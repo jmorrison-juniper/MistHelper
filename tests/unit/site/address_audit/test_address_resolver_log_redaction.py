@@ -137,7 +137,7 @@ class TestTierLogsNoStreet:
         assert "Suite 12" not in text  # The suite is part of a private address.
         assert "Evergreen" not in text  # The street name must not reach the log.
         assert "suite_found=True" in text  # The operator still learns that a suite was found.
-        assert result is not None  # Tier 1 still returns its suggestion.
+        assert isinstance(result, ResolverResult)  # WHY: Tier 1 still returns its suggestion.
 
     def test_nominatim_miss_logs_digest_only(self, tmp_path, caplog: pytest.LogCaptureFixture, monkeypatch) -> None:
         """Prove the Nominatim "no result" warning hides the street."""
@@ -162,7 +162,7 @@ class TestTierLogsNoStreet:
         text = _log_text(caplog)  # Collapse the records into one searchable buffer.
         assert _STREET not in text  # The street must never reach the log.
         assert "Nominatim validated street (key=" in text  # The success log still fires.
-        assert outcome is not None  # Tier 2 still returns its result.
+        assert isinstance(outcome, ResolverResult)  # WHY: Tier 2 still returns its result.
 
     def test_tier3_retry_logs_digest_only(self, tmp_path, caplog: pytest.LogCaptureFixture) -> None:
         """Prove the Tier-3 retry log hides the plain address."""

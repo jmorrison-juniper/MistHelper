@@ -104,7 +104,7 @@ def test_stop_ends_the_heartbeat_thread_before_it_returns(bus: PortalEventBus) -
     """
     bus.start()
     thread = bus._heartbeat_thread
-    assert thread is not None, "start() MUST create a heartbeat thread"
+    assert isinstance(thread, threading.Thread), "start() MUST create a heartbeat thread"
     assert thread.is_alive(), "the heartbeat thread MUST be running after start()"
 
     started = time.perf_counter()
@@ -166,7 +166,7 @@ def test_bus_restarts_after_a_stop(bus: PortalEventBus) -> None:
     bus.start()
 
     thread = bus._heartbeat_thread
-    assert thread is not None and thread.is_alive(), "the bus MUST run again after a stop"
+    assert isinstance(thread, threading.Thread) and thread.is_alive(), "the bus MUST run again after a stop"
 
 
 def test_stop_drops_every_subscriber(bus: PortalEventBus) -> None:
@@ -202,7 +202,7 @@ def test_heartbeat_publishes_on_a_short_interval(monkeypatch: pytest.MonkeyPatch
     finally:
         instance.stop()
 
-    assert event is not None, "the heartbeat MUST reach a subscriber"
+    assert isinstance(event, dict), "the heartbeat MUST reach a subscriber"
     assert event["type"] == "heartbeat", f"expected a heartbeat event, got {event['type']!r}"
     assert "active_operations" in event["data"], "the heartbeat MUST report the subscriber count"
     assert "dropped_events" in event["data"], "the heartbeat MUST report the dropped-event total"
@@ -264,7 +264,7 @@ def test_the_first_drop_reaches_the_log(bus: PortalEventBus, caplog: pytest.LogC
     assert len(lines) == 1, f"the first drop MUST log exactly one warning, got {lines!r}"
     assert "server-sent event" in lines[0], f"the warning MUST name the lost item, got {lines[0]!r}"
     assert lines[0].isascii(), f"a log line MUST stay ASCII only, got {lines[0]!r}"
-    assert bus.poll(subscriber_id, timeout=0) is not None, "the subscriber MUST still hold events"
+    assert isinstance(bus.poll(subscriber_id, timeout=0), dict), "the subscriber MUST still hold events"
 
 
 def test_a_burst_of_drops_does_not_flood_the_log(bus: PortalEventBus, caplog: pytest.LogCaptureFixture) -> None:

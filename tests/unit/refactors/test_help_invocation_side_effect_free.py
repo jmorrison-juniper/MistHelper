@@ -120,7 +120,7 @@ class TestHelpSubprocessInvocation:
         """
         import MistHelper as module  # WHY: inspect the root script entry.
 
-        assert module.__file__ is not None
+        assert isinstance(module.__file__, str)  # WHY: the subprocess path must come from a real module file.
         script_path = Path(module.__file__)
 
         env = os.environ.copy()  # Inherit the caller's environment (interpreter, PYTHONPATH, ...).

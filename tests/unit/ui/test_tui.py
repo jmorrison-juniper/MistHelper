@@ -104,7 +104,7 @@ class TestInitRich:
         # Every Rich class is cached on the instance as an attribute.
         for name in ("Console", "Live", "Panel", "Table", "Layout", "box", "Syntax", "Markdown"):
             assert hasattr(tui, name)
-        assert tui.console is not None  # Console instance created
+        assert isinstance(tui.console, tui.Console)  # WHY: construction must create a Rich console instance.
 
     def test_import_error_triggers_sys_exit(self, caplog: pytest.LogCaptureFixture) -> None:
         """Missing Rich library aborts the process with sys.exit(1)."""
@@ -146,9 +146,9 @@ class TestInitPlatformIO:
         """Non-Windows path caches select/termios/tty and sets old_terminal_settings None."""
         tui = _construct(is_windows=False)
         assert tui.IS_WINDOWS is False
-        assert tui.select is not None
-        assert tui.termios is not None
-        assert tui.tty is not None
+        assert getattr(tui.select, "__name__", "") == "select"  # WHY: Unix path must cache the select module.
+        assert callable(tui.termios.tcgetattr)  # WHY: Unix path must cache a usable termios module.
+        assert callable(tui.tty.setcbreak)  # WHY: Unix path must cache a usable tty module.
         assert tui.old_terminal_settings is None
 
     def test_windows_path_caches_msvcrt_and_skips_unix_modules(self):
@@ -156,7 +156,7 @@ class TestInitPlatformIO:
         tui = _construct(is_windows=True)
 
         assert tui.IS_WINDOWS is True
-        assert tui.msvcrt is not None
+        assert callable(tui.msvcrt.kbhit)  # WHY: Windows path must cache a usable msvcrt module.
         # Unix module attributes are not set on the Windows branch.
         assert not hasattr(tui, "select")
         assert not hasattr(tui, "termios")
@@ -219,7 +219,8 @@ class TestInitCollaborators:
             "_layout_builder",
             "_tui_runner",
         ):
-            assert getattr(tui, name) is not None
+            collaborator = getattr(tui, name)  # WHY: read each collaborator attribute once for type assertion.
+            assert isinstance(collaborator, MagicMock)  # WHY: each collaborator must be the patched mock instance.
 
     def test_dotenv_values_populated_from_loader(self):
         """``dotenv_values`` is assigned from the DotenvLoader mock's load() call."""
@@ -305,6 +306,7 @@ class TestThinDelegates:
         tui = _construct()
         tui._discover_current_level()
         tui._level_discoverer.discover.assert_called_once()
+        assert tui._level_discoverer.discover.call_count == 1  # WHY: discovery must delegate exactly once.
 
     def test_check_keyboard_input_returns_poller_result(self):
         """``check_keyboard_input`` returns whatever the KeyPoller returned."""
@@ -329,12 +331,14 @@ class TestThinDelegates:
         tui = _construct()
         tui._submit_parameter()
         tui._parameter_collector.submit.assert_called_once()
+        assert tui._parameter_collector.submit.call_count == 1  # WHY: submit must delegate exactly once.
 
     def test_execute_function_delegates(self):
         """``_execute_function`` calls the FunctionExecutor execute()."""
         tui = _construct()
         tui._execute_function()
         tui._function_executor.execute.assert_called_once()
+        assert tui._function_executor.execute.call_count == 1  # WHY: function execution must delegate once.
 
     def test_format_value_hierarchical_delegates(self):
         """``_format_value_hierarchical`` forwards to the HierarchicalFormatter internal renderer."""
@@ -348,12 +352,14 @@ class TestThinDelegates:
         tui = _construct()
         tui.execute_current_item()
         tui._item_executor.execute.assert_called_once()
+        assert tui._item_executor.execute.call_count == 1  # WHY: item execution must delegate exactly once.
 
     def test_run_delegates(self):
         """``run`` calls the TuiRunner run()."""
         tui = _construct()
         tui.run()
         tui._tui_runner.run.assert_called_once()
+        assert tui._tui_runner.run.call_count == 1  # WHY: the TUI runner must be invoked exactly once.
 
 
 # ---------------------------------------------------------------------------
