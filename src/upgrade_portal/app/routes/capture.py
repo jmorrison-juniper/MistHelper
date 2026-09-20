@@ -501,8 +501,13 @@ def default_runner(job: dict[str, Any]) -> None:
     record_status(capture_id, state=STATE_COLLECTING, message=COLLECTING_MESSAGE)  # The bar starts to move.
     try:  # The collection reads a network, so any fault must stay inside the worker.
         collector(job)  # The whole read of one site runs here.
-    except Exception:  # A worker that raises would leave the page waiting for ever.
-        logger.exception("capture: the capture %s stopped", capture_id)  # The cause stays in the log.
+    except Exception as error:  # Keep broad because a worker fault must not leave the page waiting.
+        logger.exception(
+            "capture: the capture %s stopped with %s: %s",
+            capture_id,
+            type(error).__name__,
+            error,
+        )  # Preserve the worker fault in the log.
         record_status(capture_id, state=STATE_FAILED, message=FAILED_MESSAGE)  # The page shows the short text.
 
 
