@@ -47,7 +47,7 @@ class TestCleanSuggestion:
             mist_address=mist, csv_address=csv, snmp_location="5550 N Military Trl Unit 200 FL 33496"
         )
         result = res._compare_internal(cand)
-        assert result is not None
+        assert isinstance(result, ResolverResult)  # WHY: Tier 1 must return a resolver result.
         assert result.canonical_address == "5550 N Military Trl Unit 200, Boca Raton, FL 33431"
 
     def test_hash_suite_detected(self):
@@ -85,7 +85,7 @@ class TestCleanSuggestion:
         authority = {"address": "4200 Conroy Rd #204", "city": "Orlando", "state": "FL", "zip": "32839"}
         cand = ResolveCandidates(mist_address=mist, csv_address=csv, authoritative_address=authority)
         result = res._compare_internal(cand)
-        assert result is not None
+        assert isinstance(result, ResolverResult)  # WHY: authoritative suite data must produce a resolver result.
         assert result.canonical_address == "4200 Conroy Rd #204, Orlando, FL 32839"
 
     def test_no_suite_anywhere_defers(self):

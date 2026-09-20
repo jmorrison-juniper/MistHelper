@@ -233,7 +233,7 @@ def test_maybe_build_offline_record_keeps_never_connected_devices() -> None:
     """Never-connected (last_seen == 0) always qualifies."""
     device = {"status": "disconnected"}
     rec = R._maybe_build_offline_record(device, {}, 1_700_000_000.0, 3600)
-    assert rec is not None
+    assert isinstance(rec, dict)  # WHY: a never-connected device must produce a report row.
     assert rec["Last Seen"] == "Never Connected"
 
 
@@ -242,7 +242,7 @@ def test_maybe_build_offline_record_keeps_offline_beyond_threshold() -> None:
     now = 1_700_000_000.0
     device = {"status": "disconnected", "last_seen": now - 7200, "type": "switch"}
     rec = R._maybe_build_offline_record(device, {}, now, 3600)
-    assert rec is not None
+    assert isinstance(rec, dict)  # WHY: a stale disconnected device must produce a report row.
     assert rec["Device Type"] == "Switch"
 
 
