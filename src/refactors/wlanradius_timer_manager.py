@@ -68,7 +68,8 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
 
     def _get_selected_wlan(self) -> dict[str, Any]:  # nosec B101 -- helper wraps runtime assertion
         """Get selected WLAN with assertion that it exists."""
-        assert self.selected_wlan is not None, "No WLAN selected"  # nosec B101
+        if self.selected_wlan is None:  # WHY: timer changes require an operator-selected WLAN.
+            raise RuntimeError("No WLAN selected")  # WHY: keep the old assertion message under python -O.
         return self.selected_wlan  # Return the confirmed-non-None WLAN dict
 
     def _discover_radius_wlans(self) -> bool:  # Aggregates site/org/template lookups + filtering
