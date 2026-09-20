@@ -93,7 +93,8 @@ def _resolve_configurator_kwargs(cfg: dict[str, Any]) -> SiteAutoUpgradeConfig:
     """
     if "config" in cfg:  # WHY: new form - config already resolved.
         resolved = cfg["config"]  # WHY: extract the pre-built record.
-        assert isinstance(resolved, SiteAutoUpgradeConfig)  # nosec B101 - The "config" branch proved the shape.
+        if not isinstance(resolved, SiteAutoUpgradeConfig):  # WHY: the new constructor form requires this type.
+            raise TypeError("config must be a SiteAutoUpgradeConfig")  # WHY: keep a named boundary error.
         return resolved  # WHY: pass through unchanged.
     if "org_id" in cfg and "deps" in cfg:  # WHY: legacy form - build from deps bundle.
         deps = cfg["deps"]  # WHY: unpack the deps bundle.

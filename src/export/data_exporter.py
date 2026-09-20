@@ -99,9 +99,12 @@ class DataExporter:  # Multi-backend export facade.
     def _build_polyglot_router(cls) -> None:
         """Construct DatabaseRouter from env (called only when the polyglot layer is available)."""
         try:  # Router construction reads env and opens connections — guard against any startup failure
-            assert configure_db_logging is not None  # nosec B101 - _polyglot_db_layer_available proved this symbol.
-            assert DatabaseConfig is not None  # nosec B101 - _polyglot_db_layer_available proved this symbol.
-            assert DatabaseRouter is not None  # nosec B101 - _polyglot_db_layer_available proved this symbol.
+            if configure_db_logging is None:  # WHY: optional DB logging can be absent in CSV-only installs.
+                raise RuntimeError("configure_db_logging is required for polyglot export")
+            if DatabaseConfig is None:  # WHY: optional DB config can be absent in CSV-only installs.
+                raise RuntimeError("DatabaseConfig is required for polyglot export")
+            if DatabaseRouter is None:  # WHY: optional DB router can be absent in CSV-only installs.
+                raise RuntimeError("DatabaseRouter is required for polyglot export")
             configure_db_logging()  # Route DB layer's logger into MistHelper logging before first use
             config = DatabaseConfig.from_env()  # Build connection settings from .env so secrets stay out of code
             cls._router = DatabaseRouter(  # Cache the shared router on the class for every later export call
@@ -216,7 +219,9 @@ class DataExporter:  # Multi-backend export facade.
             cls._standalone_probe = True  # Cache the verdict so the check stays cheap.
             return True
         logger.debug("Probing the polyglot database hosts")  # Log before the network probe.
-        assert polyglot_hosts_unreachable is not None  # nosec B101 - _polyglot_db_layer_available proved the import.
+        if polyglot_hosts_unreachable is None:  # WHY: no probe function means the optional DB path is unavailable.
+            cls._standalone_probe = True  # WHY: keep the exporter on the safe CSV/SQLite path.
+            return True
         cls._standalone_probe = polyglot_hosts_unreachable()  # Ask the db package for one TCP verdict.
         logger.debug("Polyglot host probe: unreachable=%s", cls._standalone_probe)  # Log the verdict.
         return cls._standalone_probe
@@ -291,7 +296,8 @@ class DataExporter:  # Multi-backend export facade.
         """Issue the router write call and return a truthful outcome. Never raises."""
         logger.info("Writing %s rows to the polyglot database for %s", len(payload), api_function_name)
         try:
-            assert DataExporter._router is not None  # nosec B101 - The caller checked _polyglot_skip_reason first.
+            if DataExporter._router is None:  # WHY: an unavailable optional router must not break CSV output.
+                return PolyglotWriteOutcome(False, SKIP_ROUTER_UNAVAILABLE, 0, len(payload), None)
             result = DataExporter._router.write(payload, api_function_name)  # Write to the polyglot database.
             logger.info(  # Log the router answer before the exporter judges it.
                 "Polyglot write: backend=%s, written=%s, failed=%s",
@@ -317,7 +323,8 @@ class DataExporter:  # Multi-backend export facade.
             DataExporter._log_polyglot_skip(skip_reason, api_function_name)  # Name the cause in the log.
             return PolyglotWriteOutcome(False, skip_reason)  # Tell the caller that no row reached a database.
         polyglot_data = raw_data or data  # Prefer the raw payload when the caller supplied it.
-        assert api_function_name is not None  # nosec B101 - _polyglot_skip_reason returns a cause for a None name.
+        if api_function_name is None:  # WHY: a database write needs the endpoint strategy key.
+            return PolyglotWriteOutcome(False, SKIP_NO_API_FUNCTION_NAME, 0, len(polyglot_data), None)
         return DataExporter._perform_polyglot_write(polyglot_data, api_function_name)  # Issue the write.
 
     @classmethod
