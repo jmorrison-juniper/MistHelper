@@ -109,8 +109,10 @@ class OrgAdminExporter:
                 mh.DataExporter.write_with_format_selection(
                     [], filename, api_function_name="listOrgLicenses"
                 )  # Best-effort empty write.
-            except Exception:  # nosec B110
-                pass  # Best-effort cleanup.
+            except Exception as error:  # nosec B110
+                logging.warning(
+                    "Optional step failed: %s: %s", type(error).__name__, error
+                )  # WHY: name cleanup failures without masking the export error.
             raise  # Re-raise to caller.
 
     @staticmethod

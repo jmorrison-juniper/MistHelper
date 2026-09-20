@@ -122,8 +122,10 @@ class EnvironmentUtils:
                 if os.path.exists("/usr/sbin/sshd"):  # Image ships the SSH daemon.
                     logger.debug("Container detection: /app path with MistHelper.py and sshd present")  # image signal.
                     return True  # Layout matches the container image.
-        except Exception:  # nosec B110
-            pass  # Ignore path-probing errors on host.
+        except OSError as error:  # WHY: path probes can fail on unusual hosts, but detection must continue.
+            logger.debug(
+                "Container detection path probe failed: %s: %s", type(error).__name__, error
+            )  # WHY: record the benign fallback cause.
         return False  # Layout not present: inconclusive.
 
     @staticmethod

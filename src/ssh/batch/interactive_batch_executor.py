@@ -179,8 +179,12 @@ def _write_ascii_fallback(
     try:
         safe_message = message.encode("ascii", errors="replace").decode("ascii")  # WHY: last-resort encoding.
         _persist_log_line(host_log_file, safe_message)  # WHY: reuse the sanitised persister.
-    except Exception:  # last-resort path (verbatim behaviour)
-        logger.error("Failed to write sanitized message to host log")  # WHY: preserve original error line.
+    except Exception as fallback_error:  # WHY: last-resort guard keeps one bad log line from killing the batch.
+        logger.error(
+            "Failed to write sanitized message to host log: %s: %s",
+            type(fallback_error).__name__,
+            fallback_error,
+        )  # WHY: preserve the original error line with the concrete failure type.
 
 
 def _write_clean_line(

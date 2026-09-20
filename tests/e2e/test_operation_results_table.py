@@ -166,6 +166,26 @@ class TestTheResultsTableReplacesTheLog:
         summary = results_page.locator('[data-testid="results-summary"]').inner_text()
         assert str(len(ROWS)) in summary
 
+    def test_a_sorted_heading_shows_one_arrow(self, results_page: Any) -> None:
+        """The arrow comes from the stylesheet, so the heading text must hold none.
+
+        ``portal.css`` adds the arrow through the ``sort-asc`` and ``sort-desc``
+        rules with an ``::after`` rule. A second arrow inside the heading text
+        renders twice, and the heading then reads "country down down".
+        """
+        results_page.evaluate("() => OperationResults.sortBy(0)")
+        results_page.wait_for_timeout(SETTLE_MS)
+        heading = results_page.evaluate(
+            "() => { const th = document.querySelector('#resultsHead th.sort-asc, #resultsHead th.sort-desc');"
+            " return th ? { text: th.textContent, cls: th.className } : null; }"
+        )
+        assert isinstance(heading, dict), "No heading carries a sort class, so the order is not visible."
+        for arrow in ("\u25b2", "\u25bc", "\u2191", "\u2193"):
+            assert arrow not in heading["text"], (
+                f"The heading text holds the arrow {arrow!r} and the stylesheet adds another one, "
+                f"so the reader sees two. Heading: {heading['text']!r}."
+            )
+
 
 class TestTheLayoutStaysReadable:
     """Guard the two defects that the document alone cannot show."""

@@ -118,8 +118,11 @@ logger = logging.getLogger(__name__)  # Module-scoped logger for MapsManager ope
 try:
     _raw_page_limit_env = os.environ.get("MIST_PAGE_LIMIT", "1000").strip()  # Read override from env, default "1000".
     _parsed_limit = int(_raw_page_limit_env)  # Parse to int. May raise ValueError caught below.
-except Exception:  # WHY: handle expected error
-    _parsed_limit = 1000  # Fall back to safe default on any parse failure.
+except (AttributeError, TypeError, ValueError) as page_limit_error:  # WHY: only env parsing failures use the default.
+    logger.warning(
+        "Invalid MIST_PAGE_LIMIT value. Using default page limit: %s", type(page_limit_error).__name__
+    )  # WHY: keep bad configuration visible without stopping the viewer.
+    _parsed_limit = 1000  # Fall back to safe default on invalid environment data.
 
 DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))  # Clamp to [1, 1000] per Mist API constraints.
 
