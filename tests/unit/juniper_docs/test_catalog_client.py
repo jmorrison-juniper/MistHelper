@@ -14,6 +14,7 @@ import urllib.request
 from collections.abc import Callable
 from email.message import Message
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -243,8 +244,7 @@ def test_a_blocked_redirect_target_does_not_blame_the_referring_host() -> None:
             client.fetch_bytes(f"https://www.juniper.net/doc-{index}.pdf")  # Redirects.
         except OSError:  # The document fails because the destination never answers.
             continue  # Keep going until the breaker decides which host is at fault.
-    assert "www.hpe.com" in client.unreachable_hosts  # The dead destination is flagged.
-    assert "www.juniper.net" not in client.unreachable_hosts  # The healthy site is spared.
+    assert client.unreachable_hosts == frozenset({_HPE_HOST})  # Only the dead destination is flagged.
 
 
 def test_a_proven_host_is_paused_rather_than_banned() -> None:
@@ -395,7 +395,9 @@ def test_redirect_to_a_different_host_is_allowed_and_logged(caplog: pytest.LogCa
     with caplog.at_level(logging.DEBUG, logger="src.juniper_docs.acquire.catalog_client"):  # Capture.
         payload = client.fetch_bytes(start)  # Fetch the datasheet that redirects to HPE.
     assert payload == _PDF_BODY  # The cross-host destination serves the real PDF.
-    assert any("www.hpe.com" in record.getMessage() for record in caplog.records)  # The host is audited.
+    assert any(
+        token == _HPE_HOST for record in caplog.records for token in record.getMessage().split()
+    )  # The audit log names the final host as one exact token.
 
 
 def test_redirect_to_a_non_https_scheme_is_refused() -> None:
@@ -436,6 +438,8 @@ def test_partial_content_html_body_is_not_retried() -> None:
 
 
 # The datasheet host that this network blocks; it accepts the connection then never answers.
+_HPE_HOST = "www.hpe.com"  # Compare a parsed hostname to this exact value.
+_JUNIPER_HOST = "www.juniper.net"  # The reachable documentation host.
 _HPE_URL = "https://www.hpe.com/psnow/doc/a00-datasheet.pdf"
 # A second URL on the same blocked host, used to prove the later URL fails fast.
 _HPE_URL_TWO = "https://www.hpe.com/psnow/doc/a01-datasheet.pdf"
@@ -466,7 +470,7 @@ class _SelectiveOpener:
     def open(self, request: Any, timeout: float | None = None) -> _FakeResponse:
         """Answer the Juniper host, but raise a read timeout for the HPE host."""
         self.calls.append(request.full_url)  # Record the attempt for the assertions.
-        if "hpe.com" in request.full_url:  # The blocked host never returns a response.
+        if urlsplit(request.full_url).hostname == _HPE_HOST:  # The blocked host never answers.
             raise TimeoutError("The read operation timed out")  # The silent read hang.
         return _FakeResponse(b"%PDF juniper body")  # The reachable host answers at once.
 
@@ -516,8 +520,8 @@ def test_repeated_no_response_marks_the_host_unreachable(monkeypatch: pytest.Mon
     opener = _SilentOpener()  # Every read on this host times out.
     client._opener = opener  # Replace the network opener with the silent opener.
     _trip_host(client, "https://www.hpe.com/psnow")  # Distinct documents trip the breaker.
-    assert "www.hpe.com" in client.unreachable_hosts  # The host is now flagged unreachable.
-    assert client._host_failures.get("www.hpe.com", 0) >= MAX_CONSECUTIVE_HOST_FAILURES
+    assert client.unreachable_hosts == frozenset({_HPE_HOST})  # The host is now flagged unreachable.
+    assert client._host_failures.get(_HPE_HOST, 0) >= MAX_CONSECUTIVE_HOST_FAILURES
 
 
 def test_a_later_url_on_an_unreachable_host_fails_without_opening(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -543,7 +547,7 @@ def test_a_different_host_is_unaffected_by_an_unreachable_host(monkeypatch: pyte
     _trip_host(client, "https://www.hpe.com/psnow")  # Flag the blocked host.
     payload = client.fetch_bytes(_JUNIPER_URL)  # The reachable host still answers.
     assert payload == b"%PDF juniper body"  # The different host returns its body.
-    assert "www.juniper.net" not in client.unreachable_hosts  # It is not flagged.
+    assert _JUNIPER_HOST not in client.unreachable_hosts  # It is not flagged.
 
 
 def test_the_unreachable_reason_names_the_host(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -556,7 +560,7 @@ def test_the_unreachable_reason_names_the_host(monkeypatch: pytest.MonkeyPatch) 
     with pytest.raises(HostUnreachableError) as caught:  # Capture the raised error.
         client.fetch_bytes(_HPE_URL)  # A later URL on the flagged host fails fast.
     reason = str(caught.value)  # The reason string the runner records on the document.
-    assert "www.hpe.com" in reason  # The reason names the offending host.
+    assert _HPE_HOST in reason.split()  # The reason names the offending host as one token.
     assert "unreachable from this network" in reason  # The reason states the cause plainly.
 
 
