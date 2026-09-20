@@ -860,6 +860,7 @@ class NominatimValidator:
         self.site_name = cfg.site_name  # WHY: gates duplicate-key check
         self.mist_duplicates = cfg.mist_duplicates  # WHY: pre-computed mist-side dup set
         self.ref_duplicates = cfg.ref_duplicates  # WHY: pre-computed ref-side dup set
+        self._last_nominatim_error: Exception | None = None  # WHY: preserve per-attempt failure evidence.
         self._suppress_ssl_warnings()  # WHY: silence urllib3 warnings when verify is disabled
 
     def _suppress_ssl_warnings(self) -> None:
@@ -922,10 +923,17 @@ class NominatimValidator:
         }
         headers = {"User-Agent": self.USER_AGENT}  # WHY: Nominatim ToS enforcement
         verify_ssl = not self.skip_ssl_verify  # WHY: single boolean threaded to all attempts
+        first_error: Exception | None = None  # WHY: preserve the root cause across retry attempts.
+        self._last_nominatim_error = None  # WHY: clear stale evidence from a prior request.
         for attempt in range(self.MAX_RETRIES + 1):  # WHY: initial + MAX_RETRIES extra tries
             response = self._try_request_attempt(params, headers, verify_ssl, attempt)  # WHY: per-attempt call
+            error = getattr(self, "_last_nominatim_error", None)  # WHY: read attempt failure without changing contract.
+            if response is None and first_error is None and isinstance(error, Exception):  # WHY: keep original cause.
+                first_error = error  # WHY: later failures can hide the real first cause.
             if response is not None:  # WHY: first success returns immediately
                 return response  # WHY: propagate the raw response upstream
+        if first_error is not None:  # WHY: all attempts failed and at least one cause is available.
+            logger.error("Nominatim request failed after retries; first error: %s", first_error)  # WHY: root cause log.
         return None  # WHY: all attempts failed
 
     def _try_request_attempt(
@@ -945,10 +953,12 @@ class NominatimValidator:
                 timeout=timeout,
                 verify=verify_ssl,
             )
-        except Exception:  # WHY: catch-all so a bad response does not kill validation
+        except Exception as error:  # WHY: catch-all so a bad response does not kill validation
+            self._last_nominatim_error = error  # WHY: outer loop reports the first failed attempt after exhaustion.
+            logger.warning("Nominatim attempt %s failed: %s", attempt + 1, error)  # WHY: operator-visible attempt.
             if attempt < self.MAX_RETRIES:  # WHY: sleep only when another attempt remains
                 time.sleep(self.RETRY_DELAY)  # WHY: fixed back-off between attempts
-            return None  # WHY: signal caller to retry or terminate
+            return None  # WHY: preserve the existing no-response contract for transport failures.
 
     def _calculate_component_match(
         self,
