@@ -23,6 +23,7 @@ import logging  # WHY: debug-level logging when stat lookups fail silently
 from typing import Any, cast  # WHY: Any parameterizes SDK payload dicts. Cast narrows API responses
 
 import mistapi  # WHY: stats + device APIs live under mistapi.api.v1.sites.*
+import requests  # WHY: Mist SDK transport failures surface through requests exceptions.
 
 from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
@@ -117,7 +118,11 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             )
             if hasattr(response, "data") and isinstance(response.data, dict):  # WHY: guard shape
                 return response.data  # WHY: caller consumes type/status keys
-        except Exception as error:  # WHY: log-and-continue on any mistapi error
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on Mist API failure
             logger.error("Failed to get device stats: %s", error)  # WHY: audit trail
         return None  # WHY: caller treats None as unavailable
 
@@ -151,7 +156,11 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             if not hasattr(response, "data") or not isinstance(response.data, dict):  # WHY: guard shape
                 return None  # WHY: caller treats None as unavailable
             return response.data  # WHY: caller drills into 'ports' / 'if_stat' / 'ip_stat'
-        except Exception as error:  # WHY: log-and-return-None on any error
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-return-None on Mist API failure
             logger.debug("Could not fetch device stats: %s", error)  # WHY: debug-only trace
             return None  # WHY: swallow error and signal unavailable
 
@@ -490,7 +499,11 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             )
             if hasattr(response, "data") and isinstance(response.data, dict):  # WHY: guard shape
                 return response.data
-        except Exception as error:  # WHY: log-and-return-None on any error
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-return-None on Mist API failure
             logger.debug("Could not fetch network config: %s", error)  # WHY: debug-only trace
         return None
 

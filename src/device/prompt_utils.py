@@ -19,6 +19,7 @@ from typing import Any, cast  # WHY: Any for heterogeneous dicts, cast to narrow
 
 import mistapi.api.v1.sites.devices  # WHY: Mist Sites Devices API for listing APs/gateways/switches
 import mistapi.api.v1.sites.stats  # WHY: Mist Sites Stats API for per-port status info
+import requests  # WHY: Mist SDK transport failures surface through requests exceptions.
 from prettytable import PrettyTable  # WHY: tabular display for device and port selection lists
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
@@ -197,7 +198,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             response = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: single API call for the type
                 self._session, site_id, type=device_type
             )
-        except Exception as error:  # WHY: broad catch keeps flow alive on any API failure
+        except (AttributeError, RuntimeError, requests.RequestException) as error:  # WHY: API failures keep flow alive
             print(f"\n! Error fetching {plural_label}: {error}")  # WHY: surface failure to operator
             logging.exception("Exception fetching %s for site %s: %s", plural_label, site_id, error)  # WHY: audit
             return None  # WHY: signal fetch failure to caller
@@ -289,7 +290,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         logger.info("Fetching port information for %s %s at site %s", device_type, device_mac, site_id)
         try:
             return self._perform_port_selection(site_id, device_mac, device_type, return_available)
-        except Exception as error:  # WHY: broad catch keeps flow alive on any API failure
+        except (AttributeError, RuntimeError, requests.RequestException) as error:  # WHY: API failures keep flow alive
             print(f"\n! Error fetching port information: {error}")  # WHY: surface failure to operator
             logging.exception("Exception in select_ports_from_device: %s", error)  # WHY: full traceback
             return None  # WHY: signal failure so caller can prompt again or abort
@@ -409,7 +410,11 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(  # WHY: dedicated port stats API
                 self._session, site_id, mac=device_mac, limit=1000
             )
-        except Exception as port_search_error:  # WHY: log and swallow -- caller falls back to config
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as port_search_error:  # WHY: caller falls back to config
             logging.error("Error fetching switch/gateway port stats: %s", port_search_error)  # WHY: audit
             return {}  # WHY: empty dict signals 'no live stats' to the caller
         status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
@@ -476,7 +481,11 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             device_config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # WHY: full device config
                 self._session, site_id, device_id
             )
-        except Exception as cfg_error:  # WHY: non-fatal -- profiles/descriptions will just be missing
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as cfg_error:  # WHY: profiles/descriptions will be missing
             logging.warning("Could not fetch device config for port details: %s", cfg_error)  # WHY: audit
             return {}  # WHY: empty dict spares callers a None guard
         port_config: dict[str, Any] = device_config_response.data.get("port_config", {})  # WHY: extract section
@@ -519,7 +528,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             return None
         try:
             return self._synthesize_port_stat_from_config(port_config, device_id)  # WHY: main synthesis path
-        except Exception as config_error:  # WHY: malformed config or expander failure
+        except (KeyError, TypeError, ValueError) as config_error:  # WHY: malformed config or expander failure
             self._report_no_port_info(device_type, device_name)  # WHY: reuse the shared rejection message
             logging.error("Could not build port_stat from device config: %s", config_error)  # WHY: audit
             return None

@@ -11,7 +11,10 @@ select_ap_mac, select_gateway_mac, select_switch_mac, select_ports_from_device.
 
 from __future__ import annotations  # Enable PEP 604 union types on Python 3.10+
 
-from unittest.mock import MagicMock, patch  # Mock API session, injected callables, and mistapi module
+from unittest.mock import MagicMock, patch  # Mock API session, injected callables, and mistapi module.
+
+import pytest  # WHY: parameterized failure-mode tests use pytest.
+import requests  # WHY: model expected Mist transport failures.
 
 from src.device.prompt_utils import PromptNetworkDeviceUtils, _PortPromptRequest  # Class under test + request DTO
 
@@ -289,7 +292,7 @@ class TestBuildPortStatFromConfig:
         utils = _make_utils(expand_fn=expand)  # Instance with controlled expander
         port_config = {"ge-0/0/0": {"usage": "access", "speed": "1G", "duplex": "full"}}  # Normal config
         result = utils._build_port_stat_from_config(port_config, "dev1", "switch", "SW-1")  # Build stat
-        assert result is not None  # Should produce a stat dict
+        assert isinstance(result, dict)  # Should produce a stat dict
         assert "ge-0/0/0" in result  # Port should be present
         assert result["ge-0/0/0"]["up"] is True  # 'access' usage means port is UP
         assert result["ge-0/0/0"]["_fallback"] is True  # Fallback flag must be set
@@ -304,7 +307,7 @@ class TestBuildPortStatFromConfig:
         utils = _make_utils(expand_fn=expand)  # Instance with controlled expander
         port_config = {"ge-0/0/0": {"usage": "disabled"}}  # Disabled usage profile
         result = utils._build_port_stat_from_config(port_config, "dev1", "switch", "SW-1")  # Build
-        assert result is not None  # Should produce a stat dict
+        assert isinstance(result, dict)  # Should produce a stat dict
         assert result["ge-0/0/0"]["up"] is False  # 'disabled' usage means port is DOWN
 
     def test_exception_in_config_parsing_returns_none(self, capsys):  # lines 550-554 path
@@ -738,8 +741,9 @@ class TestFetchPortStats:
             search_response = MagicMock()  # Fake search response
             search_response.data = {"results": [{"port_id": "ge-0/0/0", "up": True}]}  # One port
             mock_mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts.return_value = search_response  # Wire up mock
-            utils._fetch_port_stats("site-1", "dev-1", "de:ad:be:ef:00:01", "gateway")  # Invoke gateway path
+            result = utils._fetch_port_stats("site-1", "dev-1", "de:ad:be:ef:00:01", "gateway")  # Invoke gateway path
         mock_mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts.assert_called_once()  # Same endpoint as switch
+        assert result == {"ge-0/0/0": {"port_id": "ge-0/0/0", "up": True}}
 
     def test_switch_results_missing_port_id_returns_empty(self, capsys):  # line 439 path
         """Returns empty dict and logs a warning when results lack a 'port_id' key."""
@@ -1037,3 +1041,22 @@ class TestSelectPortsFromDevice:
                                 "site-1", "aa:bb:cc:dd:ee:ff", "switch"
                             )
         assert result is None  # User cancelled -- but fallback path was exercised (lines 363-367)
+
+
+class TestPromptDeviceFailureModes:
+    """Cover connection failures for prompt device fetches."""
+
+    @pytest.mark.parametrize(
+        "exception",
+        [
+            requests.ConnectionError("offline"),
+            requests.Timeout("slow"),
+        ],
+    )
+    def test_fetch_and_sort_request_failure_returns_none(self, exception: requests.RequestException) -> None:
+        """Connection errors and timeouts must return None for the selector flow."""
+        utils = PromptNetworkDeviceUtils(MagicMock(), MagicMock(), MagicMock())
+        with patch("src.device.prompt_utils.mistapi") as mistapi_mock:
+            mistapi_mock.api.v1.sites.devices.listSiteDevices.side_effect = exception
+            result = utils._fetch_and_sort_devices("site-1", "ap", "APs")
+        assert result is None
