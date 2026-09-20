@@ -179,15 +179,18 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         """Fetch single-device stats with bounded retry. Return enriched dict or failure record."""
         max_retries = FAST_MODE_MAX_RETRIES  # WHY: use configured retry ceiling.
         retry_delay = FAST_MODE_RETRY_DELAY  # WHY: use configured base retry delay.
+        first_exception: Exception | None = None  # WHY: keep the original cause when retries add later symptoms.
         for attempt in range(max_retries + 1):  # WHY: N retries means N+1 total attempts.
             try:
                 stats = _attempt_fetch_stats(device_info, connection_semaphore)  # WHY: one bounded attempt.
                 _log_attempt_success(attempt, device_info)  # WHY: legacy success/retry log.
                 return stats  # WHY: successful stats short-circuits remaining retry budget.
             except Exception as exception:  # pylint: disable=broad-exception-caught  # WHY: retry on any error.
+                if first_exception is None:  # WHY: later failures can be consequences of the first failure.
+                    first_exception = exception  # WHY: preserve the first cause for the failure record.
                 if attempt >= max_retries:  # WHY: exhausted budget — record terminal failure.
                     _log_terminal_failure(device_info, max_retries + 1, exception)  # WHY: terminal log line.
-                    return _build_failure_record(device_info, exception)  # WHY: emit failure row for CSV.
+                    return _build_failure_record(device_info, first_exception)  # WHY: emit original cause for CSV.
                 _log_retry_failure(attempt, device_info, exception)  # WHY: log non-terminal attempt.
                 backoff_delay = _compute_backoff(attempt, retry_delay, fast)  # WHY: compute delay for retry.
                 logging.info("! Retrying in %s seconds...", backoff_delay)  # WHY: legacy banner before sleep.
