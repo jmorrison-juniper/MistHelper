@@ -4,7 +4,11 @@ Provides site listing, map enumeration, map data for Plotly.js
 rendering, and map image serving. Replaces the standalone Dash viewer.
 """
 
+import logging
+
 from flask import Blueprint, current_app, jsonify, render_template
+
+logger = logging.getLogger(__name__)  # Use a module logger so map failures name this route module.
 
 maps_bp = Blueprint("maps", __name__)
 
@@ -73,7 +77,10 @@ def _fetch_sites(apisession, org_id: str) -> list:
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
         sites = response.data if hasattr(response, "data") else []
         return [{"id": site.get("id", ""), "name": site.get("name", "")} for site in sites]
-    except Exception:
+    except Exception as error:  # Keep the map selector usable when the Mist API request fails.
+        logger.exception(
+            "Map site list failed for org %s with %s: %s", org_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         return []
 
 
@@ -94,11 +101,14 @@ def _fetch_site_maps(apisession, site_id: str) -> list:
             }
             for m in maps
         ]
-    except Exception:
+    except Exception as error:  # Keep the map selector usable when one site map request fails.
+        logger.exception(
+            "Site map list failed for site %s with %s: %s", site_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         return []
 
 
-def _fetch_map_data(apisession, site_id: str, map_id: str) -> dict:
+def _fetch_map_data(apisession, site_id: str, map_id: str) -> dict | None:
     """Fetch map data with device positions for rendering."""
     try:
         import mistapi
@@ -114,7 +124,10 @@ def _fetch_map_data(apisession, site_id: str, map_id: str) -> dict:
             "height": map_info.get("height", 0),
             "devices": devices,
         }
-    except Exception:
+    except Exception as error:  # Let the caller return 404 instead of raising a remote API failure.
+        logger.exception(
+            "Map data fetch failed for site %s map %s with %s: %s", site_id, map_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         return None
 
 
@@ -137,11 +150,14 @@ def _get_map_devices(apisession, site_id: str, map_id: str) -> list:
             for d in devices
             if d.get("map_id") == map_id
         ]
-    except Exception:
+    except Exception as error:  # Keep map rendering usable when one device list request fails.
+        logger.exception(
+            "Map device list failed for site %s map %s with %s: %s", site_id, map_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         return []
 
 
-def _fetch_map_image(apisession, map_id: str) -> dict:
+def _fetch_map_image(apisession, map_id: str) -> dict | None:
     """Fetch map background image binary data."""
     try:
         import mistapi
@@ -157,5 +173,8 @@ def _fetch_map_image(apisession, map_id: str) -> dict:
                 "content_type": "image/png",
             }
         return None
-    except Exception:
+    except Exception as error:  # Let the image route return 404 instead of exposing an API failure.
+        logger.exception(
+            "Map image fetch failed for map %s with %s: %s", map_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         return None
