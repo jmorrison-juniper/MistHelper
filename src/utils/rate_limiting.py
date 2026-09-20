@@ -500,12 +500,24 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         RateLimitingUtils._append_delay_metrics_log(update.delay_metrics, api_usage_cache, tuning_data)  # WHY: log row.
 
     @staticmethod
+    def _ensure_cache_defaults(
+        api_usage_cache: dict[str, Any], current_time: float
+    ) -> None:  # WHY (#3091): a cold cache holds no keys, so every direct read must find a seeded value.
+        """Seed every quota key the pipeline reads, so a cold cache cannot raise KeyError."""
+        api_usage_cache.setdefault("used", 0)  # WHY: no request is counted before the first refresh.
+        api_usage_cache.setdefault("limit", _DEFAULT_REQUEST_LIMIT)  # WHY: pace against the documented quota.
+        api_usage_cache.setdefault("perceived_requests", 0)  # WHY: _needs_refresh compares this counter.
+        api_usage_cache.setdefault("initialized", False)  # WHY: False forces the cold-start live refresh.
+        api_usage_cache.setdefault("last_updated", current_time)  # WHY: a zero age keeps the PID math sane.
+
+    @staticmethod
     def _prepare_pipeline(
         apisession: Any, api_usage_cache: dict[str, Any]
     ) -> tuple[datetime, float]:  # WHY: consolidate clock + cache-sync bookkeeping before PID math.
         """Establish the time anchor and sync the usage cache for one PID cycle."""
         now = datetime.now(UTC)  # WHY: single time anchor for the whole cycle.
         current_time = time.time()  # WHY: wall-clock companion for cache accounting.
+        RateLimitingUtils._ensure_cache_defaults(api_usage_cache, current_time)  # WHY (#3091): cold cache is empty.
         elapsed = current_time - api_usage_cache["last_updated"]  # WHY: cache-age in seconds.
         previous_elapsed = float(api_usage_cache.get("previous_elapsed", elapsed))  # WHY: seed for boundary detect.
         RateLimitingUtils._sync_cache_usage(

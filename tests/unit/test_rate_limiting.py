@@ -1,10 +1,12 @@
 """Unit tests for RateLimitingUtils in src/utils/rate_limiting.py."""
 
 import json
+import logging
 import math
 import os
 import sys
 import time
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -448,11 +450,22 @@ class TestCalculatePidDelay:
 class TestLogDelayLevel:
     """Tests for _log_delay_level static method."""
 
-    def test_does_not_raise(self):
-        """Logging at all levels completes without error."""
-        RateLimitingUtils._log_delay_level(0.5, 0.3, 10.0, 100, 5000)
-        RateLimitingUtils._log_delay_level(1.5, 0.3, 10.0, 100, 5000)
-        RateLimitingUtils._log_delay_level(3.0, 0.3, 10.0, 100, 5000)
+    def test_chooses_the_severity_that_matches_the_delay(self, caplog):
+        """The severity ladder must match the backpressure the delay reports."""
+        import src.utils.rate_limiting as rl
+
+        ladder = [
+            (rl._HIGH_DELAY + 1.0, "WARNING", "High delay"),  # Above the high mark the operator must see a warning.
+            (rl._MODERATE_DELAY + 0.01, "INFO", "Moderate delay"),  # The middle tier reports at info.
+            (0.0, "DEBUG", ""),  # A normal delay must stay at debug, so the log does not fill with noise.
+        ]
+        for delay, expected_level, expected_text in ladder:
+            caplog.clear()  # Read one call at a time, so no earlier record confuses the check.
+            with caplog.at_level(logging.DEBUG, logger=rl.logger.name):
+                RateLimitingUtils._log_delay_level(delay, 0.3, 10.0, 100, 5000)
+            assert [record.levelname for record in caplog.records] == [expected_level]
+            if expected_text:
+                assert expected_text in caplog.text  # The message must name the tier it reports.
 
 
 # ---------------------------------------------------------------------------
@@ -695,10 +708,15 @@ class TestEdgeCases:
         )
         assert delay == 0.5
 
-    def test_append_metrics_write_error(self):
-        """Append handles write errors without crashing."""
-        with patch("builtins.open", side_effect=OSError("disk full")):
-            RateLimitingUtils._append_delay_metrics_log({"d": 1}, {"c": 2}, {"t": 3}, filename="custom_nondefault.json")
+    def test_append_metrics_write_error(self, caplog):
+        """A disk failure must be reported in the log instead of reaching the caller."""
+        with caplog.at_level(logging.ERROR):
+            with patch("builtins.open", side_effect=OSError("disk full")):
+                RateLimitingUtils._append_delay_metrics_log(
+                    {"d": 1}, {"c": 2}, {"t": 3}, filename="custom_nondefault.json"
+                )
+        assert "Failed to write delay metrics" in caplog.text  # The operator must learn the write failed.
+        assert "disk full" in caplog.text  # The message must carry the OSError reason.
 
     def test_resolve_metrics_makedirs_error(self):
         """Resolve handles makedirs failure gracefully."""
@@ -779,3 +797,45 @@ class TestCoverageGapTargets:
                 api_usage_cache=api_cache,  # Cache with initialized=False triggers refresh
             )
         assert delay > 0  # A positive delay is always returned
+
+
+# ---------------------------------------------------------------------------
+# Cold shared cache (issue #3091)
+# ---------------------------------------------------------------------------
+class TestColdCacheStartsTheAdaptiveDelay:
+    """The shared quota cache starts empty, so the pipeline must seed it."""
+
+    @staticmethod
+    def _point_tuning_file(monkeypatch, tmp_path):
+        """Send the tuning file to a temporary path, so no test writes the repository."""
+        import src.utils.rate_limiting as rl  # Import here to reach the module global.
+
+        monkeypatch.setattr(rl, "tuning_data_file", str(tmp_path / "tuning_data.json"))  # Redirect the write.
+
+    def test_prepare_pipeline_seeds_an_empty_cache(self, monkeypatch, tmp_path):
+        """_prepare_pipeline must seed every key it reads instead of raising KeyError."""
+        self._point_tuning_file(monkeypatch, tmp_path)  # Keep the tuning write inside the temp directory.
+        cold_cache: dict = {}  # The process-wide cache holds no key before the first call.
+        RateLimitingUtils._prepare_pipeline(None, cold_cache)  # This raised KeyError before issue #3091.
+        assert cold_cache["initialized"] is False  # A cold cache must still force the live refresh.
+        assert cold_cache["last_updated"] > 0  # The seed must carry a real clock reading.
+        assert cold_cache["perceived_requests"] >= 0  # _needs_refresh reads this counter directly.
+
+    def test_needs_refresh_reads_a_seeded_cold_cache(self, monkeypatch, tmp_path):
+        """The refresh decision must not raise KeyError on a cache the pipeline just seeded."""
+        self._point_tuning_file(monkeypatch, tmp_path)  # Keep the tuning write inside the temp directory.
+        cold_cache: dict = {}  # Start from the same empty dict the source package creates.
+        RateLimitingUtils._ensure_cache_defaults(cold_cache, time.time())  # Seed the keys under test.
+        assert RateLimitingUtils._needs_refresh(cold_cache, 0.0, datetime.now(UTC)) is True  # Cold start refreshes.
+
+    def test_cold_cache_never_reaches_the_fallback(self, monkeypatch, tmp_path, caplog):
+        """A cold cache must not raise KeyError and must not log the 500ms fallback error."""
+        self._point_tuning_file(monkeypatch, tmp_path)  # Keep the tuning write inside the temp directory.
+        cold_cache: dict = {}  # Reproduce the first call of a fresh process.
+        with caplog.at_level(logging.ERROR):  # Watch the safety net that hid this defect.
+            _, delay = RateLimitingUtils.get_rate_limited_delay(
+                smoothed_delay=None, apisession=None, api_usage_cache=cold_cache
+            )
+        assert "Failed to calculate dynamic delay" not in caplog.text  # The safety net must stay silent.
+        assert "last_updated" not in caplog.text  # No KeyError name may reach the log.
+        assert delay > 0  # The adaptive path still returns a usable delay.
