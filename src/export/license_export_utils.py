@@ -125,6 +125,9 @@ class LicenseExportUtils:
         if status_code == 404:  # Handle no-active-job response as empty export.
             logger.warning("No async claim job for org %s; exporting empty rows", org_id)  # Explain empty output.
             return {}  # Force empty payload for deterministic writes.
+        if 500 <= status_code <= 599:  # Treat Mist server errors as retryable upstream failures.
+            logger.error("Mist %s for async-claim org %s; retry later", status_code, org_id)  # Give retry guidance.
+            return None  # Signal bail-out so error payloads are not exported as success rows.
         return payload  # Pass through non-error payload for normal export flow.
 
     @staticmethod
