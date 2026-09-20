@@ -30,7 +30,12 @@ try:  # pragma: no cover - import guard mirrors MistHelper
     from src.db.router import DatabaseRouter
 
     DB_LAYER_AVAILABLE = True
-except Exception:  # pragma: no cover - graceful degradation when DB layer missing
+except ImportError as error:  # pragma: no cover - degrade only when the optional DB layer is missing.
+    logger.debug(
+        "The optional database layer is unavailable after %s: %s",
+        type(error).__name__,
+        error,
+    )  # Keep CSV and SQLite exports available when the optional backend is absent.
     DatabaseConfig = None  # type: ignore[assignment, misc]
     configure_db_logging = None  # type: ignore[assignment]
     polyglot_hosts_unreachable = None  # type: ignore[assignment]

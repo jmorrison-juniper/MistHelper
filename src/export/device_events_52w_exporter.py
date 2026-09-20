@@ -310,8 +310,8 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         try:
             if os.path.exists(checkpoint_file):  # WHY: Guard - avoid FileNotFoundError from race
                 os.remove(checkpoint_file)  # WHY: Cleanup so next run starts fresh
-        except Exception:  # WHY: Preserve blanket-except for compatibility
-            self.logger.debug(_LOG_CHECKPOINT_REMOVE_FAIL)  # WHY: Debug-only breadcrumb
+        except OSError:  # WHY: cleanup only needs to absorb filesystem faults.
+            self.logger.debug(_LOG_CHECKPOINT_REMOVE_FAIL)  # WHY: preserve the legacy cleanup breadcrumb.
 
     def _log_completion(self, csv_file: str) -> None:  # WHY: Emit final completion status per backend
         """Log completion message according to active output format."""
