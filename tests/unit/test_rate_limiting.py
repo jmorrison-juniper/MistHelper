@@ -1,10 +1,12 @@
 """Unit tests for RateLimitingUtils in src/utils/rate_limiting.py."""
 
 import json
+import logging
 import math
 import os
 import sys
 import time
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -779,3 +781,45 @@ class TestCoverageGapTargets:
                 api_usage_cache=api_cache,  # Cache with initialized=False triggers refresh
             )
         assert delay > 0  # A positive delay is always returned
+
+
+# ---------------------------------------------------------------------------
+# Cold shared cache (issue #3091)
+# ---------------------------------------------------------------------------
+class TestColdCacheStartsTheAdaptiveDelay:
+    """The shared quota cache starts empty, so the pipeline must seed it."""
+
+    @staticmethod
+    def _point_tuning_file(monkeypatch, tmp_path):
+        """Send the tuning file to a temporary path, so no test writes the repository."""
+        import src.utils.rate_limiting as rl  # Import here to reach the module global.
+
+        monkeypatch.setattr(rl, "tuning_data_file", str(tmp_path / "tuning_data.json"))  # Redirect the write.
+
+    def test_prepare_pipeline_seeds_an_empty_cache(self, monkeypatch, tmp_path):
+        """_prepare_pipeline must seed every key it reads instead of raising KeyError."""
+        self._point_tuning_file(monkeypatch, tmp_path)  # Keep the tuning write inside the temp directory.
+        cold_cache: dict = {}  # The process-wide cache holds no key before the first call.
+        RateLimitingUtils._prepare_pipeline(None, cold_cache)  # This raised KeyError before issue #3091.
+        assert cold_cache["initialized"] is False  # A cold cache must still force the live refresh.
+        assert cold_cache["last_updated"] > 0  # The seed must carry a real clock reading.
+        assert cold_cache["perceived_requests"] >= 0  # _needs_refresh reads this counter directly.
+
+    def test_needs_refresh_reads_a_seeded_cold_cache(self, monkeypatch, tmp_path):
+        """The refresh decision must not raise KeyError on a cache the pipeline just seeded."""
+        self._point_tuning_file(monkeypatch, tmp_path)  # Keep the tuning write inside the temp directory.
+        cold_cache: dict = {}  # Start from the same empty dict the source package creates.
+        RateLimitingUtils._ensure_cache_defaults(cold_cache, time.time())  # Seed the keys under test.
+        assert RateLimitingUtils._needs_refresh(cold_cache, 0.0, datetime.now(UTC)) is True  # Cold start refreshes.
+
+    def test_cold_cache_never_reaches_the_fallback(self, monkeypatch, tmp_path, caplog):
+        """A cold cache must not raise KeyError and must not log the 500ms fallback error."""
+        self._point_tuning_file(monkeypatch, tmp_path)  # Keep the tuning write inside the temp directory.
+        cold_cache: dict = {}  # Reproduce the first call of a fresh process.
+        with caplog.at_level(logging.ERROR):  # Watch the safety net that hid this defect.
+            _, delay = RateLimitingUtils.get_rate_limited_delay(
+                smoothed_delay=None, apisession=None, api_usage_cache=cold_cache
+            )
+        assert "Failed to calculate dynamic delay" not in caplog.text  # The safety net must stay silent.
+        assert "last_updated" not in caplog.text  # No KeyError name may reach the log.
+        assert delay > 0  # The adaptive path still returns a usable delay.
