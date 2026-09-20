@@ -60,9 +60,13 @@ class DataDirectoryChecker:
         except PermissionError:  # Catch permission errors and display actionable guidance
             self._handle_permission_error()  # Call error handler to print guidance and exit
             return False  # Never reached - _handle_permission_error exits
-        except Exception:  # For non-permission errors, proceed and let them fail naturally later
-            logging.debug("DataDirectoryChecker.check: non-permission exception - deferring failure")  # Log defer
-            return True  # Non-permission error, let it proceed and fail naturally
+        except OSError as error:  # Narrow to the filesystem faults this write check can raise.
+            logging.debug(
+                "DataDirectoryChecker.check: non-permission exception %s: %s - deferring failure",
+                type(error).__name__,
+                error,
+            )  # Log the deferred filesystem fault without stopping early.
+            return True  # Non-permission filesystem errors can fail naturally later.
 
     def _test_write_permission(self) -> bool:  # Validate data directory write access via test file
         """Create and remove a test file to verify write access."""
