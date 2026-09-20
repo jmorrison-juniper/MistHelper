@@ -82,7 +82,16 @@ class SourceDependencyResolverService:
     _external_modules = {  # Map third-party helper names that older code read through the root module.
         "mistapi": "mistapi",  # Resolve the Mist SDK directly.
         "PrettyTable": "prettytable",  # Resolve the table renderer directly.
-        "tqdm": "tqdm",  # Resolve the progress bar module directly.
+        "tqdm": "tqdm",  # Resolve the progress bar package directly.
+    }
+    # Some third-party packages hold the symbol a caller wants inside a module
+    # of the same name. Issue #3111: the resolver returned the bare `tqdm`
+    # module, so every `deps.tqdm(items, ...)` call raised
+    # "'module' object is not callable". Name each such attribute here, so one
+    # rule covers every package instead of an `if` chain that forgets one.
+    _external_attributes = {
+        "PrettyTable": "PrettyTable",  # The renderer is a class inside `prettytable`.
+        "tqdm": "tqdm",  # The progress bar is a callable inside `tqdm`.
     }
 
     def __init__(self) -> None:
@@ -259,11 +268,13 @@ class SourceDependencyResolverService:
         return value  # Return the helper class to the caller.
 
     def _resolve_external_symbol(self, name: str) -> Any:
-        """Resolve a third-party module or class directly."""
+        """Resolve a third-party module or the named symbol inside it."""
         module_name = self._external_modules[name]  # Read the third-party module path.
         module = importlib.import_module(module_name)  # Import the external module lazily.
-        if name == "PrettyTable":  # PrettyTable is a class inside the module.
-            return module.PrettyTable  # Return the renderer class used by legacy code.
+        attribute = self._external_attributes.get(name)  # Some packages hold the symbol inside the module.
+        if attribute is not None:
+            logger.debug("Resolved external dependency %s from its module attribute", name)  # Log the safe name.
+            return getattr(module, attribute)  # Return the callable or the class the caller expects.
         logger.debug("Resolved external dependency %s", name)  # Log the safe dependency name.
         return module  # Return the imported module.
 
