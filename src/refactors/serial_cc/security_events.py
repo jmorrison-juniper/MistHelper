@@ -134,8 +134,14 @@ class SecurityEventsService:
                 age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Convert mtime delta to minutes.
                 if age_minutes >= deps.csv_freshness_minutes:  # Stale => refetch is required.
                     return False
-            except Exception:  # Any filesystem error means we cannot prove freshness. Fall through to refetch.
-                return False
+            except Exception as error:  # Keep broad because one bad cache path must not abort the export batch.
+                logger.debug(
+                    "Cannot prove freshness for %s after %s: %s",
+                    output_file,
+                    type(error).__name__,
+                    error,
+                )  # Log the per-file cache fault before the service refetches all rows.
+                return False  # Refetch because the cache proof failed.
         return True  # All files exist and are within the freshness window.
 
     @staticmethod
