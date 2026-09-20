@@ -306,6 +306,11 @@ var DataPreviewModal = (function() {
         var url = '/api/data/preview/' + encodeURIComponent(path) +
                   '?page=' + state.currentPage + '&per_page=' + state.perPage;
         if (state.searchQuery) url += '&search=' + encodeURIComponent(state.searchQuery);
+        // Issue #3047: the state below existed and never reached the server, so
+        // a header click moved the arrow and left the rows in file order.
+        if (state.sortColumn >= 0) {
+            url += '&sort_column=' + state.sortColumn + '&sort_dir=' + state.sortDir;
+        }
         return url;
     }
 

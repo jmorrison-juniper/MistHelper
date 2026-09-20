@@ -755,6 +755,7 @@ function resetExecutionPanel() {
     document.getElementById('debugLogCount').textContent = '0';
     setElementVisible('outputFiles', false);
     document.getElementById('outputFileList').innerHTML = '';
+    if (typeof OperationResults !== 'undefined') OperationResults.reset();  // Clear the table of the previous run.
     updateProgress(0, '');
     setStatus('pending', 'Waiting...');
 }
@@ -846,6 +847,9 @@ function showOutputFiles(files) {
     var panel = document.getElementById('outputFiles');
     var list = document.getElementById('outputFileList');
     setElementVisible(panel, true);  // Issue #3030: the class hides the result list, not the inline style.
+    // Issue #3048: a log cannot be sorted, filtered, or opened, so the rows of
+    // the run also land in the results table under this list.
+    if (typeof OperationResults !== 'undefined') OperationResults.showForRun(files);
 
     files.forEach(function(file) {
         var li = document.createElement('li');

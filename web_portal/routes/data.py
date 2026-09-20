@@ -36,17 +36,42 @@ def list_files():
 def preview_file(filepath):
     """Return paginated preview of a CSV or SQLite table list."""
     from web_portal.services.data_browser import DataBrowserService
+    from web_portal.services.row_sorter import SortSpec
 
     data_dir = current_app.config.get("DATA_DIR", "data")
     service = DataBrowserService(data_dir)
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     search = request.args.get("search", "")
-    result = service.preview_file(filepath, page, per_page, search)
+    # Issue #3047: the table sent a sort that no argument carried, so the arrow
+    # moved and the rows did not. Read the order here and hand it to the service.
+    sort = _read_sort_request(service, filepath, SortSpec)
+    result = service.preview_file(filepath, page, per_page, search, sort)
     if "error" in result:
         status = 404 if "not found" in result["error"].lower() else 400
         return jsonify(result), status
     return jsonify(result)
+
+
+def _read_sort_request(service, filepath: str, spec_class):
+    """Build the sort request of this call, or None when the caller asked for none.
+
+    The column count comes from the file itself, so a crafted index can never
+    reach the row reader.
+
+    Args:
+        service: The data browser service that can read the column names.
+        filepath: The requested path inside the data directory.
+        spec_class: The ``SortSpec`` class, passed in to keep the import local.
+
+    Returns:
+        The sort request, or None.
+    """
+    column = request.args.get("sort_column")
+    if column is None or column == "":  # Most calls ask for no order at all.
+        return None
+    columns = service.read_column_names(filepath)  # An unreadable file yields an empty list.
+    return spec_class.from_request(column, request.args.get("sort_dir", "asc"), len(columns))
 
 
 @data_bp.route("/api/data/preview/<path:filepath>/<table_name>")

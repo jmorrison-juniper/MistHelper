@@ -13,6 +13,8 @@ from collections import deque
 from contextlib import closing
 from itertools import islice
 
+from web_portal.services.row_sorter import RowSorter, SortSpec  # Issue #3047: order rows on the server.
+
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
 
@@ -51,15 +53,23 @@ class DataBrowserService:
         entries.sort(key=lambda e: e["last_modified"], reverse=True)
         return entries
 
-    def preview_file(self, rel_path: str, page: int, per_page: int, search: str) -> dict:
-        """Preview a CSV, JSON, log, or return SQLite table list."""
+    def preview_file(self, rel_path: str, page: int, per_page: int, search: str, sort: SortSpec | None = None) -> dict:
+        """Preview a CSV, JSON, log, or return SQLite table list.
+
+        Args:
+            rel_path: The requested path inside the data directory.
+            page: The 1-based page number.
+            per_page: The page size.
+            search: The filter text, or an empty string.
+            sort: The requested column order, or None for the file order.
+        """
         resolved = self.resolve_safe_path(rel_path)
         if resolved is None:
             return {"error": "File not found"}
         page, per_page = self._clamp_page_args(page, per_page)  # Bound the request on both ends.
         ext = os.path.splitext(resolved)[1].lower()
         if ext == ".csv":
-            return self._preview_csv(resolved, page, per_page, search)
+            return self._preview_csv(resolved, page, per_page, search, sort)
         if ext in (".db", ".sqlite"):
             return self._list_sqlite_tables(resolved)
         if ext == ".json":
@@ -67,6 +77,32 @@ class DataBrowserService:
         if ext == ".log":
             return self._preview_log(resolved, page, per_page, search)
         return {"error": "Preview not supported for this file type"}
+
+    def read_column_names(self, rel_path: str) -> list:
+        """Return the column names of one preview file.
+
+        Why:
+            A sort request names a column by index. The route must refuse an
+            index that the file does not hold, so it needs the column count
+            before it builds the request.
+
+        Args:
+            rel_path: The requested path inside the data directory.
+
+        Returns:
+            The column names, or an empty list when the file cannot be read.
+        """
+        resolved = self.resolve_safe_path(rel_path)  # Never read outside the data directory.
+        if resolved is None:  # A missing file holds no column.
+            return []
+        if os.path.splitext(resolved)[1].lower() != ".csv":  # Only the CSV path orders rows today.
+            return []
+        try:  # A damaged file must not raise into the route.
+            with open(resolved, encoding="utf-8", errors="replace") as fh:
+                return next(csv.reader(fh), [])
+        except OSError as error:  # Report the cause and answer with no column.
+            logger.warning("Could not read the column names of %s: %s", rel_path, error)
+            return []
 
     def preview_sqlite_table(self, rel_path: str, table_name: str, page: int, per_page: int, search: str) -> dict:
         """Preview rows from a specific SQLite table."""
@@ -145,15 +181,42 @@ class DataBrowserService:
             "is_directory": False,
         }
 
-    def _preview_csv(self, filepath: str, page: int, per_page: int, search: str) -> dict:
-        """Read and paginate a CSV file."""
+    def _preview_csv(self, filepath: str, page: int, per_page: int, search: str, sort: SortSpec | None = None) -> dict:
+        """Read and paginate a CSV file, in file order or in a requested order."""
         try:
             with open(filepath, encoding="utf-8", errors="replace") as fh:
                 reader = csv.reader(fh)
                 columns = next(reader, [])
-                return self._paginate_iter_rows(columns, reader, page, per_page, search)
+                if sort is None:  # No sort keeps the streaming path, which holds no whole file.
+                    return self._paginate_iter_rows(columns, reader, page, per_page, search)
+                return self._paginate_sorted_rows(columns, reader, page, per_page, search, sort)
         except Exception as exc:
             return {"error": f"Failed to read CSV: {exc}"}
+
+    def _paginate_sorted_rows(self, columns: list, rows, page: int, per_page: int, search: str, sort: SortSpec) -> dict:
+        """Return one page of rows that the caller asked to order.
+
+        A sort cannot stream, because the last row of a file can belong on the
+        first page. This path therefore reads the matching rows into memory, up
+        to the cap that ``RowSorter`` holds, and it reports a cut read.
+        """
+        sorter = RowSorter()  # The sorter owns the cap and the key rule.
+        search_lower = search.lower() if search else ""
+        matching = (row for row in rows if not search_lower or self._row_matches(row, search_lower))
+        held, truncated = sorter.collect(matching)  # Stop at the cap, so one file cannot exhaust the worker.
+        ordered = sorter.sort(held, sort)
+        total = len(ordered)
+        total_pages = max(1, math.ceil(total / per_page))
+        safe_page = max(1, min(page, total_pages))
+        start = (safe_page - 1) * per_page
+        page_rows = ordered[start : start + per_page]
+        result = self._format_page_result(columns, page_rows, total, safe_page, per_page, total_pages)
+        result["sorted_by"] = sort.column  # The browser confirms which column the server ordered.
+        result["sort_dir"] = "desc" if sort.descending else "asc"
+        if truncated:  # Never let a partial sort look complete, because that repeats the original defect.
+            result["sort_truncated"] = True
+            result["sort_limit"] = sorter.max_rows  # Name the cap, so the operator knows the covered span.
+        return result
 
     def _preview_json(self, filepath: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate a JSON or JSONL file as tabular data."""
