@@ -19,6 +19,10 @@ import structlog  # WHY: structured logging
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger
 
+TOKEN_CREATION_ERRORS = (jwt.PyJWTError, TypeError, ValueError)  # WHY: JWT encoding can reject keys or claims.
+TOKEN_VALIDATION_ERRORS = (KeyError, TypeError, ValueError)  # WHY: decoded claims can miss required fields.
+TOKEN_REFRESH_ERRORS = (jwt.PyJWTError, KeyError, TypeError, ValueError)  # WHY: refresh reads and writes JWT claims.
+
 
 class JWTSessionManager:
     """Manages JWT-based stateless sessions with inactivity timeout."""
@@ -97,7 +101,7 @@ class JWTSessionManager:
             )  # WHY: post-creation log
             return token  # WHY: return token string
 
-        except Exception as e:
+        except TOKEN_CREATION_ERRORS as e:
             # WHY: catch and log exceptions
             logger.error("jwt_token_creation_failed", user_id=user_id, error=str(e))  # WHY: exception handling
             raise  # WHY: re-raise exception
@@ -149,7 +153,7 @@ class JWTSessionManager:
             logger.warning("jwt_token_invalid", error=str(e))  # WHY: error log
             return False, None, "invalid_token"  # WHY: invalid error
 
-        except Exception as e:
+        except TOKEN_VALIDATION_ERRORS as e:
             # WHY: catch unexpected exceptions
             logger.error("jwt_token_validation_exception", error=str(e))  # WHY: exception log
             return False, None, "validation_error"  # WHY: error return
@@ -220,7 +224,7 @@ class JWTSessionManager:
                                 "jwt_token_grace_period_expired", seconds_elapsed=time_since_expiry
                             )  # WHY: grace log
                             return False, None, "token_expired"  # WHY: expired error
-                    except Exception as e:
+                    except TOKEN_REFRESH_ERRORS as e:
                         # WHY: grace period decode failed
                         logger.warning("jwt_token_grace_period_decode_failed", error=str(e))  # WHY: error log
                         return False, None, error  # WHY: error return
@@ -247,7 +251,7 @@ class JWTSessionManager:
             logger.info("jwt_token_refreshed", user_id=user_id)  # WHY: refresh success
             return True, new_token, None  # WHY: success return
 
-        except Exception as e:
+        except TOKEN_REFRESH_ERRORS as e:
             # WHY: catch and log exceptions
             logger.error("jwt_token_refresh_exception", error=str(e))  # WHY: exception log
             return False, None, "refresh_error"  # WHY: error return
@@ -430,11 +434,12 @@ class PauseResumeManager:
             )  # WHY: success log
             return pause_state  # WHY: return pause state
 
-        except Exception as e:
+        except Exception as e:  # Keep broad so a failed pause is logged before the caller stops the unsafe resume.
             # WHY: catch and log exceptions
             logger.error(
                 "upgrade_session_pause_failed",
                 run_id=run_id,
+                exception_type=type(e).__name__,
                 error=str(e),
             )  # WHY: exception log
             raise  # WHY: re-raise exception
@@ -539,11 +544,12 @@ class PauseResumeManager:
                 current_phase=current_phase,  # WHY: phase name
             )  # WHY: return result
 
-        except Exception as e:
+        except Exception as e:  # Keep broad so resume returns one failure signal instead of losing session context.
             # WHY: catch and log exceptions
             logger.error(
                 "upgrade_session_resume_failed",
                 run_id=run_id,
+                exception_type=type(e).__name__,
                 error=str(e),
             )  # WHY: exception log
             # WHY: return error result

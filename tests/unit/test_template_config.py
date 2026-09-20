@@ -612,6 +612,7 @@ class TestReportApplyResults:
         ]
         mgr._report_apply_results(results)
         save_mock.assert_called_once()
+        assert save_mock.call_count == 1  # Prove clone reporting saved one audit report.
 
 
 # ================================================================
@@ -801,6 +802,7 @@ class TestReportCloneResults:
         site_results = [{"site_name": "S1", "status": "ASSIGNED", "error": ""}]
         mgr._report_clone_results(to_create, site_results)
         save_mock.assert_called_once()
+        assert save_mock.call_count == 1  # Prove clone reporting saved one audit report.
 
 
 # ================================================================
@@ -813,17 +815,19 @@ class TestExtractEntryPoint:
 
     def test_extract_no_templates(self) -> None:
         mgr = _make_manager()
-        with patch.object(mgr, "_fetch_templates", return_value=None):
+        with patch.object(mgr, "_fetch_templates", return_value=None) as mock_fetch:
             mgr.extract()  # Should not raise
+        assert mock_fetch.call_count == 1  # Prove extract reached the template guard.
 
     def test_extract_no_selection(self) -> None:
         mgr = _make_manager()
         templates = [{"name": "T1", "id": "id1"}]
         with (
             patch.object(mgr, "_fetch_templates", return_value=templates),
-            patch.object(mgr, "_select_template", return_value=None),
+            patch.object(mgr, "_select_template", return_value=None) as mock_select,
         ):
             mgr.extract()  # Should not raise
+        assert mock_select.call_count == 1  # Prove extract reached the selection guard.
 
 
 class TestApplyEntryPoint:
@@ -831,8 +835,9 @@ class TestApplyEntryPoint:
 
     def test_apply_no_extraction_file(self) -> None:
         mgr = _make_manager()
-        with patch.object(mgr, "_load_extraction_file", return_value=None):
+        with patch.object(mgr, "_load_extraction_file", return_value=None) as mock_load:
             mgr.apply()  # Should not raise
+        assert mock_load.call_count == 1  # Prove apply reached the extraction-file guard.
 
 
 class TestCloneByLocationEntryPoint:
@@ -840,8 +845,9 @@ class TestCloneByLocationEntryPoint:
 
     def test_clone_no_sites(self) -> None:
         mgr = _make_manager()
-        with patch.object(mgr, "_load_sites_with_location", return_value=None):
+        with patch.object(mgr, "_load_sites_with_location", return_value=None) as mock_load:
             mgr.clone_by_location()  # Should not raise
+        assert mock_load.call_count == 1  # Prove clone reached the site-load guard.
 
 
 # ================================================================
@@ -859,9 +865,10 @@ class TestExtractContinuation:
         with (  # Patch internal methods to control flow
             patch.object(mgr, "_fetch_templates", return_value=templates),  # Return template list
             patch.object(mgr, "_select_template", return_value=templates[0]),  # Select first
-            patch.object(mgr, "_fetch_template_config", return_value=None),  # Config fails
+            patch.object(mgr, "_fetch_template_config", return_value=None) as mock_config,  # Config fails
         ):
             mgr.extract()  # Should return early without saving
+        assert mock_config.call_count == 1  # Prove extract reached the config guard.
 
     def test_no_extraction_returns_early(self) -> None:
         """Lines 83, 84, 87-88: config found but extract_configs returns None → no save."""
@@ -905,9 +912,10 @@ class TestApplyContinuation:
         extraction = {"configurations": {}}  # Minimal extraction data
         with (  # Patch to supply extraction but fail on templates
             patch.object(mgr, "_load_extraction_file", return_value=extraction),  # File loaded
-            patch.object(mgr, "_fetch_templates", return_value=None),  # No templates available
+            patch.object(mgr, "_fetch_templates", return_value=None) as mock_fetch,  # No templates available
         ):
             mgr.apply()  # Should return after checking templates (lines 105-107)
+        assert mock_fetch.call_count == 1  # Prove apply reached the template guard.
 
     def test_no_destinations_returns_early(self) -> None:
         """Lines 105-111: destinations selection returns None → early return."""
@@ -917,9 +925,10 @@ class TestApplyContinuation:
         with (  # Patch to reach destination selection step
             patch.object(mgr, "_load_extraction_file", return_value=extraction),  # File loaded
             patch.object(mgr, "_fetch_templates", return_value=templates),  # Templates ok
-            patch.object(mgr, "_select_destination_templates", return_value=None),  # Nothing selected
+            patch.object(mgr, "_select_destination_templates", return_value=None) as mock_select,  # Nothing selected
         ):
             mgr.apply()  # Should return after destination check (lines 105-111)
+        assert mock_select.call_count == 1  # Prove apply reached the destination guard.
 
     def test_confirm_declined_returns_early(self) -> None:
         """Lines 105-118: user declines confirmation → early return after confirm check."""
@@ -931,9 +940,10 @@ class TestApplyContinuation:
             patch.object(mgr, "_load_extraction_file", return_value=extraction),  # File ok
             patch.object(mgr, "_fetch_templates", return_value=templates),  # Templates ok
             patch.object(mgr, "_select_destination_templates", return_value=destinations),  # Selected
-            patch.object(mgr, "_confirm_apply", return_value=False),  # User declines
+            patch.object(mgr, "_confirm_apply", return_value=False) as mock_confirm,  # User declines
         ):
             mgr.apply()  # Should cover lines 105-118 then stop at return
+        assert mock_confirm.call_count == 1  # Prove apply reached the destructive confirmation guard.
 
     def test_full_apply_reports_results(self) -> None:
         """Lines 105-121: full happy path — configs applied and results reported."""
@@ -964,9 +974,10 @@ class TestCloneByLocationContinuation:
         with (  # Patch to supply sites but fail on template fetch
             patch.object(mgr, "_load_sites_with_location", return_value=sites),  # Sites loaded
             patch.object(mgr, "_get_unique_locations", return_value=({"TX"}, set())),  # Locations
-            patch.object(mgr, "_fetch_templates", return_value=None),  # No templates
+            patch.object(mgr, "_fetch_templates", return_value=None) as mock_fetch,  # No templates
         ):
             mgr.clone_by_location()  # Should return at lines 140-142
+        assert mock_fetch.call_count == 1  # Prove clone reached the template guard.
 
     def test_no_source_selected_returns_early(self) -> None:
         """Lines 138-146: _select_template returns None → early return."""
@@ -977,9 +988,10 @@ class TestCloneByLocationContinuation:
             patch.object(mgr, "_load_sites_with_location", return_value=sites),  # Sites loaded
             patch.object(mgr, "_get_unique_locations", return_value=({"TX"}, set())),  # Locations
             patch.object(mgr, "_fetch_templates", return_value=templates),  # Templates ok
-            patch.object(mgr, "_select_template", return_value=None),  # Nothing selected
+            patch.object(mgr, "_select_template", return_value=None) as mock_select,  # Nothing selected
         ):
             mgr.clone_by_location()  # Should return at lines 144-146
+        assert mock_select.call_count == 1  # Prove clone reached the source-template guard.
 
     def test_no_source_config_returns_early(self) -> None:
         """Lines 138-150: source config fetch returns None → early return."""
@@ -992,9 +1004,10 @@ class TestCloneByLocationContinuation:
             patch.object(mgr, "_get_unique_locations", return_value=({"TX"}, set())),  # Locations
             patch.object(mgr, "_fetch_templates", return_value=templates),  # Templates ok
             patch.object(mgr, "_select_template", return_value=source),  # Source selected
-            patch.object(mgr, "_fetch_template_config", return_value=None),  # Config fails
+            patch.object(mgr, "_fetch_template_config", return_value=None) as mock_config,  # Config fails
         ):
             mgr.clone_by_location()  # Should return at lines 148-150
+        assert mock_config.call_count == 1  # Prove clone reached the source-config guard.
 
     def test_clone_not_confirmed_returns_early(self) -> None:
         """Lines 138-156: user declines clone confirmation → early return."""
@@ -1011,9 +1024,10 @@ class TestCloneByLocationContinuation:
             patch.object(mgr, "_fetch_template_config", return_value=source_config),  # Config ok
             patch.object(mgr, "_plan_template_creation", return_value=[]),  # Empty creation plan
             patch.object(mgr, "_plan_site_assignments", return_value=[]),  # Empty assignments
-            patch.object(mgr, "_confirm_clone", return_value=False),  # User declines
+            patch.object(mgr, "_confirm_clone", return_value=False) as mock_confirm,  # User declines
         ):
             mgr.clone_by_location()  # Should cover lines 138-156 then stop
+        assert mock_confirm.call_count == 1  # Prove clone reached the destructive confirmation guard.
 
     def test_full_clone_reports_results(self) -> None:
         """Lines 138-162: full happy path — templates created and sites assigned."""
@@ -1062,6 +1076,7 @@ class TestSaveExtractionSuccessPath:
             mock_open.return_value.__exit__ = MagicMock(return_value=False)  # Context exit
             mgr._save_extraction(extraction, selected)  # Should not raise; prints success
         mock_open.assert_called_once()  # Verify file was opened for writing
+        assert mock_open.call_count == 1  # Prove extraction opened one output file.
 
 
 class TestLoadExtractionFileErrors:
@@ -1167,12 +1182,14 @@ class TestReportApplyResultsMixed:
         ]
         mgr._report_apply_results(results)  # Should not raise; calls save_data and prints
         mgr._save_data.assert_called_once()  # Verify data saved via injected _save_data mock
+        assert mgr._save_data.call_count == 1  # Prove mixed results wrote one report.
 
     def test_empty_results_does_not_crash(self) -> None:
         """_report_apply_results handles empty list gracefully."""
         mgr = _make_manager()  # Create manager with mocked dependencies
         mgr._report_apply_results([])  # Empty results should not raise
         mgr._save_data.assert_called_once()  # Save still called even with empty results
+        assert mgr._save_data.call_count == 1  # Prove empty results still wrote one report.
 
 
 class TestLoadSitesWithLocation:
@@ -1366,12 +1383,12 @@ class TestParseStateHelperEdgeCases:
 class TestCoverageGapsExtra:
     """Tests targeting uncovered lines in GatewayTemplateConfigManager."""
 
-    def test_save_extraction_open_raises_covers_305_307(self) -> None:
+    def test_save_extraction_open_raises_covers_305_307(self, capsys: object) -> None:
         """Lines 305-307: open() raises IOError → except block prints error + logs."""
         mgr = _make_manager()  # create manager with default mocked dependencies
         with patch("src.gateway.template_config.open", side_effect=OSError("disk full"), create=True):  # patch open
             mgr._save_extraction({"key": "val"}, {"name": "TestTemplate", "id": "t1"})  # call; open raises
-        # If we reach here without exception, except block was executed and swallowed the error
+        assert "Error saving extraction file" in capsys.readouterr().out  # Prove the error branch reported the failure.
 
     def test_confirm_apply_picocell_prints_lines_413_414(self) -> None:
         """Lines 413-414: picocell is non-None → prints picocell info block."""
