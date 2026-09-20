@@ -8,6 +8,7 @@ from types import SimpleNamespace  # WHY: light stand-in for mistapi SDK modules
 from unittest.mock import MagicMock  # WHY: MagicMock(spec=Callable) is mandatory per project standard
 
 import pytest  # WHY: caplog, monkeypatch fixtures drive banner assertions and env-var patching
+import requests  # WHY: model expected Mist transport failures.
 
 from src.inventory.org_device_inventory_summary import (  # WHY: SUT plus DI seam
     OrgDeviceInventorySummaryCore,
@@ -120,7 +121,7 @@ def test_lookup_org_name_from_api_handles_exception() -> None:
             v1=SimpleNamespace(
                 orgs=SimpleNamespace(
                     orgs=SimpleNamespace(
-                        getOrg=MagicMock(side_effect=RuntimeError("boom"))  # WHY: force exception path
+                        getOrg=MagicMock(side_effect=requests.RequestException("boom"))  # WHY: force exception path
                     )
                 )
             )
@@ -318,7 +319,9 @@ def test_fetch_switch_page_follows_next_url() -> None:
 
 def test_fetch_switch_page_returns_none_on_exception() -> None:
     """_search_switch_page returns None when the SDK raises."""
-    api = SimpleNamespace(mist_get=MagicMock(side_effect=RuntimeError("network")))  # WHY: force the except branch
+    api = SimpleNamespace(
+        mist_get=MagicMock(side_effect=requests.RequestException("network"))
+    )  # WHY: force the except branch
     _reset_dependencies(apisession=api)  # WHY: replace default apisession
     assert OrgDeviceInventorySummaryCore._search_switch_page("org-1", "https://api/next") is None  # WHY: sentinel None
 
@@ -381,7 +384,9 @@ def test_fetch_gateway_physical_inventory_handles_exception() -> None:
             v1=SimpleNamespace(
                 orgs=SimpleNamespace(
                     inventory=SimpleNamespace(
-                        getOrgInventory=MagicMock(side_effect=RuntimeError("kaboom"))  # WHY: forced failure
+                        getOrgInventory=MagicMock(
+                            side_effect=requests.RequestException("kaboom")
+                        )  # WHY: forced failure
                     )
                 )
             )
@@ -399,7 +404,9 @@ def test_fetch_ap_inventory_handles_exception() -> None:
             v1=SimpleNamespace(
                 orgs=SimpleNamespace(
                     inventory=SimpleNamespace(
-                        getOrgInventory=MagicMock(side_effect=RuntimeError("kaboom"))  # WHY: forced failure
+                        getOrgInventory=MagicMock(
+                            side_effect=requests.RequestException("kaboom")
+                        )  # WHY: forced failure
                     )
                 )
             )
@@ -417,7 +424,9 @@ def test_fetch_unassigned_inventory_handles_exception() -> None:
             v1=SimpleNamespace(
                 orgs=SimpleNamespace(
                     inventory=SimpleNamespace(
-                        getOrgInventory=MagicMock(side_effect=RuntimeError("kaboom"))  # WHY: forced failure
+                        getOrgInventory=MagicMock(
+                            side_effect=requests.RequestException("kaboom")
+                        )  # WHY: forced failure
                     )
                 )
             )
@@ -433,7 +442,7 @@ def test_fetch_switch_type_rows_wraps_exceptions(monkeypatch: pytest.MonkeyPatch
     _reset_dependencies()  # WHY: hydrate module DI seams
 
     def _boom(target_org_id: str) -> list[dict]:  # WHY: force the except branch
-        raise RuntimeError("nope")  # WHY: exception path
+        raise requests.RequestException("nope")  # WHY: exception path
 
     monkeypatch.setattr(  # WHY: swap in the raising helper
         OrgDeviceInventorySummaryCore, "_fetch_switch_physical_inventory", staticmethod(_boom)
@@ -446,7 +455,7 @@ def test_fetch_gateway_type_rows_wraps_exceptions(monkeypatch: pytest.MonkeyPatc
     _reset_dependencies()  # WHY: hydrate module DI seams
 
     def _boom(target_org_id: str) -> list[dict]:  # WHY: force the except branch
-        raise RuntimeError("nope")  # WHY: exception path
+        raise requests.RequestException("nope")  # WHY: exception path
 
     monkeypatch.setattr(  # WHY: swap in the raising helper
         OrgDeviceInventorySummaryCore, "_fetch_gateway_physical_inventory", staticmethod(_boom)
@@ -496,7 +505,7 @@ def test_fetch_ap_type_rows_wraps_exceptions(monkeypatch: pytest.MonkeyPatch) ->
     _reset_dependencies()  # WHY: hydrate module DI seams
 
     def _boom(records: list[dict], distinct: str) -> list[dict]:  # WHY: force the except branch
-        raise RuntimeError("nope")  # WHY: exception path
+        raise requests.RequestException("nope")  # WHY: exception path
 
     monkeypatch.setattr(  # WHY: swap in the raising aggregator
         OrgDeviceInventorySummaryCore, "_aggregate_ap_counts", staticmethod(_boom)
@@ -535,7 +544,7 @@ def test_with_unassigned_falls_back_on_aggregate_error(monkeypatch: pytest.Monke
     base = [{"device_type": "ap", "model": "AP41", "count": 2}]  # WHY: original assigned rows
 
     def _boom(records: list[dict], distinct: str) -> list[dict]:  # WHY: force the except branch
-        raise RuntimeError("aggregate failure")  # WHY: aggregation must not break the report
+        raise TypeError("aggregate failure")  # WHY: aggregation must not break the report
 
     monkeypatch.setattr(  # WHY: swap in the raising aggregator
         OrgDeviceInventorySummaryCore, "_aggregate_unassigned_counts", staticmethod(_boom)
@@ -589,3 +598,104 @@ def test_run_for_org_returns_expected_tuple(monkeypatch: pytest.MonkeyPatch, cap
     assert result == (model_rows, version_rows, pivot_rows, "SafeOrg")  # WHY: tuple order documented
     out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
     assert "Summary for SafeOrg completed" in out  # WHY: user-visible summary logged
+
+
+def test_search_switch_page_unexpected_error_propagates() -> None:
+    """A coding fault in switch pagination must not read as the end of data."""
+    api = SimpleNamespace(mist_get=MagicMock(side_effect=ValueError("bad cursor")))  # Force continuation branch fault.
+    _reset_dependencies(apisession=api)  # Inject the session that raises from mist_get.
+    with pytest.raises(ValueError, match="bad cursor"):
+        OrgDeviceInventorySummaryCore._search_switch_page("org-1", "next")  # The narrowed handler must propagate.
+
+
+@pytest.mark.parametrize(
+    ("method_name", "device_type"),
+    [
+        ("_fetch_gateway_physical_inventory", "gateway"),
+        ("_fetch_ap_inventory", "ap"),
+        ("_fetch_unassigned_inventory", "switch"),
+    ],
+)
+def test_inventory_fetch_unexpected_error_propagates(method_name: str, device_type: str) -> None:
+    """A coding fault in inventory fetch helpers must not become an empty inventory."""
+    mistapi_dep = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(
+                orgs=SimpleNamespace(
+                    inventory=SimpleNamespace(getOrgInventory=MagicMock(side_effect=ValueError(f"bad {device_type}")))
+                )
+            )
+        ),
+        get_all=MagicMock(return_value=[]),
+    )  # Build the only endpoint these helpers use.
+    _reset_dependencies(mistapi_module=mistapi_dep)  # Inject the endpoint that raises unexpectedly.
+    with pytest.raises(ValueError, match=f"bad {device_type}"):
+        getattr(OrgDeviceInventorySummaryCore, method_name)("org-1")  # The narrowed handler must propagate.
+
+
+@pytest.mark.parametrize(
+    ("exception", "expected"),
+    [
+        (requests.ConnectionError("offline"), []),
+        (requests.Timeout("slow"), []),
+    ],
+)
+def test_gateway_inventory_connection_failures_return_empty(exception: Exception, expected: list[dict]) -> None:
+    """Connection errors and timeouts must keep the inventory report alive."""
+    mistapi_dep = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(
+                orgs=SimpleNamespace(inventory=SimpleNamespace(getOrgInventory=MagicMock(side_effect=exception)))
+            )
+        ),
+        get_all=MagicMock(return_value=[]),
+    )  # Build the endpoint used by the gateway inventory fetch.
+    _reset_dependencies(mistapi_module=mistapi_dep)  # Inject the endpoint that raises a connection failure.
+    result = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1")
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("method_name", "dependency_name"),
+    [
+        ("_fetch_switch_type_rows", "_fetch_switch_physical_inventory"),
+        ("_fetch_gateway_type_rows", "_fetch_gateway_physical_inventory"),
+        ("_fetch_ap_type_rows", "_fetch_ap_inventory"),
+    ],
+)
+def test_type_row_fetch_unexpected_error_propagates(
+    monkeypatch: pytest.MonkeyPatch, method_name: str, dependency_name: str
+) -> None:
+    """A coding fault in type-row fetch helpers must not look like an empty device type."""
+    monkeypatch.setattr(  # Replace the dependency with a coding fault.
+        OrgDeviceInventorySummaryCore,
+        dependency_name,
+        staticmethod(lambda _org: (_ for _ in ()).throw(ValueError(f"bad {dependency_name}"))),
+    )
+    with pytest.raises(ValueError, match=dependency_name):
+        getattr(OrgDeviceInventorySummaryCore, method_name)("org-1", "model", None)  # The handler must propagate.
+
+
+def test_with_unassigned_unexpected_merge_error_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A coding fault outside row-shape errors must not hide inside assigned-only results."""
+    monkeypatch.setattr(  # Replace aggregation with an unexpected fault outside the narrowed tuple.
+        OrgDeviceInventorySummaryCore,
+        "_aggregate_unassigned_counts",
+        staticmethod(lambda _records, _distinct: (_ for _ in ()).throw(RuntimeError("bad merge code"))),
+    )
+    with pytest.raises(RuntimeError, match="bad merge code"):
+        OrgDeviceInventorySummaryCore._with_unassigned([], "org-1", "model", [])  # The handler must propagate.
+
+
+def test_org_name_lookup_unexpected_error_propagates() -> None:
+    """A coding fault in the org-name lookup must not look like an absent org name."""
+    mistapi_dep = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(
+                orgs=SimpleNamespace(orgs=SimpleNamespace(getOrg=MagicMock(side_effect=ValueError("bad org name"))))
+            )
+        )
+    )  # Build the endpoint used by the name lookup.
+    _reset_dependencies(mistapi_module=mistapi_dep)  # Inject the endpoint that raises unexpectedly.
+    with pytest.raises(ValueError, match="bad org name"):
+        OrgDeviceInventorySummaryCore._lookup_org_name_from_api("org-1")  # The handler must propagate.

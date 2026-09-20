@@ -8,6 +8,7 @@ import time  # WHY: wall-clock elapsed reporting for the full org summary run
 from collections.abc import Callable  # WHY: PEP 585 canonical location for Callable
 from typing import Any  # WHY: apisession / mistapi / DataExporter typed as Any due to injection
 
+import requests  # WHY: Mist SDK transport failures surface through requests exceptions.
 from prettytable import PrettyTable  # WHY: console rendering for the operator-facing summary tables
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
@@ -58,7 +59,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
                     apisession, target_org_id, type="switch", limit=_INVENTORY_PAGE_SIZE
                 )
             )
-        except Exception as error:  # WHY: any transport failure stops pagination without aborting the run
+        except (AttributeError, requests.RequestException) as error:  # WHY: SDK or transport failure stops pagination.
             logging.exception("searchOrgDevices switch page failed: %s", error)  # WHY: keep traceback for ops
             return None  # WHY: sentinel telling the loop to break gracefully
         page_data = getattr(response, "data", None) if response else None  # WHY: defensive against empty response
@@ -115,7 +116,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
                 apisession, target_org_id, type="gateway", vc=True, limit=_INVENTORY_PAGE_SIZE
             )
             all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # WHY: auto-paginate
-        except Exception as error:  # WHY: degrade gracefully rather than crash the parent report
+        except (AttributeError, requests.RequestException) as error:  # WHY: inventory fetch errors return empty rows.
             logging.exception("getOrgInventory gateway failed: %s", error)  # WHY: traceback for ops
             all_records = []  # WHY: empty list keeps callers happy
         logger.info(  # WHY: summarize outcome once so logs stay quiet during success
@@ -149,7 +150,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
                 apisession, target_org_id, type="ap", limit=_INVENTORY_PAGE_SIZE
             )
             all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # WHY: auto-paginate
-        except Exception as error:  # WHY: graceful degradation keeps other reports running
+        except (AttributeError, requests.RequestException) as error:  # WHY: inventory fetch errors return empty rows.
             logging.exception("getOrgInventory AP fetch failed: %s", error)  # WHY: traceback for ops
             all_records = []  # WHY: empty result surfaces no AP rows rather than crashing
         logger.debug("AP inventory fetched: %d records org=%s", len(all_records), target_org_id)  # WHY: outcome
@@ -188,7 +189,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
                 apisession, target_org_id, type="switch", limit=_INVENTORY_PAGE_SIZE
             )
             all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # WHY: auto-paginate
-        except Exception as error:  # WHY: degrade gracefully so callers simply see no unassigned rows
+        except (AttributeError, requests.RequestException) as error:  # WHY: inventory fetch errors return empty rows.
             logging.exception("getOrgInventory unassigned switch failed: %s", error)  # WHY: traceback for ops
             all_records = []  # WHY: empty on error keeps downstream filters valid
         unassigned = [record for record in all_records if not record.get("site_id")]  # WHY: no site_id => stock
@@ -248,7 +249,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         try:  # WHY: never abort the combined report on one type's failure
             records = OrgDeviceInventorySummaryCore._fetch_switch_physical_inventory(target_org_id)  # WHY: paginate
             return OrgDeviceInventorySummaryCore._aggregate_switch_counts(records, distinct)  # WHY: VC-accurate sum
-        except Exception as error:  # WHY: swallow so other types still contribute rows
+        except (AttributeError, requests.RequestException) as error:  # WHY: type fetch failures should isolate.
             logging.exception("Switch %s count (VC-aware) failed: %s", distinct, error)  # WHY: traceback for ops
             return []  # WHY: empty rows so downstream merge/sort still work
 
@@ -259,7 +260,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         try:  # WHY: never abort the combined report on one type's failure
             records = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory(target_org_id)  # WHY: HA members
             return OrgDeviceInventorySummaryCore._aggregate_gateway_counts(records, distinct)  # WHY: per-record sum
-        except Exception as error:  # WHY: swallow so other types still contribute rows
+        except (AttributeError, requests.RequestException) as error:  # WHY: type fetch failures should isolate.
             logging.exception("Gateway %s count (HA-aware) failed: %s", distinct, error)  # WHY: traceback for ops
             return []  # WHY: empty rows so downstream merge/sort still work
 
@@ -273,7 +274,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
                 else OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)
             )
             return OrgDeviceInventorySummaryCore._aggregate_ap_counts(resolved, distinct)  # WHY: 3-way version rule
-        except Exception as error:  # WHY: swallow so other types still contribute rows
+        except (AttributeError, requests.RequestException) as error:  # WHY: type fetch failures should isolate.
             logging.exception("AP %s count from inventory failed: %s", distinct, error)  # WHY: traceback for ops
             return []  # WHY: empty rows so downstream merge/sort still work
 
@@ -312,7 +313,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         try:  # WHY: supplemental counting must never break the primary report
             unassigned_rows = OrgDeviceInventorySummaryCore._aggregate_unassigned_counts(resolved, distinct)
             return OrgDeviceInventorySummaryCore._merge_counts(all_rows, unassigned_rows, distinct)  # WHY: sum overlap
-        except Exception as error:  # WHY: fall back to assigned-only rows on any aggregation/merge failure
+        except (KeyError, TypeError, ValueError) as error:  # WHY: bad supplemental rows should not break the report.
             logging.exception("Unassigned %s supplemental count failed: %s", distinct, error)  # WHY: traceback for ops
             return all_rows  # WHY: degrade gracefully to the assigned-only counts
 
@@ -350,7 +351,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         """Return the API-reported org name, or ``None`` on failure or missing name."""
         try:  # WHY: API failures fall back to env / org id at higher level
             org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, target_org_id)  # WHY: authoritative name source
-        except Exception as error:  # WHY: never break the summary run on a naming lookup
+        except (AttributeError, requests.RequestException) as error:  # WHY: name lookup falls back to env or org ID.
             logging.warning("Could not resolve org name from API: %s", error)  # WHY: warn-only. Recovery follows
             return None  # WHY: signal caller to try env / id fallbacks
         return getattr(org_response, "data", {}).get("name")  # WHY: response may be dict-like or missing name key
