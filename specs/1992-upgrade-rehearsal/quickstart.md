@@ -185,6 +185,5 @@ config file that turns strict mode on and excludes nothing.
 .venv\Scripts\python.exe -m mypy --config-file .mypy_rehearsal.ini tests/support/rehearsal
 ```
 
-The file holds five lines: `[mypy]`, `strict = True`,
-`explicit_package_bases = True`, `ignore_missing_imports = True`, and
+The file holds five lines: `[mypy]`, `strict = True`, `explicit_package_bases = True`, `ignore_missing_imports = True`, and
 `warn_unused_ignores = False`.
