@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from flask import Blueprint, Response, current_app, jsonify, request, session
+from requests.exceptions import RequestException  # Name the transport faults that the Mist SDK can raise.
 
 from ....firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
 from ....firmware.org_upgrade_body import OrgUpgradeBody
@@ -718,8 +719,12 @@ def _call_submission(
     except ValueError as error:
         session.pop(LAST_JOB_SESSION_KEY, None)
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, str(error))
-    except Exception:
-        logger.exception("The organization upgrade submission outcome is unknown")
+    except RequestException as error:
+        logger.exception(
+            "The organization upgrade submission outcome is unknown after %s: %s",
+            type(error).__name__,
+            error,
+        )
         return json_error(
             SERVICE_UNAVAILABLE_STATUS,
             SUBMISSION_FAILED,
@@ -911,8 +916,12 @@ def _submit_aggregate(
         )
     except ValueError as error:  # A replay or a malformed plan is a conflict.
         return json_error(CONFLICT_STATUS, ALREADY_SUBMITTED, str(error))
-    except Exception:
-        logger.exception("The aggregate upgrade submission outcome is unknown")
+    except Exception as error:  # Keep broad because aggregate child writes can leave mixed unknown outcomes.
+        logger.exception(
+            "The aggregate upgrade submission outcome is unknown after %s: %s",
+            type(error).__name__,
+            error,
+        )  # Preserve the aggregate write fault in the log.
         return json_error(
             SERVICE_UNAVAILABLE_STATUS,
             SUBMISSION_FAILED,
@@ -1122,8 +1131,12 @@ def _refresh_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) 
     logger.info("Refresh aggregate upgrade %s", operation.get("operation_id", ""))  # Log before child reads.
     try:
         aggregate_service().status(cloud_session, operation, upgrade_routes.run_store())  # Persist each child.
-    except Exception:  # The last durable state remains safe to show.
-        logger.exception("The aggregate upgrade status read failed")  # Record the unknown read outcome.
+    except Exception as error:  # Keep broad because the status page must show the last durable state.
+        logger.exception(
+            "The aggregate upgrade status read failed with %s: %s",
+            type(error).__name__,
+            error,
+        )  # Record the unknown read outcome.
     _release_operation_locks(operation)  # Free every site as soon as the operation settles.
     logger.debug("The aggregate upgrade refresh finished with state %s", operation.get("state", "unknown"))
 
@@ -1146,8 +1159,12 @@ def _org_job_page(cloud_session: Any, org_id: str, upgrade_id: str) -> str | tup
         result = upgrade_service().status(cloud_session, org_id, upgrade_id)  # Read the AP job once.
     except (TypeError, ValueError) as error:
         return json_error(BAD_REQUEST_STATUS, STATUS_FAILED, str(error))
-    except Exception:
-        logger.exception("The organization upgrade status read failed")
+    except RequestException as error:
+        logger.exception(
+            "The organization upgrade status read failed with %s: %s",
+            type(error).__name__,
+            error,
+        )
         return json_error(SERVICE_UNAVAILABLE_STATUS, STATUS_FAILED, "The cloud status read failed.")
     refusal = result_error(result, STATUS_FAILED)  # Reject an invalid cloud response.
     if refusal is not None:  # Preserve the existing gateway response.
@@ -1192,8 +1209,12 @@ def _org_status_response(cloud_session: Any, org_id: str, upgrade_id: str) -> tu
         result = upgrade_service().status(cloud_session, org_id, upgrade_id)  # Read the AP job once.
     except (TypeError, ValueError) as error:
         return json_error(BAD_REQUEST_STATUS, STATUS_FAILED, str(error))
-    except Exception:
-        logger.exception("The organization upgrade status read failed")
+    except RequestException as error:
+        logger.exception(
+            "The organization upgrade status read failed with %s: %s",
+            type(error).__name__,
+            error,
+        )
         return json_error(SERVICE_UNAVAILABLE_STATUS, STATUS_FAILED, "The cloud status read failed.")
     refusal = result_error(result, STATUS_FAILED)  # Reject an invalid cloud response.
     if refusal is not None:  # Preserve the existing gateway response.
@@ -1228,8 +1249,12 @@ def _call_cancellation(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgU
         return upgrade_service().cancel(cloud_session, org_id, upgrade_id)
     except (TypeError, ValueError) as error:
         return json_error(BAD_REQUEST_STATUS, CANCEL_FAILED, str(error))
-    except Exception:
-        logger.exception("The organization upgrade cancellation outcome is unknown")
+    except RequestException as error:
+        logger.exception(
+            "The organization upgrade cancellation outcome is unknown after %s: %s",
+            type(error).__name__,
+            error,
+        )
         return json_error(
             SERVICE_UNAVAILABLE_STATUS,
             CANCEL_FAILED,
@@ -1283,8 +1308,12 @@ def _cancel_aggregate(
         aggregate_service().cancel(cloud_session, operation, upgrade_routes.run_store())
     except ValueError as error:  # A replay or malformed state is a conflict.
         return json_error(CONFLICT_STATUS, CANCEL_FAILED, str(error))
-    except Exception:  # Preserve an unknown outcome without a hidden retry.
-        logger.exception("The aggregate upgrade cancellation outcome is unknown")
+    except Exception as error:  # Keep broad because aggregate child cancellations can leave mixed outcomes.
+        logger.exception(
+            "The aggregate upgrade cancellation outcome is unknown after %s: %s",
+            type(error).__name__,
+            error,
+        )  # Preserve an unknown outcome without a hidden retry.
         return json_error(
             SERVICE_UNAVAILABLE_STATUS,
             CANCEL_FAILED,

@@ -121,9 +121,13 @@ class ArangoTransactionAdapter:  # Own the explicit python-arango transaction li
         try:  # A failure must roll back the action and run together.
             result = operation(transaction)  # Execute all work through the transaction database.
             transaction.commit_transaction()  # Make the complete write unit durable.
-        except Exception:  # A database or validation fault must commit no partial result.
+        except Exception as error:  # Keep broad because a transaction must roll back for any write fault.
             self._abort(transaction)  # Roll back both action and run changes.
-            logger.exception("The action store transaction failed")  # Record full context without record data.
+            logger.exception(
+                "The action store transaction failed with %s: %s",
+                type(error).__name__,
+                error,
+            )  # Record full context without record data.
             raise  # Let the repository convert the failure to its stable error.
         logger.debug("Committed one action store transaction")  # Confirm the complete atomic write.
         return result  # Return only after the transaction commit succeeds.
@@ -134,6 +138,10 @@ class ArangoTransactionAdapter:  # Own the explicit python-arango transaction li
         logger.info("Abort one action store transaction")  # Record the rollback attempt.
         try:  # A disconnected transaction can also refuse its abort call.
             transaction.abort_transaction()  # Discard every uncommitted action and run change.
-        except Exception:  # The original transaction fault remains the primary error.
-            logger.exception("The action store transaction abort failed")  # Record full safe fault context.
+        except Exception as error:  # Keep broad because the rollback fault must not hide the original fault.
+            logger.exception(
+                "The action store transaction abort failed with %s: %s",
+                type(error).__name__,
+                error,
+            )  # Record full safe fault context.
         logger.debug("Finished the action store transaction abort")  # Mark the rollback attempt complete.

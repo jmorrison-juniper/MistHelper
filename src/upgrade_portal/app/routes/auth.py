@@ -736,8 +736,12 @@ def dependency_rows() -> list[dict[str, str]]:
         rows = reading_rows(run_preflight(settings.arango, settings.redis))  # Probe, then flatten for the page.
         logger.debug("auth: built %d dependency row(s) for the sign-in page", len(rows))  # Report row count.
         return rows  # The page reads only plain rows, never settings.
-    except Exception:  # WHY: the sign-in form outranks the banner, so every fault degrades.
-        logger.exception("auth: the dependency preflight failed, so the page shows no dependency panel")
+    except Exception as error:  # Keep broad because a sign-in page must render without dependency rows.
+        logger.exception(
+            "auth: the dependency preflight failed with %s: %s, so the page shows no dependency panel",
+            type(error).__name__,
+            error,
+        )  # Preserve the dependency fault without hiding sign-in.
         return []  # An empty list hides the panel and leaves the form untouched.
 
 

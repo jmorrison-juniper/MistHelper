@@ -616,9 +616,16 @@ def close_handle(name: str, handle: object | None) -> None:
     if not callable(closer):  # The slot was empty, or the object closes itself.
         return  # Nothing to do.
     try:  # The socket may already be broken.
+        logger.info("Closing the request handle %s.", name)  # Log before the close attempt.
         closer()  # The object releases its socket.
-    except Exception:  # A close fault must not hide the fault that ended the request.
-        logger.warning("The portal could not close the handle %s.", name)  # Report and continue.
+        logger.debug("The request handle %s closed.", name)  # Log after the close succeeds.
+    except Exception as error:  # A close fault must not hide the fault that ended the request.
+        logger.warning(
+            "The portal could not close the handle %s after %s: %s.",
+            name,
+            type(error).__name__,
+            error,
+        )  # Report the close fault and continue.
 
 
 def import_route_module(name: str) -> ModuleType:
