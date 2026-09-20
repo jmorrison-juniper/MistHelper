@@ -382,7 +382,10 @@ class AddressUtils:
                 logger.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
             parsed = normalize_address_record(address_string)  # WHY: normalize via the optional library
             return AddressUtils._build_scourgify_result(parsed, address_string)  # WHY: shape into result dict
-        except Exception:  # nosec B110  # WHY: any library error degrades to the heuristic parser
+        except Exception as error:  # nosec B110  # WHY: any library error degrades to the heuristic parser
+            logger.debug(
+                "Optional address normalization failed: %s: %s", type(error).__name__, error
+            )  # WHY: name the fallback cause for diagnostics
             return AddressUtils._parse_components(address_string, debug=debug)  # WHY: heuristic fallback path
 
     @staticmethod
@@ -420,8 +423,10 @@ class AddressUtils:
         if fuzz is not None:  # WHY: rapidfuzz path is preferred when installed
             try:  # WHY: fuzz can throw on odd unicode
                 return float(fuzz.token_sort_ratio(norm1, norm2))  # WHY: rapidfuzz already returns 0-100
-            except Exception:  # nosec B110  # WHY: on any fuzz failure, fall through to SequenceMatcher
-                pass  # WHY: intentional silent fall-through to the difflib path
+            except Exception as error:  # nosec B110  # WHY: on any fuzz failure, fall through to SequenceMatcher
+                logger.debug(
+                    "Optional rapidfuzz comparison failed: %s: %s", type(error).__name__, error
+                )  # WHY: name the fallback cause for diagnostics
         return difflib.SequenceMatcher(None, norm1, norm2).ratio() * 100  # WHY: fallback ratio scaled to 0-100
 
     @staticmethod

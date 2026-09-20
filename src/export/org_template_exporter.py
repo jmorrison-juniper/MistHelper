@@ -140,8 +140,10 @@ class OrgTemplateExporter:
                 mh.DataExporter.write_with_format_selection(
                     [], filename, api_function_name="listOrgDeviceProfiles"
                 )  # Best-effort empty file.
-            except Exception:  # nosec B110
-                pass  # Best-effort cleanup.
+            except Exception as error:  # nosec B110
+                logging.warning(
+                    "Optional step failed: %s: %s", type(error).__name__, error
+                )  # WHY: name cleanup failures without masking the export error.
             raise  # Re-raise to caller.
 
     @staticmethod
@@ -182,6 +184,8 @@ class OrgTemplateExporter:
             logging.error("Failed to export switch templates: %s", e)  # Log error.
             try:
                 mh.DataExporter.write_with_format_selection([], filename, api_function_name="listOrgNetworkTemplates")
-            except Exception:  # nosec B110
-                pass  # Best-effort cleanup.
+            except Exception as error:  # nosec B110
+                logging.warning(
+                    "Optional step failed: %s: %s", type(error).__name__, error
+                )  # WHY: name cleanup failures without masking the export error.
             raise  # Re-raise to caller.
