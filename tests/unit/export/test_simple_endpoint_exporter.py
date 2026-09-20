@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import logging
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -55,7 +56,6 @@ def test_phantom_endpoint_is_not_in_the_table() -> None:
 def test_every_entry_resolves_to_a_callable(entry: _SimpleEndpointOp) -> None:
     """Each table row must name a real function in a real SDK module."""
     resolved = SimpleEndpointExporter._resolve(entry)
-    assert resolved is not None
     assert inspect.isfunction(resolved)
 
 
@@ -125,6 +125,7 @@ def test_persist_skips_empty_rows() -> None:
     with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         SimpleEndpointExporter._persist([], "empty.csv", "listAlarmDefinitions")
     fake.DataExporter.write_with_format_selection.assert_not_called()
+    assert fake.DataExporter.write_with_format_selection.call_count == 0
 
 
 def test_persist_wraps_single_object_response() -> None:
@@ -167,3 +168,18 @@ def test_run_uses_identifier_for_scoped_operation() -> None:
     ):
         SimpleEndpointExporter._run(_ORG_OPS[0], "org-one", "org-one")
     callable_obj.assert_called_once_with(fake.apisession, "org-one")
+
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_run_logs_http_errors_without_writing(status_code: int, caplog: pytest.LogCaptureFixture) -> None:
+    """An HTTP failure from the SDK must be logged and must not write rows."""
+    fake = _fake_mist_helper()
+    callable_obj = MagicMock(side_effect=RuntimeError(f"HTTP {status_code}"))
+    with (
+        caplog.at_level(logging.ERROR),
+        patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
+        patch.object(SimpleEndpointExporter, "_resolve", return_value=callable_obj),
+    ):
+        SimpleEndpointExporter._run(_NONE_OPS[0], None, "global")
+    assert f"HTTP {status_code}" in caplog.text
+    fake.DataExporter.write_with_format_selection.assert_not_called()

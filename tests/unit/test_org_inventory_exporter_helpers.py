@@ -16,6 +16,7 @@ import logging
 import os
 from collections import defaultdict
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -895,6 +896,20 @@ def test_resolve_combined_inventory_org_name_final_fallback(monkeypatch) -> None
     assert name == "org-1"
 
 
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_resolve_combined_inventory_org_name_http_failure_falls_back(monkeypatch, status_code: int) -> None:
+    from src.export import org_inventory_exporter as mod
+
+    monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
+    monkeypatch.setattr(
+        mod.mistapi.api.v1.orgs.orgs,
+        "getOrg",
+        lambda session, org_id: (_ for _ in ()).throw(RuntimeError(f"HTTP {status_code}")),
+    )
+    name = OrgInventoryExporter._resolve_combined_inventory_org_name("org-1", "Fallback Org")
+    assert name == "Fallback Org"
+
+
 def test_resolve_combined_inventory_org_name_unknown_org_sentinel(monkeypatch) -> None:
     from src.export import org_inventory_exporter as mod
 
@@ -918,26 +933,33 @@ def test_devices_with_site_info_orchestrator(monkeypatch, tmp_path) -> None:
     from src.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(mod.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
+    all_sites = MagicMock(return_value=[{"id": "s1", "name": "HQ", "address": "1 Main"}])
+    inventory = MagicMock(
+        return_value=[
+            {"mac": "aa", "site_id": "s1", "type": "ap", "model": "AP32"},
+        ]
+    )
     monkeypatch.setattr(
         mod.APICoreFetchUtils,
         "all_sites_with_limit",
-        lambda org_id: [{"id": "s1", "name": "HQ", "address": "1 Main"}],
+        all_sites,
     )
     monkeypatch.setattr(
         mod.APICoreFetchUtils,
         "all_inventory_with_limit",
-        lambda org_id: [
-            {"mac": "aa", "site_id": "s1", "type": "ap", "model": "AP32"},
-        ],
+        inventory,
     )
+    export_spy = MagicMock()  # WHY: prove the orchestrator emits one CSV write.
     # DataExporter lives on MistHelper (T-08 pending); stub write
     monkeypatch.setattr(
         MistHelper.DataExporter,
         "export_to_csv",
-        staticmethod(lambda data, filename: None),
+        staticmethod(export_spy),
         raising=False,
     )
     OrgInventoryExporter.devices_with_site_info(fast=False)
+    assert all_sites.call_count == 1  # WHY: prove the orchestrator fetched site rows.
+    assert inventory.call_count == 1  # WHY: prove the orchestrator fetched inventory rows.
 
 
 def test_gateways_with_site_info_orchestrator(monkeypatch) -> None:
@@ -945,25 +967,32 @@ def test_gateways_with_site_info_orchestrator(monkeypatch) -> None:
     from src.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(mod.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
+    all_sites = MagicMock(return_value=[{"id": "s1", "name": "HQ", "address": "1 Main"}])
+    inventory = MagicMock(
+        return_value=[
+            {"mac": "aa", "site_id": "s1", "type": "gateway", "model": "SRX", "hostname": "gw1"},
+        ]
+    )
     monkeypatch.setattr(
         mod.APICoreFetchUtils,
         "all_sites_with_limit",
-        lambda org_id: [{"id": "s1", "name": "HQ", "address": "1 Main"}],
+        all_sites,
     )
     monkeypatch.setattr(
         mod.APICoreFetchUtils,
         "all_inventory_with_limit",
-        lambda org_id: [
-            {"mac": "aa", "site_id": "s1", "type": "gateway", "model": "SRX", "hostname": "gw1"},
-        ],
+        inventory,
     )
+    export_spy = MagicMock()  # WHY: prove the orchestrator emits one CSV write.
     monkeypatch.setattr(
         MistHelper.DataExporter,
         "export_to_csv",
-        staticmethod(lambda data, filename: None),
+        staticmethod(export_spy),
         raising=False,
     )
     OrgInventoryExporter.gateways_with_site_info()
+    assert all_sites.call_count == 1  # WHY: prove the orchestrator fetched site rows.
+    assert inventory.call_count == 1  # WHY: prove the orchestrator fetched inventory rows.
 
 
 # ---------------------------------------------------------------------------

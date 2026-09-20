@@ -5,7 +5,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.gateway_export_utils import GatewayExportUtils, configure_gateway_export_utils_dependencies
+from src.gateway.gateway_export_utils import (
+    GatewayExportUtils,
+    _response_status_code,
+    configure_gateway_export_utils_dependencies,
+)
 
 
 def _configure_dependencies() -> None:
@@ -86,3 +90,19 @@ def test_with_wan_overrides_delegates_to_wan_override_walker() -> None:
         override_mock.assert_called_once_with(fast=True)  # Confirm walker invoked with fast flag
     finally:
         module.WanOverrideWalker.walk = original_method  # Always restore the original method
+
+
+def test_response_status_code_reads_client_error_status() -> None:
+    """The helper must preserve a 404 status for callers that branch on HTTP failure."""
+    status_code = 404  # Prove the HTTP 4xx status family with a status-named value.
+    response = SimpleNamespace(status_code=status_code)  # Build the smallest SDK response double.
+
+    assert _response_status_code(response) == status_code  # Prove the 404 is observable.
+
+
+def test_response_status_code_reads_server_error_status() -> None:
+    """The helper must preserve a 503 status for callers that branch on HTTP failure."""
+    status_code = 503  # Prove the HTTP 5xx status family with a status-named value.
+    response = SimpleNamespace(status_code=status_code)  # Build the smallest SDK response double.
+
+    assert _response_status_code(response) == status_code  # Prove the 503 is observable.

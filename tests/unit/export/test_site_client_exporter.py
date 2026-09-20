@@ -245,6 +245,23 @@ class TestClients:
         # WHY: no persist path was reached.
         wired_deps["DataExporter"].write_with_format_selection.assert_not_called()
 
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_http_error_is_logged_and_user_notice_emitted(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """When the API raises with an HTTP status, the status reaches the log and no persist occurs."""
+        wired_deps["SiteDeviceExporter"]._resolve_site_for_stats.return_value = ("site-1", "SiteName")  # WHY: resolve.
+        wired_deps["mistapi"].api.v1.sites.stats.listSiteWirelessClientsStats.side_effect = RuntimeError(
+            f"HTTP {status_code}"
+        )  # WHY: force API error branch with an observable status.
+
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: capture both ERROR + INFO records.
+            SiteClientExporter.clients()  # WHY: exercise exception path.
+
+        assert f"HTTP {status_code}" in caplog.text  # WHY: prove the status reaches the log.
+        assert "Error fetching client data" in caplog.text  # WHY: prove the operator notice appears.
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no write on failure.
+
 
 class TestClientInsights:
     """`client_insights` delegates to the local-imported SiteClientInsightsService."""
@@ -513,6 +530,7 @@ class TestGetSiteBeacon:
         SiteClientExporter.get_site_beacon()  # WHY: execute non-rate-limit failure path.
 
         wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_not_called()  # WHY: adaptive delay only on 429.
+        assert wired_deps["RateLimitingUtils"].get_rate_limited_delay.call_count == 0  # WHY: prove no retry delay.
         wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: failed fetch never persists.
         wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.assert_called_once()  # WHY: no retries on non-429.
 
