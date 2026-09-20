@@ -140,7 +140,7 @@ class _MapsClone:
             zones_check = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)  # Fetch all zones.
             if zones_check.status_code == 200:  # Only trust the count on a clean response.
                 return len([z for z in zones_check.data if z.get("map_id") == source_map_id])  # Filter by map.
-        except Exception as zone_error:  # Any failure is non-fatal for the clone-plan preview.
+        except (requests.RequestException, OSError) as zone_error:  # Network and OS failures keep preview usable.
             logging.debug("Could not fetch zone count for clone plan: %s", zone_error)  # Debug-only breadcrumb.
         return 0  # Default to zero so the plan text still reads sensibly.
 
@@ -175,7 +175,7 @@ class _MapsClone:
             image_temp_path = self._download_image_to_tempfile(source_map["url"])  # Delegate HTTP + write.
             if image_temp_path is not None:  # Only report success when the file actually landed on disk.
                 return image_temp_path  # Path is now owned by the caller until upload/cleanup.
-        except Exception as download_error:  # Network/O errors are non-fatal. Clone can proceed without image.
+        except (requests.RequestException, OSError) as download_error:  # Network and file errors skip the image.
             logging.error("Error downloading map image: %s", download_error)  # Full stack trace to the log.
             print(f"! Warning: Could not download image: {download_error}")  # User-facing warning.
         self._cleanup_temp_file(image_temp_path)  # Idempotent cleanup handles both partial-download failure modes.
@@ -245,7 +245,7 @@ class _MapsClone:
             else:
                 print(f"! Warning: Failed to upload image: HTTP {upload_response.status_code}")  # Non-fatal warning.
                 logger.error("Image upload to cloned map failed: %s", upload_response.status_code)  # Log HTTP.
-        except Exception as upload_error:  # Any exception is non-fatal for the outer clone.
+        except (requests.RequestException, OSError) as upload_error:  # Network and file errors are non-fatal.
             logging.error("Error uploading image to cloned map: %s", upload_error)  # Full failure trace.
             print(f"! Warning: Could not upload image to cloned map: {upload_error}")  # User-facing warning.
         finally:
@@ -272,7 +272,7 @@ class _MapsClone:
             logger.warning(
                 "Failed to clone zone '%s': HTTP %s", zone.get("name"), zone_response.status_code
             )  # Zone-scoped warning: outer flow keeps going.
-        except Exception as zone_error:  # Per-zone errors must not derail the whole clone.
+        except (requests.RequestException, OSError) as zone_error:  # Per-zone API failures do not derail the clone.
             logging.error("Error cloning zone '%s': %s", zone.get("name"), zone_error)  # Record the failure.
         return False  # Default path: caller increments the failure counter.
 
@@ -299,7 +299,7 @@ class _MapsClone:
             failed = len(results) - cloned  # Failures = total minus successes.
             print(f"Zones cloned: {cloned} (failed: {failed})")  # Summary line.
             return cloned, failed  # Hand the tallies to the caller.
-        except Exception as zones_error:  # Blanket safety net. Keeps outer clone flow intact.
+        except (requests.RequestException, OSError) as zones_error:  # Zone fetch failures keep outer flow intact.
             logging.exception("Error during zone cloning: %s", zones_error)  # Full trace to the log.
             print(f"! Warning: Zone cloning failed: {zones_error}")  # User-facing warning.
             return 0, 0  # Fall back to zero counts.
