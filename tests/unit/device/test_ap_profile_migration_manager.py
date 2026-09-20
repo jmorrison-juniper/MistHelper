@@ -561,7 +561,7 @@ def test_migrate_stops_on_second_retry_exhaustion_and_records_partial_success(
     assert payload["aps_reassigned"] == ["d0", "d1"]
     assert payload["outcome"] == "partial"
     fd = payload["failure_detail"]
-    assert fd is not None
+    assert isinstance(fd, dict)  # WHY: partial outcomes must include a failure-detail row.
     assert fd["failed_device_id"] == "d2"
     assert fd["reassigned_count"] == 2
     assert fd["planned_count"] == 5

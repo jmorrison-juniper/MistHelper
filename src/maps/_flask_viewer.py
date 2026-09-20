@@ -30,6 +30,7 @@ _LOCALHOST_BIND = "127.0.0.1"  # WHY: bind loopback outside containers so Window
 _CONTAINER_BIND = "0.0.0.0"  # nosec B104 - container must bind all interfaces to reach host browser.
 _HTTP_OK = 200  # WHY: named status keeps route handlers readable without magic numbers.
 _HTTP_NOT_FOUND = 404  # WHY: named status makes 404 branches self-documenting for reviewers.
+_HTTP_UNAUTHORIZED = 401  # WHY: named status makes missing authentication failures explicit.
 _HTTP_SERVER_ERROR = 500  # WHY: named status keeps 500 fallbacks obvious in the diff.
 _IMAGE_REQUEST_TIMEOUT_S = 30  # WHY: bounded HTTP GET prevents the map-image proxy from hanging Flask worker threads.
 _BROWSER_OPEN_DELAY_S = 1.5  # WHY: small delay lets Flask finish binding before the browser hits localhost.
@@ -148,8 +149,13 @@ def _fetch_map_image_bytes(api_session, site_id: str, map_id: str):  # WHY: auth
     image_url = map_response.data.get("url", "")  # WHY: Mist returns absolute signed URL when available.
     if not image_url:  # WHY: some map records omit the signed URL -- treat as no floorplan available.
         return None, (_ERR_NO_IMAGE_URL, _HTTP_NOT_FOUND)  # WHY: 404 when the map record lacks a floorplan image.
-    token = getattr(api_session, _TOKEN_ATTR, "")  # WHY: mistapi stashes the bearer here (private attribute).
-    headers = {_AUTHORIZATION_HEADER: f"Token {token}"} if token else {}  # WHY: forward auth only when we have one.
+    logger.info("Reading Mist API session token for map image fetch")  # WHY: log the credential presence check.
+    token = str(getattr(api_session, _TOKEN_ATTR, "") or "").strip()  # WHY: mistapi stashes the bearer here.
+    if not token:  # WHY: an unauthenticated image request hides the missing session token.
+        logger.debug("Mist API session token attribute %s is not set", _TOKEN_ATTR)  # WHY: log only the attribute name.
+        raise ValueError(f"Mist API session is missing {_TOKEN_ATTR}.")  # WHY: stop before an anonymous request.
+    logger.debug("Mist API session token attribute %s is set", _TOKEN_ATTR)  # WHY: confirm presence without value.
+    headers = {_AUTHORIZATION_HEADER: f"Token {token}"}  # WHY: the checked token is safe to forward, never to log.
     image_response = req_lib.get(image_url, headers=headers, timeout=_IMAGE_REQUEST_TIMEOUT_S)  # WHY: bounded GET.
     return image_response, None  # WHY: caller inspects status_code + content on success path.
 
@@ -168,6 +174,10 @@ def _handle_map_image_request(api_session, site_id: str, map_id: str):
             return f"Image fetch failed: {image_response.status_code}", _HTTP_NOT_FOUND  # WHY: keep body brief.
         content_type = image_response.headers.get(_CONTENT_TYPE_HEADER, _DEFAULT_IMAGE_MIMETYPE)  # WHY: passthrough.
         return Response(image_response.content, mimetype=content_type)  # WHY: stream bytes through as-is.
+    except ValueError as error:  # WHY: missing credentials must name the bad input, not become a remote error.
+        logging.info("Map image request lacks a required credential")  # WHY: mark the authentication failure path.
+        logging.debug("Map image credential failure: %s", error)  # WHY: name the missing attribute without a value.
+        return str(error), _HTTP_UNAUTHORIZED  # WHY: tell the operator which session field is missing.
     except Exception as e:  # WHY: broad catch so a network hiccup never leaks a stack trace into the browser.
         logging.exception("Error fetching map image: %s", e)  # WHY: full stack captured server-side.
         return _ERR_MAP_IMAGE_FAILED, _HTTP_SERVER_ERROR  # WHY: generic 500 keeps upstream details hidden.

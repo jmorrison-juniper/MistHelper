@@ -205,7 +205,7 @@ class TestTrySyntheticFetchAttempt:
             patch.object(GatewayTestExporter, "_call_synthetic_endpoint", return_value={"x": 1}),
         ):
             result = GatewayTestExporter._try_synthetic_fetch_attempt(("s", "d", "dn", "sn"), 0, None)
-        assert result is not None
+        assert isinstance(result, dict)  # WHY: a successful fetch must return one export row.
         assert result["site_id"] == "s"
         assert result["device_id"] == "d"
 

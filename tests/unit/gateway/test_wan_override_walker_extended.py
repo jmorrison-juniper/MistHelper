@@ -273,7 +273,7 @@ def test_classify_row_returns_device_info_when_overrides_present() -> None:
             template_lookup={"tmpl-1": "Template A"},
             target_ports=["ge-0/0/1"],
         )
-    assert result is not None  # Full path must materialize the device-info dict
+    assert isinstance(result, dict)  # Full path must materialize the device-info dict.
     assert result["device_id"] == "dev-1"  # Key used by _identify_devices
     assert result["device_name"] == "gw-1"  # Reporting key
     assert result["site_id"] == "site-1"  # Cross-reference to Mist site

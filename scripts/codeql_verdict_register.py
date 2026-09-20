@@ -75,6 +75,9 @@ COLUMNS = (
     "Trigger",
 )
 
+# The line and anchor cells are generated locations, not a security decision.
+POSITIONAL_COLUMNS = frozenset({"Line", "Anchor"})  # Ignore generated location drift during reconciliation.
+
 logger = logging.getLogger(__name__)
 
 
@@ -326,10 +329,11 @@ class RegisterWriter:
             "This check is a live audit, not a reproducible build. An unchanged commit\n"
             "can fail after live alert metadata changes. CI never generates the register.\n"
             "Refresh it only after you review the current metadata.\n\n"
-            "The check compares all eleven row fields, including the reason and author.\n"
-            "It removes surrounding cell spaces and restores escaped pipes. The writer\n"
-            "converts comment whitespace to spaces. The generation date does not cause\n"
-            "drift. A complete, successful API response must confirm an empty alert set.\n\n"
+            "The check compares every decision field, including the reason and author.\n"
+            "It ignores a change that only moves the line or anchor. The writer removes\n"
+            "surrounding cell spaces, restores escaped pipes, and converts comment\n"
+            "whitespace to spaces. The generation date does not cause drift. A complete,\n"
+            "successful API response must confirm an empty alert set.\n\n"
             "The `Anchor` column holds the file path and the line of the reported expression.\n"
             "It is not a stable finding identity. This register covers only the rule above.\n"
             "A row with the reason `Warning: the dismissal recorded no reason` needs a written\n"
@@ -432,14 +436,37 @@ class RegisterReconciler:
         for number in sorted(set(recorded) - set(live)):
             problems.append(f"The register holds row {number} and no dismissed alert matches it.")
         for number in sorted(set(recorded) & set(live)):
-            changed = [
-                column
-                for column, field in zip(COLUMNS, fields(VerdictRow), strict=True)
-                if getattr(recorded[number], field.name) != getattr(live[number], field.name)
-            ]
+            changed = self._changed_decision_columns(
+                number, recorded[number], live[number]
+            )  # Ignore location-only drift.
             if changed:
                 problems.append(f"Alert {number} differs in these columns: {', '.join(changed)}.")
         return problems
+
+    def _changed_decision_columns(self, number: int, recorded: VerdictRow, live: VerdictRow) -> list[str]:
+        """Return changed columns that carry a review decision."""
+        changed: list[str] = []  # Store decision-bearing differences that fail the check.
+        positional: list[str] = []  # Store generated location drift for the audit log.
+        for column, field in zip(COLUMNS, fields(VerdictRow), strict=True):  # Compare fields in register order.
+            if getattr(recorded, field.name) == getattr(live, field.name):  # Skip fields with stable values.
+                continue  # Continue so only real drift reaches the decision logic.
+            if column in POSITIONAL_COLUMNS:  # Separate generated location drift from security decisions.
+                positional.append(column)  # Keep location drift visible without failing the gate.
+                continue  # Continue so a location-only move does not become a problem.
+            changed.append(column)  # Fail on changed audit decisions or changed alert identity.
+        if positional:  # Emit an audit trail when the generated location moved.
+            self._log_positional_drift(number, recorded, live, positional)  # Log ignored generated location drift.
+        return changed
+
+    def _log_positional_drift(self, number: int, recorded: VerdictRow, live: VerdictRow, positional: list[str]) -> None:
+        """Log line drift that does not change the accepted risk."""
+        logger.info(  # Log location-only drift so a reviewer can refresh the register later.
+            "Alert %d moved from line %s to line %s. Ignored positional columns: %s",
+            number,
+            recorded.line,
+            live.line,
+            ", ".join(positional),
+        )
 
 
 class RegisterConsole:

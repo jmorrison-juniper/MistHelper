@@ -149,8 +149,6 @@ class TestRegisterReconciler:
             ("alert", 4, "Alert 4"),
             ("issue", "#44", "Issue"),
             ("file", "src/moved.py", "File"),
-            ("line", "13", "Line"),
-            ("anchor", "src/demo.py::L13", "Anchor"),
             ("verdict", "test_fixture", "Verdict"),
             ("reason", "A changed reason.", "Reason"),
             ("author", "another-reviewer", "Author"),
@@ -159,15 +157,81 @@ class TestRegisterReconciler:
             ("trigger", "A reviewer receives new evidence.", "Trigger"),
         ],
     )
-    def test_every_persisted_field_can_cause_drift(self, tmp_path: Path, field: str, value: Any, column: str) -> None:
-        """A changed field must fail without copying its value into the report."""
-        row = register.RowBuilder().build(_alert(3, "false positive", "The value is a label."))
-        path = self._write(tmp_path, [row])
-        problems = register.RegisterReconciler(path).compare([replace(row, **{field: value})])
-        assert len(problems) == (2 if field == "alert" else 1)
-        assert any(column in problem for problem in problems)
-        if field in ("reason", "author"):
-            assert value not in " ".join(problems)
+    def test_every_decision_field_can_cause_drift(self, tmp_path: Path, field: str, value: Any, column: str) -> None:
+        """A changed decision field must fail without copying its value into the report."""
+        row = register.RowBuilder().build(_alert(3, "false positive", "The value is a label."))  # Build a stable row.
+        path = self._write(tmp_path, [row])  # Write the recorded row so the comparison has a baseline.
+        problems = register.RegisterReconciler(path).compare(
+            [replace(row, **{field: value})]
+        )  # Compare one changed field.
+        assert len(problems) == (
+            2 if field == "alert" else 1
+        )  # The alert identity change creates a missing and an extra row.
+        assert any(column in problem for problem in problems)  # The report must name the changed decision column.
+        if field in ("reason", "author"):  # Sensitive audit text must not leak into CI logs.
+            assert value not in " ".join(problems)  # The report must name the column, not the private cell text.
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [("line", "13"), ("anchor", "src/demo.py::L13")],
+    )
+    def test_positional_fields_do_not_cause_drift(self, tmp_path: Path, field: str, value: str) -> None:
+        """A changed positional field must not fail when all decisions match."""
+        row = register.RowBuilder().build(_alert(3, "false positive", "The value is a label."))  # Build a stable row.
+        path = self._write(tmp_path, [row])  # Write the recorded row so the comparison has a baseline.
+        problems = register.RegisterReconciler(path).compare(
+            [replace(row, **{field: value})]
+        )  # Move one generated location cell.
+        assert problems == []  # A generated location-only move must not fail the gate.
+
+    def test_line_move_without_decision_change_reports_no_problem(self, tmp_path: Path) -> None:
+        """A line-only move must not fail the register check."""
+        row = register.RowBuilder().build(
+            _alert(3066, "false positive", "The value is a label.")
+        )  # Build the alert row.
+        recorded = replace(row, line="323", anchor="src/demo.py::L323")  # Record the old generated location.
+        live = replace(row, line="348", anchor="src/demo.py::L348")  # Simulate a harmless line move.
+        path = self._write(tmp_path, [recorded])  # Write the stale generated location to the register.
+        problems = register.RegisterReconciler(path).compare([live])  # Compare against the moved live location.
+        assert problems == []  # A line-only move must keep the required gate green.
+
+    def test_line_move_with_verdict_change_reports_one_problem(self, tmp_path: Path) -> None:
+        """A line move must still fail when the verdict changed."""
+        row = register.RowBuilder().build(
+            _alert(3066, "false positive", "The value is a label.")
+        )  # Build the alert row.
+        recorded = replace(row, line="323", anchor="src/demo.py::L323")  # Record the old generated location.
+        live = replace(row, line="348", anchor="src/demo.py::L348", verdict="test_fixture")  # Change one decision cell.
+        path = self._write(tmp_path, [recorded])  # Write the stale generated location to the register.
+        problems = register.RegisterReconciler(path).compare(
+            [live]
+        )  # Compare against moved code with a changed verdict.
+        assert len(problems) == 1  # A decision change must fail exactly once.
+        assert "Verdict" in problems[0]  # The report must name the changed decision column.
+
+    def test_line_move_with_reason_change_reports_reason(self, tmp_path: Path) -> None:
+        """A line move must still fail when the reason changed."""
+        row = register.RowBuilder().build(
+            _alert(3066, "false positive", "The value is a label.")
+        )  # Build the alert row.
+        recorded = replace(row, line="323", anchor="src/demo.py::L323")  # Record the old generated location.
+        live = replace(
+            row, line="348", anchor="src/demo.py::L348", reason="A changed reason."
+        )  # Change one decision cell.
+        path = self._write(tmp_path, [recorded])  # Write the stale generated location to the register.
+        problems = register.RegisterReconciler(path).compare(
+            [live]
+        )  # Compare against moved code with a changed reason.
+        assert len(problems) == 1  # A decision change must fail exactly once.
+        assert "Reason" in problems[0]  # The report must name the changed decision column.
+
+    def test_register_row_without_live_alert_reports_one_problem(self, tmp_path: Path) -> None:
+        """A retired alert row must still fail the register check."""
+        row = register.RowBuilder().build(_alert(3066, "false positive", "The value is a label."))  # Build a stale row.
+        path = self._write(tmp_path, [row])  # Write one register row that has no live match.
+        problems = register.RegisterReconciler(path).compare([])  # Compare against no live alerts.
+        assert len(problems) == 1  # A stale register row must fail once.
+        assert "no dismissed alert matches" in problems[0]  # The report must explain the stale row.
 
 
 class TestRegisterTable:
