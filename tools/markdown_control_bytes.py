@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # nosec B404  # WHY: run one fixed git command, never a shell.
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,7 +63,7 @@ class MarkdownControlByteScanner:
         environment = os.environ.copy()  # Start from the current environment so Git can find its configuration.
         environment.pop("GIT_DIR", None)  # Ignore test-modified Git state that points outside this checkout.
         environment.pop("GIT_WORK_TREE", None)  # Let Git derive the work tree from the repository path.
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603  # WHY: the command is a fixed tuple with no input, and no shell runs.
             command,
             cwd=repo_root,
             env=environment,
