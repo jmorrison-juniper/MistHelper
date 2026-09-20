@@ -202,7 +202,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
 
     def _read_image_dimensions(self, file_path: str) -> tuple[int, int] | None:
         """Open the image with Pillow and return (width_px, height_px) or None on failure."""
-        from PIL import Image, UnidentifiedImageError  # WHY: lazy import names image read failures only.
+        from PIL import Image  # WHY: lazy import keeps Pillow out of the module import path.
 
         try:
             with Image.open(file_path) as img:  # WHY: context manager frees the file handle promptly.
