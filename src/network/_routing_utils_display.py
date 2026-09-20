@@ -22,10 +22,13 @@ Phase 1 parsing-cluster split.
 
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref type hints
 
+import logging  # WHY: table renderer fallbacks must record failures without aborting display.
 from dataclasses import dataclass  # WHY: RoutingStatsAcc bundles 5 stat containers into one param
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle with parent
 
 from prettytable import PrettyTable  # WHY: every table renderer builds a PrettyTable instance
+
+logger = logging.getLogger(__name__)  # WHY: module logger identifies routing display fallback events.
 
 if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils  # WHY: parent type for cross-reference only
@@ -217,7 +220,12 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
         try:  # WHY: PrettyTable can fail with unusual terminals — fall back gracefully
             table = self._build_prefix_pretty_table(entries)  # WHY: builder isolated for testing
             print(table)  # WHY: render assembled PrettyTable to stdout
-        except Exception:  # WHY: broad catch — any renderer failure routes to text fallback
+        except Exception as render_error:  # WHY: any renderer failure routes to text fallback
+            logger.warning(
+                "Forwarding table renderer failed: %s: %s",
+                type(render_error).__name__,
+                render_error,
+            )  # WHY: operators need evidence when PrettyTable cannot render.
             self._render_prefix_fallback(entries)  # WHY: text-mode display never fails
 
     _FWD_ROW_FIELDS: tuple[str, ...] = (  # WHY: forwarding-table row field order shared by renderers
@@ -340,7 +348,12 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
             table = self._build_routing_details_table(route_entries)  # WHY: builder isolated
             print(table)
             self._print_rib_status_legend()  # WHY: legend printed after every successful table
-        except Exception:  # WHY: broad catch — any renderer failure routes to text fallback
+        except Exception as render_error:  # WHY: any renderer failure routes to text fallback
+            logger.warning(
+                "Routing table renderer failed: %s: %s",
+                type(render_error).__name__,
+                render_error,
+            )  # WHY: operators need evidence when PrettyTable cannot render.
             self._display_routing_details_fallback(route_entries)  # WHY: text-mode never fails
 
     def _build_routing_details_table(self, route_entries: list[dict[str, Any]]) -> PrettyTable:
@@ -460,7 +473,12 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
             table = self._build_ssr_pretty_table(route_entries)  # WHY: builder isolated
             print("\n-> Detailed routing table:")  # WHY: section header before table print
             print(table)
-        except Exception:  # WHY: broad catch — any renderer failure routes to text fallback
+        except Exception as render_error:  # WHY: any renderer failure routes to text fallback
+            logger.warning(
+                "SSR routing table renderer failed: %s: %s",
+                type(render_error).__name__,
+                render_error,
+            )  # WHY: operators need evidence when PrettyTable cannot render.
             self._display_ssr_table_fallback(route_entries)  # WHY: text-mode never fails
 
     def _build_ssr_pretty_table(self, route_entries: list[dict[str, Any]]) -> PrettyTable:

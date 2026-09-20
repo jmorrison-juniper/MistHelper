@@ -208,5 +208,10 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
                 )  # WHY: guide follow-up input
             else:
                 logger.error("! Clear session failed: %s", error)  # WHY: generic fallback
-        except Exception:  # pylint: disable=broad-exception-caught
-            logging.error("! Clear session failed: %s", error)  # WHY: never let error-handler raise
+        except Exception as handler_error:  # pylint: disable=broad-exception-caught
+            logging.error(
+                "! Clear session error handler failed: %s: %s",
+                type(handler_error).__name__,
+                handler_error,
+            )  # WHY: never let error-handler raise without evidence.
+            logging.error("! Clear session failed: %s", error)  # WHY: preserve the primary failure context.

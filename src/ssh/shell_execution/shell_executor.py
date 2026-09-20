@@ -503,7 +503,12 @@ class ShellExecutor:
             try:
                 shell.recv(_INITIAL_DRAIN_BUFFER)  # WHY: Small drain buffer is fine for cleanup
                 time.sleep(_CLEANUP_TAIL_SLEEP_S)  # WHY: Brief pause before next poll
-            except Exception:  # nosec B112 - cleanup is best-effort  # WHY: Any error during cleanup ends the drain
+            except Exception as cleanup_error:  # nosec B112 - cleanup is best-effort
+                self.logger.debug(
+                    "Shell cleanup drain stopped after %s: %s",
+                    type(cleanup_error).__name__,
+                    cleanup_error,
+                )  # WHY: cleanup remains best-effort, but the failure has trace evidence.
                 return
 
     # ------------------------------------------------------------------
