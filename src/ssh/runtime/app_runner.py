@@ -83,8 +83,12 @@ def _make_line_tracer(logger: logging.Logger, runner_file: str, low: int, high: 
             try:  # Defensive: never let tracer crash the run
                 if frame.f_code.co_filename == runner_file and low <= frame.f_lineno <= high:  # Bounded scope
                     logger.debug("[LINE] %s:%s", frame.f_code.co_name, frame.f_lineno)  # Bounded per-line trace
-            except Exception:  # nosec B110 - tracer must never break user flow
-                pass  # Swallow tracer failure silently
+            except Exception as trace_error:  # nosec B110 - tracer must never break user flow
+                logger.warning(
+                    "SSH line tracer failed: %s: %s",
+                    type(trace_error).__name__,
+                    trace_error,
+                )  # WHY: keep tracer failure visible without breaking the SSH run.
         return _ssh_line_tracer  # Tracer returns itself to keep tracing subsequent lines
 
     return _ssh_line_tracer  # Closure returned to caller for sys.settrace install

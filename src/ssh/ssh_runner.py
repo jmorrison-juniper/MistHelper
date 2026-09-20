@@ -300,8 +300,12 @@ class EnhancedSSHRunner:
         self.logger.error("Unicode encoding error writing to host log %s: %s", log_path, exc)  # WHY: original err
         try:
             _append_log_line(log_path, _ascii_fallback(message))  # WHY: last-chance write with lossy conversion
-        except Exception:  # WHY: swallow all errors here - we already logged the primary UnicodeEncodeError
-            self.logger.error("Failed to write sanitized message to host log")  # WHY: keep legacy log wording
+        except Exception as fallback_error:  # WHY: last-resort guard keeps one bad log line from killing the batch
+            self.logger.error(
+                "Failed to write sanitized message to host log: %s: %s",
+                type(fallback_error).__name__,
+                fallback_error,
+            )  # WHY: keep legacy warning visible with the concrete failure type.
 
     # T013b: _connect moved to src.ssh.connection.connector.SshConnector. Callers within this
     # module construct SshConnector inline (a real call, not a façade) and wire the returned
