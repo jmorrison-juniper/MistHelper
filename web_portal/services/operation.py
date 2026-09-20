@@ -17,6 +17,7 @@ from typing import Any
 
 
 from src.utils.operation_registry import OperationRegistry
+from web_portal.services.output_scan import OutputFileScanner
 
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 
@@ -696,14 +697,34 @@ class OperationExecutor:
         Captures logging output from the operation function and publishes
         it via SSE. Print output goes to container stdout (not captured)
         since MistHelper logs all meaningful progress via logging.info().
+
+        A scanner watches the data directory around the call, because the log
+        prose names only some of the files an operation writes (issue #3089).
         """
         handler = _RunLogHandler(run, self._event_bus)
         root_logger = logging.getLogger()
         root_logger.addHandler(handler)
+        scanner = OutputFileScanner()  # Read the data directory the portal writes into.
+        scanner.snapshot()  # Record the pre-run state, so a new file is visible later.
         try:
             func()
         finally:
             root_logger.removeHandler(handler)
+            self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
+
+    def _record_scanned_files(self, run: dict, scanner: OutputFileScanner) -> None:
+        """Merge the scanned file names into the run record without a duplicate."""
+        logger.info("Run %s collects the files it wrote", run["run_id"])  # Log before the comparison.
+        try:
+            found = scanner.changed_files()  # Ask the directory, not the log prose.
+        except OSError as error:  # A scan failure must not fail an operation that already finished.
+            logging.warning("Run %s could not scan %s: %s", run["run_id"], scanner.root, error)
+            return
+        known = set(run["output_files"])  # The log scrape may already hold a name.
+        added = [name for name in found if name not in known]
+        for name in added:
+            run["output_files"].append(name)  # The bounded deque drops the oldest name when it is full.
+        logger.debug("Run %s added %d scanned files to %d known names", run["run_id"], len(added), len(known))
 
     def _update_status(self, run: dict, status: str, progress: int) -> None:
         """Update run status and publish SSE event."""
@@ -858,9 +879,15 @@ class _RunLogHandler(logging.Handler):
         "FAST RETRY",
     )
 
-    # Regex to extract output filenames from log messages
+    # Regex to extract output filenames from log messages.
+    # Issue #3089: the phrase list and the extension list were both too short,
+    # so a Markdown report announced as "Mermaid report: data/X.md" never
+    # matched. The second branch now accepts any data-directory path, whatever
+    # sentence carries it.
     _OUTPUT_FILE_RE = re.compile(
-        r"(?:wrote \d+ rows to|written to|wrote results to)" r"\s+(?:data[/\\])?(\S+\.(?:csv|db|json|sqlite))",
+        r"(?:(?:wrote \d+ rows to|written to|wrote results to|saved to|report:|exported to)"
+        r"\s+(?:data[/\\])?|data[/\\])"
+        r"(\S+\.(?:csv|db|json|sqlite|md|html|htm|txt|xlsx|xls|pcap|yaml|yml|xml|png|pdf))",
         re.IGNORECASE,
     )
 
