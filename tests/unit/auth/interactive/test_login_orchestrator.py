@@ -22,6 +22,7 @@ from __future__ import annotations  # WHY: PEP 604 unions in test type hints.
 
 import logging  # WHY: caplog verification of structured warning/info/debug lines.
 from collections.abc import Callable  # WHY: Callable typing for injected fake callbacks.
+from types import ModuleType  # WHY: fallback import tests assert the concrete module shape.
 from typing import Any, cast  # WHY: dict[str, Any] annotations + cast(Any, x) for dynamic attr writes.
 from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch decorators.
 
@@ -111,7 +112,7 @@ class TestResolveMistapi:
             resolved = orch._resolve_mistapi()
         # We do not assert the exact module identity (fallback imports the real mistapi package)
         # but we assert it is not None and was cached back to state.
-        assert resolved is not None  # WHY: SUT returned the SDK reference.
+        assert isinstance(resolved, ModuleType)  # WHY: the fallback must return the SDK module.
         assert orch.state["mistapi"] is resolved  # WHY: cache-back contract.
         assert "Resolving mistapi SDK via fallback import" in caplog.text  # WHY: pre-action info log.
 
@@ -503,7 +504,9 @@ class TestConfigureSessionTimeout:
         LoginOrchestrator._configure_session_timeout(fake_session)
         fake_helper.assert_called_once_with(fake_session)  # WHY: delegation contract.
 
-    def test_swallowed_exception_does_not_propagate(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_swallowed_exception_does_not_propagate(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Helper raises → SUT swallows silently (legacy contract)."""
         import sys  # WHY: inject fake module for the deferred import.
         import types  # WHY: build a ModuleType stub.
@@ -515,14 +518,25 @@ class TestConfigureSessionTimeout:
 
         cast(Any, fake_module).configure_session_timeout = _boom  # WHY: cast(Any) satisfies mypy + ruff.
         monkeypatch.setitem(sys.modules, "src.auth.session_timeout", fake_module)
-        LoginOrchestrator._configure_session_timeout(MagicMock(spec=object))  # SUT should not raise.
+        with caplog.at_level(logging.DEBUG):
+            LoginOrchestrator._configure_session_timeout(MagicMock(spec=object))  # SUT should not raise.
+        assert "timeout wiring broken" in caplog.text  # WHY: swallowed optional timeout failure must be observable.
 
-    def test_missing_module_swallowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_missing_module_swallowed(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
         """When the deferred import fails, the SUT swallows the ImportError silently."""
-        import sys  # WHY: force ImportError by ensuring the target key is not in sys.modules.
+        import builtins  # WHY: force ImportError from the deferred import hook.
 
-        monkeypatch.delitem(sys.modules, "src.auth.session_timeout", raising=False)
-        LoginOrchestrator._configure_session_timeout(MagicMock(spec=object))  # SUT should not raise.
+        real_import = builtins.__import__  # WHY: all unrelated imports must still work.
+
+        def blocked_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            if name == "src.auth.session_timeout":  # WHY: target only the optional helper.
+                raise ImportError("session timeout missing")  # WHY: exercise the missing-module branch.
+            return real_import(name, *args, **kwargs)  # WHY: keep all other imports normal.
+
+        monkeypatch.setattr(builtins, "__import__", blocked_import)
+        with caplog.at_level(logging.DEBUG):
+            LoginOrchestrator._configure_session_timeout(MagicMock(spec=object))  # SUT should not raise.
+        assert "session timeout missing" in caplog.text  # WHY: swallowed optional import failure must be observable.
 
 
 class TestAnnounceMspPrivileges:

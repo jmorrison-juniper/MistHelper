@@ -58,7 +58,7 @@ class TestResolve:
         with patch.object(socket, "gethostbyname", side_effect=socket.gaierror("no such host")):
             ip, error = zp._resolve("nope.invalid")
         assert ip is None  # WHY: no address means no downstream probe can run.
-        assert error is not None  # WHY: the reason must survive for the summary.
+        assert isinstance(error, str)  # WHY: the reason must survive for the summary.
         assert "gaierror" in error  # WHY: the class name tells the operator it was DNS.
 
     def test_a_failure_does_not_raise(self) -> None:
@@ -376,7 +376,7 @@ class TestDoHttp:
         """The class name tells the operator which layer refused the probe."""
         with patch.object(zp, "_request_head_or_get", side_effect=ConnectionRefusedError("no")):
             _, error = zp._do_http("gateway.zscaler.net", 443, 3.0, tls=True)
-        assert error is not None  # WHY: the reason must survive for the summary.
+        assert isinstance(error, str)  # WHY: the reason must survive for the summary.
         assert "ConnectionRefusedError" in error  # WHY: the class name is the triage signal.
 
 
@@ -465,7 +465,7 @@ class TestTlsPeer:
         """A refused connection must abort the read, not raise into the worker."""
         with patch.object(socket, "create_connection", side_effect=ConnectionRefusedError("no")):
             _, _, error = zp._tls_peer("gateway.zscaler.net", 443, 3.0)
-        assert error is not None  # WHY: the reason must survive for the summary.
+        assert isinstance(error, str)  # WHY: the reason must survive for the summary.
         assert "ConnectionRefusedError" in error  # WHY: the class name is the triage signal.
 
 
@@ -593,7 +593,7 @@ class TestProbeFqdn:
             patch.object(zp, "_tcp_check") as tcp_spy,
         ):
             result = zp._probe_fqdn("nope.invalid", {"role": "zen"}, 3.0)
-        assert result.dns_error is not None  # WHY: the reason reaches the report.
+        assert isinstance(result.dns_error, str)  # WHY: the DNS reason must reach the report.
         ping_spy.assert_not_called()  # WHY: an unresolved name wastes a full ping timeout.
         tcp_spy.assert_not_called()  # WHY: an unresolved name wastes three connect timeouts.
 

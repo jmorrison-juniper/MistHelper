@@ -125,7 +125,7 @@ def test_persist_skips_empty_rows() -> None:
     with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         SimpleEndpointExporter._persist([], "empty.csv", "listAlarmDefinitions")
     fake.DataExporter.write_with_format_selection.assert_not_called()
-    assert fake.DataExporter.write_with_format_selection.call_count == 0
+    assert fake.DataExporter.write_with_format_selection.call_count == 0  # WHY: empty rows must skip export.
 
 
 def test_persist_wraps_single_object_response() -> None:

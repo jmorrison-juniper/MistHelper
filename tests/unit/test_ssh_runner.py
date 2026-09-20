@@ -3,6 +3,7 @@
 import logging
 import os
 import time
+from argparse import ArgumentParser  # WHY: parser creation test must assert the concrete parser type.
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -635,7 +636,7 @@ class TestCreateSecureLogFile:
         os.makedirs("data", exist_ok=True)
         log_path, write_fn = runner._create_secure_log_file("host1")
         write_fn("")  # Should not raise
-        # File may or may not exist (early return on empty)
+        assert not os.path.exists(log_path)  # WHY: the early return writes no file, so none is created.
 
     @patch("src.ssh.ssh_runner.datetime")
     def test_sanitizes_hostname(self, mock_dt, runner, tmp_path, monkeypatch):
@@ -1313,6 +1314,7 @@ class TestRunApplication:
         args = self._make_args(interactive=True)
         AppRunner.run(args)
         mock_interactive.assert_called_once()
+        assert mock_interactive.call_count == 1  # WHY: interactive mode must delegate exactly once.
 
     @patch("src.ssh.runtime.app_runner.getpass")
     @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
@@ -1325,7 +1327,7 @@ class TestRunApplication:
         result = AppRunner.run(args)
         # Should either reject or proceed depending on validation
         # At minimum, it should not crash
-        assert result is not None
+        assert isinstance(result, bool)  # WHY: command validation must return a CLI success flag.
 
     @patch("src.ssh.runtime.app_runner.getpass")
     @patch.object(EnvSshConfigLoader, "load")
@@ -1345,6 +1347,7 @@ class TestRunApplication:
         args = self._make_args(no_env=False, hostname=None, username=None, command=None)
         AppRunner.run(args)
         mock_env.assert_called_once()
+        assert mock_env.call_count == 1  # WHY: environment loading must delegate exactly once.
 
     @patch("src.ssh.runtime.app_runner.getpass")
     @patch("src.ssh.runtime.app_runner.BatchExecutor.run")
@@ -1406,7 +1409,7 @@ class TestRunApplication:
         args = self._make_args(debug=True)
         result = AppRunner.run(args)
         # Should not crash even with debug tracing
-        assert result is not None
+        assert isinstance(result, bool)  # WHY: debug tracing must still return a CLI success flag.
 
     @patch("src.ssh.runtime.app_runner.getpass")
     @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
@@ -1784,7 +1787,7 @@ class TestCreateArgumentParser:
     def test_parser_creation(self):
         """Parser is created without error."""
         parser = EnhancedSSHRunner._create_argument_parser()
-        assert parser is not None
+        assert isinstance(parser, ArgumentParser)  # WHY: factory must return a usable argparse parser.
 
     def test_default_args(self):
         """Default args have expected values."""

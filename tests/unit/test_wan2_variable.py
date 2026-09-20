@@ -245,8 +245,8 @@ class TestSelectOperationDirection:
     def test_apply_direction(self) -> None:
         migrator = _make_migrator(input_fn=MagicMock(return_value="1"))
         result = migrator._select_operation_direction()
-        assert result is not None
-        mode, search, replace = result
+        assert result == ("apply", "ge-0/0/1", "{{wan2_interface}}")  # WHY: option 1 must map to apply fields.
+        mode, search, replace = result  # WHY: keep the existing field-level assertions below.
         assert mode == "apply"
         assert search == "ge-0/0/1"
         assert replace == "{{wan2_interface}}"
@@ -254,8 +254,8 @@ class TestSelectOperationDirection:
     def test_revert_direction(self) -> None:
         migrator = _make_migrator(input_fn=MagicMock(return_value="2"))
         result = migrator._select_operation_direction()
-        assert result is not None
-        mode, search, replace = result
+        assert result == ("revert", "{{wan2_interface}}", "ge-0/0/1")  # WHY: option 2 must map to revert fields.
+        mode, search, replace = result  # WHY: keep the existing field-level assertions below.
         assert mode == "revert"
         assert search == "{{wan2_interface}}"
         assert replace == "ge-0/0/1"
@@ -284,8 +284,7 @@ class TestPromptTemplateSelection:
             {"id": "t2", "name": "Template2", "site_count": 5},
         ]
         result = migrator._prompt_template_selection(templates)
-        assert result is not None
-        assert len(result) == 2
+        assert result == templates  # WHY: the "all" keyword must return every template row.
 
     def test_select_specific(self) -> None:
         migrator = _make_migrator(input_fn=MagicMock(return_value="1,2"))
@@ -295,7 +294,7 @@ class TestPromptTemplateSelection:
             {"id": "t3", "name": "Template3", "site_count": 1},
         ]
         result = migrator._prompt_template_selection(templates)
-        assert result is not None
+        assert isinstance(result, list)  # WHY: a valid selection must return a template list.
         assert len(result) == 2
         assert result[0]["id"] == "t1"
         assert result[1]["id"] == "t2"

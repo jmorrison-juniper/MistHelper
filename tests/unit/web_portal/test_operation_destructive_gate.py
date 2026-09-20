@@ -74,15 +74,15 @@ class TestUnsafeCategoriesAreRefused:
         category = OperationRegistry.skip_category(menu_number)  # Read the authoritative verdict.
 
         assert category not in ("safe", "interactive_safe")  # Guard the premise of this test.
-        assert _refusal(executor, menu_number) is not None  # The gate must refuse the operation.
+        assert isinstance(_refusal(executor, menu_number), dict)  # The gate must return a refusal payload.
 
     def test_unparseable_key_is_refused(self, executor):
         """A key that `int()` cannot parse must not reach the thread pool."""
-        assert _refusal(executor, "x1") is not None  # The old gate returned None and allowed it.
+        assert isinstance(_refusal(executor, "x1"), dict)  # The old gate returned None and allowed it.
 
     def test_unknown_key_is_refused(self, executor):
         """A key that the menu does not hold must be refused."""
-        assert _refusal(executor, "12345") is not None  # An absent key must never run.
+        assert isinstance(_refusal(executor, "12345"), dict)  # An absent key must return a refusal payload.
 
 
 class TestSafeCategoriesStillRun:
