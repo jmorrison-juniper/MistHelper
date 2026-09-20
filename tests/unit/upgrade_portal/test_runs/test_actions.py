@@ -627,7 +627,8 @@ def test_new_key_matches_the_key_pattern() -> None:
         shape breaks that check.
     """
     key = RunRecordBuilder.new_key()
-    assert RunRecordBuilder.KEY_PATTERN.fullmatch(key) is not None
+    match = RunRecordBuilder.KEY_PATTERN.fullmatch(key)  # A full match proves the whole key fits the pattern.
+    assert match and match.group(0) == key  # The match must cover the entire key, not a leading part of it.
     assert key.startswith(RUN_KEY_PREFIX)
 
 
