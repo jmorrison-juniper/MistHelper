@@ -66,7 +66,7 @@ POLYGLOT_SKIP_MESSAGES: dict[str, str] = {
     ),
     SKIP_ROUTER_UNAVAILABLE: (
         "Skipped the polyglot database write, because the database router did not build. "
-        "Read the connection settings ARANGO_HOST and REDIS_HOST in the .env file."
+        "Read the reason in the DatabaseRouter warning above, which names the setting that failed."
     ),
     SKIP_ROUTER_FILE_FALLBACK: (
         "The polyglot write reached no database. The router wrote the file and returned success. "
