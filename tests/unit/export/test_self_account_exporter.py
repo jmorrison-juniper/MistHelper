@@ -178,6 +178,21 @@ class TestVerifyEmailMenu:
 
         mist_helper.DataExporter.write_with_format_selection.assert_called_once()
 
+    def test_a_503_records_the_status_and_writes(self, mist_helper: MagicMock) -> None:
+        """A 503 response records the server failure as an audit row."""
+        status_code = 503  # Prove the HTTP 5xx status family with a status-named value.
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
+        mist_helper.InputUtils.safe_input.return_value = TOKEN
+        with patch(
+            f"{MODULE}.mistapi.api.v1.self.update.verifySelfEmail",
+            return_value=SimpleNamespace(status_code=status_code, data={"detail": "server unavailable"}),
+        ):
+            SelfAccountExporter.verify_email()
+
+        args = mist_helper.DataExporter.write_with_format_selection.call_args.args
+        assert args[0][0]["status_code"] == status_code  # Prove the audit row keeps the 503 signal.
+        assert args[0][0]["detail"] == "server unavailable"  # Prove the body detail reaches the audit row.
+
     def test_an_sdk_error_never_escapes(self, mist_helper: MagicMock) -> None:
         """A network failure must return to the menu, not end the session."""
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
@@ -189,6 +204,7 @@ class TestVerifyEmailMenu:
             SelfAccountExporter.verify_email()
 
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert mist_helper.DataExporter.write_with_format_selection.call_count == 0  # Prove no audit row was written.
 
     def test_the_token_never_reaches_the_log(self, mist_helper: MagicMock, caplog: Any) -> None:
         """The token is a credential, so no log record may carry it."""

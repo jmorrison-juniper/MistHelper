@@ -261,3 +261,24 @@ class TestAuthService:
             "self_identity",
             {},
         )
+
+    @patch("src.shared.services.auth.mistapi.APISession")
+    @patch("src.shared.services.auth.MistEndpointService")
+    def test_fetch_self_direct_service_reports_503(
+        self,
+        mock_service_cls: MagicMock,
+        mock_session_cls: MagicMock,
+    ) -> None:
+        status_code = 503  # Prove the HTTP 5xx status family with a status-named value.
+        service = AuthService(redis_client=MagicMock())  # Call source directly, not through setup state.
+        mock_service = mock_service_cls.return_value  # Use the _fetch_self service double.
+        mock_service.list_all_entities.return_value = MagicMock(  # Return a Mist server error.
+            success=False,  # Prove the HTTP failure branch executes.
+            status_code=status_code,  # Exercise the HTTP 5xx failure path.
+            data={"detail": "Service unavailable"},  # Keep the body distinct.
+        )
+
+        with pytest.raises(MistApiUnavailableError, match="status 503"):  # Assert the observable signal.
+            service._fetch_self("tok-server-error")  # Call the uncached seam directly.
+
+        mock_session_cls.assert_called_once_with(host="api.mist.com", apitoken="tok-server-error")
