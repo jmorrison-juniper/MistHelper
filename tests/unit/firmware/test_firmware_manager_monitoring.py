@@ -120,6 +120,14 @@ class TestPresentMonitoringHeader:
         assert any("Starting continuous monitoring mode" in r.message for r in caplog.records)
 
 
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_response_status_code_preserves_http_failure_status(status_code: int) -> None:
+    """The firmware status helper must preserve HTTP failure status codes."""
+    response = types.SimpleNamespace(status_code=status_code)  # WHY: use the smallest SDK response double.
+
+    assert fm_mod._response_status_code(response) == status_code  # WHY: prove the status remains observable.
+
+
 class TestPresentMonitoringIterationHeader:
     """``_present_monitoring_iteration_header`` per-refresh banner."""
 
@@ -209,6 +217,7 @@ class TestRunMonitoringLoop:
         # If time.sleep were reached the test would hang; force the loop to exit first.
         monkeypatch.setattr(fm_mod.time, "sleep", lambda _s: (_ for _ in ()).throw(AssertionError("slept")))
         mgr._run_monitoring_loop("site-x")
+        assert mgr._execute_monitoring_check("site-x") == 0  # WHY: prove the injected handler returns exit signal.
 
     def test_loops_until_zero_upgrades(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mgr = _make_manager()

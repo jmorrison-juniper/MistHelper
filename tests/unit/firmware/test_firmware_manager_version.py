@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
+from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig, _response_status_code
 
 
 def _make_manager(**overrides: Any) -> FirmwareManager:
@@ -37,6 +37,14 @@ def _make_manager(**overrides: Any) -> FirmwareManager:
     defaults: dict[str, Any] = {"apisession": object(), "org_id": "org-test"}
     defaults.update(overrides)
     return FirmwareManager(FirmwareManagerConfig(**defaults))
+
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_response_status_code_preserves_http_failure_status(status_code: int) -> None:
+    """The firmware status helper must preserve HTTP failure status codes."""
+    response = type("Response", (), {"status_code": status_code})()  # WHY: use a minimal SDK response double.
+
+    assert _response_status_code(response) == status_code  # WHY: prove the status remains observable.
 
 
 class TestNormalizeVersionParts:

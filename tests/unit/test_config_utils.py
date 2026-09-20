@@ -119,6 +119,16 @@ class TestGetCachedOrPromptedOrgId:
                 ConfigUtils.get_cached_or_prompted_org_id()
         assert excinfo.value.code == 1
 
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_prompt_path_http_failure_reaches_caller(self, status_code: int) -> None:
+        ConfigUtils.set_apisession(MagicMock())
+        with patch(
+            "src.config.config_utils.mistapi.cli.select_org",
+            side_effect=RuntimeError(f"HTTP {status_code}"),
+        ):
+            with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):
+                ConfigUtils.get_cached_or_prompted_org_id()
+
     def test_dotenv_missing_falls_through_to_prompt(self):
         # No cache, no env, no .env file, no session -> exits.
         with pytest.raises(SystemExit):

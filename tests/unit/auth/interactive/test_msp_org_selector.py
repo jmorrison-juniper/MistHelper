@@ -178,6 +178,32 @@ def test_msp_org_selector_fetch_exception(caplog: pytest.LogCaptureFixture) -> N
     assert "org_id" not in state  # WHY: no selection recorded
 
 
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_fetch_msp_orgs_http_exception_logs_status(caplog: pytest.LogCaptureFixture, status_code: int) -> None:
+    """HTTP failures while reading MSP orgs must log the status and return None."""
+    mistapi_stub = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(
+                msps=SimpleNamespace(
+                    orgs=SimpleNamespace(
+                        listMspOrgs=MagicMock(side_effect=RuntimeError(f"HTTP {status_code}"))
+                    )  # WHY: forced status-bearing API failure.
+                )
+            )
+        )
+    )
+    state: dict[str, Any] = {
+        "msp_privileges": [{"msp_id": "m1", "msp_name": "MSP One", "role": "admin"}],
+        "apisession": MagicMock(),
+        "mistapi": mistapi_stub,
+    }  # WHY: single-MSP select path reaches _fetch_msp_orgs.
+    selector, _ = _make_selector(state=state)  # WHY: no input needed for direct fetch.
+    with caplog.at_level(logging.WARNING):
+        selector.select()  # WHY: selector catches HTTP failures and keeps state unchanged.
+    assert "org_id" not in state  # WHY: fetch failures must not select an org.
+    assert f"HTTP {status_code}" in caplog.text  # WHY: prove the status remains visible.
+
+
 def test_fetch_msp_orgs_invalid_response(caplog: pytest.LogCaptureFixture) -> None:
     """Response without .data returns None and prints the legacy error message."""
     mistapi_stub = SimpleNamespace(
@@ -244,7 +270,7 @@ def test_resolve_mistapi_fallback_import() -> None:
     state: dict[str, Any] = {}  # WHY: empty state forces the fallback import branch
     selector, _ = _make_selector(state=state)  # WHY: fallback callback unused here
     module = selector._resolve_mistapi()  # WHY: trigger the deferred import
-    assert module is not None  # WHY: mistapi module resolved
+    assert getattr(module, "__name__", "") == "mistapi"  # WHY: prove the real mistapi module resolved.
     assert state["mistapi"] is module  # WHY: cached in state for later reuse
 
 

@@ -84,6 +84,14 @@ class TestPrepareTemplateCache:
         mgr._prepare_template_cache()
         assert "Preparing template and site data" in capsys.readouterr().out
 
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_response_status_code_preserves_http_failure_status(status_code: int) -> None:
+    """The firmware status helper must preserve HTTP failure status codes."""
+    response = type("Response", (), {"status_code": status_code})()  # WHY: use a minimal SDK response double.
+
+    assert fm_mod._response_status_code(response) == status_code  # WHY: prove the status remains observable.
+
     def test_invokes_cache_fn_for_both_csvs(self) -> None:
         calls: list[tuple[str, Any]] = []
 
@@ -407,6 +415,7 @@ class TestEmitApUpgradeProgressStart:
         try:
             fm_mod.PROGRESS_EMITTER = None
             mgr._emit_ap_upgrade_progress_start()  # should not raise
+            assert fm_mod.PROGRESS_EMITTER is None  # WHY: no emitter remains configured after the no-op path.
         finally:
             fm_mod.PROGRESS_EMITTER = original
 
