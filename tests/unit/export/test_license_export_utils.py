@@ -17,17 +17,20 @@ from src.export.license_export_utils import LicenseExportUtils
 
 def test_handle_async_claim_status_401_returns_none() -> None:
     """A 401 auth failure must bail out with None."""
-    assert LicenseExportUtils._handle_async_claim_status(401, "org-1", {"any": "payload"}) is None
+    status_code = 401  # Prove the HTTP 4xx status family with a status-named value.
+    assert LicenseExportUtils._handle_async_claim_status(status_code, "org-1", {"any": "payload"}) is None
 
 
 def test_handle_async_claim_status_403_returns_none() -> None:
     """A 403 permission failure must bail out with None."""
-    assert LicenseExportUtils._handle_async_claim_status(403, "org-1", {"any": "payload"}) is None
+    status_code = 403  # Keep the permission status explicit for the analyzer and the reader.
+    assert LicenseExportUtils._handle_async_claim_status(status_code, "org-1", {"any": "payload"}) is None
 
 
 def test_handle_async_claim_status_400_returns_none() -> None:
     """A 400 invalid-input response must bail out with None."""
-    assert LicenseExportUtils._handle_async_claim_status(400, "org-1", {"any": "payload"}) is None
+    status_code = 400  # Keep the invalid-input status explicit for the analyzer and the reader.
+    assert LicenseExportUtils._handle_async_claim_status(status_code, "org-1", {"any": "payload"}) is None
 
 
 def test_handle_async_claim_status_404_returns_empty_dict() -> None:
@@ -39,6 +42,12 @@ def test_handle_async_claim_status_200_passthrough_payload() -> None:
     """A 200 success passes the raw payload through unchanged."""
     payload = {"status": "in_progress", "total": 3}
     assert LicenseExportUtils._handle_async_claim_status(200, "org-1", payload) is payload
+
+
+def test_handle_async_claim_status_500_returns_none() -> None:
+    """A 500 server failure must bail out with None."""
+    status_code = 500  # Prove the HTTP 5xx status family with a status-named value.
+    assert LicenseExportUtils._handle_async_claim_status(status_code, "org-1", {"error": "upstream"}) is None
 
 
 # ---------- export_org_license_async_claim_status bail-out branch ----------
@@ -59,6 +68,8 @@ def test_export_bails_out_when_status_handler_returns_none() -> None:
         )
     write_summary.assert_not_called()
     write_details.assert_not_called()
+    assert write_summary.call_count == 0  # Prove the summary writer stayed idle with a numeric signal.
+    assert write_details.call_count == 0  # Prove the detail writer stayed idle with a numeric signal.
 
 
 def test_export_writes_summary_only_when_detail_false() -> None:
@@ -80,6 +91,8 @@ def test_export_writes_summary_only_when_detail_false() -> None:
         )
     write_summary.assert_called_once()
     write_details.assert_not_called()
+    assert write_summary.call_count == 1  # Prove the summary path wrote exactly one time.
+    assert write_details.call_count == 0  # Prove the detail path stayed idle.
 
 
 def test_export_writes_summary_and_details_when_detail_true() -> None:
@@ -101,6 +114,8 @@ def test_export_writes_summary_and_details_when_detail_true() -> None:
         )
     write_summary.assert_called_once()
     write_details.assert_called_once()
+    assert write_summary.call_count == 1  # Prove the summary writer ran exactly one time.
+    assert write_details.call_count == 1  # Prove the detail writer ran exactly one time.
 
 
 def test_export_bails_out_when_org_id_is_invalid() -> None:
@@ -112,6 +127,8 @@ def test_export_bails_out_when_org_id_is_invalid() -> None:
         LicenseExportUtils.export_org_license_async_claim_status(org_id="not-a-uuid")
     call_api.assert_not_called()
     write_summary.assert_not_called()
+    assert call_api.call_count == 0  # Prove the invalid org id blocked the API call.
+    assert write_summary.call_count == 0  # Prove the invalid org id blocked the writer.
 
 
 # ---------- _resolve_async_claim_include_detail ----------
