@@ -191,12 +191,14 @@ var OperationResults = (function() {
     function renderHead() {
         var html = '<tr>';
         state.columns.forEach(function(col, idx) {
+            // The arrow comes from the `sort-asc` and `sort-desc` rules in
+            // portal.css, which add it with an `::after` rule. A second arrow
+            // in this text would render twice, as "country down down".
             var cls = 'sortable';
             if (state.sortColumn === idx) cls += state.sortDir === 'asc' ? ' sort-asc' : ' sort-desc';
-            var arrow = state.sortColumn === idx ? (state.sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
             html += '<th class="' + cls + '" style="cursor:pointer" data-col="' + idx + '"' +
                     ' onclick="OperationResults.sortBy(' + idx + ')">' +
-                    escapeHtml(col) + arrow + '</th>';
+                    escapeHtml(col) + '</th>';
         });
         document.getElementById('resultsHead').innerHTML = html + '</tr>';
     }
