@@ -233,7 +233,7 @@ class TestTheSnmpPathNeedsNoWebFramework:
         """A lazy export must still answer, or the Prometheus path would break."""
         import src.metrics_gateway as package
 
-        assert package.create_app is not None
+        assert callable(package.create_app)  # WHY: the lazy export must return an application factory.
 
     def test_an_unknown_name_still_raises(self) -> None:
         """The lazy lookup must not hide an ordinary mistake."""

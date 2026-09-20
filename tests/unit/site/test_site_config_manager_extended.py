@@ -169,7 +169,7 @@ def test_build_site_payload_rejects_missing_name() -> None:
 def test_build_site_payload_includes_coords_when_valid() -> None:
     """Coords included in payload when both parse successfully."""
     payload = SiteConfigManager._build_site_payload({"name": "Alpha", "lat": "1.5", "lng": "2.5"})
-    assert payload is not None
+    assert isinstance(payload, dict)  # WHY: valid input must build a site payload row.
     assert payload["latlng"] == {"lat": 1.5, "lng": 2.5}
 
 
@@ -400,7 +400,7 @@ def test_analyze_sites_for_rf_templates_full() -> None:
     )
     _wire(mistapi_ns=mistapi_ns)
     result = SiteConfigManager._analyze_sites_for_rf_templates("org-1")
-    assert result is not None
+    assert isinstance(result, tuple)  # WHY: analysis must return country groups and existing templates.
     by_country, without, existing = result
     assert "US" in by_country and existing == {"RF-US": "t-1"}
     assert without == []
@@ -433,7 +433,7 @@ def test_plan_rf_template_operations_no_update_skips_prompt() -> None:
     """Zero existing templates produces skip mode without prompting."""
     _wire()
     result = SiteConfigManager._plan_rf_template_operations({"US": [{"id": "s1", "name": "A"}]}, {})
-    assert result is not None  # WHY: narrow Optional[tuple] for mypy strict.
+    assert isinstance(result, tuple)  # WHY: planning must return create rows, update rows, and the mode.
     to_create, to_update, mode = result
     assert to_update == [] and mode == "skip"
     assert to_create and to_create[0]["country"] == "US"

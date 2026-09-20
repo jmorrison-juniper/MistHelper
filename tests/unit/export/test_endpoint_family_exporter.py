@@ -94,7 +94,6 @@ def test_phantom_and_active_endpoint_entries_do_not_ship() -> None:
 def test_every_entry_resolves_to_a_callable(entry: _EndpointFamilyOp) -> None:
     """Each table row must name a real function in a real SDK module."""
     resolved = EndpointFamilyExporter._resolve(entry)
-    assert resolved is not None
     assert inspect.isfunction(resolved)
 
 
@@ -130,7 +129,7 @@ def test_prompt_sequence_preserves_identifier_order(entry: _EndpointFamilyOp) ->
         patch("src.export.endpoint_family_exporter.InputUtils.prompt_msp_id", return_value="msp-one"),
     ):
         result = EndpointFamilyExporter._collect_arguments(entry)
-    assert result is not None
+    assert hasattr(result, "values")  # WHY: argument collection must return the argument bundle.
     assert result.values == tuple(_expected_value(param) for param in entry.required)
 
 
@@ -156,6 +155,7 @@ def test_persist_skips_empty_rows() -> None:
     with patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake):
         EndpointFamilyExporter._persist([], "empty.csv", "getOrgSso")
     fake.DataExporter.write_with_format_selection.assert_not_called()
+    assert fake.DataExporter.write_with_format_selection.call_count == 0  # WHY: empty rows must skip export.
 
 
 def test_persist_wraps_single_object_response() -> None:
