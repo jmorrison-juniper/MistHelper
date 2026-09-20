@@ -450,11 +450,22 @@ class TestCalculatePidDelay:
 class TestLogDelayLevel:
     """Tests for _log_delay_level static method."""
 
-    def test_does_not_raise(self):
-        """Logging at all levels completes without error."""
-        RateLimitingUtils._log_delay_level(0.5, 0.3, 10.0, 100, 5000)
-        RateLimitingUtils._log_delay_level(1.5, 0.3, 10.0, 100, 5000)
-        RateLimitingUtils._log_delay_level(3.0, 0.3, 10.0, 100, 5000)
+    def test_chooses_the_severity_that_matches_the_delay(self, caplog):
+        """The severity ladder must match the backpressure the delay reports."""
+        import src.utils.rate_limiting as rl
+
+        ladder = [
+            (rl._HIGH_DELAY + 1.0, "WARNING", "High delay"),  # Above the high mark the operator must see a warning.
+            (rl._MODERATE_DELAY + 0.01, "INFO", "Moderate delay"),  # The middle tier reports at info.
+            (0.0, "DEBUG", ""),  # A normal delay must stay at debug, so the log does not fill with noise.
+        ]
+        for delay, expected_level, expected_text in ladder:
+            caplog.clear()  # Read one call at a time, so no earlier record confuses the check.
+            with caplog.at_level(logging.DEBUG, logger=rl.logger.name):
+                RateLimitingUtils._log_delay_level(delay, 0.3, 10.0, 100, 5000)
+            assert [record.levelname for record in caplog.records] == [expected_level]
+            if expected_text:
+                assert expected_text in caplog.text  # The message must name the tier it reports.
 
 
 # ---------------------------------------------------------------------------
@@ -697,10 +708,15 @@ class TestEdgeCases:
         )
         assert delay == 0.5
 
-    def test_append_metrics_write_error(self):
-        """Append handles write errors without crashing."""
-        with patch("builtins.open", side_effect=OSError("disk full")):
-            RateLimitingUtils._append_delay_metrics_log({"d": 1}, {"c": 2}, {"t": 3}, filename="custom_nondefault.json")
+    def test_append_metrics_write_error(self, caplog):
+        """A disk failure must be reported in the log instead of reaching the caller."""
+        with caplog.at_level(logging.ERROR):
+            with patch("builtins.open", side_effect=OSError("disk full")):
+                RateLimitingUtils._append_delay_metrics_log(
+                    {"d": 1}, {"c": 2}, {"t": 3}, filename="custom_nondefault.json"
+                )
+        assert "Failed to write delay metrics" in caplog.text  # The operator must learn the write failed.
+        assert "disk full" in caplog.text  # The message must carry the OSError reason.
 
     def test_resolve_metrics_makedirs_error(self):
         """Resolve handles makedirs failure gracefully."""
