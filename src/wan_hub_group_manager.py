@@ -151,8 +151,12 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             profiles.sort(key=lambda profile: profile.get("name", "").lower())  # WHY: alphabetical UX ordering.
             logger.debug("Fetched %d gateway profiles", len(profiles))  # WHY: capacity signal in logs.
             return profiles  # WHY: caller drives display and match building.
-        except Exception:  # WHY: broad catch - any API/network fault must not raise into menu loop.
-            logging.exception("Failed to fetch device profiles")  # WHY: full traceback for triage.
+        except Exception as error:  # WHY: keep broad so the menu can display with incomplete profile data.
+            logging.exception(
+                "Failed to fetch device profiles after %s: %s",
+                type(error).__name__,
+                error,
+            )  # WHY: full profile read fault for triage.
             logging.error(_MSG_ERR_PROFILES)  # WHY: operator-visible connectivity hint via logger.
             return []  # WHY: empty list flows into no-profiles guard clause.
 
@@ -171,8 +175,12 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
                 "Fetched %d hub-spoke VPNs out of %d total", len(hub_spoke), len(all_vpns)
             )  # WHY: helps triage empty-hub-spoke reports.
             return hub_spoke, all_vpns  # WHY: caller distinguishes 'no VPNs' from 'no hub-spoke VPNs'.
-        except Exception:  # WHY: same broad-catch degradation as _fetch_profiles.
-            logging.exception("Failed to fetch org VPNs")  # WHY: full traceback for triage.
+        except Exception as error:  # WHY: keep broad so the menu can display with incomplete VPN data.
+            logging.exception(
+                "Failed to fetch org VPNs after %s: %s",
+                type(error).__name__,
+                error,
+            )  # WHY: full VPN read fault for triage.
             logging.error(_MSG_ERR_VPNS)  # WHY: operator-visible connectivity hint via logger.
             return [], []  # WHY: signal both lists empty to caller.
 
@@ -494,8 +502,13 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
                 new_pod,
             )  # WHY: per-VPN audit trail for NOC change review.
             return updated  # WHY: caller aggregates counts across VPNs.
-        except Exception:  # WHY: broad catch - preserves partial-success reporting.
-            logging.exception("Failed to update VPN '%s'", vpn_name)  # WHY: full traceback for triage.
+        except Exception as error:  # WHY: keep broad because a VPN update write can have an unknown outcome.
+            logging.exception(
+                "Failed to update VPN '%s' after %s: %s",
+                vpn_name,
+                type(error).__name__,
+                error,
+            )  # WHY: full VPN write fault for triage.
             logging.error(
                 "  Error updating VPN '%s'. Check logs for details.", vpn_name
             )  # WHY: operator-visible failure hint via logger.

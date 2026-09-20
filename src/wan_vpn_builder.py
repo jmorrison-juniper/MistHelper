@@ -334,8 +334,12 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             profiles.sort(key=lambda profile: profile.get("name", "").lower())  # WHY: case-insensitive display order.
             logger.debug("Fetched %d gateway profiles", len(profiles))  # WHY: %s style logging per project rule.
             return profiles  # WHY: sorted list surfaces to run() for display.
-        except Exception:  # WHY: single-branch guard so we return [] on any error.
-            logging.exception("Failed to fetch device profiles")  # WHY: capture traceback for post-mortem.
+        except Exception as error:  # WHY: keep broad so the menu can display with incomplete profile data.
+            logging.exception(
+                "Failed to fetch device profiles after %s: %s",
+                type(error).__name__,
+                error,
+            )  # WHY: capture the profile read fault for post-mortem.
             logging.error("! Error retrieving gateway device profiles. Check API connectivity.")  # WHY: operator hint.
             return []  # WHY: empty result triggers the graceful abort branch in run().
 
@@ -346,8 +350,12 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             vpns: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
             logger.debug("Fetched %d org VPNs", len(vpns))  # WHY: %s style logging per project rule.
             return vpns  # WHY: caller uses for display + uniqueness check.
-        except Exception:  # WHY: keep the workflow going even if the VPN list cannot be fetched.
-            logging.exception("Failed to fetch org VPNs")  # WHY: preserve traceback for operator log review.
+        except Exception as error:  # WHY: keep broad so the menu can display with incomplete VPN data.
+            logging.exception(
+                "Failed to fetch org VPNs after %s: %s",
+                type(error).__name__,
+                error,
+            )  # WHY: preserve the VPN list read fault for operator log review.
             logging.error(
                 "! Error retrieving VPN definitions. Check API connectivity."
             )  # WHY: operator-visible warning.
@@ -360,8 +368,12 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             created: dict[str, Any] = response.data if hasattr(response, "data") else response  # WHY: dual shape.
             logger.info("VPN created via API: %s", created.get("id", ""))  # WHY: id logged for correlation.
             return created  # WHY: caller extracts the new vpn id for profile updates.
-        except Exception:  # WHY: single-branch guard: any exception -> operator warning + None.
-            logging.exception("Failed to create VPN")  # WHY: capture full traceback in operator log.
+        except Exception as error:  # WHY: keep broad because a VPN create write can have an unknown outcome.
+            logging.exception(
+                "Failed to create VPN after %s: %s",
+                type(error).__name__,
+                error,
+            )  # WHY: capture the unknown write outcome in the operator log.
             logging.error("! Error creating VPN. Check API connectivity and input.")  # WHY: user-actionable feedback.
             return None  # WHY: caller treats None as "abort without further side-effects".
 
@@ -653,8 +665,13 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             self._push_profile_update(profile_id, fresh_profile)  # WHY: single REST PUT wrapped for patchability.
             logger.info("Updated profile '%s' with vpn_paths for VPN '%s'", profile_name, vpn_name)  # WHY: audit.
             return True  # WHY: caller counts True as one success.
-        except Exception:  # WHY: catch-all so a per-profile error does not abort other profiles.
-            logging.exception("Failed to update profile '%s'", profile_name)  # WHY: keep traceback for support.
+        except Exception as error:  # WHY: keep broad so one profile write does not abort the batch.
+            logging.exception(
+                "Failed to update profile '%s' after %s: %s",
+                profile_name,
+                type(error).__name__,
+                error,
+            )  # WHY: keep the per-profile write fault for support.
             logging.error(
                 "  ! Error updating profile '%s'. Check logs.", profile_name
             )  # WHY: operator-visible feedback.
