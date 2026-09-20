@@ -43,6 +43,12 @@ juniper-doc-archives/
 **/extracted/
 *.pdf
 
+# A test fixture PDF is source, not a harvested artifact. Each one is under 4 KB
+# and a test reads it at collection time. Without this rule the broad `*.pdf`
+# rule above drops the fixture, and the test suite then fails on a fresh
+# checkout with FileNotFoundError.
+!tests/**/fixtures/*.pdf
+
 .env.local
 .env.production
 .env.staging
