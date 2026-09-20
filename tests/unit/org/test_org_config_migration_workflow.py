@@ -541,13 +541,19 @@ class TestSubnetOverlapDispatch:
         """A network stores one CIDR in the subnet field."""
         existing = [{"name": "Corp", "subnet": "10.0.0.0/16"}]  # WHY: one existing network.
         conflict = manager._check_subnet_overlap({"subnet": "10.0.1.0/24"}, existing, "networks")
-        assert isinstance(conflict, str)  # WHY: the router must return a conflict message from the subnet check.
+        assert conflict == {
+            "reason": "subnet_overlap",
+            "detail": "10.0.1.0/24 overlaps with 'Corp' (10.0.0.0/16)",
+        }  # WHY: the networks key must reach the subnet check, which names subnet_overlap.
 
     def test_a_service_routes_to_the_address_check(self, manager: OrgConfigMigrationManager) -> None:
         """A service stores several addresses in a list."""
         existing = [{"name": "Web", "addresses": ["10.0.0.0/16"]}]  # WHY: one existing service.
         conflict = manager._check_subnet_overlap({"addresses": ["10.0.1.5/32"]}, existing, "services")
-        assert isinstance(conflict, str)  # WHY: the router must return a conflict message from the address check.
+        assert conflict == {
+            "reason": "address_overlap",
+            "detail": "10.0.1.5/32 overlaps with 'Web' (10.0.0.0/16)",
+        }  # WHY: the services key must reach the address check, which names address_overlap.
 
     def test_a_type_without_an_address_field_routes_nowhere(self, manager: OrgConfigMigrationManager) -> None:
         """A VPN holds no address field, so a scan would waste time and could raise."""
