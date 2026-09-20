@@ -287,18 +287,17 @@ class MistApiProbe:
             if param_name in context:
                 kwargs[param_name] = context[param_name]  # inject from caller-provided context
             elif param.default is inspect.Parameter.empty:
-                # Required param not in context: try to look up from env
-                env_key = f"MIST_{param_name.upper()}"
-                env_val = os.environ.get(env_key)
-                if env_val:
-                    kwargs[param_name] = env_val  # use env var fallback
+                env_key = f"MIST_{param_name.upper()}"  # Build the documented variable name for this required scope.
+                logger.info("Reading required API scope %s from %s", param_name, env_key)  # Log before validation.
+                env_val = os.environ.get(env_key)  # Read without a default so absence stays visible.
+                if env_val and env_val.strip():  # A non-empty value can identify the intended scope.
+                    kwargs[param_name] = env_val.strip()  # Use the operator-selected scope, never a guessed one.
+                    logger.debug("Required API scope %s is set", param_name)  # Confirm presence without changing it.
                 else:
-                    logger.warning(
-                        "Required param '%s' for %s not in context or env (%s)",
-                        param_name,
-                        func.__name__,
-                        env_key,
-                    )  # warn but continue
+                    logger.debug("Required API scope %s is not set", param_name)  # Name the missing input.
+                    raise ValueError(
+                        f"{param_name} is required. Set --{param_name.replace('_', '-')} or {env_key}."
+                    )  # Stop before a remote API call uses an empty or guessed scope.
             elif param_name in ("limit", "page"):
                 kwargs[param_name] = 1  # always request minimal page size
 
@@ -414,37 +413,6 @@ def _mod_call(module_path: str, func_name: str, *args, **kwargs):
     return func(*args, **kwargs)  # call and return the raw APIResponse
 
 
-def _detect_org_id(context: dict, mist_session) -> None:
-    """Fill context['org_id'] from the authenticated session's first org privilege."""
-    if context.get("org_id"):
-        return  # already set, skip
-    try:
-        resp = _mod_call("mistapi.api.v1.self.self", "getSelf", mist_session)  # fetch /api/v1/self
-        data = getattr(resp, "data", resp)  # unwrap response object
-        privs = data.get("privileges", []) if isinstance(data, dict) else []  # get privilege list
-        if privs:
-            context["org_id"] = privs[0].get("org_id", "")  # use first org in privileges
-            logger.info("Auto-detected org_id: %s", context["org_id"])  # log resolved value
-    except Exception as exc:
-        logging.warning("Could not auto-detect org_id: %s", exc)  # non-fatal, warn and continue
-
-
-def _detect_site_id(context: dict, mist_session) -> None:
-    """Fill context['site_id'], preferring any site named 'morrison' for richer device data."""
-    if context.get("site_id") or not context.get("org_id"):
-        return  # already set or no org_id to query from
-    try:
-        resp = _mod_call("mistapi.api.v1.orgs.sites", "listOrgSites", mist_session, context["org_id"])
-        sites = _unwrap_list(getattr(resp, "data", resp))  # normalize to list
-        target = next((s for s in sites if "morrison" in s.get("name", "").lower()), None)  # prefer morrison house
-        target = target or (sites[0] if sites else None)  # fallback to first site
-        if target:
-            context["site_id"] = target.get("id", "")  # store site UUID
-            logger.info("Auto-detected site_id: %s (%s)", context["site_id"], target.get("name", ""))
-    except Exception as exc:
-        logging.warning("Could not auto-detect site_id: %s", exc)  # non-fatal
-
-
 def _detect_site_resources(context: dict, mist_session) -> None:
     """Fill device_id, device_mac, map_id, wlan_id, client_mac from the site."""
     site_id = context.get("site_id")
@@ -526,12 +494,12 @@ def _fetch_first(context: dict, mist_session, key: str, module_path: str, func_n
 
 
 def _enrich_context_from_session(context: dict, mist_session) -> dict:
-    """Auto-populate all discoverable resource IDs from the live session."""
-    _detect_org_id(context, mist_session)  # org_id from /self privileges
-    _detect_site_id(context, mist_session)  # site_id preferring morrison house
-    _detect_site_resources(context, mist_session)  # device_id, device_mac, map_id, wlan_id
-    _detect_org_resources(context, mist_session)  # mxedge_id, webhook_id, sso_id
-    return context  # return fully enriched context dict
+    """Auto-populate resource IDs only inside the operator-selected scope."""
+    logger.info("Enriching probe context from explicit scope identifiers")  # Log before optional discovery.
+    _detect_site_resources(context, mist_session)  # Discover child resources only when site_id is explicit.
+    _detect_org_resources(context, mist_session)  # Discover org resources only when org_id is explicit.
+    logger.debug("Probe context enrichment completed with keys: %s", sorted(context))  # Log keys, not values.
+    return context  # Return the enriched context without selecting another tenant.
 
 
 def _load_op_ids_from_args(args) -> list[str]:
