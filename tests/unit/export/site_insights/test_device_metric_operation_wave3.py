@@ -450,7 +450,7 @@ class TestFetchOneMetric:
         response.data = {"latency_ms": 3}  # WHY: non-empty payload triggers annotation.
         op.mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice.return_value = response
         result = op._fetch_one_metric(_make_context(), "latency")  # WHY: exercise the happy path.
-        assert result is not None  # WHY: narrow Optional to dict for mypy strict indexing.
+        assert isinstance(result, dict)  # WHY: the fetch must return an annotated metric row.
         assert result["metric_type"] == "latency"  # WHY: annotator adds metric name.
         assert result["site_id"] == "site-xyz"  # WHY: annotator adds site id.
         assert result["device_mac"] == "aabbccddeeff"  # WHY: annotator adds normalized mac.
@@ -490,7 +490,7 @@ class TestFetchOneMetric:
         # Use a real dict here since the annotator writes keys on it.
         op.mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice.return_value = {"latency_ms": 5}
         result = op._fetch_one_metric(_make_context(), "latency")  # WHY: exercise the getattr fallback.
-        assert result is not None  # WHY: narrow Optional to dict for mypy strict indexing.
+        assert isinstance(result, dict)  # WHY: the fallback must return an annotated metric row.
         assert result["metric_type"] == "latency"  # WHY: annotation ran.
 
 

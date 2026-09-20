@@ -198,6 +198,15 @@ def test_fetch_msp_name_returns_none_on_exception() -> None:
     assert result is None
 
 
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_fetch_msp_name_returns_none_on_http_exception(status_code: int) -> None:
+    """An HTTP exception during the API call degrades to None."""
+    ctx, _ = _stub_get_msp_details(side_effect=RuntimeError(f"HTTP {status_code}"))
+    with ctx:
+        result = _fetch_msp_name("msp-1234abcd", session=MagicMock())
+    assert result is None
+
+
 def test_fetch_msp_name_returns_none_when_response_malformed() -> None:
     """A response whose .data is not a dict yields None."""
     fake_response = SimpleNamespace(data=None)
@@ -306,7 +315,7 @@ def test_parse_one_privilege_defaults_role_and_scope_when_missing() -> None:
     """Missing role/scope keys default to 'unknown'."""
     priv = {"msp_id": "msp-abcd0000", "msp_name": "Named"}
     result = _msp_parse_one_privilege(priv, session=MagicMock())
-    assert result is not None
+    assert result == {"msp_id": "msp-abcd0000", "msp_name": "Named", "role": "unknown", "scope": "unknown"}
     assert result["role"] == "unknown"
     assert result["scope"] == "unknown"
 
@@ -318,7 +327,7 @@ def test_parse_one_privilege_triggers_resolve_name_fallback() -> None:
     ctx, _ = _stub_get_msp_details(fake_response)
     with ctx:
         result = _msp_parse_one_privilege(priv, session=MagicMock())
-    assert result is not None
+    assert result == {"msp_id": "msp-1234abcd", "msp_name": "Fetched Name", "role": "admin", "scope": "msp"}
     assert result["msp_name"] == "Fetched Name"
 
 

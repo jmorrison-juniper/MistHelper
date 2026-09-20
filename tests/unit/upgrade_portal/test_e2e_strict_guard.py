@@ -54,6 +54,7 @@ def test_the_guard_stays_quiet_when_strict_mode_is_off(
 
     # WHY: an engineer with no browser must still run the rest of the suite.
     guard_module.pytest_configure(None)
+    assert guard_module.STRICT_VARIABLE not in guard_module.os.environ  # WHY: prove strict mode stayed off.
 
 
 def test_the_guard_fails_a_run_that_would_skip_every_browser_test(
@@ -105,9 +106,13 @@ def test_the_guard_passes_when_the_package_is_present(
     """Strict mode with the browser package present MUST let the run start."""
     logger.info("Checking the guard with the package present")  # Report the plan before the work.
     monkeypatch.setenv(guard_module.STRICT_VARIABLE, guard_module.STRICT_ENABLED)  # Turn the guard on.
-    monkeypatch.setattr(guard_module.importlib.util, "find_spec", lambda name: object())  # Present.
+    seen: list[str] = []  # WHY: record the import probe so the test proves the guard ran.
+    monkeypatch.setattr(
+        guard_module.importlib.util, "find_spec", lambda name: seen.append(name) or object()
+    )  # Present.
 
     guard_module.pytest_configure(None)  # WHY: a present package must never stop a run.
+    assert seen == ["playwright.sync_api"]  # WHY: prove the strict guard checked the browser package.
 
 
 @pytest.mark.parametrize("value", ["0", "", "true", "yes", "2"])
@@ -117,10 +122,12 @@ def test_only_the_exact_value_turns_the_guard_on(
     """Any value other than the exact one MUST leave the skip in place."""
     logger.info("Checking the guard against the value %r", value)  # Report the plan.
     monkeypatch.setenv(guard_module.STRICT_VARIABLE, value)  # Set a value that is not the gate value.
-    monkeypatch.setattr(guard_module.importlib.util, "find_spec", lambda name: None)  # No package.
+    seen: list[str] = []  # WHY: prove non-strict values skip the package probe.
+    monkeypatch.setattr(guard_module.importlib.util, "find_spec", lambda name: seen.append(name))  # No package.
 
     # WHY: one exact value keeps the gate predictable, so no stray setting fails a run.
     guard_module.pytest_configure(None)
+    assert seen == []  # WHY: prove the guard returned before any browser package check.
 
 
 def test_every_browser_module_still_carries_its_own_skip() -> None:

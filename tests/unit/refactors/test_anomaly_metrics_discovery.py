@@ -137,7 +137,7 @@ class TestProcessCsvRow:
         """A key containing any PRIORITY_KEYWORDS entry sets priority=True."""
         row = {"key": "ap-availability", "name": "AP Avail", "scope": "site"}  # WHY: 'availability' keyword.
         metric = AnomalyMetricsDiscovery._process_csv_row(row)  # WHY: exercise priority-true branch.
-        assert metric is not None  # WHY: eligible row returns a dict.
+        assert isinstance(metric, dict)  # WHY: an eligible row returns a metric dict.
         assert metric["priority"] is True  # WHY: 'availability' keyword hit.
         assert metric["metric_name"] == "ap-availability"  # WHY: lowercased key becomes metric_name.
         assert metric["description"] == "AP Avail"  # WHY: non-blank name preserved as description.
@@ -146,7 +146,7 @@ class TestProcessCsvRow:
         """A key matching none of PRIORITY_KEYWORDS sets priority=False."""
         row = {"key": "obscure-metric", "name": "Obscure", "scope": "site"}  # WHY: no priority keyword match.
         metric = AnomalyMetricsDiscovery._process_csv_row(row)  # WHY: exercise priority-false branch.
-        assert metric is not None  # WHY: eligible row.
+        assert isinstance(metric, dict)  # WHY: an eligible row returns a metric dict.
         assert metric["priority"] is False  # WHY: no keyword hit.
 
     def test_missing_fields_default_to_empty_strings(self) -> None:

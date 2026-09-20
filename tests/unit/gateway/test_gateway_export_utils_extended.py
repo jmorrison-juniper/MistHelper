@@ -451,7 +451,7 @@ class TestGatewayExportUtilsStaticMethods:
         ):
             _write_csv(tmp_path / name, ["id"], [{"id": name}])  # WHY: single-row deterministic content.
         result = GatewayExportUtils._load_management_ip_csv_inputs()
-        assert result is not None  # WHY: happy path must not be None.
+        assert isinstance(result, tuple)  # WHY: happy path must return the four CSV row groups.
         sites, templates, devices, configs = result
         assert sites == [{"id": "SiteList.csv"}]  # WHY: verify order.
         assert configs == [{"id": "AllSiteGatewayConfigs.csv"}]  # WHY: fourth slot preserved.

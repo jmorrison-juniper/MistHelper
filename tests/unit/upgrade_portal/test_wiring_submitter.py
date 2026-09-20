@@ -349,4 +349,5 @@ class TestTheStorageBootstrapRunsOnce:
         wiring.reset_storage_bootstrap()
         install_modules(monkeypatch, {})
         wiring.prepare_storage()  # Raises nothing, which is the whole assertion.
+        assert wiring._STORAGE_PREPARED is True  # WHY: prove the absent store still completed setup.
         wiring.reset_storage_bootstrap()

@@ -181,6 +181,20 @@ class TestSharedBehavior:
         assert "Error fetching alarm for site" in caplog.text  # Prove the product logged the failure.
         wired["DataExporter"].write_with_format_selection.assert_not_called()  # Failed calls must not write.
 
+    def test_http_404_sdk_error_is_logged_and_does_not_raise(
+        self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An HTTP 404 SDK failure must surface in the error log."""
+        error = RuntimeError("HTTP 404")  # Preserve the cloud status in the SDK error.
+        wired["mistapi"].api.v1.sites.alarms.searchSiteAlarms.side_effect = error  # Reach the failure path.
+
+        with caplog.at_level(logging.ERROR):  # Capture the product error signal.
+            FailureModeSiteSearchExporter.alarms()  # Call the real exporter entry point from src.
+
+        assert "HTTP 404" in caplog.text  # Prove the operator can see the status.
+        assert "Error fetching alarm for site" in caplog.text  # Prove the product logged the failure.
+        wired["DataExporter"].write_with_format_selection.assert_not_called()  # Failed calls must not write.
+
     def test_rows_are_flattened_and_escaped_before_the_write(self, wired: dict[str, Any]) -> None:
         """The persist step must run both CSV-safety helpers on the payload."""
         rows = [{"id": "row-1", "nested": {"a": 1}}]
@@ -275,6 +289,7 @@ class TestZoneSessions:
         SiteSearchExporter.zone_sessions()
 
         wired["SiteDeviceExporter"]._resolve_site_for_stats.assert_not_called()
+        assert wired["SiteDeviceExporter"]._resolve_site_for_stats.call_count == 0  # WHY: no wasted site prompt.
 
 
 class TestTroubleshootCall:
@@ -305,6 +320,7 @@ class TestTroubleshootCall:
 
         wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.assert_not_called()
         wired["DataExporter"].write_with_format_selection.assert_not_called()
+        assert wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.call_count == 0  # WHY: no API call.
 
     def test_aborts_when_the_client_mac_prompt_is_blank(self, wired: dict[str, Any]) -> None:
         """A blank client MAC must stop the flow before the API call."""
@@ -314,6 +330,7 @@ class TestTroubleshootCall:
 
         wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.assert_not_called()
         wired["DataExporter"].write_with_format_selection.assert_not_called()
+        assert wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.call_count == 0  # WHY: no API call.
 
     def test_aborts_when_the_meeting_id_prompt_is_blank(self, wired: dict[str, Any]) -> None:
         """A blank meeting ID must stop the flow before the API call."""
@@ -323,6 +340,7 @@ class TestTroubleshootCall:
 
         wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.assert_not_called()
         wired["DataExporter"].write_with_format_selection.assert_not_called()
+        assert wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.call_count == 0  # WHY: no API call.
 
     def test_empty_result_writes_nothing(self, wired: dict[str, Any]) -> None:
         """An empty result set must report the fact and skip the export."""
@@ -332,6 +350,7 @@ class TestTroubleshootCall:
         SiteSearchExporter.troubleshoot_call()
 
         wired["DataExporter"].write_with_format_selection.assert_not_called()
+        assert wired["DataExporter"].write_with_format_selection.call_count == 0  # WHY: no write for empty rows.
 
     def test_results_array_payload_is_unwrapped_to_rows(self, wired: dict[str, Any]) -> None:
         """The documented dict payload must yield its results array as the row set."""
