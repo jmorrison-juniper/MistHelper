@@ -46,10 +46,12 @@ async def readyz(request: Request) -> dict[str, str]:
         async with engine.connect() as conn:
             await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
         return {"status": "ready"}
-    except Exception:
+    except Exception as error:
         # WHY: log the exception so the traceback reaches the operator, not just the word.
         logger.warning(
-            "Readiness probe failed. The database query raised an exception.",
+            "Readiness probe failed after %s: %s",
+            type(error).__name__,
+            error,
             exc_info=True,
         )
         return {"status": "unavailable"}

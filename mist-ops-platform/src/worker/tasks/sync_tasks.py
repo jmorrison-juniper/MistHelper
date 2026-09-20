@@ -117,8 +117,13 @@ def _run_inventory_sync(engine, mist: MistEndpointService, org_id: str) -> dict:
         with Session(engine) as db:
             service = InventorySyncService(db, mist, org_id)
             return service.sync_full_inventory()
-    except Exception:
-        logger.exception("Inventory sync failed for %s", org_id)
+    except Exception as error:
+        logger.exception(
+            "Inventory sync failed for %s after %s: %s",
+            org_id,
+            type(error).__name__,
+            error,
+        )
         return {"error": f"inventory sync failed for {org_id}"}
 
 
@@ -130,8 +135,13 @@ def _run_config_sync(engine, mist: MistEndpointService, org_id: str) -> dict:  #
             device_count = service.sync_device_configs()
             site_count = service.sync_site_configs()
             return {"devices": device_count, "sites": site_count}
-    except Exception:
-        logger.exception("Config sync failed for %s", org_id)
+    except Exception as error:
+        logger.exception(
+            "Config sync failed for %s after %s: %s",
+            org_id,
+            type(error).__name__,
+            error,
+        )
         return {"error": f"config sync failed for {org_id}"}
 
 
@@ -142,8 +152,13 @@ def _run_status_sync(engine, mist: MistEndpointService, org_id: str) -> dict:  #
             service = StatusSyncService(db, mist, org_id)
             count = service.sync_device_status()
             return {"snapshots": count}
-    except Exception:
-        logger.exception("Status sync failed for %s", org_id)
+    except Exception as error:
+        logger.exception(
+            "Status sync failed for %s after %s: %s",
+            org_id,
+            type(error).__name__,
+            error,
+        )
         return {"error": f"status sync failed for {org_id}"}
 
 
@@ -154,8 +169,13 @@ def _run_events_sync(engine, mist: MistEndpointService, org_id: str) -> dict:  #
             service = EventSyncService(db, mist, org_id)
             count = service.sync_audit_events()
             return {"events": count}
-    except Exception:
-        logger.exception("Events sync failed for %s", org_id)
+    except Exception as error:
+        logger.exception(
+            "Events sync failed for %s after %s: %s",
+            org_id,
+            type(error).__name__,
+            error,
+        )
         return {"error": f"events sync failed for {org_id}"}
 
 
@@ -176,8 +196,13 @@ def _run_drift_scan(engine, org_id: str) -> dict:  # noqa: ANN001
             result = scanner.scan_org(org.org_id)
             db.commit()
             return result
-    except Exception:
-        logger.exception("Drift scan failed for %s", org_id)
+    except Exception as error:
+        logger.exception(
+            "Drift scan failed for %s after %s: %s",
+            org_id,
+            type(error).__name__,
+            error,
+        )
         return {"error": f"drift scan failed for {org_id}"}
 
 
@@ -227,6 +252,11 @@ def _export_table_backup(
                 timestamp,
             )
             return len(data)
-    except Exception:
-        logger.exception("Backup failed for %s", table_name)
+    except Exception as error:
+        logger.exception(
+            "Backup failed for %s after %s: %s",
+            table_name,
+            type(error).__name__,
+            error,
+        )
         return 0

@@ -100,8 +100,13 @@ class EmailAdapter:
                 self._timeout,
             )
             return False
-        except Exception:
-            logger.exception("Email send failed to %s", destination)
+        except Exception as error:
+            logger.exception(
+                "Email send failed to %s after %s: %s",
+                destination,
+                type(error).__name__,
+                error,
+            )
             return False
         logger.debug("Email alert delivered to %s", destination)
         return True
@@ -146,8 +151,13 @@ class WebhookAdapter:
                 timeout=10.0,
             )
             return response.is_success
-        except Exception:
-            logger.exception("Webhook POST failed to %s", url)
+        except Exception as error:
+            logger.exception(
+                "Webhook POST failed to %s after %s: %s",
+                url,
+                type(error).__name__,
+                error,
+            )
             return False
 
 

@@ -56,7 +56,12 @@ async def get_session(
         try:
             yield session
             await session.commit()
-        except Exception:
+        except Exception as error:
+            logger.exception(
+                "Database session failed after %s: %s",
+                type(error).__name__,
+                error,
+            )
             await session.rollback()
             raise
 
