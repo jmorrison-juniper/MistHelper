@@ -100,8 +100,13 @@ class MistSessionFactory:
                 raise_on_deleted_version=True,
             )
             return secret["data"]["data"].get("api_token")
-        except Exception:
-            logger.debug("Vault lookup failed for org %s", org_id)
+        except Exception as error:
+            logger.debug(
+                "Vault lookup failed for org %s after %s: %s",
+                org_id,
+                type(error).__name__,
+                error,
+            )
             return None
 
     def _read_cache(self, org_id: str) -> str | None:
@@ -148,8 +153,12 @@ class MistSessionFactory:
             client.ping()
             logger.debug("Redis token cache client build done.")  # Confirm the live connection.
             return client
-        except Exception:
-            logger.debug("Redis not available for token cache")
+        except Exception as error:
+            logger.debug(
+                "Redis not available for token cache after %s: %s",
+                type(error).__name__,
+                error,
+            )
             return None
 
     def _get_async_redis_client(self) -> AsyncRedis | None:
@@ -170,9 +179,13 @@ class MistSessionFactory:
             )
             logger.debug("Async Redis rate limit client build done.")  # Confirm the client exists.
             return self._rate_redis
-        except Exception:
+        except Exception as error:
             # WHY: fail open, like the token cache.
-            logger.debug("Async Redis not available for rate limiting")
+            logger.debug(
+                "Async Redis not available for rate limiting after %s: %s",
+                type(error).__name__,
+                error,
+            )
             return None
 
 
