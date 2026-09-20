@@ -551,7 +551,13 @@ def run_watched(name: str, work: Callable[[], Any], ledger: ProgressLedger) -> A
     """
     try:  # The read reaches a network, so it may raise.
         value = work()
-    except Exception:  # `assembly.guarded_call` still records the partial reason.
+    except Exception as error:  # Keep broad because each call group can raise a different network fault.
+        logger.debug(
+            "The capture call group %s failed with %s: %s",
+            name,
+            type(error).__name__,
+            error,
+        )  # Record the per-group failure before the caller records the final result.
         ledger.finish(name, STATE_FAILED)  # The row turns red at once.
         raise  # The caller of this group owns the reason.
     ledger.finish(name, STATE_DONE)  # The row turns green at once.

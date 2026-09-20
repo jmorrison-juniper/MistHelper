@@ -381,8 +381,14 @@ def _safe_api_call(api_fn: Callable[..., Any], apisession: Any, site_id: str, kw
     """Invoke api_fn. Return None on any raised exception (caller treats as empty)."""
     try:
         return api_fn(apisession, site_id=site_id, **kwargs)  # Delegate the actual API call.
-    except Exception:
-        return None  # Silent failure. Caller returns empty list downstream.
+    except Exception as api_error:
+        logger.warning(
+            "Map API call failed for site %s: %s: %s",
+            site_id,
+            type(api_error).__name__,
+            api_error,
+        )  # WHY: viewer can continue with incomplete data, but the failure needs evidence.
+        return None  # WHY: caller converts the failed optional payload to an empty list.
 
 
 def _filter_response_by_map(resp: Any, map_id: str) -> list[dict[str, Any]]:

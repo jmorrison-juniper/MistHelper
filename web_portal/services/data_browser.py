@@ -157,7 +157,7 @@ class DataBrowserService:
             return False
         return os.path.splitext(candidate)[1].lower() in ALLOWED_EXTENSIONS  # Same rule as listing.
 
-    def _build_file_entry(self, entry) -> dict:
+    def _build_file_entry(self, entry) -> dict | None:
         """Build metadata dict for a directory entry."""
         if entry.is_dir():
             return {

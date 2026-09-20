@@ -348,7 +348,13 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
                 self._state.api_session_ref, site_id=site_id, body=zone_payload
             )
             return zone_response.status_code in _OK_STATUSES  # WHY: accept 200 or 201
-        except Exception:  # noqa: BLE001 - preserve original broad-except behavior
+        except Exception as zone_error:  # noqa: BLE001 - one bad zone must not stop the clone batch
+            logger.warning(
+                "Failed to clone zone on map %s: %s: %s",
+                cloned_map_id,
+                type(zone_error).__name__,
+                zone_error,
+            )  # WHY: batch cloning must continue, but the failed zone needs evidence.
             return False  # WHY: never raise past caller boundary
 
     @staticmethod
