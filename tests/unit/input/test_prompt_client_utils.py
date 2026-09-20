@@ -94,6 +94,25 @@ class TestFetchAllClientsForSite:
             {"mac": "d1", "connection_type": "Wired"},
         ]
 
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_wireless_http_failure_reaches_caller(self, mh_mocks, monkeypatch, status_code: int) -> None:
+        """An HTTP failure while fetching wireless clients must remain visible."""
+        fake_mistapi = SimpleNamespace(
+            api=SimpleNamespace(
+                v1=SimpleNamespace(
+                    sites=SimpleNamespace(
+                        clients=SimpleNamespace(
+                            searchSiteWirelessClients=MagicMock(side_effect=RuntimeError(f"HTTP {status_code}"))
+                        ),
+                        wired_clients=SimpleNamespace(searchSiteWiredClients=MagicMock()),
+                    )
+                )
+            )
+        )
+        monkeypatch.setattr(mod, "mistapi", fake_mistapi)
+        with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):
+            PromptClientUtils._fetch_all_clients_for_site("site-1")
+
 
 class TestBuildClientSelectionTable:
     def test_wireless_uses_ssid(self):

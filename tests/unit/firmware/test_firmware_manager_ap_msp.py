@@ -115,6 +115,14 @@ class TestIsMspModeAvailable:
         finally:
             _restore_msp(snap)
 
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_response_status_code_preserves_http_failure_status(status_code: int) -> None:
+    """The firmware status helper must preserve HTTP failure status codes."""
+    response = types.SimpleNamespace(status_code=status_code)  # WHY: use the smallest SDK response double.
+
+    assert fm_mod._response_status_code(response) == status_code  # WHY: prove the status remains observable.
+
     def test_populated_list_returns_true(self) -> None:
         mgr = _make_manager()  # WHY: construct first — init rebinds globals
         snap = _snapshot_msp()
