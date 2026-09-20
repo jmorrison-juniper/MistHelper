@@ -7,10 +7,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.export import data_exporter as data_exporter_module
+from src.export.data_exporter import (
+    SKIP_NO_API_FUNCTION_NAME,
+    SKIP_ROUTER_UNAVAILABLE,
+    DataExporter,
+)
+from src.firmware.firmware_manager import FirmwareManager
+from src.firmware.site_auto_upgrade import _resolve_configurator_kwargs
 from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
 from src.gateway.wan_probe_device_override_manager import WANProbeDeviceOverrideManager
 from src.refactors.device_data_fetcher import DeviceDataFetcher, DeviceFetchConfig
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter
+from src.refactors.wlanradius_timer_manager import WLANRadiusTimerManager
+from src.ssh.runtime.app_runner import AppRunner
+from src.websocket.manager import WebSocketManager
 
 
 @pytest.mark.parametrize(
@@ -114,3 +125,124 @@ def test_sqlite_writer_commit_requires_cursor() -> None:
 
     with pytest.raises(RuntimeError, match="Database cursor not initialized"):  # Assert the named field.
         writer._commit_and_verify(1)  # Drive verification with no cursor.
+
+
+def test_data_exporter_missing_polyglot_symbols_stays_degraded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polyglot router setup stays on the safe degraded path when imports are missing."""
+    monkeypatch.setattr(data_exporter_module, "configure_db_logging", None)  # Drive the first paired guard.
+    monkeypatch.setattr(data_exporter_module, "DatabaseConfig", None)  # Drive the second paired guard.
+    monkeypatch.setattr(data_exporter_module, "DatabaseRouter", None)  # Drive the router guard.
+    DataExporter._router = MagicMock()  # Prove the failure path clears a stale router.
+
+    DataExporter._build_polyglot_router()  # The method catches optional-backend setup failures.
+
+    assert DataExporter._router is None  # The exporter must remain in CSV/SQLite mode.
+
+
+def test_data_exporter_missing_polyglot_probe_uses_standalone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polyglot host probing falls back to standalone mode when the probe is missing."""
+    monkeypatch.setattr(DataExporter, "_standalone_probe", None)  # Reset the process cache for this check.
+    monkeypatch.setattr(DataExporter, "_polyglot_db_layer_available", staticmethod(lambda: True))
+    monkeypatch.setattr(data_exporter_module, "polyglot_hosts_unreachable", None)  # Remove the probe function.
+
+    assert DataExporter._polyglot_hosts_silent() is True  # Missing probe must not attempt a network call.
+
+
+def test_data_exporter_missing_router_reports_skip() -> None:
+    """Polyglot write returns a skip outcome when the router is absent."""
+    DataExporter._router = None  # Drive the missing-router state that a failed init leaves.
+
+    outcome = DataExporter._perform_polyglot_write([{"id": "row-1"}], "listThing")
+
+    assert outcome.skip_reason == SKIP_ROUTER_UNAVAILABLE  # The caller gets a named skip reason.
+
+
+def test_data_exporter_route_rejects_missing_api_function(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polyglot routing reports a named skip when the endpoint name is missing."""
+    monkeypatch.setattr(DataExporter, "_polyglot_skip_reason", staticmethod(lambda _api: None))
+
+    outcome = DataExporter._route_to_polyglot([{"id": "row-1"}], None)
+
+    assert outcome.skip_reason == SKIP_NO_API_FUNCTION_NAME  # The endpoint field remains observable.
+
+
+def test_ssr_bulk_upgrade_returns_error_when_prepared_data_is_missing() -> None:
+    """SSR bulk upgrade returns a handled error when preparation returns no data."""
+    manager = FirmwareManager.__new__(FirmwareManager)  # Bypass full initialization for this boundary test.
+    manager.org_id = "org-1"  # Provide the log context read by the method.
+    manager._prepare_ssr_bulk_upgrade = MagicMock(return_value=(None, None))
+
+    result = manager._bulk_upgrade_ssr_firmware_by_site()
+
+    assert result == {"error": "SSR bulk upgrade preparation returned no data"}
+
+
+def test_ssr_prepare_returns_error_when_org_sites_are_missing() -> None:
+    """SSR preparation returns a handled error when org and site data is missing."""
+    manager = FirmwareManager.__new__(FirmwareManager)  # Bypass full initialization for this boundary test.
+    manager._resolve_ssr_org_and_sites = MagicMock(return_value=(None, None))
+
+    result, error = manager._prepare_ssr_bulk_upgrade(None)
+
+    assert result is None
+    assert error == {"error": "SSR bulk upgrade org and site resolution returned no data"}
+
+
+def test_ssr_prepare_returns_error_when_config_version_is_missing() -> None:
+    """SSR preparation returns a handled error when config and version data is missing."""
+    manager = FirmwareManager.__new__(FirmwareManager)  # Bypass full initialization for this boundary test.
+    manager._resolve_ssr_org_and_sites = MagicMock(return_value=(("Org", [{"id": "s1"}]), None))
+    manager._resolve_ssr_config_and_version = MagicMock(return_value=(None, None))
+
+    result, error = manager._prepare_ssr_bulk_upgrade(None)
+
+    assert result is None
+    assert error == {"error": "SSR bulk upgrade config and version resolution returned no data"}
+
+
+def test_ssr_org_resolution_returns_error_when_sites_are_missing() -> None:
+    """SSR org resolution returns a handled error when site data is missing."""
+    manager = FirmwareManager.__new__(FirmwareManager)  # Bypass full initialization for this boundary test.
+    manager._validate_org_for_ssr_upgrade = MagicMock(return_value=("Org", None))
+    manager._resolve_ssr_sites_or_error = MagicMock(return_value=(None, None))
+
+    result, error = manager._resolve_ssr_org_and_sites(None)
+
+    assert result is None
+    assert error == {"error": "SSR bulk upgrade site resolution returned no data"}
+
+
+def test_site_auto_upgrade_rejects_wrong_config_type() -> None:
+    """Site auto-upgrade config resolution raises a named type error for wrong input."""
+    with pytest.raises(TypeError, match="config must be a SiteAutoUpgradeConfig"):
+        _resolve_configurator_kwargs({"config": object()})
+
+
+def test_wlanradius_requires_selected_wlan() -> None:
+    """WLAN RADIUS timer updates raise a named error when no WLAN is selected."""
+    manager = WLANRadiusTimerManager.__new__(WLANRadiusTimerManager)  # Bypass prompts and cache loading.
+    manager.selected_wlan = None  # Drive the missing WLAN state.
+
+    with pytest.raises(RuntimeError, match="No WLAN selected"):
+        manager._get_selected_wlan()
+
+
+def test_app_runner_returns_none_when_user_vanishes_after_preflight(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SSH app runner aborts when preflight passes but the user value is missing."""
+    logger = MagicMock()  # Capture the error call without writing logs.
+    context = (["host-a"], None, "password", {}, False)  # Drive the impossible missing-user state.
+    monkeypatch.setattr(AppRunner, "_finalize_preflight", staticmethod(lambda *_args: True))
+
+    result = AppRunner._preflight_and_build(SimpleNamespace(), context, logger)
+
+    assert result is None  # The pipeline caller already treats None as an abort signal.
+    logger.error.assert_called_once_with("SSH preflight passed without a user")
+
+
+def test_websocket_manager_requires_mist_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WebSocket manager raises a named error when no Mist host exists."""
+    monkeypatch.setattr("src.websocket.manager.os.getenv", lambda *_args: None)  # Remove the default fallback.
+    session = SimpleNamespace(host=None)  # Provide a session with no host.
+
+    with pytest.raises(ValueError, match="mist_host must be set"):
+        WebSocketManager(session)
