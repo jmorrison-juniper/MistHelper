@@ -303,8 +303,15 @@ class AuthenticatedScraper:
         # Wait for title to render (proof content loaded)
         try:
             page.wait_for_selector("h1.uvIdeaTitle", timeout=10000)
-        except Exception:
-            # Fallback: wait a bit more
+        except Exception as error:
+            logger.debug(
+                "[%d/%d] Title wait for %s failed after %s: %s",
+                index + 1,
+                total,
+                idea_id,
+                type(error).__name__,
+                error,
+            )
             page.wait_for_timeout(3000)
 
         # Validate URL matches

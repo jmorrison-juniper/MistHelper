@@ -243,7 +243,13 @@ class OllamaFleet:
             request = urllib.request.Request(url, method="GET")
             with urllib.request.urlopen(request, timeout=5) as response:
                 return response.status == 200
-        except Exception:
+        except OSError as error:
+            logger.debug(
+                "[%s] Ollama tag check failed after %s: %s",
+                host,
+                type(error).__name__,
+                error,
+            )
             return False
 
     def _provision(self, servers: list[str]) -> list[dict]:
@@ -290,7 +296,13 @@ class OllamaFleet:
                     if model.get("name", "").startswith(prefix):
                         return model["name"]
             return models[0]["name"] if models else None
-        except Exception:
+        except Exception as error:
+            logger.debug(
+                "[%s] Model discovery failed after %s: %s",
+                host,
+                type(error).__name__,
+                error,
+            )
             return None
 
     @staticmethod
@@ -311,7 +323,13 @@ class OllamaFleet:
                 "size": entry.get("size", 0),
                 "size_vram": entry.get("size_vram", 0),
             }
-        except Exception:
+        except Exception as error:
+            logger.debug(
+                "[%s] VRAM query failed after %s: %s",
+                host,
+                type(error).__name__,
+                error,
+            )
             return None
 
     @classmethod

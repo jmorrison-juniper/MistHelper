@@ -200,7 +200,16 @@ class MistIdeasScraper:
         for attempt in range(3):
             try:
                 page.goto(idea_url, wait_until="load", timeout=20000)
-            except Exception:
+            except Exception as error:
+                logger.debug(
+                    "[%d/%d] Navigation attempt %d for %s failed after %s: %s",
+                    index + 1,
+                    total,
+                    attempt + 1,
+                    idea_id,
+                    type(error).__name__,
+                    error,
+                )
                 page.wait_for_timeout(2000)
 
             # Wait for votes to render (signals content loaded)
@@ -209,7 +218,16 @@ class MistIdeasScraper:
                     r"() => /\d/.test(document.querySelector('.uvIdeaVoteCount')?.textContent || '')",
                     timeout=8000,
                 )
-            except Exception:
+            except Exception as error:
+                logger.debug(
+                    "[%d/%d] Vote wait attempt %d for %s failed after %s: %s",
+                    index + 1,
+                    total,
+                    attempt + 1,
+                    idea_id,
+                    type(error).__name__,
+                    error,
+                )
                 page.wait_for_timeout(2000)
 
             # Validate URL matches expected idea
