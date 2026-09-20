@@ -18,6 +18,7 @@ import mistapi.api.v1.orgs.servicepolicies  # Org service-policies endpoint name
 import mistapi.api.v1.sites.gatewaytemplates  # Site gateway-template endpoint namespace
 import mistapi.api.v1.sites.networks  # Site networks endpoint namespace
 import mistapi.api.v1.sites.servicepolicies  # Site service-policies endpoint namespace
+import requests  # WHY: Mist SDK transport failures surface through requests exceptions.
 
 from src.api.response_integrity import (
     ResponseIntegrityChecker,
@@ -99,7 +100,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             tenant_list = sorted(self._extract_tenants_from_networks(response.data))  # Dedupe + sort
             logger.info("Found %d unique org-network tenants: %s", len(tenant_list), tenant_list)  # Report
             return tenant_list  # Sorted list handed back to caller
-        except Exception as error:  # Broad guard: never propagate API failures to the UI
+        except (AttributeError, requests.RequestException) as error:  # Expected API or SDK lookup failure.
             logging.error("Error fetching org tenants from networks: %s", error)  # Log root cause
             return []  # Fail-safe empty list keeps callers simple
 
@@ -135,7 +136,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             tenant_list = sorted(self._extract_tenants_from_networks(response.data))  # Dedupe + sort
             logger.info("Found %d unique site-network tenants: %s", len(tenant_list), tenant_list)  # Report
             return tenant_list  # Sorted list handed back to caller
-        except Exception as error:  # Broad guard mirrors organization_tenants for symmetry
+        except (AttributeError, requests.RequestException) as error:  # Expected API or SDK lookup failure.
             logging.error("Error fetching site tenants from derived networks: %s", error)  # Log root cause
             return []  # Fail-safe empty list keeps callers simple
 
@@ -159,7 +160,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                 "Found %d unique tenants across service policies: %s", len(tenant_list), tenant_list
             )  # Emit final union count for operator visibility
             return tenant_list  # Sorted list handed back to caller
-        except Exception as error:  # Broad guard: never propagate API failures to the UI
+        except (AttributeError, requests.RequestException) as error:  # Expected API or SDK lookup failure.
             logging.error("Error fetching tenants from service policies: %s", error)  # Log root cause
             return []  # Fail-safe empty list keeps callers simple
 
@@ -183,7 +184,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                 "Found %d unique tenants across gateway templates: %s", len(tenant_list), tenant_list
             )  # Emit final union count for operator visibility
             return tenant_list  # Sorted list handed back to caller
-        except Exception as error:  # Broad guard: never propagate API failures to the UI
+        except (AttributeError, requests.RequestException) as error:  # Expected API or SDK lookup failure.
             logging.error("Error fetching tenants from gateway templates: %s", error)  # Log root cause
             return []  # Fail-safe empty list keeps callers simple
 
@@ -313,7 +314,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                 return set()  # Fail-safe empty set
             logger.debug("Received %d org service policies", len(response.data))  # Payload size trace
             return self._extract_tenants_from_policies(response.data)  # Parse into deduped set
-        except Exception as error:  # Broad guard: policy endpoint may 404 on legacy orgs
+        except (AttributeError, requests.RequestException) as error:  # Policy endpoint may be unavailable on old orgs.
             logging.warning("Could not fetch org service policies: %s", error)  # Warn rather than error
             return set()  # Fail-safe empty set keeps union caller simple
 
@@ -329,7 +330,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                 return set()  # Fail-safe empty set
             logger.debug("Received %d site service policies", len(response.data))  # Payload size trace
             return self._extract_tenants_from_policies(response.data)  # Parse into deduped set
-        except Exception as error:  # Broad guard mirrors _fetch_org_policy_tenants for symmetry
+        except (AttributeError, requests.RequestException) as error:  # Site policy endpoint may be unavailable.
             logging.warning("Could not fetch site service policies: %s", error)  # Warn rather than error
             return set()  # Fail-safe empty set keeps union caller simple
 
@@ -345,7 +346,10 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                 return set()  # Fail-safe empty set
             logger.debug("Received %d org gateway templates", len(response.data))  # Payload size trace
             return self._extract_tenants_from_templates(response.data)  # Parse into deduped set
-        except Exception as error:  # Broad guard: template endpoint may 404 on legacy orgs
+        except (
+            AttributeError,
+            requests.RequestException,
+        ) as error:  # Template endpoint may be unavailable on old orgs.
             logging.warning("Could not fetch org gateway templates: %s", error)  # Warn rather than error
             return set()  # Fail-safe empty set keeps union caller simple
 
@@ -361,6 +365,6 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                 return set()  # Fail-safe empty set
             logger.debug("Received %d site gateway templates", len(response.data))  # Payload size trace
             return self._extract_tenants_from_templates(response.data)  # Parse into deduped set
-        except Exception as error:  # Broad guard mirrors _fetch_org_template_tenants for symmetry
+        except (AttributeError, requests.RequestException) as error:  # Site template endpoint may be unavailable.
             logging.warning("Could not fetch site gateway templates: %s", error)  # Warn rather than error
             return set()  # Fail-safe empty set keeps union caller simple
