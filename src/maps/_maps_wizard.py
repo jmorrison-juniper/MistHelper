@@ -8,6 +8,7 @@ from dataclasses import dataclass  # WHY: pack helper args into 5-Item Rule bund
 from typing import Any  # WHY: MapsManager and mist API records are loosely-typed dicts.
 
 import mistapi  # WHY: Mist REST client for all wizard API calls.
+import requests  # WHY: name network exceptions from Mist-backed calls.
 
 from src.dataclasses.map_scaling_deps import (  # WHY: shared scaling arg bundles.
     MapDimensions,  # WHY: pixel size + PPM triple.
@@ -104,7 +105,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             resp = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: pull every device in the site.
                 self.apisession, site_id=site_id, type="all"
             )
-        except Exception as err:  # WHY: log and swallow so wizard stays operable on API failures.
+        except (requests.RequestException, OSError) as err:  # WHY: keep wizard operable on network or OS failures.
             logging.debug("Could not fetch devices for wizard: %s", err)  # WHY: keep flow going on errors.
             return []  # WHY: empty list keeps caller math (len()/iteration) safe.
         return self._filter_records_by_map(resp, map_id)  # WHY: reuse status/filter helper.
@@ -122,7 +123,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             resp = mistapi.api.v1.sites.zones.listSiteZones(  # WHY: pull every zone in the site.
                 self.apisession, site_id=site_id
             )
-        except Exception as err:  # WHY: log and swallow so wizard stays operable on API failures.
+        except (requests.RequestException, OSError) as err:  # WHY: keep wizard operable on network or OS failures.
             logging.debug("Could not fetch zones for wizard: %s", err)  # WHY: swallow so wizard can continue.
             return []  # WHY: empty list keeps downstream len()/loops safe.
         return self._filter_records_by_map(resp, map_id)  # WHY: reuse map-id filter.
@@ -138,7 +139,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             vbeacons = self._fetch_beacons_of_kind(  # WHY: virtual beacons share the same shape.
                 mistapi.api.v1.sites.vbeacons.listSiteVBeacons, site_id, map_id
             )
-        except Exception as err:
+        except (requests.RequestException, OSError) as err:
             logging.debug("Could not fetch beacons for wizard: %s", err)  # WHY: keep flow going on errors.
             return [], []  # WHY: two empty lists match the documented tuple contract.
         return beacons, vbeacons  # WHY: pair matches downstream unpacking (beacons, vbeacons).
@@ -201,14 +202,14 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
 
     def _read_image_dimensions(self, file_path: str) -> tuple[int, int] | None:
         """Open the image with Pillow and return (width_px, height_px) or None on failure."""
-        from PIL import Image  # WHY: lazy import so wizard imports stay light for non-image callers.
+        from PIL import Image  # WHY: lazy import keeps Pillow out of the module import path.
 
         try:
             with Image.open(file_path) as img:  # WHY: context manager frees the file handle promptly.
                 width_px, height_px = img.size  # WHY: Pillow returns (w, h) tuple in pixels.
                 print(f"\nNew image dimensions: {width_px} x {height_px} pixels")  # WHY: user visibility.
                 return width_px, height_px  # WHY: return tuple in expected order.
-        except Exception as img_err:
+        except (requests.RequestException, OSError) as img_err:
             print(f"\n! Failed to read image dimensions: {img_err}")  # WHY: surface Pillow error text.
             return None  # WHY: caller aborts wizard.
 
@@ -816,7 +817,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             resp = mistapi.api.v1.sites.maps.addSiteMapImageFile(  # WHY: multipart image upload.
                 self.apisession, site_id=target.site_id, map_id=target.map_id, file=target.file_path
             )
-        except Exception as img_err:
+        except (requests.RequestException, OSError) as img_err:
             errors.append(f"Image upload error: {img_err}")  # WHY: bubble up to summary.
             print(f"    ! Error uploading image: {img_err}")  # WHY: user-visible failure.
             return  # WHY: cannot check response after exception.
