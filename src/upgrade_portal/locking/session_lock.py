@@ -188,7 +188,7 @@ class SessionLockManager:
                     owner_id=existing_owner_id,
                 )  # WHY: failure result
 
-        except Exception as exc:  # WHY: catch all exceptions to ensure graceful handling
+        except redis.RedisError as exc:  # WHY: Redis faults must degrade instead of starting a second upgrade.
             # WHY: log exception with context
             logger.exception(
                 "session_lock_acquire_exception",
@@ -279,7 +279,7 @@ class SessionLockManager:
             # WHY: return success - lock released
             return True  # WHY: success result
 
-        except Exception as exc:  # WHY: catch all exceptions to ensure graceful handling
+        except redis.RedisError as exc:  # WHY: Redis faults must report release failure instead of hiding it.
             # WHY: log exception with context
             logger.exception(
                 "session_lock_release_exception",
@@ -371,7 +371,7 @@ class SessionLockManager:
             # WHY: return success - lock TTL extended
             return True  # WHY: success result
 
-        except Exception as exc:  # WHY: catch all exceptions to ensure graceful handling
+        except redis.RedisError as exc:  # WHY: Redis faults must report renewal failure instead of hiding it.
             # WHY: log exception with context
             logger.exception(
                 "session_lock_extend_exception",
@@ -419,7 +419,7 @@ class SessionLockManager:
             # WHY: convert EXISTS result (0 or 1) to boolean
             return lock_exists == 1  # WHY: return boolean lock status
 
-        except Exception as exc:  # WHY: catch all exceptions to ensure graceful handling
+        except redis.RedisError as exc:  # WHY: Redis faults keep the read path graceful.
             # WHY: log exception with context
             logger.exception(
                 "session_lock_check_exception",

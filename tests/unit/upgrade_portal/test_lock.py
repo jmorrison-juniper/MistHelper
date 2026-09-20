@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import redis
 
 from src.upgrade_portal.runtime import lock as lock_module
 from src.upgrade_portal.runtime.identity import SessionOwner
@@ -647,7 +648,7 @@ def test_the_typed_word_still_works_one_second_before_the_lease_ends(store: Scri
     grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
 
     assert grant.state is LockState.TAKEN_OVER
-    assert grant.audit is not None
+    assert isinstance(grant.audit, lock_module.TakeoverAudit)
     assert stored_record(store).owner == SECOND_OWNER
 
 
@@ -693,7 +694,7 @@ def test_the_store_double_drops_a_key_the_real_server_would_have_dropped(store: 
         store: The lock store double.
     """
     seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS - 1)
-    assert store.get(SITE_KEY) is not None  # Inside the lease, so the real server keeps it
+    assert isinstance(store.get(SITE_KEY), str)  # Inside the lease, so the real server keeps it
 
     seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS + 1)
     assert store.get(SITE_KEY) is None  # Past the lease, so the real server dropped it
@@ -738,7 +739,7 @@ def test_the_confirmed_takeover_moves_the_site_and_writes_an_audit(store: Script
     assert grant.state is LockState.TAKEN_OVER
     assert grant.record.lock_token != SEEDED_TOKEN
     assert stored_record(store).owner == SECOND_OWNER
-    assert grant.audit is not None
+    assert isinstance(grant.audit, lock_module.TakeoverAudit)
     assert grant.audit.to_record()["previous_actor_email"] == FIRST_OWNER.actor_email
 
 
@@ -1441,6 +1442,29 @@ def test_one_failed_connection_stops_the_next_attempt(monkeypatch: pytest.Monkey
     assert len(attempts) == 1
 
 
+def test_open_client_answers_none_for_redis_driver_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Redis driver failure makes the lock store unavailable."""
+    settings = lock_module.RedisSettings("redis.example.invalid", 6379, "")  # WHY: no environment read is needed.
+
+    def broken_redis(*args: Any, **kwargs: Any) -> Any:
+        raise redis.RedisError("driver refused the connection")  # WHY: drive the narrowed opener handler.
+
+    monkeypatch.setattr(redis, "Redis", broken_redis)  # WHY: prevent any socket attempt.
+    assert lock_module._open_client(settings) is None  # WHY: read pages must render when Redis fails.
+
+
+def test_open_client_unexpected_error_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The lock opener must not hide a programming fault."""
+    settings = lock_module.RedisSettings("redis.example.invalid", 6379, "")  # WHY: no environment read is needed.
+
+    def broken_redis(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("bug")  # WHY: model a defect, not a Redis driver outage.
+
+    monkeypatch.setattr(redis, "Redis", broken_redis)  # WHY: prevent any socket attempt.
+    with pytest.raises(RuntimeError, match="bug"):  # WHY: the narrowed handler must not swallow defects.
+        lock_module._open_client(settings)  # WHY: drive the narrowed handler.
+
+
 def test_a_reset_lets_the_module_try_the_store_again(monkeypatch: pytest.MonkeyPatch) -> None:
     """A reset clears the window, so a repaired store connects at once.
 
@@ -1628,7 +1652,7 @@ def test_the_audit_text_form_holds_neither_address(store: ScriptedLockStore) -> 
     """
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
     grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
-    assert grant.audit is not None  # A takeover always reports the audit record
+    assert isinstance(grant.audit, lock_module.TakeoverAudit)  # A takeover always reports the audit record
 
     written = repr(grant.audit)
 
@@ -1651,7 +1675,7 @@ def test_the_audit_record_still_holds_both_addresses(store: ScriptedLockStore) -
     """
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
     grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
-    assert grant.audit is not None  # A takeover always reports the audit record
+    assert isinstance(grant.audit, lock_module.TakeoverAudit)  # A takeover always reports the audit record
 
     kept = grant.audit.to_record()
 

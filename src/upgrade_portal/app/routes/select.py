@@ -733,8 +733,11 @@ def read_site_locks(org_id: str, site_ids: list[str]) -> dict[str, str | None]:
         return {}  # Every site then reads as unknown, because no lock store can answer.
     try:  # The lock store sits on a network and may not answer.
         return dict(reader(org_id, site_ids))  # The reader owns the Redis call and the key shape.
-    except Exception:  # A read-only page must survive an unreachable lock store.
-        logger.warning("select: the lock store did not answer, so every site shows an unknown state")  # No trace.
+    except Exception as error:  # A read-only page must survive an unreachable lock store.
+        logger.warning(
+            "select: the lock store did not answer, so every site shows an unknown state (%s)",
+            type(error).__name__,
+        )  # No trace.
         return {}  # Continue, because viewing must not need Redis.
 
 
@@ -1949,8 +1952,12 @@ def session_lock_record(site_id: str) -> lock.LockRecord | None:
     """
     try:  # The session read needs a request, and a damaged field must not hide a page.
         stored = stored_lock_records().get(site_id)  # None means this browser took no lock on that site.
-    except Exception:  # A page render must survive every fault of the session layer.
-        logger.warning("select: the session held no readable lock index, so site %s reads as unknown", site_id)
+    except Exception as error:  # A page render must survive every fault of the session layer.
+        logger.warning(
+            "select: the session held no readable lock index, so site %s reads as unknown (%s)",
+            site_id,
+            type(error).__name__,
+        )
         return None  # The banner then falls back to the state that the lock store reports.
     if not isinstance(stored, str):  # A value of another type states that this browser holds no lock.
         return None  # The banner then falls back to the state that the lock store reports.
@@ -1975,8 +1982,12 @@ def lock_cooldown_seconds(org_id: str, site_id: str) -> int:
     """
     try:  # `contracts/site-lock.md:138` says a read never needs the lock store.
         held = lock.read_lock(org_id, site_id, client=lock_client())  # None for a free site or a dead store.
-    except Exception:  # A page render must survive a store that answers nothing.
-        logger.warning("select: the lock store did not answer the cooldown of site %s", site_id)  # No trace.
+    except Exception as error:  # A page render must survive a store that answers nothing.
+        logger.warning(
+            "select: the lock store did not answer the cooldown of site %s (%s)",
+            site_id,
+            type(error).__name__,
+        )  # No trace.
         return 0  # A wait the portal cannot measure reads as no wait at all.
     if held is None:  # No holder, so no operator waits for anything.
         return 0  # The banner hides the cooldown line on this value.
@@ -2004,7 +2015,8 @@ def takeover_word(holder: str) -> str:
     """
     try:  # The identity read needs a request, and a page must render without one.
         owner = identity.current_owner()  # None when the request carries no valid session.
-    except Exception:  # A fault of the session layer means no match, which is the safe answer.
+    except Exception as error:  # A fault of the session layer means no match, which is the safe answer.
+        logger.warning("select: the owner read failed, so takeover text stays strict (%s)", type(error).__name__)
         owner = None  # The page then shows the word that FR-079 fixes.
     address = owner.actor_email if owner is not None else ""  # An empty address matches no holder.
     if not address or not holder:  # One empty half cannot prove that the two operators are one person.
@@ -2056,8 +2068,12 @@ def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
         return with_lock_holder_run(banner, held)  # A traceable lock lets the holder open the run too.
     try:  # `read_site_locks` absorbs a dead store, and the seam lookup itself may still fail.
         locks = read_site_locks(org_id, [site_id]) if org_id else {}  # No organization means no readable key.
-    except Exception:  # A page render must survive every fault of the lock seam.
-        logger.warning("select: the lock seam did not answer, so site %s reads as unknown", site_id)  # No trace.
+    except Exception as error:  # A page render must survive every fault of the lock seam.
+        logger.warning(
+            "select: the lock seam did not answer, so site %s reads as unknown (%s)",
+            site_id,
+            type(error).__name__,
+        )  # No trace.
         locks = {}  # An empty index marks the state unknown, which is what the contract asks for.
     state = site_lock_state(site_id, locks)  # One of `free`, `locked`, or `unknown`.
     holder = str(locks.get(site_id) or "")  # Empty for a free site and for a site the portal cannot read.
@@ -2080,8 +2096,12 @@ def read_banner_lock_record(org_id: str, site_id: str) -> lock.LockRecord | None
     """
     try:  # A banner render must survive a store fault.
         return lock.read_lock(org_id, site_id, client=lock_client())  # The full record names the holding run.
-    except Exception:  # A broken read must not hide the page.
-        logger.warning("select: the lock store did not answer the run of site %s", site_id)  # No token, no address.
+    except Exception as error:  # A broken read must not hide the page.
+        logger.warning(
+            "select: the lock store did not answer the run of site %s (%s)",
+            site_id,
+            type(error).__name__,
+        )  # No token, no address.
         return None  # The banner then omits the run link.
 
 

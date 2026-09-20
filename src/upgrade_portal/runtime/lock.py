@@ -71,6 +71,19 @@ from .identity import (
     email_digest,
 )  # The one identity notion, and the one safe form of an address
 
+
+def _redis_error_type() -> type[Exception]:
+    """Return the Redis driver error type, or a fallback when Redis is absent."""
+    try:  # Redis is optional at import time, because read pages must still load without the package.
+        from redis.exceptions import RedisError  # Driver errors from Redis.
+    except ImportError:  # A missing Redis package is handled by the connection opener.
+        return RuntimeError  # The opener catches ImportError before this fallback matters.
+    return RedisError  # Return the concrete driver error type.
+
+
+_LOCK_STORE_ERRORS = (ConnectionError, TimeoutError, OSError, _redis_error_type())  # Store faults routes can handle.
+_LOCK_OPEN_ERRORS = (ImportError, *_LOCK_STORE_ERRORS)  # Connection open can fail before Redis imports.
+
 __all__ = [
     "ACQUIRE_ATTEMPTS",
     # Issue #2221: the four action names of the trail, and the reader path.
@@ -1050,7 +1063,7 @@ def _open_client(settings: RedisSettings) -> Any:
         )
         client.ping()  # Prove the server answers before any caller trusts the handle
         return client
-    except Exception as error:  # A read-only page must render without the lock store.
+    except _LOCK_OPEN_ERRORS as error:  # A read-only page must render without the lock store.
         _LOGGER.warning("lock: the lock store at %s did not answer (%s)", settings.host, type(error).__name__)
         return None
 
@@ -1134,7 +1147,7 @@ def _run_command(action: str, command: Callable[[], Any]) -> Any:
     """
     try:
         return command()
-    except Exception as error:  # The client raises several classes, and each one refuses the write.
+    except _LOCK_STORE_ERRORS as error:  # The client raises store faults, and each one refuses the write.
         _LOGGER.warning("lock: the lock store refused the %s command (%s)", action, type(error).__name__)
         raise LockStoreUnreachableError(LOCK_STORE_DOWN_MESSAGE) from error
 
@@ -1155,7 +1168,7 @@ def _read_record(handle: Any, key: str) -> LockRecord | None:
     """
     try:
         value = handle.get(key)
-    except Exception as error:  # A read-only page must render without the lock store.
+    except _LOCK_STORE_ERRORS as error:  # A read-only page must render without the lock store.
         _LOGGER.warning("lock: the lock store did not answer a read (%s)", type(error).__name__)
         return None
     if value is None:  # No lock exists on this site

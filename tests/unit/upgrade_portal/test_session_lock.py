@@ -10,6 +10,9 @@ Test acquire_lock(), release_lock(), extend_lock(), check_lock() with:
 from datetime import datetime  # WHY: timestamp comparison
 from unittest.mock import Mock  # WHY: mock Redis client
 
+import pytest  # WHY: assert propagation for errors outside the Redis contract
+import redis  # WHY: build Redis driver failures for narrowed handlers
+
 from src.upgrade_portal.locking.session_lock import (
     LockResult,
     SessionLockManager,
@@ -43,9 +46,9 @@ class TestAcquireLockWithRedis:
         # WHY: verify lock was acquired
         assert result.acquired is True  # WHY: verify acquired flag
         # WHY: verify lock token is not None
-        assert result.lock_token is not None  # WHY: verify token generated
+        assert isinstance(result.lock_token, str) and result.lock_token.startswith("user-1#")  # WHY: token generated
         # WHY: verify timestamp is set
-        assert result.acquired_at is not None  # WHY: verify timestamp set
+        assert isinstance(result.acquired_at, datetime)  # WHY: verify timestamp set
         # WHY: verify no failure reason
         assert result.reason is None  # WHY: verify no reason for failure
         # WHY: verify Redis SET was called with correct parameters
@@ -89,7 +92,7 @@ class TestAcquireLockWithRedis:
         # WHY: create mock Redis client that raises exception
         mock_redis = Mock()  # WHY: mock Redis client
         # WHY: setup mock to raise exception on SET
-        mock_redis.set.side_effect = Exception("Redis connection failed")  # WHY: raise error
+        mock_redis.set.side_effect = redis.RedisError("Redis connection failed")  # WHY: raise driver error
 
         # WHY: create SessionLockManager with mock Redis
         manager = SessionLockManager(redis_client=mock_redis)  # WHY: manager instance
@@ -106,6 +109,14 @@ class TestAcquireLockWithRedis:
         assert result.acquired is False  # WHY: verify acquired flag is False
         # WHY: verify reason for failure
         assert result.reason == "exception_during_acquire"  # WHY: verify failure reason
+
+    def test_acquire_lock_unexpected_error_propagates(self) -> None:
+        """Acquire lock does not hide a programming fault."""
+        mock_redis = Mock()  # WHY: mock Redis client
+        mock_redis.set.side_effect = RuntimeError("bug")  # WHY: model a defect, not a Redis outage
+        manager = SessionLockManager(redis_client=mock_redis)  # WHY: manager instance
+        with pytest.raises(RuntimeError, match="bug"):  # WHY: the narrowed handler must not swallow defects.
+            manager.acquire_lock(user_id="user-1", site_id="site-1")  # WHY: drive the narrowed handler.
 
 
 class TestAcquireLockWithoutRedis:
@@ -128,9 +139,9 @@ class TestAcquireLockWithoutRedis:
         # WHY: verify lock was acquired in degraded mode
         assert result.acquired is True  # WHY: verify acquired flag
         # WHY: verify lock token is generated
-        assert result.lock_token is not None  # WHY: verify token generated
+        assert isinstance(result.lock_token, str) and result.lock_token.startswith("user-1#")  # WHY: token generated
         # WHY: verify timestamp is set
-        assert result.acquired_at is not None  # WHY: verify timestamp set
+        assert isinstance(result.acquired_at, datetime)  # WHY: verify timestamp set
 
 
 class TestReleaseLockWithRedis:
@@ -218,6 +229,14 @@ class TestReleaseLockWithRedis:
         # WHY: verify release failed
         assert result is False  # WHY: verify failure
 
+    def test_release_lock_redis_error_returns_false(self) -> None:
+        """Release lock returns a failure signal when Redis does not answer."""
+        mock_redis = Mock()  # WHY: mock Redis client
+        mock_redis.get.side_effect = redis.RedisError("Redis connection failed")  # WHY: raise driver error
+        manager = SessionLockManager(redis_client=mock_redis)  # WHY: manager instance
+        result = manager.release_lock("user-1", "site-1", "token")  # WHY: drive the narrowed handler.
+        assert result is False  # WHY: Redis failure must not look like release success.
+
 
 class TestReleaseLockWithoutRedis:
     # WHY: test release_lock with Redis unavailable
@@ -303,6 +322,14 @@ class TestExtendLockWithRedis:
         # WHY: verify EXPIRE was not called
         mock_redis.expire.assert_not_called()  # WHY: verify expire not called
 
+    def test_extend_lock_redis_error_returns_false(self) -> None:
+        """Extend lock returns a failure signal when Redis does not answer."""
+        mock_redis = Mock()  # WHY: mock Redis client
+        mock_redis.get.side_effect = redis.RedisError("Redis connection failed")  # WHY: raise driver error
+        manager = SessionLockManager(redis_client=mock_redis)  # WHY: manager instance
+        result = manager.extend_lock("user-1", "site-1", "token")  # WHY: drive the narrowed handler.
+        assert result is False  # WHY: Redis failure must not look like renewal success.
+
 
 class TestExtendLockWithoutRedis:
     # WHY: test extend_lock with Redis unavailable
@@ -374,6 +401,14 @@ class TestCheckLockWithRedis:
         # WHY: verify lock does not exist
         assert result is False  # WHY: verify not exists
 
+    def test_check_lock_redis_error_returns_false(self) -> None:
+        """Check lock returns false when Redis does not answer."""
+        mock_redis = Mock()  # WHY: mock Redis client
+        mock_redis.exists.side_effect = redis.RedisError("Redis connection failed")  # WHY: raise driver error
+        manager = SessionLockManager(redis_client=mock_redis)  # WHY: manager instance
+        result = manager.check_lock("user-1", "site-1")  # WHY: drive the narrowed handler.
+        assert result is False  # WHY: read failure must keep the caller in degraded mode.
+
 
 class TestCheckLockWithoutRedis:
     # WHY: test check_lock with Redis unavailable
@@ -422,7 +457,7 @@ class TestSessionLockManagerIntegration:
         # WHY: get lock token from result
         acquired_token = acquire_result.lock_token  # WHY: token from acquire
         # WHY: verify token is not None before using
-        assert acquired_token is not None  # WHY: verify token exists
+        assert isinstance(acquired_token, str) and acquired_token.startswith("user-1#")  # WHY: verify token exists
 
         # WHY: setup mock for extend (GET returns token, EXPIRE succeeds)
         mock_redis.get.return_value = acquired_token.encode("utf-8")  # WHY: return token
@@ -471,9 +506,9 @@ class TestLockResultDataclass:
         # WHY: verify acquired flag
         assert result.acquired is True  # WHY: verify acquired
         # WHY: verify acquired_at is set
-        assert result.acquired_at is not None  # WHY: verify timestamp
+        assert isinstance(result.acquired_at, datetime)  # WHY: verify timestamp
         # WHY: verify lock_token is set
-        assert result.lock_token is not None  # WHY: verify token
+        assert result.lock_token == "user-1#2026-01-01T00:00:00.000000"  # WHY: verify token
         # WHY: verify reason is None for success
         assert result.reason is None  # WHY: verify no reason
         # WHY: verify owner_id is None for success
