@@ -547,7 +547,13 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         try:
             all_devices = self._call_site_devices_api(site_id)  # WHY: extracted HTTP call keeps CC low
             return [d for d in all_devices if d.get("map_id") == map_id]  # WHY: filter to this map
-        except Exception:  # WHY: mirror original bare-except behavior
+        except Exception as device_error:  # WHY: render path must tolerate partial device data
+            logger.warning(
+                "Failed to fetch site switch devices for map %s: %s: %s",
+                map_id,
+                type(device_error).__name__,
+                device_error,
+            )  # WHY: the map can render without switch overlays, but the failure needs evidence.
             return []  # WHY: swallow failures and return empty list
 
     def _call_site_devices_api(self, site_id: str) -> list[dict[str, Any]]:  # WHY: extracted API call

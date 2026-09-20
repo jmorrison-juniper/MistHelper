@@ -477,8 +477,12 @@ class StoppingRunReconciler:
         try:  # Evidence collection can fail through a cloud or store seam.
             rows = self._evidence_reader(record, now)  # Read the configured evidence source once.
             targets = tuple(TargetEvidence.from_mapping(row) for row in rows)  # Validate every safe evidence row.
-        except Exception:  # Keep the failure in the audit row and do not mutate the run.
-            logger.exception("The read-only reconciliation evidence collection failed")  # Preserve traceback.
+        except Exception as error:  # Keep broad because one evidence read must not hide the audit row.
+            logger.exception(
+                "The read-only reconciliation evidence collection failed with %s: %s",
+                type(error).__name__,
+                error,
+            )  # Preserve traceback and the exception summary.
             targets = self._unavailable_targets(record)  # Make unavailable evidence explicit.
         evidence = ReconciliationEvidence(item.identity.source_run_id, revision, now, targets)  # Bind proof.
         return evidence.summary()  # Return the digest-bound summary.
@@ -494,8 +498,12 @@ class StoppingRunReconciler:
         try:
             rows = self._evidence_reader(record, now)
             targets = tuple(TargetEvidence.from_mapping(row) for row in rows)
-        except Exception:
-            logger.exception("The read-only reconciliation evidence collection failed")
+        except Exception as error:
+            logger.exception(
+                "The read-only reconciliation evidence collection failed with %s: %s",
+                type(error).__name__,
+                error,
+            )
             targets = self._unavailable_targets(record)
         evidence = ReconciliationEvidence(item.identity.source_run_id, revision, now, targets)
         summary = evidence.summary()
