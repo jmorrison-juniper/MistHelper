@@ -9,6 +9,7 @@ Why:
 
 from __future__ import annotations
 
+import logging
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -21,6 +22,8 @@ from scapy.layers.tls.handshake import (  # type: ignore[import-untyped]
     TLSServerHello,
 )
 from scapy.layers.tls.record import TLS  # type: ignore[import-untyped]
+
+_LOGGER = logging.getLogger(__name__)  # Name the discarded parse failures so an operator can find them.
 
 
 def _record_ip_hosts(pkt: Any, hosts: Counter[str]) -> None:
@@ -85,8 +88,12 @@ def _dns_answers(dns_layer: Any) -> list[str]:
             if isinstance(rdata, bytes):  # Decode byte values for readable output.
                 rdata = rdata.decode(errors="replace")  # Match the previous decode policy.
             answers.append(f"{answer.type}:{rdata}")  # Preserve the old type:value format.
-        except Exception:
-            pass  # Preserve the old behavior for unreadable answer records.
+        except Exception as answer_error:  # Keep the summary best effort, so one bad record cannot stop the walk.
+            _LOGGER.debug(
+                "Skipped an unreadable DNS answer record after %s: %s",
+                type(answer_error).__name__,
+                answer_error,
+            )  # Name the discarded record, because the old bare pass hid every parse failure.
         answer = (
             answer.payload if hasattr(answer, "payload") else None
         )  # Advance to the next record when Scapy exposes one.
@@ -141,8 +148,12 @@ def _client_hello_sni(client_hello: Any) -> str:
         for extension in client_hello.ext or []:  # Scan extensions in wire order.
             if hasattr(extension, "servernames") and extension.servernames:  # Find the first SNI extension.
                 return extension.servernames[0].servername.decode(errors="replace")  # Preserve the old decode policy.
-    except Exception:
-        pass  # Preserve the old behavior when SNI extraction fails.
+    except Exception as sni_error:  # Keep the summary best effort, so a malformed extension cannot stop it.
+        _LOGGER.debug(
+            "SNI extraction failed after %s: %s",
+            type(sni_error).__name__,
+            sni_error,
+        )  # Name the failure, because the returned "?" marker alone hides the cause.
     return "?"  # Preserve the old unknown SNI marker.
 
 
@@ -178,8 +189,12 @@ def _record_icmp(pkt: Any, proto: Counter[str]) -> int:
         if pkt.haslayer("ICMP"):  # Count ICMP packets by layer name.
             proto["icmp"] += 1  # Keep the protocol count in sync with the return value.
             return 1  # Add one packet to the ICMP total.
-    except Exception:
-        pass  # Preserve the old behavior when layer lookup fails.
+    except Exception as layer_error:  # Keep the count best effort, so one odd packet shape cannot stop it.
+        _LOGGER.debug(
+            "ICMP layer lookup failed after %s: %s",
+            type(layer_error).__name__,
+            layer_error,
+        )  # Name the failure, because a zero count alone cannot tell an operator that a lookup broke.
     return 0  # Report no ICMP packet for all other cases.
 
 
