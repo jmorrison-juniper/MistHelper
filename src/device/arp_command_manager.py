@@ -212,8 +212,13 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         except KeyError as exception:  # Missing expected key in inner payload
             logging.warning("WebSocket message missing expected key: %s", exception)
             return None
-        except Exception as exception:  # Defensive catch
-            logging.error("Unexpected error parsing WebSocket message: %s", exception)
+        # Keep broad because malformed WebSocket frames must not stop later frames in the stream.
+        except Exception as exception:
+            logging.error(
+                "Unexpected error parsing WebSocket message (%s): %s",
+                type(exception).__name__,
+                exception,
+            )
             return None
 
     @staticmethod
@@ -304,7 +309,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             with open(file_path, "w", encoding="utf-8") as f:  # Open the file.
                 f.write(compiled_output)  # Write the output.
             logger.info("! ARP output saved to %s", file_path)  # Log the save.
-        except Exception as e:  # Save failed.
+        except (OSError, RuntimeError) as e:  # Save failed.
             logging.error("! Failed to save ARP output to file: %s", e)  # Log the error.
 
     @staticmethod
@@ -351,7 +356,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             dataset1, dataset2 = ARPCommandManager._split_arp_text_into_datasets(raw_text)  # Split.
             ARPCommandManager._write_dataset_csv(csv1_path, dataset1)  # Write first CSV.
             ARPCommandManager._write_dataset_csv(csv2_path, dataset2)  # Write second CSV.
-        except Exception as e:  # Export failed.
+        except (OSError, RuntimeError, csv.Error) as e:  # Export failed.
             logger.error(
                 "! Failed to export ARP output to CSV: %s", e
             )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
