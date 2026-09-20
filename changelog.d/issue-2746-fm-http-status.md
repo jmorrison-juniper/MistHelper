@@ -1,3 +1,3 @@
 ### Fixed
 
-- Stopped async license claim exports from treating Mist 5xx responses as successful rows for issues #2746 and #2747.
+- Covered 20 HTTP status failure-mode gaps, including async license claim Mist 5xx handling, for issues #2746 and #2747.
