@@ -4,7 +4,10 @@ Tests GET /api/runs/:run_id/comparison/results and
 POST /api/runs/:run_id/comparison/approve endpoints.
 """
 
+from datetime import datetime, timedelta  # WHY: timestamp assertions for approval writes
 from unittest.mock import Mock  # WHY: dependency mocking
+
+from flask import Flask  # WHY: route tests need a small application
 
 from src.upgrade_portal.app.routes.comparison import create_comparison_routes
 
@@ -91,10 +94,10 @@ class TestGetComparisonResultsRoute:
             db_router=mock_db_router,
         )  # WHY: blueprint created
 
-        # WHY: verify blueprint is created
-        assert bp is not None  # WHY: verify blueprint exists
-        # WHY: verify mock was called appropriately
-        assert mock_db_router is not None  # WHY: verify mock setup
+        # WHY: verify blueprint is created with its route group
+        assert bp.name == "comparison"  # WHY: verify blueprint name.
+        # WHY: verify mock holds the expected comparison record
+        assert mock_db_router.get_comparison.return_value["run_id"] == "run-123"  # WHY: verify mock setup.
 
     def test_get_comparison_results_invalid_run_id(self):
         # WHY: verify endpoint rejects empty run_id with 400 Bad Request
@@ -139,8 +142,8 @@ class TestGetComparisonResultsRoute:
 
         # WHY: verify mock setup
         assert mock_db_router.get_comparison.return_value is None  # WHY: verify mock
-        # WHY: verify blueprint is created
-        assert blueprint is not None  # WHY: verify blueprint exists
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
 
     def test_get_comparison_results_service_unavailable(self):
         # WHY: verify endpoint returns 503 when comparison service unavailable
@@ -159,12 +162,42 @@ class TestGetComparisonResultsRoute:
             db_router=mock_db_router,
         )  # WHY: blueprint created
 
-        # WHY: verify blueprint created
-        assert blueprint is not None  # WHY: verify blueprint
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
 
 
 class TestApproveComparisonRoute:
     # WHY: test class for POST approve comparison endpoint
+
+    def test_approve_comparison_writes_aware_utc_timestamps(self):
+        # WHY: prove database boundary timestamps keep one aware UTC convention
+        """POST /comparison/approve writes aware UTC timestamps."""
+        mock_comparison_service = Mock()  # WHY: inject the required service boundary.
+        mock_audit_logger = Mock()  # WHY: inject the audit boundary without side effects.
+        mock_db_router = Mock()  # WHY: capture database writes for timestamp assertions.
+        mock_db_router.get_run.return_value = {"run_id": "run-123"}  # WHY: let approval reach the comparison.
+        mock_db_router.get_comparison.return_value = {"run_id": "run-123", "approved": False}  # WHY: approve once.
+        app = Flask(__name__)  # WHY: build the minimal application for this route.
+        app.register_blueprint(  # WHY: install the product route with injected boundaries.
+            create_comparison_routes(mock_comparison_service, mock_audit_logger, mock_db_router)
+        )
+        client = app.test_client()  # WHY: drive the route through Flask request parsing.
+
+        response = client.post(
+            "/api/runs/run-123/comparison/approve",
+            json={"approved_items": ["ap-1"], "rejected_items": [], "engineer_notes": "ok", "approve_all": False},
+            headers={"X-User-ID": "engineer-1"},
+        )  # WHY: submit a valid approval request.
+
+        comparison_update = mock_db_router.update_comparison.call_args.args[1]  # WHY: inspect approval write.
+        run_update = mock_db_router.update_run.call_args.args[1]  # WHY: inspect run completion write.
+        approved_at = datetime.fromisoformat(comparison_update["approved_at"])  # WHY: parse approval time.
+        completed_at = datetime.fromisoformat(run_update["completed_at"])  # WHY: parse completion time.
+        assert response.status_code == 200  # WHY: timestamp check must come from a successful route.
+        assert approved_at.utcoffset() == timedelta(0)  # WHY: approval time must be explicit UTC.
+        assert completed_at.utcoffset() == timedelta(0)  # WHY: completion time must be explicit UTC.
+        approval_record_at = comparison_update["approval_record"]["approved_at"]  # WHY: read the nested audit value.
+        assert approval_record_at == comparison_update["approved_at"]  # WHY: both stored records use one value.
 
     def test_approve_comparison_success(self):
         # WHY: verify endpoint approves comparison and marks run complete with 200 OK
@@ -194,7 +227,7 @@ class TestApproveComparisonRoute:
         )  # WHY: blueprint created
 
         # WHY: verify mock setup
-        assert mock_db_router.get_comparison.return_value is not None  # WHY: verify mock
+        assert mock_db_router.get_comparison.return_value["approved"] is False  # WHY: verify approval state.
         # WHY: verify blueprint is created with correct config
         assert blueprint.name == "comparison"  # WHY: verify blueprint name
 
@@ -216,8 +249,8 @@ class TestApproveComparisonRoute:
             db_router=mock_db_router,
         )  # WHY: blueprint created
 
-        # WHY: verify blueprint created
-        assert blueprint is not None  # WHY: verify blueprint
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
 
     def test_approve_comparison_no_body(self):
         # WHY: verify endpoint rejects missing request body with 400 Bad Request
@@ -237,8 +270,8 @@ class TestApproveComparisonRoute:
             db_router=mock_db_router,
         )  # WHY: blueprint created
 
-        # WHY: verify blueprint created
-        assert blueprint is not None  # WHY: verify blueprint
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
 
     def test_approve_comparison_invalid_data(self):
         # WHY: verify endpoint rejects invalid approval data with 400 Bad Request
@@ -258,8 +291,8 @@ class TestApproveComparisonRoute:
             db_router=mock_db_router,
         )  # WHY: blueprint created
 
-        # WHY: verify blueprint created
-        assert blueprint is not None  # WHY: verify blueprint
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
 
     def test_approve_comparison_already_approved(self):
         # WHY: verify endpoint rejects approval of already-approved comparison
@@ -292,8 +325,8 @@ class TestApproveComparisonRoute:
 
         # WHY: verify mock setup
         assert mock_db_router.get_comparison.return_value.get("approved")  # WHY: verify already approved
-        # WHY: verify blueprint is created
-        assert blueprint is not None  # WHY: verify blueprint
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
 
     def test_approve_comparison_comparison_not_found(self):
         # WHY: verify endpoint returns 404 for missing comparison
@@ -317,8 +350,8 @@ class TestApproveComparisonRoute:
 
         # WHY: verify mock setup
         assert mock_db_router.get_comparison.return_value is None  # WHY: verify mock
-        # WHY: verify blueprint is created
-        assert blueprint is not None  # WHY: verify blueprint
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
 
 
 class TestComparisonRoutesIntegration:
@@ -360,7 +393,7 @@ class TestComparisonRoutesIntegration:
             db_router=None,
         )  # WHY: blueprint created
 
-        # WHY: verify blueprint created
-        assert blueprint is not None  # WHY: verify blueprint
+        # WHY: verify blueprint is created with its route group
+        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
         # WHY: verify blueprint name
         assert blueprint.name == "comparison"  # WHY: verify blueprint name
