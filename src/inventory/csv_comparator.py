@@ -19,6 +19,7 @@ from dataclasses import dataclass  # WHY: group injected params + item configs.
 from datetime import UTC, datetime  # WHY: parse device created_time to ISO week key.
 from typing import Any  # WHY: injected classes/dicts are heterogeneous.
 
+import requests  # WHY: Nominatim and Mist lookups can fail with requests exceptions.
 from dotenv import load_dotenv  # WHY: load ADDRESS_MATCH_THRESHOLD/END_CUSTOMER_NAME.
 from tqdm import tqdm  # WHY: progress bar over device iteration.
 
@@ -442,7 +443,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             print(f"! Loaded {len(self.site_configs)} devices from" " AllDevicesWithSiteInfo.csv")  # WHY: user info.
             print(f"! Loaded {len(self.comparison_data)} records from" f" {self.comparison_file}")  # WHY: user info.
             return True  # WHY: success.
-        except Exception as error:  # pylint: disable=broad-exception-caught  # WHY: catch-all around file IO.
+        except (OSError, csv.Error) as error:  # WHY: CSV read failures should stop this comparison cleanly.
             print(f"! Error reading comparison file" f" {self.comparison_file}: {error}")  # WHY: user visibility.
             logging.error("Error reading comparison file %s: %s", self.comparison_file, error)  # WHY: log record.
             return False  # WHY: cannot proceed.
@@ -460,7 +461,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             print("  AddressSkip.csv not found - no addresses" " will be automatically skipped")  # WHY: user info.
             if self.debug:  # WHY: debug detail.
                 logging.debug("AddressSkip.csv not found - continuing" " without skip list")  # WHY: trace.
-        except Exception as error:  # pylint: disable=broad-exception-caught  # WHY: tolerate malformed skip file.
+        except (OSError, csv.Error) as error:  # WHY: optional skip-list read failures must not stop comparison.
             print(f"!  Error loading AddressSkip.csv: {error}")  # WHY: user visibility.
             logging.warning("Error loading AddressSkip.csv: %s", error)  # WHY: log record.
 
@@ -779,7 +780,8 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         """Process a single device for address comparison."""
         try:
             self._compare_and_record(device, device_serial, device_identifier)  # WHY: happy path.
-        except Exception as device_error:  # pylint: disable=broad-exception-caught  # WHY: contain per-device errors.
+        # WHY: keep this broad so one device row cannot abort the full comparison batch.
+        except Exception as device_error:  # pylint: disable=broad-exception-caught
             self._handle_device_error(device, device_serial, device_identifier, device_error)  # WHY: log+record.
 
     def _compare_and_record(
@@ -813,7 +815,12 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         device_error: Exception,
     ) -> None:
         """Log per-device failure and register a parse-failure row."""
-        logger.warning("! Error processing device %s: %s", device_serial, device_error)  # WHY: log record.
+        logger.warning(  # WHY: log type plus message so broad handling stays observable.
+            "! Error processing device %s (%s): %s",
+            device_serial,
+            type(device_error).__name__,
+            device_error,
+        )
         self.counters.comparison_failures += 1  # WHY: reliability metric.
         self._record_device_parse_failure(
             device,  # WHY: retained on failure record.
@@ -1090,7 +1097,11 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         try:
             org_response = self._fetch_org_response()  # WHY: single-purpose helper.
             return self._parse_org_response(org_response)  # WHY: single-purpose helper.
-        except Exception as error:  # pylint: disable=broad-exception-caught  # WHY: tolerate mistapi errors.
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: org lookup failures only remove hints.
             if self.debug:  # WHY: debug-only trace.
                 logging.warning("Could not retrieve organization name: %s", error)  # WHY: log record.
             return None  # WHY: caller treats None as "no tiebreaker".

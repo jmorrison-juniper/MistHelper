@@ -2,7 +2,10 @@
 
 from __future__ import annotations  # Enable postponed evaluation of annotations for Python 3.10 compat
 
-from unittest.mock import MagicMock  # Use MagicMock to simulate the Mist API session without real calls
+from unittest.mock import MagicMock, patch  # Use mocks to simulate the Mist API session without real calls
+
+import pytest  # WHY: assert unexpected exceptions now propagate.
+import requests  # WHY: model expected Mist transport failures.
 
 from src.api.tenant_fetch import APITenantFetchUtils  # Class under test
 
@@ -251,7 +254,7 @@ class TestOrganizationTenants:
 
         import mistapi.api.v1.orgs.networks as orgs_nets
 
-        with patch.object(orgs_nets, "listOrgNetworks", side_effect=RuntimeError("API error")):
+        with patch.object(orgs_nets, "listOrgNetworks", side_effect=requests.RequestException("API error")):
             result = utils.organization_tenants()  # Must not raise, must return empty
         assert result == []  # Exception must produce empty list, not a traceback
 
@@ -287,7 +290,7 @@ class TestSiteTenants:
 
         import mistapi.api.v1.sites.networks as sites_nets
 
-        with patch.object(sites_nets, "listSiteNetworksDerived", side_effect=OSError("timeout")):
+        with patch.object(sites_nets, "listSiteNetworksDerived", side_effect=requests.RequestException("timeout")):
             result = utils.site_tenants("site-bad")
         assert result == []  # Exception must not propagate
 
@@ -308,7 +311,7 @@ class TestServicePolicyTenants:
 
         import mistapi.api.v1.orgs.servicepolicies as orgs_sp
 
-        with patch.object(orgs_sp, "listOrgServicePolicies", side_effect=RuntimeError("fail")):
+        with patch.object(orgs_sp, "listOrgServicePolicies", side_effect=requests.RequestException("fail")):
             result = utils.service_policy_tenants()
         assert result == []  # Must return empty list on failure
 
@@ -347,7 +350,7 @@ class TestGatewayTemplateTenants:
 
         import mistapi.api.v1.orgs.gatewaytemplates as orgs_gt
 
-        with patch.object(orgs_gt, "listOrgGatewayTemplates", side_effect=RuntimeError("fail")):
+        with patch.object(orgs_gt, "listOrgGatewayTemplates", side_effect=requests.RequestException("fail")):
             result = utils.gateway_template_tenants()
         assert result == []  # Must return empty list on failure
 
@@ -415,7 +418,7 @@ class TestCoverageGaps:
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
-            m.api.v1.orgs.networks.listOrgNetworks.side_effect = RuntimeError("api down")  # Simulate error
+            m.api.v1.orgs.networks.listOrgNetworks.side_effect = requests.RequestException("api down")  # Simulate error
             result = utils.organization_tenants()  # Call method under test
         assert result == []  # Exception must be caught and empty list returned
 
@@ -441,7 +444,9 @@ class TestCoverageGaps:
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
-            m.api.v1.sites.networks.listSiteNetworksDerived.side_effect = OSError("timeout")  # Simulate error
+            m.api.v1.sites.networks.listSiteNetworksDerived.side_effect = requests.RequestException(
+                "timeout"
+            )  # Simulate error
             result = utils.site_tenants("site-bad")  # Call method under test with bad site ID
         assert result == []  # Exception must be caught and empty list returned
 
@@ -465,16 +470,16 @@ class TestCoverageGaps:
         utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Bypass __init__ for injection
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = MagicMock(side_effect=RuntimeError("id fail"))  # Org ID resolver raises
-        result = utils.service_policy_tenants()  # Must not propagate the exception
-        assert result == []  # Exception must be caught and empty list returned
+        with pytest.raises(RuntimeError, match="id fail"):
+            utils.service_policy_tenants()  # Unexpected resolver faults must propagate.
 
     def test_gateway_template_tenants_exception_returns_empty(self) -> None:
         """gateway_template_tenants() must return [] when _get_org_id raises (lines 130-132)."""
         utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Bypass __init__ for injection
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = MagicMock(side_effect=RuntimeError("id fail"))  # Org ID resolver raises
-        result = utils.gateway_template_tenants()  # Must not propagate the exception
-        assert result == []  # Exception must be caught and empty list returned
+        with pytest.raises(RuntimeError, match="id fail"):
+            utils.gateway_template_tenants()  # Unexpected resolver faults must propagate.
 
     def test_extract_policies_skips_non_dict_item(self) -> None:
         """_extract_tenants_from_policies must skip non-dict entries via continue (line 192)."""
@@ -516,7 +521,9 @@ class TestCoverageGaps:
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
-            m.api.v1.orgs.servicepolicies.listOrgServicePolicies.side_effect = RuntimeError("sp fail")  # API error
+            m.api.v1.orgs.servicepolicies.listOrgServicePolicies.side_effect = requests.RequestException(
+                "sp fail"
+            )  # API error
             result = utils.service_policy_tenants()  # Calls _fetch_org_policy_tenants internally
         assert result == []  # Exception must be caught and empty list returned
 
@@ -547,7 +554,7 @@ class TestCoverageGaps:
         with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.servicepolicies.listOrgServicePolicies.return_value = org_resp  # Empty org response
             sp_derived = m.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived  # Alias
-            sp_derived.side_effect = RuntimeError("site-sp")  # Site endpoint raises
+            sp_derived.side_effect = requests.RequestException("site-sp")  # Site endpoint raises
             result = utils.service_policy_tenants(site_id="site-1")  # With site_id to trigger site fetch
         assert result == []  # Exception from site fetch must be caught and empty list returned
 
@@ -573,7 +580,9 @@ class TestCoverageGaps:
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
-            m.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.side_effect = RuntimeError("gt fail")  # API error
+            m.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.side_effect = requests.RequestException(
+                "gt fail"
+            )  # API error
             result = utils.gateway_template_tenants()  # Calls _fetch_org_template_tenants internally
         assert result == []  # Exception must be caught and empty list returned
 
@@ -607,6 +616,74 @@ class TestCoverageGaps:
         with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.return_value = org_resp  # Org empty
             site_gt = m.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived  # Alias for readability
-            site_gt.side_effect = RuntimeError("site-gt fail")  # Site gateway template fetch raises
+            site_gt.side_effect = requests.RequestException("site-gt fail")  # Site gateway template fetch raises
             result = utils.gateway_template_tenants(site_id="site-1")  # With site_id triggers site fetch
         assert result == []  # Exception from site fetch must be caught and empty list returned
+
+
+class TestNarrowedTenantExceptions:
+    """Prove unexpected tenant-fetch faults now propagate."""
+
+    def test_organization_tenants_unexpected_api_error_propagates(self) -> None:
+        """A coding fault in the org network call must not look like an empty tenant set."""
+        utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Build the class with direct injection.
+        utils._session = MagicMock()  # Supply the required session dependency.
+        utils._get_org_id = lambda: "org-1"  # Keep org resolution out of this branch.
+        from unittest.mock import patch  # Import patch only for this isolated API hook.
+
+        import mistapi.api.v1.orgs.networks as orgs_nets  # Import the endpoint module under test.
+
+        with (
+            patch.object(orgs_nets, "listOrgNetworks", side_effect=TypeError("bad org network state")),
+            pytest.raises(TypeError, match="bad org network state"),
+        ):
+            utils.organization_tenants()  # The narrowed handler must not swallow TypeError.
+
+    def test_site_tenants_unexpected_api_error_propagates(self) -> None:
+        """A coding fault in the site network call must not look like an empty tenant set."""
+        utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Build the class with direct injection.
+        utils._session = MagicMock()  # Supply the required session dependency.
+        utils._get_org_id = lambda: "org-1"  # Keep setup symmetric with other tests.
+        from unittest.mock import patch  # Import patch only for this isolated API hook.
+
+        import mistapi.api.v1.sites.networks as sites_nets  # Import the endpoint module under test.
+
+        with (
+            patch.object(sites_nets, "listSiteNetworksDerived", side_effect=TypeError("bad site network state")),
+            pytest.raises(TypeError, match="bad site network state"),
+        ):
+            utils.site_tenants("site-1")  # The narrowed handler must not swallow TypeError.
+
+    @pytest.mark.parametrize(
+        ("method_name", "endpoint_attr"),
+        [
+            ("_fetch_org_policy_tenants", "listOrgServicePolicies"),
+            ("_fetch_site_policy_tenants", "listSiteServicePoliciesDerived"),
+            ("_fetch_org_template_tenants", "listOrgGatewayTemplates"),
+            ("_fetch_site_template_tenants", "listSiteGatewayTemplatesDerived"),
+        ],
+    )
+    def test_private_fetch_unexpected_api_error_propagates(self, method_name: str, endpoint_attr: str) -> None:
+        """A coding fault inside each private tenant fetch helper must propagate."""
+        utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Build the class with direct injection.
+        utils._session = MagicMock()  # Supply the required session dependency.
+        import src.api.tenant_fetch as tenant_module  # Patch the module-level mistapi binding.
+
+        endpoint = MagicMock(side_effect=TypeError(f"bad {endpoint_attr}"))  # Model an unexpected coding fault.
+        mistapi_mock = MagicMock()  # Build a nested mistapi stand-in.
+        mistapi_mock.api.v1.orgs.servicepolicies.listOrgServicePolicies = endpoint  # Org policy hook.
+        mistapi_mock.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived = endpoint  # Site policy hook.
+        mistapi_mock.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates = endpoint  # Org template hook.
+        mistapi_mock.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived = endpoint  # Site template hook.
+        with patch.object(tenant_module, "mistapi", mistapi_mock), pytest.raises(TypeError, match=endpoint_attr):
+            getattr(utils, method_name)("scope-1")  # The narrowed handler must not swallow TypeError.
+
+    def test_union_methods_unexpected_resolver_error_propagates(self) -> None:
+        """A resolver coding fault in both union methods must propagate."""
+        utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Build the class with direct injection.
+        utils._session = MagicMock()  # Supply the required session dependency.
+        utils._get_org_id = MagicMock(side_effect=RuntimeError("id fail"))  # Model a bad injected resolver.
+        with pytest.raises(RuntimeError, match="id fail"):
+            utils.service_policy_tenants()  # The narrowed handler must not swallow resolver faults.
+        with pytest.raises(RuntimeError, match="id fail"):
+            utils.gateway_template_tenants()  # The narrowed handler must not swallow resolver faults.
