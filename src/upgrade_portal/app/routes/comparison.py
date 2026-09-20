@@ -4,7 +4,7 @@ Implement GET /api/runs/:run_id/comparison/results and
 POST /api/runs/:run_id/comparison/approve endpoints for delta review and approval.
 """
 
-from datetime import datetime  # WHY: timestamp for approval audit trail
+from datetime import UTC, datetime  # WHY: timestamp for approval audit trail
 from typing import Any  # WHY: generic type annotation, Union type
 
 import structlog  # WHY: structured logging
@@ -269,7 +269,7 @@ def create_comparison_routes(
                 # WHY: approved by user
                 "approved_by": user_id,
                 # WHY: approval timestamp
-                "approved_at": datetime.utcnow().isoformat(),
+                "approved_at": datetime.now(UTC).isoformat(),
             }  # WHY: approval record created
 
             # WHY: update comparison in database
@@ -290,7 +290,7 @@ def create_comparison_routes(
                 run_id,
                 {
                     "status": "completed",
-                    "completed_at": datetime.utcnow().isoformat(),
+                    "completed_at": datetime.now(UTC).isoformat(),
                 },
             )  # WHY: database call to update run
 

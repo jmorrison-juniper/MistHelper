@@ -4,7 +4,7 @@ Store site/device selections in ArangoDB upgrade_runs collection.
 """
 
 import uuid  # WHY: UUID generation for run IDs
-from datetime import datetime  # WHY: timestamp tracking
+from datetime import UTC, datetime  # WHY: timestamp tracking
 from typing import Any  # WHY: type hints
 
 import structlog  # WHY: structured logging
@@ -97,7 +97,7 @@ class UpgradeRunsService:
             # WHY: generate unique run ID
             run_id = str(uuid.uuid4())  # WHY: UUID for run
             # WHY: get current timestamp
-            now = datetime.utcnow().isoformat()  # WHY: ISO format timestamp
+            now = datetime.now(UTC).isoformat()  # WHY: Store an aware UTC timestamp for database reads.
 
             # WHY: create run document
             run_doc = {  # WHY: document dict
@@ -209,7 +209,7 @@ class UpgradeRunsService:
                 return False  # WHY: fail
 
             # WHY: add updated_at timestamp
-            updates["updated_at"] = datetime.utcnow().isoformat()  # WHY: update timestamp
+            updates["updated_at"] = datetime.now(UTC).isoformat()  # WHY: Store an aware UTC update time.
 
             # WHY: update in ArangoDB (would need custom update method or query)
             logger.info("update_upgrade_run_in_db", run_id=run_id)  # WHY: pre-update log
