@@ -33,7 +33,7 @@ class TestSettleResult:
         # WHY: verify no failed checks
         assert result.failed_checks == []  # WHY: check failed list
         # WHY: verify timestamp was set
-        assert result.timestamp is not None  # WHY: verify timestamp
+        assert result.timestamp.endswith("+00:00")  # WHY: verify timestamp is an ISO 8601 UTC value
 
     def test_settle_result_failed(self):
         """Test SettleResult with failed checks.

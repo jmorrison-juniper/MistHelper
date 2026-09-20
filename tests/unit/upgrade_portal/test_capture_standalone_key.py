@@ -45,7 +45,8 @@ def _standalone_document() -> dict[str, object]:
 def test_standalone_key_matches_the_capture_key_form() -> None:
     """The nonce key reads as a capture key, so a reader sees no new shape."""
     key = assembly.standalone_capture_key()  # One fresh nonce key.
-    assert _KEY_PATTERN.fullmatch(key) is not None  # The key holds the prefix, the hex, and the ordinal.
+    match = _KEY_PATTERN.fullmatch(key)  # A full match proves no extra text surrounds the key.
+    assert match and match.group(0) == key  # The key holds the prefix, the hex, and the ordinal.
 
 
 def test_two_standalone_keys_differ() -> None:
@@ -58,7 +59,9 @@ def test_two_standalone_keys_differ() -> None:
 def test_standalone_capture_carries_the_nonce_key_and_no_run() -> None:
     """The stored document holds the nonce key and an empty run."""
     document = _standalone_document()  # The stored capture of a run-less start.
-    assert _KEY_PATTERN.fullmatch(str(document["_key"])) is not None  # The key is a nonce key.
+    key_text = str(document["_key"])  # The stored key is the browser-visible capture key.
+    match = _KEY_PATTERN.fullmatch(key_text)  # A full match proves no extra text surrounds the key.
+    assert match and match.group(0) == key_text  # The key is a nonce key.
     assert document["capture_id"] == document["_key"]  # The browser reads the same key the store wrote.
     assert document["run_id"] == ""  # A run-less capture names no run, so it builds no edge.
 

@@ -163,7 +163,7 @@ def test_the_identifier_field_carries_the_test_identifier() -> None:
     """
     page = source(PAGE_PATH)  # WHY: The rendered field, with no comment text.
     field = re.search(r"<dd[^>]*data-testid=\"" + IDENTIFIER_TESTID + r"\"[^>]*>", page)  # The one field.
-    assert field is not None, "capture.html holds no identifier field with a test identifier."
+    assert field and field.group(0).startswith("<dd")  # The match must be the field, not nearby text.
     assert "{{ capture_identifier }}" in page  # The server still renders the value on a direct read.
 
 

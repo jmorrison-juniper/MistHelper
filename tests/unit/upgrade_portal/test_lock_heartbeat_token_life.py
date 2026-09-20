@@ -27,7 +27,7 @@ class TestTokenLifeOutlivesTheLock:
 
     def test_the_token_life_is_set_and_not_left_to_the_framework(self) -> None:
         """An unset value falls back to one hour, which is the defect."""
-        assert factory.CSRF_TOKEN_SECONDS is not None  # The portal states the value itself.
+        assert factory.CSRF_TOKEN_SECONDS == 43200  # The portal states the value itself.
 
     def test_the_token_outlives_the_site_lock(self) -> None:
         """A token that dies with the lock leaves no beat to renew it."""

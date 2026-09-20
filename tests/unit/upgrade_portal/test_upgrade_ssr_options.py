@@ -462,7 +462,7 @@ def test_an_empty_schedule_holds_no_duration_and_no_moment() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_stored_duration_reaches_a_moment_with_no_clock() -> None:
+def test_a_stored_duration_reaches_a_moment_with_no_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     """The run driver replays with no clock, and a duration still needs one.
 
     Why:
@@ -472,9 +472,10 @@ def test_a_stored_duration_reaches_a_moment_with_no_clock() -> None:
         caller passed. Without this rule the moment left the request body, and
         the cloud wrote the firmware at once. Issue #2196 holds that report.
     """
+    monkeypatch.setattr(module_options, "_now_epoch", fixed_now)
     stored = build_option_record({"start_time": "2h"})
     replayed = build_options(stored, now=None)
-    assert replayed.start_time is not None  # The moment must reach the body.
+    assert replayed.start_time == moment_soon()  # The moment must reach the body.
 
 
 def test_the_replayed_moment_counts_from_the_replay(monkeypatch: pytest.MonkeyPatch) -> None:

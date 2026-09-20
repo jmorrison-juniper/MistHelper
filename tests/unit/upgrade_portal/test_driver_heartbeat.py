@@ -939,6 +939,6 @@ class TestSeams:
         """
         parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
         thread = threading.current_thread().name
-        parts["driver"].run(make_record())
+        record = parts["driver"].run(make_record())
         assert threading.current_thread().name == thread  # The run stayed on this thread, and so did the write
-        assert parts["store"].record is not None
+        assert parts["store"].record == record  # The driver thread wrote the same terminal record.

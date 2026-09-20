@@ -109,7 +109,7 @@ def test_the_stop_fleet_adds_one_session_smart_router() -> None:
     """The stop run needs the organization scope device."""
     fleet = stop_fleet(0.0)  # The fleet of user story 2.
     assert len(fleet.scripts) == 7  # The six cascade devices and the router.
-    assert fleet.script_for("dd0000000001") is not None  # The router of the organization scope call.
+    assert fleet.script_for("dd0000000001") == fleet.scripts[-1]  # The router of the organization scope call.
 
 
 def test_a_device_reports_the_old_version_before_its_moment() -> None:
