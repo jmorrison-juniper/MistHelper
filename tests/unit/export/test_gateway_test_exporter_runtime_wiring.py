@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # WHY: match the repository's postponed-annotation convention.
 
+import logging  # WHY: capture retry attempt warnings from synthetic test failures.
 from types import SimpleNamespace  # WHY: provide focused MistHelper runtime doubles.
 from unittest.mock import MagicMock  # WHY: observe dependency wiring and delegated service calls.
 
@@ -72,3 +73,31 @@ def test_site_results_wires_gateway_dependencies_before_delegating(monkeypatch) 
     GatewayTestExporter.test_results_by_site(fast=True)  # WHY: execute the second direct gateway-test entry point.
 
     assert call_order == ["configure", "service"]  # WHY: service must never run with unwired gateway dependencies.
+
+
+def test_synthetic_fetch_attempt_logs_http_404(monkeypatch, caplog) -> None:
+    """A 404 during one synthetic fetch attempt must return None and log the status."""
+    status_code = 404  # Prove the HTTP 4xx status family with a status-named value.
+    monkeypatch.setattr(
+        GatewayTestExporter, "_call_synthetic_endpoint", MagicMock(side_effect=RuntimeError("HTTP 404"))
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = GatewayTestExporter._try_synthetic_fetch_attempt(("site-1", "dev-1", "gw", "HQ"), 0, None)
+
+    assert result is None
+    assert f"HTTP {status_code}" in caplog.text
+
+
+def test_synthetic_fetch_attempt_logs_http_503(monkeypatch, caplog) -> None:
+    """A 503 during one synthetic fetch attempt must return None and log the status."""
+    status_code = 503  # Prove the HTTP 5xx status family with a status-named value.
+    monkeypatch.setattr(
+        GatewayTestExporter, "_call_synthetic_endpoint", MagicMock(side_effect=RuntimeError("HTTP 503"))
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = GatewayTestExporter._try_synthetic_fetch_attempt(("site-1", "dev-1", "gw", "HQ"), 0, None)
+
+    assert result is None
+    assert f"HTTP {status_code}" in caplog.text

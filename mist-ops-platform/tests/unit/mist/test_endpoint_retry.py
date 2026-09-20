@@ -38,6 +38,7 @@ EXPECTED_CALLS_AT_RETRY_LIMIT = MAX_429_RETRIES + 1  # WHY: the first attempt pl
 RETRY_AFTER_SECONDS = "5"  # WHY: the header value the mock response returns.
 RETRY_AFTER_AS_FLOAT = 5.0  # WHY: the numeric value _backoff_delay must produce from it.
 HTTP_OK = 200  # WHY: name the success status so a reader does not read a bare number.
+HTTP_NOT_FOUND = 404  # WHY: name the client error status for failure-mode coverage.
 HTTP_SERVER_ERROR = 500  # WHY: name the server error status for failure-mode coverage.
 
 
@@ -103,6 +104,17 @@ class TestRetryOn429:
 
         assert mock_func.call_count == 1  # WHY: only 429 is safe to retry automatically.
         assert result.status_code == HTTP_SERVER_ERROR  # WHY: report the 500 to the caller.
+
+    def test_non_429_4xx_returns_without_retry(self) -> None:
+        service = MistEndpointService(MagicMock())  # WHY: no rate limiter needed for this test.
+        status_code = HTTP_NOT_FOUND  # Prove the HTTP 4xx status family with a status-named value.
+        response = _make_response(status_code)  # WHY: simulate one 404 response.
+        mock_func = MagicMock(return_value=response)  # WHY: simulate one client error response.
+
+        result = _run_read(service, mock_func)  # WHY: the call under test.
+
+        assert mock_func.call_count == 1  # WHY: only 429 is safe to retry automatically.
+        assert result.status_code == HTTP_NOT_FOUND  # WHY: report the 404 to the caller.
 
     def test_connection_timeout_reaches_the_caller(self) -> None:
         service = MistEndpointService(MagicMock())  # WHY: no rate limiter needed for this test.

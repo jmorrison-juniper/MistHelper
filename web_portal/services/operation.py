@@ -19,6 +19,11 @@ from typing import Any
 from src.utils.operation_registry import OperationRegistry
 
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
+
+# The page groups the operations under a readable heading. A number outside
+# every range below lands under "Other", which stays correct but less helpful.
+# Issue #3082 widened the portal to every safe operation, so the ranges now
+# cover the whole registry instead of stopping at menu 89.
 CATEGORY_RANGES = [
     (1, 4, "Core Organization"),
     (5, 8, "WebSocket Device Commands"),
@@ -32,26 +37,24 @@ CATEGORY_RANGES = [
     (49, 62, "Site Config & Monitoring"),
     (63, 65, "Work In Progress"),
     (66, 89, "Insights & Diagnostics"),
+    (90, 96, "Device Troubleshooting"),
+    (188, 208, "Org Administration"),
+    (209, 234, "Site Operations"),
+    (235, 247, "Counts & Summaries"),
+    (248, 268, "Endpoint Explorer"),
     (269, 269, "Network Security Scans"),
 ]
 
-DESTRUCTIVE_THRESHOLD = 90
-
-# Menu numbers the portal may run even though they sit above DESTRUCTIVE_THRESHOLD.
-# The registry check below still runs first, so this set can never admit an
-# operation that OperationRegistry does not call safe. Each entry names its issue.
-# 269 (issue #2985) scans an organization for rogue DHCP servers. It reads alarms,
-# switch events, and Marvis config actions, and it writes nothing to the Mist cloud.
-PORTAL_EXPLICIT_ALLOWLIST = frozenset({"269"})
-
 # The safety categories that the portal may run. `OperationRegistry` in
 # src/utils/operation_registry.py is the single source of truth for the safety
-# category of every operation. The portal used to compare the menu number
-# against DESTRUCTIVE_THRESHOLD alone. That comparison let five operations
-# through that the registry does not call safe, and it let a key that int()
-# cannot parse through as well. The registry check below closes both gaps.
-# DESTRUCTIVE_THRESHOLD stays as a second, narrower bound. Removing it would
-# widen the portal by 49 operations, which is a separate change.
+# category of every operation, and this set is the only gate the portal applies.
+#
+# Issue #3082: a second bound, DESTRUCTIVE_THRESHOLD, once compared the menu
+# number against 90. A menu number states when an operation was added, and it
+# states nothing about what the operation does. That bound hid 79 operations
+# that the registry calls safe, and it forced an explicit allowlist for menu
+# 269. A new safe operation above the bound never appeared, and no test reported
+# the absence. The registry verdict now decides alone.
 PORTAL_RUNNABLE_CATEGORIES = frozenset({"safe", "interactive_safe"})
 
 # --- Run registry memory caps ----------------------------------------------
@@ -567,12 +570,9 @@ class OperationExecutor:
         logger.info("Portal checks whether it may run operation %s", menu_number)
         category = OperationRegistry.skip_category(menu_number)  # Authoritative safety verdict.
         num = self._parse_menu_number(menu_number)  # None when int() cannot read the key.
-        within_bound = num is not None and num < DESTRUCTIVE_THRESHOLD  # Keep the existing narrower bound.
-        listed = menu_number in PORTAL_EXPLICIT_ALLOWLIST  # An explicit row may sit above the bound.
         allowed = (
             category in PORTAL_RUNNABLE_CATEGORIES  # The registry must call the operation safe.
             and num is not None  # A key the page cannot place must never run.
-            and (within_bound or listed)  # The bound holds, unless an explicit row names this operation.
         )
         logger.debug("Portal verdict for operation %s: category=%s allowed=%s", menu_number, category, allowed)
         return allowed

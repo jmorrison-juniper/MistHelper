@@ -138,7 +138,7 @@ class TestLoadSiteList:
         csv_file.write_text("id,name\ns1,Site One\ns2,Site Two\n", encoding="utf-8")
         fake_mh.FilePathUtils.get_csv_path.return_value = str(csv_file)  # type: ignore[attr-defined]
         rows = OrgClientSecurityExporter._load_site_list()
-        assert rows is not None
+        assert isinstance(rows, list)  # WHY: the loader must return a row list, not a sentinel.
         assert len(rows) == 2
         assert rows[0]["id"] == "s1"
         assert rows[1]["name"] == "Site Two"

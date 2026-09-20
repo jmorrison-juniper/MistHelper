@@ -159,6 +159,22 @@ class TestAuditLogsExceptionPath:
         assert any("Failed to export self audit logs" in rec.message for rec in caplog.records)  # WHY: error logged.
         wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no write on failure.
 
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_http_error_during_fetch_is_logged(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """An HTTP failure from the SDK must be logged and must not write rows."""
+        wired_deps["mistapi"].api.v1.self.logs.listSelfAuditLogs.side_effect = RuntimeError(
+            f"HTTP {status_code}"
+        )  # WHY: fail with an observable status string.
+
+        with caplog.at_level(logging.ERROR, logger="root"):  # WHY: logging.exception logs at ERROR.
+            SelfExportUtils.audit_logs()  # WHY: exercise the HTTP failure branch.
+
+        assert f"HTTP {status_code}" in caplog.text  # WHY: prove the HTTP status reaches the log.
+        assert "Failed to export self audit logs" in caplog.text  # WHY: prove the product logged context.
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no write on failure.
+
     def test_info_log_before_fetch(self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture) -> None:
         """The 'Starting export' info log fires before any API interaction."""
         wired_deps["mistapi"].api.v1.self.logs.listSelfAuditLogs.return_value = MagicMock(name="resp")

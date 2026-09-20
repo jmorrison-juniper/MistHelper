@@ -165,7 +165,7 @@ class TestFetchOneMetricBranches:
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         ctx = _make_context()  # WHY: context bundle
         result = op._fetch_one_metric(ctx, "metric-x")  # WHY: exercise fallback branch
-        assert result is not None  # WHY: non-empty raw dict is annotated
+        assert isinstance(result, dict)  # WHY: non-empty raw data must produce an annotated row.
         assert result["metric_type"] == "metric-x"  # WHY: annotate stamped metric name
         assert result["foo"] == "bar"  # WHY: original payload preserved
 
@@ -213,7 +213,7 @@ class TestAnnotateRow:
         # WHY: non-empty raw dict is annotated with metric_type/site_id/site_name
         ctx = _make_context(site_id="s1", site_name="S One")  # WHY: canonical context bundle
         result = SiteMetricOperation._annotate_row({"k": "v"}, "m1", ctx)  # WHY: exercise annotate
-        assert result is not None  # WHY: non-empty payload survives
+        assert isinstance(result, dict)  # WHY: annotation must keep the payload as a row.
         assert result["k"] == "v"  # WHY: original key preserved
         assert result["metric_type"] == "m1"  # WHY: metric stamp applied
         assert result["site_id"] == "s1"  # WHY: site id stamp applied

@@ -42,7 +42,7 @@ def test_resolve_active_msp_autoselects_single_privilege() -> None:
     """MSP resolver should auto-select when exactly one MSP privilege exists."""
     _configure_msp(privileges=[{"msp_id": "m1", "msp_name": "One MSP", "role": "admin"}])
     selected = OrgDeviceInventoryMSPOrchestrator._resolve_active_msp()
-    assert selected is not None
+    assert isinstance(selected, dict)  # WHY: one MSP privilege must resolve to its row.
     assert selected["msp_id"] == "m1"
 
 
@@ -54,7 +54,7 @@ def test_resolve_active_msp_prompts_when_multiple_privileges() -> None:
     ]
     _configure_msp(privileges=privs, safe_input_return="2")
     selected = OrgDeviceInventoryMSPOrchestrator._resolve_active_msp()
-    assert selected is not None
+    assert isinstance(selected, dict)  # WHY: the selected MSP privilege must resolve to its row.
     assert selected["msp_id"] == "m2"
 
 
