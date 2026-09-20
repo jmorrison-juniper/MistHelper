@@ -253,8 +253,13 @@ class MistApiProbe:
 
         try:
             response = func(**kwargs)  # invoke the SDK function
-        except Exception as exc:
-            logging.error("API call failed for %s: %s", op_id, exc)
+        except Exception as error:
+            logger.error(
+                "API call failed for %s after %s: %s",
+                op_id,
+                type(error).__name__,
+                error,
+            )
             return None  # skip on any API error
 
         logger.debug("Got response type %s", type(response).__name__)
@@ -272,7 +277,13 @@ class MistApiProbe:
                 func = getattr(mod, op_id, None)  # look up function by exact name
                 if func is not None and callable(func):
                     return func  # return first match found
-            except Exception:
+            except Exception as error:
+                logger.debug(
+                    "Skipping mistapi module %s after %s: %s",
+                    module_info.name,
+                    type(error).__name__,
+                    error,
+                )
                 continue  # skip un-importable modules
         return None  # not found in any module
 
@@ -538,7 +549,13 @@ def _collect_library_only_funcs() -> list[str]:
             for name, _obj in inspect.getmembers(mod, inspect.isfunction):
                 if not name.startswith("_"):
                     all_lib_funcs.add(name)  # collect public function names
-        except Exception:
+        except Exception as error:
+            logger.debug(
+                "Skipping mistapi module %s after %s: %s",
+                module_info.name,
+                type(error).__name__,
+                error,
+            )
             continue  # skip un-importable modules
 
     # MistHelper.py is too large to import; return all library funcs and
