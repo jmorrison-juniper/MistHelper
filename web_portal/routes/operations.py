@@ -299,10 +299,12 @@ def _fetch_org_sites(apisession, org_id: str) -> list:
             }
             for site in sites
         ]
-    except Exception:
+    except Exception as error:  # Keep the site selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the org ID so the operator can find the failing request in logs.
-        logger.exception("Failed to list sites for org %s", org_id)
+        logger.exception(
+            "Failed to list sites for org %s with %s: %s", org_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         # Return [] because the route call site reads len() directly and cannot
         # handle a non-list.  The log record above makes the failure visible.
         return []
@@ -333,10 +335,12 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
             }
             for device in devices
         ]
-    except Exception:
+    except Exception as error:  # Keep the device selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID and device type so the operator can trace the request.
-        logger.exception("Failed to list devices for site %s (type=%s)", site_id, device_type)
+        logger.exception(
+            "Failed to list devices for site %s type %s with %s: %s", site_id, device_type, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         # Return [] because the route reads len() directly on this result.
         return []
 
@@ -376,10 +380,12 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
             }
             for client in results
         ]
-    except Exception:
+    except Exception as error:  # Keep the client list usable when the wireless query fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID so the operator can cross-reference with the Mist portal.
-        logger.exception("Failed to list wireless clients for site %s", site_id)
+        logger.exception(
+            "Failed to list wireless clients for site %s with %s: %s", site_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         # Return [] because _fetch_site_clients concatenates both lists and
         # cannot handle a non-list return type without being rewritten.
         return []
@@ -402,10 +408,12 @@ def _fetch_wired_clients(mistapi, apisession, site_id: str) -> list:
             }
             for client in results
         ]
-    except Exception:
+    except Exception as error:  # Keep the client list usable when the wired query fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID so the operator knows which site's wired query failed.
-        logger.exception("Failed to list wired clients for site %s", site_id)
+        logger.exception(
+            "Failed to list wired clients for site %s with %s: %s", site_id, type(error).__name__, error
+        )  # Log the exception class and text for issue triage.
         # Return [] because _fetch_site_clients concatenates both lists and
         # cannot handle a non-list return type without being rewritten.
         return []
