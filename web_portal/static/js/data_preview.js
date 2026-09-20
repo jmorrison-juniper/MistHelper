@@ -109,7 +109,7 @@ var DataPreviewModal = (function() {
         var url = buildPreviewUrl(state.currentPath);
 
         fetch(url)
-            .then(function(res) { return res.json(); })
+            .then(readJsonAnswer)
             .then(function(data) {
                 showLoading(false);
                 if (data.error) { setContent('<p class="text-danger">' + escapeHtml(data.error) + '</p>'); return; }
@@ -169,7 +169,7 @@ var DataPreviewModal = (function() {
 
     function loadSqliteTableList(dbPath) {
         fetch('/api/data/preview/' + encodeURIComponent(dbPath))
-            .then(function(res) { return res.json(); })
+            .then(readJsonAnswer)
             .then(function(data) {
                 showLoading(false);
                 if (data.error) { setContent('<p class="text-danger">' + escapeHtml(data.error) + '</p>'); return; }
@@ -212,7 +212,7 @@ var DataPreviewModal = (function() {
         var url = '/api/data/preview/' + encodeURIComponent(dbPath) + '/' +
                   encodeURIComponent(tableName) + '?page=1&per_page=' + state.perPage;
         fetch(url)
-            .then(function(res) { return res.json(); })
+            .then(readJsonAnswer)
             .then(function(data) {
                 showLoading(false);
                 if (data.error) { setContent('<p class="text-danger">' + escapeHtml(data.error) + '</p>'); return; }
@@ -230,7 +230,7 @@ var DataPreviewModal = (function() {
 
     function loadJsonPreview(filepath) {
         fetch('/api/data/preview/' + encodeURIComponent(filepath))
-            .then(function(res) { return res.json(); })
+            .then(readJsonAnswer)
             .then(function(data) {
                 showLoading(false);
                 if (data.error) { setContent('<p class="text-danger">' + escapeHtml(data.error) + '</p>'); return; }
@@ -256,7 +256,7 @@ var DataPreviewModal = (function() {
 
     function loadLogPreview(filepath) {
         fetch('/api/data/preview/' + encodeURIComponent(filepath))
-            .then(function(res) { return res.json(); })
+            .then(readJsonAnswer)
             .then(function(data) {
                 showLoading(false);
                 if (data.error) { setContent('<p class="text-danger">' + escapeHtml(data.error) + '</p>'); return; }

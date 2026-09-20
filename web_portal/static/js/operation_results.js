@@ -119,7 +119,7 @@ var OperationResults = (function() {
     function load() {
         setSummary('Loading the results...');
         fetch(buildUrl())
-            .then(function(res) { return res.json(); })
+            .then(readJsonAnswer)
             .then(function(data) {
                 if (data.error) { renderError(data.error); return; }
                 render(data);
