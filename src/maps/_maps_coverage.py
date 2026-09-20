@@ -22,6 +22,7 @@ from dataclasses import dataclass, fields  # WHY: model the layer bundle immutab
 from typing import Any  # WHY: type API-session opaque object.
 
 import mistapi  # WHY: Mist SDK for site/device/map fetch.
+import requests  # WHY: name network exceptions that a Mist fetch can raise.
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger separates the log surface.
 
@@ -45,7 +46,7 @@ def _safe_call(label: str, api_call: Callable[[], Any]) -> Any:  # WHY: shared s
     """Invoke ``api_call`` and return the response or ``None`` on failure/empty."""
     try:  # WHY: Mist SDK raises broadly (HTTP, JSON, connection). We log and continue.
         response = api_call()  # WHY: run the caller-provided Mist API call.
-    except Exception as exc:  # WHY: never crash a map-render because one layer failed.
+    except (requests.RequestException, OSError) as exc:  # WHY: skip one layer on network or OS failures.
         logging.warning("Error fetching %s: %s", label, exc)  # WHY: preserve prior log format for grep.
         return _EMPTY_RESPONSE  # WHY: signal failure to the caller with a shared sentinel.
     if response.status_code != 200 or not response.data:  # WHY: guard against error status or empty payload.
@@ -299,7 +300,7 @@ class _MapsCoverage:
         logger.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)  # WHY: audit trail.
         try:  # WHY: `api_session.mist_get` may raise on network errors.
             response = api_session.mist_get(coverage_url, query=params)  # WHY: fetch coverage payload from Mist.
-        except Exception as exc:  # WHY: swallow errors so one bad layer does not kill the viewer.
+        except (requests.RequestException, OSError) as exc:  # WHY: skip one coverage layer on fetch failures.
             logging.warning("Error fetching %s coverage: %s", coverage_type, exc)  # WHY: preserve log format.
             return None  # WHY: signal missing layer to the caller.
         if response.status_code != 200:  # WHY: coverage responses may be 400 while other layers succeed.
