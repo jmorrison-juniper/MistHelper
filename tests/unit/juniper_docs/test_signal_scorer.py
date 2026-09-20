@@ -11,7 +11,12 @@ def test_scores_three_groups_and_builds_the_label() -> None:
     result = SignalScorer().score(text)  # Score the sample with the default threshold.
     assert result.sub_category == "srx__configuration__security"  # The joined label.
     assert result.is_fallback is False  # Strong evidence is not a fallback.
-    assert result.scores  # The numeric scores are recorded.
+    assert set(result.scores) == {
+        "product_family:srx",
+        "task_type:configuration",
+        "technology_domain:security",
+    }  # One score entry for each group that reached the threshold.
+    assert all(value > 0.0 for value in result.scores.values())  # Every score is positive.
 
 
 def test_below_threshold_returns_the_fallback() -> None:

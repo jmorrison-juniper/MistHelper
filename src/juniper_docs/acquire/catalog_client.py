@@ -289,6 +289,10 @@ class JvdCatalogClient:
         if match is None:  # The page carries no catalog block.
             _LOGGER.warning("No __page_data__ block found at %s", url)  # Record the miss.
             return None  # The caller treats a missing block as an empty result.
-        data: object = json.loads(match.group(1))  # Parse the captured JSON literal.
+        try:
+            data: object = json.loads(match.group(1))  # Parse the captured JSON literal.
+        except json.JSONDecodeError as error:  # A malformed block must not stop the run.
+            _LOGGER.warning("Malformed __page_data__ block at %s: %s", url, error)  # Miss.
+            return None  # The caller treats a malformed block as an empty result.
         _LOGGER.debug("Parsed a catalog block of %d characters", len(match.group(1)))
         return data  # Return the parsed catalog structure to the caller.

@@ -6,6 +6,7 @@ methods run without a network call. The HTTPS-only guard is exercised directly.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import urllib.error
@@ -102,6 +103,38 @@ def test_read_page_data_is_none_without_a_block() -> None:
     """The client returns None when the page carries no data block."""
     client = _client(_FakeResponse(b"<html>no block here</html>"))  # No block.
     assert client.read_page_data("https://x/") is None  # A missing block yields None.
+
+
+def test_read_page_data_is_none_for_a_malformed_json_block() -> None:
+    """A malformed JSON block yields None instead of stopping the run."""
+    body = b'var __page_data__ = {"jvds": [1, 2,};</script>'  # A truncated literal.
+    client = _client(_FakeResponse(body))  # The page carries a broken block.
+    with pytest.raises(json.JSONDecodeError):  # The raw literal is not valid JSON.
+        json.loads('{"jvds": [1, 2,}')  # Prove the fixture body is truly malformed.
+    assert client.read_page_data("https://x/") is None  # The client absorbs the error.
+
+
+def test_read_page_data_absorbs_a_raised_json_decode_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The client returns None when the JSON parser raises a decode error."""
+    body = b'var __page_data__ = {"jvds": [1, 2]};</script>'  # A well-formed block.
+    client = _client(_FakeResponse(body))  # The page carries a parsable block.
+
+    def _raise(*_args: object, **_kwargs: object) -> object:
+        """Raise a decode error for any parse attempt."""
+        raise json.JSONDecodeError("bad", "", 0)  # The failure mode under test.
+
+    monkeypatch.setattr(json, "loads", _raise)  # Force the parser to fail.
+    assert client.read_page_data("https://x/") is None  # No exception escapes.
+
+
+def test_read_page_data_logs_the_malformed_block(caplog: pytest.LogCaptureFixture) -> None:
+    """The client records the malformed block so an operator can find the page."""
+    body = b'var __page_data__ = {"jvds": [1, 2,};</script>'  # A truncated literal.
+    client = _client(_FakeResponse(body))  # The page carries a broken block.
+    with caplog.at_level(logging.WARNING):  # Capture the warning record.
+        client.read_page_data("https://x/bad-page/")  # Read the broken page.
+    assert "Malformed __page_data__ block" in caplog.text  # The reason is named.
+    assert "https://x/bad-page/" in caplog.text  # The page URL is named.
 
 
 def test_open_refuses_a_non_https_url() -> None:
