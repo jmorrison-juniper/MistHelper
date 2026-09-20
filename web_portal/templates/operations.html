@@ -99,6 +99,41 @@
                 <ul id="outputFileList" class="list-unstyled mt-1"></ul>
             </div>
         </div>
+
+        <!-- Results (issue #3048). A log cannot be sorted, filtered, or opened,
+             so the rows of a finished run land in this table instead. -->
+        <div class="portal-card mt-3 d-none" id="resultsPanel" data-testid="results-panel">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 class="mb-0">Results</h6>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <select class="form-select form-select-sm w-auto d-none" id="resultsFileSelect"
+                            data-testid="results-file-select"
+                            onchange="OperationResults.selectFile(this.value)"></select>
+                    <input type="search" class="form-control form-control-sm w-auto" id="resultsSearch"
+                           data-testid="results-search" placeholder="Filter rows..."
+                           oninput="OperationResults.onSearchInput(this.value)">
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            data-testid="results-export" onclick="OperationResults.exportCsv()">Export CSV</button>
+                </div>
+            </div>
+            <p class="text-muted small mb-2 mt-2" id="resultsSummary" data-testid="results-summary"></p>
+            <div class="alert alert-warning py-1 px-2 small d-none" id="resultsTruncated"
+                 data-testid="results-truncated"></div>
+            <div class="table-responsive" id="resultsTableWrap">
+                <table class="table table-sm portal-table mb-0" id="resultsTable" data-testid="results-table">
+                    <thead id="resultsHead"></thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2 d-none"
+                 id="resultsPagination" data-testid="results-pagination">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-testid="results-prev" onclick="OperationResults.previousPage()">Previous</button>
+                <span class="small text-muted" id="resultsPageInfo"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-testid="results-next" onclick="OperationResults.nextPage()">Next</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -143,4 +178,6 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/operations.js') }}"></script>
+<!-- Loaded after operations.js, because the results table uses its escapeHtml helper. -->
+<script src="{{ url_for('static', filename='js/operation_results.js') }}"></script>
 {% endblock %}

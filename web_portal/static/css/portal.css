@@ -75,6 +75,34 @@
     background-color: rgba(128, 128, 128, 0.05);
 }
 
+/* Results table (issue #3048).
+   A result file can hold 27 columns. The shared rule above breaks a word to fit
+   a narrow column, which turned "Louisburg" into three stacked lines and made
+   one row 880 pixels tall. These rules keep one row on one line and move the
+   full value into the row detail. */
+#resultsTable td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 18ch;
+    word-break: normal;
+}
+
+#resultsTable tr.result-detail td {
+    white-space: normal;
+    max-width: none;
+    overflow: visible;
+}
+
+/* The table scrolls sideways when it is wider than the panel. A detail that
+   inherits that width forces the reader to scroll to read it. Pinning the inner
+   block to the left edge keeps the detail in view at every scroll position. */
+#resultsTable .result-detail-inner {
+    position: sticky;
+    left: 0;
+    max-width: 68rem;
+}
+
 /* Sort indicators */
 .sort-asc::after { content: " \2191"; }
 .sort-desc::after { content: " \2193"; }
