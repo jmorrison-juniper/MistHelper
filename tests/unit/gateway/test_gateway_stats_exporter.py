@@ -521,6 +521,27 @@ def test_fetch_one_device_stats_terminal_failure_returns_failure_record() -> Non
     assert result["error"] == "boom"
 
 
+def test_fetch_one_device_stats_terminal_failure_keeps_first_error() -> None:
+    """Exhausted retries must report the first failure when later attempts change symptoms."""
+    _configure_dependencies()  # WHY: install the source dependency doubles before the retry helper runs.
+
+    attempt_errors = [
+        RuntimeError("auth failed"),
+        RuntimeError("connection closed"),
+    ]  # WHY: different messages prove which attempt survives.
+    with (
+        patch.object(module, "_attempt_fetch_stats", side_effect=attempt_errors),
+        patch.object(module, "FAST_MODE_MAX_RETRIES", 1),
+        patch.object(time, "sleep"),
+    ):
+        result = GatewayStatsExporter._fetch_one_device_stats(
+            ("site-1", "dev-1", "gw", "Site A"), fast=True
+        )  # WHY: drive retry exhaustion with two distinct errors.
+
+    assert result["status"] == STATUS_FAILED  # WHY: preserve the existing failure-record contract.
+    assert result["error"] == "auth failed"  # WHY: the first failure must survive the second symptom.
+
+
 # -------------------------- _process_devices_sequential --------------------------
 
 

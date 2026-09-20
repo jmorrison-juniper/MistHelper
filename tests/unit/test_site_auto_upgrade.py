@@ -1531,8 +1531,8 @@ class TestPickStableVersion:
     def test_falls_back_to_first_string(self):
         assert _sau_mod._pick_stable_version(["4.0"]) == "4.0"
 
-    def test_empty_returns_empty(self):
-        assert _sau_mod._pick_stable_version([]) == ""
+    def test_empty_returns_none(self):
+        assert _sau_mod._pick_stable_version([]) is None  # Missing versions must not become an empty target.
 
 
 # ===================================================================
@@ -2503,3 +2503,29 @@ class TestBlindHandlerNarrowing:
         ):
             with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
                 _sau_mod._fetch_reference_org_version_list(MagicMock(), "org-1")  # WHY: exercise the narrowed handler.
+
+
+class TestIssue2862MissingVersionDefaults:
+    """Regression tests for missing firmware version defaults."""
+
+    def test_stable_entry_without_version_fails_visibly(self, caplog):
+        versions = [{"tag": "stable"}]  # This row has no firmware target for the cloud payload.
+        with caplog.at_level(_sau_mod.logging.ERROR):  # Capture the operator-safety log for the refusal.
+            assert _sau_mod._pick_stable_version(versions) is None  # The caller must reject the missing field.
+        assert "field version is missing" in caplog.text  # The log names the missing field.
+
+    def test_first_entry_without_version_fails_visibly(self, caplog):
+        versions = [{"tag": "beta"}]  # This row has no fallback firmware target.
+        with caplog.at_level(_sau_mod.logging.ERROR):  # Capture the safety log for the fallback path.
+            assert _sau_mod._pick_stable_version(versions) is None  # No empty version may proceed.
+        assert "field version is missing" in caplog.text  # The log names the missing field.
+
+    def test_missing_version_refuses_auto_selection(self, mock_deps, caplog, capsys):
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])  # Build the workflow under test.
+        cfg.model_version_map = {"AP41": [{"tag": "stable"}]}  # The available-version row omits the target.
+        with caplog.at_level(_sau_mod.logging.ERROR):  # Capture the observable failure.
+            assert cfg._auto_select_versions() is False  # The caller must not apply a partial payload.
+        captured = capsys.readouterr()  # Read the operator-facing refusal.
+        assert cfg.custom_versions == {}  # No empty or partial target can survive.
+        assert "Missing firmware version for model AP41" in captured.out  # The operator sees the model.
+        assert "field version is missing" in caplog.text  # The log names the missing field.
