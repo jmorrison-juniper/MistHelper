@@ -137,6 +137,27 @@ def test_fetch_all_clients_returns_empty_on_api_exception(caplog: pytest.LogCapt
     assert "Error retrieving wired clients" in caplog.text
 
 
+@pytest.mark.parametrize("status_code", [404, 503], ids=["client-error", "server-error"])
+def test_fetch_all_clients_http_errors_log_status_and_return_empty(
+    caplog: pytest.LogCaptureFixture,
+    status_code: int,
+) -> None:
+    """Failed wired-client responses must not report a successful empty result."""
+    fake_mh = _make_mh()  # WHY: isolate the dependency resolver from live application state.
+    fake_response = SimpleNamespace(status_code=status_code, data=[])  # WHY: model a real failed SDK response.
+    fake_mistapi = MagicMock(name="mistapi")  # WHY: block live Mist SDK access.
+    fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.return_value = fake_response  # WHY: drive branch.
+    with (
+        patch("src.reports.wired_client_manufacturer_report_generator.mistapi", fake_mistapi),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
+        caplog.at_level(logging.ERROR),
+    ):
+        result = R._fetch_all_clients("org-uuid")  # WHY: call the real status parser.
+    assert result == []  # WHY: failed HTTP statuses keep the existing empty-list failure contract.
+    fake_mistapi.get_all.assert_not_called()  # WHY: pagination must not run after a failed first page.
+    assert f"HTTP {status_code}" in caplog.text  # WHY: the error log must preserve the exact status.
+
+
 # ---------- _build_manufacturer_summary ----------
 
 

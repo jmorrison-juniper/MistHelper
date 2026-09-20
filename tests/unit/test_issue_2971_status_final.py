@@ -128,3 +128,28 @@ def test_read_site_statistics_503_returns_none_and_suppresses_debug_status(
     assert result is None  # WHY: the existing failure contract for failed evidence read is None.
     assert _has_status_at_problem_level(caplog)  # WHY: the operator must see the exact 503 status.
     assert "listSiteDevicesStats returned status 503" not in caplog.text  # WHY: DEBUG alone hides the failure.
+
+
+def test_read_site_statistics_404_returns_none_and_logs_warning_status(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A site-statistics evidence 404 must not continue as a normal empty read."""
+
+    class ClientErrorResponse:
+        """Response object for a 404 with an empty payload."""
+
+        status_code = 404  # WHY: simulate a missing site or device response from the cloud.
+        data: Any = []  # WHY: simulate the empty SDK payload that previously looked normal.
+
+    reader = SiteStatsFirmwareEvidenceReader(MagicMock())  # WHY: use the real reader with a fake cloud session.
+    with patch.object(
+        run_routes.mistapi.api.v1.sites.stats,  # WHY: patch the exact namespace used by product code.
+        "listSiteDevicesStats",  # WHY: replace the site statistics API function.
+        return_value=ClientErrorResponse(),  # WHY: feed a 404 response with an empty payload.
+    ):
+        with caplog.at_level(logging.DEBUG, logger=run_routes.logger.name):  # WHY: capture all status logs.
+            result = reader._read_site_statistics("site-1")  # WHY: drive the real product helper.
+    assert result is None  # WHY: the existing failure contract for failed evidence read is None.
+    assert any(  # WHY: require an operator-grade log for the exact status.
+        record.levelno >= logging.WARNING and "404" in record.getMessage() for record in caplog.records
+    )

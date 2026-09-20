@@ -278,9 +278,11 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
 
     def _find_template_sites(self) -> bool:  # WHY: expand selected template into concrete site list.
         """Find all sites using the selected template. Returns True if found."""
-        assert self.selected_template is not None, "Template must be selected before finding sites"  # nosec B101
-        template_id = self.selected_template["id"]  # WHY: identifier used to match sites.
-        template_name = self.selected_template["name"]  # WHY: friendly name for diagnostics.
+        selected_template = self._require_selected_template(  # WHY: fail visibly under python -O too.
+            "Template must be selected before finding sites"
+        )
+        template_id = selected_template["id"]  # WHY: identifier used to match sites.
+        template_name = selected_template["name"]  # WHY: friendly name for diagnostics.
         self.template_sites = [
             {"site_id": site.get("id", ""), "site_name": site.get("name", "Unknown Site")}  # WHY: minimal projection.
             for site in self.sites  # WHY: single pass over cached rows.
@@ -405,7 +407,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
     def _show_preview(self, devices_with_overrides: list[dict[str, Any]], dry_run: bool) -> None:  # nosec B101
         """Display preview of changes to be made."""
         del dry_run  # WHY: parameter retained for signature parity with pipeline dispatcher.
-        assert self.selected_template is not None, "Template must be selected"  # nosec B101
+        self._require_selected_template("Template must be selected")  # WHY: fail visibly under python -O too.
         total_ports = sum(len(d["overridden_wan_ports"]) for d in devices_with_overrides)  # WHY: aggregate ports.
         self._print_preview_header(devices_with_overrides, total_ports)  # WHY: banner + counts.
         preview_count = min(PREVIEW_DEVICE_LIMIT, len(devices_with_overrides))  # WHY: cap sample size.
@@ -418,9 +420,9 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
 
     def _print_preview_header(self, devices: list[dict[str, Any]], total_ports: int) -> None:  # WHY: banner emitter.
         """Emit the preview header block."""
-        assert self.selected_template is not None  # nosec B101
+        selected_template = self._require_selected_template("Template must be selected")  # WHY: guard header state.
         print("\n  Preview of Changes:")  # WHY: banner label.
-        print(f"  Template: {self.selected_template['name']}")  # WHY: echo target template.
+        print(f"  Template: {selected_template['name']}")  # WHY: echo target template.
         print(f"  Devices: {len(devices)}")  # WHY: echo device count.
         print(f"  Overridden WAN Ports: {total_ports}")  # WHY: echo port count.
 
@@ -467,7 +469,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
 
     def _update_single_device(self, device: dict[str, Any], dry_run: bool) -> dict[str, Any]:  # nosec B101
         """Update a single device's overridden WAN port probe configuration."""
-        assert self.selected_template is not None, "Template must be selected"  # nosec B101
+        self._require_selected_template("Template must be selected")  # WHY: fail visibly under python -O too.
         result = self._initial_device_result(device)  # WHY: pre-populated result skeleton.
         try:
             self._run_device_update(device, dry_run, result)  # WHY: delegate patch pipeline.
@@ -504,13 +506,13 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
 
     def _initial_device_result(self, device: dict[str, Any]) -> dict[str, Any]:  # nosec B101
         """Return a fresh result skeleton for one device update attempt."""
-        assert self.selected_template is not None  # nosec B101
+        selected_template = self._require_selected_template("Template must be selected")  # WHY: guard report shape.
         return {
             "device_name": device["device_name"],  # WHY: for logging + report rendering.
             "device_id": device["device_id"],  # WHY: preserve UUID in report.
             "site_name": device["site_name"],  # WHY: preserve site name for report.
             "site_id": device["site_id"],  # WHY: preserve site UUID in report.
-            "template_name": self.selected_template["name"],  # WHY: template association for audit.
+            "template_name": selected_template["name"],  # WHY: template association for audit.
             "ports_updated": [],  # WHY: filled in if any ports are actually modified.
             "status": "",  # WHY: SUCCESS / FAILED / SKIPPED / DRY-RUN / ERROR.
             "error": "",  # WHY: human-readable failure detail.
@@ -588,8 +590,8 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
 
     def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # nosec B101
         """Generate and display final report."""
-        assert self.selected_template is not None, "Template must be selected"  # nosec B101
-        template_name = self.selected_template["name"]  # WHY: display name for summary banner.
+        selected_template = self._require_selected_template("Template must be selected")  # WHY: guard summary state.
+        template_name = selected_template["name"]  # WHY: display name for summary banner.
         self._write_audit_csv(results)  # WHY: emit CSV before summary banner.
         total_ports = self._total_ports_from_results(results)  # WHY: aggregate for summary.
         self._emit_summary(results, template_name, total_ports, dry_run)  # WHY: mode-specific summary.
@@ -597,6 +599,12 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         print(HEADER_RULE)  # WHY: close banner.
         success_count = self._count_success(results)  # WHY: successful updates only.
         logger.info("Menu #167 DESTRUCTIVE operation complete: %s devices updated", success_count)  # WHY: audit.
+
+    def _require_selected_template(self, message: str) -> dict[str, Any]:
+        """Return the selected template or raise a visible runtime error."""
+        if self.selected_template is None:  # WHY: the operation cannot continue without the template scope.
+            raise RuntimeError(message)  # WHY: keep the old assertion message under python -O.
+        return self.selected_template  # WHY: callers need the narrowed template dict.
 
     def _write_audit_csv(self, results: list[dict[str, Any]]) -> None:  # WHY: isolate CSV export side effect.
         """Serialise per-device results to the audit CSV via the injected exporter."""

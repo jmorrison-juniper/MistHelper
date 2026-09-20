@@ -256,6 +256,7 @@ class SiteClientExporter:
             _GET_SITE_BEACON_FALLBACK_RETRIES,  # WHY: fallback keeps retries bounded when config object is missing.
         )
         smoothed_delay = None  # WHY: seed RateLimitingUtils smoothing state for adaptive-delay retries.
+        first_error: RuntimeError | None = None  # WHY: preserve the first failure across rate-limit retries.
         for attempt in range(retry_limit + 1):  # WHY: include initial attempt plus configured retry attempts.
             logger.info(
                 "Calling getSiteBeacon for site_id=%s beacon_id=%s (attempt %d/%d)",
@@ -278,6 +279,8 @@ class SiteClientExporter:
                 )  # WHY: post-call summary.
                 return rows  # WHY: successful fetch ends retry loop immediately.
             except RuntimeError as exception:  # WHY: capture runtime API failures for retry/abort decisioning.
+                if first_error is None:  # WHY: the first rate-limit failure can hold the root cause.
+                    first_error = exception  # WHY: later attempts can carry follow-on transport symptoms.
                 logging.error(
                     "getSiteBeacon API call failed on attempt %d/%d: %s",
                     attempt + 1,
@@ -285,9 +288,11 @@ class SiteClientExporter:
                     exception,
                 )  # WHY: failure details.
                 if "429" not in str(exception):  # WHY: only rate-limit errors should enter adaptive retry delay path.
-                    raise  # WHY: non-rate-limit exceptions should bubble to caller for immediate handling.
+                    if first_error is not exception:  # WHY: a prior retry failure must remain visible to the caller.
+                        raise first_error from None  # WHY: preserve the first cause without chaining later symptoms.
+                    raise  # WHY: first-attempt non-rate-limit exceptions still bubble unchanged.
                 if attempt >= retry_limit:  # WHY: avoid sleeping when no retries remain.
-                    raise  # WHY: propagate exhausted-rate-limit failure after final attempt.
+                    raise first_error from None  # WHY: propagate the original rate-limit failure after exhaustion.
                 logging.info(  # WHY: pre-delay log.
                     "Rate-limit signal detected; calculating adaptive delay before retry"
                 )

@@ -123,6 +123,24 @@ def test_diagnostic_common_reports_404_without_parsing_body(caplog: pytest.LogCa
     assert "command failed; status=404" in _messages(caplog)  # WHY: the audit log must pin the status.
 
 
+@pytest.mark.parametrize("status_code", [404, 503], ids=["client-error", "server-error"])
+def test_diagnostic_common_rejects_http_error_statuses(
+    status_code: int,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The shared diagnostic parser must reject client and server error responses."""
+    websocket_manager = MagicMock()  # WHY: prove the failure path releases the WebSocket.
+    response = _response(b'{"session": "ignored"}')  # WHY: build a real response object with valid JSON.
+    response.status_code = status_code  # WHY: drive the HTTP error branch with a real status field.
+    response.json = MagicMock(side_effect=AssertionError("parsed error body"))  # WHY: error bodies must not parse.
+    caplog.set_level(logging.WARNING, logger="src.websocket.diagnostics.common")  # WHY: capture the status warning.
+    result = diagnostic_common.extract_command_session(response, websocket_manager, "arp")  # WHY: drive parser.
+    assert result is None  # WHY: HTTP error responses cannot yield a usable command session.
+    websocket_manager.disconnect.assert_called_once()  # WHY: no session can arrive after an HTTP error.
+    response.json.assert_not_called()  # WHY: the parser must stop before success-body parsing.
+    assert f"command failed; status={status_code}" in _messages(caplog)  # WHY: operators need the exact status.
+
+
 def test_arp_trigger_timeout_reaches_the_caller() -> None:
     """The ARP trigger must let a transport timeout reach the caller."""
     timeout = requests.exceptions.Timeout("synthetic timeout")  # WHY: use the real Requests timeout type.

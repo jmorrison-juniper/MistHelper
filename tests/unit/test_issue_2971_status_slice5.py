@@ -173,3 +173,29 @@ def test_site_wireless_clients_503_returns_empty_and_suppresses_success(
     assert result == []  # WHY: the existing failure contract for this helper is an empty list.
     assert _has_status_at_problem_level(caplog)  # WHY: the operator must see the exact 503 status.
     assert "Found 0 wireless clients in site" not in caplog.text  # WHY: this success would be false.
+
+
+def test_wired_manufacturer_404_returns_empty_and_suppresses_success(caplog: pytest.LogCaptureFixture) -> None:
+    """A wired-client 404 must not report a successful zero-client fetch."""
+
+    class ClientErrorResponse:
+        """Response object for a 404 with an empty payload."""
+
+        status_code = 404  # WHY: simulate a missing organization resource response from the cloud.
+        data: Any = []  # WHY: simulate the empty SDK payload that previously looked normal.
+
+    resolver = _resolver_with_writer(MagicMock())  # WHY: control resolver dependencies.
+    with patch.object(wired_report_module, "SourceDependencyResolver", resolver):  # WHY: avoid live app state.
+        with patch.object(wired_report_module.mistapi, "get_all", return_value=[]):  # WHY: block pagination work.
+            with patch.object(
+                wired_report_module.mistapi.api.v1.orgs.wired_clients,  # WHY: patch the namespace used by code.
+                "searchOrgWiredClients",  # WHY: replace the wired-client API function.
+                return_value=ClientErrorResponse(),  # WHY: feed a 404 response with an empty payload.
+            ):
+                with caplog.at_level(logging.INFO):  # WHY: capture echo and module logs.
+                    result = wired_report_module.WiredClientManufacturerReportGenerator._fetch_all_clients("org-1")
+    assert result == []  # WHY: the existing failure contract for this helper is an empty list.
+    assert any(  # WHY: require an operator-grade log for the exact status.
+        record.levelno >= logging.WARNING and "404" in record.getMessage() for record in caplog.records
+    )
+    assert "Retrieved 0 wired client records" not in caplog.text  # WHY: this success would be false.

@@ -18,6 +18,7 @@ from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 LOGGER_NAME = "src.export.org_export_utils"  # WHY: caplog target for #886 slice 92 print->logger migration.
 
@@ -153,10 +154,23 @@ class TestCollectOneSleType:
         from src.export import org_export_utils as mod
         from src.export.org_export_utils import OrgExportUtils
 
-        with patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=RuntimeError("boom")):
+        with patch.object(
+            mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=requests.RequestException("boom")
+        ):
             accum: list = []
             OrgExportUtils._collect_one_sle_type("org1", "wired", accum)
         assert accum == []
+
+    def test_unexpected_exception_propagates(self, fake_mh):
+        """Programming faults must not look like a failed SLE request."""
+        from src.export import org_export_utils as mod
+        from src.export.org_export_utils import OrgExportUtils
+
+        with (
+            patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=ValueError("bad sle state")),
+            pytest.raises(ValueError, match="bad sle state"),
+        ):
+            OrgExportUtils._collect_one_sle_type("org1", "wired", [])
 
 
 class TestPersistSitesSleSummary:
@@ -244,6 +258,7 @@ class TestSitesSleSummary:
             patch.object(OrgExportUtils, "_persist_sites_sle_summary"),
         ):
             OrgExportUtils.sites_sle_summary()
+        assert fake_mh.PROGRESS_EMITTER is None
 
 
 # ---------------------------------------------------------------------------
@@ -328,9 +343,21 @@ class TestLoadParameterizedMetricChoices:
         from src.export.org_export_utils import OrgExportUtils
 
         with patch.object(
-            mod.mistapi.api.v1.const.insight_metrics, "listInsightMetrics", side_effect=RuntimeError("boom")
+            mod.mistapi.api.v1.const.insight_metrics,
+            "listInsightMetrics",
+            side_effect=requests.RequestException("boom"),
         ):
             assert OrgExportUtils._load_parameterized_metric_choices() == {}
+
+    def test_unexpected_exception_propagates(self, fake_mh):
+        from src.export import org_export_utils as mod
+        from src.export.org_export_utils import OrgExportUtils
+
+        with (
+            patch.object(mod.mistapi.api.v1.const.insight_metrics, "listInsightMetrics", side_effect=ValueError("bad")),
+            pytest.raises(ValueError, match="bad"),
+        ):
+            OrgExportUtils._load_parameterized_metric_choices()
 
 
 # ---------------------------------------------------------------------------
@@ -380,8 +407,15 @@ class TestFetchSingleMetricChoice:
     def test_exception_returns_none(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
 
-        fake_mh.apisession.mist_get = MagicMock(side_effect=RuntimeError("boom"))
+        fake_mh.apisession.mist_get = MagicMock(side_effect=requests.RequestException("boom"))
         assert OrgExportUtils._fetch_single_metric_choice("o", "m", "bytes", "7d") is None
+
+    def test_unexpected_exception_propagates(self, fake_mh):
+        from src.export.org_export_utils import OrgExportUtils
+
+        fake_mh.apisession.mist_get = MagicMock(side_effect=ValueError("bad metric request"))
+        with pytest.raises(ValueError, match="bad metric request"):
+            OrgExportUtils._fetch_single_metric_choice("o", "m", "bytes", "7d")
 
 
 class TestFetchParameterizedOrgMetric:
@@ -458,7 +492,6 @@ class TestInsightFetchOneSleCategory:
             patch.object(mod.mistapi, "get_all", return_value=[{"s": 1}]),
         ):
             result = OrgExportUtils._insight_fetch_one_sle_category("o", "m", "wifi")
-        assert result is not None
         assert result["total_sites"] == 1
 
     def test_empty_returns_none(self, fake_mh):
@@ -475,8 +508,20 @@ class TestInsightFetchOneSleCategory:
         from src.export import org_export_utils as mod
         from src.export.org_export_utils import OrgExportUtils
 
-        with patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=RuntimeError("boom")):
+        with patch.object(
+            mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=requests.RequestException("boom")
+        ):
             assert OrgExportUtils._insight_fetch_one_sle_category("o", "m", "wifi") is None
+
+    def test_unexpected_exception_propagates(self, fake_mh):
+        from src.export import org_export_utils as mod
+        from src.export.org_export_utils import OrgExportUtils
+
+        with (
+            patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=ValueError("bad category")),
+            pytest.raises(ValueError, match="bad category"),
+        ):
+            OrgExportUtils._insight_fetch_one_sle_category("o", "m", "wifi")
 
 
 class TestInsightFetchWorstSitesSle:
@@ -556,10 +601,21 @@ class TestInsightFetchOneMetric:
     def test_exception_returns_failure(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
 
-        with patch.object(OrgExportUtils, "_insight_fetch_default_metric", side_effect=RuntimeError("boom")):
+        with patch.object(
+            OrgExportUtils, "_insight_fetch_default_metric", side_effect=requests.RequestException("boom")
+        ):
             records, ok, fail = OrgExportUtils._insight_fetch_one_metric("o", "client-x", {})
         assert records == []
         assert (ok, fail) == (0, 1)
+
+    def test_unexpected_exception_propagates(self, fake_mh):
+        from src.export.org_export_utils import OrgExportUtils
+
+        with (
+            patch.object(OrgExportUtils, "_insight_fetch_default_metric", side_effect=ValueError("bad metric")),
+            pytest.raises(ValueError, match="bad metric"),
+        ):
+            OrgExportUtils._insight_fetch_one_metric("o", "client-x", {})
 
 
 class TestInsightFetchSitesSleSummary:
@@ -595,10 +651,22 @@ class TestInsightFetchSitesSleSummary:
         from src.export import org_export_utils as mod
         from src.export.org_export_utils import OrgExportUtils
 
-        with patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=RuntimeError("boom")):
+        with patch.object(
+            mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=requests.RequestException("boom")
+        ):
             records, ok, fail = OrgExportUtils._insight_fetch_sites_sle_summary("o")
         assert records == []
         assert (ok, fail) == (0, 1)
+
+    def test_unexpected_exception_propagates(self, fake_mh):
+        from src.export import org_export_utils as mod
+        from src.export.org_export_utils import OrgExportUtils
+
+        with (
+            patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=ValueError("bad summary")),
+            pytest.raises(ValueError, match="bad summary"),
+        ):
+            OrgExportUtils._insight_fetch_sites_sle_summary("o")
 
 
 class TestInsightCollectAllMetrics:
@@ -743,6 +811,7 @@ class TestInsightMetrics:
         with patch.object(OrgExportUtils, "_insight_setup_or_empty", return_value=None):
             OrgExportUtils.insight_metrics()
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.assert_not_called()
+        assert fake_mh.ConfigUtils.get_cached_or_prompted_org_id.call_count == 0
 
     def test_success_with_data_writes_normalized(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
@@ -761,6 +830,7 @@ class TestInsightMetrics:
         ):
             OrgExportUtils.insight_metrics()
         export.assert_called_once()
+        assert export.call_count == 1
 
     def test_success_no_data_writes_empties(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
@@ -783,11 +853,23 @@ class TestInsightMetrics:
         with (
             patch.object(OrgExportUtils, "_insight_setup_or_empty", return_value=["m1"]),
             patch.object(OrgExportUtils, "_load_parameterized_metric_choices", return_value={}),
-            patch.object(OrgExportUtils, "_insight_collect_all_metrics", side_effect=RuntimeError("boom")),
+            patch.object(OrgExportUtils, "_insight_collect_all_metrics", side_effect=requests.RequestException("boom")),
             patch.object(OrgExportUtils, "_insight_write_empty_outputs") as empty,
         ):
             OrgExportUtils.insight_metrics()
         empty.assert_called_once_with(include_legacy=True)
+
+    def test_unexpected_exception_propagates(self, fake_mh):
+        from src.export.org_export_utils import OrgExportUtils
+
+        fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
+        with (
+            patch.object(OrgExportUtils, "_insight_setup_or_empty", return_value=["m1"]),
+            patch.object(OrgExportUtils, "_load_parameterized_metric_choices", return_value={}),
+            patch.object(OrgExportUtils, "_insight_collect_all_metrics", side_effect=ValueError("bad export")),
+            pytest.raises(ValueError, match="bad export"),
+        ):
+            OrgExportUtils.insight_metrics()
 
 
 # ---------------------------------------------------------------------------
@@ -809,18 +891,19 @@ class TestSimpleDelegates:
         if extra_kwargs:
             for key, val in extra_kwargs.items():
                 assert export.call_args.kwargs[key] == val
+        return export.call_args.kwargs
 
     def test_nac_clients(self, fake_mh):
-        self._assert_calls(fake_mh, "_nac_clients", "nac clients", "mac")
+        assert self._assert_calls(fake_mh, "_nac_clients", "nac clients", "mac")["data_type"] == "nac clients"
 
     def test_nac_tags(self, fake_mh):
-        self._assert_calls(fake_mh, "_nac_tags", "nac tags", "name")
+        assert self._assert_calls(fake_mh, "_nac_tags", "nac tags", "name")["data_type"] == "nac tags"
 
     def test_nac_portals(self, fake_mh):
-        self._assert_calls(fake_mh, "_nac_portals", "nac portals", "name")
+        assert self._assert_calls(fake_mh, "_nac_portals", "nac portals", "name")["data_type"] == "nac portals"
 
     def test_nac_rules(self, fake_mh):
-        self._assert_calls(fake_mh, "_nac_rules", "nac rules", "name")
+        assert self._assert_calls(fake_mh, "_nac_rules", "nac rules", "name")["data_type"] == "nac rules"
 
     def test_nac_events(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
@@ -836,19 +919,19 @@ class TestSimpleDelegates:
         assert export.call_args.kwargs["duration"] == "12h"
 
     def test_assets(self, fake_mh):
-        self._assert_calls(fake_mh, "_assets", "assets", "name")
+        assert self._assert_calls(fake_mh, "_assets", "assets", "name")["data_type"] == "assets"
 
     def test_bgp_peers(self, fake_mh):
-        self._assert_calls(fake_mh, "_bgp_peers", "bgp peers", "peer_ip")
+        assert self._assert_calls(fake_mh, "_bgp_peers", "bgp peers", "peer_ip")["data_type"] == "bgp peers"
 
     def test_tunnel_stats(self, fake_mh):
-        self._assert_calls(fake_mh, "_tunnel_stats", "tunnel stats", "name")
+        assert self._assert_calls(fake_mh, "_tunnel_stats", "tunnel stats", "name")["data_type"] == "tunnel stats"
 
     def test_site_stats(self, fake_mh):
-        self._assert_calls(fake_mh, "_site_stats", "site stats", "name")
+        assert self._assert_calls(fake_mh, "_site_stats", "site stats", "name")["data_type"] == "site stats"
 
     def test_mxedge_stats(self, fake_mh):
-        self._assert_calls(fake_mh, "_mxedge_stats", "mx edge stats", "name")
+        assert self._assert_calls(fake_mh, "_mxedge_stats", "mx edge stats", "name")["data_type"] == "mx edge stats"
 
     def test_e911_report(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
@@ -859,16 +942,19 @@ class TestSimpleDelegates:
         assert export.call_args.kwargs["limit"] is None
 
     def test_jsi_pbn(self, fake_mh):
-        self._assert_calls(fake_mh, "jsi_pbn", "jsi pbn", "id")
+        assert self._assert_calls(fake_mh, "jsi_pbn", "jsi pbn", "id")["data_type"] == "jsi pbn"
 
     def test_jsi_sirt(self, fake_mh):
-        self._assert_calls(fake_mh, "jsi_sirt", "jsi sirt", "id")
+        assert self._assert_calls(fake_mh, "jsi_sirt", "jsi sirt", "id")["data_type"] == "jsi sirt"
 
     def test_ospf_stats(self, fake_mh):
-        self._assert_calls(fake_mh, "ospf_stats", "ospf stats", "mac")
+        assert self._assert_calls(fake_mh, "ospf_stats", "ospf stats", "mac")["data_type"] == "ospf stats"
 
     def test_security_intel_profiles(self, fake_mh):
-        self._assert_calls(fake_mh, "_security_intel_profiles", "security intel profiles", "name")
+        assert (
+            self._assert_calls(fake_mh, "_security_intel_profiles", "security intel profiles", "name")["data_type"]
+            == "security intel profiles"
+        )
 
     def test_invites(self, fake_mh):
         """listOrgInvites is not exposed by the current mistapi SDK; patch it in."""
@@ -951,13 +1037,22 @@ class TestAuditLogs:
         ):
             OrgExportUtils.audit_logs(full_history=False, duration="1h")
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
+        assert fake_mh.DataExporter.write_with_format_selection.call_count == 0
 
     def test_exception_reraises(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
 
-        fake_mh.ConfigUtils.get_cached_or_prompted_org_id.side_effect = RuntimeError("boom")
-        with pytest.raises(RuntimeError, match="boom"):
+        fake_mh.ConfigUtils.get_cached_or_prompted_org_id.side_effect = requests.RequestException("boom")
+        with pytest.raises(requests.RequestException, match="boom"):
             OrgExportUtils.audit_logs()
+
+    def test_unexpected_exception_skips_audit_log_error_message(self, fake_mh, caplog):
+        from src.export.org_export_utils import OrgExportUtils
+
+        fake_mh.ConfigUtils.get_cached_or_prompted_org_id.side_effect = ValueError("bad audit state")
+        with caplog.at_level(logging.ERROR, logger=LOGGER_NAME), pytest.raises(ValueError, match="bad audit state"):
+            OrgExportUtils.audit_logs()
+        assert "Failed to export audit logs" not in caplog.text
 
 
 # ---------------------------------------------------------------------------

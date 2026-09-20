@@ -207,8 +207,8 @@ class TestComputeDeltaList:
         before = [{"name": "a", "val": 1}]
         after = [{"name": "a", "val": 2}]
         result_b, result_a = AuditReportRenderer._compute_delta_list(before, after)
-        assert result_b is not None
-        assert result_a is not None
+        assert result_b == [{"val": 1}]
+        assert result_a == [{"val": 2}]
 
 
 class TestElementIdentity:
@@ -323,8 +323,8 @@ class TestCheckReorder:
         before_map = {"name=a": {"name": "a"}, "name=b": {"name": "b"}}
         after_map = {"name=b": {"name": "b"}, "name=a": {"name": "a"}}
         result_b, result_a = AuditReportRenderer._check_reorder(before_map, after_map)
-        assert result_b is not None
-        assert result_a is not None
+        assert result_b == [{"_reordered (by name)": ["a", "b"]}]
+        assert result_a == [{"_reordered (by name)": ["b", "a"]}]
         assert "_reordered" in str(result_b)
 
 
@@ -335,8 +335,8 @@ class TestDeltaByIdentity:
         before = [{"name": "x", "val": 1}]
         after = [{"name": "x", "val": 2}]
         result_b, result_a = AuditReportRenderer._delta_by_identity(before, after)
-        assert result_b is not None
-        assert result_a is not None
+        assert result_b == [{"val": 1}]
+        assert result_a == [{"val": 2}]
 
     def test_identical_returns_none(self):
         items = [{"name": "x", "val": 1}]

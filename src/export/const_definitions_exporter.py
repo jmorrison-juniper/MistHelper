@@ -15,6 +15,8 @@ import importlib  # WHY: source resolver access to reach DataExporter + DataProc
 import logging  # WHY: structured trace for discovery/fetch/export lifecycle events.
 from typing import Any  # WHY: helper return types normalize heterogenous mistapi payloads.
 
+import requests  # WHY: Mist SDK calls use requests exceptions for transport failures.
+
 from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
@@ -70,7 +72,12 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             self._process_all_endpoints()  # Process all endpoints.
             self._print_summary()  # Print the summary.
 
-        except Exception as error:  # Discovery failed.
+        except (
+            AttributeError,
+            ImportError,
+            OSError,
+            requests.RequestException,
+        ) as error:  # Discovery or export I/O failed.
             print(f"! Critical error during dynamic const discovery: {error}")  # Tell the user.
             logging.error("Critical error during dynamic const discovery: %s", error)  # Log the error.
 
@@ -104,7 +111,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         try:
             module = importlib.import_module(modname)  # Import the module.
             self._inspect_module_functions(module, endpoint_name, modname)  # Find + register the best API function
-        except Exception as error:  # Inspection failed.
+        except (AttributeError, ImportError, ValueError) as error:  # Import or signature inspection failed.
             module_display_name = modname.split(".")[-1] if modname else "unknown"  # Module display name.
             print(f"    ! Error inspecting {module_display_name}: {error}")  # Tell the user.
             logging.error("Error inspecting const module %s: %s", module_display_name, error)  # Log the error.
@@ -273,7 +280,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             self._fetch_and_export_endpoint(config)  # Fetch and export.
             self.endpoints_processed += 1  # Count processed.
 
-        except Exception as error:  # Processing failed.
+        except (AttributeError, ImportError, OSError, requests.RequestException) as error:  # Endpoint I/O failed.
             print(f"! Critical error processing {config.endpoint_name}: {error}")  # Tell the user.
             logging.error("Critical error processing %s: %s", config.endpoint_name, error)  # Log the error.
             self.endpoints_failed += 1  # Count failed.
@@ -307,7 +314,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             file_age_hours = (time.time() - file_mtime) / 3600  # Compute age in hours.
             file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")  # Format the timestamp.
             return self._evaluate_cache_window(config, file_age_hours, file_timestamp)  # Compare window + emit message.
-        except Exception as error:  # Timestamp check failed.
+        except (OSError, OverflowError, ValueError) as error:  # Timestamp check failed.
             print(f"  ! Error checking file timestamp: {error}")  # Tell the user.
             logging.warning("Could not check %s file timestamp, will fetch fresh data: %s", config.endpoint_name, error)
             return False  # Not fresh.
@@ -319,7 +326,12 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         try:
             const_data = self._fetch_endpoint_data(config)  # Fetch the data.
             self._export_data(config, const_data)  # Export the data.
-        except Exception as error:  # Export failed.
+        except (
+            AttributeError,
+            ImportError,
+            OSError,
+            requests.RequestException,
+        ) as error:  # Fetch or file export failed.
             print(f"  ! Error exporting {config.description.lower()}: {error}")  # Tell the user.
             logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
             mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
@@ -352,7 +364,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             if model_data:  # Have data.
                 return self._normalize_model_data(model, model_data)  # Normalize and return.
             return []  # No data for this model.
-        except Exception as error:  # Model fetch failed.
+        except (AttributeError, requests.RequestException) as error:  # Model fetch failed.
             logging.warning("Failed to get gateway config for model %s: %s", model, error)  # Warn the failure.
             raise  # Re-raise so the caller can tally failure count.
 
@@ -369,7 +381,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 if records:  # Got rows.
                     all_configs.extend(records)  # Collect them.
                     successful += 1  # Count success.
-            except Exception:  # Per-model fetch threw.
+            except (AttributeError, requests.RequestException):  # Per-model fetch failed with expected SDK errors.
                 failed += 1  # Count failure.
         print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")  # Tell the user.
         return all_configs  # Return all configs.
@@ -388,7 +400,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 print(f"    ! Discovered {len(gateway_models)} gateway models from device definitions")
                 return gateway_models  # Return them.
 
-        except Exception as error:  # Fetch failed.
+        except (AttributeError, ImportError, requests.RequestException) as error:  # Fetch failed.
             logging.warning("Failed to get gateway models list: %s", error)  # Warn the failure.
 
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
@@ -466,7 +478,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                     records = self._normalize_states_data(country_code, country_data)  # Normalize state rows.
                     all_states.extend(records)  # Collect them.
                     successful += 1  # Count success.
-            except Exception as error:  # Country fetch failed.
+            except (AttributeError, requests.RequestException) as error:  # Country fetch failed.
                 logging.warning("Failed to get states for country %s: %s", country_code, error)  # Warn the failure.
                 failed += 1  # Count failure.
 
@@ -480,7 +492,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             countries_function = countries_module.listCountryCodes  # Resolve API entrypoint
             response = countries_function(self.api_session)  # Call the Mist API
             return getattr(response, "data", response) or {}  # Unwrap. Default to empty
-        except Exception as error:  # Network/import/auth failure
+        except (AttributeError, ImportError, requests.RequestException) as error:  # Network, import, or auth failure
             logging.warning("Failed to get countries list: %s", error)  # Warn for diagnostics
             return {}  # Empty signals caller to use fallback
 
@@ -599,7 +611,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                     records = self._normalize_channels_data(country_code, country_data)  # Normalize channel rows.
                     all_channels.extend(records)  # Collect them.
                     successful += 1  # Count success.
-            except Exception as error:  # Country fetch failed.
+            except (AttributeError, requests.RequestException) as error:  # Country fetch failed.
                 logging.debug("Failed to get AP channels for country %s: %s", country_code, error)  # Trace the failure.
                 failed += 1  # Count failure.
 
@@ -629,7 +641,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 country_codes = self._filter_to_iso2_country_codes(country_codes)  # ISO-2 filter + logging.
                 print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
                 return country_codes  # Return them.
-        except Exception as error:  # Fetch failed.
+        except (AttributeError, ImportError, requests.RequestException) as error:  # Fetch failed.
             logging.warning("Failed to get countries list for AP channels: %s", error)  # Warn the failure.
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
         return self.FALLBACK_CHANNEL_COUNTRIES  # Use the fallback list.
