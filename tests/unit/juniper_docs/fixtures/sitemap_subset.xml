@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/junos-configuration-guide/</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/junos-configuration-guide/</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/srx-routing-overview/topics/concept/routing-intro.html</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/srx-routing-overview/topics/task/configure-routing.html</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/jvd/solution-overview-optics-base-01-01.pdf</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/junos/release-notes/23.4/junos-release-notes-23.4r1/</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/junos/release-notes/23.4/junos-release-notes-23.4r2/</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/junos/release-notes/22.2/junos-release-notes-22.2r1/</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/hardware/srx340-installation-guide/</loc>
+  </url>
+  <url>
+    <loc>https://www.juniper.net/documentation/us/en/software/junos-cli-reference/</loc>
+  </url>
+</urlset>

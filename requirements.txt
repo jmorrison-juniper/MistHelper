@@ -29,6 +29,13 @@ PyYAML>=6.0.3,<7
 # AI analysis (Mist Ideas Analyzer)
 openai>=3.13.0,<4
 
+# Bounded PDF text sampling for the Juniper documentation corpus harvester
+# (src/juniper_docs). The harvester reads a small in-memory text sample from
+# each uncategorized PDF to derive a content sub-category, then discards the
+# text. The import stays lazy, so a missing library degrades to the documented
+# fallback label instead of a crash.
+pdfplumber>=0.11.10,<1
+
 # Terminal emulation for SSH operations
 pyte>=0.8.2,<1
 
