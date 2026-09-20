@@ -43,14 +43,14 @@ class TestCustomRanges:
     def test_parse_weeks_offset(self, parser):
         result = parser.parse("6w-2w")
         assert result.duration is None
-        assert result.start is not None
-        assert result.end is not None
+        assert isinstance(result.start, int)
+        assert isinstance(result.end, int)
         assert result.start < result.end
 
     def test_parse_days_offset(self, parser):
         result = parser.parse("30d-7d")
-        assert result.start is not None
-        assert result.end is not None
+        assert isinstance(result.start, int)
+        assert isinstance(result.end, int)
         now = int(time.time())
         # Start should be ~30 days ago
         assert abs((now - result.start) - 30 * 86400) < 5

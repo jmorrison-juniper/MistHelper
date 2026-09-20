@@ -7,7 +7,7 @@ Test acquire_lock(), release_lock(), extend_lock(), check_lock() with:
 - Lock expiry scenarios
 """
 
-from datetime import datetime  # WHY: timestamp comparison
+from datetime import UTC, datetime, timedelta  # WHY: timestamp comparison
 from unittest.mock import Mock  # WHY: mock Redis client
 
 from src.upgrade_portal.locking.session_lock import (
@@ -16,8 +16,103 @@ from src.upgrade_portal.locking.session_lock import (
 )  # WHY: import classes under test
 
 
+class ExpiringRedisDouble:
+    # WHY: test Redis TTL behavior without a Redis server
+    """Store lock values and expire them through aware UTC comparisons."""
+
+    def __init__(self) -> None:
+        # WHY: start with an aware UTC clock to match the product convention
+        self.now = datetime.now(UTC)  # WHY: all expiry comparisons use an aware UTC value.
+        self.values: dict[str, str] = {}  # WHY: hold Redis values by key.
+        self.expires_at: dict[str, datetime] = {}  # WHY: hold one expiry moment by key.
+
+    def advance(self, seconds: int) -> None:
+        # WHY: move the fake clock without sleeping
+        self.now += timedelta(seconds=seconds)  # WHY: tests drive fresh and expired boundaries.
+
+    def set(self, name: str, value: str, ex: int, nx: bool) -> bool:
+        # WHY: implement the Redis SET NX EX behavior that the lock manager uses
+        self._expire(name)  # WHY: remove an old value before the NX check.
+        if nx and name in self.values:  # WHY: Redis refuses to overwrite an active lock.
+            return False  # WHY: report that another holder still owns the key.
+        timestamp = str(value).split("#", maxsplit=1)[1]  # WHY: read the stored acquisition time.
+        acquired_at = datetime.fromisoformat(timestamp)  # WHY: parse the stored timestamp as callers would.
+        if acquired_at.tzinfo is not None and acquired_at.utcoffset() is not None:  # WHY: accept aware UTC only.
+            self.now = acquired_at  # WHY: align the Redis clock with the product acquisition time.
+        self.values[name] = value  # WHY: store the lock token as Redis would.
+        self.expires_at[name] = acquired_at + timedelta(seconds=ex)  # WHY: derive the expiry moment.
+        return True  # WHY: Redis SET NX EX accepted the lock.
+
+    def get(self, name: str) -> str | None:
+        # WHY: implement Redis GET with expiry
+        self._expire(name)  # WHY: Redis hides expired keys from reads.
+        return self.values.get(name)  # WHY: return the active value or a cache miss.
+
+    def exists(self, name: str) -> int:
+        # WHY: implement Redis EXISTS with expiry
+        self._expire(name)  # WHY: Redis hides expired keys from existence checks.
+        return 1 if name in self.values else 0  # WHY: Redis returns an integer count.
+
+    def delete(self, name: str) -> None:
+        # WHY: implement the delete operation used by release
+        self.values.pop(name, None)  # WHY: remove the stored token if it exists.
+        self.expires_at.pop(name, None)  # WHY: remove the matching expiry moment.
+
+    def expire(self, name: str, time: int) -> None:
+        # WHY: implement the expire operation used by heartbeat
+        self._expire(name)  # WHY: an expired key cannot receive a new TTL.
+        if name in self.values:  # WHY: Redis updates only an existing key.
+            self.expires_at[name] = self.now + timedelta(seconds=time)  # WHY: extend from the current clock.
+
+    def _expire(self, name: str) -> None:
+        # WHY: remove a key when the aware UTC clock passes its expiry
+        expiry = self.expires_at.get(name)  # WHY: a missing expiry means no active key.
+        if expiry is not None and self.now > expiry:  # WHY: this comparison fails if one side is naive.
+            self.delete(name)  # WHY: expired locks must not block another operator.
+
+
 class TestAcquireLockWithRedis:
     # WHY: test acquire_lock with Redis available
+
+    def test_fresh_lock_does_not_expire_before_ttl(self) -> None:
+        # WHY: prove an aware UTC lock timestamp supports the fresh-lock comparison
+        """A fresh lock still blocks a repeated acquisition before its TTL ends."""
+        redis_double = ExpiringRedisDouble()  # WHY: use a Redis double that compares stored timestamps.
+        manager = SessionLockManager(redis_client=redis_double)  # WHY: drive the product lock manager.
+        first = manager.acquire_lock("user-1", "site-1", timeout=60)  # WHY: create the stored lock.
+        redis_double.advance(59)  # WHY: move the clock near, but not past, expiry.
+
+        second = manager.acquire_lock("user-1", "site-1", timeout=60)  # WHY: test the active lock boundary.
+
+        assert first.acquired is True  # WHY: the first operator owns the lock.
+        assert manager.check_lock("user-1", "site-1") is True  # WHY: the fresh lock remains active.
+        assert second.acquired is False  # WHY: the repeated acquisition must not enter early.
+        assert second.owner_id == "user-1"  # WHY: the denial names the active holder.
+
+    def test_expired_lock_allows_a_new_holder_after_ttl(self) -> None:
+        # WHY: prove an aware UTC lock timestamp supports the expired-lock comparison
+        """An expired lock stops blocking a repeated acquisition after its TTL ends."""
+        redis_double = ExpiringRedisDouble()  # WHY: use a Redis double that compares stored timestamps.
+        manager = SessionLockManager(redis_client=redis_double)  # WHY: drive the product lock manager.
+        first = manager.acquire_lock("user-1", "site-1", timeout=60)  # WHY: create the stored lock.
+        redis_double.advance(61)  # WHY: move the clock past expiry.
+
+        second = manager.acquire_lock("user-1", "site-1", timeout=60)  # WHY: test the expired lock boundary.
+
+        assert first.acquired is True  # WHY: the first operator held the original lock.
+        assert manager.check_lock("user-1", "site-1") is True  # WHY: the new lock is active after reacquire.
+        assert second.acquired is True  # WHY: the repeated acquisition can enter after expiry.
+        assert second.owner_id is None  # WHY: the grant names no blocking holder.
+
+    def test_acquired_at_supports_aware_expiry_math(self) -> None:
+        # WHY: prove callers can subtract the returned timestamp from an aware UTC clock
+        """The acquisition time uses the same aware UTC convention as expiry code."""
+        manager = SessionLockManager(redis_client=None)  # WHY: degraded mode returns the timestamp directly.
+
+        result = manager.acquire_lock("user-1", "site-1", timeout=60)  # WHY: create a lock result.
+
+        assert result.acquired_at.utcoffset() == timedelta(0)  # WHY: the lock grant uses aware UTC.
+        assert datetime.now(UTC) - result.acquired_at < timedelta(seconds=5)  # WHY: aware math must not raise.
 
     def test_acquire_lock_success(self) -> None:
         # WHY: verify successful lock acquisition when Redis available
@@ -42,10 +137,10 @@ class TestAcquireLockWithRedis:
 
         # WHY: verify lock was acquired
         assert result.acquired is True  # WHY: verify acquired flag
-        # WHY: verify lock token is not None
-        assert result.lock_token is not None  # WHY: verify token generated
-        # WHY: verify timestamp is set
-        assert result.acquired_at is not None  # WHY: verify timestamp set
+        # WHY: verify lock token includes the expected owner
+        assert result.lock_token.startswith("user-1#")  # WHY: verify token generated for this user.
+        # WHY: verify timestamp is aware UTC
+        assert result.acquired_at.utcoffset() == timedelta(0)  # WHY: verify timestamp convention.
         # WHY: verify no failure reason
         assert result.reason is None  # WHY: verify no reason for failure
         # WHY: verify Redis SET was called with correct parameters
@@ -127,10 +222,10 @@ class TestAcquireLockWithoutRedis:
 
         # WHY: verify lock was acquired in degraded mode
         assert result.acquired is True  # WHY: verify acquired flag
-        # WHY: verify lock token is generated
-        assert result.lock_token is not None  # WHY: verify token generated
-        # WHY: verify timestamp is set
-        assert result.acquired_at is not None  # WHY: verify timestamp set
+        # WHY: verify lock token is generated for this user
+        assert result.lock_token.startswith("user-1#")  # WHY: verify token generated for degraded mode.
+        # WHY: verify timestamp is aware UTC
+        assert result.acquired_at.utcoffset() == timedelta(0)  # WHY: verify timestamp convention.
 
 
 class TestReleaseLockWithRedis:
@@ -421,8 +516,8 @@ class TestSessionLockManagerIntegration:
         assert acquire_result.acquired is True  # WHY: verify acquired
         # WHY: get lock token from result
         acquired_token = acquire_result.lock_token  # WHY: token from acquire
-        # WHY: verify token is not None before using
-        assert acquired_token is not None  # WHY: verify token exists
+        # WHY: verify the token belongs to this user before using it
+        assert acquired_token.startswith("user-1#")  # WHY: verify token exists and names the holder.
 
         # WHY: setup mock for extend (GET returns token, EXPIRE succeeds)
         mock_redis.get.return_value = acquired_token.encode("utf-8")  # WHY: return token
@@ -463,17 +558,17 @@ class TestLockResultDataclass:
             # WHY: lock acquired
             acquired=True,
             # WHY: timestamp of acquisition
-            acquired_at=datetime.utcnow(),
+            acquired_at=datetime.now(UTC),
             # WHY: lock token
             lock_token="user-1#2026-01-01T00:00:00.000000",
         )  # WHY: create result
 
         # WHY: verify acquired flag
         assert result.acquired is True  # WHY: verify acquired
-        # WHY: verify acquired_at is set
-        assert result.acquired_at is not None  # WHY: verify timestamp
-        # WHY: verify lock_token is set
-        assert result.lock_token is not None  # WHY: verify token
+        # WHY: verify acquired_at is aware UTC
+        assert result.acquired_at.utcoffset() == timedelta(0)  # WHY: verify timestamp convention.
+        # WHY: verify lock_token names the holder
+        assert result.lock_token.startswith("user-1#")  # WHY: verify token content.
         # WHY: verify reason is None for success
         assert result.reason is None  # WHY: verify no reason
         # WHY: verify owner_id is None for success

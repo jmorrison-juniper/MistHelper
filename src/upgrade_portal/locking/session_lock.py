@@ -5,7 +5,7 @@ on same site. Use Redis key format: upgrade_lock:{user_id}:{site_id}.
 """
 
 from dataclasses import dataclass  # WHY: immutable result data structure
-from datetime import datetime  # WHY: lock timestamp calculation
+from datetime import UTC, datetime  # WHY: lock timestamp calculation
 
 import redis  # WHY: Redis client for distributed locking
 import structlog  # WHY: structured logging for action tracking
@@ -72,7 +72,7 @@ class SessionLockManager:
         WHY: token allows verification that correct holder releases lock.
         """
         # WHY: get current timestamp for uniqueness
-        timestamp = datetime.utcnow().isoformat()  # WHY: ISO format timestamp
+        timestamp = datetime.now(UTC).isoformat()  # WHY: Store an aware UTC timestamp in every lock token.
         # WHY: combine user ID with timestamp to create unique token
         token = f"{user_id}#{timestamp}"  # WHY: token format for verification
         # WHY: return generated token
@@ -112,7 +112,7 @@ class SessionLockManager:
                     # WHY: return success even without Redis
                     acquired=True,
                     # WHY: set timestamp to current time
-                    acquired_at=datetime.utcnow(),
+                    acquired_at=datetime.now(UTC),
                     # WHY: return lock token for consistency
                     lock_token=lock_token,
                 )  # WHY: graceful degradation result
@@ -144,7 +144,7 @@ class SessionLockManager:
                     # WHY: lock was successfully acquired
                     acquired=True,
                     # WHY: set timestamp to current time
-                    acquired_at=datetime.utcnow(),
+                    acquired_at=datetime.now(UTC),
                     # WHY: return lock token for later release/extend
                     lock_token=lock_token,
                 )  # WHY: successful acquisition result

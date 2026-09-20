@@ -215,7 +215,7 @@ class TestParseStandardRouteLine:
 
     def test_active_selected_flags(self, ru: RoutingUtils) -> None:
         result = ru._parse_standard_route_line(">* 10.0.0.0/8 via 10.0.0.1 dev eth0 proto bgp")
-        assert result is not None
+        assert result["destination"] == "10.0.0.0/8"
         assert result["active"] is True
         assert result["selected"] is True
         assert result["next_hop"] == "10.0.0.1"
@@ -224,7 +224,7 @@ class TestParseStandardRouteLine:
 
     def test_no_flags(self, ru: RoutingUtils) -> None:
         result = ru._parse_standard_route_line("10.0.0.0/8 via 10.0.0.1")
-        assert result is not None
+        assert result["destination"] == "10.0.0.0/8"
         assert result["active"] is False
         assert result["selected"] is False
 
@@ -239,7 +239,7 @@ class TestParseProtocolRouteLine:
 
     def test_bgp_line(self, ru: RoutingUtils) -> None:
         result = ru._parse_protocol_route_line("BGP 10.0.0.0/8 10.0.0.1 ge-0/0/0")
-        assert result is not None
+        assert result["destination"] == "10.0.0.0/8"
         assert result["protocol"] == "BGP"
         assert result["destination"] == "10.0.0.0/8"
         assert result["next_hop"] == "10.0.0.1"
@@ -255,7 +255,7 @@ class TestParseProtocolRouteLine:
 
     def test_active_selected_flags(self, ru: RoutingUtils) -> None:
         result = ru._parse_protocol_route_line(">* BGP 10.0.0.0/8")
-        assert result is not None
+        assert result["protocol"] == "BGP"
         assert result["active"] is True
         assert result["selected"] is True
 
@@ -270,7 +270,7 @@ class TestParseTabularRouteLine:
 
     def test_basic_tabular(self, ru: RoutingUtils) -> None:
         result = ru._parse_tabular_route_line("10.0.0.0/8 10.0.0.1 eth0 bgp 100")
-        assert result is not None
+        assert result["interface"] == "eth0"
         assert result["destination"] == "10.0.0.0/8"
         assert result["next_hop"] == "10.0.0.1"
         assert result["admin_distance"] == "100"
@@ -281,7 +281,7 @@ class TestParseTabularRouteLine:
 
     def test_active_flag(self, ru: RoutingUtils) -> None:
         result = ru._parse_tabular_route_line("> 10.0.0.0/8 gw1")
-        assert result is not None
+        assert result["destination"] == "10.0.0.0/8"
         assert result["active"] is True
 
 
@@ -675,7 +675,7 @@ class TestGetDeviceInfo:
         with patch("src.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             result = ru._get_device_info("site-1", "dev-1", "all", False)
-        assert result is not None
+        assert result["id"] == "dev-1"
         assert result["model"] == "SSR"
 
     def test_device_not_found(self, ru: RoutingUtils) -> None:
@@ -2003,7 +2003,7 @@ class TestGetDeviceInfoDebug:
         with patch("src.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             result = ru._get_device_info("site-1", "dev-1", "all", True)
-        assert result is not None
+        assert result["id"] == "dev-1"
         assert "[DEBUG]" in caplog.text
 
 

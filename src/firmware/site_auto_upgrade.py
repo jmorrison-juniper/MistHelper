@@ -243,7 +243,16 @@ class SiteAutoUpgradeConfigurator:
         for model, versions in self.model_version_map.items():  # WHY: walk each model's version list.
             if not versions:  # WHY: skip models with no versions.
                 continue  # WHY: continue to next model.
-            selected = _pick_stable_version(versions)  # WHY: choose the stable release for this model.
+            selected = _pick_stable_version(versions)  # WHY: choose a release only when the row names a version.
+            if selected is None:  # WHY: a missing version must stop before any site setting changes.
+                self.custom_versions.clear()  # WHY: remove any earlier choices so no partial payload survives.
+                logging.error(
+                    "Auto-upgrade version selection failed because field version is missing for model %s", model
+                )
+                print(
+                    f"  X Missing firmware version for model {model}"
+                )  # WHY: make the refusal visible to the operator.
+                return False  # WHY: caller already aborts the MSP apply step on False.
             self.custom_versions[model] = selected  # WHY: record the chosen version.
             print(f"    {model}: {self.custom_versions[model]}")  # WHY: show selected version.
         logger.info(  # WHY: action-log the auto-selection outcome.
@@ -1178,7 +1187,7 @@ def _print_step4_header(  # WHY: print step-4 header.
     print("")  # WHY: spacer.
 
 
-def _pick_stable_version(versions: list[Any]) -> str:  # WHY: pick the most stable version.
+def _pick_stable_version(versions: list[Any]) -> str | None:  # WHY: pick only a real version value.
     """Pick the latest stable version from a list of version entries."""
     stable_version = _first_stable_or_none(versions)  # WHY: prefer stable-tagged first.
     if stable_version is not None:  # WHY: found one - return it immediately.
@@ -1190,18 +1199,30 @@ def _first_stable_or_none(versions: list[Any]) -> str | None:
     """Return the first stable-tagged version string, or None."""
     for entry in versions:  # WHY: walk each entry.
         if isinstance(entry, dict) and entry.get("tag") == "stable":  # WHY: match stable-tagged entries.
-            return str(entry.get("version", ""))  # WHY: return the stable version string.
+            version = str(entry.get("version") or "").strip()  # WHY: keep a missing version as a refusal.
+            if not version:  # WHY: an empty target version must never reach the site settings payload.
+                logging.error("Auto-upgrade version selection failed because field version is missing")
+                return None  # WHY: caller fails visibly instead of substituting an empty string.
+            return version  # WHY: return the stable version string.
     return None  # WHY: no stable version found.
 
 
-def _first_any_version(versions: list[Any]) -> str:
-    """Return the first version string from a list of entries, or empty."""
+def _first_any_version(versions: list[Any]) -> str | None:
+    """Return the first version string from a list of entries, or None."""
     if not versions:  # WHY: empty list means no versions.
-        return ""  # WHY: no versions - empty string.
+        return None  # WHY: no version is safer than an empty target.
     first = versions[0]  # WHY: take the first entry.
     if isinstance(first, dict):  # WHY: dict-shaped entry.
-        return str(first.get("version", ""))  # WHY: return its version field.
-    return str(first)  # WHY: entry is already a version string.
+        version = str(first.get("version") or "").strip()  # WHY: keep a missing version as a refusal.
+        if not version:  # WHY: an empty target version must never reach the site settings payload.
+            logging.error("Auto-upgrade version selection failed because field version is missing")
+            return None  # WHY: caller fails visibly instead of substituting an empty string.
+        return version  # WHY: return its version field.
+    version = str(first).strip()  # WHY: entry is already a version string.
+    if not version:  # WHY: an empty string is not a firmware target.
+        logging.error("Auto-upgrade version selection failed because field version is missing")
+        return None  # WHY: caller fails visibly instead of substituting an empty string.
+    return version  # WHY: return the literal version string.
 
 
 def _prompt_day_of_week(safe_input_fn: SafeInputFn) -> str:  # WHY: prompt for upgrade day.
