@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from src.metrics_gateway.cache import MINIMUM_REFRESH_SECONDS, MetricsCache
-from src.metrics_gateway.catalog import MetricCatalog, MetricKind
+from src.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind
 from src.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
 from src.metrics_gateway.prometheus import NAME_PATTERN, PrometheusRenderer, escape_label_value, format_value
 from src.metrics_gateway.samples import MetricSample, MetricSnapshot
@@ -127,12 +127,14 @@ class TestPrometheusRenderer:
         body = PrometheusRenderer().render(_snapshot())
         for line in body.splitlines():
             if line and not line.startswith("#"):
-                assert catalog.by_name(line.split("{")[0].split(" ")[0]) is not None
+                metric_name = line.split("{")[0].split(" ")[0]  # WHY: strip labels and values from sample line.
+                definition = catalog.by_name(metric_name)  # WHY: each emitted sample name must resolve.
+                assert isinstance(definition, MetricDefinition)  # WHY: catalog must know each emitted metric.
 
     def test_a_sample_without_a_label_prints_its_name_alone(self) -> None:
         """A gateway health reading carries no label at all."""
         definition = MetricCatalog().by_name("mist_scrape_success")
-        assert definition is not None
+        assert isinstance(definition, MetricDefinition)  # WHY: the renderer needs a metric definition object.
         sample = MetricSample(definition=definition, labels=(), value=1.0)
         body = PrometheusRenderer().render(MetricSnapshot(samples=(sample,)))
         assert "mist_scrape_success 1" in body
@@ -291,7 +293,7 @@ class TestMetricsCache:
     def test_a_health_reading_is_a_gauge(self) -> None:
         """A gateway health reading rises and falls, so it must not be a counter."""
         definition = MetricCatalog().by_name("mist_scrape_age_seconds")
-        assert definition is not None
+        assert isinstance(definition, MetricDefinition)  # WHY: catalog lookup must return a typed definition.
         assert definition.kind is MetricKind.GAUGE
 
 

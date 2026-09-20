@@ -139,7 +139,7 @@ class TestOidTree:
         """A Mist byte count passes 2^32 in a day, which a 32-bit counter cannot hold."""
         tree = OidTree(_snapshot())
         found = tree.get(BASE + (3, 1, 11, 2))
-        assert found is not None
+        assert isinstance(found, tuple)  # WHY: the OID lookup must return the SNMP value tuple.
         assert found[0] == TYPE_COUNTER64
         assert found[1] == "5000000000"
 

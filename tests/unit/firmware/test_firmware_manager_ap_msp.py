@@ -442,7 +442,7 @@ class TestSelectMspsForUpgrade:
         try:
             fm_mod.msp_privileges = [{"msp_id": "one", "msp_name": "Only"}]
             result = mgr._select_msps_for_upgrade()
-            assert result is not None
+            assert isinstance(result, list)  # WHY: one MSP selection must return a list of MSP rows.
             assert result[0]["msp_id"] == "one"
         finally:
             _restore_msp(snap)

@@ -144,7 +144,7 @@ def test_select_gateway_returns_chosen_gateway_on_valid_input() -> None:
         {"id": "gw-2", "mac": "aabbccddeeff", "model": "SSR120"},  # No name - MAC fallback path
     ]
     result = manager._select_gateway(gateways)  # Invoke helper under test
-    assert result is not None  # Non-empty gateway list must yield a selection (mypy narrowing)
+    assert isinstance(result, dict)  # Non-empty gateway list must yield a gateway row.
     assert result["id"] == "gw-1"  # Must return the first gateway (1-based to 0-based conversion)
 
 

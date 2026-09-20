@@ -45,7 +45,7 @@ def test_select_template_accepts_valid_numeric_selection() -> None:
     manager.sites = [{"gatewaytemplate_id": "tmpl-2", "name": "site-b"}]
 
     assert manager._select_template() is True
-    assert manager.selected_template is not None
+    assert isinstance(manager.selected_template, dict)  # WHY: selection must store the template row.
     assert manager.selected_template["id"] == "tmpl-1"
 
 

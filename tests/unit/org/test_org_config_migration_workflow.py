@@ -291,7 +291,7 @@ class TestLoadAndValidateBundle:
         """A good bundle must load, or the import never starts."""
         path = tmp_path / "bundle.json"  # WHY: a real file proves the read path works.
         path.write_text(json.dumps(_valid_bundle()), encoding="utf-8")  # WHY: write the valid shape.
-        assert manager._load_and_validate_bundle(str(path)) is not None
+        assert manager._load_and_validate_bundle(str(path)) == _valid_bundle()  # WHY: valid JSON must load unchanged.
 
     def test_corrupt_json_returns_none(self, manager: OrgConfigMigrationManager, tmp_path: Path, caplog: Any) -> None:
         """A truncated export must stop the import instead of raising."""
@@ -541,13 +541,13 @@ class TestSubnetOverlapDispatch:
         """A network stores one CIDR in the subnet field."""
         existing = [{"name": "Corp", "subnet": "10.0.0.0/16"}]  # WHY: one existing network.
         conflict = manager._check_subnet_overlap({"subnet": "10.0.1.0/24"}, existing, "networks")
-        assert conflict is not None  # WHY: the router must reach the subnet check.
+        assert isinstance(conflict, str)  # WHY: the router must return a conflict message from the subnet check.
 
     def test_a_service_routes_to_the_address_check(self, manager: OrgConfigMigrationManager) -> None:
         """A service stores several addresses in a list."""
         existing = [{"name": "Web", "addresses": ["10.0.0.0/16"]}]  # WHY: one existing service.
         conflict = manager._check_subnet_overlap({"addresses": ["10.0.1.5/32"]}, existing, "services")
-        assert conflict is not None  # WHY: the router must reach the address check.
+        assert isinstance(conflict, str)  # WHY: the router must return a conflict message from the address check.
 
     def test_a_type_without_an_address_field_routes_nowhere(self, manager: OrgConfigMigrationManager) -> None:
         """A VPN holds no address field, so a scan would waste time and could raise."""

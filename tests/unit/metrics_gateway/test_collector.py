@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from src.metrics_gateway.catalog import MetricCatalog, MetricKind, MetricScope
+from src.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
 from src.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
 from src.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader
 from src.metrics_gateway.prometheus import NAME_PATTERN
@@ -71,7 +71,7 @@ class TestMetricCatalog:
         """A NOC engineer reads the help text beside the alarm, so it must be a sentence."""
         for name in MetricCatalog().names():
             definition = MetricCatalog().by_name(name)
-            assert definition is not None
+            assert isinstance(definition, MetricDefinition)  # WHY: each catalog name must resolve to a definition.
             assert definition.help_text.endswith("."), f"The help text of {name} is not a sentence."
 
     def test_an_unknown_name_returns_nothing(self) -> None:
