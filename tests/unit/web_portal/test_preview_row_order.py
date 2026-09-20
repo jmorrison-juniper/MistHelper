@@ -243,16 +243,30 @@ class TestADamagedFileNeverRaises:
 
     def test_a_malformed_json_file_reports_a_reason(self, tmp_path: Path) -> None:
         """A half-written JSON file must name the fault, not raise."""
-        (tmp_path / "broken.json").write_text('{"rows": [', encoding="utf-8")
+        broken = tmp_path / "broken.json"
+        broken.write_text('{"rows": [', encoding="utf-8")
+        # Prove the file really is malformed first. Without this the assertion
+        # below could pass for an unrelated reason, such as a missing file.
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(broken.read_text(encoding="utf-8"))
         result = DataBrowserService(str(tmp_path)).preview_file("broken.json", 1, 10, "")
         assert "error" in result
         assert "json" in result["error"].lower()
 
     def test_an_empty_json_file_reports_a_reason(self, tmp_path: Path) -> None:
         """An empty body is not valid JSON, and the reader must say so."""
-        (tmp_path / "empty.json").write_text("", encoding="utf-8")
+        (tmp_path / "empty.json").write_bytes(b"")  # An interrupted write leaves exactly this.
+        with pytest.raises(json.JSONDecodeError):  # Confirm the body cannot parse at all.
+            json.loads("")
         result = DataBrowserService(str(tmp_path)).preview_file("empty.json", 1, 10, "")
         assert "error" in result
+
+    def test_an_empty_csv_body_yields_no_row(self, tmp_path: Path) -> None:
+        """A CSV reader must answer an empty body with no row, not with a fault."""
+        (tmp_path / "blank.csv").write_bytes(b"")  # The same interrupted write, in the CSV path.
+        result = DataBrowserService(str(tmp_path)).preview_file("blank.csv", 1, 10, "", SortSpec(0, False))
+        assert result.get("rows") == []
+        assert "error" not in result
 
     def test_an_absent_file_reports_a_reason(self, tmp_path: Path) -> None:
         """A run can report a file that the disk later lost."""
