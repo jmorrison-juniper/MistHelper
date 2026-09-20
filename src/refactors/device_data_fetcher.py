@@ -104,7 +104,8 @@ class DeviceDataFetcher:
         """Resolve device ID from parameter or user prompt."""
         if self.device_id:  # Caller may have pre-supplied the device. Reuse it verbatim
             return True  # Already resolved
-        assert self.site_id is not None, "Site ID must be resolved before device ID"  # nosec B101
+        if self.site_id is None:  # WHY: device selection needs a site scope before it can query inventory.
+            raise RuntimeError("Site ID must be resolved before device ID")  # WHY: keep the assertion message.
         self.device_id = _MH.PromptUtils.select_device_id_from_inventory(  # Interactive device selection
             self.site_id, device_type=self.device_type
         )  # Filter by the caller-configured device type (all/ap/switch/gateway)

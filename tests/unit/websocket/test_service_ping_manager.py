@@ -150,17 +150,17 @@ def test_short_session_preview_boundary_is_not_truncated() -> None:
 
 def test_configure_publishes_all_dependency_globals() -> None:
     """Configuration hook publishes every dependency global for downstream use."""
-    _configure_manager()
+    prompt_utils, mistapi_dependency, input_utils = _configure_manager()
 
-    assert spm_module.apisession is not None
-    assert spm_module.mistapi is not None
-    assert spm_module.PromptUtils is not None
-    assert spm_module.InputUtils is not None
+    assert spm_module.apisession.__class__ is object
+    assert spm_module.mistapi is mistapi_dependency
+    assert spm_module.PromptUtils is prompt_utils
+    assert spm_module.InputUtils is input_utils
     assert spm_module.WebSocketManager is _FakeWebSocketManager
-    assert spm_module.check_fn is not None
+    assert spm_module.check_fn() is False
     assert spm_module.APITenantFetchUtils is _FakeTenantUtils
-    assert spm_module.ConfigUtils is not None
-    assert spm_module.APIFetchUtils is not None
+    assert spm_module.ConfigUtils.get_cached_or_prompted_org_id() == "org-1"
+    assert spm_module.APIFetchUtils.organization_services() == []
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +265,7 @@ def test_lookup_device_info_success_populates_device_info() -> None:
     manager.device_id = "device-1"
 
     assert manager._lookup_device_info() is True
-    assert manager.device_info is not None
+    assert manager.device_info["id"] == "device-1"
     assert manager.device_info["name"] == "gw-1"
 
 
@@ -288,7 +288,7 @@ def test_fetch_device_info_accepts_gateway_device() -> None:
     manager.device_id = "device-1"
 
     assert manager._fetch_device_info() is True
-    assert manager.device_info is not None
+    assert manager.device_info["id"] == "device-1"
     assert manager.device_info["name"] == "gw-1"
 
 

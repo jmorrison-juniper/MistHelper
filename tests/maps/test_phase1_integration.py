@@ -13,7 +13,7 @@ class TestDashTemplateManagerIntegration:
         # This verifies the import statement exists in maps_manager.py
         from src.maps.maps_manager import DashTemplateManager
 
-        assert DashTemplateManager is not None
+        assert DashTemplateManager.__name__ == "DashTemplateManager"
 
     def test_template_manager_creates_instance(self):
         """Template manager can be instantiated with org_id."""
@@ -121,8 +121,8 @@ class TestDashTemplateManagerIntegration:
         template1 = mgr1.get_html_template()
         template2 = mgr2.get_html_template()
 
-        assert template1 is not None
-        assert template2 is not None
+        assert template1.startswith("<!DOCTYPE html>")
+        assert template2.startswith("<!DOCTYPE html>")
         assert len(template1) > 0
         assert len(template2) > 0
 
@@ -186,7 +186,7 @@ class TestTemplateIntegrationWithMapsManager:
         # This import should succeed without errors
         from src.maps.maps_manager import DashTemplateManager
 
-        assert DashTemplateManager is not None
+        assert DashTemplateManager.__name__ == "DashTemplateManager"
 
     @patch("src.maps.maps_manager.Dash")
     @patch("src.maps.plotly_map_templates.DashTemplateManager")
@@ -204,8 +204,8 @@ class TestTemplateIntegrationWithMapsManager:
         mock_mgr_instance.get_html_template.return_value = "<!DOCTYPE html><html><body>{%app_entry%}</body></html>"
 
         # Verify mock setup
-        assert mock_mgr_instance.get_app_meta.return_value is not None
-        assert mock_mgr_instance.get_html_template.return_value is not None
+        assert mock_mgr_instance.get_app_meta.return_value["title"] == "Test Map Viewer"
+        assert mock_mgr_instance.get_html_template.return_value.startswith("<!DOCTYPE html>")
 
     def test_template_manager_org_id_passed_correctly(self):
         """Template manager receives org_id correctly."""
@@ -223,7 +223,7 @@ class TestPhase1Completion:
         from src.maps.plotly_map_templates import DashTemplateManager
 
         mgr = DashTemplateManager(org_id="test-org")
-        assert mgr is not None
+        assert mgr.org_id == "test-org"
 
     def test_phase1_integration_complete(self):
         """Phase 1 integration is complete with all components."""
@@ -245,6 +245,6 @@ class TestPhase1Completion:
         assert hasattr(mgr, "validate_template")
 
         # All methods should return valid values
-        assert mgr.get_html_template() is not None
-        assert mgr.get_custom_css() is not None
-        assert mgr.get_app_meta() is not None
+        assert mgr.get_html_template().startswith("<!DOCTYPE html>")
+        assert "background-color" in mgr.get_custom_css()
+        assert mgr.get_app_meta()["suppress_callback_exceptions"] is True

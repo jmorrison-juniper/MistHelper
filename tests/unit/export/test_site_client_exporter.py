@@ -525,3 +525,21 @@ class TestGetSiteBeacon:
                 "site-123",
                 "beacon-456",
             )
+
+    def test_retry_helper_raises_first_failure_after_distinct_retry_errors(
+        self, wired_deps: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Exhausted getSiteBeacon retries must raise the first observed failure."""
+        endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon  # WHY: keep the mock path readable.
+        endpoint.side_effect = [
+            RuntimeError("429 auth failed"),
+            RuntimeError("connection closed"),
+        ]  # WHY: distinct errors prove the first one survives.
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.return_value = (0.1, 0.1)  # WHY: satisfy retry delay.
+        monkeypatch.setattr("src.export.site_client_exporter.time.sleep", MagicMock(), raising=True)  # WHY: no wait.
+
+        with pytest.raises(RuntimeError, match="auth failed"):  # WHY: assert the first failure reaches the caller.
+            SiteClientExporter._fetch_site_beacon_with_retry(  # WHY: drive retry exhaustion directly.
+                "site-123",
+                "beacon-456",
+            )
