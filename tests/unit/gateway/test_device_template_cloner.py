@@ -43,6 +43,18 @@ def test_constructor_accepts_write_csv_fn_dependency() -> None:
     assert manager.org_id == "org-uuid-1"  # Org ID must be stored verbatim
 
 
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_list_sites_http_failure_reaches_caller(status_code: int) -> None:
+    """A site-list HTTP failure must stay visible to the clone caller."""
+    manager = _build_manager()  # WHY: use the normal dependency bundle.
+    with patch(
+        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
+        side_effect=RuntimeError(f"HTTP {status_code}"),
+    ):
+        with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):
+            manager._list_sites()
+
+
 def test_export_result_calls_write_csv_with_correct_signature() -> None:
     """Regression test: _export_result must call write_csv_fn(rows, filename, api_function_name=...).
 
@@ -96,7 +108,7 @@ def test_build_template_payload_strips_device_metadata_and_injects_template_fiel
     }
     for stripped_field in DEVICE_METADATA_FIELDS_TO_STRIP:  # Sanity-check the constant covers our fixtures
         if stripped_field in device_config:
-            assert device_config[stripped_field] is not None  # Fixture values are non-null
+            assert device_config[stripped_field] != ""  # Fixture values are non-empty.
 
     payload = manager._build_template_payload(device_config, "tmpl-X", "standalone", "SRX340")
 

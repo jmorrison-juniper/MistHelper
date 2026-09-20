@@ -137,6 +137,27 @@ class TestFetchFilteredAuditEntries:
         assert result is None  # WHY: legacy contract: API failure returns None (not raise).
         assert "API call failed: boom" in caplog.text  # WHY: exception message must appear in log.
 
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_http_status_exception_returns_none_and_logs_status(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """HTTP status failures return None and keep the status visible in logs."""
+        mh = _make_mh()  # WHY: provide the API session used by the source call.
+        _install_fake_mist_helper(monkeypatch, mh)  # WHY: SUT's lazy import lands on our stub.
+        time_range = ParsedTimeRange(duration="4w", description="4 weeks")  # WHY: valid range for the source call.
+
+        with patch("src.audit.audit_analysis_ops.mistapi") as fake_mistapi:
+            fake_mistapi.api.v1.orgs.logs.listOrgAuditLogs.side_effect = RuntimeError(
+                f"HTTP {status_code}"
+            )  # WHY: force a status-bearing API failure.
+            with caplog.at_level(logging.ERROR):
+                result = AuditAnalysisOps._fetch_filtered_audit_entries("org-1", time_range)
+
+        assert result is None  # WHY: legacy contract returns None for API failures.
+        assert (
+            f"HTTP {status_code}" in caplog.text
+        )  # WHY: prove the status is observable..text  # WHY: exception message must appear in log.
+
 
 class TestRenderAuditAnalysisReports:
     """``_render_audit_analysis_reports`` writes both mermaid + html reports and logs paths."""
@@ -193,6 +214,7 @@ class TestAuditLogAnalysisOrchestration:
         mh = self._prime_helpers(monkeypatch, cache_hit=True, org_id="ignored")
         AuditAnalysisOps.audit_log_analysis()  # WHY: cache-hit path.
         mh.ConfigUtils.get_cached_or_prompted_org_id.assert_not_called()  # WHY: proves early return.
+        assert mh.ConfigUtils.get_cached_or_prompted_org_id.call_count == 0  # WHY: numeric proof of early return.
 
     def test_missing_org_id_short_circuits(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Missing org_id returns before invoking time-range prompt or API."""
@@ -201,6 +223,7 @@ class TestAuditLogAnalysisOrchestration:
             AuditAnalysisOps.audit_log_analysis()
         fake_prompt.assert_not_called()  # WHY: no org means no prompt.
         mh.CacheUtils.fast_cache_hit.assert_called_once()  # WHY: entered top of function.
+        assert fake_prompt.call_count == 0  # WHY: numeric proof of prompt short-circuit.
 
     def test_invalid_time_range_logs_and_returns(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
