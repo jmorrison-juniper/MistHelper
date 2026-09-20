@@ -224,11 +224,14 @@ class TestRunPreflight:
         """A test and a launcher both need to force the decision."""
         monkeypatch.delenv(AUTOSTART_VARIABLE, raising=False)  # WHY: the switch would otherwise allow a start.
         with (
-            patch.object(dependencies, "service_answers", return_value=False),
+            patch.object(dependencies, "service_answers", return_value=False) as service_spy,
             patch.object(dependencies, "find_runtime") as runtime_spy,
         ):
-            run_preflight(ARANGO, REDIS, allow_start=False)
+            report = run_preflight(ARANGO, REDIS, allow_start=False)
+        assert report.healthy is False  # WHY: prove the preflight path evaluated the failed services.
+        assert service_spy.call_count == 2  # WHY: prove both required services were checked.
         runtime_spy.assert_not_called()
+        assert runtime_spy.call_count == 0  # WHY: prove the caller flag blocked the runtime start.
 
 
 class TestReadingRows:

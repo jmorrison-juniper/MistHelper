@@ -57,8 +57,9 @@ class TestFirmwareManagerConfigValidation:
     """
 
     def test_valid_minimal_config_constructs(self) -> None:
-        cfg = _make_config()
-        assert cfg.apisession is not None
+        session = object()  # WHY: a named sentinel proves the config keeps the injected API session.
+        cfg = _make_config(apisession=session)  # WHY: pass the sentinel through the constructor.
+        assert cfg.apisession is session  # WHY: the config must keep the injected API session object.
         assert cfg.org_id == "org-test"
 
     def test_none_apisession_raises_value_error(self) -> None:

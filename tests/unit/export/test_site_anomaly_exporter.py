@@ -602,7 +602,7 @@ class TestAnomalyPrepare:
         ):
             result = SiteAnomalyExporter._anomaly_prepare()
 
-        assert result is not None
+        assert isinstance(result, tuple)  # WHY: a prepared anomaly export returns the five-part selection tuple.
         site_id, site_name, client_mac, client_hostname, filename = result
         assert site_id == "s1"
         assert site_name == "Site A"

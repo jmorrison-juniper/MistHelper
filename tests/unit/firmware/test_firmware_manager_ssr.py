@@ -1112,7 +1112,7 @@ class TestSSREntryFromGateway:
     def test_ssr_gateway_returns_tuple(self) -> None:
         gw = {"type": "ssr", "model": "SSR-100", "id": "id-1", "version": "6.3.5", "site_id": "s"}
         result = _make_manager()._ssr_entry_from_gateway(gw)
-        assert result is not None
+        assert isinstance(result, tuple)  # WHY: a valid SSR gateway must return the id and info tuple.
         gid, info = result
         assert gid == "id-1"
         assert info == {"model": "SSR-100", "type": "ssr", "version": "6.3.5", "site_id": "s"}
