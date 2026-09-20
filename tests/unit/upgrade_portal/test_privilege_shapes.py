@@ -432,6 +432,7 @@ def test_a_missing_capture_store_leaves_the_portal_running(monkeypatch: Any) -> 
     wiring.reset_storage_bootstrap()  # The bootstrap runs once for each process.
     monkeypatch.setattr(wiring, "load_module", lambda name: None)
     wiring.prepare_storage()
+    assert wiring._STORAGE_PREPARED is True  # WHY: prove the missing store still marks the portal prepared.
 
 
 def test_a_failed_bootstrap_leaves_the_portal_running(monkeypatch: Any) -> None:
@@ -457,3 +458,4 @@ def test_a_failed_bootstrap_leaves_the_portal_running(monkeypatch: Any) -> None:
     wiring.reset_storage_bootstrap()  # The bootstrap runs once for each process.
     monkeypatch.setattr(wiring, "load_module", lambda name: AngryStore)
     wiring.prepare_storage()
+    assert wiring._STORAGE_PREPARED is True  # WHY: prove the failed bootstrap still leaves the portal running.

@@ -78,6 +78,7 @@ class TestTheOwnerRecord:
 
         portal_conftest._forget_owner()
         portal_conftest._forget_owner()
+        assert not portal_conftest.SERVER_OWNER_PATH.exists()  # WHY: prove the repeated cleanup left no record.
 
     def test_an_unwritable_record_never_stops_a_run(self, portal_conftest: ModuleType) -> None:
         """A record the suite cannot write MUST NOT raise, because the run still works.
@@ -90,6 +91,7 @@ class TestTheOwnerRecord:
         portal_conftest.SERVER_OWNER_PATH = portal_conftest.SERVER_OWNER_PATH / "no-such-folder" / "portal.pid"
 
         portal_conftest._record_owner(_StandInProcess(4321))  # WHY: this must not raise.
+        assert not portal_conftest.SERVER_OWNER_PATH.exists()  # WHY: prove the failed write left no bad record.
 
 
 class TestReadingTheRecord:
