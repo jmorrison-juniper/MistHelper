@@ -510,7 +510,7 @@ class TestWlanSelection:
 
     def test_the_selected_wlan_accessor_rejects_an_empty_selection(self, manager: WLANRadiusTimerManager) -> None:
         """A silent None would send a write with no target identifier."""
-        with pytest.raises(AssertionError):  # WHY: the guard must stop the caller.
+        with pytest.raises(RuntimeError, match="No WLAN selected"):  # WHY: the guard must stop the caller.
             manager._get_selected_wlan()
 
 
