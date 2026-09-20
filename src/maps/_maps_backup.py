@@ -113,7 +113,7 @@ def _http_get_bytes(url: str) -> tuple[bytes | None, int]:  # WHY: isolate HTTP 
     """GET ``url`` and return ``(content-or-None, status_code)``."""
     try:  # WHY: network I/O may raise. Caller wants graceful fallback
         response = requests.get(url, timeout=_IMG_TIMEOUT_SECS)  # WHY: bounded network wait
-    except Exception as err:  # WHY: any failure downgrades to warn + skip
+    except requests.RequestException as err:  # WHY: HTTP client failures downgrade to warn + skip.
         logger.warning("Image backup failed: %s", err)  # WHY: surface reason to operator
         return None, 0  # WHY: sentinel indicating no HTTP round-trip happened
     ok = response.status_code == _HTTP_OK  # WHY: only 200 payload counts as usable content
@@ -153,7 +153,7 @@ def _call_api(  # WHY: encapsulate try/except around a Mist listSite* call
     """Invoke ``api_call`` and return the response or ``None`` on exception."""
     try:  # WHY: fetch is best-effort. Caller degrades gracefully
         return api_call(api_session, site_id=site_id)  # WHY: shared site-scoped signature
-    except Exception as err:  # WHY: swallow to keep the backup usable
+    except (requests.RequestException, OSError) as err:  # WHY: network and OS failures keep the backup usable.
         logger.debug("%s backup skipped: %s", label, err)  # WHY: diagnostic trace only
         return None
 
@@ -187,7 +187,7 @@ def _fetch_devices(request: BackupRequest) -> Any | None:  # WHY: wrap listSiteD
         return mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: Mist API listing
             request.api_session, site_id=request.site_id, type="all"
         )
-    except Exception as err:  # WHY: any failure downgrades to warn + skip
+    except (requests.RequestException, OSError) as err:  # WHY: network and OS failures downgrade to warn + skip.
         logger.warning("Device placement backup failed: %s", err)  # WHY: surface reason
         return None
 
@@ -351,8 +351,12 @@ def backup_map_geometry(request: BackupRequest) -> str | None:  # WHY: public en
     """Backup map geometry data to a JSON file. Return path on success or ``None``."""
     try:  # WHY: pipeline may raise. Wrapper degrades to warning
         return _perform_backup(request)
-    except Exception as err:  # WHY: any failure surfaces as warning, not crash
-        logger.exception("Map geometry backup failed: %s", err)  # WHY: full traceback in log
+    except Exception as err:  # WHY: keep the dashboard alive when the backup pipeline fails unexpectedly.
+        logger.exception(  # WHY: log the exception type and operation for post-mortem review.
+            "Map geometry backup failed during geometry backup: %s: %s",
+            type(err).__name__,
+            err,
+        )
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("\n   [!] Warning: Could not backup map geometry: %s", err)
         return None
