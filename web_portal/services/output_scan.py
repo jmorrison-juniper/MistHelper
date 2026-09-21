@@ -18,6 +18,11 @@ Limit:
     run can report a file the other run wrote. The portal shows a superset
     rather than an empty list, because a missing report costs an engineer more
     than an extra name.
+
+    The scanner does skip the runtime bookkeeping files that every run touches.
+    Issue #3126 records the noise they created. A file that a log line names
+    explicitly still reaches the panel, because the executor merges the scanned
+    names into the names the log already produced.
 """
 
 from __future__ import annotations
@@ -31,6 +36,21 @@ logger = logging.getLogger(__name__)
 DEFAULT_SCAN_LIMIT = 200  # One run must not flood the result panel with names.
 _SKIPPED_SUFFIXES = (".tmp", ".part", ".swp", ".lock")  # A partial write is not a report.
 _SKIPPED_PREFIXES = (".", "~")  # A hidden file and an editor backup are not reports.
+
+# Issue #3126: the runtime writes these files on every run, and no operation
+# means one as its output. The scanner would otherwise list four names for a
+# run that produced one report, so the engineer must pick the report out of a
+# list that changes each time.
+#
+# Warning: each name below must match the writer that owns it. The guard test
+# `tests/unit/web_portal/test_output_scan_runtime_files.py` reads the owning
+# constant and fails when a rename leaves a stale entry here.
+RUNTIME_FILE_NAMES = (
+    "script.log",  # The application log. src/refactors/main_entrypoint.py opens it.
+    "portal_access.log",  # The Gunicorn access log. container/scripts/start.sh names it.
+    "delay_metrics.json",  # The rate-limiter metric store. src/utils/rate_limiting._METRICS_FILENAME.
+    "tuning_data.json",  # The rate-limiter tuning store. src/utils/rate_limiting._TUNING_FILENAME.
+)
 
 
 class OutputFileScanner:
@@ -92,4 +112,16 @@ class OutputFileScanner:
         """Report whether one file name can name an operation output."""
         if name.startswith(_SKIPPED_PREFIXES):  # A hidden file and a backup carry no report.
             return False
-        return not name.endswith(_SKIPPED_SUFFIXES)  # A partial write is not a finished report.
+        if name.endswith(_SKIPPED_SUFFIXES):  # A partial write is not a finished report.
+            return False
+        return not OutputFileScanner._is_runtime_file(name)  # Runtime bookkeeping is not an operation output.
+
+    @staticmethod
+    def _is_runtime_file(name: str) -> bool:
+        """Report whether one name belongs to the runtime rather than to an operation."""
+        for runtime_name in RUNTIME_FILE_NAMES:
+            if name == runtime_name:  # The plain name matches a runtime writer.
+                return True
+            if name.startswith(runtime_name + "."):  # A rotated log carries a numeric suffix.
+                return True
+        return False

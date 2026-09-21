@@ -17,6 +17,10 @@
     <!-- Portal CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/portal.css') }}">
 
+    <!-- Responsive and touch rules. This file follows portal.css, so its
+         breakpoint rules win over the base layout at the same specificity. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
+
     <!-- Accent color injection -->
     <style>
         :root {
@@ -32,7 +36,7 @@
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="{{ url_for('dashboard.dashboard') }}" data-testid="navbar-brand">
                 <img src="{{ config.PORTAL.logo_url }}" alt="Logo" height="32" class="me-2">
-                <span>{{ config.PORTAL.title }}</span>
+                <span class="brand-text">{{ config.PORTAL.title }}</span>
             </a>
 
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse"

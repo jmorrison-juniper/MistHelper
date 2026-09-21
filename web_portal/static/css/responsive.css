@@ -1,0 +1,200 @@
+/**
+ * MistHelper Web Portal - Responsive and touch rules
+ *
+ * Why this file exists:
+ *     The portal carried one media query for the whole page. It therefore read
+ *     as a desktop page on every device. On a 390 pixel phone the operations
+ *     page stacked the list above the run panel, so selecting an operation put
+ *     the Run button 609 pixels below the fold and the page gave no sign that
+ *     the selection had worked.
+ *
+ * Scope:
+ *     Layout, spacing, and touch targets only. No rule here changes a colour,
+ *     because the theme files own colour. A theme therefore keeps its meaning
+ *     at every width.
+ *
+ * Breakpoints:
+ *     The values match Bootstrap, so a rule here never fights a grid class.
+ *     Phone is below 576, tablet is 576 to 991, and desktop is 992 and above.
+ */
+
+/* ===================================================================
+   Touch targets
+   A pointer that is coarse belongs to a finger. A finger needs a
+   larger target than a mouse pointer does, at any screen width.
+   =================================================================== */
+
+@media (pointer: coarse) {
+    .portal-accordion .accordion-button,
+    .op-item,
+    .list-group-item,
+    .btn,
+    .nav-link {
+        min-height: 44px;  /* The widely used minimum for a touch target. */
+    }
+
+    .op-item,
+    .list-group-item {
+        padding-top: 0.7rem;
+        padding-bottom: 0.7rem;
+    }
+
+    /* A select must not need a precise press to open its list. */
+    select.form-control,
+    select.form-select,
+    input.form-control {
+        min-height: 44px;
+        font-size: 1rem;  /* A value below 1rem makes iOS zoom the page on focus. */
+    }
+
+    /* A sort heading is a control on a touch screen, so it needs room. */
+    .portal-table th.sortable {
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+    }
+}
+
+/* ===================================================================
+   Phone
+   =================================================================== */
+
+@media (max-width: 575.98px) {
+    /* Bootstrap gives `.row` a negative horizontal margin of half the
+       gutter, which is 12 pixels. The container padding must match or
+       exceed that value, or the row pushes past the viewport. A value
+       of 0.5rem produced 4 pixels of horizontal overflow here. */
+    .portal-main { padding: 0.75rem; }
+
+    /* The brand appears twice in the header. One name is enough on a
+       narrow screen, and the space belongs to the page. */
+    .navbar-brand .brand-text { display: none; }
+
+    h4 { font-size: 1.15rem; }
+
+    .portal-card { padding: 0.75rem; }
+
+    /* The page heading and its sentence cost a third of a phone screen
+       before the operator reaches the search box. */
+    .portal-page-intro { display: none; }
+
+    /* One column of controls reads better than two cramped ones. */
+    .op-controls { flex-direction: column; align-items: stretch; }
+    .op-controls > * { width: 100%; }
+
+    /* The results table cannot fit 20 columns. Let it scroll sideways
+       inside its own box instead of stretching the page. */
+    .portal-table { font-size: 0.8rem; }
+    .portal-table th, .portal-table td { white-space: nowrap; }
+}
+
+/* ===================================================================
+   Phone and small tablet: the two-pane page becomes two views
+   Below the `md` grid boundary the list and the run panel stack. The
+   operator then works in one view at a time, so the portal offers a
+   way back to the list and keeps the primary action reachable.
+   =================================================================== */
+
+@media (max-width: 767.98px) {
+    /* The control appears only where the panes stack. */
+    .mobile-back-to-list { display: inline-flex !important; }
+
+    /* A narrow screen is nearly always a touch screen. Some browsers and
+       test runners report a fine pointer even there, so the size rule
+       must not depend on the pointer media feature alone. */
+    .op-action-bar .btn,
+    .mobile-back-to-list,
+    .portal-accordion .accordion-button,
+    .op-item,
+    .list-group-item {
+        min-height: 44px;
+    }
+
+    .op-action-bar .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mobile-back-to-list {
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Hold the run controls against the bottom edge, so the operator
+       never scrolls to find the primary action. */
+    .op-action-bar {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        padding: 0.6rem 0;
+        margin-top: 0.5rem;
+        background: var(--bs-body-bg, #111);
+        border-top: 1px solid rgba(128, 128, 128, 0.35);
+    }
+
+    .op-action-bar .btn { flex: 1 1 auto; }
+
+    /* A long list of categories buries the panel. Bound its height, so
+       the panel stays within reach after a selection. */
+    .portal-accordion { max-height: 55vh; overflow-y: auto; }
+
+    /* The execution log must not own the whole screen. */
+    .log-output { max-height: 45vh; }
+}
+
+/* ===================================================================
+   Tablet
+   =================================================================== */
+
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .portal-main { padding: 1rem; }
+    .portal-table { font-size: 0.9rem; }
+
+    /* The log keeps a useful height without pushing the results away. */
+    .log-output { max-height: 50vh; }
+}
+
+/* ===================================================================
+   Large desktop
+   A very wide screen stretches a line of text past comfortable
+   reading. Bound the content and keep it centred.
+   =================================================================== */
+
+@media (min-width: 1600px) {
+    .portal-main { max-width: 1560px; margin-left: auto; margin-right: auto; }
+}
+
+/* ===================================================================
+   Shared helpers
+   =================================================================== */
+
+/* The navbar is sticky, so a scrolled element can land beneath it. A
+   scroll margin reserves that height, which keeps the search box and
+   the panel heading readable after either scroll control runs. */
+#opSearch,
+#operationAccordion,
+#selectedOp {
+    scroll-margin-top: 4.5rem;
+}
+
+/* The control is hidden by default and the stacked rule above reveals
+   it. A desktop reader therefore never meets a control it cannot use. */
+.mobile-back-to-list { display: none; }
+
+/* A table that scrolls sideways must say so, because a hidden column
+   reads as missing data. */
+.table-scroll-hint {
+    display: none;
+    font-size: 0.75rem;
+    opacity: 0.75;
+    margin-bottom: 0.25rem;
+}
+
+@media (max-width: 767.98px) {
+    .table-scroll-hint { display: block; }
+}
+
+/* A reader who prefers less motion must not receive a smooth scroll. */
+@media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; }
+}

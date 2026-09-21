@@ -24,9 +24,13 @@ import re
 import uuid
 
 
-from flask import Flask, abort, request
+from flask import Flask, abort, jsonify, request
 
 from src.utils.environment_utils import EnvironmentUtils
+
+# Issue #3087: one sentence states the cause and the action. The operator used
+# to read a JSON parser message, which named neither.
+SESSION_EXPIRED_MESSAGE = "Your session expired. Reload the page, then start the operation again."
 
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 # The networks that a workstation serves when the operator sets no allowlist.
@@ -279,6 +283,41 @@ class SecurityMiddleware:
         csrf = CSRFProtect()
         csrf.init_app(app)
         app.config["csrf"] = csrf
+        self._register_csrf_error_handler(app)  # Issue #3087: answer an API caller with a reason it can read.
+
+    def _register_csrf_error_handler(self, app: Flask) -> None:
+        """Answer a CSRF failure with JSON when the caller asked for JSON.
+
+        Issue #3087: `flask-wtf` answers a stale token with the default Flask
+        error page, which is HTML. Every portal caller reads the answer with
+        `response.json()`, so the parser raised and the operator read
+        "Unexpected token '<'" instead of the reason. The operator learned
+        nothing about the stale token and had no action to take.
+        """
+        from flask_wtf.csrf import CSRFError
+
+        @app.errorhandler(CSRFError)
+        def handle_csrf_error(error: CSRFError):
+            logger.warning("Rejected %s %s: %s", request.method, request.path, error.description)  # Name the refusal.
+            if not self._wants_json(app):
+                return error.get_response()  # An HTML form keeps the page it already expects.
+            payload = {
+                "error": SESSION_EXPIRED_MESSAGE,  # The existing clients read this field.
+                "code": "csrf_expired",  # A caller can branch on the reason without reading prose.
+                "detail": error.description,  # Keep the library wording for a support report.
+            }
+            logger.debug("Answered the CSRF failure with JSON for %s", request.path)  # Record the chosen shape.
+            return jsonify(payload), 400  # Keep the status flask-wtf already used.
+
+        logger.debug("Registered the portal CSRF error handler")
+
+    @staticmethod
+    def _wants_json(app: Flask) -> bool:
+        """Report whether the current caller expects a JSON answer."""
+        if request.path.startswith("/api/"):  # Every portal API route answers JSON.
+            return True
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        return best == "application/json"  # A caller that prefers JSON must not receive an error page.
 
     def _get_peer_ip(self) -> str:
         """Return the socket peer address of the current request."""
