@@ -3,6 +3,16 @@
 # Features: SSH access on port 2200, SQLite persistence, TLS verification on
 # Usage: podman build -t misthelper . OR docker build -t misthelper .
 #
+# Warning: `Dockerfile` and `Containerfile` must stay byte-identical. Podman
+# prefers the name `Containerfile` and Docker prefers `Dockerfile`, so a change
+# that lands in one file only repairs one build. The two files drifted by 33
+# lines once, and a `podman build` then reported success while it ignored the
+# change an engineer had made to `Dockerfile`. Issue #3130 records that case,
+# and `tests/unit/container/test_build_files_match.py` holds the rule.
+#
+# Edit `Containerfile`, then copy it over `Dockerfile`:
+#   Copy-Item Containerfile Dockerfile -Force
+#
 # Corporate proxy support (issue #1906):
 # The image verifies every TLS certificate. It never disables the check.
 # If you build behind a TLS-inspecting proxy, add the proxy root certificate:
@@ -22,11 +32,11 @@ LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-junip
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
 
-# Install minimal system dependencies including SSH server and SNMP support
+# Install minimal system dependencies including SSH server and SNMP daemon.
+# The snmp package provides snmpget, snmpwalk, and other CLI tools for testing.
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo snmpd && \
-    rm -rf /var/lib/apt/lists/* && \
-    ls -la /usr/sbin/snmp* 
+    apt-get install -y ca-certificates openssh-server sudo snmpd snmp && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and configure SSH access
 RUN groupadd -r misthelper && useradd -r -g misthelper -m -s /bin/bash misthelper
@@ -52,10 +62,6 @@ RUN echo "misthelper:misthelper123!" | chpasswd && \
     usermod -aG sudo misthelper && \
     echo "misthelper ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Configure SNMPd for metrics gateway pass_persist handler
-RUN mkdir -p /var/lib/snmp && \
-    mkdir -p /var/run/snmp
-
 # Copy container scripts from maintainable source files
 COPY container/scripts/misthelper-session.sh /usr/local/bin/misthelper-session
 COPY container/scripts/welcome.sh /home/misthelper/welcome.sh
@@ -65,6 +71,11 @@ RUN chmod +x /usr/local/bin/misthelper-session /home/misthelper/welcome.sh && \
 
 # Set working directory
 WORKDIR /app
+
+# Configure SNMP to use downloaded MIBs and disable loading errors in logs
+RUN mkdir -p /etc/snmp && \
+    echo "mibs :" > /etc/snmp/snmp.conf && \
+    echo "mibdirs /usr/share/snmp/mibs:/usr/share/snmp/mibs/iana:/usr/share/snmp/mibs/ietf" >> /etc/snmp/snmp.conf
 
 # Create data directory with proper permissions
 RUN mkdir -p /app/data && chown -R misthelper:misthelper /app/data
@@ -102,10 +113,11 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
+# wsgi_capture.py is the entry point of the upgrade capture portal on port 8056.
 COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
+COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY web_portal/ ./web_portal/
-COPY src/ ./src/
 # Issue #3104: menu 243 generates the SNMP MIB from the Mist OpenAPI document,
 # and the operation failed on every container run while this file was absent.
 # The registry calls menu 243 safe, so the portal lists it and an operator can
@@ -142,17 +154,26 @@ ENV DISABLE_UV_CHECK=true
 ENV DISABLE_AUTO_INSTALL=true
 ENV AUTO_UPGRADE_UV=false
 ENV AUTO_UPGRADE_DEPENDENCIES=false
+# Web portal port (must match EXPOSE)
+ENV WEB_PORT=8055
+# Upgrade capture portal port (must match EXPOSE). A second Gunicorn process
+# serves this port, so a fault in one portal cannot stop the other.
+ENV CAPTURE_PORT=8056
 
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH, web, capture, metrics, and SNMP service ports
+# Expose SSH, web, capture, metrics, and SNMP service ports. compose.yml
+# publishes these same five ports for misthelper-app (issue #2408).
 EXPOSE 2200 8055 8056 8057 1161/udp
 
 # Health probe for the web portal readiness endpoint (issue #1863).
 # The image installs no curl, so the probe uses the Python interpreter that
 # already runs the application. A non-200 response raises HTTPError, the
 # command exits non-zero, and the runtime marks the container unhealthy.
+# Podman honours this instruction when it builds in the Docker format. A build
+# that uses the OCI format drops the instruction instead of failing, so
+# deploy/misthelper.container also defines HealthCmd for the Quadlet unit.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD ["python", "-c", "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('WEB_PORT','8055')+'/ready',timeout=8)"]
 

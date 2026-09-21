@@ -3,6 +3,16 @@
 # Features: SSH access on port 2200, SQLite persistence, TLS verification on
 # Usage: podman build -t misthelper . OR docker build -t misthelper .
 #
+# Warning: `Dockerfile` and `Containerfile` must stay byte-identical. Podman
+# prefers the name `Containerfile` and Docker prefers `Dockerfile`, so a change
+# that lands in one file only repairs one build. The two files drifted by 33
+# lines once, and a `podman build` then reported success while it ignored the
+# change an engineer had made to `Dockerfile`. Issue #3130 records that case,
+# and `tests/unit/container/test_build_files_match.py` holds the rule.
+#
+# Edit `Containerfile`, then copy it over `Dockerfile`:
+#   Copy-Item Containerfile Dockerfile -Force
+#
 # Corporate proxy support (issue #1906):
 # The image verifies every TLS certificate. It never disables the check.
 # If you build behind a TLS-inspecting proxy, add the proxy root certificate:
