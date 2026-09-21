@@ -26,4 +26,4 @@ pytest-timeout>=2.3
 httpx2>=2.13.0
 
 # Run Redis Lua commands in memory without a Redis service (issue #2050).
-fakeredis[lua]>=2.31.0
+fakeredis[lua]>=2.38.0
