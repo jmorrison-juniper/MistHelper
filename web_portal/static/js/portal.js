@@ -13,6 +13,49 @@ function getCsrfToken() {
     return meta ? meta.getAttribute('content') : '';
 }
 
+/* ========== Safe JSON reading ========== */
+
+// Issue #3087: every caller used to read an answer with `response.json()`.
+// A stale CSRF token makes flask-wtf answer with an HTML error page, so the
+// parser raised and the operator read:
+//
+//   Unexpected token '<', "<!doctype "... is not valid JSON
+//
+// That message names neither the cause nor an action. A proxy page and a
+// server error page produce the same useless text. `readJsonAnswer` returns a
+// usable object for any answer, so a caller always has a reason to show.
+
+var SESSION_EXPIRED_MESSAGE =
+    'Your session expired. Reload the page, then start the operation again.';
+
+function statusReason(response) {
+    // Turn one status code into a sentence that states a cause and an action.
+    if (response.status === 400 || response.status === 403) return SESSION_EXPIRED_MESSAGE;
+    if (response.status === 404) return 'The portal route is missing. Reload the page.';
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+        return 'The portal is restarting. Wait a moment, then try again.';
+    }
+    if (response.status >= 500) return 'The portal failed to answer. Read data/script.log for the cause.';
+    return 'The portal answered with status ' + response.status + '.';
+}
+
+function readJsonAnswer(response) {
+    // Always resolve with an object. A caller then reads `.error` for a reason.
+    return response.text().then(function(body) {
+        var parsed = null;
+        try {
+            parsed = body ? JSON.parse(body) : null;
+        } catch (err) {
+            parsed = null;  // The body was HTML or was empty, which is the reported case.
+        }
+        if (parsed && typeof parsed === 'object') {
+            if (!response.ok && !parsed.error) parsed.error = statusReason(response);
+            return parsed;
+        }
+        return { error: statusReason(response) };  // No JSON body, so name the status instead.
+    });
+}
+
 /* ========== Theme Switcher ========== */
 
 var THEME_STORAGE_KEY = 'misthelper-theme';
@@ -42,7 +85,7 @@ function applyTheme(themeName) {
 
 function loadThemeMenu() {
     fetch('/api/themes')
-        .then(function(res) { return res.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
             var menu = document.getElementById('themeMenu');
             if (!menu) return;

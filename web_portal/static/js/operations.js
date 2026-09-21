@@ -64,7 +64,7 @@ function isElementVisible(target) {
 
 function loadOperations() {
     fetch('/api/operations/list')
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
             renderAccordion(data.categories || []);
             document.getElementById('opLoading').style.display = 'none';
@@ -175,7 +175,7 @@ function loadParameters(menuNumber) {
     setElementVisible(formDiv, true);
 
     fetch('/api/operations/parameters/' + menuNumber)
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
             setElementVisible(loadingDiv, false);
             handleParameterResponse(data, formDiv, fieldsDiv);
@@ -291,15 +291,32 @@ function createSiteDropdown(param) {
     return select;
 }
 
+function showSelectError(selectElement, message) {
+    // Issue #3087: a failed fetch must name its reason. An empty list would
+    // otherwise read as "no sites exist", which sends the operator to the
+    // wrong problem.
+    selectElement.innerHTML = '';
+    var option = document.createElement('option');
+    option.value = '';
+    option.textContent = message;
+    selectElement.appendChild(option);
+    selectElement.title = message;  // The full sentence stays readable inside a narrow control.
+    selectElement.disabled = false;
+    validateForm();  // The Run button must reflect that no usable choice exists.
+}
+
 function fetchSites(selectElement) {
     fetch('/api/operations/sites')
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
+            if (data.error) {
+                showSelectError(selectElement, 'Cannot load the sites. ' + data.error);
+                return;
+            }
             populateSiteOptions(selectElement, data.sites || []);
         })
-        .catch(function() {
-            selectElement.innerHTML = '<option value="">Failed to load sites</option>';
-            selectElement.disabled = false;
+        .catch(function(err) {
+            showSelectError(selectElement, 'Cannot load the sites. ' + err.message);
         });
 }
 
@@ -350,13 +367,16 @@ function fetchDevices(siteSelect, deviceSelect) {
 
     var url = '/api/operations/sites/' + encodeURIComponent(siteId) + '/devices?type=' + filter;
     fetch(url)
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
+            if (data.error) {
+                showSelectError(deviceSelect, 'Cannot load the devices. ' + data.error);
+                return;
+            }
             populateDeviceOptions(deviceSelect, data.devices || []);
         })
-        .catch(function() {
-            deviceSelect.innerHTML = '<option value="">Failed to load devices</option>';
-            deviceSelect.disabled = false;
+        .catch(function(err) {
+            showSelectError(deviceSelect, 'Cannot load the devices. ' + err.message);
         });
 }
 
@@ -408,12 +428,16 @@ function fetchClients(siteSelect, clientSelect) {
     clientSelect.disabled = true;
 
     fetch('/api/operations/sites/' + encodeURIComponent(siteId) + '/clients')
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
+            if (data.error) {
+                showSelectError(clientSelect, 'Cannot load the clients. ' + data.error);
+                return;
+            }
             populateClientOptions(clientSelect, data.clients || []);
         })
-        .catch(function() {
-            clientSelect.innerHTML = '<option value="">Failed to load clients</option>';
+        .catch(function(err) {
+            showSelectError(clientSelect, 'Cannot load the clients. ' + err.message);
             clientSelect.disabled = false;
         });
 }
@@ -597,7 +621,7 @@ function runSelectedOperation() {
         },
         body: JSON.stringify(body)
     })
-    .then(function(response) { return response.json(); })
+    .then(readJsonAnswer)
     .then(function(data) {
         if (data.error) {
             showError(data.error);
@@ -636,7 +660,7 @@ function stopRunningOperation() {
         method: 'POST',
         headers: { 'X-CSRFToken': getCsrfToken() }
     })
-    .then(function(response) { return response.json(); })
+    .then(readJsonAnswer)
     .then(function(data) {
         if (data.error) {
             appendLog('Stop request failed: ' + data.error, 'WARNING');
@@ -722,7 +746,7 @@ function startSSEStream(runId) {
 
 function checkRunStatus(runId) {
     fetch('/api/operations/status/' + encodeURIComponent(runId))
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
             if (data.status === 'completed') {
                 setStatus('complete', 'Operation completed');
@@ -901,7 +925,7 @@ function finishRun() {
 
 function refreshActiveOps() {
     fetch('/api/operations/active')
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
             var runs = data.active_runs || data.active || [];
             renderActiveOps(runs);
@@ -974,7 +998,7 @@ function reconnectToOperation(runId, menuNumber, description) {
 
 function replayExistingLogs(runId) {
     fetch('/api/operations/status/' + encodeURIComponent(runId))
-        .then(function(response) { return response.json(); })
+        .then(readJsonAnswer)
         .then(function(data) {
             if (data.log_messages) {
                 data.log_messages.forEach(function(entry) {
@@ -1008,7 +1032,7 @@ function stopActiveOperation(runId) {
         method: 'POST',
         headers: { 'X-CSRFToken': getCsrfToken() }
     })
-    .then(function(response) { return response.json(); })
+    .then(readJsonAnswer)
     .then(function(data) {
         if (data.error) {
             alert('Stop failed: ' + data.error);
