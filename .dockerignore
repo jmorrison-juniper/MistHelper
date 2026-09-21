@@ -74,7 +74,14 @@ Dockerfile*
 .dockerignore
 
 # Documentation (not needed in container)
-documentation/
+# Issue #3104: the directory holds 130 MB, and only one file has a runtime
+# reader. Menu 243 generates the SNMP MIB from the Mist OpenAPI file, and the
+# operation failed on every container run while the whole directory was absent.
+# The two lines below drop the directory contents and then restore that one
+# file, which costs 5.3 MB. The `documentation/*` form matters: a negation
+# cannot re-include a file when the parent directory itself is excluded.
+documentation/*
+!documentation/mist-api-openapi31json.json
 docs/
 docs/_build/
 agents.md
