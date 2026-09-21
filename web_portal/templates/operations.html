@@ -5,7 +5,7 @@
 <div class="row mb-3">
     <div class="col">
         <h4>Operations</h4>
-        <p class="text-muted">Run the read-only data extraction operations that the safety registry allows.</p>
+        <p class="text-muted portal-page-intro">Run the read-only data extraction operations that the safety registry allows.</p>
     </div>
 </div>
 
@@ -25,6 +25,13 @@
     <div class="col-md-7">
         <!-- Selected Operation -->
         <div class="portal-card d-none" id="selectedOp" data-testid="selected-op-panel">
+            <!-- The panes stack below the `md` grid boundary, so this control
+                 returns the operator to the list. responsive.css reveals it
+                 only at those widths, so a desktop reader never meets it. -->
+            <button type="button" class="btn btn-sm btn-outline-secondary mb-2 mobile-back-to-list"
+                    id="backToListBtn" onclick="scrollToOperationList()" data-testid="back-to-list">
+                Back to the list
+            </button>
             <h5 id="selectedOpTitle"></h5>
             <p class="text-muted mb-2" id="selectedOpDesc"></p>
 
@@ -46,12 +53,16 @@
                 </div>
             </div>
 
-            <button type="button" class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()" data-testid="run-btn">
-                Run Operation
-            </button>
-            <button type="button" class="btn btn-outline-danger mt-2 ms-2 d-none" id="stopBtn" onclick="stopRunningOperation()" data-testid="stop-btn">
-                Stop Operation
-            </button>
+            <!-- The bar holds the primary action against the bottom edge on a
+                 stacked layout, so the operator never scrolls to find Run. -->
+            <div class="op-action-bar d-flex gap-2">
+                <button type="button" class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()" data-testid="run-btn">
+                    Run Operation
+                </button>
+                <button type="button" class="btn btn-outline-danger mt-2 d-none" id="stopBtn" onclick="stopRunningOperation()" data-testid="stop-btn">
+                    Stop Operation
+                </button>
+            </div>
         </div>
 
         <!-- Active Operations -->
@@ -119,6 +130,10 @@
             <p class="text-muted small mb-2 mt-2" id="resultsSummary" data-testid="results-summary"></p>
             <div class="alert alert-warning py-1 px-2 small d-none" id="resultsTruncated"
                  data-testid="results-truncated"></div>
+            <!-- A stacked layout cannot show 20 columns at once. The table
+                 scrolls sideways inside its own box, and this line says so,
+                 because a column a reader cannot see reads as missing data. -->
+            <p class="table-scroll-hint" data-testid="table-scroll-hint">Scroll the table sideways to read every column.</p>
             <div class="table-responsive" id="resultsTableWrap">
                 <table class="table table-sm portal-table mb-0" id="resultsTable" data-testid="results-table">
                     <thead id="resultsHead"></thead>

@@ -13,6 +13,7 @@ from collections import deque
 from contextlib import closing
 from itertools import islice
 
+from web_portal.services.column_order import ColumnOrder  # Issue #3125: lead with the column that names the row.
 from web_portal.services.row_sorter import RowSorter, SortSpec  # Issue #3047: order rows on the server.
 
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
@@ -200,6 +201,7 @@ class DataBrowserService:
         first page. This path therefore reads the matching rows into memory, up
         to the cap that ``RowSorter`` holds, and it reports a cut read.
         """
+        columns, rows = self._lead_with_identity(columns, rows)  # Issue #3125: name the row before it is sorted.
         sorter = RowSorter()  # The sorter owns the cap and the key rule.
         search_lower = search.lower() if search else ""
         matching = (row for row in rows if not search_lower or self._row_matches(row, search_lower))
@@ -490,8 +492,27 @@ class DataBrowserService:
             "total_pages": total_pages,
         }
 
+    @staticmethod
+    def _lead_with_identity(columns: list, rows):
+        """Return the header and the rows arranged to lead with the identity column.
+
+        Issue #3125: a preview took its order from the file, and an exporter
+        writes the keys alphabetically. The `name` column therefore sat past
+        several template identifiers, and a reader could not tell which entity
+        each row described without scrolling sideways.
+
+        The header and every row move together, so a column index still selects
+        the same value. The caller applies this before it sorts, because the
+        browser sends the index of the column a person clicked.
+        """
+        plan = ColumnOrder.plan(list(columns))  # A record with no identity column yields None.
+        if plan is None:
+            return columns, rows  # Keep the file order, and add no work to the stream.
+        return plan.apply(columns), plan.apply_to_rows(rows)
+
     def _paginate_iter_rows(self, columns: list, rows, page: int, per_page: int, search: str) -> dict:
         """Return a page from a row stream and count every matching row."""
+        columns, rows = self._lead_with_identity(columns, rows)  # Issue #3125: name the row in the first column.
         if not search:
             return self._paginate_unfiltered_iter_rows(columns, rows, page, per_page)
         requested_page = page

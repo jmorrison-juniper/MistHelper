@@ -16,8 +16,10 @@ def test_csv_preview_keeps_metadata_when_requested_page_is_too_high(tmp_path) ->
     result = service.preview_file("sites.csv", 99, 2, "")  # Ask past the end to exercise late page clamping.
 
     assert result == {  # The full response shape must stay stable.
-        "columns": ["id", "name"],
-        "rows": [["3", "Gamma"]],
+        # Issue #3125 leads the table with the column that names the row, so
+        # `name` precedes `id` here and each row follows the same arrangement.
+        "columns": ["name", "id"],
+        "rows": [["Gamma", "3"]],
         "total_rows": 3,
         "page": 2,
         "per_page": 2,
@@ -34,8 +36,10 @@ def test_csv_search_preview_keeps_last_page_when_request_is_too_high(tmp_path) -
     result = service.preview_file("sites.csv", 99, 2, "a")  # Ask past the end with a case-insensitive search.
 
     assert result == {  # The filtered high page response must match the old paginator.
-        "columns": ["id", "name"],
-        "rows": [["3", "Gamma"]],
+        # Issue #3125 leads the table with the column that names the row, so
+        # `name` precedes `id` here and each row follows the same arrangement.
+        "columns": ["name", "id"],
+        "rows": [["Gamma", "3"]],
         "total_rows": 3,
         "page": 2,
         "per_page": 2,

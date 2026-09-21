@@ -17,6 +17,11 @@ ROOT = Path(__file__).parents[2]  # Anchor asset paths at the repository root.
 SCRIPT_DIR = ROOT / "web_portal" / "static" / "js"  # Reuse the production browser scripts.
 OPERATIONS_SCRIPT = SCRIPT_DIR / "operations.js"  # Load the Operations controller.
 DATA_PREVIEW_SCRIPT = SCRIPT_DIR / "data_preview.js"  # Load the preview modal controller.
+# Issue #3087: `base.html` loads `portal.js` on every page, and the other two
+# scripts now read every answer through its `readJsonAnswer` helper. This shell
+# must load the same file in the same order, or it tests a page that production
+# never serves.
+PORTAL_SCRIPT = SCRIPT_DIR / "portal.js"  # Load the shared helpers that base.html loads first.
 
 
 def _install_browser_stubs(page: Any, preview_rows: list[list[str]]) -> None:
@@ -37,30 +42,39 @@ def _install_browser_stubs(page: Any, preview_rows: list[list[str]]) -> None:
             show() { this.el.classList.add('show'); }
             hide() { this.el.classList.remove('show'); }
           } };
+          // Issue #3087: every caller now reads an answer through
+          // `readJsonAnswer`, which uses `response.text()`, `response.ok`, and
+          // `response.status`. A bare object carrying only `json` does not hold
+          // those members, so this stub returns a real `Response` and therefore
+          // exercises the same interface that `fetch` returns in production.
+          const jsonResponse = (payload) => new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
           window.fetch = async (url, options = {}) => {
             if (String(url).includes('/api/operations/parameters/31')) {
-              return { json: async () => ({
+              return jsonResponse({
                 category: 'interactive',
                 parameters: [{ name: 'site_id', label: 'Site', param_type: 'site', required: true }]
-              }) };
+              });
             }
             if (String(url).includes('/api/operations/sites')) {
-              return { json: async () => ({ sites: [{ id: 'site-alpha', name: 'Alpha', address: 'Lab' }] }) };
+              return jsonResponse({ sites: [{ id: 'site-alpha', name: 'Alpha', address: 'Lab' }] });
             }
             if (String(url).includes('/api/operations/run')) {
               window.__runBody = JSON.parse(options.body);
-              return { json: async () => ({ run_id: 'run-issue-992' }) };
+              return jsonResponse({ run_id: 'run-issue-992' });
             }
             if (String(url).includes('/api/data/preview/')) {
-              return { json: async () => ({
+              return jsonResponse({
                 columns: ['site', 'device', 'status'],
                 rows: config.rows,
                 page: 1,
                 total_pages: 1,
                 total_rows: config.rows.length
-              }) };
+              });
             }
-            return { json: async () => ({ active_runs: [] }) };
+            return jsonResponse({ active_runs: [] });
           };
         }
         """,
@@ -73,6 +87,7 @@ def _load_operations_shell(page: Any) -> None:
     """Load the minimum Operations page nodes that the production script needs."""
     logger.info("Loading the Operations quickstart shell")  # Mark the DOM setup.
     page.set_content(OPERATIONS_HTML)  # Provide the production script with its required element identifiers.
+    page.add_script_tag(path=str(PORTAL_SCRIPT))  # Load the shared helpers first, exactly as base.html does.
     page.add_script_tag(path=str(DATA_PREVIEW_SCRIPT))  # Add the shared modal script before the Operations script.
     page.add_script_tag(path=str(OPERATIONS_SCRIPT))  # Add the production Operations controller.
     logger.debug("Loaded the Operations quickstart shell")  # Confirm the script setup.
