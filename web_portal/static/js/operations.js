@@ -136,6 +136,51 @@ function selectOperation(menuNumber, element) {
     resetParameterPanels();
     loadParameters(menuNumber);
     document.getElementById('runBtn').disabled = false;
+    revealPanelOnStackedLayout();  // A stacked layout hides the panel below the list.
+}
+
+// The `col-md-5` and `col-md-7` panes sit side by side at 768 pixels and
+// above. Below that width they stack, and the run panel lands under the whole
+// category list. A selection then gave no visible sign at all: the Run button
+// sat 609 pixels below the fold of a 390 pixel phone, so the page looked
+// broken. These two helpers move the view to the pane the operator needs.
+
+function panesAreStacked() {
+    // Read the real layout rather than a width guess, so one number never
+    // needs to stay in step with the grid class in the template.
+    //
+    // Measure the two grid columns, not their contents. The panel carries
+    // `d-none` until an operation is selected, and a hidden element reports a
+    // zero box, which would make a content measurement answer "not stacked"
+    // for the one case that matters most.
+    var list = document.getElementById('operationAccordion');
+    var panel = document.getElementById('selectedOp');
+    if (!list || !panel) return false;
+    var listColumn = list.closest('[class*="col-"]') || list;
+    var panelColumn = panel.closest('[class*="col-"]') || panel;
+    var listBox = listColumn.getBoundingClientRect();
+    var panelBox = panelColumn.getBoundingClientRect();
+    if (!listBox.width || !panelBox.width) return false;  // An unrendered column answers nothing.
+    // Side by side means the panel column starts to the right of the list
+    // column. Stacked means both columns share the same left edge.
+    return panelBox.left < listBox.right;
+}
+
+function scrollElementIntoView(element) {
+    if (!element) return;
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
+
+function revealPanelOnStackedLayout() {
+    if (!panesAreStacked()) return;  // Side-by-side panes need no scroll.
+    scrollElementIntoView(document.getElementById('selectedOp'));
+}
+
+function scrollToOperationList() {
+    // The back control returns the operator to the list without a page load,
+    // so the open category and the search text both survive.
+    scrollElementIntoView(document.getElementById('opSearch') || document.getElementById('operationAccordion'));
 }
 
 function highlightActiveItem(element) {
