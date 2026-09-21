@@ -1,0 +1,522 @@
+/*
+ * magenta.css - MistHelper Operations Portal brand theme, dark
+ *
+ * This is the brand theme. The brand name stays inside this comment. The file
+ * name, every class name, and every custom property name hold no brand name,
+ * because the repository ignore rules exclude a path that carries the brand
+ * name. A file with the brand name in its path would stay untracked.
+ *
+ * The palette comes from the upgrade capture portal theme at
+ * src/upgrade_portal/app/assets/static/css/themes/magenta.css. The two portals
+ * therefore carry one brand identity. The variable names differ, because each
+ * portal names its own tokens, so this file maps the shared palette onto the
+ * names that portal.css and dark.css already read here.
+ *
+ * The primary brand color is #E20074. This theme is dark: the page is near
+ * black, a card is dark gray, and the header is a solid brand fill. portal.js
+ * sets data-bs-theme="dark" for every theme except `light`, so Bootstrap draws
+ * its own controls in the dark set.
+ *
+ * ACCESSIBILITY NOTE ON #E20074
+ * #E20074 gives only 4.15:1 against the page #0d0d0d and 3.02:1 against a card
+ * #2b2b2b. Both numbers pass the 3:1 floor for a fill, a border, and a graphic.
+ * Both fail the 4.5:1 floor for normal text. This theme therefore keeps
+ * #E20074 for a fill and a border, and uses the lighter ink #ff5fae or the link
+ * tint #ff8ac4 for brand colored TEXT.
+ *
+ * Every foreground and background pair below carries its computed contrast
+ * ratio. The floor is 4.5:1 for normal text, 3:1 for large text, and 3:1 for a
+ * control boundary or a graphic. The ratios follow the WCAG 2.1 relative
+ * luminance formula.
+ */
+
+:root {
+    /* --- Surfaces and text ------------------------------------------------
+     * #ffffff on #0d0d0d .......... 19.44:1  (page text)
+     * #ffffff on #2b2b2b .......... 14.16:1  (card text)
+     * #ffffff on #262626 .......... 15.13:1  (table head, card header)
+     * #a8a8a8 on #0d0d0d ...........  8.17:1  (muted text)
+     * #a8a8a8 on #2b2b2b ...........  5.95:1  (muted text on a card)
+     * #3d3d3d is a decorative hairline. It carries no meaning and no text.
+     */
+    --portal-bg: #0d0d0d;
+    --portal-bg-secondary: #262626;
+    --portal-text: #ffffff;
+    --portal-text-muted: #a8a8a8;
+    --portal-border: #3d3d3d;
+    --portal-card-bg: #2b2b2b;
+
+    /* --- Brand and links --------------------------------------------------
+     * #ffffff on #E20074 ...........  4.68:1  (primary button)
+     * #E20074 on #0d0d0d ...........  4.15:1  (border, needs 3:1)
+     * #ff8ac4 on #2b2b2b ...........  6.53:1  (link)
+     * #ffb3d9 on #2b2b2b ...........  8.56:1  (link hover)
+     * #ff2d95 on #0d0d0d ...........  5.61:1  (focus ring)
+     *
+     * The link token is the lighter tint, not #E20074, because a link is normal
+     * text on a dark surface and needs 4.5:1.
+     *
+     * Caution: base.html injects --portal-accent in a <style> block that
+     * follows this file, so PORTAL_ACCENT_COLOR decides the rendered accent.
+     * The value below is the fallback for a page that skips that injection.
+     * PortalConfigLoader.ENV_DEFAULTS carries the same value, so the two agree.
+     */
+    --portal-accent: #E20074;
+    --portal-accent-hover: #ff2d95;
+    --portal-link: #ff8ac4;
+    --portal-link-hover: #ffb3d9;
+    --portal-focus-ring: #ff2d95;
+    --portal-brand-ink: #ff5fae;
+
+    /* The accent ink. portal.css reads this token wherever the accent paints
+     * TEXT rather than a fill, because #E20074 gives only 3.02:1 on a card and
+     * text needs 4.5:1. A theme that sets no ink keeps the plain accent.
+     * #ff5fae on #2b2b2b ...........  5.06:1  (open accordion heading)
+     * #ff5fae on #262626 ...........  5.40:1  (hovered table heading)
+     */
+    --portal-accent-text: #ff5fae;
+
+    /* --- Header -----------------------------------------------------------
+     * The header is a solid brand fill, so it needs its own tokens. The page
+     * text tokens are tuned for a dark surface and give too little contrast on
+     * magenta. The fill lightens from left to right.
+     * #ffffff on #a3005a ...........  7.76:1  (brand text, dark end)
+     * #ffffff on #c4006a ...........  5.91:1  (brand text, light end)
+     * #ffe6f2 on #a3005a ...........  6.60:1  (navigation link, dark end)
+     * #ffe6f2 on #c4006a ...........  5.02:1  (navigation link, light end)
+     * #8c0048 is the rule under the header. It carries no text.
+     */
+    --portal-navbar-bg: #a3005a;
+    --portal-header-bg: linear-gradient(90deg, #a3005a 0%, #c4006a 100%);
+    --portal-header-text: #ffffff;
+    --portal-header-link: #ffe6f2;
+    --portal-header-border: #8c0048;
+
+    /* --- Text fields ------------------------------------------------------
+     * A field sinks below the card, so the operator sees where to type.
+     * #ffffff on #1a1a1a .......... 17.40:1  (typed text)
+     * #8a8a8a on #1a1a1a ...........  5.04:1  (field boundary, needs 3:1)
+     */
+    --portal-input-bg: #1a1a1a;
+    --portal-input-text: #ffffff;
+    --portal-input-border: #8a8a8a;
+
+    /* --- Tables -----------------------------------------------------------
+     * #ffffff on #333333 .......... 12.63:1  (row hover text)
+     * #a8a8a8 on #333333 ...........  5.31:1  (muted text on a hovered row)
+     */
+    --portal-table-hover: #333333;
+
+    /* --- Result colors ----------------------------------------------------
+     * A badge and a status word state a result, so they keep green, amber,
+     * red, and cyan. The brand color never states a result, because an
+     * operator must not read "magenta" as "good" or as "bad".
+     *
+     * These four tints are light, because the rules below place each one as a
+     * BACKGROUND under the near-black page ink.
+     * #0d0d0d on #75b798 ...........  8.53:1  (success badge text)
+     * #0d0d0d on #ffda6a .......... 13.72:1  (warning badge text)
+     * #0d0d0d on #ea868f ...........  8.19:1  (danger badge text)
+     * #0d0d0d on #6edff6 .......... 12.31:1  (info badge text)
+     *
+     * The same four tints serve as TEXT on the page and on a card.
+     * #75b798 on #0d0d0d ...........  8.53:1  (success text)
+     * #ffda6a on #2b2b2b ........... 10.02:1  (warning text on a card)
+     * #ea868f on #2b2b2b ...........  5.98:1  (danger text on a card)
+     */
+    --portal-success: #75b798;
+    --portal-danger: #ea868f;
+    --portal-warning: #ffda6a;
+    --portal-info: #6edff6;
+
+    /* --- Badges -----------------------------------------------------------
+     * #ced4da on #2b3035 ...........  8.91:1  (neutral badge text)
+     */
+    --portal-badge-bg: #2b3035;
+
+    /* --- Scrollbar --------------------------------------------------------
+     * The browser draws a light scrollbar on a dark page unless a rule names
+     * the two colors.
+     * #8a8a8a on #1f1f1f ...........  4.77:1  (thumb on track, needs 3:1)
+     */
+    --portal-scrollbar-track: #1f1f1f;
+    --portal-scrollbar-thumb: #8a8a8a;
+}
+
+body {
+    background-color: var(--portal-bg);
+    color: var(--portal-text);
+}
+
+a {
+    color: var(--portal-link);
+}
+
+a:hover {
+    color: var(--portal-link-hover);
+}
+
+/* Navbar
+ * The header carries the brand fill, so it overrides the flat background that
+ * the shared rule sets. The shared rule uses `!important`, so this rule needs
+ * the same weight to win. */
+.portal-navbar {
+    background: var(--portal-header-bg) !important;
+    border-bottom: 1px solid var(--portal-header-border);
+}
+
+.portal-navbar .nav-link {
+    color: var(--portal-header-link);
+}
+
+.portal-navbar .nav-link:hover,
+.portal-navbar .nav-link.active {
+    color: var(--portal-header-text);
+}
+
+.portal-navbar .navbar-brand {
+    color: var(--portal-header-text);
+}
+
+/* The active tab underline sits on the brand fill, where the accent color
+ * disappears. White marks the chosen tab instead. */
+.portal-navbar .nav-link.active {
+    border-bottom-color: var(--portal-header-text);
+}
+
+/* A control in the header sits on the brand fill. The page boundary color
+ * gives under 3:1 there, so a control here takes a white boundary. */
+.portal-navbar .btn,
+.portal-navbar .form-control,
+.portal-navbar .form-select {
+    border-color: var(--portal-header-text);
+    color: var(--portal-header-text);
+}
+
+.navbar-toggler {
+    border-color: var(--portal-header-text);
+}
+
+/* Cards */
+.portal-card,
+.card {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.card-header {
+    background-color: var(--portal-bg-secondary);
+    border-color: var(--portal-border);
+}
+
+/* Tables */
+.portal-table,
+.table {
+    color: var(--portal-text);
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: var(--portal-table-hover);
+    border-color: var(--portal-border);
+}
+
+.portal-table th {
+    background-color: var(--portal-bg-secondary);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.portal-table td {
+    border-color: var(--portal-border);
+}
+
+/* Forms */
+.form-control,
+.form-select {
+    background-color: var(--portal-input-bg);
+    border-color: var(--portal-input-border);
+    color: var(--portal-input-text);
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--portal-input-bg);
+    border-color: var(--portal-focus-ring);
+    color: var(--portal-input-text);
+    box-shadow: 0 0 0 0.2rem rgba(255, 45, 149, 0.30);
+}
+
+.form-control::placeholder {
+    color: var(--portal-text-muted);
+}
+
+/* Accordion */
+.accordion-item {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+}
+
+.accordion-button {
+    background-color: var(--portal-bg-secondary);
+    color: var(--portal-text);
+    border-color: var(--portal-border);
+}
+
+/* An open heading reads as chosen. It uses the lighter brand ink, because a
+ * heading is text and #E20074 gives only 3.23:1 on this fill.
+ * #ff5fae on #2b2b2b ...........  5.06:1  (open heading text) */
+.accordion-button:not(.collapsed) {
+    background-color: var(--portal-card-bg);
+    color: var(--portal-brand-ink);
+}
+
+.accordion-button::after {
+    filter: invert(0.8);
+}
+
+.accordion-body {
+    background-color: var(--portal-card-bg);
+}
+
+/* List Groups */
+.list-group-item {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.list-group-item-action:hover {
+    background-color: var(--portal-table-hover);
+    color: var(--portal-text);
+}
+
+/* The chosen row takes the brand fill with white text, which reads at 4.68:1. */
+.list-group-item.active {
+    background-color: var(--portal-accent);
+    border-color: var(--portal-accent);
+    color: #ffffff;
+}
+
+/* Badges
+ * Each rule places a light tint under the near-black page ink, so the text
+ * ratio stays above 8:1 in every case. */
+.badge {
+    background-color: var(--portal-badge-bg);
+}
+
+.bg-success { background-color: var(--portal-success) !important; color: #0d0d0d !important; }
+.bg-danger { background-color: var(--portal-danger) !important; color: #0d0d0d !important; }
+.bg-warning { background-color: var(--portal-warning) !important; color: #0d0d0d !important; }
+.bg-info { background-color: var(--portal-info) !important; color: #0d0d0d !important; }
+.bg-primary { background-color: var(--portal-accent) !important; color: #ffffff !important; }
+
+/* Log Viewer
+ * The log sits on the darkest surface, so a long run reads as one block.
+ * #75b798 on #050505 ...........  9.06:1  (log text) */
+.log-viewer,
+.log-output {
+    background-color: #050505;
+    border-color: var(--portal-border);
+    color: var(--portal-success);
+}
+
+/* Progress Bar
+ * The bar uses the lighter tint, not #E20074. A visible track needs a light
+ * enough gray, and #E20074 gives only 2.32:1 against that gray.
+ * #ff5fae on #3d3d3d ...........  3.88:1  (bar against track, needs 3:1) */
+.portal-progress {
+    background-color: var(--portal-border);
+}
+
+.portal-progress .progress-bar,
+.progress-bar {
+    background-color: var(--portal-brand-ink);
+    color: #0d0d0d;
+}
+
+/* Buttons */
+.btn-outline-secondary {
+    color: var(--portal-text-muted);
+    border-color: var(--portal-input-border);
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--portal-bg-secondary);
+    color: var(--portal-text);
+    border-color: var(--portal-text);
+}
+
+/* The destructive button stays red, not brand magenta. Magenta is the normal
+ * action color here, so a magenta stop button would read as safe.
+ * #ffffff on #dc3545 ...........  4.53:1  (button text)
+ * #dc3545 on #2b2b2b ...........  3.13:1  (button boundary, needs 3:1) */
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #ffffff;
+}
+
+.btn-danger:hover {
+    background-color: #b02a37;
+    border-color: #b02a37;
+    color: #ffffff;
+}
+
+.btn-outline-danger {
+    color: var(--portal-danger);
+    border-color: var(--portal-danger);
+}
+
+.btn-outline-danger:hover {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #ffffff;
+}
+
+/* Footer */
+.portal-footer {
+    background-color: var(--portal-bg-secondary);
+    border-top: 1px solid var(--portal-border);
+    color: var(--portal-text-muted);
+}
+
+/* Dropdowns */
+.dropdown-menu {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+}
+
+.dropdown-item {
+    color: var(--portal-text);
+}
+
+.dropdown-item:hover {
+    background-color: var(--portal-table-hover);
+    color: var(--portal-text);
+}
+
+.dropdown-item.active {
+    background-color: var(--portal-accent);
+    color: #ffffff;
+}
+
+/* Pagination */
+.page-link {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-link);
+}
+
+.page-link:hover {
+    background-color: var(--portal-bg-secondary);
+    color: var(--portal-link-hover);
+}
+
+.page-item.active .page-link {
+    background-color: var(--portal-accent);
+    border-color: var(--portal-accent);
+    color: #ffffff;
+}
+
+.page-item.disabled .page-link {
+    background-color: var(--portal-bg-secondary);
+    border-color: var(--portal-border);
+    color: var(--portal-text-muted);
+}
+
+/* Alerts
+ * Each alert keeps a dark fill with its own light ink, so the signal word
+ * stays readable and the surface stays part of the dark page.
+ * #6edff6 on #032830 .......... 10.04:1  (note)
+ * #75b798 on #051b11 ...........  7.67:1  (done)
+ * #ffda6a on #332701 .......... 10.82:1  (caution)
+ * #ea868f on #2c0b0e ...........  7.15:1  (warning) */
+.alert-info {
+    background-color: #032830;
+    border-color: var(--portal-info);
+    color: var(--portal-info);
+}
+
+.alert-success {
+    background-color: #051b11;
+    border-color: var(--portal-success);
+    color: var(--portal-success);
+}
+
+.alert-warning {
+    background-color: #332701;
+    border-color: var(--portal-warning);
+    color: var(--portal-warning);
+}
+
+.alert-danger {
+    background-color: #2c0b0e;
+    border-color: var(--portal-danger);
+    color: var(--portal-danger);
+}
+
+/* Modal */
+.modal-content {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.modal-header,
+.modal-footer {
+    border-color: var(--portal-border);
+}
+
+.btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--portal-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--portal-scrollbar-thumb);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--portal-text-muted);
+}
+
+/* Firefox reads this pair instead of the three rules above. */
+* {
+    scrollbar-color: var(--portal-scrollbar-thumb) var(--portal-scrollbar-track);
+}
+
+/* Text helpers */
+.text-muted {
+    color: var(--portal-text-muted) !important;
+}
+
+.text-danger {
+    color: var(--portal-danger) !important;
+}
+
+.text-warning {
+    color: var(--portal-warning) !important;
+}
+
+.text-success {
+    color: var(--portal-success) !important;
+}
+
+.text-info {
+    color: var(--portal-info) !important;
+}
+
+/* The brand ink, for text that must read as brand colored. #E20074 fails the
+ * 4.5:1 text floor on every surface in this theme, so it never paints text. */
+.text-primary {
+    color: var(--portal-brand-ink) !important;
+}

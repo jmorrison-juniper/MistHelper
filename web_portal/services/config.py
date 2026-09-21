@@ -72,8 +72,13 @@ class PortalConfigLoader:
     ENV_DEFAULTS = {
         "PORTAL_TITLE": "MistHelper",
         "PORTAL_LOGO_URL": "/static/img/logo-default.svg",
-        "PORTAL_ACCENT_COLOR": "#0077B6",
-        "PORTAL_THEME": "dark",
+        # Issue #3136: the brand magenta. base.html injects this value in a
+        # <style> block that follows the theme stylesheet, so this setting and
+        # not the theme file decides the rendered accent. It therefore has to
+        # match the default theme below, or the page mixes a magenta surface
+        # with a blue button.
+        "PORTAL_ACCENT_COLOR": "#E20074",
+        "PORTAL_THEME": "magenta",
         "WEB_PORT": "8055",
         "PORTAL_ALLOWED_IPS": "",
         "PORTAL_TRUSTED_PROXIES": "",
@@ -356,12 +361,13 @@ class ThemeManager:
     """
 
     DISPLAY_LABELS = {
+        "magenta": "Brand Magenta",
         "dark": "Dark NOC",
         "light": "Light Office",
         "high-contrast": "High Contrast",
     }
 
-    def __init__(self, themes_dir: str, default_theme: str = "dark"):
+    def __init__(self, themes_dir: str, default_theme: str = "magenta"):
         """Initialize with path to themes directory and default name."""
         self._themes_dir = themes_dir
         self._default_theme = default_theme

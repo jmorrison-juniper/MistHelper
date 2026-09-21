@@ -166,7 +166,7 @@ class WebPortalApp:
     def _setup_theme_manager(app: Flask, config: dict) -> None:
         """Initialize ThemeManager and store on app.config."""
         themes_dir = os.path.join(WebPortalApp._get_static_dir(), "css", "themes")
-        manager = ThemeManager(themes_dir, config.get("theme", "dark"))
+        manager = ThemeManager(themes_dir, config.get("theme", "magenta"))
         manager.load_themes()
         app.config["THEME_MANAGER"] = manager
 
@@ -236,7 +236,7 @@ class WebPortalApp:
                 "portal_title": portal.get("title", "MistHelper"),
                 "portal_logo": portal.get("logo_url", "/static/img/logo-default.svg"),
                 "portal_accent": portal.get("accent_color", "#0d6efd"),
-                "portal_theme": portal.get("theme", "dark"),
+                "portal_theme": portal.get("theme", "magenta"),
                 "available_themes": theme_mgr.get_themes() if theme_mgr else [],
             }
 

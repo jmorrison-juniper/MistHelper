@@ -28,7 +28,7 @@ answering.
 - **Data Browser**: Browse, preview, search, and download CSV/SQLite output files
 - **Operations**: Run non-destructive data extraction operations (menus 1-89) with real-time SSE progress
 - **Map Viewer**: Interactive Plotly.js floor plan viewer with device markers
-- **Themes**: Dark, Light, and High Contrast themes with instant switching (persisted in localStorage)
+- **Themes**: Brand Magenta, Dark, Light, and High Contrast themes with instant switching (persisted in localStorage). Brand Magenta is the default and matches the upgrade capture portal.
 - **Branding**: Customize title, logo, and accent color via ENV variables
 
 ## Environment Variables
@@ -37,8 +37,8 @@ answering.
 |----------|---------|-------------|
 | `PORTAL_TITLE` | `MistHelper` | Browser tab and navbar title |
 | `PORTAL_LOGO_URL` | `/static/img/logo-default.svg` | Logo image URL |
-| `PORTAL_ACCENT_COLOR` | `#0d6efd` | Accent color for buttons and highlights |
-| `PORTAL_THEME` | `dark` | Default theme (dark, light, high-contrast) |
+| `PORTAL_ACCENT_COLOR` | `#E20074` | Accent color for buttons and highlights |
+| `PORTAL_THEME` | `magenta` | Default theme (magenta, dark, light, high-contrast) |
 | `WEB_PORT` | `8055` | Web portal listen port |
 | `PORTAL_ALLOWED_IPS` | *(empty = all)* | Comma-separated CIDR allowlist |
 | `PORTAL_SECRET_KEY` | *(auto-generated)* | Flask session secret key |
