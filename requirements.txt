@@ -27,7 +27,7 @@ python-dotenv>=1.2.3,<2
 PyYAML>=6.0.3,<7
 
 # AI analysis (Mist Ideas Analyzer)
-openai>=3.13.0,<4
+openai>=3.14.1,<4
 
 # Bounded PDF text sampling for the Juniper documentation corpus harvester
 # (src/juniper_docs). The harvester reads a small in-memory text sample from
