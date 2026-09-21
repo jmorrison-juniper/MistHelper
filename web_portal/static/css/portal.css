@@ -62,7 +62,8 @@
 }
 
 .portal-table th:hover {
-    color: var(--portal-accent, #0077B6);
+    /* Text, so it reads the accent ink. See the note on the accordion rule. */
+    color: var(--portal-accent-text, var(--portal-accent, #0077B6));
 }
 
 .portal-table td {
@@ -234,7 +235,12 @@
 
 /* Accordion (Operations) */
 .portal-accordion .accordion-button:not(.collapsed) {
-    color: var(--portal-accent, #0077B6);
+    /* Issue #3136: an accent is a FILL color, and a fill only needs 3:1. This
+     * rule paints TEXT, which needs 4.5:1. A saturated brand color can pass the
+     * first floor and fail the second, so a theme names its own accent ink
+     * here. The chain falls back to the accent, which keeps every theme that
+     * sets no ink exactly as it was. */
+    color: var(--portal-accent-text, var(--portal-accent, #0077B6));
 }
 
 /* Category badge */

@@ -12,6 +12,13 @@
     --portal-text-muted: #a6adc8;
     --portal-border: #45475a;
     --portal-link: #89b4fa;
+    /* The accent ink. portal.css reads this token wherever the accent paints
+     * TEXT rather than a fill. The former accent #0077B6 gave only 2.58:1 on
+     * the open accordion heading, far under the 4.5:1 text floor. This theme
+     * reuses its own link tint, which keeps its blue identity. Issue #3136.
+     * #89b4fa on #313244 ...........  5.97:1  (open accordion heading)
+     */
+    --portal-accent-text: #89b4fa;
     --portal-link-hover: #b4d0fb;
     --portal-success: #a6e3a1;
     --portal-danger: #f38ba8;

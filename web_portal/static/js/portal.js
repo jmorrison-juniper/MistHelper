@@ -61,8 +61,11 @@ function readJsonAnswer(response) {
 var THEME_STORAGE_KEY = 'misthelper-theme';
 
 function getDefaultTheme() {
+    // base.html carries the server value on the script tag. The literal below
+    // answers only a page that omits the attribute, so it names the same
+    // default that PortalConfigLoader.ENV_DEFAULTS holds (issue #3136).
     var script = document.querySelector('script[data-default-theme]');
-    return script ? script.getAttribute('data-default-theme') : 'dark';
+    return script ? script.getAttribute('data-default-theme') : 'magenta';
 }
 
 function getSavedTheme() {
@@ -75,6 +78,8 @@ function applyTheme(themeName) {
         link.href = '/static/css/themes/' + themeName + '.css';
     }
     var html = document.documentElement;
+    // Every shipped theme paints a dark page except `light`, so Bootstrap takes
+    // its dark control set unless the operator chooses that one theme.
     if (themeName === 'light') {
         html.setAttribute('data-bs-theme', 'light');
     } else {
