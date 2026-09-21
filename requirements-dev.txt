@@ -55,7 +55,7 @@ pdfplumber>=0.11.10
 # a skip, and a skip reads as a pass. Download the browser after any install:
 #   python -m playwright install chromium
 # `scripts/bootstrap_worktree.py` runs that command for you.
-playwright==1.62.0
+playwright==1.63.0
 pytest-playwright==0.9.0
 
 # Security
