@@ -45,6 +45,26 @@ CATEGORY_RANGES = [
     (269, 269, "Network Security Scans"),
 ]
 
+# Menu numbers whose range gives the wrong category name. Issue #3153.
+#
+# A menu number records when an operation joined the menu. It does not record
+# what the operation does. The ranges above therefore misfiled eight rows, and
+# three category names described no operation they held. An operator who opened
+# "Packet Captures" found two device inventory exports and no packet capture.
+#
+# Each entry below states the label the operator reads, so a reviewer can judge
+# the destination without opening the menu.
+CATEGORY_OVERRIDES = {
+    5: "Organization Exports",  # Export E911 report for the organization.
+    6: "Insights & Diagnostics",  # Site Config Analysis across every site.
+    7: "Insights & Diagnostics",  # Site Inventory Health Analysis across every site.
+    8: "Organization Exports",  # Export the full inventory of devices in the organization.
+    9: "Organization Exports",  # Export a list of all devices in the organization.
+    10: "Organization Exports",  # Export all devices with site and address information.
+    40: "Template Exports",  # Export AP template information for the organization.
+    41: "Template Exports",  # Export switch template information for the organization.
+}
+
 # The safety categories that the portal may run. `OperationRegistry` in
 # src/utils/operation_registry.py is the single source of truth for the safety
 # category of every operation, and this set is the only gate the portal applies.
@@ -969,6 +989,9 @@ class OperationExecutor:
 
     def _get_category(self, num: int) -> str:
         """Map a menu number to its category name."""
+        override = CATEGORY_OVERRIDES.get(num)
+        if override is not None:
+            return override  # The range gives the wrong name for this row. Issue #3153.
         for low, high, name in CATEGORY_RANGES:
             if low <= num <= high:
                 return name
