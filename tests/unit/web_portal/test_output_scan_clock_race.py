@@ -96,9 +96,10 @@ def test_the_mark_is_an_integer_count_of_nanoseconds(tmp_path):
 def test_every_recorded_time_is_an_integer_count_of_nanoseconds(tmp_path):
     """Each file time holds integer nanoseconds, matching the mark."""
     (tmp_path / "a.csv").write_text("x", encoding="utf-8")  # Give the walk one file to read.
+    (tmp_path / "b.csv").write_text("y", encoding="utf-8")  # A second file proves the walk reads them all.
     scanner = OutputFileScanner(str(tmp_path))
     state = scanner._read_state()  # Run the code under test.
-    assert state, "the walk found no file, so this test proves nothing"
+    assert sorted(state) == ["a.csv", "b.csv"]  # The walk must return both files and nothing else.
     for name, stamp in state.items():
         assert isinstance(stamp, int), f"{name} carries a float time, which can round"
         assert stamp > 1_000_000_000_000_000_000  # The value must be nanoseconds, not seconds.
