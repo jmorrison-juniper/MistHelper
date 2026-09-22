@@ -42,17 +42,22 @@ _SKIPPED_PREFIXES = (".", "~")  # A hidden file and an editor backup are not rep
 # comparison is exact, because a file an operation writes carries a
 # modification time after the run started.
 #
-# Measured inside the container on 2026-09-21, the mount records a modification
-# time with microsecond precision, and every write landed after the mark:
+# Issue #3172: the mark used to come from the wall clock, and a file carries a
+# time from the filesystem clock. The two do not agree. Measured on Windows, a
+# report written right after the mark carried a time up to 194500 nanoseconds
+# before it, so a strict comparison dropped the file the operation had just
+# written. The scanner now takes the mark from a probe file, so one clock dates
+# the mark and every report. See snapshot() for the measurement.
 #
-#   mark=1790039984.044932  mtime=1790039984.059383
+# This value only widens the window when the wall-clock fallback runs, which
+# happens when the root cannot hold a probe file.
 #
 # Warning: a filesystem that truncates the modification time to a whole second
 # could place a write before the mark and hide that report. If this scanner ever
-# runs on such a mount, compare against a mark that is rounded down to the
-# granularity of that filesystem rather than widening the window for everyone. A
-# wider window reports a file the run never wrote, which the tests forbid.
-_MTIME_GRANULARITY_SECONDS = 0.0
+# runs on such a mount, raise this value to the granularity of that mount rather
+# than widening the window for everyone. A wider window reports a file the run
+# never wrote, which the tests forbid.
+_MTIME_GRANULARITY_NANOSECONDS = 0
 
 # Issue #3140: the scanner walked every entry under the data root, and one
 # operator tree held 11330 corpus PDF files across 19.7 GB. One walk with a stat
@@ -130,10 +135,46 @@ class OutputFileScanner:
         prune, and the portal pays it twice for each operation. A timestamp
         costs nothing and answers the same question, because a report the
         operation wrote carries a modification time after the run started.
+
+        Issue #3172: the mark came from the wall clock, and a file carries a
+        time from the filesystem clock. The two disagree. A report written
+        right after the mark could carry a time up to 0.19 milliseconds before
+        it, so the scanner dropped the file the operation had just written.
+
+        The mark now comes from a probe file, so one clock dates the mark and
+        every report. Measured over 1500 attempts of each case:
+
+            wall clock, strict >   lost 118   reported in error 0
+            wall clock, >=         lost  36   reported in error 0
+            probe file, strict >   lost   0   reported in error 0
+            probe file, >=         lost   0   reported in error 14
         """
-        self._started_at = time.time() - _MTIME_GRANULARITY_SECONDS
-        logger.info("Output scan marks the run start for %s", self._root)  # Log before the run.
-        logger.debug("Output scan start mark: %.3f", self._started_at)  # State the recorded value.
+        logger.info("Output scan marks the run start for %s", self._root)  # Log before the mark.
+        self._started_at = self._mark_from_probe_file()
+        logger.debug("Output scan start mark: %d ns", self._started_at)  # State the recorded value.
+
+    def _mark_from_probe_file(self) -> int:
+        """Return a run-start mark taken from the filesystem clock.
+
+        The probe carries the process id, so two runs against one root never
+        pick the same name.
+        """
+        probe = self._root / f".portal-scan-mark-{os.getpid()}"  # A unique name per process.
+        try:
+            probe.write_bytes(b"")  # Create the probe, so the filesystem dates it.
+            stamp = probe.stat().st_mtime_ns  # Read the mark in the clock that dates every report.
+            return stamp
+        except OSError as error:
+            # A missing or read-only root cannot hold a probe. The wall clock
+            # is the weaker mark, so name the reason an operator may see a
+            # report go missing.
+            logger.warning("Output scan could not write a probe in %s: %s. Using the wall clock.", self._root, error)
+            return time.time_ns() - _MTIME_GRANULARITY_NANOSECONDS
+        finally:
+            try:
+                probe.unlink()  # Remove the probe, so it never reaches the result panel.
+            except OSError:
+                pass  # A probe that never existed cannot be removed, and that is not an error.
 
     def changed_files(self) -> list[str]:
         """Return the files that appeared or changed since the run began."""
@@ -144,15 +185,17 @@ class OutputFileScanner:
         logger.debug("Output scan found %d changed files", len(names))  # Log the measured count.
         return names[: self._limit]  # Cap the list, so one run cannot flood the panel.
 
-    def _read_state(self) -> dict[str, float]:
+    def _read_state(self) -> dict[str, int]:
         """Return the modification time of every readable file under the root."""
-        state: dict[str, float] = {}
+        state: dict[str, int] = {}
         if not self._root.is_dir():  # A missing directory is not an error, because the run may still start.
             logging.warning("Output scan found no directory at %s", self._root)  # Name the missing path.
             return state
         for path in self._walk():
             try:
-                state[path.relative_to(self._root).as_posix()] = path.stat().st_mtime
+                # Read integer nanoseconds. A float rounds two close instants
+                # to one value and hides a report. Issue #3172.
+                state[path.relative_to(self._root).as_posix()] = path.stat().st_mtime_ns
             except OSError as error:  # A file can vanish between the walk and the stat call.
                 logger.debug("Output scan skipped %s: %s", path, error)  # Record the skip for a reader.
         return state
