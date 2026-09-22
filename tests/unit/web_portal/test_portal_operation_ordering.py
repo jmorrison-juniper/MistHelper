@@ -54,7 +54,7 @@ def test_shuffled_input_comes_back_in_numeric_order(executor):
     """The builder sorts operations even when the keys arrive shuffled."""
     # These four numbers reproduce the reported "1, 2, 4, 3" order.
     produced = _numbers_by_category(executor, _shuffled_actions([1, 2, 4, 3]))
-    assert produced, "the builder returned no category, so this test proves nothing"
+    assert sum(len(numbers) for numbers in produced.values()) == 4  # Every row I supplied must come back.
     for numbers in produced.values():
         assert numbers == sorted(numbers), f"the builder kept the input order: {numbers}"
 
@@ -63,7 +63,7 @@ def test_sort_is_numeric_and_not_text(executor):
     """The builder sorts by value, so 9 comes before 10."""
     # Text order puts "10" before "9", so this input separates the two sort keys.
     produced = _numbers_by_category(executor, _shuffled_actions([10, 9, 11, 2]))
-    assert produced, "the builder returned no category, so this test proves nothing"
+    assert sum(len(numbers) for numbers in produced.values()) == 4  # Every row I supplied must come back.
     for numbers in produced.values():
         assert numbers == sorted(numbers), f"the builder sorted as text, not as numbers: {numbers}"
 
@@ -72,7 +72,7 @@ def test_reverse_input_comes_back_in_numeric_order(executor):
     """A fully reversed input returns in ascending order."""
     # A reversed input fails loudly if the builder does no sorting at all.
     produced = _numbers_by_category(executor, _shuffled_actions([13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]))
-    assert produced, "the builder returned no category, so this test proves nothing"
+    assert sum(len(numbers) for numbers in produced.values()) == 13  # Every row I supplied must come back.
     for numbers in produced.values():
         assert numbers == sorted(numbers), f"the builder kept the reversed order: {numbers}"
 
