@@ -114,6 +114,7 @@ class PortalHarness:
         self.log = log
         self.headless = headless
         self.console_errors: list[str] = []
+        self.answered_notes: dict[str, list[str]] = {}  # Record what each control was given.
         self._play = None
         self._browser = None
         self.page: Page | None = None
@@ -224,16 +225,82 @@ class PortalHarness:
         assert self.page is not None
         found: list[str] = []
         for selector in ("select", "input[type=text]", "input[type=number]", "textarea"):
-            controls = self.page.locator(selector)
+            controls = self.page.locator(f"#parameterFields {selector}")
             for index in range(controls.count()):
                 control = controls.nth(index)
                 if not control.is_visible():
                     continue
                 name = control.get_attribute("name") or control.get_attribute("id") or ""
-                if name in ("", "themeSelect"):
-                    continue
                 found.append(f"{selector}:{name}")
         return found
+
+    def fill_parameters(self, menu_number: str) -> tuple[bool, list[str]]:
+        """Answer every required control, so the operation can actually run.
+
+        A control the operator must answer is the interactivity this campaign
+        checks. An empty list of options is a defect, because the page asks a
+        question the operator cannot answer.
+
+        Returns whether every control received an answer, and the notes that
+        describe what the page offered.
+        """
+        assert self.page is not None
+        notes: list[str] = []
+        answered_all = True
+
+        selects = self.page.locator("#parameterFields select")
+        for index in range(selects.count()):
+            control = selects.nth(index)
+            if not control.is_visible():
+                continue
+            name = control.get_attribute("name") or control.get_attribute("id") or f"select{index}"
+            options = control.locator("option")
+            # A placeholder option carries no value, so count the real choices.
+            values = [options.nth(k).get_attribute("value") or "" for k in range(options.count())]
+            real = [value for value in values if value.strip()]
+            if not real:
+                answered_all = False
+                self.log.add(
+                    menu_number,
+                    "interactivity",
+                    "high",
+                    f"#{menu_number} asks for '{name}' and offers no choice",
+                    f"the select holds {options.count()} options and none carry a value",
+                    self.shot(f"emptyselect-{menu_number}-{name}"),
+                )
+                continue
+            label = options.nth(values.index(real[0])).inner_text().strip()
+            if not label:
+                self.log.add(
+                    menu_number,
+                    "readability",
+                    "medium",
+                    f"#{menu_number} lists a choice for '{name}' with no readable name",
+                    f"the first real option value is {real[0][:40]!r} and its text is empty",
+                )
+            control.select_option(real[0])
+            self.page.wait_for_timeout(250)
+            notes.append(f"{name}={label[:40] or real[0][:40]} ({len(real)} choices)")
+
+        for selector, sample in (
+            ("input[type=text]", "1"),
+            ("input[type=number]", "1"),
+            ("textarea", "1"),
+        ):
+            inputs = self.page.locator(f"#parameterFields {selector}")
+            for index in range(inputs.count()):
+                control = inputs.nth(index)
+                if not control.is_visible():
+                    continue
+                name = control.get_attribute("name") or control.get_attribute("id") or selector
+                existing = control.input_value()
+                if existing.strip():
+                    notes.append(f"{name}={existing[:30]} (prefilled)")
+                    continue
+                control.fill(sample)
+                notes.append(f"{name}={sample} (supplied)")
+
+        return answered_all, notes
 
     def run_operation(self, menu_number: str) -> str:
         """Run one operation and return its terminal state."""
@@ -243,22 +310,70 @@ class PortalHarness:
 
         label = self.rendered_label(menu_number)
         run_button = self.page.locator("#runBtn")
+
+        # The portal hides the run control for an operation that needs a
+        # persistent keyboard, and it explains that in #cliOnlyPanel. That is
+        # designed behavior, not a defect, so read the message before judging.
+        cli_panel = self.page.locator("#cliOnlyPanel")
+        if cli_panel.count() > 0 and cli_panel.first.is_visible():
+            message = self.page.locator("#cliOnlyMessage")
+            explanation = " ".join(message.first.inner_text().split()) if message.count() else ""
+            if explanation:
+                self.log.time(menu_number, label[:70], 0.0, "cli-only")
+                return "cli-only"
+            # An empty panel leaves the operator with no reason, which is a defect.
+            self.log.add(
+                menu_number,
+                "usability",
+                "medium",
+                f"#{menu_number} hides the run control and gives no reason",
+                f"cliOnlyPanel is visible and cliOnlyMessage is empty. label: {label[:70]}",
+                self.shot(f"noreason-{menu_number}"),
+            )
+            return "cli-only-no-reason"
+
         if run_button.count() == 0 or not run_button.first.is_visible():
             self.log.add(
                 menu_number,
                 "missing",
                 "high",
-                f"#{menu_number} offers no run control after selection",
+                f"#{menu_number} offers no run control and no explanation",
                 f"rendered label: {label[:80]}",
                 self.shot(f"norun-{menu_number}"),
             )
             return "no-run-control"
 
         if run_button.first.is_disabled():
-            # A disabled control is correct when a required answer is missing.
-            controls = self.parameter_controls()
-            self.log.time(menu_number, label[:70], 0.0, "blocked")
-            return "blocked-needs-input" if controls else "blocked-no-reason"
+            # A disabled control is correct when a required answer is missing,
+            # so answer every control and try again. An operation that stays
+            # disabled after every question is answered is a real defect.
+            answered, notes = self.fill_parameters(menu_number)
+            self.page.wait_for_timeout(400)
+            if run_button.first.is_disabled():
+                controls = self.parameter_controls()
+                if not controls:
+                    self.log.add(
+                        menu_number,
+                        "missing",
+                        "high",
+                        f"#{menu_number} keeps the run control disabled and asks nothing",
+                        f"label: {label[:70]}",
+                        self.shot(f"stuck-{menu_number}"),
+                    )
+                    self.log.time(menu_number, label[:70], 0.0, "blocked-no-reason")
+                    return "blocked-no-reason"
+                if answered:
+                    self.log.add(
+                        menu_number,
+                        "interactivity",
+                        "high",
+                        f"#{menu_number} stays disabled after every control is answered",
+                        f"answered: {'; '.join(notes)[:150]}",
+                        self.shot(f"stilldisabled-{menu_number}"),
+                    )
+                self.log.time(menu_number, label[:70], 0.0, "blocked-needs-input")
+                return "blocked-needs-input"
+            self.answered_notes[menu_number] = notes
 
         started = time.monotonic()
         run_button.first.click()
