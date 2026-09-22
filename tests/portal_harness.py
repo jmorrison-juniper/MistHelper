@@ -223,8 +223,14 @@ class PortalHarness:
         """Return a description of each visible parameter control."""
         assert self.page is not None
         found: list[str] = []
+        # Scope the scan to the parameter area. An earlier version scanned the
+        # whole page, so it counted the results file chooser and the results
+        # search box as parameter controls and raised a false defect.
+        area = self.page.locator("#parameterFields")
+        if area.count() == 0:
+            return found
         for selector in ("select", "input[type=text]", "input[type=number]", "textarea"):
-            controls = self.page.locator(selector)
+            controls = area.first.locator(selector)
             for index in range(controls.count()):
                 control = controls.nth(index)
                 if not control.is_visible():
@@ -234,6 +240,24 @@ class PortalHarness:
                     continue
                 found.append(f"{selector}:{name}")
         return found
+
+    def _terminal_state(self) -> str | None:
+        """Return the finished run state, or None while the run continues.
+
+        The badge is the only honest source. An earlier version searched the
+        page prose for the word "failed", so it counted a passing run whose
+        output merely held that word as a failure.
+        """
+        assert self.page is not None
+        badge = self.page.locator("#statusBadge")
+        if badge.count() == 0:
+            return None  # No badge means the page never started a run.
+        text = (badge.first.inner_text() or "").strip().lower()
+        if text == "complete":
+            return "completed"  # The run finished and the portal accepted it.
+        if text == "error":
+            return "failed"  # The portal itself declared the failure.
+        return None  # Pending and Running both mean the run continues.
 
     def run_operation(self, menu_number: str) -> str:
         """Run one operation and return its terminal state."""
@@ -266,12 +290,9 @@ class PortalHarness:
         state = "unknown"
         deadline = started + RUN_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
-            body = self.page.inner_text("body").lower()
-            if "completed" in body or "finished" in body:
-                state = "completed"
-                break
-            if "failed" in body or "traceback" in body:
-                state = "failed"
+            reached = self._terminal_state()  # Read the badge, never the page prose.
+            if reached is not None:
+                state = reached
                 break
             self.page.wait_for_timeout(1000)
         else:
