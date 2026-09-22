@@ -89,7 +89,7 @@ def test_start_script_pool_exceeds_the_outage_count():
     """The Gunicorn thread pool holds more threads than the outage allowed."""
     source = START_SCRIPT.read_text(encoding="utf-8")  # Read the start script that launches Gunicorn.
     match = re.search(r'PORTAL_THREADS="\$\{PORTAL_THREADS:-(\d+)\}"', source)  # Find the default thread count.
-    assert match is not None, "start.sh must set a PORTAL_THREADS default"  # A missing default returns the outage.
-    threads = int(match.group(1))  # Convert the captured text, so the test can compare numbers.
+    # A missing default returns the outage, so treat it as a pool of zero threads.
+    threads = int(match.group(1)) if match else 0  # Convert the captured text, so the test can compare numbers.
     assert threads > OUTAGE_THREAD_COUNT  # The pool must exceed the count that caused issue #3164.
     assert "--threads ${PORTAL_THREADS}" in source  # Gunicorn must read the configured value, not a literal.
