@@ -317,7 +317,9 @@ class PortalHarness:
         cli_panel = self.page.locator("#cliOnlyPanel")
         if cli_panel.count() > 0 and cli_panel.first.is_visible():
             message = self.page.locator("#cliOnlyMessage")
-            explanation = " ".join(message.first.inner_text().split()) if message.count() else ""
+            explanation = (
+                " ".join(message.first.inner_text().split()) if message.count() else ""
+            )
             if explanation:
                 self.log.time(menu_number, label[:70], 0.0, "cli-only")
                 return "cli-only"
@@ -378,14 +380,21 @@ class PortalHarness:
         started = time.monotonic()
         run_button.first.click()
 
+        # Read the status badge, which is the element the portal sets. An earlier
+        # version scanned the whole page text for the word "failed", and that
+        # matched prose elsewhere on the page. Menu 44 and menu 47 both reported
+        # a false failure while their run record said completed.
         state = "unknown"
+        badge = self.page.locator("#statusBadge")
         deadline = started + RUN_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
-            body = self.page.inner_text("body").lower()
-            if "completed" in body or "finished" in body:
+            text = ""
+            if badge.count() > 0:
+                text = " ".join(badge.first.inner_text().split()).lower()
+            if text in ("complete", "completed", "finished", "success"):
                 state = "completed"
                 break
-            if "failed" in body or "traceback" in body:
+            if text in ("error", "failed", "stopped"):
                 state = "failed"
                 break
             self.page.wait_for_timeout(1000)
