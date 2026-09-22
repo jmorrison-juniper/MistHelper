@@ -588,6 +588,10 @@ class OperationExecutor:
                     "category": op_category,
                 }
             )
+        for operations in categories.values():
+            # Sort by the numeric value, not the text. Text order puts "10"
+            # before "9", and the page showed an operator a shuffled list.
+            operations.sort(key=lambda op: self._parse_menu_number(op["menu_number"]))
         return [{"name": name, "operations": ops} for name, ops in sorted(categories.items(), key=lambda x: x[0])]
 
     def get_operation_parameters(self, menu_number: str) -> dict | None:
