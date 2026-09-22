@@ -50,6 +50,32 @@ def _stream_max_seconds() -> float:
     return parsed
 
 
+# Reasons a pick list came back empty. An empty control with no explanation
+# made an operator think the portal had stalled, so every empty list now
+# carries one of these. Issue #3163.
+NO_SESSION_REASON = "The portal holds no Mist API session. Check the API token in the environment file."
+NO_ORG_REASON = "The portal holds no organization identifier. Set MIST_ORG_ID in the environment file."
+NO_SITE_REASON = "No site was chosen, so the portal cannot list this data."
+NO_ROWS_REASON = "The Mist API answered with no rows for this request."
+API_ERROR_REASON = "The Mist API request failed with {error}. Read the portal error log for the full report."
+
+
+class PickList(list):
+    """A list of pick list rows that also knows why it holds no row.
+
+    The selector endpoints used to answer with an empty list and no reason.
+    An operator then read a blank control as a stalled portal. This type
+    stays a plain list for every reader that counts rows or sorts them, and
+    it carries the reason for the route that must explain the blank control.
+    Issue #3163.
+    """
+
+    def __init__(self, items=(), reason: str | None = None) -> None:
+        """Store the rows and the reason the list may be empty."""
+        super().__init__(items)  # Keep list behavior, so every existing caller still works.
+        self.reason = reason  # Hold the explanation for the route that renders the control.
+
+
 operations_bp = Blueprint("operations", __name__)
 
 
@@ -199,7 +225,7 @@ def list_sites():
     apisession = current_app.config.get("APISESSION")
     org_id = current_app.config.get("ORG_ID")
     sites = _fetch_org_sites(apisession, org_id)
-    return jsonify({"sites": sites, "total_count": len(sites)})
+    return jsonify(_pick_list_payload("sites", sites))
 
 
 @operations_bp.route("/api/operations/sites/<site_id>/devices")
@@ -208,13 +234,9 @@ def list_site_devices(site_id):
     device_type = request.args.get("type", "all")
     apisession = current_app.config.get("APISESSION")
     devices = _fetch_site_devices(apisession, site_id, device_type)
-    return jsonify(
-        {
-            "devices": devices,
-            "total_count": len(devices),
-            "site_id": site_id,
-        }
-    )
+    payload = _pick_list_payload("devices", devices)
+    payload["site_id"] = site_id  # Echo the site, so the page can prove which request answered.
+    return jsonify(payload)
 
 
 @operations_bp.route("/api/operations/sites/<site_id>/clients")
@@ -222,13 +244,9 @@ def list_site_clients(site_id):
     """Return clients at a site (wireless + wired merged)."""
     apisession = current_app.config.get("APISESSION")
     clients = _fetch_site_clients(apisession, site_id)
-    return jsonify(
-        {
-            "clients": clients,
-            "total_count": len(clients),
-            "site_id": site_id,
-        }
-    )
+    payload = _pick_list_payload("clients", clients)
+    payload["site_id"] = site_id  # Echo the site, so the page can prove which request answered.
+    return jsonify(payload)
 
 
 def _get_executor():
@@ -390,26 +408,43 @@ DEVICE_LABEL_FIELDS = ("name", "mac")
 CLIENT_LABEL_FIELDS = ("hostname", "mac")
 
 
-def _fetch_org_sites(apisession, org_id: str) -> list:
+def _pick_list_payload(key: str, items: PickList) -> dict:
+    """Return the JSON body for one pick list, naming the reason it is empty."""
+    payload = {key: list(items), "total_count": len(items)}  # The page reads the count to size the control.
+    if not items:
+        # An empty control with no reason made an operator think the portal
+        # had stalled. Name the cause, so the page can show it. Issue #3163.
+        payload["reason"] = items.reason or NO_ROWS_REASON
+    return payload
+
+
+def _fetch_org_sites(apisession, org_id: str) -> PickList:
     """Fetch organization sites from Mist API."""
-    if not apisession or not org_id:
-        return []
+    if not apisession:
+        # Name the missing piece, so an operator does not read an empty list as a stall.
+        logger.warning("Cannot list the sites, because the portal holds no Mist API session.")
+        return PickList(reason=NO_SESSION_REASON)
+    if not org_id:
+        logger.warning("Cannot list the sites, because the portal holds no organization identifier.")
+        return PickList(reason=NO_ORG_REASON)
     try:
         import mistapi
 
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
         sites = response.data if hasattr(response, "data") else []
-        return sort_by_name(
-            [
-                {
-                    "id": site.get("id", ""),
-                    "name": site.get("name", ""),
-                    "address": site.get("address", ""),
-                    "country_code": site.get("country_code", ""),
-                    "timezone": site.get("timezone", ""),
-                }
-                for site in sites
-            ]
+        return PickList(
+            sort_by_name(
+                [
+                    {
+                        "id": site.get("id", ""),
+                        "name": site.get("name", ""),
+                        "address": site.get("address", ""),
+                        "country_code": site.get("country_code", ""),
+                        "timezone": site.get("timezone", ""),
+                    }
+                    for site in sites
+                ]
+            )
         )  # Issue #3083: the dropdown lists the sites by name.
     except Exception as error:  # Keep the site selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
@@ -417,15 +452,20 @@ def _fetch_org_sites(apisession, org_id: str) -> list:
         logger.exception(
             "Failed to list sites for org %s with %s: %s", org_id, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
-        # Return [] because the route call site reads len() directly and cannot
-        # handle a non-list.  The log record above makes the failure visible.
-        return []
+        # Return an empty list because the route reads len() directly and cannot
+        # handle a non-list. The log record above makes the failure visible.
+        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))
 
 
-def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
+def _fetch_site_devices(apisession, site_id: str, device_type: str) -> PickList:
     """Fetch devices for a site from Mist API."""
-    if not apisession or not site_id:
-        return []
+    if not apisession:
+        # Name the missing piece, so an operator does not read an empty list as a stall.
+        logger.warning("Cannot list the devices, because the portal holds no Mist API session.")
+        return PickList(reason=NO_SESSION_REASON)
+    if not site_id:
+        logger.warning("Cannot list the devices, because no site was chosen.")
+        return PickList(reason=NO_SITE_REASON)
     try:
         import mistapi
 
@@ -436,19 +476,21 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
             kwargs["type"] = "all"
         response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, **kwargs)
         devices = response.data if hasattr(response, "data") else []
-        return sort_by_name(
-            [
-                {
-                    "id": device.get("id", ""),
-                    "mac": device.get("mac", ""),
-                    "name": device.get("name", ""),
-                    "model": device.get("model", ""),
-                    "type": device.get("type", ""),
-                    "status": device.get("status", ""),
-                }
-                for device in devices
-            ],
-            DEVICE_LABEL_FIELDS,
+        return PickList(
+            sort_by_name(
+                [
+                    {
+                        "id": device.get("id", ""),
+                        "mac": device.get("mac", ""),
+                        "name": device.get("name", ""),
+                        "model": device.get("model", ""),
+                        "type": device.get("type", ""),
+                        "status": device.get("status", ""),
+                    }
+                    for device in devices
+                ],
+                DEVICE_LABEL_FIELDS,
+            )
         )  # Issue #3083: the dropdown lists the devices by the label it shows.
     except Exception as error:  # Keep the device selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
@@ -456,15 +498,19 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
         logger.exception(
             "Failed to list devices for site %s type %s with %s: %s", site_id, device_type, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
-        # Return [] because the route reads len() directly on this result.
-        return []
+        # Return an empty list because the route reads len() directly on this result.
+        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))
 
 
-def _fetch_site_clients(apisession, site_id: str) -> list:
+def _fetch_site_clients(apisession, site_id: str) -> PickList:
     """Fetch wireless and wired clients for a site."""
-    if not apisession or not site_id:
-        return []
-    clients = []
+    if not apisession:
+        # Name the missing piece, so an operator does not read an empty list as a stall.
+        logger.warning("Cannot list the clients, because the portal holds no Mist API session.")
+        return PickList(reason=NO_SESSION_REASON)
+    if not site_id:
+        logger.warning("Cannot list the clients, because no site was chosen.")
+        return PickList(reason=NO_SITE_REASON)
     try:
         import mistapi
 
@@ -473,19 +519,30 @@ def _fetch_site_clients(apisession, site_id: str) -> list:
         # Issue #3083: a plain concatenation put every wireless client before
         # every wired one, whatever its name. One sort interleaves both types.
         # A client carries its name in `hostname`, so the sort must read that.
-        clients = sort_by_name(wireless + wired, CLIENT_LABEL_FIELDS)
+        merged = sort_by_name(list(wireless) + list(wired), CLIENT_LABEL_FIELDS)
+        if merged:
+            return PickList(merged)  # At least one source answered, so the control has rows.
+        # Both sources came back empty. Issue #3163: report a failed source as a
+        # failure, never as "no rows". A caught failure in both helpers used to
+        # reach the operator as an empty control with a misleading reason.
+        failure = wireless.reason or wired.reason
+        return PickList(reason=failure) if failure else PickList()
     except Exception as client_error:
-        logging.debug("Could not fetch site clients: %s", client_error)
-    return clients
+        # This was a debug record on the root logger, so an operator never saw
+        # the cause of an empty client list. Report it at ERROR. Issue #3163.
+        logger.exception(
+            "Failed to list clients for site %s with %s: %s", site_id, type(client_error).__name__, client_error
+        )
+        return PickList(reason=API_ERROR_REASON.format(error=type(client_error).__name__))
 
 
-def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
+def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> PickList:
     """Fetch wireless clients for a site."""
     try:
         response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
         raw = response.data if hasattr(response, "data") else []
         results = raw.get("results", []) if isinstance(raw, dict) else raw
-        return [
+        return PickList(
             {
                 "mac": client.get("mac", ""),
                 "hostname": client.get("hostname", ""),
@@ -497,25 +554,24 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
                 ),
             }
             for client in results
-        ]
+        )
     except Exception as error:  # Keep the client list usable when the wireless query fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID so the operator can cross-reference with the Mist portal.
         logger.exception(
             "Failed to list wireless clients for site %s with %s: %s", site_id, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
-        # Return [] because _fetch_site_clients concatenates both lists and
-        # cannot handle a non-list return type without being rewritten.
-        return []
+        # Carry the reason, so the caller can tell a failure from a true zero count.
+        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))
 
 
-def _fetch_wired_clients(mistapi, apisession, site_id: str) -> list:
+def _fetch_wired_clients(mistapi, apisession, site_id: str) -> PickList:
     """Fetch wired clients for a site."""
     try:
         response = mistapi.api.v1.sites.clients.searchSiteWiredClients(apisession, site_id)
         raw = response.data if hasattr(response, "data") else []
         results = raw.get("results", []) if isinstance(raw, dict) else raw
-        return [
+        return PickList(
             {
                 "mac": client.get("mac", ""),
                 "hostname": client.get("hostname", ""),
@@ -525,13 +581,12 @@ def _fetch_wired_clients(mistapi, apisession, site_id: str) -> list:
                 "ap_name": "",
             }
             for client in results
-        ]
+        )
     except Exception as error:  # Keep the client list usable when the wired query fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID so the operator knows which site's wired query failed.
         logger.exception(
             "Failed to list wired clients for site %s with %s: %s", site_id, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
-        # Return [] because _fetch_site_clients concatenates both lists and
-        # cannot handle a non-list return type without being rewritten.
-        return []
+        # Carry the reason, so the caller can tell a failure from a true zero count.
+        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))

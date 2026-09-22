@@ -358,14 +358,20 @@ function fetchSites(selectElement) {
                 showSelectError(selectElement, 'Cannot load the sites. ' + data.error);
                 return;
             }
-            populateSiteOptions(selectElement, data.sites || []);
+            populateSiteOptions(selectElement, data.sites || [], data.reason);
         })
         .catch(function(err) {
             showSelectError(selectElement, 'Cannot load the sites. ' + err.message);
         });
 }
 
-function populateSiteOptions(selectElement, sites) {
+function populateSiteOptions(selectElement, sites, reason) {
+    if (sites.length === 0) {
+        // Issue #3163: a blank control with no reason read as a stalled
+        // portal. The server names the cause, so show that sentence.
+        showSelectError(selectElement, reason || 'No sites found.');
+        return;
+    }
     selectElement.innerHTML = '<option value="">-- Select Site --</option>';
     sites.forEach(function(site) {
         var opt = document.createElement('option');
@@ -375,9 +381,7 @@ function populateSiteOptions(selectElement, sites) {
         selectElement.appendChild(opt);
     });
     selectElement.disabled = false;
-    if (sites.length === 0) {
-        selectElement.innerHTML = '<option value="">No sites found</option>';
-    }
+    selectElement.title = '';  // Clear a reason an earlier empty answer left behind.
 }
 
 // ---------------------------------------------------------------------------
@@ -418,14 +422,20 @@ function fetchDevices(siteSelect, deviceSelect) {
                 showSelectError(deviceSelect, 'Cannot load the devices. ' + data.error);
                 return;
             }
-            populateDeviceOptions(deviceSelect, data.devices || []);
+            populateDeviceOptions(deviceSelect, data.devices || [], data.reason);
         })
         .catch(function(err) {
             showSelectError(deviceSelect, 'Cannot load the devices. ' + err.message);
         });
 }
 
-function populateDeviceOptions(select, devices) {
+function populateDeviceOptions(select, devices, reason) {
+    if (devices.length === 0) {
+        // Issue #3163: a blank control with no reason read as a stalled
+        // portal. The server names the cause, so show that sentence.
+        showSelectError(select, reason || 'No devices found.');
+        return;
+    }
     select.innerHTML = '<option value="">-- Select Device --</option>';
     devices.forEach(function(device) {
         var opt = document.createElement('option');
@@ -436,9 +446,7 @@ function populateDeviceOptions(select, devices) {
         select.appendChild(opt);
     });
     select.disabled = false;
-    if (devices.length === 0) {
-        select.innerHTML = '<option value="">No devices found</option>';
-    }
+    select.title = '';  // Clear a reason an earlier empty answer left behind.
 }
 
 function buildDeviceLabel(device) {
@@ -479,7 +487,7 @@ function fetchClients(siteSelect, clientSelect) {
                 showSelectError(clientSelect, 'Cannot load the clients. ' + data.error);
                 return;
             }
-            populateClientOptions(clientSelect, data.clients || []);
+            populateClientOptions(clientSelect, data.clients || [], data.reason);
         })
         .catch(function(err) {
             showSelectError(clientSelect, 'Cannot load the clients. ' + err.message);
@@ -487,7 +495,13 @@ function fetchClients(siteSelect, clientSelect) {
         });
 }
 
-function populateClientOptions(select, clients) {
+function populateClientOptions(select, clients, reason) {
+    if (clients.length === 0) {
+        // Issue #3163: a blank control with no reason read as a stalled
+        // portal. The server names the cause, so show that sentence.
+        showSelectError(select, reason || 'No clients found.');
+        return;
+    }
     select.innerHTML = '<option value="">-- Select Client --</option>';
     clients.forEach(function(client, idx) {
         var opt = document.createElement('option');
@@ -497,9 +511,7 @@ function populateClientOptions(select, clients) {
         select.appendChild(opt);
     });
     select.disabled = false;
-    if (clients.length === 0) {
-        select.innerHTML = '<option value="">No clients found</option>';
-    }
+    select.title = '';  // Clear a reason an earlier empty answer left behind.
 }
 
 function buildClientLabel(client) {
