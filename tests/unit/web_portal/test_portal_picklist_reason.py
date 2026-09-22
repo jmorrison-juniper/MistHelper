@@ -9,6 +9,8 @@ API may have failed, or the organization may truly hold no site.
 These tests hold the explanation in place for all three selectors.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from web_portal.routes.operations import (
@@ -170,4 +172,70 @@ class TestACloudFailureNamesItself:
         result = _fetch_site_clients(object(), "site-1")  # Run the code under test.
         assert result == []  # The control still receives a list.
         assert result.reason == API_ERROR_REASON.format(error="RuntimeError")  # The wireless source failed first.
+        assert result.reason != NO_ROWS_REASON  # The control must never claim the site holds no client.
+
+
+class TestAnHttpFailureNamesItself:
+    """The Mist cloud can refuse a call or fail it. The control must say so.
+
+    The old code answered with an empty list on every one of these, so an
+    operator saw the same blank control for an expired token, a rate limit,
+    and a cloud outage. Each case now names the failure. Issue #3163.
+    """
+
+    @staticmethod
+    def raising_api(error: Exception) -> MagicMock:
+        """Return a stand-in SDK whose every call raises the supplied error."""
+        api = MagicMock()  # A mock keeps the test offline, so no real request leaves the machine.
+        api.api.v1.orgs.sites.listOrgSites.side_effect = error  # The site lookup must raise.
+        api.api.v1.sites.devices.listSiteDevices.side_effect = error  # The device lookup must raise.
+        api.api.v1.sites.clients.searchSiteWirelessClients.side_effect = error  # The wireless lookup must raise.
+        api.api.v1.sites.clients.searchSiteWiredClients.side_effect = error  # The wired lookup must raise.
+        return api
+
+    @pytest.mark.parametrize(
+        ("status", "cause"),
+        [
+            (401, "the token expired"),
+            (403, "the token lacks the scope"),
+            (404, "the organization is gone"),
+            (429, "the cloud rate limited the call"),
+        ],
+    )
+    def test_a_client_error_names_the_failure(self, status: int, cause: str) -> None:
+        """An HTTP 4xx answer names the failure instead of showing a blank control."""
+        error = RuntimeError(f"HTTP {status}: {cause}")  # Build the failure the cloud would raise.
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            result = _fetch_org_sites(object(), "org-1")  # Run the code under test.
+        assert result == []  # The route reads len(), so the answer must stay a list.
+        assert result.reason == API_ERROR_REASON.format(error="RuntimeError")  # The control names the failure.
+        assert result.reason != NO_ROWS_REASON  # The control must never claim the organization holds no site.
+
+    @pytest.mark.parametrize("status", [500, 502, 503])
+    def test_a_server_error_names_the_failure(self, status: int) -> None:
+        """An HTTP 5xx answer names the failure instead of showing a blank control."""
+        error = RuntimeError(f"HTTP {status}: the cloud failed")  # Build the failure the cloud would raise.
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            result = _fetch_org_sites(object(), "org-1")  # Run the code under test.
+        assert result == []  # The route reads len(), so the answer must stay a list.
+        assert result.reason == API_ERROR_REASON.format(error="RuntimeError")  # The control names the failure.
+        assert result.reason != NO_ROWS_REASON  # A cloud fault is never a true zero count.
+
+    @pytest.mark.parametrize("status", [401, 429, 500, 503])
+    def test_a_failed_device_call_names_the_failure(self, status: int) -> None:
+        """The device selector names the failure on any HTTP fault."""
+        error = RuntimeError(f"HTTP {status}")  # Build the failure the cloud would raise.
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            result = _fetch_site_devices(object(), "site-1", "all")  # Run the code under test.
+        assert result == []  # The route reads len(), so the answer must stay a list.
+        assert result.reason == API_ERROR_REASON.format(error="RuntimeError")  # The control names the failure.
+
+    @pytest.mark.parametrize("status", [403, 500])
+    def test_a_failed_client_call_names_the_failure(self, status: int) -> None:
+        """The client selector names the failure when both sources fail."""
+        error = RuntimeError(f"HTTP {status}")  # Build the failure the cloud would raise.
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            result = _fetch_site_clients(object(), "site-1")  # Run the code under test.
+        assert result == []  # The route reads len(), so the answer must stay a list.
+        assert result.reason == API_ERROR_REASON.format(error="RuntimeError")  # The control names the failure.
         assert result.reason != NO_ROWS_REASON  # The control must never claim the site holds no client.
