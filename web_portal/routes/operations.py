@@ -244,7 +244,7 @@ def _build_replay(executor, run_id: str):
                 {
                     "run_id": run_id,
                     "status": "completed",
-                    "message": "Operation completed",
+                    "message": status.get("completion_message") or "Operation completed",  # Preserve no-output reason.
                     "output_files": status.get("output_files", []),
                     "duration_seconds": _calc_duration(status),
                 },
