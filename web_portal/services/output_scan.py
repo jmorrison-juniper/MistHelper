@@ -38,10 +38,21 @@ DEFAULT_SCAN_LIMIT = 200  # One run must not flood the result panel with names.
 _SKIPPED_SUFFIXES = (".tmp", ".part", ".swp", ".lock")  # A partial write is not a report.
 _SKIPPED_PREFIXES = (".", "~")  # A hidden file and an editor backup are not reports.
 
-# Some filesystems record a modification time with one second of granularity, so
-# the run-start mark steps back by this much. A wider window can name one extra
-# file. A narrower window could lose a report, which costs an engineer more.
-_MTIME_GRANULARITY_SECONDS = 1.0
+# Issue #3140: the run-start mark dates each file the later walk finds. The
+# comparison is exact, because a file an operation writes carries a
+# modification time after the run started.
+#
+# Measured inside the container on 2026-09-21, the mount records a modification
+# time with microsecond precision, and every write landed after the mark:
+#
+#   mark=1790039984.044932  mtime=1790039984.059383
+#
+# Warning: a filesystem that truncates the modification time to a whole second
+# could place a write before the mark and hide that report. If this scanner ever
+# runs on such a mount, compare against a mark that is rounded down to the
+# granularity of that filesystem rather than widening the window for everyone. A
+# wider window reports a file the run never wrote, which the tests forbid.
+_MTIME_GRANULARITY_SECONDS = 0.0
 
 # Issue #3140: the scanner walked every entry under the data root, and one
 # operator tree held 11330 corpus PDF files across 19.7 GB. One walk with a stat
@@ -119,12 +130,6 @@ class OutputFileScanner:
         prune, and the portal pays it twice for each operation. A timestamp
         costs nothing and answers the same question, because a report the
         operation wrote carries a modification time after the run started.
-
-        The mark steps back one second, because some filesystems record a
-        modification time with one second of granularity. A file written in the
-        same second as the start would otherwise miss the comparison. The module
-        already prefers a superset over an empty list, so the wider window
-        matches the stated behavior.
         """
         self._started_at = time.time() - _MTIME_GRANULARITY_SECONDS
         logger.info("Output scan marks the run start for %s", self._root)  # Log before the run.
@@ -133,7 +138,8 @@ class OutputFileScanner:
     def changed_files(self) -> list[str]:
         """Return the files that appeared or changed since the run began."""
         logger.info("Output scan reads %s for files the run wrote", self._root)  # Log before the walk.
-        names = [name for name, stamp in self._read_state().items() if stamp >= self._started_at]
+        # A strict comparison keeps a file the run never touched out of the panel.
+        names = [name for name, stamp in self._read_state().items() if stamp > self._started_at]
         names.sort()  # A stable order keeps the result panel readable between runs.
         logger.debug("Output scan found %d changed files", len(names))  # Log the measured count.
         return names[: self._limit]  # Cap the list, so one run cannot flood the panel.
