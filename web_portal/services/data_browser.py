@@ -13,6 +13,7 @@ from collections import deque
 from contextlib import closing
 from itertools import islice
 
+from src.security import CredentialRedactor  # Reuse the shared credential classifier and redactor.
 from web_portal.services.column_order import ColumnOrder  # Issue #3125: lead with the column that names the row.
 from web_portal.services.row_sorter import RowSorter, SortSpec  # Issue #3047: order rows on the server.
 
@@ -584,14 +585,85 @@ class DataBrowserService:
         total_pages: int,
     ) -> dict:
         """Build the response dictionary for one preview page."""
+        safe_rows = DataBrowserService._redact_preview_rows(
+            columns, page_rows
+        )  # Remove secrets before JSON leaves Flask.
         return {
             "columns": columns,
-            "rows": page_rows,
+            "rows": safe_rows,
             "total_rows": total,
             "page": page,
             "per_page": per_page,
             "total_pages": total_pages,
         }
+
+    @staticmethod
+    def _redact_preview_rows(columns: list, page_rows: list) -> list:
+        """Return preview rows with credential fields masked for the browser."""
+        if not page_rows:  # An empty page has no row value to redact.
+            return page_rows  # Keep the existing empty result shape unchanged.
+        if columns == ["Key", "Value"]:  # The JSON object fallback stores field names in the first column.
+            return DataBrowserService._redact_key_value_preview_rows(page_rows)  # Redact the value, not the field name.
+        logger.info("Redacting browser preview rows for %d column(s)", len(columns))  # Log the action, not the values.
+        records = [
+            DataBrowserService._preview_row_to_record(columns, row) for row in page_rows
+        ]  # Match the redactor input.
+        safe_records = CredentialRedactor.redact_records(records)  # Reuse the repository-wide credential redactor.
+        safe_rows = [  # Rebuild the row shape that the browser already renders.
+            DataBrowserService._preview_record_to_row(columns, row, safe_record)
+            for row, safe_record in zip(page_rows, safe_records, strict=True)
+        ]
+        logger.debug("Redacted %d browser preview row(s)", len(safe_rows))  # Report the count, never a row value.
+        return safe_rows  # Hand the browser only masked credential cells.
+
+    @staticmethod
+    def _redact_key_value_preview_rows(page_rows: list) -> list:
+        """Return JSON object fallback rows with credential values masked."""
+        logger.info("Redacting browser key-value preview rows for %d row(s)", len(page_rows))  # Log only the row count.
+        records = [
+            DataBrowserService._key_value_row_to_record(row) for row in page_rows
+        ]  # Shape rows for the redactor.
+        safe_records = CredentialRedactor.redact_records(
+            records
+        )  # Reuse the shared key classifier and redaction marker.
+        safe_rows = [  # Keep the display shape that says which field exists.
+            DataBrowserService._key_value_record_to_row(row, safe_record)
+            for row, safe_record in zip(page_rows, safe_records, strict=True)
+        ]
+        logger.debug("Redacted %d browser key-value preview row(s)", len(safe_rows))  # Report the count only.
+        return safe_rows  # Return field names plus masked credential values.
+
+    @staticmethod
+    def _key_value_row_to_record(row: list) -> dict:
+        """Convert a JSON object fallback row to a one-field record."""
+        key = str(row[0]) if row else ""  # The first cell is the JSON field name.
+        value = row[1] if len(row) > 1 else ""  # The second cell is the value that may hold a secret.
+        return {key: value}  # Let CredentialRedactor decide whether the key is sensitive.
+
+    @staticmethod
+    def _key_value_record_to_row(row: list, safe_record: dict) -> list:
+        """Convert one redacted JSON object record back to a key-value row."""
+        if not row:  # A ragged row with no key must stay visible as an empty row.
+            return row  # Preserve the existing odd shape instead of inventing a key.
+        key = str(row[0])  # Keep the field name visible so the operator knows what exists.
+        safe_value = safe_record.get(key, row[1] if len(row) > 1 else "")  # Use the redacted value when one exists.
+        return [row[0], safe_value] + list(row[2:])  # Preserve any extra ragged cells after the value.
+
+    @staticmethod
+    def _preview_row_to_record(columns: list, row: list) -> dict:
+        """Convert one preview row to a dictionary for the shared redactor."""
+        return {
+            str(column): row[index] if index < len(row) else "" for index, column in enumerate(columns)
+        }  # Preserve short rows.
+
+    @staticmethod
+    def _preview_record_to_row(columns: list, row: list, safe_record: dict) -> list:
+        """Convert a redacted dictionary back to the preview row shape."""
+        return [  # Preserve row order because the browser pairs each cell with the header at the same index.
+            safe_record.get(str(column), row[index] if index < len(row) else "") for index, column in enumerate(columns)
+        ] + list(
+            row[len(columns) :]
+        )  # Preserve extra cells from a ragged row instead of deleting them.
 
     def _filter_rows(self, rows: list, search: str) -> list:
         """Filter rows by search string (case-insensitive)."""

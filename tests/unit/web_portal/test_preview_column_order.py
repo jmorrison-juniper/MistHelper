@@ -24,6 +24,7 @@ import json
 
 import pytest
 
+from src.security import CredentialRedactor
 from web_portal.services.column_order import IDENTITY_PREFERENCE, ColumnOrder
 from web_portal.services.data_browser import DataBrowserService
 from web_portal.services.row_sorter import SortSpec
@@ -156,6 +157,36 @@ class TestSortIndexStaysConsistent:
         spec = SortSpec(column=country_index, descending=False)
         result = service.preview_file(name, page=1, per_page=25, search="", sort=spec)
         assert [row[country_index] for row in result["rows"]] == ["BZ", "CA", "US"]
+
+
+class TestPreviewCredentialRedaction:
+    """The browser preview must mask credential fields while it keeps the columns."""
+
+    def test_preview_rows_redact_passphrase_and_key(self, tmp_path) -> None:
+        """The preview checks two credential fields and emits only the mask."""
+        checked_fields = ("passphrase", "key")  # State the measured field count for issue #3156.
+        fake_value = "NOT-A-REAL-SECRET"  # Use an invented value so the test never stores a real secret.
+        name = _write_csv(  # Drive the same CSV preview path that the operations result table uses.
+            tmp_path,
+            "Security.csv",
+            ["name", *checked_fields],
+            [["Demo WLAN", fake_value, fake_value]],
+        )
+        result = DataBrowserService(str(tmp_path)).preview_file(
+            name, page=1, per_page=25, search=""
+        )  # Read the server output.
+        paired = dict(
+            zip(result["columns"], result["rows"][0], strict=True)
+        )  # Match each rendered cell to its heading.
+        rendered_output = " ".join(
+            str(cell) for row in result["rows"] for cell in row
+        )  # Model the browser-visible text.
+
+        assert len(checked_fields) == 2  # The proof covers passphrase and key.
+        for field in checked_fields:  # Check each credential field by name.
+            assert field in result["columns"]  # The operator still sees that the field exists.
+            assert paired[field] == CredentialRedactor.REDACTION_MARKER  # The browser receives the mask only.
+        assert fake_value not in rendered_output  # The browser-visible text never receives the fake secret.
 
 
 class TestDamagedFilesStillAnswer:

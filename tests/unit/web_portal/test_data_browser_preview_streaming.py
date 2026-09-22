@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from src.security import CredentialRedactor
 from web_portal.services.data_browser import DataBrowserService
 
 
@@ -70,6 +71,20 @@ def test_json_lines_single_item_keeps_key_value_fallback(tmp_path) -> None:
 
     assert result["columns"] == ["Key", "Value"]  # A single object must use the object preview format.
     assert result["rows"] == [["alpha", "1"], ["beta", "Two"]]  # Dict insertion order must stay stable.
+
+
+def test_json_key_value_preview_redacts_credential_value(tmp_path) -> None:
+    """A JSON object preview must keep the field name and mask the value."""
+    fake_value = "NOT-A-REAL-SECRET"  # Use an invented value so no real secret enters the test.
+    json_path = tmp_path / "single.json"  # The JSON preview accepts the .json extension.
+    json_path.write_text(json.dumps({"api_token": fake_value}), encoding="utf-8")  # Model a sensitive JSON field.
+    service = DataBrowserService(str(tmp_path))  # Scope the service to the fixture directory.
+
+    result = service.preview_file("single.json", 1, 25, "")  # Drive the JSON key-value preview path.
+
+    assert result["columns"] == ["Key", "Value"]  # The field-name column must remain visible.
+    assert result["rows"] == [["api_token", CredentialRedactor.REDACTION_MARKER]]  # Only the value is masked.
+    assert fake_value not in " ".join(result["rows"][0])  # The browser text must not receive the fake secret.
 
 
 def test_json_lines_detection_reuses_the_first_parsed_item(tmp_path, monkeypatch) -> None:
