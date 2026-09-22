@@ -6,6 +6,8 @@ and SSE event streaming for real-time progress updates.
 
 import json
 import logging
+import os
+import time
 
 from flask import (
     Blueprint,
@@ -18,6 +20,35 @@ from flask import (
 
 # Module-level logger so every helper identifies its source file in log output.
 logger = logging.getLogger(__name__)
+
+# Seconds one event stream may hold a worker thread before it closes itself.
+# Gunicorn runs a fixed thread pool, and one open stream holds one thread for
+# its whole life. Without this cap, a few forgotten browser tabs take every
+# thread and the portal stops answering. The browser EventSource client
+# reconnects on its own, so a closed stream costs the operator nothing.
+DEFAULT_STREAM_MAX_SECONDS = 300.0
+
+# Seconds the poll waits for one event before it writes a heartbeat.
+STREAM_POLL_TIMEOUT_SECONDS = 5
+
+
+def _stream_max_seconds() -> float:
+    """Read the stream lifetime cap from the environment."""
+    raw = os.environ.get("PORTAL_STREAM_MAX_SECONDS")  # Operator override for a slow site.
+    if raw is None:
+        return DEFAULT_STREAM_MAX_SECONDS  # No override, so use the shipped default.
+    try:
+        parsed = float(raw)  # Accept a fractional value, so a test can use a short cap.
+    except ValueError:
+        # Name the bad value, so the operator can correct the environment file.
+        logger.warning("PORTAL_STREAM_MAX_SECONDS is not a number: %r. Using %.0fs.", raw, DEFAULT_STREAM_MAX_SECONDS)
+        return DEFAULT_STREAM_MAX_SECONDS
+    if parsed <= 0:
+        # A zero or negative cap would close every stream at once, so refuse it.
+        logger.warning("PORTAL_STREAM_MAX_SECONDS must be above zero. Using %.0fs.", DEFAULT_STREAM_MAX_SECONDS)
+        return DEFAULT_STREAM_MAX_SECONDS
+    return parsed
+
 
 operations_bp = Blueprint("operations", __name__)
 
@@ -93,15 +124,27 @@ def operation_stream():
     Handles the race condition where fast operations complete before the
     SSE subscriber connects by checking run status on initial connect
     and on each heartbeat timeout.
+
+    The stream closes itself after a fixed time. One stream holds one worker
+    thread, so an unbounded stream lets a few browser tabs take the whole
+    pool. The browser reconnects on its own after the close.
     """
     run_id = request.args.get("run_id")
     event_bus = current_app.config.get("EVENT_BUS")
-    executor = current_app.config.get("OPERATION_EXECUTOR")
+    executor = _get_executor()  # Build the executor if no earlier request built it, matching the other routes.
     if event_bus is None:
         return jsonify({"error": "Event bus not available"}), 503
+    if executor.get_run_status(run_id) is None:
+        # An unknown run never sends an event, so the stream would heartbeat
+        # forever and hold a thread for nothing. Refuse it instead.
+        logger.warning("Refused an event stream for the unknown run %r.", run_id)
+        return jsonify({"error": "Unknown run_id"}), 404
+
+    max_seconds = _stream_max_seconds()  # Read the cap once, so the whole stream uses one value.
 
     def generate():
         subscriber_id = event_bus.subscribe(run_id)
+        deadline = time.monotonic() + max_seconds  # Fix the close time before the first poll.
         try:
             # Check if operation already completed before SSE connected
             replay = _build_replay(executor, run_id)
@@ -110,7 +153,12 @@ def operation_stream():
                 return
 
             while True:
-                event = event_bus.poll(subscriber_id, timeout=5)
+                if time.monotonic() >= deadline:
+                    # Report the close, so a reader can tell it apart from a crash.
+                    logger.info("Closing the event stream for run %s after %.0fs.", run_id, max_seconds)
+                    yield _format_sse("stream_timeout", {"run_id": run_id})
+                    break
+                event = event_bus.poll(subscriber_id, timeout=STREAM_POLL_TIMEOUT_SECONDS)
                 if event is None:
                     # Check if operation completed while waiting
                     replay = _build_replay(executor, run_id)

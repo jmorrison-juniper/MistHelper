@@ -203,6 +203,14 @@ SHUTDOWN_GRACE_SECONDS="${PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS:-30}"
 # Add a margin past the grace period, so bash waits longer than Gunicorn before it forces a kill.
 CONTAINER_KILL_MARGIN_SECONDS=10
 
+# Size the thread pool. One open event stream holds one thread for its whole
+# life, so the pool must hold more threads than the operator opens browser
+# tabs. A thread that waits on a stream uses almost no processor time, so a
+# larger pool costs little memory. Issue #3164 recorded the outage that four
+# threads caused.
+PORTAL_THREADS="${PORTAL_THREADS:-24}"
+log_container_event "[PORTAL] Using $PORTAL_THREADS worker threads."  # Name the count, so a later outage has the value in the log.
+
 # Start Gunicorn web portal in the background
 # Warning: do not add a dash to `su`. A dash starts a login shell, which clears
 # the environment. Every runtime variable that `compose.yml` supplies is then
@@ -212,7 +220,7 @@ su misthelper -c "cd /app && gunicorn wsgi:app \
     --bind 0.0.0.0:${WEB_PORT} \
     --workers 1 \
     --worker-class gthread \
-    --threads 4 \
+    --threads ${PORTAL_THREADS} \
     --timeout 120 \
     --graceful-timeout ${SHUTDOWN_GRACE_SECONDS} \
     --access-logfile /app/data/portal_access.log \
