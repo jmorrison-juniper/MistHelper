@@ -121,8 +121,31 @@ if ! id "$USERNAME" >/dev/null 2>&1; then
     echo "[SSH] Creating user $USERNAME" >> /app/data/ssh.log
     useradd -m -s /bin/bash "$USERNAME" || true
     usermod -aG sudo "$USERNAME" || true
-    # Ensure /app readable; retain original ownership on writable paths
-    chown -R "$USERNAME" /app/data 2>/dev/null || true
+    # Issue #3138: this step used "chown -R $USERNAME /app/data". That walked the
+    # whole bind mount, which held 14521 files across 19.9 GB on the reporting
+    # workstation, and the container answered no request for about 7 minutes.
+    # During that window "podman ps" reports unhealthy, so an operator cannot
+    # tell a slow start from a failed one.
+    #
+    # The session user writes the log files and its own session directory. It
+    # never writes the document corpus, so the ownership change now names the
+    # paths that a session touches.
+    #
+    # Warning: keep each "|| true" guard. A container that cannot set one owner
+    # must still start, because the portal then names the fault.
+    log_container_event "[SSH] Setting owner $USERNAME on the session paths."
+    for session_path in \
+        /app/data/script.log \
+        /app/data/ssh.log \
+        /app/data/per-host-logs \
+        /app/sessions
+    do
+        [ -e "$session_path" ] && chown -R "$USERNAME" "$session_path" 2>/dev/null || true
+    done
+    # The data root itself must be writable, so the user can create a new report.
+    # This changes one directory entry and never descends.
+    chown "$USERNAME" /app/data 2>/dev/null || true
+    log_container_event "[SSH] Session paths are owned by $USERNAME."
 fi
 
 # Update password if provided (non-empty).
