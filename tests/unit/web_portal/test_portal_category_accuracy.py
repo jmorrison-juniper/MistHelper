@@ -84,14 +84,17 @@ def test_the_three_misleading_categories_are_gone(categories):
 )
 def test_each_misfiled_row_now_sits_with_its_own_kind(categories, menu_number, expected_category, expected_word):
     """Each repaired row sits in the category its label describes."""
-    found = None  # Hold the row, so a failure can name what the page shows.
-    for category in categories:
-        for operation in category["operations"]:
-            if operation["menu_number"] == menu_number:
-                found = (category["name"], operation["description"].lower())
-    assert found is not None, f"menu {menu_number} no longer appears on the page"
-    assert found[0] == expected_category  # The row must sit under the name that describes it.
-    assert expected_word in found[1]  # The label must still match the reason it moved.
+    # Collect every match, so the count also proves the row appears exactly once.
+    found = [
+        (category["name"], operation["description"].lower())
+        for category in categories
+        for operation in category["operations"]
+        if operation["menu_number"] == menu_number
+    ]
+    assert len(found) == 1, f"menu {menu_number} must appear exactly once, and the page shows it {len(found)} times"
+    category_name, label = found[0]  # Unpack the single match for the two checks below.
+    assert category_name == expected_category  # The row must sit under the name that describes it.
+    assert expected_word in label  # The label must still match the reason it moved.
 
 
 def test_every_override_names_a_category_that_exists():
