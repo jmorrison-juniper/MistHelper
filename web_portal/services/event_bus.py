@@ -62,6 +62,11 @@ class PortalEventBus:
         # WHY: hold the drop total that triggers the next report. See the
         # FIRST_DROP_LOG_THRESHOLD comment for the reason behind the rate limit.
         self._next_drop_log_at = self.FIRST_DROP_LOG_THRESHOLD
+        # Hold the numbers of a drop report that no thread has written yet.
+        # The enqueue path runs while the lock is held, and it must not log
+        # there, so publish() reports these numbers after it unlocks.
+        # Issue #3177 recorded the deadlock that a log record caused.
+        self._pending_drop_report: tuple | None = None
 
     def start(self) -> None:
         """Start the heartbeat timer thread.
@@ -136,6 +141,17 @@ class PortalEventBus:
                 if not self._matches_filter(sub_info, run_id):
                     continue
                 self._enqueue_event(sub_info["queue"], event)
+            report = self._take_drop_report()  # Read and clear the pending report inside the lock.
+        # Warning: this report must stay outside the lock. A log record reaches
+        # _RunLogHandler.emit, which calls publish again. Reporting inside the
+        # lock made this thread wait for a lock it already held, and the wait
+        # never ended. Issue #3177 holds the captured stack.
+        if report is not None:
+            logger.warning(
+                "Web portal event bus dropped %d server-sent event(s): %d evicted oldest, "
+                "%d rejected newest. A subscriber reads the stream too slowly.",
+                *report,
+            )
 
     def poll(self, subscriber_id: str, timeout: float = 35) -> dict:
         """Block until an event is available or timeout expires."""
@@ -183,9 +199,15 @@ class PortalEventBus:
             self._record_event_drop()  # Report the loss on the rate-limited schedule.
 
     def _record_event_drop(self) -> None:
-        """Report a dropped event, at a rate that grows with the drop total.
+        """Note that a dropped event needs a report, at a growing threshold.
 
-        A per-drop WARNING is not an option here. A queue that overflows once
+        Warning: this method must never call the logging framework. The portal
+        installs ``_RunLogHandler``, whose ``emit`` calls ``publish``, and
+        ``publish`` holds ``self._lock`` while this runs. A log record here
+        therefore re-enters ``publish`` on the same thread and waits for a lock
+        that thread already holds. Issue #3177 recorded the permanent hang.
+
+        A per-drop report is not an option either. A queue that overflows once
         overflows again on the next event, so the log would fill with identical
         lines. Issue #1766 records that noise already dilutes the WARNING level
         in this project. The threshold therefore doubles after each report, so
@@ -194,15 +216,20 @@ class PortalEventBus:
         total = self.dropped_event_count  # Read the combined total for both loss paths.
         if total < self._next_drop_log_at:
             return  # Stay silent until the total reaches the next threshold.
-        logger.warning(
-            "Web portal event bus dropped %d server-sent event(s): %d evicted oldest, "
-            "%d rejected newest. A subscriber reads the stream too slowly.",
-            total,
-            self._evicted_event_count,
-            self._rejected_event_count,
-        )
+        # Hold the numbers for the caller, which reports them after it unlocks.
+        self._pending_drop_report = (total, self._evicted_event_count, self._rejected_event_count)
         # WHY: raise the bar before the next report, so a burst cannot flood the log.
         self._next_drop_log_at = total * self.DROP_LOG_GROWTH_FACTOR
+
+    def _take_drop_report(self) -> tuple | None:
+        """Return the pending drop report and clear it, or return None.
+
+        The caller must already hold ``self._lock``, and it must log the
+        returned numbers only after it releases that lock.
+        """
+        report = self._pending_drop_report  # Read the value the enqueue path left.
+        self._pending_drop_report = None  # Clear it, so one loss reports one time.
+        return report
 
     def _log_drop_summary(self) -> None:
         """Report the final count of dropped events when the bus stops.
@@ -278,4 +305,8 @@ class PortalEventBus:
             stale = [sid for sid, info in self._subscribers.items() if info["created_at"] < cutoff]
             for sid in stale:
                 del self._subscribers[sid]
-                logger.info("Cleaned up stale SSE subscriber %s", sid[:8])
+        # Warning: report outside the lock. A log record reaches
+        # _RunLogHandler.emit, which calls publish, and publish waits for this
+        # same lock. Issue #3177 holds the captured stack.
+        for sid in stale:
+            logger.info("Cleaned up stale SSE subscriber %s", sid[:8])
