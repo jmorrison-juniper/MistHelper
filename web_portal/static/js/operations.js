@@ -761,8 +761,8 @@ function startSSEStream(runId) {
 
     source.addEventListener('complete', function(event) {
         var data = JSON.parse(event.data);
-        setStatus('complete', data.message || 'Operation completed');
-        updateProgress(100, 'Done');
+        updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
+        setStatus('complete', data.message || 'Operation completed');  // Keep a no-output reason visible.
         showOutputFiles(data.output_files || []);
         finishRun();
         source.close();
@@ -794,8 +794,8 @@ function checkRunStatus(runId) {
         .then(readJsonAnswer)
         .then(function(data) {
             if (data.status === 'completed') {
-                setStatus('complete', 'Operation completed');
-                updateProgress(100, 'Done');
+                updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
+                setStatus('complete', data.completion_message || 'Operation completed');  // Show the no-output reason when the run has no file.
                 showOutputFiles(data.output_files || []);
                 finishRun();
             } else if (data.status === 'failed') {
@@ -1059,8 +1059,8 @@ function replayExistingLogs(runId) {
                 showOutputFiles(data.output_files);
             }
             if (data.status === 'completed') {
-                setStatus('complete', 'Operation completed');
-                updateProgress(100, 'Done');
+                updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
+                setStatus('complete', data.completion_message || 'Operation completed');  // Preserve the no-output reason during a reconnect.
                 finishRun();
             } else if (data.status === 'failed') {
                 setStatus('error', data.error_message || 'Operation failed');

@@ -15,7 +15,6 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import wait as wait_for_futures
 from typing import Any
 
-
 from src.utils.operation_registry import OperationRegistry
 from web_portal.services.output_scan import OutputFileScanner
 
@@ -85,6 +84,33 @@ ACTIVE_RUN_STATUSES = ("pending", "running")
 # Issue #1861: without a bound, a stuck run could hang a restart forever.
 DEFAULT_OPERATION_SHUTDOWN_GRACE_SECONDS = 30
 
+# A completed run with no file must still state the empty-result reason.
+NO_OUTPUT_REASON_MARKERS = (
+    "no ",  # Most empty-result lines start with "No ... data found".
+    "not found",  # Some selection helpers use this wording for an empty lookup.
+    "returned no data",  # Some get-by-id handlers use this explicit API result line.
+    "skipping",  # Some optional workflows report an intentional skip.
+    "0 ",  # Some summary lines state that zero records were exported.
+)
+
+# A missing required answer is not a successful run, even when the handler returned.
+MISSING_INPUT_MARKERS = (
+    "no site selected",  # Site-scoped handlers log this when the portal supplied no site answer.
+    "no client input provided",  # Client insight handlers log this when no client answer arrived.
+    "no device selected",  # Device insight handlers log this when no device answer arrived.
+    "no identifier supplied",  # Get-by-id handlers log this when a required ID is blank.
+    "no beacon selected",  # Beacon detail handlers log this when the beacon ID is blank.
+    "no value provided",  # Shared identifier prompts log this when a required value is blank.
+    "not available in web portal",  # The executor logs this when raw interactive input is required.
+)
+
+# A handler that catches its own API error still did not produce a successful result.
+HANDLED_ERROR_MARKERS = (
+    "error fetching",  # Exporters use this wording when an SDK call failed and was caught.
+    "failed to",  # Other helpers use this wording for a caught operational failure.
+    "could not",  # Prompt and lookup helpers use this wording for an unrecoverable failure.
+)
+
 
 def _read_positive_int_env(name: str, default: int) -> int:
     """Read a positive whole number cap from the environment."""
@@ -149,6 +175,13 @@ def _number_param(name: str, label: str, **kwargs) -> dict:
     return param
 
 
+def _required_text_param(name: str, label: str, **kwargs) -> dict:
+    """Build a required text parameter definition."""
+    param = _text_param(name, label, **kwargs)  # Reuse the optional text builder so all text metadata stays uniform.
+    param["required"] = True  # Make the Run button wait for the identifier that the API path requires.
+    return param  # Return a complete parameter definition for the portal form.
+
+
 def _choice_param(name: str, label: str, options: list, **kwargs) -> dict:
     """Build a choice-type parameter definition."""
     param = {
@@ -178,10 +211,14 @@ def _build_registry() -> dict:
         "51",
         "52",
         "53",
+        "66",  # Menu 66 prompts for a site before it can list site beacons.
         "68",
         "70",
         "71",
         "84",
+        "210",  # Menu 210 prompts for a site before it can read assets of interest.
+        "213",  # Menu 213 prompts for a site before it can read the application list.
+        "224",  # Menu 224 prompts for a site before it can search rogue events.
     ]
     for menu in site_only_menus:
         registry[menu] = {
@@ -208,6 +245,25 @@ def _build_registry() -> dict:
     registry["73"] = {
         "category": "interactive",
         "parameters": [_site_param(), _device_param("gateway")],
+    }
+
+    registry["75"] = {  # Menu 75 asks for a site and then one client.
+        "category": "interactive",  # The portal must render input controls before Run.
+        "parameters": [
+            _site_param(),  # Answer the site prompt that the handler reads first.
+            {
+                "name": "client_mac",  # Match the client selector name used by the browser form.
+                "label": "Client",  # Show the operator the required client choice.
+                "param_type": "client",  # Load clients after the site choice is known.
+                "required": True,  # A client insight export cannot run without a client.
+                "depends_on": "site_id",  # Keep the client selector scoped to the selected site.
+            },
+        ],
+    }
+
+    registry["76"] = {  # Menu 76 asks for a site and then one device.
+        "category": "interactive",  # The portal must render input controls before Run.
+        "parameters": [_site_param(), _device_param("all")],  # Answer the site and device prompts.
     }
 
     # --- Forwarding table (menu 6): gateway + text fields ---
@@ -291,6 +347,16 @@ def _build_registry() -> dict:
                 "required": True,
                 "depends_on": "site_id",
             },
+        ],
+    }
+
+    registry["209"] = {  # Menu 209 asks for raw identifiers, not a site name.
+        "category": "interactive",  # The portal must block Run until both identifiers exist.
+        "parameters": [
+            _required_text_param("site_id", "Site ID", placeholder="Mist site UUID"),  # API path site identifier.
+            _required_text_param(  # Build the required beacon identifier control.
+                "beacon_id", "Beacon ID", placeholder="Mist beacon UUID"  # API path beacon identifier.
+            ),
         ],
     }
 
@@ -630,6 +696,7 @@ class OperationExecutor:
             "output_files": deque(maxlen=self._output_files_max),
             # The counter reports the output file names the cap discarded.
             "dropped_output_file_count": 0,
+            "completion_message": None,
         }
 
     def _prune_runs(self) -> None:
@@ -682,8 +749,7 @@ class OperationExecutor:
             else:
                 self._capture_and_run(run, func)
             if not run.get("_stop_requested"):
-                self._update_status(run, "completed", 100)
-                self._publish_complete(run)
+                self._finish_successful_operation(run)  # Assess result evidence before the portal reports success.
         except (EOFError, SystemExit):
             if not run.get("_stop_requested"):
                 self._handle_failure(run, "Operation requires interactive input (not available in web portal)")
@@ -711,6 +777,75 @@ class OperationExecutor:
         finally:
             root_logger.removeHandler(handler)
             self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
+
+    def _finish_successful_operation(self, run: dict) -> None:
+        """Mark a returned handler as complete only when the result is honest."""
+        logger.info("Assessing operation %s result evidence", run["menu_number"])  # Log before the evidence check.
+        missing_input = self._missing_input_reason(run)  # Read the log for a required answer that never arrived.
+        if missing_input:  # A required missing answer means the operation did not really run.
+            logger.debug("Operation %s missed required input: %s", run["menu_number"], missing_input)  # Result trace.
+            self._handle_failure(run, f"Operation could not run because required input was missing: {missing_input}")
+            return
+        handled_error = self._handled_error_reason(run)  # Read the log for an error that the handler caught.
+        if handled_error:  # A caught handler error must not report as successful completion.
+            logger.debug(  # Result trace.
+                "Operation %s returned after a handled error: %s", run["menu_number"], handled_error
+            )
+            self._handle_failure(run, handled_error)  # Surface the concrete handler error to the status record.
+            return
+        completion_message = self._completion_message(run)  # Build the message shown on the completed run.
+        if completion_message is None:  # No file and no no-data reason would be silent success.
+            logger.debug("Operation %s produced no output evidence", run["menu_number"])  # Result trace.
+            self._handle_failure(run, "Operation finished without an output file or a no-data message.")
+            return
+        run["completion_message"] = completion_message  # Store the message for REST replay and SSE completion.
+        logger.debug("Operation %s completion message: %s", run["menu_number"], completion_message)  # Result trace.
+        self._update_status(run, "completed", 100)  # Mark completion only after the evidence check passes.
+        self._publish_complete(run)  # Publish the complete event with the honest result message.
+
+    def _completion_message(self, run: dict) -> str | None:
+        """Return a completion message that names a file or an empty-result reason."""
+        if run["output_files"]:  # Output files are concrete evidence that the operation produced a result.
+            return "Operation completed"  # Keep the established success message when a result exists.
+        reason = self._no_output_reason(run)  # Read the main log for the empty-result explanation.
+        if reason:  # A readable no-data line is an honest completed result.
+            return f"Operation completed with no output file: {reason}"
+        return None  # No file and no explanation must not become a silent success.
+
+    def _missing_input_reason(self, run: dict) -> str | None:
+        """Return the first log line that says a required input was missing."""
+        for message in self._run_log_messages(run):  # Scan the user-facing log in the order the operator saw.
+            lowered = message.lower()  # Normalize case so marker checks stay simple.
+            if any(marker in lowered for marker in MISSING_INPUT_MARKERS):  # Detect a required missing answer.
+                return message  # Return the exact log line, so the operator sees the concrete missing input.
+        return None  # No missing-input message appeared.
+
+    def _handled_error_reason(self, run: dict) -> str | None:
+        """Return the first log line that says the handler caught an error."""
+        for message in self._run_log_messages(run):  # Scan the user-facing log in the order the operator saw.
+            lowered = message.lower()  # Normalize case so marker checks stay simple.
+            if any(marker in lowered for marker in HANDLED_ERROR_MARKERS):  # Detect a caught handler failure.
+                return message  # Return the exact error line, so the operator sees the concrete cause.
+        return None  # No handled-error message appeared.
+
+    def _no_output_reason(self, run: dict) -> str | None:
+        """Return the first log line that explains a completed run with no file."""
+        for message in reversed(self._run_log_messages(run)):  # Prefer the latest summary line.
+            lowered = message.lower()  # Normalize case so marker checks stay simple.
+            if any(marker in lowered for marker in NO_OUTPUT_REASON_MARKERS):  # Detect an empty-result explanation.
+                return message  # Return the exact line from the handler.
+        return None  # No empty-result message appeared.
+
+    @staticmethod
+    def _run_log_messages(run: dict) -> list[str]:
+        """Return the user-facing log messages from a run record."""
+        messages: list[str] = []  # Keep a plain list so callers can scan more than once.
+        for entry in run.get("log_messages", []):  # The run stores dict entries from _RunLogHandler.
+            if isinstance(entry, dict):  # Normal path for records captured by the handler.
+                messages.append(str(entry.get("message", "")))  # Use only the text for marker checks.
+            else:  # Defensive path for older tests or legacy run records.
+                messages.append(str(entry))  # Preserve the message text in a uniform list.
+        return messages  # Return the normalized log messages.
 
     def _record_scanned_files(self, run: dict, scanner: OutputFileScanner) -> None:
         """Merge the scanned file names into the run record without a duplicate."""
@@ -757,7 +892,8 @@ class OperationExecutor:
             {
                 "run_id": run["run_id"],
                 "status": "completed",
-                "message": "Operation completed",
+                "message": run.get("completion_message") or "Operation completed",
+                "completion_message": run.get("completion_message") or "Operation completed",
                 # Copy the bounded deque into a list, so the SSE stream can encode the event.
                 "output_files": list(run["output_files"]),
                 "duration_seconds": round(duration, 1),
@@ -795,6 +931,7 @@ class OperationExecutor:
             "completed_at": run["completed_at"],
             "progress_pct": run["progress_pct"],
             "error_message": run["error_message"],
+            "completion_message": run.get("completion_message"),
             "output_files": list(run.get("output_files", [])),
             # The read boundary copies each bounded deque into a list, so JSON encoding still works.
             "log_messages": list(run.get("log_messages", [])),
