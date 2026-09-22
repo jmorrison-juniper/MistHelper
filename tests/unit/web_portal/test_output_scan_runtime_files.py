@@ -25,7 +25,11 @@ import pytest
 
 from src.utils import rate_limiting
 from web_portal.services.operation import OperationExecutor
-from web_portal.services.output_scan import RUNTIME_FILE_NAMES, OutputFileScanner
+from web_portal.services.output_scan import (
+    EXCLUDED_DIR_NAMES,
+    RUNTIME_FILE_NAMES,
+    OutputFileScanner,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
@@ -118,3 +122,43 @@ class TestSkipListMatchesItsWriters:
             "delay_metrics.json",
             "tuning_data.json",
         }
+
+
+class TestPrunedTreesStayOutOfTheWalk:
+    """Issue #3140 prunes large trees. A pruned tree can never reach the panel."""
+
+    def test_a_pruned_tree_is_not_scanned(self, tmp_path):
+        """A file inside an excluded tree must not reach the result panel."""
+        corpus = tmp_path / "juniper_pdf_library"
+        corpus.mkdir()
+        scanner = OutputFileScanner(str(tmp_path))
+        scanner.snapshot()
+        (corpus / "manual.pdf").write_bytes(b"%PDF-1.4\n")  # The corpus is reference material.
+        (tmp_path / "Report.csv").write_text("a,b\n", encoding="utf-8")  # A real report.
+        assert scanner.changed_files() == ["Report.csv"]
+
+    def test_the_walk_counts_every_unpruned_file(self, tmp_path):
+        """The scan must still read a nested report that no rule excludes."""
+        nested = tmp_path / "exports" / "weekly"
+        nested.mkdir(parents=True)
+        scanner = OutputFileScanner(str(tmp_path))
+        scanner.snapshot()
+        (nested / "Inventory.csv").write_text("a\n", encoding="utf-8")
+        assert scanner.changed_files() == ["exports/weekly/Inventory.csv"]
+
+    def test_ssh_transcripts_are_never_pruned(self):
+        """A per-host SSH log is operation output, so the prune list must omit it."""
+        # The companion test above asserts the scanner reports this path. Naming
+        # the directory here stops a future edit from pruning it by mistake.
+        assert "per-host-logs" not in EXCLUDED_DIR_NAMES
+
+    def test_the_operator_can_extend_the_prune_list(self, tmp_path, monkeypatch):
+        """A site can hold a large tree that this repository cannot know about."""
+        bulky = tmp_path / "site_archive"
+        bulky.mkdir()
+        monkeypatch.setenv("PORTAL_SCAN_EXCLUDE_DIRS", "site_archive")
+        scanner = OutputFileScanner(str(tmp_path))
+        scanner.snapshot()
+        (bulky / "old.csv").write_text("a\n", encoding="utf-8")
+        (tmp_path / "New.csv").write_text("a\n", encoding="utf-8")
+        assert scanner.changed_files() == ["New.csv"]

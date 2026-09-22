@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,46 @@ logger = logging.getLogger(__name__)
 DEFAULT_SCAN_LIMIT = 200  # One run must not flood the result panel with names.
 _SKIPPED_SUFFIXES = (".tmp", ".part", ".swp", ".lock")  # A partial write is not a report.
 _SKIPPED_PREFIXES = (".", "~")  # A hidden file and an editor backup are not reports.
+
+# Issue #3140: the run-start mark dates each file the later walk finds. The
+# comparison is exact, because a file an operation writes carries a
+# modification time after the run started.
+#
+# Measured inside the container on 2026-09-21, the mount records a modification
+# time with microsecond precision, and every write landed after the mark:
+#
+#   mark=1790039984.044932  mtime=1790039984.059383
+#
+# Warning: a filesystem that truncates the modification time to a whole second
+# could place a write before the mark and hide that report. If this scanner ever
+# runs on such a mount, compare against a mark that is rounded down to the
+# granularity of that filesystem rather than widening the window for everyone. A
+# wider window reports a file the run never wrote, which the tests forbid.
+_MTIME_GRANULARITY_SECONDS = 0.0
+
+# Issue #3140: the scanner walked every entry under the data root, and one
+# operator tree held 11330 corpus PDF files across 19.7 GB. One walk with a stat
+# call took 341 seconds on that mount, and the portal runs two walks for each
+# operation, so every run paid about 11 minutes whatever work it did.
+#
+# No operation writes a report into one of these trees, so the walk skips them
+# whole rather than visiting each file. Pruning needs `os.walk`, because
+# `Path.rglob` offers no way to refuse a subdirectory before it descends.
+#
+# Warning: add a name here only when no operation writes a report into it. A
+# pruned tree can never reach the result panel.
+EXCLUDED_DIR_NAMES = (
+    "juniper_pdf_library",  # The harvested Juniper document corpus. Read-only reference material.
+    "mist_ideas_cache",  # The scraped idea cache. src/ideas writes it outside a portal run.
+    "portal-test-artifacts",  # The end-to-end test reports. A test run is not an operation output.
+    "agent_logs",  # The agent telemetry directory that copilot-instructions.md names.
+    "__pycache__",  # Compiled bytecode is never a report.
+    ".git",  # Repository metadata is never a report.
+)
+
+# An operator can extend the prune list without a code change, because a site
+# can hold a large tree that this repository cannot know about.
+_EXTRA_EXCLUDES_ENV = "PORTAL_SCAN_EXCLUDE_DIRS"
 
 # Issue #3126: the runtime writes these files on every run, and no operation
 # means one as its output. The scanner would otherwise list four names for a
@@ -61,7 +102,20 @@ class OutputFileScanner:
         chosen = data_dir or os.environ.get("DATA_DIR", "data")  # The portal writes every output file here.
         self._root = Path(chosen).resolve()  # An absolute root keeps the relative names stable.
         self._limit = max(1, limit)  # One name must always fit, so a zero cap cannot hide a report.
-        self._before: dict[str, float] = {}  # Hold the modification time of each file before the run.
+        self._before: dict[str, float] = {}  # Kept for callers that read the pre-run picture.
+        self._started_at: float = 0.0  # The run-start mark that dates each file found later.
+        self._excluded = self._resolve_excludes()  # Name the trees the walk refuses to enter.
+
+    @staticmethod
+    def _resolve_excludes() -> frozenset[str]:
+        """Return the directory names the walk skips, including operator additions."""
+        names = set(EXCLUDED_DIR_NAMES)  # Start from the trees this repository knows are large.
+        raw = os.environ.get(_EXTRA_EXCLUDES_ENV, "")  # Read the operator list, which may be absent.
+        for entry in raw.split(os.pathsep):  # The separator matches the platform path convention.
+            cleaned = entry.strip()  # A stray space must not create an unmatchable name.
+            if cleaned:  # An empty field would prune nothing and cost a comparison.
+                names.add(cleaned)
+        return frozenset(names)  # A frozen set states that the list cannot change mid-run.
 
     @property
     def root(self) -> Path:
@@ -69,24 +123,26 @@ class OutputFileScanner:
         return self._root
 
     def snapshot(self) -> None:
-        """Record the modification time of every file before the operation runs."""
-        logger.info("Output scan records the state of %s", self._root)  # Log before the directory walk.
-        self._before = self._read_state()  # Keep the pre-run picture for the later comparison.
-        logger.debug("Output scan recorded %d files", len(self._before))  # Log the measured count.
+        """Record the moment the run began, so a later walk can date each file.
+
+        Issue #3140: this method used to walk the whole tree and stat every
+        entry. That walk cost 32 seconds on the reporting mount even after the
+        prune, and the portal pays it twice for each operation. A timestamp
+        costs nothing and answers the same question, because a report the
+        operation wrote carries a modification time after the run started.
+        """
+        self._started_at = time.time() - _MTIME_GRANULARITY_SECONDS
+        logger.info("Output scan marks the run start for %s", self._root)  # Log before the run.
+        logger.debug("Output scan start mark: %.3f", self._started_at)  # State the recorded value.
 
     def changed_files(self) -> list[str]:
-        """Return the files that appeared or changed since the snapshot."""
-        logger.info("Output scan compares %s against the pre-run state", self._root)  # Log before the walk.
-        after = self._read_state()  # Read the directory a second time.
-        names = [name for name, stamp in after.items() if self._is_new_or_changed(name, stamp)]
+        """Return the files that appeared or changed since the run began."""
+        logger.info("Output scan reads %s for files the run wrote", self._root)  # Log before the walk.
+        # A strict comparison keeps a file the run never touched out of the panel.
+        names = [name for name, stamp in self._read_state().items() if stamp > self._started_at]
         names.sort()  # A stable order keeps the result panel readable between runs.
         logger.debug("Output scan found %d changed files", len(names))  # Log the measured count.
         return names[: self._limit]  # Cap the list, so one run cannot flood the panel.
-
-    def _is_new_or_changed(self, name: str, stamp: float) -> bool:
-        """Report whether one file is absent from the snapshot or newer than it."""
-        previous = self._before.get(name)  # A missing entry means the operation created the file.
-        return previous is None or stamp > previous
 
     def _read_state(self) -> dict[str, float]:
         """Return the modification time of every readable file under the root."""
@@ -102,10 +158,21 @@ class OutputFileScanner:
         return state
 
     def _walk(self):
-        """Yield every file under the root that can hold an operation report."""
-        for path in self._root.rglob("*"):
-            if path.is_file() and self._is_reportable(path.name):
-                yield path
+        """Yield every file under the root that can hold an operation report.
+
+        The walk prunes each excluded tree in place, so it never descends into a
+        large read-only corpus. `os.walk` allows that refusal. `Path.rglob` does
+        not, and issue #3140 measured the cost of visiting every entry.
+        """
+        visited_dirs = 0  # Count the directories the walk entered, so the log can prove the scope.
+        for current, dirnames, filenames in os.walk(self._root):
+            # Editing dirnames in place tells os.walk which subtrees to skip.
+            dirnames[:] = [name for name in dirnames if name not in self._excluded]
+            visited_dirs += 1
+            for name in filenames:
+                if self._is_reportable(name):  # Skip a partial write, a hidden file, and bookkeeping.
+                    yield Path(current) / name
+        logger.debug("Output scan entered %d directories", visited_dirs)  # State the measured scope.
 
     @staticmethod
     def _is_reportable(name: str) -> bool:
