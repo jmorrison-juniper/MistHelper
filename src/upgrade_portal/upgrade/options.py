@@ -161,6 +161,13 @@ _PERCENTAGE_HIGHEST = 100
 # that no real maintenance plan reaches.
 _PHASE_COUNT_HIGHEST = 20
 
+# WHY: Issue #3223. Each phase is the cumulative share of the devices that the
+# cloud upgrades by the end of that phase, so a phase of 0 upgrades nothing, a
+# falling list moves backward, and a list that stops before 100 leaves devices
+# out. `src/firmware/org_upgrade_body.py` enforces the same rule for the
+# organization request, and both modes of the portal now share it.
+_PHASE_LOWEST = 1
+
 # A download group of no access point downloads nothing, and a count above this
 # reads as a paste mistake. The cloud default is 10.
 _P2P_SIZE_HIGHEST = 1000
@@ -190,7 +197,10 @@ OPTION_HELP: Mapping[str, tuple[str, str]] = {
     ),
     "canary_phases": (
         "Phases of the staged upgrade",
-        "Write one whole number for each phase, separated by commas. An example is 1,10,50,100.",
+        (
+            "Write one whole number for each phase, separated by commas. Each number must be higher than the "
+            "number before it, and the last number must be 100. An example is 1,10,50,100."
+        ),
     ),
     "max_failures": (
         "Failures allowed inside each phase",
@@ -882,6 +892,30 @@ def _read_optional_boolean(payload: Mapping[str, Any], field: str) -> bool | Non
     return _read_boolean(payload, field, False)
 
 
+def _check_phase_order(phases: tuple[int, ...] | None) -> None:
+    """Refuse a phase list that does not rise from 1 to 100.
+
+    Why:
+        Issue #3223. The old rule checked only that each entry was a whole
+        number, so `50,10`, `10,101`, and `10,50` reached the upgrade request
+        of both modes.
+
+    Args:
+        phases: The phase list, or None when the operator left the control alone.
+
+    Raises:
+        BadOptionError: If a phase is outside 1 to 100, the list does not rise,
+            or the last phase is not 100.
+    """
+    if phases is None:  # An empty control keeps the cloud default.
+        return  # Nothing to judge.
+    in_range = all(_PHASE_LOWEST <= phase <= _PERCENTAGE_HIGHEST for phase in phases)  # Each share is real.
+    rising = all(left < right for left, right in zip(phases, phases[1:], strict=False))  # Each phase adds devices.
+    if not (in_range and rising and phases[-1] == _PERCENTAGE_HIGHEST):  # The last phase must reach every device.
+        logger.warning("Upgrade portal refused a phase list that does not rise from 1 to 100")  # No value logged.
+        raise BadOptionError("canary_phases")  # The label table names the control and its rule.
+
+
 def _read_canary(payload: Mapping[str, Any]) -> CanaryOptions:
     """Read the three staged-upgrade controls.
 
@@ -896,6 +930,7 @@ def _read_canary(payload: Mapping[str, Any]) -> CanaryOptions:
             a value that no rule maps.
     """
     phases = _read_number_list(payload, "canary_phases")
+    _check_phase_order(phases)  # A list that does not rise to 100 never reaches the cloud (issue #3223).
     failures = _read_number_list(payload, "max_failures")
     if failures is not None and len(failures) != len(phases or ()):
         # The cloud needs one failure limit for each phase. A shorter list would

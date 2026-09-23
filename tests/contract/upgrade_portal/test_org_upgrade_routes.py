@@ -336,6 +336,42 @@ def test_invalid_canary_phases_stop_before_submission(org_upgrade_client: FlaskC
     assert answer.get_json()["error"]["code"] == "org_upgrade_options_invalid"
 
 
+@pytest.mark.parametrize("phases", ["50,10", "10,101", "10,50", "0,100"])
+def test_multidevice_invalid_canary_phases_build_no_plan(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+    phases: str,
+) -> None:
+    """Issue #3223: the current multi-device form refuses phases that do not rise from 1 to 100."""
+    store = AggregateStoreStandIn()  # A plan must never reach this store.
+    boundary = AggregateBoundaryStandIn()  # A plan build records its request here.
+    org_upgrade_client.application.config["RUN_STORE"] = store
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary
+    devices = [{"mac": "001122334455", "name": "ap", "device_type": "ap", "model": "AP45"}]  # One AP target.
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+    monkeypatch.setattr(
+        org_upgrade,
+        "build_options_record",
+        lambda session, org_id, site_id, body: {  # Pass the submitted phases through, as the shipped mapper does.
+            "targets": [{**devices[0], "version_before": "old", "version_target": "0.15.1", "site_id": site_id}],
+            "options": {key: body[key] for key in ("strategy", "canary_phases") if key in body},
+        },
+    )
+    answer = org_upgrade_client.post(
+        ORG_OPTIONS_API,
+        json={
+            "selected_types": ["ap"],  # The current page always sends the family list.
+            "version_ap": "0.15.1",
+            "strategy": "canary",
+            "canary_phases": phases,
+            "max_failure_percentage": "5",
+        },
+    )
+    assert answer.status_code == 400  # The options step refuses the phases.
+    assert answer.get_json()["error"]["code"] == "org_upgrade_options_invalid"
+    assert boundary.requests == []  # No plan was built, so no child can carry the phases.
+
+
 def test_submission_requires_the_exact_confirmation(
     org_upgrade_client: FlaskClient,
     org_service: OrgUpgradeServiceStandIn,
