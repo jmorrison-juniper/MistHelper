@@ -208,11 +208,35 @@ def test_a_row_that_prompts_first_offers_real_choices():
     # A chooser prints a numbered table and reads one digit. An option list that
     # is short, empty, or numbered from zero sends the operator to the wrong
     # operation, and the export then names a different endpoint than the label.
+    from src.export.count_exporter import _SITE_OPS as site_count_ops
+    from src.export.simple_endpoint_exporter import _SITE_OPS as site_endpoint_ops
+    from src.export.site_search_exporter import _VALID_ZONE_TYPES
+
+    # Compare each control against the table its own prompt prints. A count
+    # comparison catches a truncated list, which a truthiness check cannot.
+    expected_counts = {
+        "229": len(_VALID_ZONE_TYPES),  # The prompt accepts only these zone families.
+        "236": len(site_count_ops),  # The chooser prints one row for each count operation.
+        "261": len(site_endpoint_ops),  # The chooser prints one row for each endpoint.
+    }
     for menu in sorted(PROMPTS_BEFORE_PICKER):
         control = (PARAMETER_REGISTRY.get(menu) or {})["parameters"][0]
         options = control.get("options") or []
-        assert options, f"menu {menu} offers an empty choice list, so the operator cannot answer"
         assert control["param_type"] == "choice", f"menu {menu} first control is {control['param_type']}"
+        assert (
+            len(options) == expected_counts[menu]
+        ), f"menu {menu} offers {len(options)} choices and its prompt prints {expected_counts[menu]}"
+    # Menus 236 and 261 number their rows from one, so the first value must be
+    # "1". A zero-based list would run the operation above the chosen one.
+    for menu in ("236", "261"):
+        options = (PARAMETER_REGISTRY.get(menu) or {})["parameters"][0]["options"]
+        assert options[0]["value"] == "1", f"menu {menu} numbers its first choice {options[0]['value']}, not 1"
+        values = [option["value"] for option in options]
+        assert values == [str(index) for index in range(1, len(options) + 1)], f"menu {menu} choice values have a gap"
+    # Menu 229 sends its value straight into the URL path, so a value the SDK
+    # rejects produces a 404 rather than an empty result.
+    zone_values = {option["value"] for option in (PARAMETER_REGISTRY["229"])["parameters"][0]["options"]}
+    assert zone_values == set(_VALID_ZONE_TYPES), f"menu 229 offers {sorted(zone_values)}, which the path rejects"
     # Menus 236 and 261 number their rows from one, so the first value must be
     # "1". A zero-based list would run the operation above the chosen one.
     for menu in ("236", "261"):
