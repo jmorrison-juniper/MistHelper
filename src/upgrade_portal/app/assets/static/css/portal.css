@@ -273,6 +273,21 @@
     color: var(--portal-text-muted);
 }
 
+/*
+ * Issue #3278. A cell that holds one control never wraps. The shared cell rule
+ * above lets a word break at any letter, and a control inherits that rule. At a
+ * width of 390 pixels the table then made the action column narrower than the
+ * label. The Choose, Open, and Select labels broke into groups of letters.
+ *
+ * A cell that never wraps keeps the whole label on one line. If the row is
+ * wider than the screen, the scroll box of the table scrolls sideways, and the
+ * page itself does not. The organization table and the site table use this
+ * class in both the single-site mode and the multi-site mode.
+ */
+.portal-table .cell-control {
+    white-space: nowrap;
+}
+
 /* --------------------------------------------------------------------------
  * 4a. The history table
  *
