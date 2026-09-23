@@ -38,6 +38,7 @@ INDEX_NAME = "index.html"  # The page that a person opens first.
 SLOW_STEP_COUNT = 15  # The index lists this many of the slowest steps.
 READY_BUDGET_VARIABLE = "UPGRADE_PORTAL_E2E_READY_SECONDS"  # The start budget that the server fixture reads.
 READY_BUDGET_SECONDS = "120"  # Several portals start at once, so each start may take this long.
+JOURNEY_VARIABLE = "UPGRADE_PORTAL_JOURNEYS"  # The opt-in switch that the journey conftest reads.
 
 
 def pytest_command(*extra: str) -> list[str]:
@@ -82,7 +83,11 @@ def run_child(arguments: list[str], label: str) -> dict[str, Any]:
     """
     logger.info("Start the journey group %s", label)  # Log before the child starts.
     started = time.perf_counter()  # The wall time of the whole child.
-    environment = {**os.environ, READY_BUDGET_VARIABLE: READY_BUDGET_SECONDS}  # A loaded host starts slowly.
+    environment = {  # A loaded host starts slowly, and the journeys run only on request.
+        **os.environ,
+        READY_BUDGET_VARIABLE: READY_BUDGET_SECONDS,
+        JOURNEY_VARIABLE: "1",
+    }
     finished = subprocess.run(  # nosec B603 - a fixed pytest command with no shell.
         pytest_command(*arguments), capture_output=True, text=True, cwd=REPO_ROOT, env=environment, check=False
     )

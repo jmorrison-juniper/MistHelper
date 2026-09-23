@@ -9,6 +9,7 @@ Why:
 
 from __future__ import annotations
 
+import os  # Read the opt-in switch of the journey harness.
 from collections.abc import Callable, Iterator  # Type the recorder factory.
 from typing import Any  # Playwright objects carry no stub types here.
 
@@ -17,6 +18,33 @@ import pytest
 from tests.e2e.upgrade_portal.journeys.evidence import JourneyRecorder  # The one evidence recorder.
 
 OUTCOME_ATTRIBUTE = "journey_outcome"  # The item attribute that the report hook writes.
+JOURNEY_VARIABLE = "UPGRADE_PORTAL_JOURNEYS"  # The opt-in switch of the journey harness.
+JOURNEY_SKIP_REASON = (  # The reason that a default run prints for each journey.
+    "The operator journeys of issue #3200 run only on request. Run "
+    "`python -m tests.e2e.upgrade_portal.journeys.run_journeys`, or set UPGRADE_PORTAL_JOURNEYS=1."
+)
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip every journey unless the run opts in.
+
+    Why:
+        A journey that starts a job takes the site locks of its server, so the
+        journeys need the runner, which gives each start journey its own server.
+        A default test run, and the CI test job, must not run them in one
+        shared process.
+
+    Args:
+        config: The pytest configuration.
+        items: Every collected test item.
+    """
+    del config  # The switch lives in the environment, not in the options.
+    if os.environ.get(JOURNEY_VARIABLE) == "1":  # The runner or the engineer opted in.
+        return  # Keep every journey.
+    skip = pytest.mark.skip(reason=JOURNEY_SKIP_REASON)  # One marker for every journey.
+    for item in items:  # Mark only the journeys of this folder.
+        if "journeys" in item.nodeid.replace("\\", "/").split("/"):  # A test below this folder.
+            item.add_marker(skip)  # The default run reports a named skip.
 
 
 def pytest_configure(config: pytest.Config) -> None:
