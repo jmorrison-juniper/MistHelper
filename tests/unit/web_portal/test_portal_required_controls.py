@@ -69,9 +69,6 @@ AUDIT_SEES_FEWER_PROMPTS = frozenset({"246"})
 EXTRA_CONTROL_BACKLOG = frozenset(
     {
         "5",  # OrgExportUtils.e911_report
-        "8",  # OrgInventoryExporter.inventory
-        "9",  # OrgInventoryExporter.devices
-        "10",  # OrgInventoryExporter.devices_with_site_info
         "29",  # OrgClientSecurityExporter.rogue_clients
         "30",  # OrgClientSecurityExporter.rogue_aps
         "33",  # GatewayTestExporter.synthetic_tests
@@ -350,6 +347,15 @@ def test_a_site_export_does_not_ask_for_a_client(menu):
     # the Run control never became usable. Issue #3191 recorded that blocked row.
     declared = _declared_types(menu)
     assert declared == ["site"], f"menu {menu} declares {declared}, so it asks for a value it never reads"
+
+
+@pytest.mark.parametrize("menu", ["6", "7", "8", "9", "10"])
+def test_inventory_and_analysis_rows_have_no_stale_websocket_controls(menu):
+    """Menus 6 through 10 do not ask for WebSocket command values."""
+    # Issue #3226 proved that these controls belonged to the old WebSocket
+    # numbering, and the real handlers now run from organization context only.
+    declared = _declared_types(menu)
+    assert declared == [], f"menu {menu} declares {declared}, so a stale WebSocket control remains"
 
 
 def test_a_long_running_server_is_command_line_only():
