@@ -1194,6 +1194,20 @@ class _RunLogHandler(logging.Handler):
         "Fast mode:",
         "Retry ",
         "FAST RETRY",
+        # Issue #3229: the dependency resolver and the bootstrap log these lines
+        # at INFO, because the repository logging standard requires an INFO
+        # record before each action. They describe plumbing, not the operation.
+        # In a small operation they filled most of the Execution Log and pushed
+        # the result out of view. script.log keeps each one at INFO, and the
+        # Debug Log panel still shows each one.
+        "Resolving the bound host module",
+        "Resolving the active dependency host",
+        "Resolving source dependency ",
+        "Resolving the active application context",
+        "Resolving the application context for ",
+        "Selecting the bootstrap application context",
+        "Activating the bootstrap application context",
+        "Setting the active application context",
     )
 
     # Regex to extract output filenames from log messages.
