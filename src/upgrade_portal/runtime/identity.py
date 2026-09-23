@@ -69,6 +69,8 @@ BROWSER_ID_BYTES: Final[int] = 32  # 32 random bytes give 43 URL-safe characters
 BROWSER_ID_MAX_AGE_SECONDS: Final[int] = 31_536_000  # 365 days keeps the value across windows
 ENVIRONMENT_TOKEN_VARIABLES: Final[tuple[str, ...]] = ("MIST_APITOKEN", "MIST_API_TOKEN")  # Names only
 ERROR_NOT_AUTHENTICATED: Final[str] = "not_authenticated"  # The fixed code a test asserts on
+SIGN_IN_PAGE_PATH: Final[str] = "/auth/signin"  # The form that a browser page with no session opens (issue #3214)
+SIGN_IN_REDIRECT_STATUS: Final[int] = 303  # See Other, so the browser opens the form with GET
 SESSION_OWNER_KEY: Final[str] = "owner_key"  # The field inside the signed browser session
 ERROR_ORG_NOT_PERMITTED: Final[str] = "org_not_permitted"  # The fixed code of the organization refusal
 ORG_NOT_PERMITTED_MESSAGE: Final[str] = "This session may not act on that organization."  # One sentence, one place
@@ -842,6 +844,24 @@ def not_authenticated_response() -> tuple[Response, int]:
     return flask.jsonify(payload), 401  # The status and the code always travel together
 
 
+def _prefers_page() -> bool:
+    """Return true when a browser asks for a page and not for JSON.
+
+    Why:
+        Issue #3214. A browser that opened a portal page with no session read
+        the raw JSON envelope and found no way back to the sign-in form. A
+        browser navigation prefers `text/html`, while `fetch`, a JSON client,
+        and a request with no Accept header all select JSON, so they keep the
+        envelope of `contracts/README.md:31-39`.
+
+    Returns:
+        True for a GET request whose client prefers HTML over JSON.
+    """
+    accept = flask.request.accept_mimetypes  # The content types that the client names.
+    preferred = accept.best_match(("application/json", "text/html"))  # JSON wins a tie, as in the routes.
+    return flask.request.method == "GET" and preferred == "text/html"  # Only a page view gets the form.
+
+
 def _refusal_for_request() -> tuple[Response, int] | None:
     """Return the refusal envelope when the request carries no session.
 
@@ -850,12 +870,16 @@ def _refusal_for_request() -> tuple[Response, int] | None:
         its own. A test can then call the decision without a decorator.
 
     Returns:
-        The `not_authenticated` envelope, or None when a session exists.
+        The `not_authenticated` envelope, a redirect to the sign-in form for a
+        browser page, or None when a session exists.
     """
     if current_session() is not None:  # A valid pair of session and cookie answers the question
         return None  # The route function may run
     # The endpoint name is our own text, so the record stays ASCII.
     _LOGGER.info("identity: refused a request with no session for endpoint %s", flask.request.endpoint)
+    if _prefers_page():  # A browser page goes to the form, so the operator can sign in again (issue #3214).
+        _LOGGER.debug("identity: sent the browser page to the sign-in form")  # The result of the decision.
+        return flask.redirect(SIGN_IN_PAGE_PATH, code=SIGN_IN_REDIRECT_STATUS), SIGN_IN_REDIRECT_STATUS
     return not_authenticated_response()  # The one envelope that every guarded route answers with
 
 

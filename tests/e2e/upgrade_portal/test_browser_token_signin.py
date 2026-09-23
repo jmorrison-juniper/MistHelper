@@ -82,6 +82,25 @@ def _require_ok(status: int, path: str) -> None:
     assert status == OK_STATUS, f"{path} answered {status}, not {OK_STATUS}."  # Every other status is a fault.
 
 
+def _opened_signin(page: Any, status: int) -> bool:
+    """Return true when a page visit with no session ended on the sign-in form.
+
+    Why:
+        Issue #3214. A browser page with no session once showed the raw JSON
+        envelope. The guard now sends a browser page to the sign-in form, so
+        the visit ends on that form with status 200.
+
+    Args:
+        page: The browser page that opened the signed-in path.
+        status: The status of the final answer.
+
+    Returns:
+        True when the final answer is the sign-in form.
+    """
+    on_form = page.url.split("?", 1)[0].endswith(SIGNIN_PATH)  # The address of the final page.
+    return status == OK_STATUS and on_form  # The form rendered at its own address.
+
+
 def _reset_evidence(path: Path) -> None:
     """Remove the browser-token evidence file before one scenario starts.
 
@@ -246,7 +265,9 @@ class TestBrowserTokenSignInJourney:
         signed_out_page.get_by_test_id(SIGNOUT_BUTTON_ID).click()  # Use the real sign-out control.
         signed_out_page.wait_for_url(f"**{SIGNIN_PATH}", timeout=GATE_TIMEOUT_MS)  # Sign-out returns to the form.
         status = _page_status(signed_out_page, ORG_PAGE_PATH)  # A later signed-in page must now refuse.
-        assert status == UNAUTHORIZED_STATUS, f"{ORG_PAGE_PATH} answered {status} after sign-out."
+        assert _opened_signin(
+            signed_out_page, status
+        ), f"{ORG_PAGE_PATH} answered {status} after sign-out and did not open the form."
 
     def test_invalid_token_stays_on_the_form_and_creates_no_session(
         self,
@@ -271,7 +292,9 @@ class TestBrowserTokenSignInJourney:
         assert event.value.status == BAD_REQUEST_STATUS, f"The refusal answered {event.value.status}."
         sync_api.expect(signed_out_page.get_by_test_id(SIGNIN_ERROR_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
         status = _page_status(signed_out_page, ORG_PAGE_PATH)  # A refused token must not create a session.
-        assert status == UNAUTHORIZED_STATUS, f"{ORG_PAGE_PATH} answered {status} after a refused token."
+        assert _opened_signin(
+            signed_out_page, status
+        ), f"{ORG_PAGE_PATH} answered {status} after a refused token and did not open the form."
         evidence = browser_token_evidence_path.read_text(encoding="utf-8")  # The evidence must remain safe.
         assert bad_token not in evidence, "The refusal evidence holds the submitted token value."
 
@@ -286,7 +309,9 @@ class TestBrowserTokenSignInJourney:
         signed_out_page.get_by_test_id(SIGNIN_SUBMIT_ID).click()  # Submit with an empty token field.
         sync_api.expect(signed_out_page.get_by_test_id(SIGNIN_ERROR_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
         status = _page_status(signed_out_page, ORG_PAGE_PATH)  # The empty field must not create a session.
-        assert status == UNAUTHORIZED_STATUS, f"{ORG_PAGE_PATH} answered {status} after an empty token."
+        assert _opened_signin(
+            signed_out_page, status
+        ), f"{ORG_PAGE_PATH} answered {status} after an empty token and did not open the form."
 
     def test_missing_session_cannot_open_a_signed_in_page(self, signed_out_page: Any) -> None:
         """A browser with no session cannot open the organization picker.
@@ -295,7 +320,9 @@ class TestBrowserTokenSignInJourney:
             signed_out_page: A page with no preloaded portal session.
         """
         status = _page_status(signed_out_page, ORG_PAGE_PATH)  # The signed-in page requires a session.
-        assert status == UNAUTHORIZED_STATUS, f"{ORG_PAGE_PATH} answered {status} without a session."
+        assert _opened_signin(
+            signed_out_page, status
+        ), f"{ORG_PAGE_PATH} answered {status} without a session and did not open the form."
 
     def test_cookie_fixture_session_does_not_use_the_browser_token_seam(
         self,
