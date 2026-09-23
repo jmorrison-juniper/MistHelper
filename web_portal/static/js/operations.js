@@ -13,6 +13,7 @@ var selectedCategory = null;
 var currentRunId = null;
 var currentSSE = null;
 var currentParameters = [];
+var baseParameters = [];  // Keep the server-sent controls so dynamic controls can be rebuilt after a choice changes.
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -235,6 +236,8 @@ function handleParameterResponse(data, formDiv, fieldsDiv) {
     var runBtn = document.getElementById('runBtn');
 
     if (data.category === 'cli_only') {
+        baseParameters = [];  // Clear stale dynamic controls when the selected row cannot run in the browser.
+        currentParameters = [];  // Prevent an old form from affecting a command-line-only row.
         showCliOnlyPanel(data.cli_only_message);
         runBtn.disabled = true;
         setElementVisible(runBtn, false);
@@ -244,11 +247,14 @@ function handleParameterResponse(data, formDiv, fieldsDiv) {
 
     setElementVisible(runBtn, true);
     if (data.parameters && data.parameters.length > 0) {
-        currentParameters = data.parameters;
+        baseParameters = data.parameters.slice();  // Keep a clean copy before a dynamic endpoint choice adds controls.
+        currentParameters = data.parameters.slice();  // Start validation with the controls the server returned.
         renderParameterFields(data.parameters, fieldsDiv);
         setElementVisible(formDiv, true);
         validateForm();
     } else {
+        baseParameters = [];  // Clear stale controls from the previously selected operation.
+        currentParameters = [];  // A row without controls should not validate stale dynamic fields.
         setElementVisible(formDiv, false);
     }
 }
@@ -535,8 +541,56 @@ function createChoiceDropdown(param) {
         if (param.default && opt.value === param.default) option.selected = true;
         select.appendChild(option);
     });
-    select.addEventListener('change', function() { validateForm(); });
+    select.addEventListener('change', function() {  // Rebuild dependent endpoint controls when the choice changes.
+        if (param.dynamic_parameters) {
+            renderDynamicParameters(param, select.value);  // Show only the prompts for the selected endpoint.
+        }
+        validateForm();  // Refresh the Run button after the dynamic field set changes.
+    });
     return select;
+}
+
+function renderDynamicParameters(parentParam, parentValue) {
+    removeDynamicParameters(parentParam.name);  // Remove controls from the previous endpoint choice.
+    var dynamicParameters = readDynamicParameters(parentParam, parentValue);  // Read controls for the selected choice.
+    var parentGroup = document.getElementById('param-group-' + parentParam.name);  // Insert controls after the chooser.
+    if (!parentGroup) return;  // A missing parent means the form was redrawn before this event completed.
+    insertDynamicParameters(parentParam, dynamicParameters, parentGroup);  // Add controls in prompt order.
+}
+
+function readDynamicParameters(parentParam, parentValue) {
+    if (!parentValue) return [];  // No endpoint choice means there are no later prompts yet.
+    var dynamicMap = parentParam.dynamic_parameters || {};  // The registry stores controls by chooser value.
+    return dynamicMap[parentValue] || [];  // An endpoint with no later prompt returns an empty list.
+}
+
+function removeDynamicParameters(parentName) {
+    var dynamicGroups = document.querySelectorAll('[data-dynamic-parent="' + parentName + '"]');  // Find old groups.
+    Array.prototype.forEach.call(dynamicGroups, function(group) {  // Remove each old control group from the form.
+        group.remove();  // Delete stale controls so their values cannot be submitted.
+    });
+    currentParameters = baseParameters.slice();  // Reset answer order to the server-sent controls.
+}
+
+function insertDynamicParameters(parentParam, dynamicParameters, parentGroup) {
+    var insertionPoint = parentGroup;  // Keep each new group in the same order as the prompt list.
+    var parentIndex = findParameterIndex(parentParam.name);  // Insert answers immediately after the chooser answer.
+    dynamicParameters.forEach(function(dynamicParam, index) {  // Add every prompt control for this endpoint.
+        var parameter = Object.assign({}, dynamicParam);  // Copy metadata so the registry object stays unchanged.
+        parameter.dynamic_parent = parentParam.name;  // Mark the answer as owned by this chooser.
+        currentParameters.splice(parentIndex + index + 1, 0, parameter);  // Preserve input queue order.
+        var group = buildParameterGroup(parameter);  // Build the same control shape as static parameters.
+        group.dataset.dynamicParent = parentParam.name;  // Let the next choice remove this group.
+        insertionPoint.insertAdjacentElement('afterend', group);  // Place the control after the prior prompt.
+        insertionPoint = group;  // Move the insertion point forward to preserve order.
+    });
+}
+
+function findParameterIndex(parameterName) {
+    for (var index = 0; index < currentParameters.length; index += 1) {  // Search current answer order.
+        if (currentParameters[index].name === parameterName) return index;  // Return the owner prompt position.
+    }
+    return currentParameters.length - 1;  // Append safely if the owner is missing.
 }
 
 function createTextInput(param) {
