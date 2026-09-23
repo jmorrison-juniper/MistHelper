@@ -51,6 +51,7 @@ from jinja2 import TemplateNotFound  # Marks a template that a later module stil
 
 from ...capture.devices import normalize_device_mac  # Match inventory rows to the upgrade target records.
 from ...runtime import identity, lock  # The session guard, and the site lock that FR-072 to FR-083 fix.
+from ...runtime.cloud_cache import CloudReadCache  # Issue #3210: reuse one organization list read briefly.
 from ...upgrade.options import (  # Reuse the upgrade target rules.
     TypedVersionSelector,
     build_version_options,
@@ -156,6 +157,13 @@ CLOUD_READS: dict[str, tuple[str, str]] = {
     "listOrgSites": ("mistapi.api.v1.orgs.sites", "listOrgSites"),  # The site records of one organization.
     "listOrgSiteStats": ("mistapi.api.v1.orgs.stats", "listOrgSiteStats"),  # The device count of each site.
 }
+
+# WHY: Issue #3210. The picker, the site post, and the multi-site options steps
+# each read both lists again. One minute of reuse for the same operator saves a
+# paged cloud read on each step. The lock read stays live on every view.
+CLOUD_READ_TTL_SECONDS = 60  # A site list and a device count change rarely inside one minute.
+CLOUD_READ_CACHE_LIMIT = 256  # The size bound across every operator; the oldest entry leaves first.
+CLOUD_READ_CACHE = CloudReadCache(CLOUD_READ_TTL_SECONDS, CLOUD_READ_CACHE_LIMIT)  # One cache for this process.
 
 # Warning: `type="all"` on `searchOrgDevices` can break the read. That value is
 # legal on `listSiteDevicesStats` only. This module passes no device type at
@@ -334,10 +342,18 @@ def default_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
     if target is None or record is None:  # A caller defect, or a request with no session.
         logger.warning("select: no cloud read is bound to the name %s", name)  # Name the read, never a token.
         return []  # An empty list keeps the page working and shows no site.
-    call: Any = getattr(import_module(target[0]), target[1])  # The software development kit owns the call.
     org_id = str(parameters.get(ORG_FIELD, ""))  # Every read of this module is organization-scoped.
+    key = (record.owner.key, name, org_id, id(record.cloud_session))  # One operator and one credential.
+    kept = CLOUD_READ_CACHE.get(key)  # Issue #3210: a fresh answer saves one paged cloud read.
+    if kept is not None:  # The same operator read this list less than a minute ago.
+        return kept  # A copy of the kept records.
+    call: Any = getattr(import_module(target[0]), target[1])  # The software development kit owns the call.
+    logger.info("select: read %s of organization %s from the cloud", name, org_id)  # Log before the read.
     page = call(record.cloud_session, org_id=org_id, limit=SITE_LIST_LIMIT)  # The first page of the read.
-    return collect_pages(record.cloud_session, page, name)  # Every later page travels through the same helper.
+    records = collect_pages(record.cloud_session, page, name)  # Every later page travels through the same helper.
+    CLOUD_READ_CACHE.put(key, records)  # Keep a non-empty answer for the next view.
+    logger.debug("select: read %s record(s) of %s", len(records), name)  # Log the count after the read.
+    return records  # Every record of every page.
 
 
 def collect_pages(cloud_session: Any, response: Any, name: str) -> list[dict[str, Any]]:
