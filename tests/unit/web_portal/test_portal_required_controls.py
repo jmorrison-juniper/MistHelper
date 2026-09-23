@@ -352,6 +352,26 @@ def test_a_site_export_does_not_ask_for_a_client(menu):
     assert declared == ["site"], f"menu {menu} declares {declared}, so it asks for a value it never reads"
 
 
+@pytest.mark.parametrize(
+    "menu,expected",
+    [
+        ("64", ["site"]),
+        ("67", ["site"]),
+        ("78", ["site", "device"]),
+        ("82", ["site"]),
+        ("83", ["site"]),
+        ("197", ["site"]),
+        ("203", ["site"]),
+    ],
+)
+def test_rows_with_hidden_prompt_utils_controls_declare_prompt_order(menu, expected):
+    """Rows with injected prompt helpers must still declare browser controls."""
+    # Issue #3184 proved that the prompt audit misses these injected helpers.
+    # The guard locks the source-read prompt order into the portal registry.
+    declared = _declared_types(menu)
+    assert declared == expected, f"menu {menu} declares {declared}, not {expected}"
+
+
 def test_a_long_running_server_is_command_line_only():
     """Menu 241 serves until stopped, so the portal refuses to host it."""
     # A browser run held a worker thread until the request timed out and then
