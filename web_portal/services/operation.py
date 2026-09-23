@@ -314,8 +314,13 @@ def _build_registry() -> dict:
         # it. The sweep proved that a plain call survives a closed stream by
         # taking its default, so the site control alone unblocks the run.
         "63",  # SiteDeviceExporter.device_virtual_chassis
-        "78",  # SiteAnomalyExporter.device_anomaly_events
+        "64",  # SiteClientExporter.wifi_clients
+        "67",  # SiteConfigExporter.maps
+        "82",  # SiteExportUtils.switches_metrics
+        "83",  # SiteExportUtils.beacons_stats
+        "197",  # ClientPacketCaptureDownloader.run
         "199",  # SiteWebhookDeliveriesExporter.deliveries
+        "203",  # SiteClientExporter.wan_client_events
     ]
     for menu in site_only_menus:
         registry[menu] = {
@@ -397,7 +402,7 @@ def _build_registry() -> dict:
     }
 
     # --- Site + device (all types) ---
-    site_device_all_menus = ["72", "74", "80", "81", "85"]
+    site_device_all_menus = ["72", "74", "78", "80", "81", "85"]
     for menu in site_device_all_menus:
         registry[menu] = {
             "category": "interactive",
