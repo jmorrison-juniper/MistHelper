@@ -186,7 +186,7 @@ class TestFetchWiredClientsSilentFailure:
     def test_logs_exception_on_api_failure(self, caplog):
         """A Mist API exception must produce an ERROR log."""
         mistapi_mock = MagicMock()
-        mistapi_mock.api.v1.sites.clients.searchSiteWiredClients.side_effect = RuntimeError("rate limit exceeded")
+        mistapi_mock.api.v1.sites.wired_clients.searchSiteWiredClients.side_effect = RuntimeError("rate limit exceeded")
         apisession = _fake_apisession()
         with caplog.at_level(logging.ERROR, logger="web_portal.routes.operations"):
             _fetch_wired_clients(mistapi_mock, apisession, "site-def")
@@ -199,7 +199,7 @@ class TestFetchWiredClientsSilentFailure:
     def test_result_carries_error_signal_on_api_failure(self, caplog):
         """A failed wired call must not look like a site with no wired clients."""
         mistapi_mock = MagicMock()
-        mistapi_mock.api.v1.sites.clients.searchSiteWiredClients.side_effect = RuntimeError("rate limit exceeded")
+        mistapi_mock.api.v1.sites.wired_clients.searchSiteWiredClients.side_effect = RuntimeError("rate limit exceeded")
         apisession = _fake_apisession()
         result = _fetch_wired_clients(mistapi_mock, apisession, "site-def")
 
