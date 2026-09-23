@@ -162,6 +162,31 @@ class TestRunRecordMerge:
         executor._finalize_output_files(run, tmp_path)  # Keep existing files even when their name is a cache elsewhere.
         assert list(run["output_files"]) == ["SiteList.csv"]  # Menu 1 must still show its result file.
 
+    def test_finalize_moves_device_cache_after_the_device_anomaly_reason(self, tmp_path):
+        """A device prompt cache must not preview as a device anomaly result."""
+        from web_portal.services.operation import OperationExecutor
+
+        (tmp_path / "SiteInventory.csv").write_text("device\n", encoding="utf-8")  # Create the device cache file.
+        run = {"run_id": "r5", "menu_number": "78", "output_files": deque(maxlen=50)}  # Build a device run.
+        run["log_messages"] = [  # Store the no-data reason that the handler logged for this device.
+            {"message": "! 0 device anomaly events exported to SiteDeviceAnomalyEvents_AlamoSanAntonio_0.csv"}
+        ]
+        run["output_files"].append("SiteInventory.csv")  # Simulate the scanner finding only the device cache.
+        executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
+        executor._finalize_output_files(run, tmp_path)  # Remove cache-only evidence when the run says no data.
+        assert list(run["output_files"]) == []  # The completion guard must show the no-data reason instead.
+
+    def test_finalize_keeps_site_inventory_when_menu_sixty_exports_it(self, tmp_path):
+        """Menu 60 must keep its site inventory output because it is the operation result."""
+        from web_portal.services.operation import OperationExecutor
+
+        (tmp_path / "SiteInventory.csv").write_text("device\n", encoding="utf-8")  # Create the menu 60 result file.
+        run = {"run_id": "r6", "menu_number": "60", "output_files": deque(maxlen=50)}  # Build a menu 60 run.
+        run["output_files"].append("SiteInventory.csv")  # Simulate the scanner finding the inventory export.
+        executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
+        executor._finalize_output_files(run, tmp_path)  # Keep the inventory file for the true inventory operation.
+        assert list(run["output_files"]) == ["SiteInventory.csv"]  # Menu 60 must still show its result file.
+
     def test_finalize_drops_lonely_site_cache_when_the_run_reports_no_data(self, tmp_path):
         """A prompt cache must not hide an empty site-scoped operation result."""
         from web_portal.services.operation import OperationExecutor

@@ -133,10 +133,10 @@ HANDLED_ERROR_MARKERS = (
 )
 
 # Prompt helper caches can change during site-scoped operations, but they are not the operation result.
-PROMPT_CACHE_OUTPUT_FILES = frozenset({"SiteList.csv"})
+PROMPT_CACHE_OUTPUT_FILES = frozenset({"SiteInventory.csv", "SiteList.csv"})
 
-# Menu 1 exports the site list, so the cache name is a real result for that menu.
-PROMPT_CACHE_EXPORT_MENUS = frozenset({"1"})
+# Menus 1 and 60 export prompt cache files as their direct results, so they keep those names first.
+PROMPT_CACHE_EXPORT_MENUS = frozenset({"1", "60"})
 
 
 def _read_positive_int_env(name: str, default: int) -> int:
