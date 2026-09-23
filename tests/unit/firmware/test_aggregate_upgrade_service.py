@@ -307,3 +307,97 @@ def test_stale_cancel_claim_does_not_repeat_and_continues() -> None:
     assert record["children"][0]["cancellation"]["status"] == "cancel_unknown"  # Never repeat the AP cancel.
     assert org.calls.count("cancel") == 0  # The stale AP call did not run again.
     assert len([call for call in devices.calls if call[0] == "cancel"]) == 2  # Eligible untouched jobs ran once.
+
+
+# WHY: Issue #3220. The Mist OpenAPI names these words for a job that still
+# runs. Each one must keep the child readable, or the portal stops the reads
+# and releases the site locks during the write.
+RUNNING_CLOUD_WORDS = (
+    "created",
+    "queued",
+    "downloading",
+    "downloaded",
+    "upgrading",
+    "inprogress",
+    "scheduled",
+    "starting",
+)
+
+
+@pytest.mark.parametrize("word", RUNNING_CLOUD_WORDS)
+def test_each_running_cloud_word_keeps_the_child_running(word: str) -> None:
+    """Every running word of the Mist enums maps to the running child state."""
+    assert AggregateUpgradeService._child_state(word) == "running"  # The child stays readable and active.
+    assert AggregateUpgradeService._child_state(word.upper()) == "running"  # The case of the word never matters.
+
+
+@pytest.mark.parametrize(
+    ("word", "state"),
+    [
+        ("completed", "completed"),
+        ("success", "completed"),
+        ("failed", "failed"),
+        ("error", "failed"),
+        ("cancelled", "cancelled"),
+        ("partial", "partial"),
+        ("unknown", "read_unknown"),
+        ("", "read_unknown"),
+        ("a-word-that-no-enum-holds", "read_unknown"),
+    ],
+)
+def test_final_and_unknown_cloud_words_map_to_service_states(word: str, state: str) -> None:
+    """A final word maps to its final state, and any other word stays readable."""
+    assert AggregateUpgradeService._child_state(word) == state  # One rule, one place.
+
+
+def test_an_upgrading_ap_child_is_read_again_until_it_completes() -> None:
+    """An AP child that reports upgrading stays readable and reaches completed on a later read."""
+
+    class SteppingOrg(OrgServiceStandIn):
+        """Answer upgrading once, then completed."""
+
+        def __init__(self) -> None:
+            """Start with one running answer."""
+            super().__init__()  # Keep the call recorder.
+            self.running = True  # The first read reports a job that still runs.
+
+        def status(self, session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
+            """Report upgrading once, then the normal completed answer."""
+            if self.running:  # The cloud still writes the firmware.
+                self.running = False  # The next read reports the end.
+                self.calls.append("status")  # Record this read like every other read.
+                return OrgUpgradeResult(org_id, upgrade_id, 200, {"id": upgrade_id, "status": "upgrading"}, None)
+            return super().status(session, org_id, upgrade_id)  # The job ended.
+
+    org = SteppingOrg()  # The AP reader that steps through two answers.
+    service = AggregateUpgradeService(org, DeviceServiceStandIn())  # Keep all calls offline.
+    record = build_record(service)  # Build the complete plan.
+    store = CasStore(record)  # Coordinate each transition.
+    service.submit(SAFE_SESSION, record, store, permit_lock)  # Create known child identifiers.
+    service.status(SAFE_SESSION, record, store)  # The first read reports upgrading.
+    ap_child = record["children"][0]  # The one organization AP child.
+    assert ap_child["status"] == "running"  # The child stays active.
+    assert ap_child["cloud_status"] == "upgrading"  # The exact cloud word stays visible.
+    assert record["state"] != "attention_required"  # A normal running job needs no attention.
+    service.status(SAFE_SESSION, record, store)  # The second read must reach the AP child again.
+    assert record["children"][0]["status"] == "completed"  # The portal saw the end of the job.
+    assert org.calls.count("status") == 2  # The running child was read a second time.
+
+
+def test_an_invalid_status_answer_stays_readable() -> None:
+    """An AP status answer with an error keeps the child readable for the next poll."""
+
+    class BrokenOrg(OrgServiceStandIn):
+        """Answer one invalid status."""
+
+        def status(self, session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
+            """Report an invalid answer."""
+            self.calls.append("status")  # Prove that the read ran.
+            return OrgUpgradeResult(org_id, upgrade_id, 502, {}, "The cloud answered an invalid body.")
+
+    service = AggregateUpgradeService(BrokenOrg(), DeviceServiceStandIn())  # Keep all calls offline.
+    record = build_record(service)  # Build the complete plan.
+    store = CasStore(record)  # Coordinate each transition.
+    service.submit(SAFE_SESSION, record, store, permit_lock)  # Create known child identifiers.
+    service.status(SAFE_SESSION, record, store)  # The read answers an error.
+    assert record["children"][0]["status"] == "read_unknown"  # The next poll reads the child again.

@@ -76,7 +76,7 @@
         <tr>
           <th scope="row">{{ site.site_name | default(site.site_id, true) }}</th>
           <td>{{ site.device_family | default('ap', true) }}</td>
-          <td>{{ site.status | default('unknown', true) }}</td>
+          <td>{{ site.status | default('unknown', true) }}{% if site.cloud_status and site.cloud_status != site.status %} ({{ site.cloud_status }}){% endif %}</td>
           <td>{{ site.total | default(0, true) }}</td>
           <td>{{ site.upgraded | default(0, true) }}</td>
           <td>{{ site.failed | default(0, true) }}</td>

@@ -32,6 +32,18 @@ AP_ACTIVE_STATES = frozenset(  # Cloud words that prove one AP site job still ru
 )
 AP_FAILURE_STATES = frozenset({"failed", "rejected", "error"})  # Known terminal failure words.
 AP_TERMINAL_STATES = frozenset({"completed", "cancelled"})  # Known terminal nonfailure words.
+# WHY: Issue #3220. The Mist OpenAPI names these upgrade status words:
+# `created`, `queued`, `downloading`, `downloaded`, `upgrading` for an
+# organization job and a site job, and `inprogress`, `scheduled`, `starting`
+# for one device. Each word means that the job still runs. A word outside the
+# service vocabulary once fell through to `attention_required`, which released
+# every site lock during the write and stopped the child reads.
+CLOUD_RUNNING_WORDS = AP_ACTIVE_STATES | frozenset(  # Every cloud word that proves a job still runs.
+    {"created", "queued", "downloaded", "inprogress", "starting"}
+)
+CLOUD_COMPLETED_WORDS = frozenset({"completed", "success"})  # Cloud words of a job that ended well.
+CLOUD_FAILED_WORDS = frozenset({"failed", "error"})  # Cloud words of a job that ended with a failure.
+CLOUD_KEPT_WORDS = frozenset({"partial", "cancelled", "rejected"})  # Service words that a read keeps as they are.
 SETTLED_STATE_RULES = (  # Map one settled child-state group to one aggregate word, in priority order.
     (frozenset({"submission_claimed"}), "running"),  # A fresh claim is still in flight.
     (frozenset({"submission_unknown", "not_submitted", "unknown"}), "attention_required"),  # Uncertain work.
@@ -594,7 +606,39 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         child["raw_status"] = result.raw_status  # Preserve the exact HTTP status.
         child["status_data"] = deepcopy(dict(result.data))  # Preserve every site and target result.
         child["error"] = result.error  # Preserve an invalid response as an error.
-        child["status"] = self._org_status(result)  # Normalize only the display state.
+        cloud_word = self._org_status(result)  # The cloud word, or the word that the site entries combine to.
+        child["cloud_status"] = cloud_word  # Keep the exact word visible on the progress page.
+        child["status"] = self._child_state(cloud_word)  # Normalize only the display state.
+
+    @staticmethod
+    def _child_state(cloud_word: str) -> str:
+        """Map one cloud status word to the child state vocabulary of this service.
+
+        Why:
+            Issue #3220. `_can_read` reads a child again only while its state is
+            accepted, partial, running, or read_unknown, and `_aggregate_state`
+            treats only those states as active. A raw cloud word such as
+            `upgrading` matched neither set, so the portal stopped the reads,
+            showed `attention_required`, and released every site lock while the
+            devices still wrote firmware. An unknown word now stays readable,
+            so no lock releases on a word that this service cannot judge.
+
+        Args:
+            cloud_word: The status word that the cloud answered.
+
+        Returns:
+            running, completed, failed, partial, cancelled, rejected, or read_unknown.
+        """
+        word = str(cloud_word or "").strip().lower()  # Compare one normalized form.
+        if word in CLOUD_RUNNING_WORDS:  # The job still writes firmware.
+            return "running"  # Keep the child readable and the sites locked.
+        if word in CLOUD_COMPLETED_WORDS:  # The job ended well.
+            return "completed"  # A known final state.
+        if word in CLOUD_FAILED_WORDS:  # The job ended with a failure.
+            return "failed"  # A known final state.
+        if word in CLOUD_KEPT_WORDS:  # A word that this service already owns.
+            return word  # Keep it as it is.
+        return "read_unknown"  # An unknown answer stays readable, so the next poll may judge it.
 
     @staticmethod
     def _org_status(result: OrgUpgradeResult) -> str:
@@ -623,9 +667,9 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         if not values:  # An answer without site entries reports no known state.
             return "unknown"  # Never turn an empty answer into a success.
         seen = set(values)  # Compare the distinct words one time.
-        if seen & AP_ACTIVE_STATES:  # An active site keeps the child nonterminal.
+        if seen & CLOUD_RUNNING_WORDS:  # An active site keeps the child nonterminal.
             return "partial" if seen & AP_FAILURE_STATES else "running"  # Show mixed failure.
-        if seen <= AP_TERMINAL_STATES:  # Every site reached a terminal nonfailure state.
+        if seen <= AP_TERMINAL_STATES | {"success"}:  # Every site reached a terminal nonfailure state.
             return "cancelled" if seen == {"cancelled"} else "completed"  # Summarize the final words.
         if seen & AP_FAILURE_STATES:  # No active site remains, so a failure is now terminal.
             return "failed"  # Report the terminal failure for this child.
@@ -640,7 +684,9 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         )
         child["status_data"] = deepcopy(dict(status))  # Preserve the complete normalized status.
         child["raw_status"] = int(status.get("raw_status", 0))  # Preserve the status code.
-        child["status"] = str(status.get("status") or "unknown").lower()  # Preserve the cloud state.
+        cloud_word = str(status.get("status") or "unknown").lower()  # The exact word of the site or SSR job.
+        child["cloud_status"] = cloud_word  # Keep the exact word visible on the progress page.
+        child["status"] = self._child_state(cloud_word)  # Map it to the service vocabulary (issue #3220).
         child["error"] = None if status.get("status_known", True) else "The cloud status is unknown."  # Mark doubt.
 
     @staticmethod

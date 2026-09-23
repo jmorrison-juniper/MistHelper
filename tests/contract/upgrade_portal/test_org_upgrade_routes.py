@@ -605,6 +605,12 @@ def test_multidevice_operation_is_durable_transparent_and_replay_safe(
     assert len(cancelled.get_json()["cancellation"]["results"]) == 3
     assert boundary.cancel_count == 1
     assert store.records["org-run-contract"]["children"][1]["error"] == "The switch child failed."
+    # WHY: Issue #3220. A cancel request does not stop a device that already
+    # writes firmware, and the gateway child still runs, so both sites stay held.
+    assert store.records["org-run-contract"]["site_locks"] != {}  # A running child keeps the site.
+    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is not None  # No new work can start.
+    boundary.final_state = "cancelled"  # The next read finds every child past any write.
+    org_upgrade_client.get("/api/org-upgrades/org-run-contract")  # The status read releases the sites.
     assert store.records["org-run-contract"]["site_locks"] == {}  # A settled operation blocks no later work.
     assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # The site accepts new work.
 
