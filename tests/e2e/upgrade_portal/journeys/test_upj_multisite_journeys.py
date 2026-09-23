@@ -55,6 +55,10 @@ JOB_URL = re.compile(r".*/upgrade/org/jobs/[^/?#]+$")  # The progress page of on
 STATUS_ROUTE = re.compile(r".*/api/org-upgrades/[^/]+$")  # The status read of the progress page.
 FLASH = "flash-message"  # The in-page message of a refused request.
 PHASE_DEFECT = "#3223: the multi-site path never applies the canary phase rule"  # One reason for each phase case.
+IN_VIEW_SCRIPT = (  # True when the whole element box sits inside the viewport.
+    "element => { const box = element.getBoundingClientRect();"
+    " return box.top >= 0 && box.bottom <= window.innerHeight; }"
+)
 
 pytestmark = pytest.mark.journey  # Every test of this file is an operator journey.
 
@@ -229,6 +233,8 @@ class TestMultiSiteFamilyJourneys:
         for family in families:  # Each family shows its completed child.
             expect(progress).to_contain_text(family)  # The family column names the family.
         operator.recorder.step("final state")  # Record the end of the journey.
+        final = operator.page.locator("[data-org-upgrade-field='status']").inner_text()  # The painted state.
+        assert final == "completed"  # The journey ends on the completed state.
 
     @pytest.mark.xfail(strict=True, reason="#3220: a running cloud word reads as attention_required")
     @pytest.mark.fresh_server
@@ -240,6 +246,7 @@ class TestMultiSiteFamilyJourneys:
         operator.start()  # The stand-in cloud answers a job that still runs.
         status = operator.page.locator("[data-org-upgrade-field='status']")  # The aggregate state.
         expect(status).not_to_have_text("attention_required")  # A running job needs no attention.
+        assert status.inner_text() != "attention_required"  # The same rule as a plain comparison.
 
     @pytest.mark.xfail(strict=True, reason="#3220: the first status read releases the site locks of a running job")
     @pytest.mark.fresh_server
@@ -253,6 +260,7 @@ class TestMultiSiteFamilyJourneys:
         for site_id in (SITE_ID, SECOND_SITE_ID):  # Each site of the running job.
             row = operator.page.locator("tr", has=operator.page.get_by_test_id(f"site-select-{site_id}"))
             expect(row).not_to_contain_text("Free")  # A running job holds the site.
+            assert "Free" not in row.inner_text()  # The same rule as a plain comparison.
 
     @pytest.mark.xfail(strict=True, reason="#3225: a completed operation still offers the cancel form")
     @pytest.mark.fresh_server
@@ -266,7 +274,9 @@ class TestMultiSiteFamilyJourneys:
         operator.page.get_by_test_id("org-upgrade-refresh").click()  # Read the end now.
         expect(operator.page.locator("[data-org-upgrade-field='status']")).to_have_text("completed")  # The end.
         operator.recorder.step("completed state")  # Record the page with the end state.
-        expect(operator.page.get_by_test_id("org-upgrade-cancel-confirmation")).to_be_hidden()  # No cancel.
+        cancel_word = operator.page.get_by_test_id("org-upgrade-cancel-confirmation")  # The cancel word field.
+        expect(cancel_word).to_be_hidden()  # No cancel.
+        assert cancel_word.is_hidden() is True  # The same rule as a plain comparison.
 
 
 class TestMultiSiteOptionsJourneys:
@@ -279,6 +289,8 @@ class TestMultiSiteOptionsJourneys:
         reader.page.get_by_test_id("org-upgrade-review").scroll_into_view_if_needed()  # The operator scrolls down.
         reader.review(expect_confirm=False)  # All families selected and no version.
         expect(reader.page.get_by_test_id(FLASH)).to_be_in_viewport()  # The message must be in view.
+        in_view = reader.page.get_by_test_id(FLASH).evaluate(IN_VIEW_SCRIPT)  # The browser measures the box.
+        assert in_view is True  # The same rule as a plain comparison.
 
     @pytest.mark.xfail(strict=True, reason="#3206: the refusal names the internal field version_target")
     def test_unknown_version_names_the_control(self, reader: MultiSiteJourney) -> None:
@@ -289,6 +301,7 @@ class TestMultiSiteOptionsJourneys:
         flash = reader.page.get_by_test_id(FLASH)  # The refusal message.
         expect(flash).not_to_contain_text("version_target")  # No internal name.
         expect(flash).to_contain_text("Access point")  # The label of the control.
+        assert "version_target" not in flash.inner_text()  # The same rule as a plain comparison.
 
     @pytest.mark.xfail(strict=True, reason="#3207: the controls of a cleared family stay visible")
     def test_cleared_families_hide_their_controls(self, reader: MultiSiteJourney) -> None:
@@ -298,6 +311,8 @@ class TestMultiSiteOptionsJourneys:
         for test_id in ("org-upgrade-switch-version", "org-upgrade-gateway-version", "org-upgrade-reboot-group"):
             expect(reader.page.get_by_test_id(test_id)).to_be_hidden()  # A control of a cleared family.
         expect(reader.page.get_by_test_id("org-upgrade-junos-file-action-group")).to_be_hidden()  # Junos only.
+        hidden = reader.page.get_by_test_id("org-upgrade-switch-version").is_hidden()  # The switch version control.
+        assert hidden is True  # The same rule as a plain comparison.
 
     @pytest.mark.xfail(strict=True, reason="#3221: the options page resets families, reboot, Junos action, and force")
     def test_back_from_confirm_keeps_every_choice(self, reader: MultiSiteJourney) -> None:
@@ -317,6 +332,7 @@ class TestMultiSiteOptionsJourneys:
         expect(reader.page.locator("#org-junos-no")).to_be_checked()  # The Junos choice stays no.
         expect(reader.page.locator("#org-upgrade-force")).to_be_checked()  # The force choice stays on.
         expect(reader.page.get_by_test_id("org-strategy-big_bang")).to_be_checked()  # The strategy stays.
+        assert reader.page.locator("#org-reboot-no").is_checked() is True  # The reboot choice as a comparison.
 
     @pytest.mark.parametrize(
         ("control", "value"),
@@ -373,6 +389,7 @@ class TestMultiSiteConfirmJourneys:
             expect(plan).to_contain_text(name)  # One site name.
         expect(plan).to_contain_text("2030")  # The start time.
         expect(plan).to_contain_text("10")  # The failure limit.
+        assert all(name in plan.inner_text() for name in SITE_NAMES)  # Every site name as a plain check.
 
     @pytest.mark.parametrize("word", ["confirm", "CONFIRM ", " CONFIRM", "CONFIRMED", "", "C0NFIRM"])
     def test_start_stays_closed_for_a_wrong_word(self, reader: MultiSiteJourney, word: str) -> None:
@@ -382,6 +399,7 @@ class TestMultiSiteConfirmJourneys:
         reader.review()  # The confirm page.
         reader.page.get_by_test_id("org-upgrade-confirmation").fill(word)  # A wrong word.
         expect(reader.page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # The start stays closed.
+        assert reader.page.get_by_test_id("org-upgrade-start").is_disabled() is True  # The same rule as a comparison.
 
 
 class TestMultiSiteSessionJourneys:
@@ -421,7 +439,7 @@ class TestMultiSiteSessionJourneys:
         flash = operator.page.get_by_test_id(FLASH)  # The refusal message.
         expect(flash).to_be_visible()  # The operator must see a reason.
         expect(flash).not_to_contain_text("site_lock_wrong_run")  # No internal code.
-        assert first_job  # The first job page exists for the operator to open.
+        assert first_job.rsplit("/", 1)[-1].startswith("org-run-")  # The first job page exists for the operator.
 
     @pytest.mark.xfail(strict=True, reason="#3224: the busy-site refusal names no running job and offers no link")
     @pytest.mark.fresh_server
@@ -441,6 +459,7 @@ class TestMultiSiteSessionJourneys:
         job_key = first_job.rsplit("/", 1)[-1]  # The identifier of the running job.
         expect(operator.page.locator(f"a[href$='{job_key}']")).to_be_visible()  # A link to the running job.
         expect(operator.page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # No second click.
+        assert operator.page.locator(f"a[href$='{job_key}']").count() == 1  # One link as a plain comparison.
 
     def test_mode_change_clears_the_site_selection(self, reader: MultiSiteJourney) -> None:
         """Single-site mode and then multi-site mode shows no old site selection."""
@@ -453,3 +472,7 @@ class TestMultiSiteSessionJourneys:
         reader.recorder.step("multi-site site page again", reader._continue_to_sites)  # The picker again.
         for site_id in (SITE_ID, SECOND_SITE_ID):  # No old box stays checked.
             expect(reader.page.get_by_test_id(f"site-select-{site_id}")).not_to_be_checked()
+        boxes = [
+            reader.page.get_by_test_id(f"site-select-{site_id}").is_checked() for site_id in (SITE_ID, SECOND_SITE_ID)
+        ]
+        assert boxes == [False, False]  # The same rule as a plain comparison.

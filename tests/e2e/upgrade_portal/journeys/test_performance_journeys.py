@@ -164,6 +164,11 @@ def _poll_intervals() -> dict[str, int]:
     }  # Read from portal.js comments and data attributes.
 
 
+# WHY: One journey measures about 15 pages 5 times and about 8 APIs 20 times. It
+# needs its own server and a longer budget than the 300-second default, or the
+# thread timeout ends the whole shared pytest process (issue #3200).
+@pytest.mark.fresh_server
+@pytest.mark.timeout(1800)
 def test_upgrade_portal_performance_measurement(firmware_operator_page: Any) -> None:
     """Measure browser pages, JSON APIs, static assets, and poll cost."""
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)  # Ensure the evidence directory exists.

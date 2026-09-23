@@ -230,42 +230,42 @@ def _final_payload(status: str) -> dict[str, Any]:
             ("ap",),
             ("org-upgrade-version",),
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-001: unselected family fields remain visible."
+                strict=True, reason="#3207 (F-upj-multisite-001): unselected family fields remain visible."
             ),
         ),
         pytest.param(
             ("switch",),
             ("org-upgrade-switch-version",),
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-001: unselected family fields remain visible."
+                strict=True, reason="#3207 (F-upj-multisite-001): unselected family fields remain visible."
             ),
         ),
         pytest.param(
             ("gateway",),
             ("org-upgrade-gateway-version",),
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-001: unselected family fields remain visible."
+                strict=True, reason="#3207 (F-upj-multisite-001): unselected family fields remain visible."
             ),
         ),
         pytest.param(
             ("ap", "switch"),
             ("org-upgrade-version", "org-upgrade-switch-version"),
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-001: unselected family fields remain visible."
+                strict=True, reason="#3207 (F-upj-multisite-001): unselected family fields remain visible."
             ),
         ),
         pytest.param(
             ("ap", "gateway"),
             ("org-upgrade-version", "org-upgrade-gateway-version"),
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-001: unselected family fields remain visible."
+                strict=True, reason="#3207 (F-upj-multisite-001): unselected family fields remain visible."
             ),
         ),
         pytest.param(
             ("switch", "gateway"),
             ("org-upgrade-switch-version", "org-upgrade-gateway-version"),
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-001: unselected family fields remain visible."
+                strict=True, reason="#3207 (F-upj-multisite-001): unselected family fields remain visible."
             ),
         ),
         (
@@ -295,6 +295,8 @@ def test_family_combinations_show_only_selected_fields(
             sync_api.expect(page.get_by_test_id(test_id)).to_be_visible()  # Assert that required fields appear.
         for test_id in all_fields - set(visible_fields):  # Unselected family fields confuse the operator.
             sync_api.expect(page.get_by_test_id(test_id)).to_be_hidden()  # Assert that extra fields stay hidden.
+        shown = [test_id for test_id in all_fields - set(visible_fields) if page.get_by_test_id(test_id).is_visible()]
+        assert shown == []  # No control of a cleared family stays visible.
     finally:  # Always release held site locks for the next test.
         _release_locks(page)  # Clean the server-side lock store.
 
@@ -352,7 +354,7 @@ def test_all_family_final_states_render_clearly(firmware_operator_page: Any) -> 
 
 
 @pytest.mark.xfail(
-    strict=True, reason="F-upj-multisite-002: confirmation omits route, schedule, and safety option details."
+    strict=True, reason="#3222 (F-upj-multisite-002): confirmation omits route, schedule, and safety option details."
 )
 def test_confirmation_names_all_operator_decisions(firmware_operator_page: Any) -> None:
     """The confirmation page must show every decision before the typed word."""
@@ -393,19 +395,19 @@ def test_confirmation_names_all_operator_decisions(firmware_operator_page: Any) 
         pytest.param(
             "big_bang",
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-003: strategy controls do not adapt per strategy."
+                strict=True, reason="#3207 (F-upj-multisite-003): strategy controls do not adapt per strategy."
             ),
         ),
         pytest.param(
             "rrm",
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-003: strategy controls do not adapt per strategy."
+                strict=True, reason="#3207 (F-upj-multisite-003): strategy controls do not adapt per strategy."
             ),
         ),
         pytest.param(
             "serial",
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-003: strategy controls do not adapt per strategy."
+                strict=True, reason="#3207 (F-upj-multisite-003): strategy controls do not adapt per strategy."
             ),
         ),
     ],
@@ -431,11 +433,12 @@ def test_strategy_specific_fields_adapt_to_strategy(firmware_operator_page: Any,
         else:  # RRM and serial need different staged controls.
             sync_api.expect(canary_field).to_be_hidden()  # Canary phases must not appear for this strategy.
             sync_api.expect(max_failure_field).to_be_visible()  # The failure threshold remains relevant.
+        assert canary_field.is_visible() == (strategy == "canary")  # Only canary shows the phase field.
     finally:  # Always release any lock records made while loading options.
         _release_locks(page)  # Clean the test lock state.
 
 
-@pytest.mark.xfail(strict=True, reason="F-upj-multisite-004: empty multi-site selection opens raw JSON.")
+@pytest.mark.xfail(strict=True, reason="#3240 (F-upj-multisite-004): empty multi-site selection opens raw JSON.")
 def test_site_selection_navigation_and_mode_change(page: Any) -> None:
     """Site selection must refuse an empty set and clear targets on mode change."""
     evidence = _watch(page)  # Capture browser evidence.
@@ -463,6 +466,7 @@ def test_site_selection_navigation_and_mode_change(page: Any) -> None:
     page.get_by_test_id("mode-single-site").check()  # Change mode to single-site.
     _click_and_wait(page, "mode-continue", SITE_PATH)  # Continue to the site page.
     sync_api.expect(page.get_by_test_id(f"site-select-{SITE_ID}")).not_to_be_checked()  # Old target must clear.
+    assert page.get_by_test_id(f"site-select-{SITE_ID}").is_checked() is False  # The same rule as a comparison.
 
 
 @pytest.mark.parametrize(
@@ -483,7 +487,7 @@ def test_site_selection_navigation_and_mode_change(page: Any) -> None:
             lambda page: page.get_by_test_id("org-upgrade-canary-phases").fill("0"),
             "phase",
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-006: invalid canary phases can reach confirmation."
+                strict=True, reason="#3223 (F-upj-multisite-006): invalid canary phases can reach confirmation."
             ),
         ),
         pytest.param(
@@ -491,7 +495,7 @@ def test_site_selection_navigation_and_mode_change(page: Any) -> None:
             lambda page: page.get_by_test_id("org-upgrade-canary-phases").fill("101"),
             "phase",
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-006: invalid canary phases can reach confirmation."
+                strict=True, reason="#3223 (F-upj-multisite-006): invalid canary phases can reach confirmation."
             ),
         ),
         pytest.param(
@@ -499,7 +503,7 @@ def test_site_selection_navigation_and_mode_change(page: Any) -> None:
             lambda page: page.get_by_test_id("org-upgrade-canary-phases").fill("50,10"),
             "increasing",
             marks=pytest.mark.xfail(
-                strict=True, reason="F-upj-multisite-006: invalid canary phases can reach confirmation."
+                strict=True, reason="#3223 (F-upj-multisite-006): invalid canary phases can reach confirmation."
             ),
         ),
         pytest.param(
@@ -540,7 +544,9 @@ def test_validation_errors_stay_in_page(page: Any, name: str, mutator: Callable[
         _release_locks(page)  # Clean the lock store.
 
 
-@pytest.mark.xfail(strict=True, reason="F-upj-multisite-010: a double click sends two organization start requests.")
+@pytest.mark.xfail(
+    strict=True, reason="#3242 (F-upj-multisite-010): a double click sends two organization start requests."
+)
 def test_confirmation_gate_and_replay_prevention(firmware_operator_page: Any) -> None:
     """The start button must require exact text and reject a replay."""
     page = firmware_operator_page  # Use a write-capable operator.
@@ -594,7 +600,7 @@ def _fake_replay_refusal(route: Any, submissions: list[str]) -> None:
 
 
 @pytest.mark.xfail(
-    strict=True, reason="F-upj-multisite-009: a second operator can open a synthetic organization job page."
+    strict=True, reason="#3241 (F-upj-multisite-009): a second operator can open a synthetic organization job page."
 )
 def test_progress_cancel_ownership_and_lock_conflicts(firmware_operator_page: Any, second_operator_page: Any) -> None:
     """Progress, cancellation, ownership, and lock conflicts must be clear."""
