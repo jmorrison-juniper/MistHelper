@@ -441,45 +441,6 @@ def _build_registry() -> dict:
         "parameters": [_site_param(), _device_param("all")],  # Answer the site and device prompts.
     }
 
-    # --- Forwarding table (menu 6): gateway + text fields ---
-    registry["6"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("gateway"),
-            _text_param("prefix", "IP Prefix", placeholder="0.0.0.0/0", default="0.0.0.0/0"),
-            _text_param("service_name", "Service Name", placeholder="press Enter to skip"),
-            _text_param("vrf", "VRF Name", placeholder="press Enter to skip"),
-            _text_param("node", "Node", placeholder="node0/node1 for HA"),
-        ],
-    }
-
-    # --- Routing table (menu 7): switch + text fields ---
-    registry["7"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("switch"),
-            _text_param("prefix", "Route Prefix", placeholder="press Enter to show all"),
-            _text_param("protocol", "Protocol Filter", placeholder="press Enter for any"),
-            _text_param("vrf", "VRF Name", placeholder="press Enter to skip"),
-            _text_param("neighbor", "BGP Neighbor IP", placeholder="press Enter to skip"),
-        ],
-    }
-
-    # --- SSR routes (menu 8): gateway + many params ---
-    registry["8"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("gateway"),
-            _text_param("protocol", "Protocol", placeholder="press Enter for API default"),
-            _text_param("prefix", "Route Prefix", placeholder="e.g. 192.168.1.0/24"),
-            _text_param("vrf", "VRF Name", placeholder="press Enter for default VRF"),
-            _text_param("neighbor", "BGP Neighbor IP", placeholder="press Enter to skip"),
-        ],
-    }
-
     # --- Ping device (menu 87) ---
     registry["87"] = {
         "category": "interactive",
@@ -534,42 +495,6 @@ def _build_registry() -> dict:
             _text_param("service", "Service", placeholder="select index or enter custom"),
             _text_param("host", "Target Host/IP", default="8.8.8.8", placeholder="8.8.8.8"),
             _number_param("count", "Ping Count", default="4", min_value=1, max_value=100),
-        ],
-    }
-
-    # --- Packet captures (complex interactive) ---
-    registry["9"] = {
-        "category": "interactive",
-        "parameters": [
-            _choice_param(
-                "capture_type",
-                "Capture Type",
-                [
-                    {"value": "1", "label": "Wireless Client"},
-                    {"value": "2", "label": "Wired Client"},
-                    {"value": "3", "label": "Gateway"},
-                    {"value": "4", "label": "Switch"},
-                    {"value": "5", "label": "New Association"},
-                    {"value": "6", "label": "Scan Radio"},
-                ],
-            ),
-            _site_param(),
-            _text_param("client_mac", "Client MAC", placeholder="e.g. aa:bb:cc:dd:ee:ff"),
-            _number_param("duration", "Duration (seconds)", default="60", min_value=10, max_value=300),
-            _number_param("num_packets", "Packet Count", default="100", min_value=1, max_value=10000),
-            _number_param("max_pkt_len", "Max Packet Length", default="128", min_value=64, max_value=1500),
-        ],
-    }
-
-    registry["10"] = {
-        "category": "interactive",
-        "parameters": [
-            _text_param("mxedge_index", "MxEdge Index", placeholder="select MxEdge index"),
-            _text_param("port_index", "Port Index", placeholder="select port index"),
-            _text_param("tcpdump_filter", "Tcpdump Filter", placeholder="press Enter for none"),
-            _number_param("duration", "Duration (seconds)", default="30", min_value=1, max_value=86400),
-            _number_param("num_packets", "Packet Count", default="1024", min_value=0, max_value=10000),
-            _number_param("max_pkt_len", "Max Packet Length", default="128", min_value=1, max_value=2048),
         ],
     }
 
