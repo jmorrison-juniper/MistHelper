@@ -215,6 +215,46 @@ def _choice_param(name: str, label: str, options: list, **kwargs) -> dict:
     return param
 
 
+def _indexed_options(operation_names: list) -> list:
+    """Number a list of operation names the way the chooser prompt numbers them.
+
+    Why:
+        ``CountExporter._choose`` and ``SimpleEndpointExporter._choose`` print a
+        numbered table and then read one digit. The recorded answer must be that
+        digit, so the control stores the position and shows the operation name.
+
+    Args:
+        operation_names: The operation names, in the order the chooser prints them.
+
+    Returns:
+        One option for each name, whose value is the 1-based position.
+    """
+    # The chooser numbers its rows from one, so the value must match that origin.
+    return [{"value": str(position), "label": name} for position, name in enumerate(operation_names, start=1)]
+
+
+def _site_scoped_chooser_options() -> tuple:
+    """Return the count and simple-endpoint choices that menus 236 and 261 offer.
+
+    Why:
+        Both menus print a table built from a tuple in the exporter module. A
+        second copy of those names here would drift the moment either tuple
+        changed, and the operator would then pick the wrong operation. Reading
+        the tuples keeps one source of truth.
+
+    Returns:
+        The count options and the simple-endpoint options, in chooser order.
+    """
+    # These modules already load when the menu table builds, so the import is
+    # resolved by this point and costs nothing extra.
+    from src.export.count_exporter import _SITE_OPS as site_count_ops
+    from src.export.simple_endpoint_exporter import _SITE_OPS as site_endpoint_ops
+
+    count_options = _indexed_options([entry.operation for entry in site_count_ops])  # Menu 236 offers these.
+    endpoint_options = _indexed_options([entry.operation for entry in site_endpoint_ops])  # Menu 261 offers these.
+    return count_options, endpoint_options
+
+
 def _build_registry() -> dict:
     """Build the full PARAMETER_REGISTRY mapping."""
     registry = {}
@@ -276,15 +316,85 @@ def _build_registry() -> dict:
         "63",  # SiteDeviceExporter.device_virtual_chassis
         "78",  # SiteAnomalyExporter.device_anomaly_events
         "199",  # SiteWebhookDeliveriesExporter.deliveries
-        "211",  # SiteAssetExporter.asset_filter
-        "212",  # SiteAssetExporter.asset
-        "246",  # SiteSearchExporter.troubleshoot_call
     ]
     for menu in site_only_menus:
         registry[menu] = {
             "category": "interactive",
             "parameters": [_site_param()],
         }
+
+    # Each row below reaches a site prompt and then one or more identifier
+    # prompts that reject an empty answer. A site control alone let the run
+    # start and then abort at the identifier prompt, so the portal reported a
+    # complete run that wrote nothing. Issues #3181 and #3184 recorded that
+    # silent abort. Every prompt now owns a control, in prompt order.
+    registry["211"] = {  # Menu 211 reads one asset filter by its identifier.
+        "category": "interactive",  # The portal must collect both values before Run.
+        "parameters": [
+            _site_param(),  # Answer the site prompt the handler reads first.
+            _required_text_param(  # Answer the asset filter prompt that rejects an empty value.
+                "assetfilter_id", "Asset Filter ID", placeholder="Mist asset filter UUID"
+            ),
+        ],
+    }
+    registry["212"] = {  # Menu 212 reads one asset by its identifier.
+        "category": "interactive",  # The portal must collect both values before Run.
+        "parameters": [
+            _site_param(),  # Answer the site prompt the handler reads first.
+            _required_text_param(  # Answer the asset prompt that rejects an empty value.
+                "asset_id", "Asset ID", placeholder="Mist asset UUID"
+            ),
+        ],
+    }
+    registry["246"] = {  # Menu 246 troubleshoots one call for one client meeting.
+        "category": "interactive",  # The portal must collect all three values before Run.
+        "parameters": [
+            _site_param(),  # Answer the site prompt the handler reads first.
+            _required_text_param(  # Answer the client MAC prompt that rejects an empty value.
+                "client_mac", "Client MAC", placeholder="98:3a:78:ea:4a:44"
+            ),
+            _required_text_param(  # Answer the meeting prompt that rejects an empty value.
+                "meeting_id", "Meeting ID", placeholder="Meeting UUID"
+            ),
+        ],
+    }
+
+    # Menus 229, 236, and 261 each reach a plain prompt BEFORE the site prompt.
+    # A site control alone would send the site name to that first prompt and
+    # leave the site prompt reading a closed stream, so the run would still
+    # fail. Each row therefore declares its first answer first, then the site.
+    # Issue #3196 recorded this ordering requirement.
+    count_options, endpoint_options = _site_scoped_chooser_options()  # Read both chooser tables once.
+
+    registry["229"] = {  # Menu 229 searches zone sessions for one site.
+        "category": "interactive",  # The portal must collect both answers before Run.
+        "parameters": [
+            _choice_param(  # Answer the zone type prompt the handler reads first.
+                "zone_type",
+                "Zone Type",
+                [
+                    {"value": "zones", "label": "zones"},  # The SDK path accepts this value.
+                    {"value": "rssizones", "label": "rssizones"},  # The SDK path accepts this value.
+                ],
+                default="zones",  # The prompt uses the same default for an empty answer.
+            ),
+            _site_param(),  # Answer the site prompt the handler reads second.
+        ],
+    }
+    registry["236"] = {  # Menu 236 runs one site-scoped count operation.
+        "category": "interactive",  # The portal must collect both answers before Run.
+        "parameters": [
+            _choice_param("count_operation", "Count Operation", count_options),  # The chooser reads this digit first.
+            _site_param(),  # Answer the site prompt the handler reads second.
+        ],
+    }
+    registry["261"] = {  # Menu 261 runs one site-scoped simple read endpoint.
+        "category": "interactive",  # The portal must collect both answers before Run.
+        "parameters": [
+            _choice_param("endpoint_operation", "Endpoint", endpoint_options),  # The chooser reads this digit first.
+            _site_param(),  # Answer the site prompt the handler reads second.
+        ],
+    }
 
     # --- Site + device (all types) ---
     site_device_all_menus = ["72", "74", "80", "81", "85"]
@@ -383,31 +493,20 @@ def _build_registry() -> dict:
     }
 
     # --- Client operations ---
-    registry["69"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            {
-                "name": "client_mac",
-                "label": "Client",
-                "param_type": "client",
-                "required": True,
-                "depends_on": "site_id",
-            },
-        ],
+    # Menus 69 and 86 once carried a client control as well. Neither handler
+    # asks for a client. SiteConfigExporter.wlans exports the WLAN list of a
+    # site, and current_channel_planning reads the RRM plan of a site. Each
+    # reaches one site prompt and stops. The extra control forced the operator
+    # to answer a question the operation never asks, and the client list was
+    # empty for most sites, so the Run control never became usable. Issue #3191
+    # recorded that blocked state.
+    registry["69"] = {  # Menu 69 exports the WLAN list of one site.
+        "category": "interactive",  # The portal must render the site control before Run.
+        "parameters": [_site_param()],  # Answer the single site prompt the handler reaches.
     }
-    registry["86"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            {
-                "name": "client_mac",
-                "label": "Client",
-                "param_type": "client",
-                "required": True,
-                "depends_on": "site_id",
-            },
-        ],
+    registry["86"] = {  # Menu 86 exports the RRM channel and power plan of one site.
+        "category": "interactive",  # The portal must render the site control before Run.
+        "parameters": [_site_param()],  # Answer the single site prompt the handler reaches.
     }
 
     registry["209"] = {  # Menu 209 asks for raw identifiers, not a site name.
@@ -482,6 +581,20 @@ def _build_registry() -> dict:
         "parameters": [],
         "cli_only_message": (
             "Interactive CLI shell requires persistent keyboard input. " "Use SSH access on port 2200."
+        ),
+    }
+    # Menu 241 starts a metrics server that serves until an operator stops it.
+    # A browser run held a worker thread until the request timed out, then
+    # reported "Operation requires interactive input". That message named the
+    # wrong cause, and the run wasted a thread the portal needs for real work.
+    # Issue #3182 recorded the misleading failure.
+    registry["241"] = {  # Menu 241 serves Mist Cloud health on port 8057.
+        "category": "cli_only",  # The portal hides Run and explains the reason instead.
+        "parameters": [],  # A server takes no operator answer, so it needs no control.
+        "cli_only_message": (  # Name the port and the start path the operator should use.
+            "This operation starts a long-running metrics server on port 8057 and serves "
+            "until you stop it. A browser run cannot host it. Start it with the "
+            "--metrics-gateway flag, or use SSH access on port 2200."
         ),
     }
 
