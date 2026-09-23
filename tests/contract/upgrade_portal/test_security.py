@@ -644,6 +644,36 @@ def test_the_guard_refuses_a_request_with_no_session(probe_client: FlaskClient) 
     assert read_error_code(response) == NOT_AUTHENTICATED_CODE
 
 
+# WHY: Issue #3214. A browser sends this Accept header for a page view. The
+# guard sends that page to the sign-in form, and keeps the JSON envelope for
+# every script request.
+BROWSER_PAGE_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+
+def test_the_guard_sends_a_browser_page_to_the_sign_in_form(probe_client: FlaskClient) -> None:
+    """A browser page with no session opens the sign-in form, not a raw JSON body.
+
+    Args:
+        probe_client: The test client.
+    """
+    response = probe_client.get(PROBE_GUARDED_PATH, headers={"Accept": BROWSER_PAGE_ACCEPT})  # A page view.
+    assert response.status_code == 303  # See Other, so the browser opens the form with GET.
+    assert response.headers["Location"].endswith("/auth/signin")  # The form of the portal itself.
+
+
+@pytest.mark.parametrize("accept", ["*/*", "application/json"])
+def test_the_guard_keeps_the_json_envelope_for_a_script(probe_client: FlaskClient, accept: str) -> None:
+    """A script request with no session keeps the documented 401 envelope.
+
+    Args:
+        probe_client: The test client.
+        accept: The Accept header of a script request.
+    """
+    response = probe_client.get(PROBE_GUARDED_PATH, headers={"Accept": accept})  # A fetch or a JSON client.
+    assert response.status_code == NOT_AUTHENTICATED_STATUS  # The contract status stays.
+    assert read_error_code(response) == NOT_AUTHENTICATED_CODE  # The contract code stays.
+
+
 def test_the_guard_refusal_uses_the_documented_envelope(probe_client: FlaskClient) -> None:
     """The refusal holds the ``error`` envelope and nothing beside it.
 
