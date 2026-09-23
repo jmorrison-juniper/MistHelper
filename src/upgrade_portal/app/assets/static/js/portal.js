@@ -177,7 +177,8 @@
     /* The run poll stops on these three states. data-model.md section 4.1 ends
      * every path at one of them. */
     var RUN_FINISHED_STATES = ["complete", "stopped", "failed"];
-    var ORG_UPGRADE_FINISHED_STATES = ["attention_required", "cancelled", "completed", "failed"];
+    /* Issue #3220: `attention_required` keeps the poll, because a later read can reconcile an uncertain child. */
+    var ORG_UPGRADE_FINISHED_STATES = ["cancelled", "completed", "failed"];
     var RUN_RETRYABLE_STATES = ["failed", "stopped", "cancelled"];
 
     /* Each device cell of the run table carries one of these field names. The
@@ -2746,6 +2747,22 @@
         return parts.filter(Boolean).join(" - ");  // Join with an ASCII separator for every terminal and browser.
     }
 
+    /**
+     * Returns the state text of one child row.
+     *
+     * Why: Issue #3220 maps each cloud word to the service states, so a row
+     * reads `running` while the cloud reports `downloading`. The row keeps the
+     * exact cloud word in brackets, so the operator still sees the step.
+     *
+     * @param {Object} site One child row of the status answer.
+     * @returns {string} The state, with the cloud word when it differs.
+     */
+    function orgChildStatusText(site) {
+        var state = site.status || "unknown";  /* The service state of the child. */
+        var cloudWord = site.cloud_status || "";  /* The exact word that the cloud answered. */
+        return cloudWord && cloudWord !== state ? state + " (" + cloudWord + ")" : state;  /* One cell text. */
+    }
+
     function paintOrgUpgradeSites(status) {
         var body = document.querySelector("[data-org-upgrade-sites]");
         if (!body) {
@@ -2767,7 +2784,7 @@
             [
                 site.site_name || site.site_id || "Unknown",
                 site.device_family || "ap",
-                site.status || "unknown",
+                orgChildStatusText(site),
                 site.total || 0,
                 site.upgraded || 0,
                 site.failed || 0,

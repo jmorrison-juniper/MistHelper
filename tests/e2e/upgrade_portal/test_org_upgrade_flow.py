@@ -143,3 +143,11 @@ class TestOrganizationUpgradeBrowserFlow:
         page.get_by_test_id("org-upgrade-cancel").click()
         page.wait_for_url(re.compile(r".*/upgrade/org/jobs/org-run-[0-9a-f]+$"))
         sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("requested")
+        # WHY: Issue #3220. The portal keeps both sites until the cloud reports
+        # every child as ended. The route above answered each status read in the
+        # browser, so the server never read the cancelled job. A reload reads it,
+        # as the 30-second poll of a real page does, and the sites go back.
+        page.unroute(re.compile(r".*/api/org-upgrades/[^/]+$"))  # Let the server answer from now on.
+        page.reload(wait_until="domcontentloaded")  # The job page reads every child again.
+        status = page.locator("[data-org-upgrade-field='status']")  # The aggregate state.
+        sync_api.expect(status).to_have_text("cancelled")  # Every child ended on the cancel.

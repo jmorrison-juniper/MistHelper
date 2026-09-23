@@ -45,7 +45,7 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import flask
 import pytest
@@ -848,25 +848,27 @@ class E2EOrgUpgradeService:
 
     @staticmethod
     def status(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
-        """Return progress for both selected sites."""
+        """Return progress for both selected sites, or the end state of a cancelled job."""
+        state = "cancelled" if CancelledJobs.holds(upgrade_id) else "inprogress"  # A real cloud ends a cancelled job.
+        site_state = "cancelled" if state == "cancelled" else "running"  # Each site follows the job.
         return OrgUpgradeResult(
             org_id,
             upgrade_id,
             200,
             {
                 "id": upgrade_id,
-                "status": "inprogress",
+                "status": state,
                 "site_upgrades": [
                     {
                         "site_id": STAND_IN_SITE_ID,
                         "id": "55555555-5555-5555-5555-555555555555",
-                        "status": "running",
+                        "status": site_state,
                         "targets": {"total": 2, "upgraded": ["a"], "failed": []},
                     },
                     {
                         "site_id": SECOND_SITE_ID,
                         "id": "66666666-6666-6666-6666-666666666666",
-                        "status": "running",
+                        "status": site_state,
                         "targets": {"total": 2, "upgraded": [], "failed": ["b"]},
                     },
                 ],
@@ -876,8 +878,37 @@ class E2EOrgUpgradeService:
 
     @staticmethod
     def cancel(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
-        """Return one accepted cancellation."""
+        """Return one accepted cancellation, and end the job for every later status read."""
+        CancelledJobs.add(upgrade_id)  # The next read reports the end, so the sites go back (issue #3220).
         return OrgUpgradeResult(org_id, upgrade_id, 200, {}, None)
+
+
+class CancelledJobs:
+    """Remember each stand-in job that a browser test cancelled.
+
+    Why:
+        Issue #3220. The portal now keeps the site locks of a multi-site
+        operation until each child reaches a final state. A stand-in that
+        reported a running job forever would therefore hold both stand-in
+        sites for the rest of the browser session, and every later single-site
+        test would meet a site lock. A real cloud reports a cancelled job as
+        cancelled, so this stand-in does the same.
+    """
+
+    _identifiers: ClassVar[set[str]] = set()  # The cancelled job identifiers of this server process.
+    _guard: ClassVar[threading.Lock] = threading.Lock()  # The server answers requests on several threads.
+
+    @classmethod
+    def add(cls, upgrade_id: str) -> None:
+        """Record one cancelled job."""
+        with cls._guard:  # One writer at a time keeps the set whole.
+            cls._identifiers.add(str(upgrade_id))  # Later reads see the end state.
+
+    @classmethod
+    def holds(cls, upgrade_id: str) -> bool:
+        """Return true when a browser test cancelled this job."""
+        with cls._guard:  # A reader waits for a writer.
+            return str(upgrade_id) in cls._identifiers  # The job ended on a cancel.
 
 
 class E2EDeviceUpgradeService:
@@ -905,20 +936,21 @@ class E2EDeviceUpgradeService:
         upgrade_id: str,
         family: Any,
     ) -> dict[str, Any]:
-        """Return one running child status."""
+        """Return one running child status, or the end state of a cancelled child."""
         del cloud_session, scope, identifier, family  # The fixed answer needs no request value.
         return {
             "upgrade_id": upgrade_id,
             "raw_status": 200,
-            "status": "running",
+            "status": "cancelled" if CancelledJobs.holds(upgrade_id) else "running",  # A cancel ends the child.
             "status_known": True,
             "targets": {},
         }
 
     @staticmethod
     def cancel_upgrade(cloud_session: Any, plan: Any, upgrade_id: str, status: Any) -> CancelOutcome:
-        """Accept one site child cancellation."""
-        del cloud_session, upgrade_id, status  # The fixed answer needs the plan targets only.
+        """Accept one site child cancellation, and end the child for every later status read."""
+        del cloud_session, status  # The fixed answer needs the plan targets only.
+        CancelledJobs.add(upgrade_id)  # The next read reports the end, so the sites go back (issue #3220).
         return CancelOutcome(
             tuple(target.mac for target in plan.targets),
             (),

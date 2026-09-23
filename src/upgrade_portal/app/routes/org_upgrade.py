@@ -850,7 +850,15 @@ def _child_site_ids(child: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 SETTLED_OPERATION_STATES = frozenset(  # States that end every destructive child action of one operation.
-    {"completed", "cancelled", "failed", "attention_required"}
+    {"completed", "cancelled", "failed"}
+)
+# WHY: Issue #3220. `attention_required` once released every site lock, and a
+# normal cloud word such as `upgrading` produced that state during the write.
+# A lock now stays until each child holds a state in which no firmware write can
+# follow. An uncertain child (`submission_unknown`, `read_unknown`) keeps the
+# sites, and the lease then expires on its own if no read reconciles it.
+FINAL_WRITE_STATES = frozenset(  # Child states in which no firmware write can follow.
+    {"completed", "cancelled", "failed", "rejected", "not_submitted"}
 )
 
 
@@ -876,11 +884,19 @@ def _release_operation_locks(operation: MutableMapping[str, Any]) -> None:
 
 
 def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
-    """Return true when the portal sends no further write for one operation."""
-    if str(operation.get("state", "")) in SETTLED_OPERATION_STATES:  # A final state ends every child action.
-        return True  # The operation needs no site.
-    cancellation = operation.get("cancellation")  # Read the durable cancellation marker.
-    return isinstance(cancellation, Mapping) and cancellation.get("requested") is True  # A stop ends the work.
+    """Return true when no child of one operation can still write firmware.
+
+    Why:
+        A cancel request does not stop a device that already writes firmware,
+        and a normal cloud word once read as `attention_required` (issue
+        #3220). Only the state of every child proves that the sites are safe
+        to release.
+    """
+    children = [child for child in operation.get("children", ()) if isinstance(child, Mapping)]  # Valid rows.
+    if not children:  # A damaged record with no child keeps the conservative state rule.
+        return str(operation.get("state", "")) in SETTLED_OPERATION_STATES  # Only a final aggregate state.
+    states = [str(child.get("status", "")).strip().lower() for child in children]  # One word for each child.
+    return all(state in FINAL_WRITE_STATES for state in states)  # Every child must be past any write.
 
 
 def _release_one_lock(org_id: str, site_id: str, value: object) -> None:
@@ -1071,6 +1087,7 @@ def _aggregate_child_summary(child: Mapping[str, Any]) -> tuple[dict[str, Any], 
         "route": child.get("route", ""),
         "id": child.get("upgrade_id", ""),
         "status": child.get("status", "unknown"),
+        "cloud_status": child.get("cloud_status", ""),  # The exact cloud word behind the state (issue #3220).
         "total": total,
         "upgraded": upgraded,
         "failed": failed,

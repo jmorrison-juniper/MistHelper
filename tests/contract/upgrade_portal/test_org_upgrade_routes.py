@@ -605,6 +605,13 @@ def test_multidevice_operation_is_durable_transparent_and_replay_safe(
     assert len(cancelled.get_json()["cancellation"]["results"]) == 3
     assert boundary.cancel_count == 1
     assert store.records["org-run-contract"]["children"][1]["error"] == "The switch child failed."
+    # WHY: Issue #3220. A cancel request does not stop a device that already
+    # writes firmware, and the gateway child still runs, so both sites stay held.
+    assert store.records["org-run-contract"]["site_locks"] != {}  # A running child keeps the site.
+    held = lock.read_lock(fake_org_id, fake_site_id, select.lock_client())  # The lock of the running operation.
+    assert isinstance(held, lock.LockRecord) and held.run_id == "org-run-contract"  # No new work can start.
+    boundary.final_state = "cancelled"  # The next read finds every child past any write.
+    org_upgrade_client.get("/api/org-upgrades/org-run-contract")  # The status read releases the sites.
     assert store.records["org-run-contract"]["site_locks"] == {}  # A settled operation blocks no later work.
     assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # The site accepts new work.
 
@@ -647,7 +654,8 @@ def test_multidevice_reboot_delay_reaches_the_confirmed_options(
         saved_options = dict(browser_session["org_upgrade_options"])  # Detach the session record for assertions.
     assert saved.status_code == 200  # The valid delay must not block the save.
     assert saved_options["reboot_at"] == "8h"  # The route stores the same field name and duration units.
-    assert boundary.requests[0].options.reboot_at is not None  # The service receives an epoch value for the cloud.
+    reboot_at = boundary.requests[0].options.reboot_at  # The value that the service sends to the cloud.
+    assert isinstance(reboot_at, int) and reboot_at > 0  # The service receives an epoch value for the cloud.
     assert b'data-testid="org-upgrade-reboot-at"' in page.data  # The confirmation names the reboot delay.
     assert b"8h" in page.data  # The operator sees the same duration they entered.
 
@@ -745,7 +753,8 @@ def test_settled_operation_releases_every_site_lock(
     assert saved.status_code == 200
     started = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
     assert started.status_code == 200
-    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is not None  # The write holds the site.
+    held = lock.read_lock(fake_org_id, fake_site_id, select.lock_client())  # The lock that the write took.
+    assert isinstance(held, lock.LockRecord) and held.run_id == "org-run-contract"  # The write holds the site.
     boundary.final_state = "completed"  # The next read finds every child finished.
     status = org_upgrade_client.get("/api/org-upgrades/org-run-contract")
     assert status.get_json()["status"] == "completed"
