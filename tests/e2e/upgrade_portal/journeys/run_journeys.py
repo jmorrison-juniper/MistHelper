@@ -39,6 +39,7 @@ SLOW_STEP_COUNT = 15  # The index lists this many of the slowest steps.
 READY_BUDGET_VARIABLE = "UPGRADE_PORTAL_E2E_READY_SECONDS"  # The start budget that the server fixture reads.
 READY_BUDGET_SECONDS = "120"  # Several portals start at once, so each start may take this long.
 JOURNEY_VARIABLE = "UPGRADE_PORTAL_JOURNEYS"  # The opt-in switch that the journey conftest reads.
+PASSING_EXIT_CODES = (0, 5)  # pytest answers 5 when a file holds no journey of the selection.
 
 
 def pytest_command(*extra: str) -> list[str]:
@@ -190,10 +191,15 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")  # One log format.
     since = time.time()  # Reports older than this moment stay out of the summary.
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)  # The first run creates the folder.
-    shared = [JOURNEY_FOLDER, "-m", f"not {FRESH_MARKER}"] + (["-k", options.keyword] if options.keyword else [])
+    keyword = ["-k", options.keyword] if options.keyword else []  # The optional filter of the caller.
+    files = sorted(path.relative_to(REPO_ROOT).as_posix() for path in (REPO_ROOT / JOURNEY_FOLDER).glob("test_*.py"))
+    # WHY: One pytest process for each file. The thread timeout of pytest ends
+    # the whole process, so one slow journey under load once cost every later
+    # journey of a single shared process (issue #3200).
+    shared = [[path, "-m", f"not {FRESH_MARKER}", *keyword] for path in files]  # One server for each file.
     fresh = collect_fresh(options.keyword)  # One server for each of these journeys.
     with ThreadPoolExecutor(max_workers=max(1, options.parallel)) as pool:  # Bound the browser count.
-        futures = [pool.submit(run_child, shared, "shared-server journeys")]  # The shared group.
+        futures = [pool.submit(run_child, group, f"shared journeys of {group[0]}") for group in shared]  # Files.
         futures += [pool.submit(run_child, [node], node) for node in fresh]  # One child for each start journey.
         groups = [future.result() for future in futures]  # Wait for every child.
     reports = read_reports(since)  # The journeys that this run wrote.
@@ -201,7 +207,8 @@ def main() -> int:
     (ARTIFACT_ROOT / SUMMARY_NAME).write_text(json.dumps(summary, indent=2), encoding="utf-8")  # The summary.
     index = write_index(summary, reports)  # The page that a person opens first.
     print(json.dumps({"index": str(index), "outcomes": summary["outcomes"]}, indent=2))  # One result line set.
-    return 0 if all(group["exit_code"] == 0 for group in groups) else 1  # Fail when one group failed.
+    passed = all(group["exit_code"] in PASSING_EXIT_CODES for group in groups)  # A file with no shared journey is fine.
+    return 0 if passed else 1  # Fail when one group failed.
 
 
 if __name__ == "__main__":

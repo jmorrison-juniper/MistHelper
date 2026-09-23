@@ -80,6 +80,7 @@ class TestSingleSiteJourneys:
         expect(page.get_by_role("link", name="Go to the capture page")).to_be_visible()  # The next step.
         recorder.step("capture page", lambda: page.get_by_role("link", name="Go to the capture page").click())
         expect(page.locator("h1")).to_be_visible()  # The capture page rendered.
+        assert "/captures/" in page.url  # The journey ended on the capture page.
 
     @staticmethod
     def _continue(page: Any) -> None:
@@ -94,6 +95,7 @@ class TestSingleSiteJourneys:
         visit(page, recorder, f"/runs/{PREPARED_RUN_ID}/options", "options page")  # The per-device choices.
         visit(page, recorder, f"/runs/{PREPARED_RUN_ID}/confirm", "confirm page")  # The typed confirmation.
         expect(page.get_by_test_id("upgrade-start-button")).to_be_disabled()  # Closed before the word.
+        assert page.get_by_test_id("upgrade-start-button").is_disabled() is True  # The same rule as a comparison.
 
     @pytest.mark.fresh_server
     def test_start_reaches_the_progress_page(self, operator: tuple[Any, JourneyRecorder]) -> None:
@@ -105,12 +107,14 @@ class TestSingleSiteJourneys:
         recorder.step("start", lambda: page.get_by_test_id("upgrade-start-button").click())  # Start the run.
         page.wait_for_url(re.compile(rf".*/runs/{START_READY_RUN_ID}$"))  # The progress page of the run.
         recorder.step("progress page")  # Record the first progress view.
+        assert page.url.endswith(f"/runs/{START_READY_RUN_ID}")  # The journey ended on the run page.
 
     @pytest.mark.parametrize("run_id", [FAILED_RUN_ID, STOPPED_RUN_ID, LIFECYCLE_RUN_ID])
     def test_run_page_of_each_seeded_state(self, reader: tuple[Any, JourneyRecorder], run_id: str) -> None:
         """Each seeded run state renders its run page."""
         page, recorder = reader  # The read-only operator.
         visit(page, recorder, f"/runs/{run_id}", f"run page {run_id}")  # The run in its seeded state.
+        assert page.url.endswith(f"/runs/{run_id}")  # The run page of that state rendered.
 
     def test_history_and_comparison_pages(self, reader: tuple[Any, JourneyRecorder]) -> None:
         """The history page and the comparison of the seeded captures render."""
@@ -118,3 +122,4 @@ class TestSingleSiteJourneys:
         visit(page, recorder, "/history", "history page")  # Every stored capture and run.
         visit(page, recorder, f"/compare?before={PRE_CAPTURE_ID}&after={POST_CAPTURE_ID}", "comparison page")
         visit(page, recorder, f"/captures/{PRE_CAPTURE_ID}", "pre-check capture page")  # One capture.
+        assert page.url.endswith(f"/captures/{PRE_CAPTURE_ID}")  # The journey ended on the capture page.
