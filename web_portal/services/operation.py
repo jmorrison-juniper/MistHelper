@@ -1170,8 +1170,18 @@ class _RunLogHandler(logging.Handler):
             "werkzeug",
             "flask",
             "mistapi",
+            # Issue #3232: the polyglot writers bind these bare names, outside
+            # src.db, so the prefix rule below cannot reach them.
+            "redis_writer",
+            "redis_json_writer",
         )
     )
+
+    # Issue #3232: the site prompt refreshes SiteList.csv, and that refresh
+    # writes the polyglot store. src.db logs one JSON line for each collection,
+    # so every site-scoped run showed database internals. The prefix applies at
+    # INFO only, because the WARNING check runs first and keeps a failure visible.
+    _DEBUG_LOGGER_PREFIXES = ("src.db.",)
 
     # Message prefixes that indicate internal plumbing (even at INFO)
     _INTERNAL_PREFIXES = (
@@ -1208,6 +1218,8 @@ class _RunLogHandler(logging.Handler):
         "Selecting the bootstrap application context",
         "Activating the bootstrap application context",
         "Setting the active application context",
+        "Polyglot write:",  # Issue #3232: the store summary of a site cache refresh.
+        "Polyglot DatabaseRouter initialized",  # Issue #3232: the store start line of the same refresh.
     )
 
     # Regex to extract output filenames from log messages.
@@ -1266,6 +1278,8 @@ class _RunLogHandler(logging.Handler):
 
     def _is_user_facing(self, record: logging.LogRecord, message: str) -> bool:
         """Decide if a message belongs in the main execution log."""
+        if self._is_site_menu_line(record, message):  # A pick list already answered this menu.
+            return False
         if record.levelno >= logging.WARNING:
             return True
         if record.levelno < logging.INFO:
@@ -1273,11 +1287,30 @@ class _RunLogHandler(logging.Handler):
         logger_root = record.name.split(".")[0]
         if logger_root in self._DEBUG_LOGGERS:
             return False
+        if record.name.startswith(self._DEBUG_LOGGER_PREFIXES):  # Database internals are plumbing at INFO.
+            return False
         if any(message.startswith(prefix) for prefix in self._INTERNAL_PREFIXES):
             return False
         if self._looks_like_http_log(message):
             return False
         return True
+
+    # Issue #3232: the site prompt prints its whole menu, a heading and one row
+    # for each site, at WARNING, because the command line hides INFO by default
+    # (#886). The portal sends each WARNING to the Execution Log, so every
+    # site-scoped run showed 144 menu lines that the pick list already answered.
+    # The routing stays narrow: one logger, and the two line shapes of that menu.
+    _SITE_MENU_LOGGER = "src.ui.prompt_utils"
+    _SITE_MENU_HEADING = "Available Sites:"
+    _SITE_MENU_ROW = re.compile(r"^\[\d+\] \S")
+
+    @classmethod
+    def _is_site_menu_line(cls, record: logging.LogRecord, message: str) -> bool:
+        """Report whether one record is a heading or a row of the command-line site menu."""
+        if record.name != cls._SITE_MENU_LOGGER:  # Another module's numbered line is real output.
+            return False
+        text = message.strip()  # The heading carries a leading newline for the terminal.
+        return text == cls._SITE_MENU_HEADING or bool(cls._SITE_MENU_ROW.match(text))
 
     @staticmethod
     def _looks_like_http_log(message: str) -> bool:
