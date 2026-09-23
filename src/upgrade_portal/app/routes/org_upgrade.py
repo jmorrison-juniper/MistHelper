@@ -297,9 +297,9 @@ def _complete_aggregate_options(
 ) -> dict[str, Any]:
     """Validate and return the combined site option record."""
     if not targets:  # A confirmed request must name a real device.
-        raise ValueError("Choose a target version for at least one supported device type.")
+        raise ValueError("Choose a value for the Target version control for at least one selected device type.")
     if options is None:  # Every selected site must produce the common option record.
-        raise ValueError("Choose a target version for at least one supported device type.")
+        raise ValueError("Choose a value for the Target version control for at least one selected device type.")
     return {"targets": targets, "options": options, "selected_types": list(selected)}  # Return detached values.
 
 
@@ -353,11 +353,16 @@ def request_for_service(site_ids: list[str], options: Mapping[str, Any]) -> dict
 def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
     """Return form values from the validated service option shape."""
     first = _first_version(options.get("versions"))  # Read the legacy AP version record.
+    selected_types = list(options.get("selected_types", ["ap", "switch", "gateway"]))  # Restore chosen families.
     return {  # Return the existing template field names.
         "version": options.get("version_ap", first.get("version", "")),
         "version_ap": str(options.get("version_ap", first.get("version", ""))),  # Keep the AP target visible.
         "version_switch": str(options.get("version_switch", "")),  # Keep the switch target visible.
         "version_gateway": str(options.get("version_gateway", "")),  # Keep the gateway target visible.
+        "selected_types": selected_types,  # Keep the selected family boxes stable after Back.
+        "reboot": options.get("reboot", True),  # Keep the reboot radio group stable after Back.
+        "junos_file_action": options.get("junos_file_action", True),  # Keep the Junos radio group stable.
+        "force": options.get("force", False),  # Keep the force checkbox stable after Back.
         "strategy": options.get("strategy", "canary"),
         "canary_phases": _phase_text(options.get("canary_phases")),
         "max_failure_percentage": options.get("max_failure_percentage", 5),

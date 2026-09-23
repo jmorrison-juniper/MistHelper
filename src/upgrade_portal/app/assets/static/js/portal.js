@@ -489,7 +489,13 @@
      */
     function showRequestError(error) {
         var text = (error && error.message) || "The request failed.";
-        return showFlash(text, "danger");
+        var item = showFlash(text, "danger");
+        if (item) {
+            item.tabIndex = -1;
+            item.scrollIntoView({ block: "center", behavior: "smooth" });
+            item.focus({ preventScroll: true });
+        }
+        return item;
     }
 
     /**
@@ -2847,6 +2853,52 @@
             });
     }
 
+    function setOrgGroupVisibility(group, visible) {
+        if (!group) {  /* A legacy page can omit a group that this script knows. */
+            return;  /* Keep the page working when the group is absent. */
+        }
+        group.hidden = !visible;  /* Make the browser and the server-rendered attribute agree. */
+        if ("disabled" in group) {  /* Fieldsets can disable all child controls through their own property. */
+            group.disabled = !visible;  /* Clear a server-rendered disabled fieldset when it becomes visible. */
+        }
+        group.querySelectorAll("input, select, textarea, button").forEach(function (control) {
+            control.disabled = !visible;  /* Hidden controls must not enter FormData. */
+        });
+    }
+
+    function orgFamilySelected(form, family) {
+        var control = form.querySelector('[name="selected_types"][value="' + family + '"]');  /* Find one family box. */
+        return Boolean(control && control.checked);  /* Treat an absent box as not selected. */
+    }
+
+    function orgSelectedStrategy(form) {
+        var control = form.querySelector('[name="strategy"]:checked');  /* Read the active strategy radio. */
+        return control ? control.value : "";  /* Return an empty value when no strategy is selected. */
+    }
+
+    function updateOrgOptionsVisibility(form) {
+        var hasAp = orgFamilySelected(form, "ap");  /* Access point fields apply only to access points. */
+        var hasSwitch = orgFamilySelected(form, "switch");  /* Switch fields apply only to switches. */
+        var hasGateway = orgFamilySelected(form, "gateway");  /* Gateway fields apply only to gateways. */
+        var hasJunosDevice = hasSwitch || hasGateway;  /* Reboot and Junos action apply to Junos devices. */
+        setOrgGroupVisibility(byTestId("org-upgrade-ap-version-group", form), hasAp);  /* Hide unused AP version. */
+        setOrgGroupVisibility(byTestId("org-upgrade-switch-version-group", form), hasSwitch);  /* Hide switch version. */
+        setOrgGroupVisibility(byTestId("org-upgrade-gateway-version-group", form), hasGateway);  /* Hide gateway version. */
+        setOrgGroupVisibility(byTestId("org-upgrade-reboot-group", form), hasJunosDevice);  /* Hide reboot choices. */
+        setOrgGroupVisibility(byTestId("org-upgrade-reboot-at-field", form), hasJunosDevice);  /* Hide reboot delay. */
+        setOrgGroupVisibility(byTestId("org-upgrade-junos-file-action-group", form), hasJunosDevice);  /* Hide action. */
+        setOrgGroupVisibility(byTestId("org-upgrade-canary-phases-field", form), orgSelectedStrategy(form) === "canary");  /* Hide non-canary phases. */
+    }
+
+    function initOrgOptionsVisibility(form) {
+        updateOrgOptionsVisibility(form);  /* Match the first paint to the checked controls. */
+        form.querySelectorAll('[name="selected_types"], [name="strategy"]').forEach(function (control) {
+            control.addEventListener("change", function () {
+                updateOrgOptionsVisibility(form);  /* Repaint as soon as a family or strategy changes. */
+            });
+        });
+    }
+
     function orgFormBody(form) {
         var body = {};  /* One plain object carries every control of the form. */
         var entries = new FormData(form);  /* The browser reads the same values a native post would send. */
@@ -2882,6 +2934,7 @@
     function initOrgUpgradeForms() {
         var forms = document.querySelectorAll('form[action^="/api/org-upgrades"]');  /* Find every org form. */
         Array.prototype.forEach.call(forms, function (form) {
+            initOrgOptionsVisibility(form);  /* Keep multi-site option groups aligned with their family boxes. */
             form.addEventListener("submit", function (event) {
                 event.preventDefault();  /* Stop the native post that would open a raw JSON document. */
                 sendOrgForm(form);  /* Send the same fields as JSON and read the answer.  */

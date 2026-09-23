@@ -222,6 +222,30 @@ OPTION_HELP: Mapping[str, tuple[str, str]] = {
         "Order of the mesh access points",
         "Choose a listed order.",
     ),
+    "selected_types": (
+        "Device types to upgrade",
+        "Choose at least one listed device type, and choose each device type no more than once.",
+    ),
+    "targets": (
+        "Target version",
+        "Choose a target version for at least one selected device type.",
+    ),
+    "version_ap": (
+        "Access point target version",
+        "Choose a version that the selected access point model offers.",
+    ),
+    "version_switch": (
+        "Switch target version",
+        "Choose a version that the selected switch model offers.",
+    ),
+    "version_gateway": (
+        "Gateway target version",
+        "Choose a version that the selected gateway model offers.",
+    ),
+    "version_target": (
+        "Target version",
+        "Choose a version that the device model offers.",
+    ),
 }
 
 # The message that a field with no entry above receives. It still names the
@@ -229,7 +253,7 @@ OPTION_HELP: Mapping[str, tuple[str, str]] = {
 UNKNOWN_OPTION_RULE = "Read the note under the control for the rule."
 
 
-def option_message(field: str) -> str:
+def option_message(field: str, model: str = "") -> str:
     """Return the refusal sentence of one option.
 
     Why:
@@ -243,15 +267,17 @@ def option_message(field: str) -> str:
 
     Args:
         field: The cloud field name of the option that failed.
+        model: The device model that refused a target version, when known.
 
     Returns:
         The sentence that names the control and states the rule.
     """
     label, rule = OPTION_HELP.get(field, ("", UNKNOWN_OPTION_RULE))  # An unmapped field still reads plainly.
+    model_text = f" for model {model}" if model else ""  # Name the model only when the validator knows it.
     if not label:  # No label means the portal knows the field and not its control.
         logger.warning("Upgrade portal refused the option %s, which names no control", field)
         return f'The control for "{field}" holds a value that the portal refuses. {rule}'
-    return f'The control "{label}" holds a value that the portal refuses. {rule}'
+    return f'The control "{label}"{model_text} holds a value that the portal refuses. {rule}'
 
 
 class BadOptionError(ValueError):
@@ -274,15 +300,17 @@ class BadOptionError(ValueError):
         field: The name of the option that failed.
     """
 
-    def __init__(self, field: str) -> None:
+    def __init__(self, field: str, model: str = "") -> None:
         """Build the refusal for one named option.
 
         Args:
             field: The name of the option that failed.
+            model: The model that rejected the version, when known.
         """
         self.code = ERROR_BAD_OPTION
         self.field = field
-        super().__init__(option_message(field))  # The sentence names the control and states the rule.
+        self.model = model  # Keep the model available to a caller that wants structured refusal detail.
+        super().__init__(option_message(field, model))  # The sentence names the control and states the rule.
 
 
 @dataclass(frozen=True, slots=True)
@@ -1582,7 +1610,7 @@ def _validate_target_versions(
         offered = {_normalized_version(item) for item in versions_by_model.get(model, ())}
         if version not in offered:
             logger.warning("Upgrade portal refused an unavailable target for model %s", model)
-            raise BadOptionError("version_target")
+            raise BadOptionError("version_target", model=model)
 
 
 def build_targets(

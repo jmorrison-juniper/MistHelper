@@ -22,6 +22,7 @@ from src.firmware.upgrade_service import DeviceTarget, UpgradeOptions
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.app.routes.org_upgrade import status_summary
 from src.upgrade_portal.runtime import identity, lock
+from src.upgrade_portal.upgrade.options import BadOptionError
 from tests.support.lock_store_double import FakeLockStore
 
 ORG_OPTIONS_PAGE = "/upgrade/org/options"
@@ -487,6 +488,35 @@ def test_zero_failure_limit_survives_the_options_round_trip(org_upgrade_client: 
     page = org_upgrade_client.get(ORG_OPTIONS_PAGE)
     assert page.status_code == 200
     assert b'value="0"' in page.data
+
+
+def test_options_view_restores_multisite_saved_choices() -> None:
+    """The options page reads every saved choice after Back."""
+    view = org_upgrade.options_view(  # Build the same display record that the route sends to the template.
+        {
+            "selected_types": ["ap", "switch"],
+            "version_ap": "0.15.1",
+            "version_switch": "23.4R1.9",
+            "version_gateway": "23.4R1.9",
+            "strategy": "big_bang",
+            "reboot": False,
+            "junos_file_action": False,
+            "force": True,
+        }
+    )
+    assert view["selected_types"] == ["ap", "switch"]  # The cleared gateway box must stay cleared.
+    assert view["reboot"] is False  # The No reboot choice must survive a return from confirmation.
+    assert view["junos_file_action"] is False  # The No Junos action choice must survive.
+    assert view["force"] is True  # The force checkbox must survive.
+
+
+def test_bad_option_message_names_the_page_label_and_model() -> None:
+    """A version refusal must name the page label, not an internal field."""
+    error = BadOptionError("version_target", model="EX4400")  # Build the refusal raised by target validation.
+    message = str(error)  # Read the operator text that the route returns.
+    assert "Target version" in message  # The operator sees this label on the options page.
+    assert "EX4400" in message  # The operator needs the model that refused the version.
+    assert "version_target" not in message  # An internal field name does not help the operator.
 
 
 def test_disabled_writes_call_no_service(

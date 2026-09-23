@@ -1102,6 +1102,16 @@
     padding: 0.45rem 0.75rem;
 }
 
+/*
+ * A placeholder is guidance, not a value. The dim and italic style stops a
+ * duration example from looking like a saved reboot delay.
+ */
+.portal-card input::placeholder {
+    color: var(--portal-text-muted);
+    font-style: italic;
+    opacity: 0.55;
+}
+
 /* ==========================================================================
  * 14. Narrow window
  * ========================================================================== */
