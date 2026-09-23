@@ -495,8 +495,11 @@ def test_reference_site_entries_use_root_totals() -> None:
 def test_status_page_and_api_preserve_site_progress(
     org_upgrade_client: FlaskClient,
     org_service: OrgUpgradeServiceStandIn,
+    fake_org_id: str,
 ) -> None:
     """The status paths show the organization and site job states."""
+    with org_upgrade_client.session_transaction() as browser_session:  # This browser started the job.
+        browser_session["org_upgrade_last_job"] = {"upgrade_id": UPGRADE_ID, "org_id": fake_org_id}
     page = org_upgrade_client.get(f"/upgrade/org/jobs/{UPGRADE_ID}")
     assert page.status_code == 200
     assert b'data-testid="org-upgrade-site-progress"' in page.data
@@ -507,6 +510,19 @@ def test_status_page_and_api_preserve_site_progress(
     assert answer.get_json()["upgraded_count"] == 1
     assert answer.get_json()["site_upgrades"][0]["id"] == SITE_UPGRADE_ID
     assert [call[0] for call in org_service.calls] == ["status", "status"]
+
+
+@pytest.mark.parametrize("path", [f"/upgrade/org/jobs/{UPGRADE_ID}", f"/api/org-upgrades/{UPGRADE_ID}"])
+def test_a_job_of_another_browser_is_refused_with_no_cloud_read(
+    org_upgrade_client: FlaskClient,
+    org_service: OrgUpgradeServiceStandIn,
+    path: str,
+) -> None:
+    """Issue #3241: the page and the poll refuse a job that this browser session did not start."""
+    answer = org_upgrade_client.get(path)  # No signed marker names this job.
+    assert answer.status_code == 409  # The same refusal as the cancel route.
+    assert answer.get_json()["error"]["code"] == "org_upgrade_job_not_owned"  # The documented code.
+    assert org_service.calls == []  # The portal read no cloud job for a job that it does not own.
 
 
 def test_cancellation_requires_cancel_and_calls_once(
