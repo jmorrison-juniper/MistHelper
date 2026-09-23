@@ -236,7 +236,7 @@ never runs in an automated test pass.
 | 200 | Search Site Guest Authorization (searchSiteGuestAuthorization) - Per-site authorized guest CSV | Interactive safe | `SiteGuestAuthorizationExporter.guest_authorizations` |
 | 201 | Search Site Mist Edge Events (searchSiteMistEdgeEvents) - Per-site Mist Edge event CSV | Interactive safe | `SiteMistEdgeEventsExporter.mist_edge_events` |
 | 202 | Search Site NAC Client Events (searchSiteNacClientEvents) - Per-site NAC client event CSV | Interactive safe | `SiteNacClientEventsExporter.nac_client_events` |
-| 203 | Search WAN client events for a selected site (spec 899 / issue #1407) | Interactive safe | `SiteClientExporter.wan_client_events` |
+| 203 | Search WAN client events for a selected site | Interactive safe | `SiteClientExporter.wan_client_events` |
 | 204 | Export JSI assets and contract search results | Safe org exports | `OrgExportUtils.jsi_assets` |
 | 205 | Export Org Mist Edge event search results | Safe org exports | `OrgExportUtils.mist_edge_events` |
 | 206 | DESTRUCTIVE: Manage org Zscaler synthetic probes - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue | Destructive | `lambda: manage_org_synthetic_probes(MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id())` |
@@ -268,9 +268,9 @@ never runs in an automated test pass.
 | 232 | Search WAN clients for the organization (searchOrgWanClients) | Safe org exports | `OrgSearchExporter.wan_clients` |
 | 233 | Search WAN client events for the organization (searchOrgWanClientEvents) | Safe org exports | `OrgSearchExporter.wan_client_events` |
 | 234 | Search system events for the organization (searchOrgSystemEvents) | Safe org exports | `OrgSearchExporter.system_events` |
-| 235 | Run any org-scoped Mist count endpoint (35 operations, issue #1802) | Interactive safe | `CountExporter.org_counts` |
-| 236 | Run any site-scoped Mist count endpoint (32 operations, issue #1802) | Interactive safe | `CountExporter.site_counts` |
-| 237 | Run any MSP-scoped Mist count endpoint (3 operations, issue #1802) | Interactive safe | `CountExporter.msp_counts` |
+| 235 | Run any org-scoped Mist count endpoint (35 operations) | Interactive safe | `CountExporter.org_counts` |
+| 236 | Run any site-scoped Mist count endpoint (33 operations) | Interactive safe | `CountExporter.site_counts` |
+| 237 | Run any MSP-scoped Mist count endpoint (3 operations) | Interactive safe | `CountExporter.msp_counts` |
 | 238 | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | Interactive safe | `MSPLicenseExporter.licenses` |
 | 239 | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | Destructive | `lambda: _launch_capture_portal()` |
 | 240 | Export one organization security intelligence profile (getOrgSecIntelProfile) | Interactive safe | `OrgSecIntelProfileExporter.profile` |
@@ -292,17 +292,17 @@ never runs in an automated test pass.
 | 256 | Search organization webhook deliveries (searchOrgWebhooksDeliveries) | Interactive safe | `OrgWebhookDeliveriesExporter.deliveries` |
 | 257 | Search NAC clients for a selected site (searchSiteNacClients) | Interactive safe | `SiteSearchExporter.nac_clients` |
 | 258 | Search other-device events for a selected site (searchSiteOtherDeviceEvents) | Interactive safe | `SiteOtherDeviceEventsExporter.other_device_events` |
-| 259 | Run any no-identifier Mist get or list endpoint (29 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.global_endpoints` |
-| 260 | Run any org-scoped Mist get or list endpoint (55 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.org_endpoints` |
-| 261 | Run any site-scoped simple Mist read endpoint (58 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
-| 262 | Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.msp_endpoints` |
-| 263 | Run any site SLE endpoint with scope prompts (17 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_sle_endpoints` |
-| 264 | Run any site map endpoint with map prompts (7 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_map_endpoints` |
-| 265 | Run any site detail endpoint with identifier prompts (33 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_detail_endpoints` |
-| 266 | Run any org detail endpoint with identifier prompts (61 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.org_detail_endpoints` |
-| 267 | Run any MSP detail endpoint with identifier prompts (10 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.msp_detail_endpoints` |
-| 268 | Run any remaining endpoint with identifier prompts (6 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.other_endpoints` |
-| 269 | Scan the organization for rogue DHCP servers on switches (30 days, issue #2985) | Safe org exports | `RogueDhcpScanOperation.run` |
+| 259 | Run any no-identifier Mist get or list endpoint (29 operations) | Interactive safe | `SimpleEndpointExporter.global_endpoints` |
+| 260 | Run any org-scoped Mist get or list endpoint (55 operations) | Interactive safe | `SimpleEndpointExporter.org_endpoints` |
+| 261 | Run any site-scoped simple Mist read endpoint (58 operations) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
+| 262 | Run any MSP-scoped Mist get or list endpoint (10 operations) | Interactive safe | `SimpleEndpointExporter.msp_endpoints` |
+| 263 | Run any site SLE endpoint with scope prompts (17 operations) | Interactive safe | `EndpointFamilyExporter.site_sle_endpoints` |
+| 264 | Run any site map endpoint with map prompts (7 operations) | Interactive safe | `EndpointFamilyExporter.site_map_endpoints` |
+| 265 | Run any site detail endpoint with identifier prompts (33 operations) | Interactive safe | `EndpointFamilyExporter.site_detail_endpoints` |
+| 266 | Run any org detail endpoint with identifier prompts (61 operations) | Interactive safe | `EndpointFamilyExporter.org_detail_endpoints` |
+| 267 | Run any MSP detail endpoint with identifier prompts (10 operations) | Interactive safe | `EndpointFamilyExporter.msp_detail_endpoints` |
+| 268 | Run any remaining endpoint with identifier prompts (6 operations) | Interactive safe | `EndpointFamilyExporter.other_endpoints` |
+| 269 | Scan the organization for rogue DHCP servers on switches (30 days) | Safe org exports | `RogueDhcpScanOperation.run` |
 
 ### Endpoint family sub-menus (259-268)
 
