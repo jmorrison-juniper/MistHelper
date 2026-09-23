@@ -16,6 +16,16 @@ from concurrent.futures import wait as wait_for_futures
 from typing import Any
 
 
+from src.export.endpoint_catalog import menu_text
+from src.export.endpoint_family_exporter import (
+    _MSP_DETAIL_OPS,
+    _ORG_DETAIL_OPS,
+    _OTHER_DETAIL_OPS,
+    _SITE_DETAIL_OPS,
+    _SITE_MAP_OPS,
+    _SITE_SLE_OPS,
+)
+from src.export.simple_endpoint_exporter import _SITE_OPS
 from src.utils.operation_registry import OperationRegistry
 from web_portal.services.output_scan import OutputFileScanner
 
@@ -160,6 +170,59 @@ def _choice_param(name: str, label: str, options: list, **kwargs) -> dict:
     }
     param.update(kwargs)
     return param
+
+
+def _endpoint_options(operations: tuple) -> list[dict]:
+    """Build dropdown choices from endpoint operation rows."""
+    return [
+        {"value": str(index), "label": menu_text(operation.operation)}  # Show the same readable text as the CLI picker.
+        for index, operation in enumerate(operations, start=1)  # Preserve the CLI one-based selection numbers.
+    ]
+
+
+def _answer_order_by_choice(operations: tuple) -> dict[str, list[str]]:
+    """Map each endpoint dropdown choice to the prompts that handler will read."""
+    return {
+        str(index): list(operation.required)  # Match the exporter prompt order for the selected endpoint.
+        for index, operation in enumerate(operations, start=1)  # Use the same one-based values shown in the control.
+    }
+
+
+def _operation_choice_param(name: str, label: str, operations: tuple, prompt_order: list[str] | None = None) -> dict:
+    """Build an endpoint operation selector that can order later answers."""
+    answer_order = (  # Simple endpoint menus use one fixed prompt order for every operation.
+        {str(index): prompt_order for index, _operation in enumerate(operations, start=1)}
+        if prompt_order is not None
+        else _answer_order_by_choice(operations)
+    )
+    return _choice_param(  # Reuse the standard choice shape so the browser renders one dropdown.
+        name,
+        label,
+        _endpoint_options(operations),
+        answer_order_by_choice=answer_order,
+    )
+
+
+def _identifier_param(name: str, label: str | None = None) -> dict:
+    """Build a required text parameter for an endpoint identifier."""
+    return _text_param(  # Reuse text input rendering because identifiers have no universal pick list.
+        name,
+        label or name.replace("_", " ").title(),
+        required=True,
+        placeholder=name,
+    )
+
+
+def _identifier_params_for(operations: tuple, excluded_names: set[str] | None = None) -> list[dict]:
+    """Build one identifier control for every required endpoint prompt."""
+    excluded = excluded_names or set()  # Keep callers concise when no prompt has a special browser control.
+    names = []  # Preserve first-seen order so the form stays stable across requests.
+    for operation in operations:  # Read each endpoint row in the same order as the CLI selector.
+        for name in operation.required:  # Read each identifier in the handler prompt order.
+            if name in excluded or name in names:  # Avoid duplicate controls and controls served by pick lists.
+                continue
+            names.append(name)  # Keep this identifier because one selectable endpoint needs it.
+    return [_identifier_param(name) for name in names]  # Convert every remaining identifier to a text control.
 
 
 def _build_registry() -> dict:
@@ -307,6 +370,96 @@ def _build_registry() -> dict:
         ],
     }
 
+    # --- Device troubleshooting operations that need browser selections ---
+    registry["91"] = {
+        "category": "interactive",
+        "parameters": [
+            _text_param(
+                "manufacturer_choice",
+                "Manufacturer Number (optional)",
+                placeholder="leave blank to export all manufacturers",
+            )
+        ],
+    }
+    registry["93"] = {
+        "category": "interactive",
+        "parameters": [_site_param()],
+    }
+    registry["94"] = {
+        "category": "interactive",
+        "parameters": [_site_param(), _device_param("all")],
+    }
+    registry["95"] = {
+        "category": "interactive",
+        "parameters": [_site_param(), _device_param("gateway")],
+    }
+    registry["96"] = {
+        "category": "interactive",
+        "parameters": [_site_param(), _device_param("all")],
+    }
+
+    # --- Endpoint explorer operations that need endpoint and identifier controls ---
+    registry["257"] = {
+        "category": "interactive",
+        "parameters": [_site_param()],
+    }
+    registry["258"] = {
+        "category": "interactive",
+        "parameters": [_site_param()],
+    }
+    registry["261"] = {
+        "category": "interactive",
+        "parameters": [
+            _operation_choice_param("operation_index", "Endpoint Operation", _SITE_OPS, ["site_id"]),
+            _site_param(),
+        ],
+    }
+    registry["263"] = {
+        "category": "interactive",
+        "parameters": [
+            _operation_choice_param("operation_index", "Endpoint Operation", _SITE_SLE_OPS),
+            _site_param(),
+            *_identifier_params_for(_SITE_SLE_OPS, {"site_id"}),
+        ],
+    }
+    registry["264"] = {
+        "category": "interactive",
+        "parameters": [
+            _operation_choice_param("operation_index", "Endpoint Operation", _SITE_MAP_OPS),
+            _site_param(),
+            *_identifier_params_for(_SITE_MAP_OPS, {"site_id"}),
+        ],
+    }
+    registry["265"] = {
+        "category": "interactive",
+        "parameters": [
+            _operation_choice_param("operation_index", "Endpoint Operation", _SITE_DETAIL_OPS),
+            _site_param(),
+            *_identifier_params_for(_SITE_DETAIL_OPS, {"site_id"}),
+        ],
+    }
+    registry["266"] = {
+        "category": "interactive",
+        "parameters": [
+            _operation_choice_param("operation_index", "Endpoint Operation", _ORG_DETAIL_OPS),
+            *_identifier_params_for(_ORG_DETAIL_OPS),
+        ],
+    }
+    registry["267"] = {
+        "category": "interactive",
+        "parameters": [
+            _operation_choice_param("operation_index", "Endpoint Operation", _MSP_DETAIL_OPS),
+            *_identifier_params_for(_MSP_DETAIL_OPS),
+        ],
+    }
+    registry["268"] = {
+        "category": "interactive",
+        "parameters": [
+            _operation_choice_param("operation_index", "Endpoint Operation", _OTHER_DETAIL_OPS),
+            *_identifier_params_for(_OTHER_DETAIL_OPS),
+        ],
+    }
+
     # --- Packet captures (complex interactive) ---
     registry["9"] = {
         "category": "interactive",
@@ -356,6 +509,13 @@ def _build_registry() -> dict:
         "parameters": [],
         "cli_only_message": (
             "Interactive CLI shell requires persistent keyboard input. " "Use SSH access on port 2200."
+        ),
+    }
+    registry["92"] = {
+        "category": "cli_only",
+        "parameters": [],
+        "cli_only_message": (
+            "Site selection stores state for later shell operations. " "Use SSH access on port 2200."
         ),
     }
 

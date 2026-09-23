@@ -246,6 +246,9 @@ function handleParameterResponse(data, formDiv, fieldsDiv) {
     if (data.parameters && data.parameters.length > 0) {
         currentParameters = data.parameters;
         renderParameterFields(data.parameters, fieldsDiv);
+        currentParameters.forEach(function(param) {
+            updateAnswerOrderVisibility(param);  // Hide endpoint identifiers until the operator selects an endpoint.
+        });
         setElementVisible(formDiv, true);
         validateForm();
     } else {
@@ -457,7 +460,10 @@ function createClientDropdown(param) {
     select.innerHTML = '<option value="">-- Select site first --</option>';
     select.disabled = true;
 
-    select.addEventListener('change', function() { validateForm(); });
+    select.addEventListener('change', function() {
+        updateAnswerOrderVisibility(param);  // Endpoint menus show only the identifiers for the selected call.
+        validateForm();  // Recheck required identifiers after the selected endpoint changes.
+    });
     return select;
 }
 
@@ -612,6 +618,10 @@ function validateForm() {
     var runBtn = document.getElementById('runBtn');
 
     currentParameters.forEach(function(param) {
+        updateAnswerOrderVisibility(param);  // Keep conditional endpoint fields visible before validation reads them.
+    });
+
+    currentParameters.forEach(function(param) {
         if (!isFieldInvalid(param)) return;
         valid = false;
     });
@@ -622,9 +632,47 @@ function validateForm() {
     return valid;
 }
 
+function activeAnswerNames() {
+    var names = new Set();  // The set makes the membership checks stable and cheap.
+    currentParameters.forEach(function(param) {
+        if (!param.answer_order_by_choice) return;  // Only endpoint selectors define conditional prompt order.
+        var control = document.getElementById('param-' + param.name);  // Read the selected endpoint row.
+        var order = control ? param.answer_order_by_choice[control.value] : null;  // Find the matching prompts.
+        names.add(param.name);  // The selector itself is always part of the submitted answers.
+        (order || []).forEach(function(name) { names.add(name); });  // Add only prompts the handler will read.
+    });
+    return names;  // An empty set means the operation uses the normal static order.
+}
+
+function activeAnswerOrder() {
+    var order = [];  // The array preserves the prompt order that the Python handler reads.
+    currentParameters.forEach(function(param) {
+        if (!param.answer_order_by_choice) return;  // Only endpoint selectors provide conditional prompt order.
+        var control = document.getElementById('param-' + param.name);  // Read the current endpoint choice.
+        var selected = control ? param.answer_order_by_choice[control.value] : null;  // Find that choice order.
+        order.push(param.name);  // The handler first reads the endpoint operation number.
+        (selected || []).forEach(function(name) { order.push(name); });  // Then it reads the identifiers.
+    });
+    return order;  // An empty array means the static form order still applies.
+}
+
+function updateAnswerOrderVisibility(changedParam) {
+    if (!changedParam.answer_order_by_choice) return;  // Only endpoint selectors drive conditional controls.
+    var activeNames = activeAnswerNames();  // Read the controls that matter for the selected endpoint.
+    currentParameters.forEach(function(param) {
+        if (param.name === changedParam.name) return;  // Keep the endpoint selector visible.
+        if (param.depends_on) return;  // Cascading site controls manage their own visibility.
+        var group = document.getElementById('param-group-' + param.name);  // Resolve the form row.
+        if (!group) return;  // A missing row means the form has already changed.
+        group.style.display = activeNames.has(param.name) ? '' : 'none';  // Hide unused identifiers.
+    });
+}
+
 function isFieldInvalid(param) {
     var control = document.getElementById('param-' + param.name);
-    if (!control || !param.required) return false;
+    var activeNames = activeAnswerNames();
+    var conditionallyRequired = activeNames.size > 0 && activeNames.has(param.name);
+    if (!control || (!param.required && !conditionallyRequired)) return false;
 
     var group = document.getElementById('param-group-' + param.name);
     if (group && group.style.display === 'none') return false;
@@ -688,6 +736,14 @@ function runSelectedOperation() {
 
 function collectInputAnswers() {
     var answers = [];
+    var orderedNames = activeAnswerOrder();
+    if (orderedNames.length > 0) {
+        orderedNames.forEach(function(name) {
+            var control = document.getElementById('param-' + name);
+            answers.push(control ? (control.value || '') : '');
+        });
+        return answers;
+    }
     currentParameters.forEach(function(param) {
         var control = document.getElementById('param-' + param.name);
         answers.push(control ? (control.value || '') : '');

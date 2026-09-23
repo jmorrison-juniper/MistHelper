@@ -102,7 +102,7 @@ MENU_DESCRIPTIONS = {
     "88": "Export sites by AP model with site address (CSV)",
     "89": "E911 BSSID Compliance Report",
     "90": "Global Wired Client Report (operator-based MAC/MFG filtering)",
-    "91": "Wired Client Manufacturer Report (browse & select)",
+    "91": "Wired Client Manufacturer Report (exports all manufacturers)",
     "92": "Select a site (used by other functions)",
     "93": "View device inventory for a selected site",
     "94": "View statistics for a selected device at a site",

@@ -5807,7 +5807,7 @@ menu_actions: dict[str, Any] = {
     "91": GlobalImportManager.MenuEntry(  # Use named fields for menu 91.
         menu_id="91",  # Store key for drift checks.
         handler=WiredClientManufacturerReportGenerator.execute,
-        title="Wired Client Manufacturer Report (browse & select)",
+        title="Wired Client Manufacturer Report (exports all manufacturers)",
         category=OperationRegistry.skip_category("91"),  # Read the safety class.
         destructive=False,  # Keep the safety flag.
         supports_fast=False,  # Avoid fast-mode inspection.
