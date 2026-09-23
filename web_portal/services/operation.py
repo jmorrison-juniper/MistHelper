@@ -598,6 +598,84 @@ def _build_registry() -> dict:
         ),
     }
 
+    # --- Issue #3230 required plain prompts and endpoint family explorers ---
+    from src.export.count_exporter import _MSP_OPS as msp_count_ops  # Read the MSP chooser source of truth.
+    from src.export.count_exporter import _ORG_OPS as org_count_ops  # Read the org chooser source of truth.
+    from src.export.simple_endpoint_exporter import _MSP_OPS as msp_endpoint_ops  # Read the MSP endpoint table.
+    from src.export.simple_endpoint_exporter import _NONE_OPS as global_endpoint_ops  # Read the global endpoint table.
+    from src.export.simple_endpoint_exporter import _ORG_OPS as org_endpoint_ops  # Read the org endpoint table.
+
+    org_count_options = _indexed_options([entry.operation for entry in org_count_ops])  # Match menu 235 chooser order.
+    msp_count_options = _indexed_options([entry.operation for entry in msp_count_ops])  # Match menu 237 chooser order.
+    global_endpoint_options = _indexed_options(  # Build menu 259 choices from the exporter table.
+        [entry.operation for entry in global_endpoint_ops]
+    )
+    org_endpoint_options = _indexed_options([entry.operation for entry in org_endpoint_ops])  # Match menu 260 order.
+    msp_endpoint_options = _indexed_options([entry.operation for entry in msp_endpoint_ops])  # Match menu 262 order.
+
+    registry["235"] = {  # Menu 235 asks for an org count operation before it uses the cached org.
+        "category": "interactive",  # The portal can run this row after it records the chooser answer.
+        "parameters": [
+            _choice_param("count_operation", "Count Operation", org_count_options),  # Answer the required chooser.
+        ],
+    }
+    registry["237"] = {  # Menu 237 asks for an MSP count operation and then an MSP identifier.
+        "category": "interactive",  # The portal can run this row after both required answers exist.
+        "parameters": [
+            _choice_param("count_operation", "Count Operation", msp_count_options),  # Answer the required chooser.
+            _required_text_param("msp_id", "MSP ID", placeholder="Mist MSP UUID"),  # Answer the required MSP prompt.
+        ],
+    }
+    registry["238"] = {  # Menu 238 asks for an MSP identifier before it lists MSP licenses.
+        "category": "interactive",  # The portal must collect the MSP identifier before Run is enabled.
+        "parameters": [
+            _required_text_param("msp_id", "MSP ID", placeholder="Mist MSP UUID"),  # Answer the required MSP prompt.
+        ],
+    }
+    registry["242"] = {  # Menu 242 asks for the SSID and aborts when the answer is empty.
+        "category": "interactive",  # The portal must collect the SSID before Run is enabled.
+        "parameters": [
+            _required_text_param("ssid", "SSID", placeholder="Production Wi-Fi"),  # Answer the required SSID prompt.
+        ],
+    }
+    registry["247"] = {  # Menu 247 verifies an email change token from a Mist email.
+        "category": "interactive",  # The portal must collect the token before Run is enabled.
+        "parameters": [
+            _required_text_param(  # Answer the token prompt without echoing the token meaning in logs.
+                "email_change_token", "Email Change Token", placeholder="Token from the Mist email"
+            ),
+        ],
+    }
+    registry["259"] = {  # Menu 259 asks which global endpoint to export.
+        "category": "interactive",  # The portal can run this row after it records the chooser answer.
+        "parameters": [
+            _choice_param("endpoint_operation", "Endpoint", global_endpoint_options),  # Answer the required chooser.
+        ],
+    }
+    registry["260"] = {  # Menu 260 asks which org endpoint to export before it uses the cached org.
+        "category": "interactive",  # The portal can run this row after it records the chooser answer.
+        "parameters": [
+            _choice_param("endpoint_operation", "Endpoint", org_endpoint_options),  # Answer the required chooser.
+        ],
+    }
+    registry["262"] = {  # Menu 262 asks which MSP endpoint to export and then asks for an MSP identifier.
+        "category": "interactive",  # The portal can run this row after both required answers exist.
+        "parameters": [
+            _choice_param("endpoint_operation", "Endpoint", msp_endpoint_options),  # Answer the required chooser.
+            _required_text_param("msp_id", "MSP ID", placeholder="Mist MSP UUID"),  # Answer the required MSP prompt.
+        ],
+    }
+    for menu in ("263", "264", "265", "266", "267", "268"):  # These families ask different prompts per choice.
+        registry[menu] = {  # Replace the runnable row with an honest browser limitation.
+            "category": "cli_only",  # Hide Run, because the portal cannot model dynamic prompts yet.
+            "parameters": [],  # A browser row must not collect a fixed list that can drift from the choice.
+            "cli_only_message": (  # Tell the operator why the browser cannot run this row and what to do.
+                "This endpoint family explorer asks for different identifiers after the endpoint choice. "
+                "The browser cannot model those per-choice prompts yet. Start it with "
+                f"python MistHelper.py --menu {menu}, or use SSH access on port 2200."
+            ),
+        }
+
     return registry
 
 
