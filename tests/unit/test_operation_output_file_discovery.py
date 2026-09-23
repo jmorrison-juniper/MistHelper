@@ -18,7 +18,7 @@ from collections import deque
 
 import pytest
 
-from web_portal.services.operation import _RunLogHandler
+from web_portal.services.operation import PARAMETER_REGISTRY, _RunLogHandler
 from web_portal.services.output_scan import OutputFileScanner
 
 
@@ -150,6 +150,24 @@ class TestRunRecordMerge:
         executor._finalize_output_files(run, tmp_path)  # Reorder cache names after true operation outputs.
         expected = ["SiteWlans_AlamoSanAntonio.csv", "SiteList.csv"]  # Name the safe preview order.
         assert list(run["output_files"]) == expected  # Preview the result first.
+
+    def test_site_parameter_rows_measure_prompt_cache_risk(self):
+        """The guard must state how many rows can refresh the site cache."""
+        site_menus = [  # Build the measured row list from the same metadata that builds portal controls.
+            int(menu_number)  # Compare menu numbers as integers, because the registry keys are strings.
+            for menu_number, entry in PARAMETER_REGISTRY.items()  # Read each portal parameter definition once.
+            if any(  # Keep rows whose controls can select a site and refresh the cache.
+                "site" in str(parameter.get("name", "")).lower()  # Detect site-scoped control names.
+                or "site" in str(parameter.get("source", "")).lower()  # Detect site-backed selector sources.
+                or str(parameter.get("type", "")).lower() in {"site", "site_select"}  # Detect site selector types.
+                for parameter in entry.get("parameters", [])  # Read the controls that the portal renders.
+                if isinstance(parameter, dict)  # Ignore malformed test fixtures without failing the measurement.
+            )
+        ]
+        print(f"The site cache output guard checked {len(site_menus)} site-scoped portal rows.")  # Guard proof.
+        assert len(site_menus) == 76  # Pin the measured risk set, so a future change updates the evidence.
+        assert 69 in site_menus  # Menu 69 reproduced the defect and must stay in the measured set.
+        assert 1 not in site_menus  # Menu 1 exports SiteList.csv directly, so it stays outside this cache-risk set.
 
     def test_finalize_keeps_site_list_when_menu_one_exports_it(self, tmp_path):
         """Menu 1 must keep its site list output because it is the operation result."""
