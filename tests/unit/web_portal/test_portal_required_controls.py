@@ -65,31 +65,13 @@ PROMPTS_BEFORE_PICKER = {
 # which the static audit cannot follow, so it reports no prompt at all. The
 # browser sweep of #3238 proved each prompt: without a control, each row failed
 # with "No site selected", and #3184 added the control that lets each row run.
-AUDIT_SEES_FEWER_PROMPTS = frozenset({"246", "64", "67", "203"})
+AUDIT_SEES_FEWER_PROMPTS = frozenset({"246", "64", "66", "67", "68", "203"})
 
 # Rows that declare a control no prompt consumes. The operator answers a
 # question the operation never asks, and the run discards the answer. Issue
 # #3198 tracks the repair and holds the evidence for each row. This list must
 # only shrink.
-EXTRA_CONTROL_BACKLOG = frozenset(
-    {
-        "5",  # OrgExportUtils.e911_report
-        "29",  # OrgClientSecurityExporter.rogue_clients
-        "30",  # OrgClientSecurityExporter.rogue_aps
-        "33",  # GatewayTestExporter.synthetic_tests
-        "34",  # GatewayTestExporter.test_results_by_site
-        "49",  # OrgAdminExporter.sso
-        "50",  # OrgConfigExporter.mx_edges
-        "51",  # OrgExportUtils.sle_metrics
-        "52",  # OrgExportUtils.sites_sle_summary
-        "53",  # OrgExportUtils.insight_metrics
-        "66",  # SiteClientExporter.beacons
-        "68",  # SiteConfigExporter.zones
-        "87",  # GatewayHaExporter.ha_cluster_info
-        "88",  # SitesByAPModelExporter.export_sites_by_ap_model
-        "89",  # OrgExportUtils.e911_bssid_compliance_report
-    }
-)
+EXTRA_CONTROL_BACKLOG = frozenset()
 
 
 @pytest.fixture(scope="module")
@@ -358,7 +340,9 @@ def test_a_site_export_does_not_ask_for_a_client(menu):
     "menu,expected",
     [
         ("64", ["site"]),
+        ("66", ["site"]),
         ("67", ["site"]),
+        ("68", ["site"]),
         ("78", ["site", "device"]),
         ("82", ["site"]),
         ("83", ["site"]),
@@ -374,13 +358,46 @@ def test_rows_with_hidden_prompt_utils_controls_declare_prompt_order(menu, expec
     assert declared == expected, f"menu {menu} declares {declared}, not {expected}"
 
 
-@pytest.mark.parametrize("menu", ["6", "7", "8", "9", "10"])
-def test_inventory_and_analysis_rows_have_no_stale_websocket_controls(menu):
-    """Menus 6 through 10 do not ask for WebSocket command values."""
-    # Issue #3226 proved that these controls belonged to the old WebSocket
-    # numbering, and the real handlers now run from organization context only.
+@pytest.mark.parametrize(
+    "menu",
+    [
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "29",
+        "30",
+        "33",
+        "34",
+        "49",
+        "50",
+        "51",
+        "52",
+        "53",
+        "89",
+    ],
+)
+def test_organization_rows_have_no_stale_controls(menu):
+    """Organization rows do not ask for values that their handlers never read."""
+    # Issues #3226 and #3198 proved that these controls belonged to other rows
+    # or to imagined scope filters. The real handlers run from organization
+    # context only, so the portal must not collect discarded answers.
     declared = _declared_types(menu)
-    assert declared == [], f"menu {menu} declares {declared}, so a stale WebSocket control remains"
+    assert declared == [], f"menu {menu} declares {declared}, so a stale control remains"
+
+
+def test_gateway_ha_row_asks_only_for_site():
+    """Menu 87 asks for a site and discovers the HA gateways itself."""
+    declared = _declared_types("87")
+    assert declared == ["site"], f"menu 87 declares {declared}, so it asks stale gateway ping questions"
+
+
+def test_sites_by_ap_model_row_asks_only_for_model_number():
+    """Menu 88 asks for the AP model number that its handler prompt reads."""
+    declared = _declared_types("88")
+    assert declared == ["number"], f"menu 88 declares {declared}, not the single model prompt"
 
 
 def test_a_long_running_server_is_command_line_only():
