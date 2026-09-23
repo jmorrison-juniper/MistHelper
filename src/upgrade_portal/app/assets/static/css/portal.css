@@ -998,7 +998,13 @@
 }
 
 /* Each level names itself in a text prefix as well as a color, so the level
- * reads without color. */
+ * reads without color.
+ *
+ * Each prefix ends with one space. portal.js writes an alert sentence as plain
+ * text with no leading space, so a prefix without the space touches the first
+ * word. Issue #3277 records the sign-in alert "Warning:The portal could not
+ * sign you in". A browser removes a space at the end of a line, so a flex item
+ * and a block prefix keep the same look. */
 .flash-item::before {
     font-weight: 700;
     white-space: nowrap;
@@ -1011,7 +1017,7 @@
 }
 
 .flash-info::before {
-    content: "Note:";
+    content: "Note: ";
 }
 
 .flash-success {
@@ -1021,7 +1027,7 @@
 }
 
 .flash-success::before {
-    content: "Done:";
+    content: "Done: ";
 }
 
 .flash-warning {
@@ -1031,7 +1037,7 @@
 }
 
 .flash-warning::before {
-    content: "Caution:";
+    content: "Caution: ";
 }
 
 .flash-danger {
@@ -1041,7 +1047,7 @@
 }
 
 .flash-danger::before {
-    content: "Warning:";
+    content: "Warning: ";
 }
 
 .run-failure-alert {
