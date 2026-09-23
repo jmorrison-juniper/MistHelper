@@ -160,7 +160,12 @@
             {% endif %}
           </td>
 
-          <td>
+          {#
+            Issue #3278: a control cell never wraps. The Open button of the
+            single-site mode and the Select box of the multi-site mode both keep
+            the label on one line on a narrow screen.
+          #}
+          <td class="cell-control">
             {#
               A read view needs no lock, so this link opens a locked site too.
               The site sections of contracts/http-api.md state that a read never

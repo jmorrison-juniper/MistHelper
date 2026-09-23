@@ -168,7 +168,8 @@
 
           <td class="cell-mono">{{ org_id }}</td>
 
-          <td>
+          {# Issue #3278: a control cell never wraps, so the label stays on one line on a narrow screen. #}
+          <td class="cell-control">
             {#
               The token guard matches layout.html. The page stays renderable
               before the security layer registers the csrf_token global. The
