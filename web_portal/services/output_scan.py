@@ -74,6 +74,13 @@ EXCLUDED_DIR_NAMES = (
     "juniper_pdf_library",  # The harvested Juniper document corpus. Read-only reference material.
     "mist_ideas_cache",  # The scraped idea cache. src/ideas writes it outside a portal run.
     "portal-test-artifacts",  # The end-to-end test reports. A test run is not an operation output.
+    # Issue #3201: the upgrade portal suites write their artifacts here, and the
+    # tree reached 1,522 mostly empty directories. Each listing is a round trip
+    # over the bind mount, so the walk of this tree alone cost 67 seconds, and
+    # every operation paid that cost. Measured in the container on 2026-09-23:
+    # the whole scan fell from 56.0 seconds to 3.0 seconds with this prune.
+    "test-artifacts",  # The upgrade portal test artifacts. A test run is not an operation output.
+    "test-control-byte-guard",  # The markdown control-byte test workspace. A test run is not an operation output.
     "agent_logs",  # The agent telemetry directory that copilot-instructions.md names.
     "__pycache__",  # Compiled bytecode is never a report.
     ".git",  # Repository metadata is never a report.
@@ -110,6 +117,10 @@ class OutputFileScanner:
         self._before: dict[str, float] = {}  # Kept for callers that read the pre-run picture.
         self._started_at: float = 0.0  # The run-start mark that dates each file found later.
         self._excluded = self._resolve_excludes()  # Name the trees the walk refuses to enter.
+        # Issue #3201: the cost of a walk is the count of directories it lists,
+        # not the count of files it finds. The count stays readable after each
+        # walk, so a test can prove that a pruned tree was never entered.
+        self.last_walk_directories = 0  # The directories the most recent walk listed.
 
     @staticmethod
     def _resolve_excludes() -> frozenset[str]:
@@ -215,6 +226,7 @@ class OutputFileScanner:
             for name in filenames:
                 if self._is_reportable(name):  # Skip a partial write, a hidden file, and bookkeeping.
                     yield Path(current) / name
+        self.last_walk_directories = visited_dirs  # Publish the measured scope for a caller or a test.
         logger.debug("Output scan entered %d directories", visited_dirs)  # State the measured scope.
 
     @staticmethod
