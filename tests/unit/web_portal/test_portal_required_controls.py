@@ -60,7 +60,12 @@ PROMPTS_BEFORE_PICKER = {
 # audit sees two, because it does not follow the second identifier call. The
 # registry is correct here and the audit is short, so this row is not a defect.
 # Issue #3181 holds the source reading that proves the third prompt.
-AUDIT_SEES_FEWER_PROMPTS = frozenset({"246"})
+#
+# Menus 64, 67, and 203 reach their site prompt through an injected PromptUtils,
+# which the static audit cannot follow, so it reports no prompt at all. The
+# browser sweep of #3238 proved each prompt: without a control, each row failed
+# with "No site selected", and #3184 added the control that lets each row run.
+AUDIT_SEES_FEWER_PROMPTS = frozenset({"246", "64", "67", "203"})
 
 # Rows that declare a control no prompt consumes. The operator answers a
 # question the operation never asks, and the run discards the answer. Issue
@@ -69,9 +74,6 @@ AUDIT_SEES_FEWER_PROMPTS = frozenset({"246"})
 EXTRA_CONTROL_BACKLOG = frozenset(
     {
         "5",  # OrgExportUtils.e911_report
-        "8",  # OrgInventoryExporter.inventory
-        "9",  # OrgInventoryExporter.devices
-        "10",  # OrgInventoryExporter.devices_with_site_info
         "29",  # OrgClientSecurityExporter.rogue_clients
         "30",  # OrgClientSecurityExporter.rogue_aps
         "33",  # GatewayTestExporter.synthetic_tests
@@ -350,6 +352,35 @@ def test_a_site_export_does_not_ask_for_a_client(menu):
     # the Run control never became usable. Issue #3191 recorded that blocked row.
     declared = _declared_types(menu)
     assert declared == ["site"], f"menu {menu} declares {declared}, so it asks for a value it never reads"
+
+
+@pytest.mark.parametrize(
+    "menu,expected",
+    [
+        ("64", ["site"]),
+        ("67", ["site"]),
+        ("78", ["site", "device"]),
+        ("82", ["site"]),
+        ("83", ["site"]),
+        ("197", ["site"]),
+        ("203", ["site"]),
+    ],
+)
+def test_rows_with_hidden_prompt_utils_controls_declare_prompt_order(menu, expected):
+    """Rows with injected prompt helpers must still declare browser controls."""
+    # Issue #3184 proved that the prompt audit misses these injected helpers.
+    # The guard locks the source-read prompt order into the portal registry.
+    declared = _declared_types(menu)
+    assert declared == expected, f"menu {menu} declares {declared}, not {expected}"
+
+
+@pytest.mark.parametrize("menu", ["6", "7", "8", "9", "10"])
+def test_inventory_and_analysis_rows_have_no_stale_websocket_controls(menu):
+    """Menus 6 through 10 do not ask for WebSocket command values."""
+    # Issue #3226 proved that these controls belonged to the old WebSocket
+    # numbering, and the real handlers now run from organization context only.
+    declared = _declared_types(menu)
+    assert declared == [], f"menu {menu} declares {declared}, so a stale WebSocket control remains"
 
 
 def test_a_long_running_server_is_command_line_only():

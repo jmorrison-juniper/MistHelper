@@ -126,3 +126,52 @@ class TestRunRecordMerge:
         (tmp_path / "Extra.md").write_text("# x", encoding="utf-8")
         OperationExecutor._record_scanned_files(OperationExecutor.__new__(OperationExecutor), run, scanner)
         assert list(run["output_files"]) == ["Sites.csv", "Extra.md"]
+
+    def test_finalize_removes_a_log_name_when_the_file_does_not_exist(self, tmp_path):
+        """A no-data export log line must not create a previewable phantom file."""
+        from web_portal.services.operation import OperationExecutor
+
+        run = {"run_id": "r1", "menu_number": "4", "output_files": deque(maxlen=50)}  # Build the run state.
+        run["output_files"].append("OrgCurrentGuests.csv")  # Simulate the log scrape finding a no-data filename.
+        executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
+        executor._finalize_output_files(run, tmp_path)  # Remove names that do not exist under the data directory.
+        assert list(run["output_files"]) == []  # The results panel must not offer a missing file.
+
+    def test_finalize_moves_site_cache_after_the_site_result(self, tmp_path):
+        """A site prompt cache must not be the first preview when a result exists."""
+        from web_portal.services.operation import OperationExecutor
+
+        (tmp_path / "SiteList.csv").write_text("site\n", encoding="utf-8")  # Create the prompt cache file.
+        (tmp_path / "SiteWlans_AlamoSanAntonio.csv").write_text("wlan\n", encoding="utf-8")  # Create the result.
+        run = {"run_id": "r2", "menu_number": "69", "output_files": deque(maxlen=50)}  # Build a site-scoped run.
+        run["output_files"].append("SiteList.csv")  # Simulate the scanner finding the cache first.
+        run["output_files"].append("SiteWlans_AlamoSanAntonio.csv")  # Simulate the operation output.
+        executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
+        executor._finalize_output_files(run, tmp_path)  # Reorder cache names after true operation outputs.
+        expected = ["SiteWlans_AlamoSanAntonio.csv", "SiteList.csv"]  # Name the safe preview order.
+        assert list(run["output_files"]) == expected  # Preview the result first.
+
+    def test_finalize_keeps_site_list_when_menu_one_exports_it(self, tmp_path):
+        """Menu 1 must keep its site list output because it is the operation result."""
+        from web_portal.services.operation import OperationExecutor
+
+        (tmp_path / "SiteList.csv").write_text("site\n", encoding="utf-8")  # Create the menu 1 result file.
+        run = {"run_id": "r3", "menu_number": "1", "output_files": deque(maxlen=50)}  # Build a menu 1 run.
+        run["output_files"].append("SiteList.csv")  # Simulate the scanner finding the site list export.
+        executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
+        executor._finalize_output_files(run, tmp_path)  # Keep existing files even when their name is a cache elsewhere.
+        assert list(run["output_files"]) == ["SiteList.csv"]  # Menu 1 must still show its result file.
+
+    def test_finalize_drops_lonely_site_cache_when_the_run_reports_no_data(self, tmp_path):
+        """A prompt cache must not hide an empty site-scoped operation result."""
+        from web_portal.services.operation import OperationExecutor
+
+        (tmp_path / "SiteList.csv").write_text("site\n", encoding="utf-8")  # Create the prompt cache file.
+        run = {"run_id": "r4", "menu_number": "69", "output_files": deque(maxlen=50)}  # Build a site-scoped run.
+        run["log_messages"] = [
+            {"message": "No data provided for output to SiteWlans_AlamoSanAntonio.csv"}
+        ]  # Mark no data.
+        run["output_files"].append("SiteList.csv")  # Simulate the scanner finding only the cache refresh.
+        executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
+        executor._finalize_output_files(run, tmp_path)  # Remove cache-only evidence when the run says no data.
+        assert list(run["output_files"]) == []  # The completion guard must read the no-data reason instead.

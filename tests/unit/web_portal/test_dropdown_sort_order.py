@@ -168,7 +168,7 @@ class TestTheClientDropdown:
         """Return a stand-in SDK that answers both client searches."""
         api = MagicMock()
         api.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(data={"results": wireless})
-        api.api.v1.sites.clients.searchSiteWiredClients.return_value = MagicMock(data={"results": wired})
+        api.api.v1.sites.wired_clients.searchSiteWiredClients.return_value = MagicMock(data={"results": wired})
         return api
 
     def test_the_two_client_types_interleave_by_name(self) -> None:
@@ -226,7 +226,7 @@ class TestACloudFailureLeavesTheSelectorUsable:
         api.api.v1.orgs.sites.listOrgSites.side_effect = error
         api.api.v1.sites.devices.listSiteDevices.side_effect = error
         api.api.v1.sites.clients.searchSiteWirelessClients.side_effect = error
-        api.api.v1.sites.clients.searchSiteWiredClients.side_effect = error
+        api.api.v1.sites.wired_clients.searchSiteWiredClients.side_effect = error
         return api
 
     @pytest.mark.parametrize(
@@ -271,7 +271,7 @@ class TestACloudFailureLeavesTheSelectorUsable:
         api.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(
             data={"results": [{"mac": "w1", "hostname": "alpha"}]}
         )
-        api.api.v1.sites.clients.searchSiteWiredClients.side_effect = RuntimeError("HTTP 500")
+        api.api.v1.sites.wired_clients.searchSiteWiredClients.side_effect = RuntimeError("HTTP 500")
         with patch.dict("sys.modules", {"mistapi": api}):
             result = _fetch_site_clients(object(), "site-1")
         assert names(result, CLIENT_LABEL_FIELDS) == ["alpha"]

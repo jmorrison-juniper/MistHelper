@@ -13,6 +13,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import wait as wait_for_futures
+from pathlib import Path  # Resolve output names against the data directory safely.
 from typing import Any
 
 from src.utils.operation_registry import OperationRegistry
@@ -130,6 +131,12 @@ HANDLED_ERROR_MARKERS = (
     "failed to",  # Other helpers use this wording for a caught operational failure.
     "could not",  # Prompt and lookup helpers use this wording for an unrecoverable failure.
 )
+
+# Prompt helper caches can change during site-scoped operations, but they are not the operation result.
+PROMPT_CACHE_OUTPUT_FILES = frozenset({"SiteList.csv"})
+
+# Menu 1 exports the site list, so the cache name is a real result for that menu.
+PROMPT_CACHE_EXPORT_MENUS = frozenset({"1"})
 
 
 def _read_positive_int_env(name: str, default: int) -> int:
@@ -314,8 +321,13 @@ def _build_registry() -> dict:
         # it. The sweep proved that a plain call survives a closed stream by
         # taking its default, so the site control alone unblocks the run.
         "63",  # SiteDeviceExporter.device_virtual_chassis
-        "78",  # SiteAnomalyExporter.device_anomaly_events
+        "64",  # SiteClientExporter.wifi_clients
+        "67",  # SiteConfigExporter.maps
+        "82",  # SiteExportUtils.switches_metrics
+        "83",  # SiteExportUtils.beacons_stats
+        "197",  # ClientPacketCaptureDownloader.run
         "199",  # SiteWebhookDeliveriesExporter.deliveries
+        "203",  # SiteClientExporter.wan_client_events
     ]
     for menu in site_only_menus:
         registry[menu] = {
@@ -397,7 +409,7 @@ def _build_registry() -> dict:
     }
 
     # --- Site + device (all types) ---
-    site_device_all_menus = ["72", "74", "80", "81", "85"]
+    site_device_all_menus = ["72", "74", "78", "80", "81", "85"]
     for menu in site_device_all_menus:
         registry[menu] = {
             "category": "interactive",
@@ -434,45 +446,6 @@ def _build_registry() -> dict:
     registry["76"] = {  # Menu 76 asks for a site and then one device.
         "category": "interactive",  # The portal must render input controls before Run.
         "parameters": [_site_param(), _device_param("all")],  # Answer the site and device prompts.
-    }
-
-    # --- Forwarding table (menu 6): gateway + text fields ---
-    registry["6"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("gateway"),
-            _text_param("prefix", "IP Prefix", placeholder="0.0.0.0/0", default="0.0.0.0/0"),
-            _text_param("service_name", "Service Name", placeholder="press Enter to skip"),
-            _text_param("vrf", "VRF Name", placeholder="press Enter to skip"),
-            _text_param("node", "Node", placeholder="node0/node1 for HA"),
-        ],
-    }
-
-    # --- Routing table (menu 7): switch + text fields ---
-    registry["7"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("switch"),
-            _text_param("prefix", "Route Prefix", placeholder="press Enter to show all"),
-            _text_param("protocol", "Protocol Filter", placeholder="press Enter for any"),
-            _text_param("vrf", "VRF Name", placeholder="press Enter to skip"),
-            _text_param("neighbor", "BGP Neighbor IP", placeholder="press Enter to skip"),
-        ],
-    }
-
-    # --- SSR routes (menu 8): gateway + many params ---
-    registry["8"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("gateway"),
-            _text_param("protocol", "Protocol", placeholder="press Enter for API default"),
-            _text_param("prefix", "Route Prefix", placeholder="e.g. 192.168.1.0/24"),
-            _text_param("vrf", "VRF Name", placeholder="press Enter for default VRF"),
-            _text_param("neighbor", "BGP Neighbor IP", placeholder="press Enter to skip"),
-        ],
     }
 
     # --- Ping device (menu 87) ---
@@ -532,42 +505,6 @@ def _build_registry() -> dict:
         ],
     }
 
-    # --- Packet captures (complex interactive) ---
-    registry["9"] = {
-        "category": "interactive",
-        "parameters": [
-            _choice_param(
-                "capture_type",
-                "Capture Type",
-                [
-                    {"value": "1", "label": "Wireless Client"},
-                    {"value": "2", "label": "Wired Client"},
-                    {"value": "3", "label": "Gateway"},
-                    {"value": "4", "label": "Switch"},
-                    {"value": "5", "label": "New Association"},
-                    {"value": "6", "label": "Scan Radio"},
-                ],
-            ),
-            _site_param(),
-            _text_param("client_mac", "Client MAC", placeholder="e.g. aa:bb:cc:dd:ee:ff"),
-            _number_param("duration", "Duration (seconds)", default="60", min_value=10, max_value=300),
-            _number_param("num_packets", "Packet Count", default="100", min_value=1, max_value=10000),
-            _number_param("max_pkt_len", "Max Packet Length", default="128", min_value=64, max_value=1500),
-        ],
-    }
-
-    registry["10"] = {
-        "category": "interactive",
-        "parameters": [
-            _text_param("mxedge_index", "MxEdge Index", placeholder="select MxEdge index"),
-            _text_param("port_index", "Port Index", placeholder="select port index"),
-            _text_param("tcpdump_filter", "Tcpdump Filter", placeholder="press Enter for none"),
-            _number_param("duration", "Duration (seconds)", default="30", min_value=1, max_value=86400),
-            _number_param("num_packets", "Packet Count", default="1024", min_value=0, max_value=10000),
-            _number_param("max_pkt_len", "Max Packet Length", default="128", min_value=1, max_value=2048),
-        ],
-    }
-
     # --- CLI-only operations ---
     registry["62"] = {
         "category": "cli_only",
@@ -597,6 +534,84 @@ def _build_registry() -> dict:
             "--metrics-gateway flag, or use SSH access on port 2200."
         ),
     }
+
+    # --- Issue #3230 required plain prompts and endpoint family explorers ---
+    from src.export.count_exporter import _MSP_OPS as msp_count_ops  # Read the MSP chooser source of truth.
+    from src.export.count_exporter import _ORG_OPS as org_count_ops  # Read the org chooser source of truth.
+    from src.export.simple_endpoint_exporter import _MSP_OPS as msp_endpoint_ops  # Read the MSP endpoint table.
+    from src.export.simple_endpoint_exporter import _NONE_OPS as global_endpoint_ops  # Read the global endpoint table.
+    from src.export.simple_endpoint_exporter import _ORG_OPS as org_endpoint_ops  # Read the org endpoint table.
+
+    org_count_options = _indexed_options([entry.operation for entry in org_count_ops])  # Match menu 235 chooser order.
+    msp_count_options = _indexed_options([entry.operation for entry in msp_count_ops])  # Match menu 237 chooser order.
+    global_endpoint_options = _indexed_options(  # Build menu 259 choices from the exporter table.
+        [entry.operation for entry in global_endpoint_ops]
+    )
+    org_endpoint_options = _indexed_options([entry.operation for entry in org_endpoint_ops])  # Match menu 260 order.
+    msp_endpoint_options = _indexed_options([entry.operation for entry in msp_endpoint_ops])  # Match menu 262 order.
+
+    registry["235"] = {  # Menu 235 asks for an org count operation before it uses the cached org.
+        "category": "interactive",  # The portal can run this row after it records the chooser answer.
+        "parameters": [
+            _choice_param("count_operation", "Count Operation", org_count_options),  # Answer the required chooser.
+        ],
+    }
+    registry["237"] = {  # Menu 237 asks for an MSP count operation and then an MSP identifier.
+        "category": "interactive",  # The portal can run this row after both required answers exist.
+        "parameters": [
+            _choice_param("count_operation", "Count Operation", msp_count_options),  # Answer the required chooser.
+            _required_text_param("msp_id", "MSP ID", placeholder="Mist MSP UUID"),  # Answer the required MSP prompt.
+        ],
+    }
+    registry["238"] = {  # Menu 238 asks for an MSP identifier before it lists MSP licenses.
+        "category": "interactive",  # The portal must collect the MSP identifier before Run is enabled.
+        "parameters": [
+            _required_text_param("msp_id", "MSP ID", placeholder="Mist MSP UUID"),  # Answer the required MSP prompt.
+        ],
+    }
+    registry["242"] = {  # Menu 242 asks for the SSID and aborts when the answer is empty.
+        "category": "interactive",  # The portal must collect the SSID before Run is enabled.
+        "parameters": [
+            _required_text_param("ssid", "SSID", placeholder="Production Wi-Fi"),  # Answer the required SSID prompt.
+        ],
+    }
+    registry["247"] = {  # Menu 247 verifies an email change token from a Mist email.
+        "category": "interactive",  # The portal must collect the token before Run is enabled.
+        "parameters": [
+            _required_text_param(  # Answer the token prompt without echoing the token meaning in logs.
+                "email_change_token", "Email Change Token", placeholder="Token from the Mist email"
+            ),
+        ],
+    }
+    registry["259"] = {  # Menu 259 asks which global endpoint to export.
+        "category": "interactive",  # The portal can run this row after it records the chooser answer.
+        "parameters": [
+            _choice_param("endpoint_operation", "Endpoint", global_endpoint_options),  # Answer the required chooser.
+        ],
+    }
+    registry["260"] = {  # Menu 260 asks which org endpoint to export before it uses the cached org.
+        "category": "interactive",  # The portal can run this row after it records the chooser answer.
+        "parameters": [
+            _choice_param("endpoint_operation", "Endpoint", org_endpoint_options),  # Answer the required chooser.
+        ],
+    }
+    registry["262"] = {  # Menu 262 asks which MSP endpoint to export and then asks for an MSP identifier.
+        "category": "interactive",  # The portal can run this row after both required answers exist.
+        "parameters": [
+            _choice_param("endpoint_operation", "Endpoint", msp_endpoint_options),  # Answer the required chooser.
+            _required_text_param("msp_id", "MSP ID", placeholder="Mist MSP UUID"),  # Answer the required MSP prompt.
+        ],
+    }
+    for menu in ("263", "264", "265", "266", "267", "268"):  # These families ask different prompts per choice.
+        registry[menu] = {  # Replace the runnable row with an honest browser limitation.
+            "category": "cli_only",  # Hide Run, because the portal cannot model dynamic prompts yet.
+            "parameters": [],  # A browser row must not collect a fixed list that can drift from the choice.
+            "cli_only_message": (  # Tell the operator why the browser cannot run this row and what to do.
+                "This endpoint family explorer asks for different identifiers after the endpoint choice. "
+                "The browser cannot model those per-choice prompts yet. Start it with "
+                f"python MistHelper.py --menu {menu}, or use SSH access on port 2200."
+            ),
+        }
 
     return registry
 
@@ -954,6 +969,7 @@ class OperationExecutor:
         finally:
             root_logger.removeHandler(handler)
             self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
+            self._finalize_output_files(run, scanner.root)  # Remove phantom names and put real results first.
 
     def _finish_successful_operation(self, run: dict) -> None:
         """Mark a returned handler as complete only when the result is honest."""
@@ -1037,6 +1053,56 @@ class OperationExecutor:
         for name in added:
             run["output_files"].append(name)  # The bounded deque drops the oldest name when it is full.
         logger.debug("Run %s added %d scanned files to %d known names", run["run_id"], len(added), len(known))
+
+    def _finalize_output_files(self, run: dict, data_root: Path) -> None:
+        """Keep only files that exist and put prompt caches after results."""
+        logger.info("Run %s finalizes its output file evidence", run["run_id"])  # Log before pruning and ordering.
+        original = list(run["output_files"])  # Freeze the deque, because the method rebuilds it in place.
+        existing = [name for name in original if self._output_file_exists(data_root, name)]  # Drop phantom names.
+        evidence = self._drop_cache_only_empty_result(run, existing)  # Do not let a prompt cache hide no data.
+        ordered = self._order_output_files_for_preview(run, evidence)  # Put the preview-worthy result first.
+        target = run["output_files"]  # Reuse the bounded deque that the run record already owns.
+        target.clear()  # Clear stale names so the response cannot list a removed file.
+        for name in ordered:
+            target.append(name)  # Rebuild the deque in the order the Results panel should preview.
+        logger.debug(  # Log the final counts so an operator can explain a missing name.
+            "Run %s kept %d of %d output file names",
+            run["run_id"],
+            len(ordered),
+            len(original),
+        )
+
+    @staticmethod
+    def _output_file_exists(data_root: Path, filename: str) -> bool:
+        """Return True when a reported output name exists under the data root."""
+        root = Path(data_root).resolve()  # Resolve the root once so a relative filename cannot escape silently.
+        candidate = (root / str(filename)).resolve()  # Resolve the reported name under the data root.
+        try:
+            candidate.relative_to(root)  # Reject an absolute or parent-relative name outside the data root.
+        except ValueError:
+            return False  # Do not list a path outside the output directory.
+        return candidate.is_file()  # A previewable output must be a file that exists now.
+
+    def _drop_cache_only_empty_result(self, run: dict, names: list[str]) -> list[str]:
+        """Remove prompt caches when they are the only evidence for a no-data run."""
+        menu_number = str(run.get("menu_number", ""))  # Normalize the menu number for the cache exception.
+        if menu_number in PROMPT_CACHE_EXPORT_MENUS:
+            return names  # Menu 1 writes this file as its true result.
+        if not names or not all(name in PROMPT_CACHE_OUTPUT_FILES for name in names):
+            return names  # A real output name makes the list useful to the operator.
+        if self._no_output_reason(run):
+            return []  # The completion guard must show the no-data reason instead of the cache.
+        return names  # Keep a cache-only list when no log line proves an empty result.
+
+    @staticmethod
+    def _order_output_files_for_preview(run: dict, names: list[str]) -> list[str]:
+        """Return output names in the order the Results panel should preview."""
+        menu_number = str(run.get("menu_number", ""))  # Normalize the key because run records store strings.
+        if menu_number in PROMPT_CACHE_EXPORT_MENUS or len(names) < 2:
+            return names  # Menu 1 and single-file runs already have the correct preview target.
+        result_names = [name for name in names if name not in PROMPT_CACHE_OUTPUT_FILES]  # Prefer operation results.
+        cache_names = [name for name in names if name in PROMPT_CACHE_OUTPUT_FILES]  # Keep cache files visible later.
+        return result_names + cache_names  # Move cache files after real results without hiding them.
 
     def _update_status(self, run: dict, status: str, progress: int) -> None:
         """Update run status and publish SSE event."""
@@ -1170,8 +1236,18 @@ class _RunLogHandler(logging.Handler):
             "werkzeug",
             "flask",
             "mistapi",
+            # Issue #3232: the polyglot writers bind these bare names, outside
+            # src.db, so the prefix rule below cannot reach them.
+            "redis_writer",
+            "redis_json_writer",
         )
     )
+
+    # Issue #3232: the site prompt refreshes SiteList.csv, and that refresh
+    # writes the polyglot store. src.db logs one JSON line for each collection,
+    # so every site-scoped run showed database internals. The prefix applies at
+    # INFO only, because the WARNING check runs first and keeps a failure visible.
+    _DEBUG_LOGGER_PREFIXES = ("src.db.",)
 
     # Message prefixes that indicate internal plumbing (even at INFO)
     _INTERNAL_PREFIXES = (
@@ -1208,6 +1284,8 @@ class _RunLogHandler(logging.Handler):
         "Selecting the bootstrap application context",
         "Activating the bootstrap application context",
         "Setting the active application context",
+        "Polyglot write:",  # Issue #3232: the store summary of a site cache refresh.
+        "Polyglot DatabaseRouter initialized",  # Issue #3232: the store start line of the same refresh.
     )
 
     # Regex to extract output filenames from log messages.
@@ -1266,6 +1344,8 @@ class _RunLogHandler(logging.Handler):
 
     def _is_user_facing(self, record: logging.LogRecord, message: str) -> bool:
         """Decide if a message belongs in the main execution log."""
+        if self._is_site_menu_line(record, message):  # A pick list already answered this menu.
+            return False
         if record.levelno >= logging.WARNING:
             return True
         if record.levelno < logging.INFO:
@@ -1273,11 +1353,30 @@ class _RunLogHandler(logging.Handler):
         logger_root = record.name.split(".")[0]
         if logger_root in self._DEBUG_LOGGERS:
             return False
+        if record.name.startswith(self._DEBUG_LOGGER_PREFIXES):  # Database internals are plumbing at INFO.
+            return False
         if any(message.startswith(prefix) for prefix in self._INTERNAL_PREFIXES):
             return False
         if self._looks_like_http_log(message):
             return False
         return True
+
+    # Issue #3232: the site prompt prints its whole menu, a heading and one row
+    # for each site, at WARNING, because the command line hides INFO by default
+    # (#886). The portal sends each WARNING to the Execution Log, so every
+    # site-scoped run showed 144 menu lines that the pick list already answered.
+    # The routing stays narrow: one logger, and the two line shapes of that menu.
+    _SITE_MENU_LOGGER = "src.ui.prompt_utils"
+    _SITE_MENU_HEADING = "Available Sites:"
+    _SITE_MENU_ROW = re.compile(r"^\[\d+\] \S")
+
+    @classmethod
+    def _is_site_menu_line(cls, record: logging.LogRecord, message: str) -> bool:
+        """Report whether one record is a heading or a row of the command-line site menu."""
+        if record.name != cls._SITE_MENU_LOGGER:  # Another module's numbered line is real output.
+            return False
+        text = message.strip()  # The heading carries a leading newline for the terminal.
+        return text == cls._SITE_MENU_HEADING or bool(cls._SITE_MENU_ROW.match(text))
 
     @staticmethod
     def _looks_like_http_log(message: str) -> bool:
