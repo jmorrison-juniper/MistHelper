@@ -18,6 +18,7 @@ that silently stops skipping.
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from pathlib import Path
 
@@ -162,3 +163,67 @@ class TestPrunedTreesStayOutOfTheWalk:
         (bulky / "old.csv").write_text("a\n", encoding="utf-8")
         (tmp_path / "New.csv").write_text("a\n", encoding="utf-8")
         assert scanner.changed_files() == ["New.csv"]
+
+
+# Issue #3201: the test suites write their artifacts into the data folder, and
+# the live container mounts that folder. The tree reached 1,522 directories, and
+# the walk of it cost 67 seconds for every operation the portal ran.
+TEST_ARTIFACT_RUNS = 40  # Enough nested folders to make an unpruned walk plainly visible.
+
+
+class TestTestOutputNeverSlowsTheWalk:
+    """A test output tree must never reach the result panel or cost a listing."""
+
+    def _build_test_output_tree(self, root: Path) -> None:
+        """Create the nested, mostly empty tree that the upgrade portal suites leave."""
+        for run in range(TEST_ARTIFACT_RUNS):  # One folder for each recorded test run.
+            step = root / "test-artifacts" / "upgrade-portal" / f"run-{run}" / "screenshots"
+            step.mkdir(parents=True)  # Most of the real folders hold nothing at all.
+
+    def test_a_test_artifact_file_stays_out_of_the_result_panel(self, tmp_path):
+        """A file that a test run writes is not an operation output."""
+        self._build_test_output_tree(tmp_path)
+        scanner = OutputFileScanner(str(tmp_path))
+        scanner.snapshot()
+        (tmp_path / "test-artifacts" / "upgrade-portal" / "run-0" / "report.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "SiteWlans.csv").write_text("a,b\n", encoding="utf-8")  # The real report.
+        assert scanner.changed_files() == ["SiteWlans.csv"]
+
+    def test_the_walk_refuses_a_test_output_tree_before_it_descends(self, tmp_path):
+        """The walk lists the root only, because every listing costs a round trip."""
+        # A filter applied after the descent would still pass the test above,
+        # and it would still pay the 67 seconds. Only a count of the listed
+        # folders proves that the walk never entered the tree.
+        self._build_test_output_tree(tmp_path)
+        scanner = OutputFileScanner(str(tmp_path))
+        scanner.snapshot()
+        (tmp_path / "SiteWlans.csv").write_text("a,b\n", encoding="utf-8")
+        assert scanner.changed_files() == ["SiteWlans.csv"]
+        assert (
+            scanner.last_walk_directories == 1
+        ), f"the walk listed {scanner.last_walk_directories} folders, so it entered the test output tree"
+
+    def test_every_test_output_folder_a_test_names_is_pruned(self):
+        """Each data folder that a test module names as test output must be pruned."""
+        # A new suite that writes data/<test-folder> would slow every portal run
+        # again. This guard reads every test module, finds each data folder
+        # whose name carries the word "test", and requires the prune.
+        chained = re.compile(r"""["']data["']\s*\)?\s*/\s*[fr]?["']([^"'{}]+)["']""")  # data / "name"
+        literal = re.compile(r"""["'](?:\./)?data[/\\]{1,2}([A-Za-z0-9_.\-]+)""")  # "data/name"
+        modules = sorted((REPOSITORY_ROOT / "tests").rglob("*.py"))
+        assert len(modules) >= 500, f"the guard read only {len(modules)} test modules, so it proves too little"
+        named: dict[str, str] = {}  # Map each test output folder to one module that names it.
+        for module in modules:
+            text = module.read_text(encoding="utf-8", errors="replace")
+            for pattern in (chained, literal):
+                for match in pattern.finditer(text):
+                    name = match.group(1)
+                    if Path(name).suffix:  # A name with a suffix is a file, not a folder.
+                        continue
+                    if "test" in re.split(r"[-_.]", name.lower()):  # The name marks itself as test output.
+                        named.setdefault(name, module.relative_to(REPOSITORY_ROOT).as_posix())
+        # Measured on 2026-09-23: three folders. The floor proves the guard still
+        # finds the known writers, so a broken pattern cannot report a clean result.
+        assert len(named) >= 3, f"the guard found only {sorted(named)}, so its patterns no longer match"
+        unpruned = {name: module for name, module in named.items() if name not in EXCLUDED_DIR_NAMES}
+        assert not unpruned, f"these test output folders are not pruned, so each run pays their walk: {unpruned}"
