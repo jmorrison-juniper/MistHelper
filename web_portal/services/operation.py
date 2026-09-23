@@ -239,6 +239,46 @@ def _build_registry() -> dict:
         "210",  # Menu 210 prompts for a site before it can read assets of interest.
         "213",  # Menu 213 prompts for a site before it can read the application list.
         "224",  # Menu 224 prompts for a site before it can search rogue events.
+        # Issues #3179, #3151, and #3152. Each row below reaches exactly one
+        # site prompt in its call graph, offered no control, and failed every
+        # run of the full sweep with "No site selected". The operation printed
+        # all 143 sites to the log, read a closed input stream, and gave up.
+        "60",  # SiteDeviceExporter.devices
+        "61",  # SiteDeviceExporter.device_stats
+        "65",  # SiteClientExporter.clients
+        "77",  # SiteAnomalyExporter.anomaly_events
+        "92",  # PromptUtils.select_site_with_logging
+        "93",  # InteractiveDisplayUtils.site_inventory
+        "198",  # SiteWanUsageExporter.wan_usages
+        "200",  # SiteGuestAuthorizationExporter.guest_authorization
+        "201",  # SiteMistEdgeEventsExporter.mist_edge_events
+        "202",  # SiteNacClientEventsExporter.nac_client_events
+        "214",  # SiteSystemEventsExporter.system_events
+        "215",  # SiteSearchExporter.alarms
+        "216",  # SiteSearchExporter.assets
+        "217",  # SiteSearchExporter.bgp_stats
+        "218",  # SiteSearchExporter.calls
+        "219",  # SiteSearchExporter.skyatp_events
+        "220",  # SiteSearchExporter.wireless_client_events
+        "221",  # SiteSearchExporter.wan_clients
+        "222",  # SiteSearchExporter.device_events
+        "223",  # SiteSearchExporter.devices
+        "225",  # SiteSearchExporter.ospf_stats
+        "226",  # SiteSearchExporter.device_last_configs
+        "227",  # SiteSearchExporter.device_config_history
+        "228",  # SiteSearchExporter.discovered_switches
+        "244",  # SiteSearchExporter.service_path_events
+        "257",  # SiteSearchExporter.nac_clients
+        "258",  # SiteOtherDeviceEventsExporter.other_device_events
+        # These rows reach a site prompt first and a plain input() call after
+        # it. The sweep proved that a plain call survives a closed stream by
+        # taking its default, so the site control alone unblocks the run.
+        "63",  # SiteDeviceExporter.device_virtual_chassis
+        "78",  # SiteAnomalyExporter.device_anomaly_events
+        "199",  # SiteWebhookDeliveriesExporter.deliveries
+        "211",  # SiteAssetExporter.asset_filter
+        "212",  # SiteAssetExporter.asset
+        "246",  # SiteSearchExporter.troubleshoot_call
     ]
     for menu in site_only_menus:
         registry[menu] = {
