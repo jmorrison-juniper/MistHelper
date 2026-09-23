@@ -147,6 +147,29 @@ class TestPrunedTreesStayOutOfTheWalk:
         (nested / "Inventory.csv").write_text("a\n", encoding="utf-8")
         assert scanner.changed_files() == ["exports/weekly/Inventory.csv"]
 
+    def test_in_place_nested_rewrite_does_not_stat_untouched_siblings(self, tmp_path, monkeypatch):
+        """An in-place rewrite must be found without statting each historical file."""
+        output_dir = tmp_path / "CombinedInventory_ByWeek"  # Use the measured costly nested report folder.
+        output_dir.mkdir()  # Create the folder before the scanner records the directory state.
+        for index in range(25):  # Build enough siblings to prove whether the scan reads the whole folder.
+            (output_dir / f"week-{index:02d}.csv").write_text("before\n", encoding="utf-8")
+        target = output_dir / "week-07.csv"  # Pick one existing file to overwrite in place.
+        scanner = OutputFileScanner(str(tmp_path))  # Build a scanner rooted at the temporary data directory.
+        scanner.snapshot()  # Mark the run start before the operation overwrites its report.
+        real_stat = Path.stat  # Keep the original method so the scanner still gets true file times.
+        counted: list[str] = []  # Record which sibling CSV files the scanner asks the filesystem to stat.
+
+        def counting_stat(path: Path, *args, **kwargs):
+            """Count stats of historical report siblings before delegating."""
+            if path.parent == output_dir and path.suffix == ".csv":  # Count only files in the measured hot folder.
+                counted.append(path.name)  # Save the name so the failure shows the excessive scope.
+            return real_stat(path, *args, **kwargs)  # Preserve the real filesystem behavior.
+
+        monkeypatch.setattr(Path, "stat", counting_stat)  # Instrument stats after the snapshot setup finishes.
+        target.write_text("after\n", encoding="utf-8")  # Rewrite an existing file without changing the folder mtime.
+        assert scanner.changed_files() == ["CombinedInventory_ByWeek/week-07.csv"]
+        assert len(set(counted)) <= 3, f"the scan statted too many sibling files: {sorted(set(counted))}"
+
     def test_ssh_transcripts_are_never_pruned(self):
         """A per-host SSH log is operation output, so the prune list must omit it."""
         # The companion test above asserts the scanner reports this path. Naming
