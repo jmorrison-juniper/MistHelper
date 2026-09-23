@@ -60,7 +60,12 @@ PROMPTS_BEFORE_PICKER = {
 # audit sees two, because it does not follow the second identifier call. The
 # registry is correct here and the audit is short, so this row is not a defect.
 # Issue #3181 holds the source reading that proves the third prompt.
-AUDIT_SEES_FEWER_PROMPTS = frozenset({"246"})
+#
+# Menus 64, 67, and 203 reach their site prompt through an injected PromptUtils,
+# which the static audit cannot follow, so it reports no prompt at all. The
+# browser sweep of #3238 proved each prompt: without a control, each row failed
+# with "No site selected", and #3184 added the control that lets each row run.
+AUDIT_SEES_FEWER_PROMPTS = frozenset({"246", "64", "67", "203"})
 
 # Rows that declare a control no prompt consumes. The operator answers a
 # question the operation never asks, and the run discards the answer. Issue
