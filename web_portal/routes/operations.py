@@ -568,7 +568,11 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> PickList:
 def _fetch_wired_clients(mistapi, apisession, site_id: str) -> PickList:
     """Fetch wired clients for a site."""
     try:
-        response = mistapi.api.v1.sites.clients.searchSiteWiredClients(apisession, site_id)
+        # Issue #3233: this call named `mistapi.api.v1.sites.clients`, which holds
+        # no wired search in mistapi 0.64.0. The call raised AttributeError, so
+        # every client pick list lost its wired half, and a site with only wired
+        # clients offered an empty list. The function lives in `wired_clients`.
+        response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
         raw = response.data if hasattr(response, "data") else []
         results = raw.get("results", []) if isinstance(raw, dict) else raw
         return PickList(
