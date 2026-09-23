@@ -13,6 +13,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import wait as wait_for_futures
+from pathlib import Path  # Resolve output names against the data directory safely.
 from typing import Any
 
 from src.utils.operation_registry import OperationRegistry
@@ -130,6 +131,12 @@ HANDLED_ERROR_MARKERS = (
     "failed to",  # Other helpers use this wording for a caught operational failure.
     "could not",  # Prompt and lookup helpers use this wording for an unrecoverable failure.
 )
+
+# Prompt helper caches can change during site-scoped operations, but they are not the operation result.
+PROMPT_CACHE_OUTPUT_FILES = frozenset({"SiteList.csv"})
+
+# Menu 1 exports the site list, so the cache name is a real result for that menu.
+PROMPT_CACHE_EXPORT_MENUS = frozenset({"1"})
 
 
 def _read_positive_int_env(name: str, default: int) -> int:
@@ -954,6 +961,7 @@ class OperationExecutor:
         finally:
             root_logger.removeHandler(handler)
             self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
+            self._finalize_output_files(run, scanner.root)  # Remove phantom names and put real results first.
 
     def _finish_successful_operation(self, run: dict) -> None:
         """Mark a returned handler as complete only when the result is honest."""
@@ -1037,6 +1045,56 @@ class OperationExecutor:
         for name in added:
             run["output_files"].append(name)  # The bounded deque drops the oldest name when it is full.
         logger.debug("Run %s added %d scanned files to %d known names", run["run_id"], len(added), len(known))
+
+    def _finalize_output_files(self, run: dict, data_root: Path) -> None:
+        """Keep only files that exist and put prompt caches after results."""
+        logger.info("Run %s finalizes its output file evidence", run["run_id"])  # Log before pruning and ordering.
+        original = list(run["output_files"])  # Freeze the deque, because the method rebuilds it in place.
+        existing = [name for name in original if self._output_file_exists(data_root, name)]  # Drop phantom names.
+        evidence = self._drop_cache_only_empty_result(run, existing)  # Do not let a prompt cache hide no data.
+        ordered = self._order_output_files_for_preview(run, evidence)  # Put the preview-worthy result first.
+        target = run["output_files"]  # Reuse the bounded deque that the run record already owns.
+        target.clear()  # Clear stale names so the response cannot list a removed file.
+        for name in ordered:
+            target.append(name)  # Rebuild the deque in the order the Results panel should preview.
+        logger.debug(  # Log the final counts so an operator can explain a missing name.
+            "Run %s kept %d of %d output file names",
+            run["run_id"],
+            len(ordered),
+            len(original),
+        )
+
+    @staticmethod
+    def _output_file_exists(data_root: Path, filename: str) -> bool:
+        """Return True when a reported output name exists under the data root."""
+        root = Path(data_root).resolve()  # Resolve the root once so a relative filename cannot escape silently.
+        candidate = (root / str(filename)).resolve()  # Resolve the reported name under the data root.
+        try:
+            candidate.relative_to(root)  # Reject an absolute or parent-relative name outside the data root.
+        except ValueError:
+            return False  # Do not list a path outside the output directory.
+        return candidate.is_file()  # A previewable output must be a file that exists now.
+
+    def _drop_cache_only_empty_result(self, run: dict, names: list[str]) -> list[str]:
+        """Remove prompt caches when they are the only evidence for a no-data run."""
+        menu_number = str(run.get("menu_number", ""))  # Normalize the menu number for the cache exception.
+        if menu_number in PROMPT_CACHE_EXPORT_MENUS:
+            return names  # Menu 1 writes this file as its true result.
+        if not names or not all(name in PROMPT_CACHE_OUTPUT_FILES for name in names):
+            return names  # A real output name makes the list useful to the operator.
+        if self._no_output_reason(run):
+            return []  # The completion guard must show the no-data reason instead of the cache.
+        return names  # Keep a cache-only list when no log line proves an empty result.
+
+    @staticmethod
+    def _order_output_files_for_preview(run: dict, names: list[str]) -> list[str]:
+        """Return output names in the order the Results panel should preview."""
+        menu_number = str(run.get("menu_number", ""))  # Normalize the key because run records store strings.
+        if menu_number in PROMPT_CACHE_EXPORT_MENUS or len(names) < 2:
+            return names  # Menu 1 and single-file runs already have the correct preview target.
+        result_names = [name for name in names if name not in PROMPT_CACHE_OUTPUT_FILES]  # Prefer operation results.
+        cache_names = [name for name in names if name in PROMPT_CACHE_OUTPUT_FILES]  # Keep cache files visible later.
+        return result_names + cache_names  # Move cache files after real results without hiding them.
 
     def _update_status(self, run: dict, status: str, progress: int) -> None:
         """Update run status and publish SSE event."""
