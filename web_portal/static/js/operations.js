@@ -134,6 +134,7 @@ function selectOperation(menuNumber, element) {
     highlightActiveItem(element);
     showSelectedPanel(menuNumber, element);
     resetParameterPanels();
+    clearExecutionPanel();  // Clear the prior run without revealing an empty panel for the new selection.
     loadParameters(menuNumber);
     document.getElementById('runBtn').disabled = false;
     revealPanelOnStackedLayout();  // A stacked layout hides the panel below the list.
@@ -827,18 +828,22 @@ function checkRunStatus(runId) {
 // UI Helpers
 // ---------------------------------------------------------------------------
 
+function clearExecutionPanel() {
+    document.getElementById('logViewer').innerHTML = '';  // Remove the prior run log before the next selection can mislead the operator.
+    document.getElementById('debugLogViewer').innerHTML = '';  // Remove prior debug lines because they belong to another run.
+    setElementVisible('debugLogToggle', false);  // Hide the debug control until the new run creates debug lines.
+    setElementVisible('debugLogPanel', false);  // Close the debug panel so an old trace is not visible.
+    document.getElementById('debugLogCount').textContent = '0';  // Reset the count to match the cleared debug log.
+    setElementVisible('outputFiles', false);  // Hide the old file list until a new run reports files.
+    document.getElementById('outputFileList').innerHTML = '';  // Remove old file links that can belong to another operation.
+    if (typeof OperationResults !== 'undefined') OperationResults.reset();  // Clear the table of the previous run.
+    updateProgress(0, '');  // Reset the bar so the next run starts from a neutral state.
+    setStatus('pending', 'Waiting...');  // Reset the badge so a prior Complete state does not carry forward.
+}
+
 function resetExecutionPanel() {
     setElementVisible('executionPanel', true);  // Issue #3030: the class hides this panel, not the inline style.
-    document.getElementById('logViewer').innerHTML = '';
-    document.getElementById('debugLogViewer').innerHTML = '';
-    setElementVisible('debugLogToggle', false);
-    setElementVisible('debugLogPanel', false);
-    document.getElementById('debugLogCount').textContent = '0';
-    setElementVisible('outputFiles', false);
-    document.getElementById('outputFileList').innerHTML = '';
-    if (typeof OperationResults !== 'undefined') OperationResults.reset();  // Clear the table of the previous run.
-    updateProgress(0, '');
-    setStatus('pending', 'Waiting...');
+    clearExecutionPanel();  // Run starts and reconnects must reveal the fresh execution panel.
 }
 
 function appendLog(message, level) {
