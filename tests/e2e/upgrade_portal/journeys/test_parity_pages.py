@@ -91,7 +91,10 @@ def _fill_multi_options(page: Any) -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="#3204 #3205 #3209 (P-10, P-19, P-21, P-22, P-23, P-24): multi-site options lack per-device and advanced controls",
+    reason=(
+        "#3204 #3205 #3209 (P-10, P-19, P-21, P-22, P-23, P-24): "
+        "multi-site options lack per-device and advanced controls"
+    ),
 )
 def test_options_page_pair_has_the_same_main_controls(page: Any) -> None:
     """The options pages must expose the same controls before a firmware write."""
