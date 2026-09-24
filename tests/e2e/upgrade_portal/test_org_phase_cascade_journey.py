@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
+from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Issue #3243: the pre-check gate.
 
 sync_api = pytest.importorskip(
     "playwright.sync_api", reason="Playwright is not installed."
@@ -71,6 +72,7 @@ def start_operation(page: Any) -> str:
     page.get_by_test_id("org-upgrade-gateway-version").fill("0.15.1")  # The gateway version is fixed.
     page.get_by_test_id("org-upgrade-review").click()  # The review page must use the plan.
     page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # The confirm page must open.
+    OrgPrecheckSteps.take_missing(page)  # Issue #3243: each site needs a verified pre-check before the submit.
     page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # The operator confirms the write.
     page.get_by_test_id("org-upgrade-start").click()  # The page starts the operation.
     page.wait_for_url(JOB_PATH)  # The progress page must open.

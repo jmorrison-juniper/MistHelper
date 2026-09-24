@@ -1803,6 +1803,18 @@ _COUNT_TAIL = "  COLLECT WITH COUNT INTO total\n  RETURN total\n"
 # so no operator value reaches the query. Each value travels as a bind instead.
 # The four filters name the site, the pre role, an empty run, and the verified
 # state, and the sort with the limit hands back the newest match alone (FR-103).
+# Issue #3243: the multi-site confirm page reads one pre-check for each site.
+# A whole capture holds every device, every client, and every alarm of the site,
+# so the query keeps only the small fields that a caller reads.
+PRECHECK_FIELDS: tuple[str, ...] = (
+    "capture_id",
+    "site_id",
+    "role",
+    "run_id",
+    CAPTURE_STATE_FIELD,
+    "tier",
+    "started_at",
+)
 _PRECHECK_QUERY = (
     "FOR doc IN " + CAPTURE_COLLECTION + "\n"
     "  FILTER doc.site_id == @site_id\n"
@@ -1811,7 +1823,7 @@ _PRECHECK_QUERY = (
     "  FILTER doc." + CAPTURE_STATE_FIELD + " == @verified\n"
     "  SORT doc.started_at DESC\n"
     "  LIMIT 1\n"
-    "  RETURN doc\n"
+    "  RETURN KEEP(doc, " + ", ".join('"' + name + '"' for name in PRECHECK_FIELDS) + ")\n"
 )
 
 # WHY: The run history row. Every name below comes from the UpgradeRun table of

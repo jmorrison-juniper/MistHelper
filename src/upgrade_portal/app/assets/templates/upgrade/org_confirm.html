@@ -58,6 +58,63 @@
     </div>
   {% endif %}
 
+  {#
+    Issue #3243. The single-site confirm page stays locked until the site
+    holds a verified pre-check capture. This card applies the same rule to
+    each selected site. The buttons take one pre-check capture at a time
+    through `/api/org-upgrades/prechecks/<site_id>`, and `portal.js` loads
+    the page again when each capture verifies. A capture reads the site and
+    sends no firmware request.
+  #}
+  <section class="portal-card mb-3" data-testid="org-upgrade-prechecks" data-org-precheck-card data-poll-seconds="3">
+    <h3 class="portal-card-title">Pre-check captures</h3>
+    <table class="table table-sm">
+      <thead>
+        <tr><th scope="col">Site</th><th scope="col">Capture</th><th scope="col">Tier</th><th scope="col">State</th></tr>
+      </thead>
+      <tbody>
+        {% for site in prechecks.sites %}
+          <tr data-testid="org-upgrade-precheck-row-{{ site.site_id }}"
+              data-site-id="{{ site.site_id }}"
+              data-ready="{{ 'true' if site.ready else 'false' }}">
+            <td>{{ site.site_name }}</td>
+            <td>
+              {% if site.ready %}
+                <a class="cell-mono"
+                   href="/captures/{{ site.capture_id }}"
+                   data-testid="org-upgrade-precheck-capture-{{ site.site_id }}">{{ site.capture_id }}</a>
+              {% else %}
+                <span data-testid="org-upgrade-precheck-capture-{{ site.site_id }}">None saved</span>
+              {% endif %}
+            </td>
+            <td data-testid="org-upgrade-precheck-tier-{{ site.site_id }}">{{ site.tier if site.ready else '-' }}</td>
+            <td data-testid="org-upgrade-precheck-state-{{ site.site_id }}">{{ 'verified' if site.ready else 'missing' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <label class="form-label" for="org-upgrade-precheck-tier">Data tier</label>
+    <select class="form-select mb-2"
+            id="org-upgrade-precheck-tier"
+            data-testid="org-upgrade-precheck-tier">
+      <option value="2" selected>Tier 2. The device state and the client lists.</option>
+      <option value="3">Tier 3. Tier 2, the port state, the radio state, and the alarms.</option>
+    </select>
+    <button type="button"
+            class="portal-button portal-button-primary"
+            data-testid="org-upgrade-precheck-missing"
+            data-precheck-scope="missing"
+            {% if not prechecks.missing %}disabled{% endif %}>Take the missing pre-checks</button>
+    <button type="button"
+            class="portal-button"
+            data-testid="org-upgrade-precheck-all"
+            data-precheck-scope="all">Take new pre-checks for all sites</button>
+    {% if not prechecks.ready %}
+      <p class="portal-card-note" data-testid="org-upgrade-precheck-hint">The portal needs a saved pre-check capture for each site before an upgrade starts.</p>
+    {% endif %}
+    <p class="text-danger" data-testid="org-upgrade-precheck-error" role="alert" hidden></p>
+  </section>
+
   <form method="post" action="/api/org-upgrades">
     <input type="hidden"
            name="csrf_token"
@@ -74,7 +131,7 @@
            autocapitalize="off"
            spellcheck="false"
            aria-describedby="org-upgrade-confirm-hint"
-           {% if not writes_enabled %}disabled{% endif %}
+           {% if not (writes_enabled and prechecks.ready) %}disabled{% endif %}
            required>
     <p class="portal-card-note" id="org-upgrade-confirm-hint" aria-live="polite"></p>
     <button type="submit"

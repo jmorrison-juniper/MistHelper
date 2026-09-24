@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 
+from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Issue #3243: the pre-check gate.
+
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
 MODE_PATH = "/select/mode"
@@ -93,6 +95,8 @@ class TestOrganizationUpgradeBrowserFlow:
         sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text("Switches 0.15.1")
         sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()
 
+        OrgPrecheckSteps.take_missing(page)  # Issue #3243: each site needs a verified pre-check before the submit.
+        sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # The word is still missing.
         page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")
         sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_enabled()
         page.get_by_test_id("org-upgrade-start").click()

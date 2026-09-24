@@ -14,6 +14,7 @@ import secrets
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial  # Issue #3243: bind the adopter seam to the pre-check reader.
 from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request, session
@@ -38,6 +39,7 @@ from ...upgrade.org_cascade.view import OrgPhaseView  # Issue #3245: the phase c
 from ...upgrade.org_cascade.walk import OrgCascadeDeps, OrgCascadeRegistry  # Issue #3245: one watch thread.
 from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
 from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for each device of the operation.
+from ...upgrade.org_precheck import PRECHECK_FIELD, OrgPrecheckGate, OrgPrecheckState  # Issue #3243: the gate.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
 from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
 from ..factory import json_error
@@ -110,6 +112,16 @@ UNREACHABLE_OPERATOR_MESSAGE = (  # The cure is a reachable address, not a diffe
     "Sign in again with a reachable work address, then start the upgrade."
 )
 JOB_NOT_OWNED = "org_upgrade_job_not_owned"
+SITE_LOCK_WRONG_RUN = "site_lock_wrong_run"  # The operator holds the site for another run.
+SITE_LOCK_WRONG_RUN_MESSAGE = "Your existing site lock belongs to another run."  # The cure is the other run.
+PRECHECK_MISSING_MESSAGE = (  # Issue #3243: the refusal names the cure and each site with no capture.
+    "Save a verified pre-check capture for each selected site before you start the upgrade. "
+    "These sites hold no pre-check capture: {names}."
+)
+PRECHECK_RECORD_MESSAGE = (  # Issue #3243: the plan could not keep the baseline of each site.
+    "The portal could not record the pre-check captures. Read the operation before another action."
+)
+PLANNED_STATE = "planned"  # The one state in which no child job reached the cloud.
 TERMINAL_JOB_STATES = frozenset({"cancelled", "completed", "failed"})
 
 BAD_GATEWAY_STATUS = 502
@@ -126,6 +138,16 @@ class SubmissionContext:
     site_ids: list[str]  # Keep the validated site selection.
     options: dict[str, Any]  # Keep the confirmed option record.
     request_nonce: object  # Keep the replay-prevention value.
+
+
+@dataclass(frozen=True, slots=True)
+class OperationLockScope:
+    """Hold the values that each site lock of one operation shares."""
+
+    org_id: str  # The organization half of each lock key.
+    operation_id: str  # The run name that each lock of the operation carries.
+    owner: identity.SessionOwner  # The signed operator and browser.
+    client: Any  # The lock store client of the production portal or of a test.
 
 
 class OrgUpgradeScheduleReader:
@@ -833,6 +855,8 @@ def confirm_page() -> str | tuple[Response, int]:
     operation = _saved_operation(options)  # Read the durable plan one time for every value of the page.
     target_count, families = _confirmation_targets(operation)  # Read only the durable aggregate child summary.
     view = options_view(options)  # Build the display values one time.
+    names = {str(row["site_id"]): str(row["name"]) for row in rows}  # The approved name of each site.
+    prechecks = precheck_gate().read(site_ids, names)  # Issue #3243: the pre-check capture of each site.
     return render_page(  # Render the existing typed confirmation page.
         CONFIRM_TEMPLATE,  # Keep the existing template.
         org_name=org_display_name(org_id),  # Show the selected organization.
@@ -843,6 +867,7 @@ def confirm_page() -> str | tuple[Response, int]:
         firmware_summary=firmware_summary(view, families),  # Name the target version of each family.
         writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.
         schedule=OrgScheduleView.build(operation, view["start_time"]),  # Issue #3247: the start line and form.
+        prechecks=prechecks,  # Issue #3243: the card and the gate of the confirmation field.
     )
 
 
@@ -850,6 +875,48 @@ def _saved_operation(options: Mapping[str, Any]) -> dict[str, Any] | None:
     """Return the durable plan that the saved options name, or None for an AP-only request."""
     operation_id = str(options.get("operation_id", ""))  # Read only the durable identity from the session.
     return _read_operation(operation_id) if operation_id else None  # Read the confirmed plan from storage.
+
+
+def precheck_gate() -> OrgPrecheckGate:
+    """Return the pre-check gate over the adopter seam of the single-site portal.
+
+    Why:
+        Issue #3243. Both modes read the pre-check capture through one seam. A
+        site that passes the gate of the single-site run then passes the gate
+        of the multi-site operation too.
+
+    Returns:
+        The gate. With no adopter seam, the gate stays closed for each site.
+    """
+    adopter = upgrade_routes.precheck_adopter()  # The same seam as the single-site run create call.
+    if adopter is None:  # No wiring, so no site holds a readable capture.
+        return OrgPrecheckGate(None)  # The gate fails closed.
+    return OrgPrecheckGate(partial(upgrade_routes.read_precheck_pair, adopter))  # One read for each site.
+
+
+def _submission_prechecks(context: SubmissionContext, operation: Mapping[str, Any] | None) -> OrgPrecheckState:
+    """Read the pre-check capture of each site of one confirmed submission.
+
+    Args:
+        context: The validated scope of the submission.
+        operation: The durable plan, or None for a request for access points only.
+
+    Returns:
+        The state of the gate, in the order of the selection.
+    """
+    stored = operation.get("site_names") if operation is not None else None  # The approved names of the plan.
+    names = {str(key): str(value) for key, value in stored.items()} if isinstance(stored, Mapping) else {}
+    return precheck_gate().read(context.site_ids, names)  # A site with no name shows its identifier.
+
+
+def _precheck_refusal(prechecks: OrgPrecheckState) -> tuple[Response, int] | None:
+    """Return the refusal of a start with a site that holds no pre-check capture, or None."""
+    if prechecks.ready:  # Each selected site holds a verified pre-check capture.
+        return None  # The start continues to the site locks.
+    names = prechecks.missing_names()  # The sites that close the gate, in the order of the selection.
+    logger.warning("The organization upgrade start stops, because %d sites hold no pre-check", len(prechecks.missing))
+    message = PRECHECK_MISSING_MESSAGE.format(names=names)  # The cure and each site.
+    return json_error(CONFLICT_STATUS, upgrade_routes.PRE_CAPTURE_MISSING_CODE, message)  # The single-site code.
 
 
 def _confirmation_targets(operation: Mapping[str, Any] | None) -> tuple[int, list[str]]:
@@ -999,28 +1066,76 @@ def _acquire_operation_locks(
     if owner is None:  # A missing owner cannot hold a production lock.
         return json_error(CONFLICT_STATUS, JOB_NOT_OWNED, "The signed operator identity is unavailable.")
     operation_id = str(operation.get("operation_id", ""))  # Bind every lock to one aggregate identity.
-    client = select_routes.lock_client()  # Use the configured production or test lock client.
+    scope = OperationLockScope(org_id, operation_id, owner, select_routes.lock_client())  # The shared values.
     for site_id in site_ids:  # Acquire each selected site before any cloud write.
-        held = lock.read_lock(org_id, site_id, client)  # Detect a same-owner lock bound to another run.
-        if held is not None and held.held_by(owner) and held.run_id != operation_id:  # Refuse unsafe reuse.
-            return json_error(CONFLICT_STATUS, "site_lock_wrong_run", "Your existing site lock belongs to another run.")
-        request_record = lock.LockRequest(org_id, site_id, owner, operation_id)  # Build the existing lock request.
-        logger.info("Acquire site %s for aggregate upgrade %s", site_id, operation_id)  # Log before acquisition.
-        try:  # Lock writes fail closed and use no memory fallback.
-            grant = lock.acquire_site_lock(request_record, client)  # Atomically acquire or resume this run lock.
-        except lock.SiteLockError as fault:  # Map the existing lock error to a safe API response.
-            status = (
-                SERVICE_UNAVAILABLE_STATUS if isinstance(fault, lock.LockStoreUnreachableError) else CONFLICT_STATUS
-            )
-            return json_error(status, fault.code, str(fault))  # Preserve the lock module's code and message.
-        replacement = dict(operation)  # Build a detached CAS replacement.
-        stored_locks = dict(replacement.get("site_locks", {}))  # Preserve locks acquired for earlier sites.
-        stored_locks[site_id] = grant.record.to_record()  # Store the JSON-safe lock record.
-        replacement["site_locks"] = stored_locks  # Attach the updated lock map.
-        if not _cas_operation(operation, replacement):  # Persist this lock before the next acquisition.
-            return json_error(SERVICE_UNAVAILABLE_STATUS, SUBMISSION_FAILED, "The portal could not store a site lock.")
-        logger.debug("Aggregate upgrade %s stores the lock for site %s", operation_id, site_id)  # Log after CAS.
+        refusal = _operation_site_lock(operation, scope, site_id)  # Take or bind the lock of one site.
+        if refusal is not None:  # One site that the operation cannot hold stops every child.
+            return refusal  # Preserve the lock code and the lock message.
     return None  # Every selected site lock is durable and bound to this operation.
+
+
+def _operation_site_lock(
+    operation: MutableMapping[str, Any], scope: OperationLockScope, site_id: str
+) -> tuple[Response, int] | None:
+    """Take or bind the lock of one site, and store the lock in the operation record."""
+    held = lock.read_lock(scope.org_id, site_id, scope.client)  # Detect a lock of this operator.
+    try:  # Lock writes fail closed and use no memory fallback.
+        record = _operation_lock_record(scope, site_id, held)  # The lock that now names the operation.
+    except lock.SiteLockError as fault:  # Map the lock error to a safe API response.
+        return _lock_fault(fault)  # Preserve the code and the message of the lock module.
+    if record is None:  # The operator holds the site for another run.
+        return json_error(CONFLICT_STATUS, SITE_LOCK_WRONG_RUN, SITE_LOCK_WRONG_RUN_MESSAGE)  # Refuse unsafe reuse.
+    return _store_site_lock(operation, site_id, record)  # Persist this lock before the next site.
+
+
+def _operation_lock_record(
+    scope: OperationLockScope, site_id: str, held: lock.LockRecord | None
+) -> lock.LockRecord | None:
+    """Return the lock that binds one site to the operation, or None for a lock of another run.
+
+    Why:
+        Issue #3243. The pre-check capture of the confirm page takes the site
+        with no run, as the capture page does. The start then binds that lock
+        to the operation and keeps its token. The start still refuses a lock
+        of the same operator that names another run.
+
+    Raises:
+        SiteLockError: When the store refuses the lock or does not answer.
+    """
+    mine = held is not None and held.held_by(scope.owner)  # The same operator and the same browser.
+    if held is not None and mine and held.run_id not in ("", scope.operation_id):  # A lock of another run.
+        return None  # The caller refuses the start.
+    if held is not None and mine and held.run_id == "":  # Issue #3243: a lock of a pre-check capture.
+        bound = held.bound_to_run(scope.operation_id)  # The same token, with the name of the operation.
+        logger.info("Bind the pre-check lock of site %s to aggregate upgrade %s", site_id, scope.operation_id)
+        lock.refresh_site_lock(lock.build_key(scope.org_id, site_id), bound, scope.client)  # Compare the token.
+        logger.debug("The lock of site %s now names aggregate upgrade %s", site_id, scope.operation_id)  # After.
+        return bound  # The stored copy names the operation.
+    request_record = lock.LockRequest(scope.org_id, site_id, scope.owner, scope.operation_id)  # A new lock.
+    logger.info("Acquire site %s for aggregate upgrade %s", site_id, scope.operation_id)  # Log before acquisition.
+    return lock.acquire_site_lock(request_record, scope.client).record  # Atomically acquire or resume this lock.
+
+
+def _lock_fault(fault: lock.SiteLockError) -> tuple[Response, int]:
+    """Return the answer of one lock error: 503 for an unreachable store, and 409 for the others."""
+    unreachable = isinstance(fault, lock.LockStoreUnreachableError)  # The store did not answer.
+    status = SERVICE_UNAVAILABLE_STATUS if unreachable else CONFLICT_STATUS  # The contract status.
+    logger.warning("The site lock step of an aggregate upgrade reported %s", fault.code)  # Name the safe code only.
+    return json_error(status, fault.code, str(fault))  # Preserve the lock module's code and message.
+
+
+def _store_site_lock(
+    operation: MutableMapping[str, Any], site_id: str, record: lock.LockRecord
+) -> tuple[Response, int] | None:
+    """Store one site lock in the operation record through one compare-and-set write."""
+    replacement = dict(operation)  # Build a detached CAS replacement.
+    stored_locks = dict(replacement.get("site_locks", {}))  # Preserve locks acquired for earlier sites.
+    stored_locks[site_id] = record.to_record()  # Store the JSON-safe lock record.
+    replacement["site_locks"] = stored_locks  # Attach the updated lock map.
+    if not _cas_operation(operation, replacement):  # Persist this lock before the next acquisition.
+        return json_error(SERVICE_UNAVAILABLE_STATUS, SUBMISSION_FAILED, "The portal could not store a site lock.")
+    logger.debug("Aggregate upgrade %s stores the lock for site %s", operation.get("operation_id", ""), site_id)
+    return None  # The lock is durable in the record.
 
 
 def _refresh_child_locks(operation: Mapping[str, Any], child: Mapping[str, Any]) -> None:
@@ -1121,6 +1236,7 @@ def _release_one_lock(org_id: str, site_id: str, value: object) -> None:
 def _submit_aggregate(
     cloud_session: Any,
     operation: MutableMapping[str, Any],
+    prechecks: OrgPrecheckState,
 ) -> Response | tuple[Response, int]:
     """Submit every child through the aggregate boundary."""
     if not _record_operator(operation):  # FR-009: the record names the operator before any lock or cloud write.
@@ -1129,6 +1245,8 @@ def _submit_aggregate(
             SUBMISSION_FAILED,
             "The portal could not record the operator. Read the operation before another action.",
         )
+    if not _record_prechecks(operation, prechecks):  # Issue #3243: the baseline of each site, before any lock.
+        return json_error(SERVICE_UNAVAILABLE_STATUS, SUBMISSION_FAILED, PRECHECK_RECORD_MESSAGE)
     site_ids = [str(value) for value in operation.get("site_ids", [])]  # Read the durable lock scope.
     refusal = _acquire_operation_locks(operation, str(operation.get("org_id", "")), site_ids)  # Lock all sites.
     if refusal is not None:  # Stop before the parent or child claim.
@@ -1256,6 +1374,32 @@ def _record_operator(operation: MutableMapping[str, Any]) -> bool:
     return recorded  # A stale record stops the submission before any lock.
 
 
+def _record_prechecks(operation: MutableMapping[str, Any], prechecks: OrgPrecheckState) -> bool:
+    """Store the pre-check capture of each site before the first site lock.
+
+    Why:
+        Issue #3243. The comparison after the upgrade needs the baseline of
+        each site. The list changes only while the plan waits for its first
+        claim, so a repeated start never moves the baseline of a started run.
+
+    Args:
+        operation: The durable operation record.
+        prechecks: The state of the gate, which is ready.
+
+    Returns:
+        True when the record holds the list, and False when the write failed.
+    """
+    wanted = prechecks.stored()  # One entry for each site, in the order of the selection.
+    if operation.get(PRECHECK_FIELD) == wanted:  # A repeated start with the same captures.
+        return True  # Write nothing, and continue.
+    if operation.get("state") != PLANNED_STATE or operation.get("submission_claim_id"):  # A claimed plan.
+        return True  # Keep the list of the first claim. The service then refuses the replay.
+    logger.info("Record the pre-check captures of aggregate upgrade %s", operation.get("operation_id", ""))  # Before.
+    recorded = _cas_operation(operation, {**operation, PRECHECK_FIELD: wanted})  # One write before any lock.
+    logger.debug("The pre-check record write returned %s", recorded)  # Log the result only.
+    return recorded  # A stale record stops the submission before any lock.
+
+
 @org_upgrade_bp.post(SUBMIT_PATH)
 @identity.require_session
 def submit_upgrade() -> Response | tuple[Response, int]:
@@ -1268,8 +1412,12 @@ def submit_upgrade() -> Response | tuple[Response, int]:
     if not isinstance(loaded, SubmissionContext):  # A failed safeguard returns its existing response.
         return loaded  # Stop before any destructive action.
     operation = _owned_operation(loaded.options, loaded.org_id)  # Read an owned durable plan only.
+    prechecks = _submission_prechecks(loaded, operation)  # Issue #3243: the pre-check capture of each site.
+    refusal = _precheck_refusal(prechecks)  # The rule of the single-site start, before any write.
+    if refusal is not None:  # One site holds no verified pre-check capture.
+        return refusal  # No record change, no site lock, and no child job.
     if operation is not None and _operation_matches_context(operation, loaded):  # Require the exact durable plan.
-        return _submit_aggregate(loaded.cloud_session, operation)  # Submit each child at most once.
+        return _submit_aggregate(loaded.cloud_session, operation, prechecks)  # Submit each child at most once.
     if loaded.options.get("operation_id"):  # Never fall back to a legacy write when a durable plan mismatches.
         return json_error(CONFLICT_STATUS, ALREADY_SUBMITTED, "The confirmed aggregate plan no longer matches.")
     return _submit_org_job(loaded)  # Keep the existing AP-only route unchanged.
@@ -1410,6 +1558,7 @@ def _aggregate_record_view(record: Mapping[str, Any]) -> dict[str, Any]:
         "age_text": age.age_text,  # A short age, or "unknown".
         "controls": OrgControlsView.build(record, retry_plan_of(record, rows)),  # Issue #3247: the recovery.
         "cancel_outcomes": OrgCancelOutcomes.rows(record),  # Issue #3246: the three lists of each cancel.
+        "prechecks": OrgPrecheckGate.rows_of(record),  # Issue #3243: the pre-check capture of each site.
         **OrgPhaseView.build(record),  # Issue #3245: the four phases, the watch line, and the poll rule.
     }
 
