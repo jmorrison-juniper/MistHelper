@@ -35,6 +35,7 @@ from flask import Flask  # The smallest application that can hold the blueprint.
 from flask.testing import FlaskClient  # Drives a route with no server and no browser.
 from werkzeug.test import TestResponse  # The answer that the test client returns.
 
+from src.upgrade_portal.app import factory  # The module that owns the negotiation rule and its header names.
 from src.upgrade_portal.app.routes import auth  # The module under test.
 from src.upgrade_portal.runtime import identity  # The registry, the mode names, and the variable names.
 
@@ -58,8 +59,9 @@ CLOUD_REFUSED: dict[str, Any] = {"error": {"message": "invalid credentials"}}
 CLOUD_THROTTLED: dict[str, Any] = {"error": {"message": "Too many requests"}}
 
 # WHY: Every route test states the script header, so the route answers JSON and
-# no test depends on the default `Accept` header of the test client.
-SCRIPT_HEADERS = {auth.SCRIPT_HEADER: auth.SCRIPT_HEADER_VALUE}
+# no test depends on the default `Accept` header of the test client. The factory
+# owns the one negotiation rule and its header names (issue #3275).
+SCRIPT_HEADERS = {factory.SCRIPT_HEADER: factory.SCRIPT_HEADER_VALUE}
 
 # WHY: Two obviously fake organization identifiers. The stand-in cloud session
 # names the first one and names the second one nowhere.

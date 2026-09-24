@@ -57,7 +57,7 @@ from ...upgrade.options import (  # Reuse the upgrade target rules.
     build_version_options,
     read_model_versions,
 )
-from ..factory import build_error_envelope, json_error  # The one error envelope that the contract allows.
+from ..factory import build_error_envelope, json_error, wants_browser_page  # The error envelope and the one page rule.
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -230,12 +230,6 @@ SERVER_ERROR_STATUS = 500  # A part of the portal is missing, so the read cannot
 UNAVAILABLE_STATUS = 503  # The lock store did not answer a write, and no fallback is allowed.
 REDIRECT_STATUS = 303  # See Other, so the browser reads the next page with GET and never repeats the post.
 
-# One post serves a browser form and a script, so the answer follows one rule.
-# The names below hold the two media types and the header that a script sets.
-BROWSER_MIME = "text/html"  # A browser form post states this type first.
-SCRIPT_MIME = "application/json"  # The portal script asks for this type.
-SCRIPT_HEADER = "X-Requested-With"  # A script marks its own request with this header.
-SCRIPT_HEADER_VALUE = "XMLHttpRequest"  # The one value that names a script request.
 LOCATION_HEADER = "Location"  # The header that carries the next page of a redirect.
 
 
@@ -673,26 +667,6 @@ def store_chosen_site(site_id: str) -> None:
         site_id: The site identifier the operator opened.
     """
     session[SELECTED_SITE_KEY] = site_id  # The signed session carries the pick to every later request.
-
-
-def wants_browser_page() -> bool:
-    """Report whether the current request asks for a page instead of JSON.
-
-    Why:
-        One post serves two clients. The portal script sends `fetch` and reads
-        a JSON body. A plain form post needs a new page, because a browser
-        shows a JSON body as raw text. This function holds the single rule that
-        separates the two, so every route of this module answers the same way.
-        The script header wins over the `Accept` header, because a script
-        inside a browser page inherits the header of that page.
-
-    Returns:
-        True when the request states a preference for an HTML page.
-    """
-    if request.headers.get(SCRIPT_HEADER, "") == SCRIPT_HEADER_VALUE:  # The script names itself.
-        return False  # A script always reads JSON, whatever the page header states.
-    preferred = request.accept_mimetypes.best_match((SCRIPT_MIME, BROWSER_MIME))  # None means no preference.
-    return preferred == BROWSER_MIME  # Only a stated preference for HTML earns a page.
 
 
 def next_page_answer(path: str = NEXT_AFTER_ORG) -> Response | tuple[Response, int]:

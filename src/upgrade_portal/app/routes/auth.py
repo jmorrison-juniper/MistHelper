@@ -46,7 +46,7 @@ from jinja2 import TemplateNotFound  # Marks a template that a later module stil
 
 from ...runtime import identity  # The registry, the digest, and the sign-out. No copy of them lives here.
 from ..config import load_settings  # The dependency panel probes the addresses the portal itself uses.
-from ..factory import json_error  # The one error envelope that the contract allows.
+from ..factory import BROWSER_MIME, json_error, wants_browser_page  # The envelope, the page type, and the page rule.
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -110,10 +110,6 @@ BAD_REQUEST_STATUS = 400  # The cloud refused the pair, or refused the code.
 RATE_LIMIT_STATUS = 429  # The cloud throttled the attempt.
 REDIRECT_STATUS = 303  # See Other, so the browser reads the next page with GET and never repeats the post.
 
-BROWSER_MIME = "text/html"  # A browser form post states this type first.
-SCRIPT_MIME = "application/json"  # The portal script asks for this type.
-SCRIPT_HEADER = "X-Requested-With"  # A script marks its own request with this header.
-SCRIPT_HEADER_VALUE = "XMLHttpRequest"  # The one value that names a script request.
 LOCATION_HEADER = "Location"  # The header that carries the next page of a redirect.
 
 STATE_OK = "ok"  # The cloud accepted the credential and the session is live.
@@ -609,24 +605,6 @@ def browser_identifier() -> str:
         The cookie value, or a new unpredictable value.
     """
     return identity.read_browser_id() or identity.issue_browser_id()  # A missing cookie means a first visit.
-
-
-def wants_browser_page() -> bool:
-    """Report whether the current request asks for a page instead of JSON.
-
-    Why:
-        One post serves two clients. The portal script sends `fetch` and reads
-        a JSON body. A plain form post needs a new page, because a browser
-        shows a JSON body as raw text. The script header wins over the `Accept`
-        header, because a script inside a browser page inherits that header.
-
-    Returns:
-        True when the request states a preference for an HTML page.
-    """
-    if request.headers.get(SCRIPT_HEADER, "") == SCRIPT_HEADER_VALUE:  # The script names itself.
-        return False  # A script always reads JSON, whatever the page header states.
-    preferred = request.accept_mimetypes.best_match((SCRIPT_MIME, BROWSER_MIME))  # None means no preference.
-    return preferred == BROWSER_MIME  # Only a stated preference for HTML earns a page.
 
 
 def redirect_response(path: str) -> Response:

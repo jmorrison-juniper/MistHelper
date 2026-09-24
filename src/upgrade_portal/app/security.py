@@ -62,6 +62,12 @@ CSRF_MISSING_CODE = "csrf_missing"  # The fixed code that a contract test assert
 CSRF_MISSING_MESSAGE = (
     "The request carries no valid security token. Reload the page and try again."  # A test reads the code only.
 )
+CSRF_PAGE_TITLE = "The portal refused the form"  # The heading of the page that a browser form post reads.
+# A reload repeats the refused post, so the page tells the operator to open the form again (issue #3275).
+CSRF_PAGE_MESSAGE = (
+    "The form carries no valid security token. The token stops working when your session ends, "
+    "for example after a portal restart. Open the form again, then send it again."
+)
 
 
 class PortalSecurity:
@@ -187,28 +193,39 @@ class PortalSecurity:
         app.register_error_handler(CSRFError, csrf_error_response)  # A class handler beats the plain 400 handler.
 
 
-def csrf_error_response(error: Exception) -> tuple[Response, int]:
+def csrf_error_response(error: Exception) -> tuple[Response, int] | tuple[str, int]:
     """Answer a state-changing request that carries no valid token.
 
     Why:
-        The contract binds one answer to this fault: the status 400 with the
-        code `csrf_missing`. The import of the envelope builder sits inside this
-        function, because `factory` imports this module while it loads. A module
-        level import here would close that circle.
+        The contract binds the status 400 and the code `csrf_missing` to this
+        fault. A script and a JSON client read the envelope. A browser form
+        post reads the error page with a link back to the form, because a
+        browser shows a JSON body as raw text (issue #3275). The imports sit
+        inside this function, because `factory` imports this module while it
+        loads. A module level import here would close that circle.
 
     Args:
         error: The token fault that `flask-wtf` raised.
 
     Returns:
-        The error envelope and the status code 400.
+        The error page or the error envelope, and the status code 400.
     """
-    from .factory import json_error  # The late import breaks the circle with the factory.
+    from .factory import (  # The late import breaks the circle with the factory.
+        error_page,
+        form_return_path,
+        json_error,
+        wants_browser_page,
+    )
 
     logger.warning(
         "The portal refused a request with no valid token: %s.",  # The class name only, never the token.
         type(error).__name__,
     )
-    return json_error(CSRF_STATUS, CSRF_MISSING_CODE, CSRF_MISSING_MESSAGE)  # The one shape the contract allows.
+    if not wants_browser_page():  # The portal script and a JSON client read the envelope.
+        return json_error(CSRF_STATUS, CSRF_MISSING_CODE, CSRF_MISSING_MESSAGE)  # The one shape the contract allows.
+    logger.info("The portal answers the refused form post with the error page.")  # A person reads this answer.
+    back_path = form_return_path()  # The form page, or None when the referrer names no safe page.
+    return error_page(CSRF_STATUS, CSRF_MISSING_CODE, CSRF_PAGE_MESSAGE, CSRF_PAGE_TITLE, back_path)
 
 
 def read_client_address() -> str:

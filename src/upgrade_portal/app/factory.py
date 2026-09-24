@@ -25,6 +25,7 @@ from pathlib import Path  # Builds the asset paths from the module location.
 from time import monotonic, monotonic_ns  # Ages the readiness cache, and builds a fresh value for each write.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # The error envelope holds free-form details.
+from urllib.parse import urlsplit  # Splits the referrer of a refused form post into its host and its path.
 
 from flask import (  # The web framework surface.
     Blueprint,
@@ -39,8 +40,10 @@ from flask import (  # The web framework surface.
     request,
     send_from_directory,
 )
+from werkzeug.exceptions import HTTPException  # The URL map raises this fault for a path that it cannot serve.
 
 from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
+from ..runtime import identity  # Tells the error page whether the request holds a live session.
 from .config import DEFAULT_THEMES, PortalSettings, load_settings  # The settings record and the environment reader.
 from .security import PortalSecurity  # The guards that arm the application.
 from .wiring import install_seams  # Joins the upgrade parts into the seams the routes read.
@@ -96,6 +99,16 @@ ERROR_MESSAGES = {
 }
 
 ERROR_PAGE_TEMPLATE = "error.html"  # The one fault page that a person reads, for every status code.
+
+# One post serves a browser form and a script, so the answer follows one rule
+# (issue #3275). The token check, the sign-in routes, and the selection routes
+# all read `wants_browser_page`, so the three answers cannot drift apart.
+BROWSER_MIME = "text/html"  # A browser form post states this type first.
+SCRIPT_MIME = "application/json"  # The portal script asks for this type.
+SCRIPT_HEADER = "X-Requested-With"  # A script marks its own request with this header.
+SCRIPT_HEADER_VALUE = "XMLHttpRequest"  # The one value that names a script request.
+HOST_PREFIX = "//"  # A browser reads a link that starts with two slashes as the address of another host.
+BACKSLASH = "\\"  # A browser reads a backslash in a link as a slash, so `/\\` also names another host.
 
 RUN_FIELD = "run_id"  # The log field that follows one upgrade run.
 SITE_FIELD = "site_id"  # The log field that names the site.
@@ -265,6 +278,7 @@ def error_page(
     code: str | None = None,
     message: str | None = None,
     title: str | None = None,
+    back_path: str | None = None,
 ) -> tuple[str, int]:
     """Build one HTML error page for a person who opened a page.
 
@@ -275,17 +289,24 @@ def error_page(
         same two tables as `json_error`, so the page and the envelope give one
         code and one sentence for each status.
 
+        Issue #3275. The header partial reads a missing `signed_in` value as
+        true. A refused form post after a restart holds no session, so the page
+        states the session state itself.
+
     Args:
         status: The HTTP status code.
         code: The error code. The status supplies the default.
         message: The sentence for the operator. The status supplies the default.
         title: The page heading. The template supplies the default.
+        back_path: The page that the link back opens. None draws no link back.
+            `form_return_path` supplies a value that it checked (issue #3275).
 
     Returns:
         The rendered page and the status code.
     """
     chosen_code = code or ERROR_CODES.get(status, ERROR_CODES[500])  # An unknown status reads as a fault.
     chosen_message = message or ERROR_MESSAGES.get(status, ERROR_MESSAGES[500])  # The matching sentence.
+    signed_in = identity.current_session() is not None  # A refused post after a restart holds no session.
     logger.info("The portal renders the error page for the status %s and the code %s.", status, chosen_code)
     page = render_template(  # Jinja escapes each value, and the template marks no value as safe.
         ERROR_PAGE_TEMPLATE,  # The shared fault page.
@@ -293,9 +314,77 @@ def error_page(
         error_code=chosen_code,  # A support request quotes this stable code.
         error_message=chosen_message,  # One plain sentence for the operator.
         error_title=title,  # None keeps the default heading of the template.
+        back_path=back_path,  # None draws no link back. Jinja escapes the path inside the attribute.
+        signed_in=signed_in,  # The header shows its links and the sign-out control to a live session only.
     )
     logger.debug("The error page holds %s characters.", len(page))  # The size only, never the page text.
     return page, status  # Flask reads the pair as the body and the status.
+
+
+def wants_browser_page() -> bool:
+    """Report whether the current request asks for a page instead of JSON.
+
+    Why:
+        One post serves two clients. The portal script sends `fetch` and reads
+        a JSON body. A plain form post needs a new page, because a browser
+        shows a JSON body as raw text. The script header wins over the `Accept`
+        header, because a script inside a browser page inherits that header.
+        This function is the one copy of the rule (issue #3275).
+
+    Returns:
+        True when the request states a preference for an HTML page.
+    """
+    if request.headers.get(SCRIPT_HEADER, "") == SCRIPT_HEADER_VALUE:  # The script names itself.
+        return False  # A script always reads JSON, whatever the page header states.
+    preferred = request.accept_mimetypes.best_match((SCRIPT_MIME, BROWSER_MIME))  # None means no preference.
+    return preferred == BROWSER_MIME  # Only a stated preference for HTML earns a page.
+
+
+def form_return_path() -> str | None:
+    """Return the page of this portal that sent the current form post.
+
+    Why:
+        Issue #3275. A refused form post needs a link back to the form. The
+        browser names the form page in the `Referer` header, and the portal
+        policy `strict-origin-when-cross-origin` keeps the whole address for a
+        same-origin post. The header is client text, so the function accepts
+        only a path on this host that the URL map serves for `GET`.
+
+    Returns:
+        The path with its query, or None when the header names no safe page.
+    """
+    parts = urlsplit(request.referrer or "")  # A browser can omit the header.
+    if parts.netloc != request.host or not is_local_page_path(parts.path):  # Another host, or an unsafe path.
+        logger.debug("The referrer names no page of this portal, so the page shows no link back.")
+        return None  # The link to the site list stays on the page.
+    logger.debug("The link back opens the path %s.", ascii(parts.path))  # ASCII only, one log line.
+    return f"{parts.path}?{parts.query}" if parts.query else parts.path  # Keep the filter of a list page.
+
+
+def is_local_page_path(path: str) -> bool:
+    """Report whether one path names a page that this portal serves for `GET`.
+
+    Why:
+        A link that starts with two slashes, or with a slash and a backslash,
+        opens another host. The URL map then refuses a path that no route
+        serves, and a path that answers `POST` only.
+
+    Args:
+        path: The path part of the referrer.
+
+    Returns:
+        True when a browser can open the path again with `GET`.
+    """
+    if not path.startswith("/") or path.startswith(HOST_PREFIX) or BACKSLASH in path:
+        return False  # The path is not absolute, or the browser would leave this portal.
+    adapter = current_app.create_url_adapter(request)  # The URL map, bound to this request.
+    if adapter is None:  # Flask builds no adapter outside a request.
+        return False  # Refuse a path that the function cannot check.
+    try:  # The URL map raises a fault for a path that it cannot serve.
+        adapter.match(path, method="GET")  # Find the route that serves the path.
+    except HTTPException:  # No route, a refused method, or a redirect.
+        return False  # Offer no link that answers a fault.
+    return True  # A route serves this path for `GET`.
 
 
 def handle_error(status: int, error: Exception) -> tuple[Response, int]:
