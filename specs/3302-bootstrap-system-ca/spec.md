@@ -21,15 +21,23 @@ sets no certificate option.
 ## Measurements
 
 A probe on 2026-09-23 sent one HEAD request from the Playwright Node runtime,
-version 24.21.0, to the browser download server.
+version 24.21.0, to the root path of the browser download server.
 
 | Setting | Result |
 | - | - |
 | No option | `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` |
-| `NODE_OPTIONS=--use-system-ca`, request from a forked child | HTTP 307, the normal redirect |
+| `NODE_OPTIONS=--use-system-ca`, request from a forked child | HTTP 400 from the server, so the TLS handshake passed |
 
 Playwright downloads each browser in a forked child. The child reads
 `NODE_OPTIONS` from the environment of its parent.
+
+A second probe on 2026-09-24 ran the real `python -m playwright install chromium`
+into a temporary browser folder.
+
+| Environment | Result |
+| - | - |
+| The old download environment | Exit code 1 after 8.1 seconds, with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` |
+| The new download environment | Exit code 0 after 62.3 seconds, with 4 packages |
 
 ## Functional requirements
 
