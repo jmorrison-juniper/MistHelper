@@ -3,13 +3,16 @@
 from __future__ import annotations  # WHY: PEP 563 postponed annotations for forward Any typing
 
 import logging  # WHY: Structured trace for workflow start/abort events
-from dataclasses import dataclass  # WHY: Frozen slotted state bundles keep execute() CC low
+from dataclasses import dataclass, field  # WHY: Frozen slotted state bundles keep execute() CC low
+from functools import partial  # WHY: Give each export context its own refusal log.
 from types import SimpleNamespace  # WHY: SimpleNamespace preserves the deps shape tests already rely on
 from typing import Any  # WHY: Runtime collaborators are dynamic attrs typed loosely
+from urllib.parse import quote  # WHY: Keep each metric name as one path segment.
 
 from src.config.source_dependency_resolver import (  # WHY: Avoid a root import.
     SourceDependencyResolver,
 )
+from src.export.site_insights.metric_refusals import MetricRefusalLog  # WHY: Report each refused metric (#3297).
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 
@@ -42,6 +45,11 @@ _MSG_SELECTED_TMPL = "! Selected client by index: %s"  # WHY: Selection echo tem
 _MSG_METRIC_OK = "Retrieved client insight data for metric: %s"  # WHY: Log template for successful metric
 _MSG_METRIC_EMPTY = "No data available for client metric: %s"  # WHY: Log template for empty metric result
 _MSG_METRIC_FAIL = "Failed to get client insight data for metric %s: %s"  # WHY: Log template for metric failure
+_MSG_METRIC_REQUEST = "Requesting client insight metric %s at site %s"  # WHY: Log template before each request
+_MSG_METRIC_ANSWER = "The Mist API answered client insight metric %s with HTTP %s"  # WHY: Log template after it
+# WHY: The live cloud serves this path form. It answers the SDK query form with HTTP 404 and an empty body (#3297).
+_CLIENT_METRIC_URI_TMPL = "/api/v1/sites/{site_id}/insights/client/{client_mac}/{metric}"
+_REFUSAL_SCOPE = "client insight"  # WHY: The scope name in each refusal line
 _MSG_EXPORT_OK_TMPL = "! %d client insight metrics exported to %s"  # WHY: Export success user template
 _MSG_EXPORT_OK_LOG = "Exported %s client insight metrics at %s to %s"  # WHY: Log template for successful export
 _MSG_EXPORT_EMPTY_TMPL = "! 0 client insights exported to %s (no data available)"  # WHY: Empty export template
@@ -95,6 +103,9 @@ class _ExportContext:
     site_name: str  # WHY: Human-readable display name (for user output and traces)
     client_mac: str  # WHY: Normalized client MAC used for insight metric queries
     filename: str  # WHY: Target export filename (used on success and on failure fallback)
+    refusals: MetricRefusalLog = field(
+        default_factory=partial(MetricRefusalLog, _REFUSAL_SCOPE), compare=False, repr=False
+    )  # WHY: Each run gets a new log, so no refusal carries into the next run.
 
 
 def _emit_preview_rows(clients: list[dict[str, Any]], site_name: str) -> None:
@@ -204,14 +215,19 @@ class SiteClientInsightsService:
 
     @staticmethod
     def _fetch_single_metric(deps: SimpleNamespace, context: _ExportContext, metric: str) -> dict[str, Any] | None:
-        """Fetch one client-scope insight metric. Return the tagged record or None on empty/failure."""
+        """Fetch one client-scope insight metric. Return the tagged record, or None for no data or a refusal."""
+        uri = _CLIENT_METRIC_URI_TMPL.format(
+            site_id=context.site_id, client_mac=context.client_mac, metric=quote(metric, safe="")
+        )  # WHY: Encode the metric name, so a slash or a space cannot change the path.
+        logger.info(_MSG_METRIC_REQUEST, metric, context.site_name)  # WHY: Log before the API call
         try:  # WHY: Per-metric failures are non-fatal and skip to the next metric
-            response = deps.mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
-                deps.apisession, context.site_id, context.client_mac, metrics=metric
-            )  # WHY: Query one client insight metric
+            response = deps.apisession.mist_get(uri)  # WHY: Send the GET through the authenticated session
         except Exception as metric_error:  # WHY: Per-metric API failure - log and continue
             logging.debug(_MSG_METRIC_FAIL, metric, metric_error)  # WHY: Trace the failure
             return None  # WHY: Skip to the next metric
+        logger.debug(_MSG_METRIC_ANSWER, metric, getattr(response, "status_code", None))  # WHY: Log after the call
+        if context.refusals.record(metric, response):  # WHY: An HTTP error answer is a refusal, not data
+            return None  # WHY: The refusal report names this metric at the end of the run
         client_insight_data = getattr(response, "data", response) or {}  # WHY: Normalize to the payload (or empty)
         if not client_insight_data:  # WHY: Metric returned no data
             logger.debug(_MSG_METRIC_EMPTY, metric)  # WHY: Trace empty result
@@ -323,6 +339,7 @@ class SiteClientInsightsService:
             deps.DataExporter.write_with_format_selection(
                 [], context.filename, api_function_name="listSiteWirelessClientsStats"
             )  # WHY: Write empty export on failure
+        context.refusals.report(context.client_mac)  # WHY: Name each refused metric after the summary line
 
     @staticmethod
     def _print_intro_and_refresh(deps: SimpleNamespace) -> None:

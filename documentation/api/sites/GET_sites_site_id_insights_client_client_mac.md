@@ -116,6 +116,7 @@ Retrieves detailed insight metrics for a specific wireless client by MAC address
 
 - Requires a valid `metrics` query parameter. Available metrics vary by client type and activity.
 - Time range must be specified for meaningful trend data.
+- The live Mist cloud answers this query form with HTTP 404 and an empty body. A live probe on 2026-09-23 found this result for all 12 client-scope metrics. The path form `GET /api/v1/sites/{site_id}/insights/client/{client_mac}/{metric}` returns HTTP 200 with data. Issue #3297 records the probe.
 
 ## Related Endpoints
 
@@ -124,4 +125,4 @@ Retrieves detailed insight metrics for a specific wireless client by MAC address
 
 ## MistHelper Notes
 
-Used by Menu **68** and **69** via `getSiteInsightMetrics` for detailed client performance analysis.
+Menu **75** requests the path form `/api/v1/sites/{site_id}/insights/client/{client_mac}/{metric}` through `apisession.mist_get()`. The SDK function builds the query form, and the live cloud refuses that form. Issue #3297 records the probe.

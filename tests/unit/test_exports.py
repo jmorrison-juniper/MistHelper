@@ -162,18 +162,20 @@ def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
     assert selected == "dev-gw"
 
 
-def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")
-    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_const_insight_metrics", lambda: None)
-    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])
+def test_client_insights_requests_the_path_form(monkeypatch, tmp_path):
+    """Menu 75 requests each client metric from the path form that the live cloud serves (issue #3297)."""
+    monkeypatch.chdir(tmp_path)  # WHY: Keep any export file inside the test folder.
+    monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")  # WHY: Choose one site.
+    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_const_insight_metrics", lambda: None)  # WHY: No CSV.
+    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])  # WHY: 1 metric.
+    monkeypatch.setattr(MistHelper, "ConstDefinitionsExporter", MagicMock())  # WHY: The refresh calls the cloud.
     monkeypatch.setattr(MistHelper.EnhancedSSHRunner, "sanitize_filename", lambda value: value.replace(" ", "_"))
 
     site_info_response = type("Response", (), {"data": {"id": "site-1", "name": "Site One"}, "status_code": 200})()
     client_response = [{"mac": "00:11:22:33:44:55", "hostname": "Client One", "last_seen": "now"}]
 
     def get_all_stub(*_args, **_kwargs):
-        return client_response
+        return client_response  # WHY: One wireless client at the site.
 
     monkeypatch.setattr(MistHelper.mistapi, "get_all", get_all_stub)
     monkeypatch.setattr(
@@ -188,24 +190,19 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
         lambda *_args, **_kwargs: object(),
     )
 
-    captured = {}
+    requested = []  # WHY: Each URI that the session requests, in order.
 
-    def get_client_insight_stub(apisession, site_id, client_mac, *, metrics):
-        captured["site_id"] = site_id
-        captured["client_mac"] = client_mac
-        captured["metrics"] = metrics
-        return type("Response", (), {"data": {"value": 42}})()
+    class RecordingSession:
+        """Record each GET request, and answer it with metric data."""
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites.insights,
-        "getSiteInsightMetricsForClient",
-        get_client_insight_stub,
-    )
+        def mist_get(self, uri, query=None):
+            requested.append(uri)  # WHY: Keep the URI for the assertion.
+            return type("Response", (), {"data": {"value": 42}, "status_code": 200})()  # WHY: Metric data.
+
+    monkeypatch.setattr(MistHelper, "apisession", RecordingSession())  # WHY: Menu 75 sends the request through it.
     monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "0")
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "0")  # WHY: Select the first client.
 
     MistHelper.SiteClientExporter.client_insights()
 
-    assert captured["site_id"] == "site-1"
-    assert captured["client_mac"] == "00:11:22:33:44:55"
-    assert captured["metrics"] == "metric-one"
+    assert requested == ["/api/v1/sites/site-1/insights/client/00:11:22:33:44:55/metric-one"]  # WHY: Path form.
