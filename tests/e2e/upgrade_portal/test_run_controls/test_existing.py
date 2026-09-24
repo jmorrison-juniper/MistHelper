@@ -268,6 +268,33 @@ def _open_run_page(page: Any, run_id: str) -> None:
         raise AssertionError(f"{path} answered {answer.status}. The contract fixes 200 for this page.")
 
 
+def _open_seeded_run_page(page: Any, run_id: str) -> bool:
+    """Open the run page of one seeded run, and report whether the store holds it yet.
+
+    Why:
+        Issue #3276. The run page answers 404 for a run ID that the store does
+        not hold. The seed thread can write a run a moment after the server
+        binds, so a seed loop reads a 404 as a run that is not written yet.
+
+    Args:
+        page: The browser page that points at the portal.
+        run_id: The key of the seeded run.
+
+    Returns:
+        True when the page answered 200, and False when it answered 404.
+
+    Raises:
+        AssertionError: If the page answers any other status.
+    """
+    path = PROGRESS_PAGE_TEMPLATE.format(run_id=run_id)  # The run page of the seeded run.
+    answer = page.goto(path)  # Open the page the way an operator opens a link.
+    if answer is not None and answer.status == NOT_FOUND_STATUS:  # The seed thread did not write the run yet.
+        return False  # The caller waits and tries again.
+    if answer is not None and answer.status != OK_STATUS:  # Any other refusal is a route fault.
+        raise AssertionError(f"{path} answered {answer.status}. The contract fixes 200 for this page.")
+    return True  # The store holds the run, and the page shows it.
+
+
 def _require_enabled(control: Any, name: str) -> None:
     """Refuse a press against a control that the page drew disabled.
 
@@ -329,8 +356,8 @@ def fixture_failed_run_page(portal_page: Any) -> Any:
     """
     _take_site_lock_without_a_live_run(portal_page)  # Keep the lock without blocking the retry.
     for _ in range(SEED_TRIES):  # The seed runs on its own thread, so it may land a moment after the bind.
-        _open_run_page(portal_page, FAILED_RUN_ID)
-        if portal_page.get_by_test_id(RETRY_REGION_ID).count() >= 1:  # The seeded run is readable now.
+        opened = _open_seeded_run_page(portal_page, FAILED_RUN_ID)  # False while the seed is not written.
+        if opened and portal_page.get_by_test_id(RETRY_REGION_ID).count() >= 1:  # The seeded run is readable now.
             return portal_page
         portal_page.wait_for_timeout(SEED_PAUSE_MS)  # Give the writer thread one more moment.
     pytest.skip(f"The portal holds no failed run under {FAILED_RUN_ID}, so the seed did not write.")
@@ -380,6 +407,7 @@ class TestTheRescheduleControl:
 
         flash = page.get_by_test_id(FLASH_REGION_ID)
         sync_api.expect(flash).to_contain_text(RESCHEDULE_MESSAGE, timeout=FLASH_TIMEOUT_MS)
+        assert RESCHEDULE_MESSAGE in flash.inner_text(), "the operator must read the move on the page"
 
 
 class TestTheCancelControl:
@@ -412,6 +440,7 @@ class TestTheCancelControl:
 
         flash = page.get_by_test_id(FLASH_REGION_ID)
         sync_api.expect(flash).to_contain_text(CANCEL_MESSAGE, timeout=FLASH_TIMEOUT_MS)
+        assert CANCEL_MESSAGE in flash.inner_text(), "the operator must read that the run ended"
 
     def test_the_canceled_run_reads_as_canceled_after_a_reload(self, scheduled_run_page: Any) -> None:
         """The cancel MUST reach the record, so a reload MUST show the new state.
@@ -463,9 +492,9 @@ class TestTheRetryControl:
         """A stopped attempt can restart without rebuilding the plan by hand."""
         _take_site_lock_without_a_live_run(portal_page)  # Keep the lock without a conflicting run.
         for _ in range(SEED_TRIES):
-            _open_run_page(portal_page, STOPPED_RUN_ID)
+            opened = _open_seeded_run_page(portal_page, STOPPED_RUN_ID)  # False while the seed is not written.
             button = portal_page.get_by_test_id(RETRY_BUTTON_ID)
-            if button.count() == 1:
+            if opened and button.count() == 1:  # The seeded run shows its retry control.
                 break
             portal_page.wait_for_timeout(SEED_PAUSE_MS)
         sync_api.expect(button).to_be_visible()
