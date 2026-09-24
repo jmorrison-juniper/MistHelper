@@ -91,6 +91,7 @@ SELECTED_MODE_KEY = "selected_upgrade_mode"  # The operation mode in the signed 
 ORG_UPGRADE_OPTIONS_KEY = "org_upgrade_options"
 ORG_UPGRADE_OPTIONS_ORG_KEY = "org_upgrade_options_org"
 ORG_UPGRADE_OPTIONS_NONCE_KEY = "org_upgrade_options_nonce"
+ORG_UPGRADE_RETRY_KEY = "org_upgrade_retry"  # Issue #3247: the reference to the operation that a retry repeats.
 SELECTED_SITE_KEY = "selected_site_id"  # The site pick, in the same signed session.
 ORG_FIELD = "org_id"  # The body field that carries the pick.
 MODE_FIELD = "mode"  # The body field that carries the operation mode.
@@ -565,9 +566,10 @@ def read_chosen_org() -> str:
 
 def clear_org_upgrade_options() -> None:
     """Drop organization upgrade options that belong to an earlier scope."""
-    session.pop(ORG_UPGRADE_OPTIONS_KEY, None)
-    session.pop(ORG_UPGRADE_OPTIONS_ORG_KEY, None)
-    session.pop(ORG_UPGRADE_OPTIONS_NONCE_KEY, None)
+    session.pop(ORG_UPGRADE_OPTIONS_KEY, None)  # The saved choices belong to the earlier scope.
+    session.pop(ORG_UPGRADE_OPTIONS_ORG_KEY, None)  # The organization binding of those choices.
+    session.pop(ORG_UPGRADE_OPTIONS_NONCE_KEY, None)  # The request nonce of the earlier plan.
+    session.pop(ORG_UPGRADE_RETRY_KEY, None)  # Issue #3247: a retry of an earlier scope must not narrow a new plan.
 
 
 def store_chosen_org(org_id: str) -> None:

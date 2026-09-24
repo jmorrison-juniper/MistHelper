@@ -9,6 +9,7 @@
      data-org-upgrade-region
      data-upgrade-id="{{ upgrade_id }}"
      data-job-status="{{ status.status | default('unknown', true) }}"
+     {% if status.controls is defined %}data-org-controls="{{ status.controls.signature }}"{% endif %}
      data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}">
   <h2 class="portal-card-title">Multi-site upgrade operation</h2>
   <p><strong>Operation identifier:</strong> <span class="cell-mono">{{ upgrade_id }}</span></p>
@@ -77,6 +78,104 @@
   </form>
   <p class="portal-card-note">Cancellation is best effort. It does not restore devices that already upgraded.</p>
 </div>
+
+{#
+  Issue #3247. The single-site page offers a retry of the failed devices and a
+  check of an uncertain outcome. The multi-site page offers the same two
+  controls, and `OrgControlsView` builds their values. The retry opens a new
+  plan and writes no firmware. The check reads the running versions, and it
+  sends no firmware, stop, or cancel request. The poll paints text only, so
+  `portal.js` loads the page again when the poll reports a new signature.
+#}
+{% if status.controls is defined %}
+  {% set controls = status.controls %}
+  <section class="portal-card" data-testid="org-upgrade-controls">
+    <h2 class="portal-card-title">Recovery actions</h2>
+    {% if controls.retry.available %}
+      <div class="mb-3" data-testid="org-upgrade-retry-controls">
+        <h3 class="portal-card-title">Retry the devices that did not upgrade</h3>
+        <p class="portal-card-note">
+          <span data-testid="org-upgrade-retry-count">{{ controls.retry.count }}</span>
+          {{ 'device' if controls.retry.count == 1 else 'devices' }} did not reach the target version.
+        </p>
+        <ul data-testid="org-upgrade-retry-devices">
+          {% for device in controls.retry.devices %}
+            <li data-testid="org-upgrade-retry-device-{{ device.mac }}">
+              <span class="cell-mono">{{ device.mac }}</span>
+              {{ device.name | default('Unnamed device', true) }} at {{ device.site_name | default('an unnamed site', true) }}.
+              The last state is {{ device.state | default('unknown', true) }}.
+            </li>
+          {% endfor %}
+        </ul>
+        <p class="portal-card-note">The retry opens a new plan. The portal writes no firmware until you confirm the new plan.</p>
+        <form method="post" action="/api/org-upgrades/{{ upgrade_id }}/retry">
+          <input type="hidden"
+                 name="csrf_token"
+                 value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <button type="submit"
+                  class="portal-button portal-button-primary"
+                  data-testid="org-upgrade-retry">Retry the failed devices</button>
+        </form>
+      </div>
+    {% endif %}
+    {% if controls.reconcile.children %}
+      <div class="mb-3" data-testid="org-upgrade-reconcile-controls">
+        <h3 class="portal-card-title">Check the uncertain child jobs</h3>
+        <p class="portal-card-note">
+          This check sends no firmware, stop, or cancel request to Mist. The portal changes a child job only with complete proof.
+        </p>
+        <ul data-testid="org-upgrade-reconcile-children">
+          {% for child in controls.reconcile.children %}
+            <li data-testid="org-upgrade-reconcile-child-{{ child.child_id }}">
+              {{ child.site_name | default('An unnamed site', true) }}, {{ child.device_family | default('unknown', true) }},
+              {{ child.device_count }} {{ 'device' if child.device_count == 1 else 'devices' }}.
+              {% if child.evidence %}
+                <span data-testid="org-upgrade-reconcile-evidence-{{ child.child_id }}">Last check: {{ child.evidence }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        {% if controls.reconcile.available %}
+          <form method="post" action="/api/org-upgrades/{{ upgrade_id }}/reconcile">
+            <input type="hidden"
+                   name="csrf_token"
+                   value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <label class="form-label" for="org-upgrade-reconcile-confirmation">
+              Type <strong class="cell-mono">{{ controls.reconcile.word }}</strong> to start the check
+            </label>
+            <input class="form-control"
+                   id="org-upgrade-reconcile-confirmation"
+                   name="confirmation"
+                   data-testid="org-upgrade-reconcile-confirmation"
+                   data-confirm-word="{{ controls.reconcile.word }}"
+                   data-confirm-target="org-upgrade-reconcile"
+                   data-confirm-hint-for="org-upgrade-reconcile-hint"
+                   autocomplete="off"
+                   autocapitalize="off"
+                   spellcheck="false"
+                   aria-describedby="org-upgrade-reconcile-hint"
+                   required>
+            <p class="portal-card-note" id="org-upgrade-reconcile-hint" aria-live="polite"></p>
+            <button type="submit"
+                    id="org-upgrade-reconcile"
+                    class="portal-button portal-button-primary mt-3"
+                    data-testid="org-upgrade-reconcile"
+                    disabled>Check the child jobs</button>
+          </form>
+        {% else %}
+          <p class="portal-card-note" data-testid="org-upgrade-reconcile-wait">
+            A submission of this operation still runs. The check opens after the submission ends.
+          </p>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if not controls.retry.available and not controls.reconcile.children %}
+      <p class="portal-card-note" data-testid="org-upgrade-controls-none">
+        No recovery action applies now. A retry opens after every child job ends, for each device that did not reach the target version.
+      </p>
+    {% endif %}
+  </section>
+{% endif %}
 
 <div class="portal-table-scroll">
   <table class="portal-table" data-testid="org-upgrade-site-progress">

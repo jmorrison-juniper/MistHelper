@@ -166,17 +166,22 @@ class OrgVersionRefresh:
         readings: dict[str, str] = {}  # The running version of each wanted device.
         failed_sites: set[str] = set()  # A failed site keeps its final children open.
         for site_id, macs in plan.wanted.items():  # One read serves every child of the site.
-            answer = self._read_site(cloud_session, site_id)  # Read the site, or None after a failure.
+            answer = self.read_site(cloud_session, site_id)  # Read the site, or None after a failure.
             if answer is None:  # The read proves nothing, so store no reading.
                 failed_sites.add(site_id)  # The next refresh reads the site again.
                 continue  # Read the next site.
             readings.update({mac: answer.get(mac, "") for mac in sorted(macs)})  # An absent device reports nothing.
         return readings, failed_sites  # The caller builds the result.
 
-    def _read_site(self, cloud_session: Any, site_id: str) -> dict[str, str] | None:
-        """Read one site, and return None when the answer proves nothing."""
+    def read_site(self, cloud_session: Any, site_id: str) -> dict[str, str] | None:
+        """Read one site, and return None when the answer proves nothing.
+
+        Why:
+            Issue #3247. The reconciliation check of the multi-site portal
+            reads each site of an uncertain child job through the same rules.
+        """
         logger.info("Read the running versions of site %s", site_id)  # Log before the cloud call.
-        try:
+        try:  # One failed site must not stop the caller.
             raw = self._reader(cloud_session, site_id)  # One listSiteDevicesStats read for the site.
         except Exception as error:  # Keep broad because one failed site must not stop the progress page.
             logger.warning("The running version read of site %s failed with %s", site_id, type(error).__name__)

@@ -2940,8 +2940,32 @@
         setText(byTestId("org-upgrade-cloud-account"), status.cloud_account || "Not recorded");
     }
 
+    /**
+     * Reports whether the recovery controls of one operation changed.
+     *
+     * Why: Issue #3247. The progress page shows a retry form and a check form.
+     * The poll paints text only, so a changed set of forms needs a new page.
+     * The server builds the signature from the durable record, so the new page
+     * holds the same signature and the poll loads the page one time only.
+     *
+     * @param {Element} region The progress region. It holds the rendered signature.
+     * @param {Object} status The status that the poll read.
+     * @returns {boolean} True when the page must load again.
+     */
+    function orgControlsChanged(region, status) {
+        var controls = status.controls;  /* An earlier organization job carries no controls. */
+        var signature = controls && typeof controls.signature === "string" ? controls.signature : null;  /* The poll value. */
+        var rendered = region.getAttribute("data-org-controls");  /* The signature of the page render. */
+        return signature !== null && rendered !== null && signature !== rendered;  /* Both exist and differ. */
+    }
+
     function paintOrgUpgradeStatus(region, status) {
         if (!region || !status) {
+            return;
+        }
+        if (orgControlsChanged(region, status)) {  /* Issue #3247: a new recovery control needs a new page. */
+            stopOrgUpgradePoll();  /* The loaded page starts its own poll. */
+            window.location.reload();  /* The server renders the new forms with a new request token. */
             return;
         }
         var fields = ["status", "current_phase", "total", "upgraded_count", "failed_count"];

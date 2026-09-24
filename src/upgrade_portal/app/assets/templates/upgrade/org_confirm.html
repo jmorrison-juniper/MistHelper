@@ -17,6 +17,37 @@
     <p data-testid="org-upgrade-reboot-at"><strong>Reboot each switch and each gateway after this much time:</strong> {{ options.reboot_at }}</p>
   {% endif %}
 
+  {#
+    Issue #3247. The single-site confirmation page names the start time and
+    can move it before the confirmation. The multi-site page now does the
+    same. The form moves the start time of every child job through one write,
+    and it sends nothing to the Mist cloud.
+  #}
+  {% if schedule is defined %}
+    <p data-testid="org-upgrade-start-line"><strong>Start time:</strong> {{ schedule.start_text }}</p>
+    {% if schedule.available %}
+      <form method="post"
+            action="/api/org-upgrades/{{ schedule.operation_id }}/reschedule"
+            class="mb-3"
+            data-testid="org-upgrade-reschedule-form">
+        <input type="hidden"
+               name="csrf_token"
+               value="{{ csrf_token() if csrf_token is defined else '' }}">
+        <label class="form-label" for="org-upgrade-reschedule-start">Move the start time (UTC)</label>
+        <input class="form-control"
+               type="datetime-local"
+               id="org-upgrade-reschedule-start"
+               name="start_time"
+               data-testid="org-upgrade-reschedule-start"
+               value="{{ schedule.start_value }}">
+        <p class="portal-card-note">Leave the field empty to start the upgrade at once after you confirm.</p>
+        <button type="submit"
+                class="portal-button"
+                data-testid="org-upgrade-reschedule">Move the start time</button>
+      </form>
+    {% endif %}
+  {% endif %}
+
   <div class="alert alert-danger" role="alert">
     Warning: the upgrade can interrupt network service at all selected sites. Cancellation does not restore upgraded devices.
   </div>
