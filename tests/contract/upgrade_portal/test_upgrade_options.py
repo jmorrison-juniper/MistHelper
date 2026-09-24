@@ -137,6 +137,10 @@ REFUSED_ADVANCED_BODIES = (
     {"strategy": "canary", "max_failure_percentage": "101"},  # The schema fixes the range 0 to 100.
     {"strategy": "big_bang", "canary_phases": "25,50"},  # A phase list outside the staged strategy.
     {"strategy": "canary", "canary_phases": "25,50,100", "max_failures": "1,2"},  # One limit for each phase.
+    {"strategy": "canary", "canary_phases": "50,10"},  # Issue #3223: a falling phase list.
+    {"strategy": "canary", "canary_phases": "10,101"},  # Issue #3223: a phase above 100.
+    {"strategy": "canary", "canary_phases": "10,50"},  # Issue #3223: a list that stops before 100.
+    {"strategy": "canary", "canary_phases": "0,100"},  # Issue #3223: a phase that upgrades no device.
     {"strategy": "rrm", "rrm_node_order": "sideways"},  # A word outside the documented enumeration.
     {"strategy": "rrm", "rrm_mesh_upgrade": "at_once"},  # The same rule for the mesh word.
     {"reboot_at": "not-a-moment"},  # A reboot window that names no epoch second.
