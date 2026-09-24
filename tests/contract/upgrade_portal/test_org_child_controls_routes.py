@@ -568,12 +568,12 @@ def test_the_progress_page_and_the_poll_show_the_retry_control(harness: Controls
     harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
     page = harness.client.get(f"/upgrade/org/jobs/{RETRY_ID}").get_data(as_text=True)  # The progress page.
     poll = harness.client.get(f"/api/org-upgrades/{RETRY_ID}").get_json()  # The status poll.
-    assert 'data-org-controls="retry=2;reconcile="' in page  # The signature that the poll compares.
+    assert 'data-org-controls="retry=2;reconcile=;cancel="' in page  # The signature that the poll compares.
     assert f'data-testid="org-upgrade-retry-device-{AP_TWO}"' in page  # The failed access point.
     assert f'data-testid="org-upgrade-retry-device-{SWITCH_ONE}"' in page  # The failed switch.
     assert f'data-testid="org-upgrade-retry-device-{AP_ONE}"' not in page  # The healthy access point.
     assert f'action="/api/org-upgrades/{RETRY_ID}/retry"' in page  # The retry form names the operation.
-    assert poll["controls"]["signature"] == "retry=2;reconcile="  # The poll carries the same signature.
+    assert poll["controls"]["signature"] == "retry=2;reconcile=;cancel="  # The poll carries the same signature.
     assert poll["controls"]["retry"]["count"] == 2  # The poll counts the retry devices.
 
 
@@ -586,7 +586,7 @@ def test_the_progress_page_offers_the_check_of_each_uncertain_child(harness: Con
     """The progress page names each uncertain child job and the exact typed word."""
     harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs.
     page = harness.client.get(f"/upgrade/org/jobs/{RECONCILE_ID}").get_data(as_text=True)  # The progress page.
-    assert 'data-org-controls="retry=0;reconcile=child-switch-one,child-switch-two"' in page  # The signature.
+    assert 'data-org-controls="retry=0;reconcile=child-switch-one,child-switch-two;cancel="' in page  # The signature.
     assert 'data-testid="org-upgrade-reconcile-child-child-switch-one"' in page  # The first uncertain job.
     assert 'data-testid="org-upgrade-reconcile-child-child-switch-two"' in page  # The second uncertain job.
     assert f'data-confirm-word="{RECONCILE_WORD}"' in page  # The typed word names this operation.

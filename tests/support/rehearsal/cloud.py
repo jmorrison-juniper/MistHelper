@@ -395,7 +395,7 @@ class StandInCloud:
         self._record(name, args, kwargs)  # The stop test reads the scope from this record.
         self.cancelled.append(str(args[1]) if len(args) > 1 else "")  # The scope identifier of the cancel call.
         logger.debug("The stand-in holds %s cancel calls", len(self.cancelled))  # The result of the action.
-        return StandInResponse({"result": "ok"})  # ``_sort_cancel`` accepts status 200 and status 202.
+        return StandInResponse({"result": "ok"})  # ``sort_cancel`` accepts status 200 and status 202.
 
     def _status(self, name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> StandInResponse:
         """Answer one upgrade status read.
@@ -413,7 +413,7 @@ class StandInCloud:
         body = {
             "status": "upgrading",  # The state of the upgrade job.
             "current_phase": "downloading",  # The phase that the cloud reports for this job.
-            "targets": {"reboot_in_progress": writing},  # ``_sort_cancel`` reads this list.
+            "targets": {"reboot_in_progress": writing},  # ``reboot_macs`` reads this list for ``sort_cancel``.
             "upgrade_id": UPGRADE_ID,  # The identifier that the submission returned.
             "status_known": True,  # ``stop.status_is_known`` needs this field.
         }

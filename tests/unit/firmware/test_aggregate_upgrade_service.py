@@ -169,6 +169,9 @@ def test_mixed_status_and_cancellation_keep_all_results() -> None:
     results = record["cancellation"]["results"]  # Read every child cancellation result.
     assert len(results) == len(record["children"])  # No child result disappears.
     assert any(result["status"] == "unavailable" for result in results)  # The rejected child has no job identifier.
+    ap_child = next(child for child in record["children"] if child["route"] == "upgradeOrgDevices")  # Issue #3246.
+    assert ap_child["cancellation"]["cancelled"] == ["001122334455"]  # The root list names no rebooting AP.
+    assert ap_child["cancellation"]["already_writing"] == []  # The portal read the list, so no AP writes.
     service.cancel(SAFE_SESSION, record, store)  # A repeated request continues without duplicate cloud calls.
     assert org.calls.count("cancel") == 1  # The AP cancellation did not repeat.
 

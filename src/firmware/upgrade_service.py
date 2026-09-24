@@ -1380,7 +1380,7 @@ def _holds_upgrade_job(status: Mapping[str, object] | None) -> bool:
     return any(key in status for key in _UPGRADE_JOB_KEYS)
 
 
-def _reboot_macs(status: Mapping[str, object] | None) -> frozenset[str] | None:
+def reboot_macs(status: Mapping[str, object] | None) -> frozenset[str] | None:
     """Return the MAC addresses that the last status marked as rebooting.
 
     Why:
@@ -1394,6 +1394,10 @@ def _reboot_macs(status: Mapping[str, object] | None) -> frozenset[str] | None:
         report every device as stopped. An operator who reads the word stopped
         can cut power to a switch that is still writing firmware.
 
+        Issue #3246. The access point child job of a multi-site operation reads
+        each site job of the organization answer with this rule, so the rule
+        is public.
+
     Args:
         status: The last status that the portal read, or ``None``.
 
@@ -1401,17 +1405,17 @@ def _reboot_macs(status: Mapping[str, object] | None) -> frozenset[str] | None:
         The MAC addresses in lower case with no separator, or ``None`` when the
         portal cannot tell which devices write firmware.
     """
-    if not _holds_upgrade_job(status) or status is None:
-        return None
-    values = status.get("reboot_in_progress")
-    if values is None:
-        targets = status.get("targets")
-        values = targets.get("reboot_in_progress") if isinstance(targets, Mapping) else None
+    if not _holds_upgrade_job(status) or status is None:  # No job fields, so the answer names no device state.
+        return None  # The portal cannot tell which devices write firmware.
+    values = status.get("reboot_in_progress")  # The cloud can write the list at the top level.
+    if values is None:  # The top level holds no list, so read the targets mapping.
+        targets = status.get("targets")  # The second place where the cloud writes the list.
+        values = targets.get("reboot_in_progress") if isinstance(targets, Mapping) else None  # A damaged map.
     if values is None:
         return frozenset()  # The job exists and it names no device, so no device writes firmware.
     if isinstance(values, str) or not isinstance(values, Sequence):
         return None  # The field holds a shape the portal does not understand.
-    return frozenset(_normalize_mac(value) for value in values)
+    return frozenset(_normalize_mac(value) for value in values)  # One spelling for each MAC address.
 
 
 def _cancel_message(stopped: int, already: int) -> str:
@@ -1455,7 +1459,7 @@ def _unknown_state_message(count: int) -> str:
     )
 
 
-def _sort_cancel(macs: tuple[str, ...], last_status: Mapping[str, object] | None, status: int) -> CancelOutcome:
+def sort_cancel(macs: tuple[str, ...], writing: frozenset[str] | None, status: int) -> CancelOutcome:
     """Sort the MAC addresses of one cancel into the three groups.
 
     Why:
@@ -1464,23 +1468,27 @@ def _sort_cancel(macs: tuple[str, ...], last_status: Mapping[str, object] | None
         same case. Every device then joins ``already_writing``, which the
         contract defines as the devices that may still finish the write.
 
+        Issue #3246. The single-site stop and the access point child job of a
+        multi-site operation share this rule. Each caller reads its own
+        reboot list, so the rule takes the list instead of the status.
+
     Args:
         macs: The MAC addresses of the plan.
-        last_status: The last upgrade status that the portal read.
+        writing: The normalized MAC addresses that write firmware, or ``None``
+            when the portal cannot tell.
         status: The HTTP status code of the cancel call.
 
     Returns:
         The cancel outcome.
     """
-    if status not in ACCEPTED_STATUS:
+    if status not in ACCEPTED_STATUS:  # The cloud refused the cancel, so no device stopped.
         refused = f"The cloud refused the cancel with status {status}, so every device continues the upgrade."
-        return CancelOutcome((), macs, (), refused)
-    writing = _reboot_macs(last_status)
-    if writing is None:
-        return CancelOutcome((), macs, (), _unknown_state_message(len(macs)))
-    already = tuple(mac for mac in macs if _normalize_mac(mac) in writing)
-    stopped = tuple(mac for mac in macs if _normalize_mac(mac) not in writing)
-    return CancelOutcome(stopped, already, (), _cancel_message(len(stopped), len(already)))
+        return CancelOutcome((), macs, (), refused)  # Every device can still write firmware.
+    if writing is None:  # The portal cannot tell which devices write firmware.
+        return CancelOutcome((), macs, (), _unknown_state_message(len(macs)))  # Claim no stop.
+    already = tuple(mac for mac in macs if _normalize_mac(mac) in writing)  # The devices that still write.
+    stopped = tuple(mac for mac in macs if _normalize_mac(mac) not in writing)  # The devices that stopped.
+    return CancelOutcome(stopped, already, (), _cancel_message(len(stopped), len(already)))  # Plan order.
 
 
 def cancel_upgrade(
@@ -1515,7 +1523,7 @@ def cancel_upgrade(
         _logger().debug("the family of this plan offers no cancel call")
         return CancelOutcome((), (), macs, _MESSAGE_NO_CANCEL)
     response = _resolve_endpoint(name)(session, plan.route.scope_id, upgrade_id)
-    outcome = _sort_cancel(macs, last_status, _status_code(response))
+    outcome = sort_cancel(macs, reboot_macs(last_status), _status_code(response))  # Sort from the last read.
     _logger().debug("the cancel stopped %s of %s device(s)", len(outcome.cancelled), len(macs))
     return outcome
 
@@ -1602,9 +1610,9 @@ def _normalize_status(payload: Mapping[str, object], upgrade_id: str, raw_status
     Returns:
         The status fields.
     """
-    raw_targets = payload.get("targets")
-    targets = raw_targets if isinstance(raw_targets, Mapping) else {}
-    reboot = _reboot_macs(payload)
+    raw_targets = payload.get("targets")  # The per-device lists of the job, when the cloud sends them.
+    targets = raw_targets if isinstance(raw_targets, Mapping) else {}  # A damaged mapping reads as empty.
+    reboot = reboot_macs(payload)  # None when the portal cannot tell which devices write firmware.
     return {
         "upgrade_id": upgrade_id,
         "raw_status": raw_status,

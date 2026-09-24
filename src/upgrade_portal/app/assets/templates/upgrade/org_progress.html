@@ -76,8 +76,64 @@
             data-testid="org-upgrade-cancel"
             disabled>Request cancellation</button>
   </form>
-  <p class="portal-card-note">Cancellation is best effort. It does not restore devices that already upgraded.</p>
+  <p class="portal-card-note" data-testid="org-upgrade-cancel-caution">
+    Caution: the cancellation stops each upgrade that waits to start. A device
+    that already writes firmware finishes the write. Each site can hold two
+    firmware versions after the cancellation. The cancellation does not
+    restore a device that already upgraded.
+  </p>
 </div>
+
+{#
+  Issue #3246. The single-site stop page shows three device lists after a
+  stop. This panel shows the same three lists for each child job that holds a
+  cancel result. `OrgCancelOutcomes` builds the rows from the stored record,
+  so a reload shows the same lists. The portal never guesses a list. If a
+  child job holds no complete set of lists, each device of it shows in the
+  writing list, and the note explains why.
+#}
+{% if status.cancel_outcomes is defined and status.cancel_outcomes %}
+  <section class="portal-card" data-testid="org-cancel-outcome" aria-live="polite">
+    <h2 class="portal-card-title">Cancellation result</h2>
+    {% for outcome in status.cancel_outcomes %}
+      <div class="status-panel" data-testid="org-cancel-outcome-{{ outcome.child_id }}">
+        <h3 class="status-panel-title">{{ outcome.label }} ({{ outcome.device_family }})</h3>
+        <p><strong>Status:</strong> <span data-testid="org-cancel-outcome-status-{{ outcome.child_id }}">{{ outcome.status }}</span></p>
+        <p class="status-message" data-testid="org-cancel-outcome-message-{{ outcome.child_id }}">{{ outcome.message }}</p>
+        {% if outcome.note %}
+          <p class="portal-card-note" data-testid="org-cancel-outcome-note-{{ outcome.child_id }}">{{ outcome.note }}</p>
+        {% endif %}
+
+        <h4 class="status-panel-title">Cancelled</h4>
+        <ul class="status-section-list" data-testid="org-cancel-outcome-cancelled-{{ outcome.child_id }}">
+          {% for mac in outcome.cancelled %}
+            <li class="cell-mono">{{ mac }}</li>
+          {% else %}
+            <li>The portal canceled no device.</li>
+          {% endfor %}
+        </ul>
+
+        <h4 class="status-panel-title">Writing firmware</h4>
+        <ul class="status-section-list" data-testid="org-cancel-outcome-writing-{{ outcome.child_id }}">
+          {% for mac in outcome.already_writing %}
+            <li class="cell-mono">{{ mac }}</li>
+          {% else %}
+            <li>No device writes firmware.</li>
+          {% endfor %}
+        </ul>
+
+        <h4 class="status-panel-title">No cancel available</h4>
+        <ul class="status-section-list" data-testid="org-cancel-outcome-no-cancel-{{ outcome.child_id }}">
+          {% for mac in outcome.no_cancel_available %}
+            <li class="cell-mono">{{ mac }}</li>
+          {% else %}
+            <li>Every device has a cancel path.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+  </section>
+{% endif %}
 
 {#
   Issue #3247. The single-site page offers a retry of the failed devices and a
