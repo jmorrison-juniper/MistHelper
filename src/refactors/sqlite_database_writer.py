@@ -224,13 +224,11 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         """Execute database operations with comprehensive error handling."""
         try:
             self._connect_to_database()  # Open the DB connection.
-            self._create_table_and_indexes()  # Ensure schema exists.
+            self._create_table_and_indexes()  # Ensure schema exists, with a column for each field of this batch.
             insert_mode = self._determine_insert_mode()  # Pick insert/upsert mode.
             safe_fields = self._prepare_safe_fields()  # Sanitize column names.
             successful_inserts = self._insert_all_rows(insert_mode, safe_fields)  # Insert all rows.
-            self._commit_and_verify(successful_inserts)  # Commit and verify counts.
-            logger.debug("EXIT: SQLiteDatabaseWriter.write - success")  # Trace success.
-            return True  # Write succeeded.
+            return self._finish_batch(successful_inserts)  # Issue #3350: commit, or roll back when no row inserted.
         except sqlite3.Error as error:  # Handle SQLite errors.
             self._handle_sqlite_error(error)  # Log and rollback.
             return False  # Write failed.
@@ -260,11 +258,12 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             raise RuntimeError("Database connection not initialized")  # WHY: keep the old assertion message.
         return self.connection  # WHY: callers need a narrowed connection object.
 
-    def _create_table_and_indexes(self) -> None:  # Create table then indexes.
-        """Create table with strategy-appropriate schema and indexes."""
+    def _create_table_and_indexes(self) -> None:  # Create table, add new columns, then indexes.
+        """Create table with strategy-appropriate schema, add each missing column, and create indexes."""
         self._require_cursor()  # WHY: fail visibly under python -O if connect() did not initialize a cursor.
         self._create_schema_table()  # Delegate DDL creation to keep this function under STRUCT-LENGTH limit
-        self._create_schema_indexes()  # Delegate index creation to keep this function under STRUCT-LENGTH limit
+        self._add_missing_columns()  # Issue #3350: CREATE TABLE IF NOT EXISTS never adds a column to an old table.
+        self._create_schema_indexes()  # Create indexes last, because an index can name a column added above.
 
     def _create_schema_table(self) -> None:  # Extract table DDL to keep parent under 25 lines
         """Build and execute the CREATE TABLE DDL for the current strategy."""
@@ -279,6 +278,27 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             self.table_name,
             self.strategy["type"],
         )
+
+    def _add_missing_columns(self) -> None:  # Add each column that an old table lacks.
+        """Add a TEXT column for each field of this batch that the existing table does not hold (issue #3350)."""
+        cursor = self._require_cursor()  # WHY: fail visibly under python -O before the schema read.
+        safe_table_name = self._get_safe_table_name()  # Sanitize the table name for the PRAGMA and ALTER statements.
+        logger.info("Reading the columns of table %s at %s", self.table_name, self.timestamp)  # Log before the read.
+        table_info = cursor.execute(f"PRAGMA table_info({safe_table_name})").fetchall()  # One row for each column.
+        existing = {str(column_row[1]).lower() for column_row in table_info}  # SQLite column names ignore case.
+        batch_columns = dict.fromkeys(self._prepare_safe_fields())  # Keep the field order and drop duplicate names.
+        missing = [column for column in batch_columns if column.lower() not in existing]  # Columns to add.
+        logger.debug(  # Log the result of the schema read.
+            "Table %s holds %s columns, and this batch adds %s columns", self.table_name, len(existing), len(missing)
+        )
+        for column in missing:  # Add each missing column before the INSERT names it.
+            self._add_column(cursor, safe_table_name, column)  # One ALTER TABLE statement for each column.
+
+    def _add_column(self, cursor: sqlite3.Cursor, safe_table_name: str, column: str) -> None:  # One ALTER.
+        """Add one TEXT column to an existing table, because every writer column holds text."""
+        logger.info("Adding column %s to table %s at %s", column, self.table_name, self.timestamp)  # Log before ALTER.
+        cursor.execute(f"ALTER TABLE {safe_table_name} ADD COLUMN {column} TEXT")  # Both identifiers are sanitized.
+        logger.debug("Column %s added to table %s", column, self.table_name)  # Log after the ALTER statement.
 
     def _create_schema_indexes(self) -> None:  # Extract index DDL to keep parent under 25 lines
         """Build and execute the CREATE INDEX statements paired with the schema strategy."""
@@ -393,6 +413,36 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         return (  # nosec B608 - identifiers are sanitised above. Values are bound via placeholders
             f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
         )
+
+    def _finish_batch(self, successful_inserts: int) -> bool:  # Commit, or roll back an empty result.
+        """Commit the batch and return True, or roll it back and return False when no row inserted (issue #3350)."""
+        total_rows = len(self.processed_data)  # The number of rows in this batch.
+        if total_rows > 0 and successful_inserts == 0:  # Every row insert failed.
+            logger.error(  # Tell the operator that the table did not change.
+                "The writer inserted 0 of %s rows into table %s at %s. The writer rolled back the batch.",
+                total_rows,
+                self.table_name,
+                self.timestamp,
+            )
+            self._rollback_transaction()  # Keep the old rows. The rollback also undoes an auto-increment clear.
+            logger.debug("EXIT: SQLiteDatabaseWriter.write - no row inserted")  # Trace the early exit.
+            return False  # Tell the caller that the write failed.
+        self._commit_and_verify(successful_inserts)  # Persist the rows and verify the row count.
+        self._log_partial_failure(successful_inserts, total_rows)  # Summarize the failed rows, if any.
+        logger.debug("EXIT: SQLiteDatabaseWriter.write - success")  # Trace success.
+        return True  # At least one row reached the table.
+
+    def _log_partial_failure(self, successful_inserts: int, total_rows: int) -> None:  # One summary line.
+        """Log one summary error line when some rows of the batch did not insert."""
+        failed_rows = total_rows - successful_inserts  # The rows that the per-row handler logged as failed.
+        if failed_rows > 0:  # Only a partial failure needs the summary line.
+            logger.error(  # Give the operator one count instead of a search through the per-row lines.
+                "The writer did not insert %s of %s rows into table %s at %s",
+                failed_rows,
+                total_rows,
+                self.table_name,
+                self.timestamp,
+            )
 
     def _commit_and_verify(self, successful_inserts: int) -> None:  # Commit then verify row count.
         """Commit transaction and verify row count."""
