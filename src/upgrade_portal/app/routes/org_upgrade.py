@@ -32,6 +32,10 @@ from ...upgrade.options import (
     build_options_view,
 )
 from ...upgrade.org_cancel_outcomes import OrgCancelOutcomes  # Issue #3246: the three lists of each cancel.
+from ...upgrade.org_cascade.readers import OrgSettleAnchors  # Issue #3245: the anchors before the first write.
+from ...upgrade.org_cascade.record import WATCH_KEY, OrgPhaseEntries, OrgPhaseWatch  # Issue #3245: the watch.
+from ...upgrade.org_cascade.view import OrgPhaseView  # Issue #3245: the phase card of the page and the poll.
+from ...upgrade.org_cascade.walk import OrgCascadeDeps, OrgCascadeRegistry  # Issue #3245: one watch thread.
 from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
 from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for each device of the operation.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
@@ -83,6 +87,8 @@ OPTIONS_VIEW_CONFIG_KEY = "ORG_UPGRADE_OPTIONS_VIEW"
 OPTIONS_BUILDER_CONFIG_KEY = "ORG_UPGRADE_OPTIONS_BUILDER"
 WRITES_ENABLED_CONFIG_KEY = "ORG_UPGRADE_WRITES_ENABLED"
 DEVICE_VERSION_READER_CONFIG_KEY = "ORG_DEVICE_VERSION_READER"  # Issue #3249: a test replaces the stats read.
+ANCHOR_READER_CONFIG_KEY = "ORG_SETTLE_ANCHOR_READER"  # Issue #3245: a test replaces the anchor read.
+CASCADE_STARTER_CONFIG_KEY = "ORG_CASCADE_STARTER"  # Issue #3245: a test replaces the watch thread.
 RETRY_CACHE_KEY = "org_retry_plan"  # Issue #3247: one request builds the retry plan one time.
 PLAN_OPTION_DROPPED = frozenset({"operation_id", "target_count"})  # Issue #3247: values of the browser session only.
 
@@ -1127,6 +1133,27 @@ def _submit_aggregate(
     refusal = _acquire_operation_locks(operation, str(operation.get("org_id", "")), site_ids)  # Lock all sites.
     if refusal is not None:  # Stop before the parent or child claim.
         return refusal  # Preserve the existing lock error response.
+    _prepare_phase_watch(cloud_session, operation)  # Issue #3245: store the anchors before the first write.
+    failure = _send_aggregate(cloud_session, operation)  # Send each planned child at most once.
+    if failure is not None:  # A replay, a malformed plan, or an unknown outcome stops the flow here.
+        return failure  # Preserve the mapped error response.
+    release_operation_locks(operation)  # Free every site when no child can still write firmware.
+    _start_phase_watch(cloud_session, operation)  # Issue #3245: follow each phase after the cloud accepts a job.
+    session.pop(ORG_UPGRADE_RETRY_KEY, None)  # Issue #3247: the retry ends when its new plan reaches the cloud.
+    return next_page_answer(f"/upgrade/org/jobs/{operation['operation_id']}")  # Show one seamless operation.
+
+
+def _send_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) -> tuple[Response, int] | None:
+    """Send every planned child through the aggregate boundary, and map a fault to a response.
+
+    Args:
+        cloud_session: The signed cloud session of the operator.
+        operation: The durable operation record. The service updates it in place.
+
+    Returns:
+        None after the service stored every child outcome, or the error response.
+    """
+    logger.info("Send the child jobs of aggregate upgrade %s", operation.get("operation_id", ""))  # Before.
     try:  # The service persists before and after every destructive action.
         aggregate_service().submit(  # Submit through atomic claims and immediate lock refreshes.
             cloud_session,
@@ -1135,21 +1162,71 @@ def _submit_aggregate(
             _refresh_child_locks,
         )
     except ValueError as error:  # A replay or a malformed plan is a conflict.
-        return json_error(CONFLICT_STATUS, ALREADY_SUBMITTED, str(error))
+        return json_error(CONFLICT_STATUS, ALREADY_SUBMITTED, str(error))  # No child job goes to the cloud again.
     except Exception as error:  # Keep broad because aggregate child writes can leave mixed unknown outcomes.
         logger.exception(
             "The aggregate upgrade submission outcome is unknown after %s: %s",
             type(error).__name__,
             error,
         )  # Preserve the aggregate write fault in the log.
-        return json_error(
+        return json_error(  # The operator must read the operation before another action.
             SERVICE_UNAVAILABLE_STATUS,
             SUBMISSION_FAILED,
             "One or more child outcomes are unknown. Read the operation before another action.",
         )
-    release_operation_locks(operation)  # Free every site when no child can still write firmware.
-    session.pop(ORG_UPGRADE_RETRY_KEY, None)  # Issue #3247: the retry ends when its new plan reaches the cloud.
-    return next_page_answer(f"/upgrade/org/jobs/{operation['operation_id']}")  # Show one seamless operation.
+    logger.debug(  # After the submission. The state names the result of the child jobs.
+        "Aggregate upgrade %s now has state %s", operation.get("operation_id", ""), operation.get("state")
+    )
+    return None  # The caller releases the settled sites and starts the phase watch.
+
+
+def _prepare_phase_watch(cloud_session: Any, operation: MutableMapping[str, Any]) -> None:
+    """Store the settle anchors, the four phases, and the first watch state before the first write.
+
+    Why:
+        Issue #3245. FR-001 reads the uptime of each device before the cloud
+        receives a firmware write. FR-002 says that a failed read never blocks
+        the upgrade, so this function logs a fault and returns.
+
+    Args:
+        cloud_session: The signed cloud session of the operator.
+        operation: The durable operation record. A stored change updates it in place.
+    """
+    if WATCH_KEY in operation:  # A repeated submission keeps the anchors of the first try.
+        return  # Write nothing, and continue.
+    reader = current_app.config.get(ANCHOR_READER_CONFIG_KEY, OrgSettleAnchors.read)  # A test reaches no cloud.
+    logger.info("Read the settle anchors of aggregate upgrade %s", operation.get("operation_id", ""))  # Before.
+    try:  # The read and the write can fail, and neither may stop the upgrade.
+        found = reader(cloud_session, operation)  # FR-001: one statistics read for each device family.
+        stored = _cas_operation(operation, OrgPhaseWatch.prepared(operation, found.anchors, found.note))  # One write.
+    except Exception as error:  # Keep broad: FR-002 says that the anchors never block the upgrade.
+        logger.warning("The settle anchor step failed with %s", type(error).__name__)  # Name the type only.
+        return  # The submission continues with no phase watch.
+    logger.debug("The settle anchor write returned %s", stored)  # A lost race leaves no watch fields.
+
+
+def _start_phase_watch(cloud_session: Any, operation: Mapping[str, Any]) -> None:
+    """Start the phase watch of one operation when no watch thread runs.
+
+    Why:
+        Issue #3245. The watch starts after the cloud accepts a child job. The
+        page and each status poll call this function too, so a watch starts
+        again after a portal restart (FR-012). The registry refuses a second
+        thread for the same operation.
+
+    Args:
+        cloud_session: The signed cloud session of the operator. The watch reads with it and never writes.
+        operation: The durable operation record.
+    """
+    starter = current_app.config.get(CASCADE_STARTER_CONFIG_KEY, OrgCascadeRegistry.ensure_running)  # A test seam.
+    logger.info("Check the phase watch of aggregate upgrade %s", operation.get("operation_id", ""))  # Before.
+    try:  # The page must answer even when the watch cannot start.
+        deps = OrgCascadeDeps(store=upgrade_routes.run_store(), session=cloud_session)  # The wall clock and wait.
+        started = starter(operation, deps)  # FR-012: at most one thread for each operation.
+    except Exception as error:  # Keep broad: a fault in the watch start must not hide the progress page.
+        logger.warning("The phase watch start failed with %s", type(error).__name__)  # Name the type only.
+        return  # The next poll tries again.
+    logger.debug("The phase watch start returned %s", started)  # True only when this call started a thread.
 
 
 def _record_operator(operation: MutableMapping[str, Any]) -> bool:
@@ -1297,7 +1374,7 @@ def aggregate_summary(record: Mapping[str, Any]) -> dict[str, Any]:
     return {  # Return one public operation with every child row.
         "upgrade_id": record.get("operation_id", ""),
         "status": record.get("state", "unknown"),
-        "current_phase": None,
+        "current_phase": OrgPhaseEntries.active_label(record),  # Issue #3245: the phase that the watch follows.
         "total": totals[0],
         "upgraded_count": totals[1],
         "failed_count": totals[2],
@@ -1333,6 +1410,7 @@ def _aggregate_record_view(record: Mapping[str, Any]) -> dict[str, Any]:
         "age_text": age.age_text,  # A short age, or "unknown".
         "controls": OrgControlsView.build(record, retry_plan_of(record, rows)),  # Issue #3247: the recovery.
         "cancel_outcomes": OrgCancelOutcomes.rows(record),  # Issue #3246: the three lists of each cancel.
+        **OrgPhaseView.build(record),  # Issue #3245: the four phases, the watch line, and the poll rule.
     }
 
 
@@ -1431,7 +1509,7 @@ def _status_context() -> tuple[str, Any] | tuple[Response, int]:
 def _refresh_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) -> None:
     """Refresh one aggregate operation and preserve its durable fallback."""
     logger.info("Refresh aggregate upgrade %s", operation.get("operation_id", ""))  # Log before child reads.
-    try:
+    try:  # A failed status read must not hide the last durable state.
         aggregate_service().status(cloud_session, operation, upgrade_routes.run_store())  # Persist each child.
     except Exception as error:  # Keep broad because the status page must show the last durable state.
         logger.exception(
@@ -1441,7 +1519,10 @@ def _refresh_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) 
         )  # Record the unknown read outcome.
     _refresh_device_versions(cloud_session, operation)  # Issue #3249: read the versions that the table needs.
     release_operation_locks(operation)  # Free every site as soon as the operation settles.
-    logger.debug("The aggregate upgrade refresh finished with state %s", operation.get("state", "unknown"))
+    _start_phase_watch(cloud_session, operation)  # Issue #3245: start the watch again after a portal restart.
+    logger.debug(  # After the refresh.
+        "The aggregate upgrade refresh finished with state %s", operation.get("state", "unknown")
+    )
 
 
 def _refresh_device_versions(cloud_session: Any, operation: MutableMapping[str, Any]) -> None:

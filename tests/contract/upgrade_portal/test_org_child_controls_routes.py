@@ -29,6 +29,7 @@ from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.runtime import identity, lock
 from src.upgrade_portal.upgrade import options as option_rules
 from tests.support.lock_store_double import FakeLockStore
+from tests.support.org_cascade_seams import CascadeSeamStandIn
 
 OPERATOR_EMAIL = "org-controls.operator@juniper.net"  # A reachable address, because a firmware write needs one.
 CLOUD_ACCOUNT = "mist.account@juniper.net"  # The account label behind the signed cloud session.
@@ -199,6 +200,7 @@ def harness(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, fake_site_i
             "MIST_SELF_READER": lambda cloud_session: {"email": CLOUD_ACCOUNT},  # No self read.
         }
     )
+    CascadeSeamStandIn().install(portal_app.config)  # Issue #3245: no anchor read and no watch thread.
     owner = identity.build_owner(OPERATOR_EMAIL, identity.issue_browser_id())  # The signed operator.
     operator = identity.OperatorSession(  # The server-side record that the session guard reads.
         owner=owner,

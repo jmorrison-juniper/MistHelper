@@ -2980,6 +2980,51 @@
         return signature !== null && rendered !== null && signature !== rendered;  /* Both exist and differ. */
     }
 
+    /**
+     * Paints the cascade phase card of a multi-site operation (issue #3245).
+     *
+     * Why: The single-site page and this card hold the same phase cells, so
+     * `paintRunPhases` repaints both. The watch line, the failure reason, and
+     * the anchor note exist only on this card. A paragraph that carries the
+     * `data-hide-empty` attribute leaves the page when its text is empty.
+     *
+     * @param {Element} region The organization status region.
+     * @param {Object} status The status body.
+     * @returns {void}
+     */
+    function paintOrgPhaseWatch(region, status) {
+        region.setAttribute("data-phase-active", status.phase_active === true ? "true" : "false");  /* The poll rule. */
+        var card = document.querySelector("[data-org-phase-region]");  /* A record of an earlier release has no card. */
+        var watch = status.phase_watch;  /* Null when the record holds no phase watch. */
+        if (!card || !watch) {
+            return;  /* Nothing to paint. */
+        }
+        paintRunPhases(card, status);  /* The single-site paint of the four phase rows. */
+        ["label", "note", "reason", "anchor_note"].forEach(function (field) {
+            var cell = card.querySelector('[data-org-phase-watch="' + field + '"]');  /* The fixed cell of the field. */
+            var value = watch[field] ? String(watch[field]) : "";  /* A null field paints empty text. */
+            setText(cell, value);
+            if (cell && cell.hasAttribute("data-hide-empty")) {
+                cell.hidden = value === "";  /* An empty reason or note leaves the page. */
+            }
+        });
+    }
+
+    /**
+     * Returns true when the poll of a multi-site page may stop.
+     *
+     * Why: Issue #3245. The cloud can report a final child job state while the
+     * devices still reboot. The phase watch then still runs, so the poll stops
+     * only when the operation state is final and no phase watch is active.
+     *
+     * @param {string} state The operation state in lower case.
+     * @param {boolean} phaseActive True when the phase watch still runs.
+     * @returns {boolean} True when no later poll can change the page.
+     */
+    function orgUpgradePollDone(state, phaseActive) {
+        return ORG_UPGRADE_FINISHED_STATES.indexOf(state) !== -1 && !phaseActive;  /* Both ends are required. */
+    }
+
     function paintOrgUpgradeStatus(region, status) {
         if (!region || !status) {
             return;
@@ -2998,9 +3043,10 @@
         paintOrgUpgradeSites(status);
         paintOrgUpgradeDevices(status);  /* Issue #3249: one row for each device. */
         paintOrgUpgradeAudit(status);  /* Issue #3249: the age, the operator, and the account. */
+        paintOrgPhaseWatch(region, status);  /* Issue #3245: the four phases and the watch line. */
         var state = String(status.status || "unknown").toLowerCase();
         region.setAttribute("data-job-status", state);
-        if (ORG_UPGRADE_FINISHED_STATES.indexOf(state) !== -1) {
+        if (orgUpgradePollDone(state, status.phase_active === true)) {  /* Issue #3245: wait for the phase watch. */
             stopOrgUpgradePoll();
         }
     }
@@ -3129,7 +3175,8 @@
             });
         }
         var state = (region.getAttribute("data-job-status") || "").toLowerCase();
-        if (ORG_UPGRADE_FINISHED_STATES.indexOf(state) !== -1) {
+        var phaseActive = region.getAttribute("data-phase-active") === "true";  /* Issue #3245: the watch still runs. */
+        if (orgUpgradePollDone(state, phaseActive)) {
             return;
         }
         stopOrgUpgradePoll();
