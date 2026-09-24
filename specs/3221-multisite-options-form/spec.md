@@ -22,6 +22,10 @@ Given the reboot delay is empty, when the operator reads the field, then the pla
 
 Given the Review is refused, when the message appears, then focus moves to the message and the text names a page label.
 
+### Story 5: Each page keeps its own labels
+
+Given a label test reads one page, when the test compares the label table with that page, then each label in the table matches a label that the page paints.
+
 ## Functional Requirements
 
 - FR-001: The options view must return selected_types, reboot, junos_file_action, and force.
@@ -31,3 +35,7 @@ Given the Review is refused, when the message appears, then focus moves to the m
 - FR-005: The reboot delay placeholder must be guidance, not an example value.
 - FR-006: A request refusal must move focus to the flash message.
 - FR-007: Option refusal text must name a page label and must not name an internal field.
+- FR-008: The multi-site page must use a label table of its own. The single-site table must hold only the labels of the single-site page. Issue #3273 records the test failure that the shared table caused.
+- FR-009: A refused target version must name the version control of the device family that holds the refused model.
+- FR-010: If the route cannot read a canary phase, the failure percentage, or the start time, the refusal must name the multi-site control. The refusal must not repeat the typed value.
+- FR-011: If no selected device type holds a typed target version, the refusal must name the control "Device types to upgrade".

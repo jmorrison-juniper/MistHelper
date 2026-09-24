@@ -22,7 +22,7 @@ from src.firmware.upgrade_service import DeviceTarget, UpgradeOptions
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.app.routes.org_upgrade import status_summary
 from src.upgrade_portal.runtime import identity, lock
-from src.upgrade_portal.upgrade.options import BadOptionError
+from src.upgrade_portal.upgrade.options import BadOptionError, build_options
 from tests.support.lock_store_double import FakeLockStore
 
 ORG_OPTIONS_PAGE = "/upgrade/org/options"
@@ -517,6 +517,146 @@ def test_bad_option_message_names_the_page_label_and_model() -> None:
     assert "Target version" in message  # The operator sees this label on the options page.
     assert "EX4400" in message  # The operator needs the model that refused the version.
     assert "version_target" not in message  # An internal field name does not help the operator.
+
+
+# One access point and one switch at the stand-in site, in the shape of the options view. Issue #3273.
+FAMILY_VIEW_ROWS = [
+    {"mac": "001122334455", "name": "ap", "device_type": "ap", "model": "AP45"},
+    {"mac": "001122334466", "name": "switch", "device_type": "switch", "model": "EX4400"},
+]
+
+
+def refused_message(client: FlaskClient, body: dict[str, Any]) -> str:
+    """Post one multi-site option body, and return the refusal text that the flash message shows."""
+    answer = client.post(ORG_OPTIONS_API, json=body)  # Save the options through the JSON contract.
+    assert answer.status_code == 400  # The route must refuse the body before the confirmation step.
+    payload = answer.get_json()  # Read the structured refusal.
+    assert payload["error"]["code"] == "org_upgrade_options_invalid"  # Keep the existing route error code.
+    return str(payload["error"]["message"])  # Return the text that the operator reads.
+
+
+def family_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+    """Return the device rows of the stand-in site, in the shape of the options view."""
+    return {"targets": FAMILY_VIEW_ROWS}  # Each selected site answers with the same two devices.
+
+
+def test_a_refused_switch_version_names_the_switch_control(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #3273: a model refusal names the family control that the multi-site page paints."""
+    monkeypatch.setattr(org_upgrade, "build_options_view", family_view)  # Keep the inventory read offline.
+
+    def refused(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Refuse the switch version as the shared target validator does."""
+        raise BadOptionError("version_target", model="EX4400")
+
+    monkeypatch.setattr(org_upgrade, "build_options_record", refused)  # Keep the test offline.
+    message = refused_message(
+        org_upgrade_client,
+        {"selected_types": ["ap", "switch"], "version_ap": "0.15.1", "version_switch": "23.4R1.9"},
+    )
+    assert '"Switch target version"' in message  # The multi-site page paints this label.
+    assert "EX4400" in message  # The operator needs the model that refused the version.
+    assert '"Target version"' not in message  # The multi-site page paints no control with this label.
+    assert "version_target" not in message  # An internal field name does not help the operator.
+    assert "23.4R1.9" not in message  # No refusal repeats the typed value.
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "label"),
+    [
+        ("canary_phases", "1,10,fifty,100", "Canary phases"),
+        ("max_failure_percentage", "five", "Maximum failure percentage"),
+        ("start_time", "not-a-moment", "Start time (UTC)"),
+    ],
+)
+def test_an_unreadable_value_names_the_multisite_control(
+    org_upgrade_client: FlaskClient,
+    field: str,
+    value: str,
+    label: str,
+) -> None:
+    """Issue #3273: a value that the route cannot read names its control and never repeats the value."""
+    body = {  # Start from a valid canary body, then break one field.
+        "selected_types": ["switch"],
+        "version_switch": "23.4R1.9",
+        "strategy": "canary",
+        "canary_phases": "1,10,50,100",
+        "max_failure_percentage": "5",
+        field: value,
+    }
+    message = refused_message(org_upgrade_client, body)  # The route refuses before any inventory read.
+    assert f'"{label}"' in message  # The multi-site page paints this label.
+    assert value not in message  # No refusal repeats the typed value.
+    assert "invalid literal" not in message  # The parser text of Python never reaches the operator.
+    assert "isoformat" not in message  # The date parser text never reaches the operator.
+
+
+def test_a_past_start_time_names_the_multisite_control(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #3273: the shared guard refuses a past start, and the text names the multi-site control."""
+    monkeypatch.setattr(org_upgrade, "build_options_view", family_view)  # Keep the inventory read offline.
+
+    def guarded(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Run the shared option mapper, which refuses a start time in the past."""
+        build_options(body)  # The shared guard raises for the past moment.
+        raise AssertionError("The shared guard accepted a start time in the past.")
+
+    monkeypatch.setattr(org_upgrade, "build_options_record", guarded)  # Keep the inventory read offline.
+    message = refused_message(
+        org_upgrade_client,
+        {
+            "selected_types": ["switch"],
+            "version_switch": "23.4R1.9",
+            "strategy": "big_bang",
+            "start_time": "2020-01-01T00:00",
+        },
+    )
+    assert '"Start time (UTC)"' in message  # The multi-site page paints this label.
+    assert "Begin the firmware download" not in message  # The single-site label names no multi-site control.
+    assert "Write a number and a unit" not in message  # The multi-site control holds a date and a time.
+
+
+def test_a_shared_mapper_refusal_names_the_multisite_label(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #3273: a refusal from the shared mapper names the label of the multi-site page."""
+    monkeypatch.setattr(org_upgrade, "build_options_view", family_view)  # Keep the inventory read offline.
+
+    def refused(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Refuse the failure limit with the single-site label, as the shared mapper does."""
+        raise BadOptionError("max_failure_percentage")
+
+    monkeypatch.setattr(org_upgrade, "build_options_record", refused)  # Keep the test offline.
+    message = refused_message(
+        org_upgrade_client,
+        {"selected_types": ["switch"], "version_switch": "23.4R1.9", "strategy": "serial"},
+    )
+    assert '"Maximum failure percentage"' in message  # The multi-site page paints this label.
+    assert "Failures allowed across the whole run" not in message  # The single-site label is absent.
+
+
+def test_no_typed_target_names_a_multisite_control(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #3273: a request with no typed target names a control that the multi-site page paints."""
+    monkeypatch.setattr(org_upgrade, "build_options_view", family_view)  # Keep the inventory read offline.
+    monkeypatch.setattr(  # Each site answers with no target, as the shared mapper does for no choice.
+        org_upgrade,
+        "build_options_record",
+        lambda session, org_id, site_id, body: {"targets": [], "options": {"strategy": "big_bang"}},
+    )
+    message = refused_message(
+        org_upgrade_client,
+        {"selected_types": ["switch"], "version_switch": "", "strategy": "big_bang"},
+    )
+    assert '"Device types to upgrade"' in message  # The multi-site page paints this legend.
+    assert "Target version control" not in message  # The multi-site page paints no control with this label.
 
 
 def test_disabled_writes_call_no_service(
