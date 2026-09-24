@@ -9,6 +9,7 @@ through the ``MistHelper.SiteConfigExporter`` re-export alias.
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
 import logging  # WHY: structured trace for export lifecycle events.
+import os  # WHY: build the operator display path with the separator of the platform.
 from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for sites/orgs endpoints.
@@ -24,6 +25,8 @@ from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inlin
 from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
 logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
+_DATA_SUBDIR: str = "data"  # WHY: the output folder that the operator notice names.
 
 
 class SiteConfigExporter:
@@ -72,19 +75,21 @@ class SiteConfigExporter:
     def _persist_site_wlans_csv(rawdata: list[Any], filename: str, site_name: str) -> None:
         """Flatten + sort by SSID + write WLAN rows (or write empty CSV when none)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
+        display_path = os.path.join(_DATA_SUBDIR, filename)  # WHY: name the file with the platform separator.
         if not rawdata:  # No rows.
             logger.warning("No data provided for output to %s", filename)  # Warn none.
             mh.DataExporter.write_with_format_selection([], filename, api_function_name="listSiteWlans")  # Empty CSV.
-            # WHY: Preserve user-facing zero-record notice verbatim. INFO-level structured emit.
-            logger.info("! 0 records exported to data\\%s", filename)
+            logger.info("! 0 records exported to %s", display_path)  # WHY: operator notice for the empty file.
             return  # Done.
+        logger.info("Writing %s WLAN records for site %s", len(rawdata), site_name)  # WHY: log before the write.
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
         mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="listSiteWlans")  # Persist.
-        # WHY: Preserve user-facing record-count notice verbatim.
-        logger.info("! %s records exported to data\\%s", len(processed), filename)
-        logger.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
+        logger.info("! %s records exported to %s", len(processed), display_path)  # WHY: operator record-count notice.
+        logger.info(
+            "Exported %s WLAN records for site %s to %s", len(processed), site_name, filename
+        )  # WHY: audit line that names the site.
 
     @staticmethod
     def wlans(site_id: str | None = None) -> None:
