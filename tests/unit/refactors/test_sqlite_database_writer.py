@@ -14,6 +14,7 @@ from __future__ import annotations  # PEP 604 unions across Python 3.10-3.13 tes
 
 import sqlite3  # WHY: sqlite3.Error type used for raising into except-branch tests
 import sys  # WHY: inject a fake host module for the source dependency resolver.
+from contextlib import closing  # WHY: close each read-back connection so Windows releases the file.
 from pathlib import Path  # WHY: tmp_path fixture returns pathlib.Path objects
 from types import SimpleNamespace  # WHY: build stand-in namespace matching writer._deps shape
 from typing import Any, cast  # WHY: cast() lets tests pass wrong-type inputs without # type: ignore
@@ -21,6 +22,7 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch, caplog, tmp_path fixtures
 
+from src.db.database_schema_utils import DatabaseSchemaUtils  # WHY: the real DDL proves the ALTER names match CREATE.
 from src.refactors import sqlite_database_writer as swr_mod  # WHY: module handle for monkeypatching
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # WHY: SUT direct import
 
@@ -319,38 +321,52 @@ def test_prepare_safe_fields_appends_audit_columns(stub_deps: SimpleNamespace) -
 # ---------------------------------------------------------------------------
 
 
-def test_rollback_swallows_rollback_exception(stub_deps: SimpleNamespace) -> None:
+def test_rollback_swallows_rollback_exception(stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture) -> None:
     """Rollback failures must NOT propagate - they must be logged and swallowed."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     fake_conn = MagicMock(spec=sqlite3.Connection)  # Stand-in connection with rollback
     fake_conn.rollback.side_effect = RuntimeError("rollback-failed")  # Simulate rollback failure
     writer.connection = fake_conn  # Attach the failing connection
+    caplog.set_level("ERROR")  # WHY: the writer reports the swallowed error at the ERROR level.
     writer._rollback_transaction()  # Must NOT raise
-    fake_conn.rollback.assert_called_once()  # Rollback was attempted
+    fake_conn.rollback.assert_called_once_with()  # WHY: the writer tried the rollback one time, with no arguments.
+    assert "Failed to rollback transaction: rollback-failed" in caplog.text  # WHY: the log names the error.
 
 
-def test_rollback_no_op_when_no_connection(stub_deps: SimpleNamespace) -> None:
+def test_rollback_no_op_when_no_connection(stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture) -> None:
     """_rollback_transaction with connection=None must be a silent no-op."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     writer.connection = None  # No connection was ever opened
+    caplog.set_level("DEBUG")  # WHY: capture every level, so the test also sees the debug trace of a rollback.
+    caplog.clear()  # WHY: keep only the records of the call below.
     writer._rollback_transaction()  # Must return without raising
+    assert caplog.records == []  # WHY: a silent no-op writes no log line, not even the rollback trace.
 
 
-def test_close_connection_swallows_close_exception(stub_deps: SimpleNamespace) -> None:
+def test_close_connection_swallows_close_exception(
+    stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture
+) -> None:
     """Failures during close() must NOT propagate."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     fake_conn = MagicMock(spec=sqlite3.Connection)  # Stand-in connection
     fake_conn.close.side_effect = RuntimeError("close-failed")  # Simulate close failure
-    writer.connection = fake_conn
+    writer.connection = fake_conn  # Attach the failing connection
+    caplog.set_level("ERROR")  # WHY: the writer reports the swallowed error at the ERROR level.
     writer._close_connection()  # Must NOT raise
-    fake_conn.close.assert_called_once()  # Close was attempted
+    fake_conn.close.assert_called_once_with()  # WHY: the writer tried the close one time, with no arguments.
+    assert "Failed to close database connection: close-failed" in caplog.text  # WHY: the log names the error.
 
 
-def test_close_connection_no_op_when_no_connection(stub_deps: SimpleNamespace) -> None:
+def test_close_connection_no_op_when_no_connection(
+    stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture
+) -> None:
     """_close_connection with connection=None must be a silent no-op."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     writer.connection = None  # No connection was ever opened
+    caplog.set_level("DEBUG")  # WHY: capture every level, so the test also sees the debug trace of a close.
+    caplog.clear()  # WHY: keep only the records of the call below.
     writer._close_connection()  # Must return without raising
+    assert caplog.records == []  # WHY: a silent no-op writes no log line, not even the close trace.
 
 
 # ---------------------------------------------------------------------------
@@ -399,3 +415,155 @@ def test_log_row_failure_emits_error_with_index(
     combined = "\n".join(rec.getMessage() for rec in caplog.records)
     assert "Failed to insert row 7" in combined  # Row index and prefix present
     assert "bad-row" in combined  # Error message included in the log line
+
+
+# ---------------------------------------------------------------------------
+# Issue #3350: a new field on an existing table, and the batch result
+# ---------------------------------------------------------------------------
+
+
+def _use_real_natural_pk_ddl(stub_deps: SimpleNamespace) -> None:
+    """Use the real DDL builder with an `id` key, as the natural_pk export of menu 270 does."""
+    stub_deps.DatabaseSchemaUtils.get_endpoint_strategy.return_value = {  # The strategy shape of a keyed table.
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "description": "primary key on id column",
+    }
+    stub_deps.DatabaseSchemaUtils.build_create_table_sql.side_effect = (  # The production CREATE TABLE builder.
+        DatabaseSchemaUtils.build_create_table_sql
+    )
+
+
+def _use_auto_increment_strategy(stub_deps: SimpleNamespace) -> None:
+    """Switch the stub strategy to auto-increment, so the writer clears the table before the insert."""
+    stub_deps.DatabaseSchemaUtils.get_endpoint_strategy.return_value = {  # The DELETE plus INSERT mode.
+        "type": "auto_increment",
+        "description": "no natural key, using auto-increment id",
+    }
+
+
+def _read_rows(writer: SQLiteDatabaseWriter, table_name: str) -> list[sqlite3.Row]:
+    """Return every row of one table, with each column readable by name."""
+    with closing(sqlite3.connect(writer._database_path())) as conn:  # Close the file handle after the read.
+        conn.row_factory = sqlite3.Row  # Read each column by its name.
+        return conn.execute(f"SELECT * FROM {table_name}").fetchall()  # Read the whole test table.
+
+
+def _read_columns(writer: SQLiteDatabaseWriter, table_name: str) -> list[str]:
+    """Return the column names of one table in their declared order."""
+    with closing(sqlite3.connect(writer._database_path())) as conn:  # Close the file handle after the read.
+        return [row[1] for row in conn.execute(f"PRAGMA table_info({table_name})")]  # Column 1 holds the name.
+
+
+def _missing_table_insert_sql(self: SQLiteDatabaseWriter, mode: str, fields: list[str], count: int) -> str:
+    """Return an INSERT statement for a table that does not exist, so every row insert fails."""
+    return f"{mode} INTO no_such_table ({', '.join(fields)}) VALUES ({', '.join(['?'] * count)})"  # Real SQL error.
+
+
+def test_second_write_adds_the_new_column_and_updates_the_row(stub_deps: SimpleNamespace) -> None:
+    """A field that is new to an existing table must become a column, and the upsert must update the row."""
+    _use_real_natural_pk_ddl(stub_deps)  # Declare the key, so INSERT OR REPLACE replaces the row.
+    first = SQLiteDatabaseWriter([{"id": "act-1", "status": "open"}], "drift", "listDrift")  # The old row shape.
+    assert first.write() is True  # The first write builds the table without the new field.
+    second = SQLiteDatabaseWriter(  # The same row, with a new field and a new status.
+        [{"id": "act-1", "status": "validated", "alarm_id": "alarm-1"}], "drift", "listDrift"
+    )
+    assert second.write() is True  # The write must add the column, then update the row.
+    rows = _read_rows(second, "drift")  # Read the table back.
+    assert len(rows) == 1  # The upsert replaced the row. It did not add a second row.
+    assert rows[0]["status"] == "validated"  # The new status reached the table.
+    assert rows[0]["alarm_id"] == "alarm-1"  # The new column holds the new value.
+
+
+def test_new_column_name_matches_the_insert_column_name(stub_deps: SimpleNamespace) -> None:
+    """A new field name with an unsafe character must become the sanitized name that the INSERT uses."""
+    _use_real_natural_pk_ddl(stub_deps)  # The real CREATE statement sanitizes each column name.
+    assert SQLiteDatabaseWriter([{"id": "act-1"}], "drift2", "listDrift").write() is True  # One-field table.
+    writer = SQLiteDatabaseWriter([{"id": "act-2", "alarm.type": "ap_offline"}], "drift2", "listDrift")  # Dot name.
+    assert writer.write() is True  # The write must add the sanitized column.
+    assert "alarm_type" in _read_columns(writer, "drift2")  # The dot became an underscore, as in the INSERT.
+    rows = {row["id"]: row for row in _read_rows(writer, "drift2")}  # Index the rows by their id value.
+    assert rows["act-2"]["alarm_type"] == "ap_offline"  # The value reached the new column.
+
+
+def test_new_indexed_field_gets_its_column_before_the_index(stub_deps: SimpleNamespace) -> None:
+    """An index on a new field must find the column, so the index statement does not fail the write."""
+    assert SQLiteDatabaseWriter([{"id": "row-1"}], "indexed", "listIndexed").write() is True  # Old table shape.
+    stub_deps.DatabaseSchemaUtils.build_indexes_sql.side_effect = lambda tbl, fields, strat: [  # Index a new field.
+        f"CREATE INDEX IF NOT EXISTS idx_{tbl}_site_id ON {tbl}(site_id)"
+    ]
+    writer = SQLiteDatabaseWriter([{"id": "row-2", "site_id": "site-1"}], "indexed", "listIndexed")  # New field.
+    assert writer.write() is True  # The column must exist before the writer creates the index.
+    with closing(sqlite3.connect(writer._database_path())) as conn:  # Read the index list back.
+        names = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")]  # All names.
+    assert "idx_indexed_site_id" in names  # The index on the new column exists.
+
+
+def test_field_that_differs_only_in_case_adds_no_column(stub_deps: SimpleNamespace) -> None:
+    """SQLite treats Status and status as one column, so the writer must not add a duplicate column."""
+    assert SQLiteDatabaseWriter([{"id": "row-1", "Status": "open"}], "casefold", "listCase").write() is True
+    writer = SQLiteDatabaseWriter([{"id": "row-2", "status": "validated"}], "casefold", "listCase")  # Lower case.
+    assert writer.write() is True  # An ALTER for "status" would fail with a duplicate column name.
+    assert _read_columns(writer, "casefold").count("Status") == 1  # The table still holds one status column.
+
+
+def test_write_with_known_fields_adds_no_column(
+    stub_deps: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A new table and a write with known fields must not send an ALTER TABLE statement."""
+    added: list[str] = []  # Record each column that the writer tries to add.
+    monkeypatch.setattr(  # Replace the ALTER step with a recorder.
+        SQLiteDatabaseWriter, "_add_column", lambda self, cursor, table, column: added.append(column)
+    )
+    assert SQLiteDatabaseWriter([{"id": "row-1"}], "same", "listSame").write() is True  # CREATE makes each column.
+    assert SQLiteDatabaseWriter([{"id": "row-2"}], "same", "listSame").write() is True  # No field is new.
+    assert added == []  # Neither write needed an ALTER TABLE statement.
+
+
+def test_write_returns_false_when_no_row_inserts(
+    stub_deps: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A batch where every row insert fails must return False, so the caller can report the failure."""
+    monkeypatch.setattr(SQLiteDatabaseWriter, "_build_insert_sql", _missing_table_insert_sql)  # Every insert fails.
+    writer = SQLiteDatabaseWriter([{"id": "row-1"}, {"id": "row-2"}], "allfail", "listAllFail")  # Two rows.
+    with caplog.at_level("ERROR"):  # Capture the error lines of the writer.
+        assert writer.write() is False  # No row reached the table, so the write failed.
+    assert "The writer inserted 0 of 2 rows into table allfail" in caplog.text  # One summary line names the table.
+
+
+def test_failed_auto_increment_batch_keeps_the_old_rows(
+    stub_deps: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If every insert fails, the rollback must undo the auto-increment clear, so the old rows stay."""
+    _use_auto_increment_strategy(stub_deps)  # The writer clears the table before each insert batch.
+    first = SQLiteDatabaseWriter([{"a": 1}, {"a": 2}], "keep", "listKeep")  # Two old rows.
+    assert first.write() is True  # The old rows reach the table.
+    monkeypatch.setattr(SQLiteDatabaseWriter, "_build_insert_sql", _missing_table_insert_sql)  # Every insert fails.
+    assert SQLiteDatabaseWriter([{"a": 3}], "keep", "listKeep").write() is False  # The new batch fails.
+    assert len(_read_rows(first, "keep")) == 2  # The rollback kept the two old rows.
+
+
+def test_partial_failure_logs_one_summary_line_and_returns_true(
+    stub_deps: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """If some rows fail, the writer must keep the good rows, return True, and log one summary line."""
+    original = SQLiteDatabaseWriter._prepare_row_values  # Keep the real value builder for the good row.
+
+    def fail_bad_row(self: SQLiteDatabaseWriter, row: dict[str, Any], current_time: str) -> list[str]:
+        """Raise for the row named "bad", and build the values for every other row."""
+        if row.get("id") == "bad":  # Only the bad row fails.
+            raise ValueError("simulated bad row")  # The per-row handler catches this error.
+        return original(self, row, current_time)  # Build the real values for the good row.
+
+    monkeypatch.setattr(SQLiteDatabaseWriter, "_prepare_row_values", fail_bad_row)  # Fail one row of two.
+    writer = SQLiteDatabaseWriter([{"id": "good"}, {"id": "bad"}], "partial", "listPartial")  # Two rows.
+    with caplog.at_level("ERROR"):  # Capture the error lines of the writer.
+        assert writer.write() is True  # One row reached the table.
+    assert "The writer did not insert 1 of 2 rows into table partial" in caplog.text  # The summary counts the failure.
+    assert len(_read_rows(writer, "partial")) == 1  # The good row reached the table.

@@ -92,6 +92,7 @@ def test_wan2_fast_mode_requires_connection_pool() -> None:
     [
         ("_create_table_and_indexes", ()),
         ("_create_schema_table", ()),
+        ("_add_missing_columns", ()),
         ("_create_schema_indexes", ()),
         ("_determine_insert_mode", ()),
         ("_insert_single_row", (0, {"id": "row-1"}, "INSERT", ["id"], "now")),
