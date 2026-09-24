@@ -41,10 +41,25 @@ python MistHelper.py --menu 270 --output-format sqlite
 
 The run writes the table `OrgMarvisActions` in `data/mist_data.db`, and it writes
 no CSV file. The table keeps the rows of earlier runs, so filter it on `is_open`.
+The table stores `is_open` as the text `True` or `False`. Compare it with a quoted
+text value, because the number `0` matches no row.
 
 ```sql
-SELECT status_name, COUNT(*) FROM OrgMarvisActions WHERE is_open = 0 GROUP BY status_name;
+SELECT status_name, COUNT(*) FROM OrgMarvisActions WHERE is_open = 'False' GROUP BY status_name;
 ```
+
+### Read the report in ArangoDB
+
+A portal run also writes the collection `listOrgMarvisActions`. The collection
+stores `is_open` as a boolean value.
+
+```aql
+FOR d IN listOrgMarvisActions FILTER d.is_open == false COLLECT status_name = d.status_name WITH COUNT INTO total RETURN {status_name, total}
+```
+
+Caution: an SSH session writes only the CSV file, so the ArangoDB collection can
+keep the rows of an earlier run. Issue #3313 records this defect. Run the export
+from the portal to update the collection.
 
 ## Operations portal
 
