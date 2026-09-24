@@ -70,6 +70,7 @@ FAVICON_CACHE_SECONDS = 86400  # Cache the small icon for one day.
 # Comparison route module added for T-014 delta analysis and approval workflow.
 # Keep the route order aligned with the operator journey. Issue #3247 adds the
 # recovery controls of a multi-site operation after the multi-site routes.
+# Issue #3243 adds the pre-check capture of each site of a multi-site operation.
 BLUEPRINT_NAMES = (
     "auth",
     "select",
@@ -77,6 +78,7 @@ BLUEPRINT_NAMES = (
     "upgrade",
     "org_upgrade",
     "org_controls",
+    "org_precheck",
     "review",
     "comparison",
     "run_controls",

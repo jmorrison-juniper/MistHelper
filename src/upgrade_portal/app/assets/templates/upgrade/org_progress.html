@@ -86,6 +86,33 @@
 </div>
 
 {#
+  Issue #3243. The single-site run page links its pre-check capture. This
+  card shows the pre-check capture of each site that the start stored in the
+  operation record. The comparison after the upgrade reads the same list. An
+  operation from an earlier release holds no list, so the card says so.
+#}
+{% if status.prechecks is defined %}
+  <section class="portal-card" data-testid="org-upgrade-precheck-list">
+    <h2 class="portal-card-title">Pre-check captures</h2>
+    {% if status.prechecks %}
+      <ul class="list-unstyled mb-0">
+        {% for row in status.prechecks %}
+          <li data-testid="org-upgrade-precheck-entry-{{ row.site_id }}">
+            {{ row.site_name }}:
+            <a class="cell-mono"
+               href="/captures/{{ row.capture_id }}"
+               data-testid="org-upgrade-precheck-link-{{ row.site_id }}">{{ row.capture_id }}</a>
+            (tier {{ row.tier }})
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="portal-card-note" data-testid="org-upgrade-precheck-empty">The portal stored no pre-check capture for this operation.</p>
+    {% endif %}
+  </section>
+{% endif %}
+
+{#
   Issue #3245. The cascade phase card of the single-site page, for a
   multi-site operation. The partial explains its inputs, and it renders
   nothing for a record that holds no phase watch.

@@ -40,6 +40,7 @@ from src.upgrade_portal.upgrade.org_cascade.record import (
 )
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
+from tests.support.org_precheck_seams import PrecheckAdopterStandIn
 
 OPERATOR_EMAIL = "org-phase.operator@juniper.net"  # A reachable address, because a firmware write needs one.
 CLOUD_ACCOUNT = "mist.account@juniper.net"  # The account label behind the signed cloud session.
@@ -256,6 +257,7 @@ def harness(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, fake_site_i
         portal_app.config
     )  # The seam supplies anchors.
     portal_app.config[org_upgrade.CASCADE_STARTER_CONFIG_KEY] = starter  # Record each watch start.
+    PrecheckAdopterStandIn((fake_site_id, SITE_TWO)).install(portal_app.config)  # Issue #3243: each pre-check.
     with signed_client(portal_app, fake_org_id, fake_site_id) as client:  # The signed multi-site operator.
         yield WatchHarness(client, portal_app, store, service, seams, starter)  # The test receives every stand-in.
 

@@ -123,6 +123,10 @@
     var UPGRADE_STATE_TESTID = "upgrade-state";
     var UPGRADE_REFRESH_TESTID = "upgrade-refresh-button";
     var ORG_UPGRADE_REFRESH_TESTID = "org-upgrade-refresh";
+    var ORG_PRECHECK_TIER_TESTID = "org-upgrade-precheck-tier";  /* Issue #3243: the tier of each pre-check. */
+    var ORG_PRECHECK_ERROR_TESTID = "org-upgrade-precheck-error";  /* Issue #3243: the refusal beside the buttons. */
+    var ORG_PRECHECK_STATE_PREFIX = "org-upgrade-precheck-state-";  /* Issue #3243: one state cell for each site. */
+    var ORG_PRECHECK_PATH = "/api/org-upgrades/prechecks/";  /* Issue #3243: the start path of one pre-check. */
     var SIGNIN_EMAIL_TESTID = "signin-email";  /* The browser-token mode must relax this provider field. */
     var SIGNIN_PASSWORD_TESTID = "signin-password";  /* The browser-token mode must relax this provider field. */
     var SIGNIN_ERROR_TESTID = "signin-error";  /* The sign-in page already owns a dedicated error region. */
@@ -3163,6 +3167,197 @@
         });
     }
 
+    /**
+     * Reads the sites that one press of a pre-check button must capture.
+     *
+     * Why: Issue #3243. The missing button captures only the sites that hold
+     * no verified pre-check. The all button captures every selected site again.
+     * Each row carries its site and its state, so the script holds no site list
+     * of its own.
+     *
+     * @param {Element} card The pre-check card.
+     * @param {string} scope Either `missing` or `all`.
+     * @returns {Array<string>} The site identifiers in the page order.
+     */
+    function orgPrecheckSites(card, scope) {
+        var rows = card.querySelectorAll("tr[data-site-id]");  /* One row for each selected site. */
+        var sites = [];  /* The sites to capture, in the page order. */
+        Array.prototype.forEach.call(rows, function (row) {
+            var ready = row.getAttribute("data-ready") === "true";  /* The row holds a verified capture. */
+            if (scope === "all" || !ready) {  /* The all scope takes each site again. */
+                sites.push(row.getAttribute("data-site-id"));  /* Keep the page order for the operator. */
+            }
+        });
+        return sites;  /* The caller captures these sites one at a time. */
+    }
+
+    /**
+     * Locks or unlocks the two pre-check buttons.
+     *
+     * Why: One capture at a time keeps the cloud read load low. A second press
+     * while a sequence runs would start a second sequence for the same sites.
+     * The missing button stays locked when no row misses a capture.
+     *
+     * @param {Element} card The pre-check card.
+     * @param {boolean} busy True while a sequence runs.
+     * @returns {void}
+     */
+    function setOrgPrecheckBusy(card, busy) {
+        var missing = orgPrecheckSites(card, "missing").length;  /* The count of rows with no verified capture. */
+        card.querySelectorAll("[data-precheck-scope]").forEach(function (button) {
+            var idle = button.getAttribute("data-precheck-scope") === "all" || missing > 0;  /* Unlock rule. */
+            button.disabled = busy || !idle;  /* A running sequence locks both buttons. */
+        });
+    }
+
+    /**
+     * Shows or clears the pre-check refusal beside the buttons.
+     *
+     * Why: The operator reads the cause next to the control that caused it.
+     * The region is hidden until a refusal exists, so an empty region takes no
+     * space on the page.
+     *
+     * @param {Element} card The pre-check card.
+     * @param {string} message The sentence for the operator. Empty clears it.
+     * @returns {void}
+     */
+    function paintOrgPrecheckError(card, message) {
+        var region = byTestId(ORG_PRECHECK_ERROR_TESTID, card);  /* The refusal region of the card. */
+        if (!region) {  /* A page without the region shows the refusal in the flash region only. */
+            return;
+        }
+        setText(region, message || "");  /* The text goes in as text, never as markup. */
+        region.hidden = !message;  /* An empty message hides the region again. */
+    }
+
+    /**
+     * Reads the state of one pre-check capture until it ends.
+     *
+     * Why: The start answers 202 before the capture reads the cloud. The card
+     * must wait for the end state before it starts the next site, so two
+     * captures never read the cloud at the same time.
+     *
+     * @param {Element} card The pre-check card. It names the poll interval.
+     * @param {string} siteId The site of the capture.
+     * @param {string} statusUrl The status path from the 202 answer.
+     * @returns {Promise<Object>} The last status body of the capture.
+     */
+    function waitForOrgPrecheck(card, siteId, statusUrl) {
+        var cell = byTestId(ORG_PRECHECK_STATE_PREFIX + siteId, card);  /* The state cell of this site. */
+        return new Promise(function (resolve, reject) {
+            function readOnce() {
+                fetchJson(statusUrl).then(function (status) {
+                    var state = String((status && status.state) || "pending");  /* The server state name. */
+                    var percent = status && typeof status.percent === "number" ? " " + status.percent + "%" : "";  /* Progress. */
+                    setText(cell, state + (FINISHED_STATES.indexOf(state) === -1 ? percent : ""));  /* Paint it. */
+                    if (FINISHED_STATES.indexOf(state) !== -1) {  /* The capture ended, so stop the reads. */
+                        resolve(status);  /* The caller checks the end state. */
+                        return;
+                    }
+                    window.setTimeout(readOnce, readPollMilliseconds(card));  /* Read again after the interval. */
+                }).catch(reject);  /* A failed read stops the sequence with its message. */
+            }
+            readOnce();  /* The first read runs at once, because a short capture can end before the interval. */
+        });
+    }
+
+    /**
+     * Starts one pre-check capture and waits for its end state.
+     *
+     * Why: The route takes the site lock and the tier, then starts the same
+     * capture job as the single-site capture page. A capture that does not
+     * verify stops the sequence, because the gate needs a verified capture.
+     *
+     * @param {Element} card The pre-check card.
+     * @param {string} siteId The site to capture.
+     * @param {number} tier The data tier that the operator chose.
+     * @returns {Promise<string>} The site identifier after the capture verifies.
+     */
+    function takeOrgPrecheck(card, siteId, tier) {
+        var cell = byTestId(ORG_PRECHECK_STATE_PREFIX + siteId, card);  /* The state cell of this site. */
+        setText(cell, "starting");  /* Show at once that the press reached this site. */
+        console.info("The pre-check capture starts.", siteId, tier);  /* Log before the start request. */
+        var path = ORG_PRECHECK_PATH + encodeURIComponent(siteId);  /* The start path of this site. */
+        return fetchJson(path, { method: "POST", body: { tier: tier } })
+            .then(function (created) {
+                console.debug("The pre-check capture started.", created && created.capture_id);  /* Log after it. */
+                return waitForOrgPrecheck(card, siteId, String((created && created.status_url) || ""));
+            })
+            .then(function (status) {
+                if (!status || status.state !== "verified") {  /* The gate accepts a verified capture only. */
+                    var failed = new Error((status && status.message) || "The pre-check capture did not verify.");
+                    failed.code = "precheck_failed";  /* A stable code for the log line of the caller. */
+                    throw failed;  /* Stop the sequence at this site. */
+                }
+                var row = card.querySelector('tr[data-site-id="' + siteId + '"]');  /* The row of this site. */
+                if (row) {
+                    row.setAttribute("data-ready", "true");  /* A later missing press skips this site. */
+                }
+                return siteId;  /* The caller moves to the next site. */
+            });
+    }
+
+    /**
+     * Takes the pre-check captures of one scope, one site at a time.
+     *
+     * Why: Issue #3243 asks for the same pre-check rule in both modes. The
+     * operator presses one button, and the card captures each site in turn.
+     * When every capture verifies, the page loads again, so the server paints
+     * the stored captures and unlocks the confirmation field.
+     *
+     * @param {Element} card The pre-check card.
+     * @param {string} scope Either `missing` or `all`.
+     * @returns {Promise<boolean>} True when every capture verified.
+     */
+    function runOrgPrechecks(card, scope) {
+        var sites = orgPrecheckSites(card, scope);  /* The sites of this press. */
+        if (!sites.length) {  /* Nothing to capture, so nothing to do. */
+            return Promise.resolve(false);
+        }
+        var tierSelect = byTestId(ORG_PRECHECK_TIER_TESTID, card);  /* The tier control of the card. */
+        var tier = tierSelect ? Number(tierSelect.value) : 2;  /* Tier 2 matches the single-site default. */
+        paintOrgPrecheckError(card, "");  /* Clear an old refusal before a new sequence. */
+        setOrgPrecheckBusy(card, true);  /* Lock both buttons while the sequence runs. */
+        sites.forEach(function (siteId) {
+            setText(byTestId(ORG_PRECHECK_STATE_PREFIX + siteId, card), "queued");  /* Show the waiting sites. */
+        });
+        var chain = sites.reduce(function (previous, siteId) {
+            return previous.then(function () {
+                return takeOrgPrecheck(card, siteId, tier);  /* Start the next site after the last one ends. */
+            });
+        }, Promise.resolve());
+        return chain.then(function () {
+            showFlash("Each pre-check capture verified. The page loads again.", "success");  /* Tell the operator. */
+            window.location.reload();  /* The server paints the stored captures and the unlocked field. */
+            return true;
+        }).catch(function (error) {
+            console.error("The pre-check sequence stopped.", error && error.code, error && error.status);
+            paintOrgPrecheckError(card, (error && error.message) || "The pre-check capture did not start.");
+            setOrgPrecheckBusy(card, false);  /* Let the operator try again. */
+            return false;
+        });
+    }
+
+    /**
+     * Arms the pre-check buttons of the multi-site confirmation page.
+     *
+     * Why: Issue #3243. The page holds the card only in the multi-site mode, so
+     * every other page returns at once.
+     *
+     * @returns {void}
+     */
+    function initOrgPrecheckCard() {
+        var card = document.querySelector("[data-org-precheck-card]");  /* The card of the confirmation page. */
+        if (!card) {  /* Only the multi-site confirmation page holds the card. */
+            return;
+        }
+        card.querySelectorAll("[data-precheck-scope]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                runOrgPrechecks(card, button.getAttribute("data-precheck-scope") || "missing");  /* Run the scope. */
+            });
+        });
+    }
+
     function initOrgUpgradePage() {
         var region = document.querySelector("[data-org-upgrade-region]");
         if (!region) {
@@ -4283,6 +4478,7 @@
         initRunPage();  /* Add run polling and manual refresh only on the run page. */
         initRunAgeDisplay();  /* Update age text without changing the server stale decision. */
         initOrgUpgradeForms();  /* Issue #2523: send every organization form as JSON and show errors in the page. */
+        initOrgPrecheckCard();  /* Issue #3243: take each multi-site pre-check capture from the confirmation page. */
         initBulkRunPreview();  /* Replace browser selection with one authoritative server preview. */
         initRunReconciliation();  /* Reconcile one stale run from read-only evidence. */
         initOrgUpgradePage();

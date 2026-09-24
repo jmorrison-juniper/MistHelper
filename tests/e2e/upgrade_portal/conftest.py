@@ -1242,12 +1242,25 @@ def stand_in_capture_runner(job: dict[str, Any]) -> None:
         This seam reports through that same writer, so the run record gains its
         pre-check field by the shipped path and never by a test shortcut.
 
+        Issue #3243. The shipped collector also stores a capture that names no
+        run. The multi-site gate reads that stored capture, so this seam stores
+        one in the process-owned capture store before it reports the end state.
+
     Args:
-        job: The capture job. This seam reads the key and the tier alone.
+        job: The capture job. This seam reads the key, the tier, the run, the
+            role, and the site.
     """
     from src.upgrade_portal.app.routes import capture  # Late, so a plain collection never loads the portal.
 
-    opened = capture.section_map(int(job.get("tier", capture.TIER_STANDARD)))  # One state for each section name.
+    tier = int(job.get("tier", capture.TIER_STANDARD))  # The tier that the operator chose.
+    if not job.get("run_id") and job.get("role") == "pre":  # A standalone pre-check stores its own capture.
+        logger.info("The stand-in capture runner stores the standalone pre-check %s", job["capture_id"])
+        stored = stand_in_capture(  # The same shape as each seeded capture, for the named site.
+            str(job["capture_id"]), "pre", STAND_IN_VERSIONS[0], stand_in_stamp(), site_id=str(job["site_id"])
+        )
+        flask.current_app.config["CAPTURE_STORE"].write_capture({**stored, "run_id": "", "tier": tier})
+        logger.debug("The stand-in capture runner stored one standalone pre-check")  # Log after the write.
+    opened = capture.section_map(tier)  # One state for each section name.
     read = {name: capture.SECTION_DONE if state != capture.SECTION_SKIPPED else state for name, state in opened.items()}
     capture.record_status(
         str(job["capture_id"]),
@@ -1257,6 +1270,21 @@ def stand_in_capture_runner(job: dict[str, Any]) -> None:
         verified=True,
         message=STAND_IN_CAPTURE_MESSAGE,
     )
+
+
+def stand_in_stamp() -> str:
+    """Return the current moment in ISO 8601 with a UTC offset.
+
+    Why:
+        Issue #3243. A standalone pre-check that the browser starts must sort
+        after each seeded capture, so the gate reads the newest capture.
+
+    Returns:
+        The current moment, such as `2026-09-18T01:02:03+00:00`.
+    """
+    from datetime import UTC, datetime  # Late, so the import list of this module stays unchanged.
+
+    return datetime.now(UTC).isoformat(timespec="seconds")  # A whole second is enough for the order.
 
 
 def stand_in_run_launcher(record: dict[str, Any]) -> None:
@@ -1309,7 +1337,9 @@ def stand_in_client(index: int, device_mac: str) -> dict[str, Any]:
     return {"mac": f"aabbcc00000{index}", "hostname": f"e2e-client-{index}", "device_mac": device_mac}
 
 
-def stand_in_capture(capture_id: str, role: str, version: str, started_at: str) -> dict[str, Any]:
+def stand_in_capture(
+    capture_id: str, role: str, version: str, started_at: str, site_id: str = STAND_IN_SITE_ID
+) -> dict[str, Any]:
     """Build one stored capture of the stand-in site.
 
     Why:
@@ -1323,22 +1353,25 @@ def stand_in_capture(capture_id: str, role: str, version: str, started_at: str) 
         role: `pre` for the first capture. `post` for the second.
         version: The firmware version that every device reports.
         started_at: The start stamp, in ISO 8601 with a UTC offset.
+        site_id: The site that the capture reads. Issue #3243: a multi-site
+            pre-check names the second site too.
 
     Returns:
         One capture document, ready for the comparison and for the history.
     """
     from src.upgrade_portal.capture import devices  # Late, so a plain collection never loads the portal.
 
-    records = [{**device, "version": version} for device in stand_in_device_read()]
+    records = [{**device, "version": version} for device in stand_in_site_devices(site_id)]  # The site inventory.
     index = devices.build_device_index(records, [])
     clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]
+    site_name = SECOND_SITE_NAME if site_id == SECOND_SITE_ID else STAND_IN_SITE_NAME  # The name of the site row.
     return {
         "capture_id": capture_id,
         "run_id": STAND_IN_RUN_ID,
         "org_id": STAND_IN_ORG_ID,
         "org_name": STAND_IN_ORG_NAME,
-        "site_id": STAND_IN_SITE_ID,
-        "site_name": STAND_IN_SITE_NAME,
+        "site_id": site_id,
+        "site_name": site_name,
         "role": role,
         "ordinal": 1 if role == "pre" else 2,
         "capture_status": "verified",

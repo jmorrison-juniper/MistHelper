@@ -25,6 +25,7 @@ from src.upgrade_portal.runtime import identity, lock
 from src.upgrade_portal.upgrade.options import BadOptionError, build_options
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
+from tests.support.org_precheck_seams import PrecheckAdopterStandIn
 
 ORG_OPTIONS_PAGE = "/upgrade/org/options"
 ORG_OPTIONS_API = "/api/org-upgrades/options"
@@ -289,6 +290,7 @@ def org_upgrade_client(
     portal_app.config["ORG_UPGRADE_SERVICE"] = org_service
     portal_app.config[org_upgrade.DEVICE_VERSION_READER_CONFIG_KEY] = VersionReaderStandIn()  # No stats read.
     CascadeSeamStandIn().install(portal_app.config)  # Issue #3245: no anchor read and no watch thread.
+    PrecheckAdopterStandIn((fake_site_id, SECOND_SITE_ID)).install(portal_app.config)  # Issue #3243: each pre-check.
     portal_app.config["MIST_SELF_READER"] = lambda cloud_session: {"email": CLOUD_ACCOUNT}  # No self read.
     owner = identity.build_owner(PROBE_EMAIL, identity.issue_browser_id())
     operator_session = identity.OperatorSession(
