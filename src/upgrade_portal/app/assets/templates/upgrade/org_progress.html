@@ -10,6 +10,7 @@
      data-upgrade-id="{{ upgrade_id }}"
      data-job-status="{{ status.status | default('unknown', true) }}"
      {% if status.controls is defined %}data-org-controls="{{ status.controls.signature }}"{% endif %}
+     data-phase-active="{{ 'true' if (status.phase_active is defined and status.phase_active) else 'false' }}"
      data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}">
   <h2 class="portal-card-title">Multi-site upgrade operation</h2>
   <p><strong>Operation identifier:</strong> <span class="cell-mono">{{ upgrade_id }}</span></p>
@@ -83,6 +84,13 @@
     restore a device that already upgraded.
   </p>
 </div>
+
+{#
+  Issue #3245. The cascade phase card of the single-site page, for a
+  multi-site operation. The partial explains its inputs, and it renders
+  nothing for a record that holds no phase watch.
+#}
+{% include 'partials/org_phase_list.html' %}
 
 {#
   Issue #3246. The single-site stop page shows three device lists after a

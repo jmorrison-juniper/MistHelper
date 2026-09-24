@@ -29,6 +29,7 @@ from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.runtime import identity
 from src.upgrade_portal.upgrade.org_cancel_outcomes import NEVER_STARTED_NOTE, UNSORTED_NOTE, OrgCancelOutcomes
 from tests.support.lock_store_double import FakeLockStore
+from tests.support.org_cascade_seams import CascadeSeamStandIn
 
 OPERATOR_EMAIL = "org-cancel.operator@juniper.net"  # A reachable address, because a firmware write needs one.
 SITE_ONE = "00000000-0000-0000-0000-0000000000bb"  # The shared site fixture value, which is the first site.
@@ -191,6 +192,7 @@ def harness(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, fake_site_i
             "MIST_SELF_READER": lambda cloud_session: {"email": OPERATOR_EMAIL},  # No self read.
         }
     )
+    CascadeSeamStandIn().install(portal_app.config)  # Issue #3245: no anchor read and no watch thread.
     owner = identity.build_owner(OPERATOR_EMAIL, identity.issue_browser_id())  # The signed operator.
     operator = identity.OperatorSession(  # The server-side record that the session guard reads.
         owner=owner,

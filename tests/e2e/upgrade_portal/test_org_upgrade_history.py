@@ -20,6 +20,8 @@ from typing import Any
 
 import pytest
 
+from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
+
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
 MODE_PATH = "/select/mode"
@@ -29,7 +31,6 @@ SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"
 SITE_NAMES = "E2E Stand-In Site, E2E Second Stand-In Site"  # `conftest.py` fixes both names, in the site order.
 DEVICE_TYPES = "Access points, Switches, Gateways"  # The three families that the options page selects.
 FIRMWARE_EMAIL = "e2e.operator@juniper.net"  # The typed address of the firmware operator.
-JOB_PATH = re.compile(r".*/upgrade/org/jobs/(org-run-[0-9a-f]+)$")  # The progress page of one operation.
 
 
 def start_operation(page: Any) -> str:
@@ -65,23 +66,6 @@ def start_operation(page: Any) -> str:
     return match.group(1)
 
 
-def cancel_operation(page: Any) -> None:
-    """Cancel the operation on its progress page, and wait for the end state.
-
-    Why:
-        Issue #3220. The portal keeps the site locks of an operation until each
-        child ends. The cancel ends each stand-in child, so both sites go back.
-
-    Args:
-        page: The browser page on the progress page of the operation.
-    """
-    page.get_by_test_id("org-upgrade-cancel-confirmation").fill("CANCEL")
-    page.get_by_test_id("org-upgrade-cancel").click()
-    page.wait_for_url(JOB_PATH)
-    page.reload(wait_until="domcontentloaded")  # The server reads every child again.
-    sync_api.expect(page.locator("[data-org-upgrade-field='status']")).to_have_text("cancelled")
-
-
 class TestMultiSiteHistory:
     """Find a multi-site upgrade in the history and open it again."""
 
@@ -112,7 +96,7 @@ class TestMultiSiteHistory:
         page.wait_for_url(JOB_PATH)
         assert page.url.endswith(f"/upgrade/org/jobs/{operation_id}")
         sync_api.expect(page.get_by_test_id("org-upgrade-progress")).to_be_visible()
-        cancel_operation(page)
+        OrgCancelSteps.cancel(page)  # Issue #3245: wait for this cancel, because each job holds its own identifier.
 
         page.goto(HISTORY_PATH, wait_until="domcontentloaded")
         sync_api.expect(page.get_by_test_id(f"history-operation-state-{operation_id}")).to_have_text("cancelled")

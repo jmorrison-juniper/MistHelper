@@ -835,6 +835,7 @@ def read_fleet_statistics(
     org_id: str,
     site_id: str | None = None,
     page_limit: int | None = None,
+    device_type: str = STATISTICS_TYPE,
 ) -> FleetRead:
     """Read the statistics of the whole fleet with one call.
 
@@ -848,11 +849,16 @@ def read_fleet_statistics(
         The call always sends the type, because the cloud answers with
         access points only when the type is absent and reports no error.
 
+        Issue #3245. A multi-site phase can read the whole organization. The
+        caller then names one device family, so the answer holds the devices
+        of that phase only and needs fewer pages.
+
     Args:
         session: The cloud session.
         org_id: The organization that owns the devices.
         site_id: The site to read. None reads every site of the organization.
         page_limit: The page size. None reads the shared page size.
+        device_type: The device family to read. The default reads every family.
 
     Returns:
         The readings and the reasons of one poll.
@@ -862,7 +868,7 @@ def read_fleet_statistics(
         mistapi.api.v1.orgs.stats.listOrgDevicesStats,
         session,
         org_id,
-        type=STATISTICS_TYPE,
+        type=device_type,  # Issue #3245: one family for a read of the whole organization.
         site_id=site_id,
         fields=STATISTICS_FIELDS,
         limit=limit,

@@ -32,6 +32,7 @@ Why:
 from __future__ import annotations
 
 import importlib.util
+import itertools  # Issue each stand-in cloud job its own number.
 import json  # Write process-safe browser-token evidence without credential values.
 import logging
 import os
@@ -848,15 +849,10 @@ class E2EOrgUpgradeService:
 
     @staticmethod
     def submit(cloud_session: Any, org_id: str, body: dict[str, object]) -> OrgUpgradeResult:
-        """Return one accepted organization job."""
-        assert body["site_ids"] == [STAND_IN_SITE_ID, SECOND_SITE_ID]
-        return OrgUpgradeResult(
-            org_id,
-            "44444444-4444-4444-4444-444444444444",
-            200,
-            {"id": "44444444-4444-4444-4444-444444444444"},
-            None,
-        )
+        """Return one accepted organization job with a new identifier."""
+        assert body["site_ids"] == [STAND_IN_SITE_ID, SECOND_SITE_ID]  # Every organization journey picks both sites.
+        upgrade_id = StandInJobIds.org_job()  # A real cloud gives each job its own identifier.
+        return OrgUpgradeResult(org_id, upgrade_id, 200, {"id": upgrade_id}, None)  # A valid accepted answer.
 
     @staticmethod
     def status(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
@@ -926,6 +922,44 @@ class CancelledJobs:
             return str(upgrade_id) in cls._identifiers  # The job ended on a cancel.
 
 
+class StandInJobIds:
+    """Give each stand-in cloud job a new identifier, as a real cloud does.
+
+    Why:
+        `CancelledJobs` keys the end state by the job identifier. The stand-in
+        once gave every switch child job the identifier "switch-job". A cancel
+        in one browser test then ended the switch job of each later test, and
+        the later test read "cancelled" before it cancelled anything. The
+        journey of issue #3245 cancels two operations, so it showed the fault.
+    """
+
+    _numbers: ClassVar[itertools.count[int]] = itertools.count(1)  # The next free number of this server process.
+    _guard: ClassVar[threading.Lock] = threading.Lock()  # The server answers requests on several threads.
+
+    @classmethod
+    def _next(cls) -> int:
+        """Return the next free number of this server process."""
+        with cls._guard:  # One caller at a time keeps each number unique.
+            return next(cls._numbers)  # Each call takes a new number.
+
+    @classmethod
+    def org_job(cls) -> str:
+        """Return a new organization job identifier in the shape of a cloud answer."""
+        return f"44444444-4444-4444-4444-{cls._next():012d}"  # The five groups of a real identifier.
+
+    @classmethod
+    def child_job(cls, device_type: str) -> str:
+        """Return a new site child job identifier that names the device family.
+
+        Args:
+            device_type: The device family of the child job, such as "switch".
+
+        Returns:
+            The identifier, such as "switch-job-7".
+        """
+        return f"{device_type}-job-{cls._next()}"  # The family keeps the identifier clear in a screenshot.
+
+
 class E2EDeviceUpgradeService:
     """Return deterministic site child results without a Mist call."""
 
@@ -933,10 +967,10 @@ class E2EDeviceUpgradeService:
 
     @staticmethod
     def invoke_upgrade(cloud_session: Any, plan: Any) -> UpgradeSubmission:
-        """Accept one site child."""
+        """Accept one site child with a new job identifier."""
         del cloud_session  # The stand-in reads no credential.
         return UpgradeSubmission(
-            f"{plan.targets[0].device_type}-job",
+            StandInJobIds.child_job(plan.targets[0].device_type),  # A cancel of one job never ends a later job.
             plan.scope,
             tuple(target.mac for target in plan.targets),
             (),
@@ -1911,6 +1945,15 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     # device. This seam answers fixed versions, so the browser suite opens no
     # socket to the Mist cloud.
     built.config[org_upgrade.DEVICE_VERSION_READER_CONFIG_KEY] = stand_in_running_versions
+    # WHY: Issue #3245. The submission reads the uptime of each device before
+    # the first write, and each page read starts the phase watch. The default
+    # anchor read calls the Mist cloud, and the Mist trap counters would record
+    # that call. The scripted starter moves the watch one step for each page
+    # read, so a journey sees each phase end and starts no thread.
+    from tests.support.org_cascade_seams import CascadeSeamStandIn, ScriptedCascadeStarter
+
+    CascadeSeamStandIn().install(built.config)  # The anchor read reaches no cloud.
+    built.config[org_upgrade.CASCADE_STARTER_CONFIG_KEY] = ScriptedCascadeStarter()  # One step for each read.
     from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
 
     built.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = AggregateUpgradeService(

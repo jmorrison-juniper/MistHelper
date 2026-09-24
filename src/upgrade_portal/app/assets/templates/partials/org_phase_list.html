@@ -1,0 +1,112 @@
+{#
+  Issue #3245. The single-site page shows one row for each cascade phase in
+  upgrade/progress.html. This card shows the same rows for a multi-site
+  operation. The cells carry the same classes, the same count sentences, and
+  the same data attributes, so the `paintRunPhases` function of portal.js
+  repaints both pages. The contract test `test_org_phase_watch_contract.py`
+  compares the cell text of the two pages, so a change to one page without the
+  other fails the test.
+
+  The route adds `phases`, `phase_watch`, and `phase_active` to the status. A
+  record of an earlier release holds no watch, and an organization job of the
+  access point route holds none either. The card then does not render.
+
+  Inputs:
+    status.phases        - the four phase entries, in the single-site shape.
+    status.phase_watch   - the state, the label, the note, the failure reason,
+                           and the anchor note of the watch.
+#}
+{% set org_phase_watch = status.phase_watch | default(none, true) %}
+{% if org_phase_watch %}
+  {% set org_phase_map = {} %}
+  {% for entry in status.phases | default([], true) %}
+    {% if entry.name is defined and entry.name %}
+      {% set _ = org_phase_map.update({entry.name: entry}) %}
+    {% endif %}
+  {% endfor %}
+  {% set org_phase_labels = {
+    'gateways': 'Gateways',
+    'switches': 'Switches',
+    'aps': 'Access points',
+    'clients': 'Wireless clients'
+  } %}
+  {% set org_phase_reason = org_phase_watch.reason | default('', true) %}
+  {% set org_anchor_note = org_phase_watch.anchor_note | default('', true) %}
+  <section class="portal-card"
+           data-testid="org-upgrade-phases"
+           data-org-phase-region
+           aria-live="polite">
+    <h2 class="portal-card-title">Cascade phases</h2>
+
+    {#
+      The watch line names the state of the phase watch and one sentence about
+      it. The child job state above comes from the cloud, and it can read
+      "completed" while the devices still reboot. The watch line tells the
+      operator that the portal still follows the devices.
+    #}
+    <p class="portal-card-note">
+      <strong>Phase watch:</strong>
+      <span data-testid="org-upgrade-phase-watch-state"
+            data-org-phase-watch="label">{{ org_phase_watch.label | default('Not started', true) }}</span>.
+      <span data-testid="org-upgrade-phase-watch"
+            data-org-phase-watch="note">{{ org_phase_watch.note | default('', true) }}</span>
+    </p>
+
+    {#
+      The reason names the first phase that failed, with the sentence of the
+      single-site run. The anchor note names each device that gave no uptime
+      before the write. Each paragraph always exists, so the poll fills it, and
+      the `hidden` attribute removes an empty paragraph from the page.
+    #}
+    <p class="portal-card-note"
+       data-testid="org-upgrade-phase-reason"
+       data-org-phase-watch="reason"
+       data-hide-empty
+       {% if not org_phase_reason %}hidden{% endif %}>{{- org_phase_reason -}}</p>
+    <p class="portal-card-note"
+       data-testid="org-upgrade-phase-anchor-note"
+       data-org-phase-watch="anchor_note"
+       data-hide-empty
+       {% if not org_anchor_note %}hidden{% endif %}>{{- org_anchor_note -}}</p>
+
+    <p class="portal-card-note" data-testid="org-upgrade-phase-cadence">
+      Each phase count moves once, when that phase ends. A count that does not
+      change means the portal is still waiting for the devices of that phase.
+    </p>
+
+    <div class="status-phase-list">
+      {% for name in ['gateways', 'switches', 'aps', 'clients'] %}
+        {% set phase = org_phase_map.get(name, {}) %}
+        {% set phase_state = phase.state | default('waiting', true) %}
+        {% set settled_count = phase.settled | default(0, true) %}
+        {% set total_count = phase.total | default(0, true) %}
+        {% set phase_note = phase.note | default('', true) %}
+
+        <span class="status-phase-name">{{ org_phase_labels.get(name, name) }}</span>
+
+        <span class="status-phase-state"
+              data-testid="org-upgrade-phase-{{ name }}"
+              data-run-phase="{{ name }}"
+              data-run-field="state">{{ phase_state }}</span>
+
+        <span class="status-phase-count"
+              data-testid="org-upgrade-phase-progress-{{ name }}"
+              data-run-phase="{{ name }}"
+              data-run-field="progress">
+          {%- if total_count -%}
+            {{ settled_count }} of {{ total_count }} settled
+          {%- elif phase_state == 'settled' -%}
+            All settled
+          {%- else -%}
+            Not started
+          {%- endif -%}
+        </span>
+
+        <span class="status-phase-note"
+              data-testid="org-upgrade-phase-note-{{ name }}"
+              data-run-phase="{{ name }}"
+              data-run-field="note">{{- phase_note -}}</span>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
