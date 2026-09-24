@@ -404,10 +404,14 @@ device and stop client traffic. Do not call that endpoint from a script.
 
 ## Where MistHelper keeps the results
 
-| File | Database collection | Primary key | Content |
-| - | - | - | - |
-| `data/OrgMarvisActions.csv` | `listOrgMarvisActions` | `uuid` | One row for each action. Modes 1 and 2 write it. |
-| `data/OrgMarvisActionsResolveResults.csv` | `resolveOrgMarvisActions` | `result_id` | One row for each action that a mode 3 run touched. |
+| File | SQLite table | ArangoDB collection | Primary key | Content |
+| - | - | - | - | - |
+| `data/OrgMarvisActions.csv` | `OrgMarvisActions` | `listOrgMarvisActions` | `uuid` | One row for each action. Modes 1 and 2 write it. |
+| `data/OrgMarvisActionsResolveResults.csv` | `OrgMarvisActionsResolveResults` | `resolveOrgMarvisActions` | `result_id` | One row for each action that a mode 3 run touched. |
+
+The default format writes the CSV file. The `--output-format sqlite` flag writes
+the SQLite table in `data/mist_data.db` and writes no CSV file. When ArangoDB
+answers, each run also writes the ArangoDB collection.
 
 The `result_id` joins the action `uuid` and the `resolve_time` of the run, so each
 run adds new rows. The database document of an action holds the full raw row and

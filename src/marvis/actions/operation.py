@@ -11,6 +11,8 @@ Output:
     Modes 1 and 2 write ``OrgMarvisActions.csv`` under the data directory and
     write the same rows to the configured database backend. Mode 3 writes
     ``OrgMarvisActionsResolveResults.csv``, with one row for each request.
+    With ``--output-format sqlite``, each write goes to a SQLite table that has
+    the file name without ``.csv``, and the run writes no CSV file.
 
 Safety:
     Mode 3 changes Mist records. It sends nothing until the operator types
@@ -301,6 +303,36 @@ class MarvisLoadedActions:
     documents: dict[str, dict[str, Any]]  # WHY: the database document of each action.
 
 
+class MarvisOutputTarget:
+    """Name the place that receives the rows, for the active output format.
+
+    Why:
+        The CSV format writes a file under the data directory. The SQLite
+        format writes a table in the SQLite database and writes no CSV file.
+        A line that names the CSV file after a SQLite write sends the operator
+        to a file that the run did not write.
+    """
+
+    @staticmethod
+    def describe(filename: str) -> str:
+        """Return the text that names the output of one write.
+
+        Args:
+            filename: The CSV file name of the write, such as ``OrgMarvisActions.csv``.
+
+        Returns:
+            The file name for the CSV format. For the SQLite format, the table name and the database path.
+        """
+        output_format = SourceDependencyResolver.OUTPUT_FORMAT  # WHY: the format that the exporter selects.
+        if output_format != "sqlite":  # WHY: the CSV format keeps the file name that the web dashboard reads.
+            return filename  # WHY: the web dashboard finds the file through this exact name.
+        table = filename.removesuffix(".csv")  # WHY: the exporter names the table after the file, without .csv.
+        database_path = SourceDependencyResolver.DATABASE_PATH  # WHY: the SQLite file that holds the table.
+        target = f"the SQLite table {table} in {database_path}"  # WHY: the table and the file, in one phrase.
+        logger.debug("The output target of %s is %s", filename, target)  # WHY: result summary.
+        return target  # WHY: every export line and completion line uses this text.
+
+
 class MarvisResolveWorkflow:
     """Run mode 3: preview, confirm, resolve, verify, and write the results.
 
@@ -425,7 +457,8 @@ class MarvisResolveWorkflow:
     def _write_results(results: Sequence[MarvisResolveResult]) -> None:
         """Write the results file, then log the summary and the completion line."""
         rows = [result.as_row() for result in results]  # WHY: one CSV row for each target.
-        logger.info("Writing %d resolve result rows to %s", len(rows), RESULTS_FILENAME)  # WHY: action log.
+        target = MarvisOutputTarget.describe(RESULTS_FILENAME)  # WHY: the file or the table of the active format.
+        logger.info("Writing %d resolve result rows to %s", len(rows), target)  # WHY: action log.
         written = SourceDependencyResolver.DataExporter.write_with_format_selection(
             rows,
             RESULTS_FILENAME,
@@ -433,19 +466,24 @@ class MarvisResolveWorkflow:
             fieldnames=MarvisResolveResult.column_names(),  # WHY: a fixed column order.
         )
         logger.debug("The results export returned written=%s", written)  # WHY: result summary.
-        MarvisResolveWorkflow._log_summary(results)  # WHY: the counts come before the completion line.
+        MarvisResolveWorkflow._log_summary(results, target)  # WHY: the counts come before the completion line.
         if not written:  # WHY: never report success after a failed write.
             logger.error(  # WHY: the handled failure that the web dashboard reports as failed.
-                "MistHelper could not write %s. Read the export error above.", RESULTS_FILENAME
+                "MistHelper could not write %s. Read the export error above.", target
             )
             return  # WHY: the error is the last word of the run.
         logger.log(  # WHY: the completion line names the file that the web dashboard offers.
-            DISPLAY_LEVEL, "Completed the Marvis Actions resolve and wrote results to %s", RESULTS_FILENAME
+            DISPLAY_LEVEL, "Completed the Marvis Actions resolve and wrote results to %s", target
         )
 
     @staticmethod
-    def _log_summary(results: Sequence[MarvisResolveResult]) -> None:
-        """Log the outcome counts, and one line for each kind of problem."""
+    def _log_summary(results: Sequence[MarvisResolveResult], target: str) -> None:
+        """Log the outcome counts, and one line for each kind of problem.
+
+        Args:
+            results: One result for each action that the run touched.
+            target: The file or the SQLite table that holds the results.
+        """
         counts = Counter(result.outcome for result in results)  # WHY: one count for each outcome.
         summary = " ".join(f"{outcome}={counts[outcome]}" for outcome in OUTCOMES)  # WHY: one fixed order.
         logger.log(DISPLAY_LEVEL, "Marvis Actions resolve summary: %s", summary)  # WHY: the operator reads it here.
@@ -454,7 +492,7 @@ class MarvisResolveWorkflow:
                 "MistHelper could not resolve %d of %d Marvis Actions. Read %s for the HTTP status of each one.",
                 counts[OUTCOME_ERROR],
                 len(results),
-                RESULTS_FILENAME,
+                target,  # WHY: the operator reads the HTTP status in this file or table.
             )
         if counts[OUTCOME_UNVERIFIED]:  # WHY: an accepted request without a closed status needs a check.
             logger.warning(  # WHY: the operator must check these actions in the Mist portal.
@@ -587,7 +625,8 @@ class MarvisActionsOperation:
         logger.log(  # WHY: the status summary before the write.
             DISPLAY_LEVEL, "Selected Marvis Actions by status: %s", status_text
         )
-        logger.info("Writing %d Marvis Actions to %s", len(rows), EXPORT_FILENAME)  # WHY: action log.
+        target = MarvisOutputTarget.describe(EXPORT_FILENAME)  # WHY: the file or the table of the active format.
+        logger.info("Writing %d Marvis Actions to %s", len(rows), target)  # WHY: action log.
         written = SourceDependencyResolver.DataExporter.write_with_format_selection(
             rows,
             EXPORT_FILENAME,
@@ -598,9 +637,9 @@ class MarvisActionsOperation:
         logger.debug("The export returned written=%s", written)  # WHY: result summary.
         if not written:  # WHY: never report success after a failed write.
             logger.error(  # WHY: the handled failure that the web dashboard reports as failed.
-                "MistHelper could not write %s. Read the export error above.", EXPORT_FILENAME
+                "MistHelper could not write %s. Read the export error above.", target
             )
             return  # WHY: the error is the last word of the run.
         logger.log(  # WHY: the completion line names the file that the web dashboard offers.
-            DISPLAY_LEVEL, "Completed the Marvis Actions export and wrote results to %s", EXPORT_FILENAME
+            DISPLAY_LEVEL, "Completed the Marvis Actions export and wrote results to %s", target
         )

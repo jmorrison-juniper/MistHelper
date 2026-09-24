@@ -497,3 +497,57 @@ class TestCap:
         """No value means the documented default."""
         monkeypatch.delenv("MARVIS_RESOLVE_MAX_ACTIONS", raising=False)
         assert MarvisResolveWorkflow.max_actions() == DEFAULT_MAX_ACTIONS
+
+
+class TestOutputTarget:
+    """Each export line names the file or the SQLite table that the active format writes."""
+
+    SQLITE_EXPORT = "the SQLite table OrgMarvisActions in data/mist_data.db"
+    SQLITE_RESULTS = "the SQLite table OrgMarvisActionsResolveResults in data/mist_data.db"
+
+    @staticmethod
+    def use_sqlite(built: OperationHarness) -> None:
+        """Select the SQLite format, as the --output-format sqlite flag does."""
+        built.resolver.OUTPUT_FORMAT = "sqlite"
+        built.resolver.DATABASE_PATH = "data/mist_data.db"
+
+    def test_the_csv_format_names_the_file(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The web dashboard finds the CSV file through the exact file name in the completion line."""
+        built = harness([make_raw(1)], "", *DEFAULT_FILTERS)
+        built.resolver.OUTPUT_FORMAT = "csv"
+        text = run_menu(caplog)
+        assert "Writing 1 Marvis Actions to OrgMarvisActions.csv" in text
+        assert text.rstrip().endswith(EXPORT_DONE)
+
+    def test_the_sqlite_format_names_the_table_and_the_database(
+        self, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A SQLite run writes no CSV file, so no line may send the operator to one."""
+        built = harness([make_raw(1)], "", *DEFAULT_FILTERS)
+        self.use_sqlite(built)
+        text = run_menu(caplog)
+        assert f"Writing 1 Marvis Actions to {self.SQLITE_EXPORT}" in text
+        assert text.rstrip().endswith(f"Completed the Marvis Actions export and wrote results to {self.SQLITE_EXPORT}")
+        assert "OrgMarvisActions.csv" not in text
+        assert only_write(built)[1] == EXPORT_FILENAME
+
+    def test_a_failed_sqlite_write_names_the_table(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The failure line names the table that the run could not write."""
+        built = harness([make_raw(1)], "", *DEFAULT_FILTERS)
+        self.use_sqlite(built)
+        built.resolver.DataExporter.write_with_format_selection.return_value = False
+        text = run_menu(caplog)
+        assert f"MistHelper could not write {self.SQLITE_EXPORT}. Read the export error above." in text
+        assert "Completed the Marvis Actions export" not in text
+
+    def test_the_sqlite_resolve_names_the_results_table(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The error summary and the completion line both name the results table."""
+        built = harness(list(TestResolve.RAWS), "3", *DEFAULT_FILTERS, "", "", "RESOLVE 2")
+        self.use_sqlite(built)
+        built.session.put_statuses.extend([400, 200])
+        text = run_menu(caplog)
+        done = f"Completed the Marvis Actions resolve and wrote results to {self.SQLITE_RESULTS}"
+        assert f"Read {self.SQLITE_RESULTS} for the HTTP status of each one." in text
+        assert text.rstrip().endswith(done)
+        assert "OrgMarvisActionsResolveResults.csv" not in text
+        assert only_write(built)[1] == RESULTS_FILENAME

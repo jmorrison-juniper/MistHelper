@@ -3,10 +3,11 @@
 - **Added**: Menu 270 reads every Marvis Action of one organization, and a
   numbered table filters the actions by category and by subcategory. Mode 1
   exports every action, and mode 2 exports the open actions only. Each mode
-  writes `OrgMarvisActions.csv` through CSV, SQLite, or ArangoDB. The database
-  receives the full nested action. The CSV file holds a fixed set of columns
-  with readable names for the category, the subcategory, the status, the site,
-  and the device. Issue #3299.
+  writes `OrgMarvisActions.csv`. The `--output-format sqlite` flag writes the
+  SQLite table `OrgMarvisActions` instead. When ArangoDB answers, the run also
+  writes the collection `listOrgMarvisActions`, which receives the full nested
+  action. The CSV file holds a fixed set of columns with readable names for the
+  category, the subcategory, the status, the site, and the device. Issue #3299.
 
 - **Added**: Mode 3 marks the open actions of the selected topics as resolved.
   The operator chooses one of the four resolution codes of Mist and can add a

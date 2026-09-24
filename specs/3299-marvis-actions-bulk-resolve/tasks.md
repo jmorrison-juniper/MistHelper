@@ -113,33 +113,45 @@ in the same phase, because the two tasks touch no common file.
 
 ## Phase 7: Validation
 
-- [ ] **T019** Run `py_compile`, `ruff`, `black`, `mypy`, `pylint`, `bandit`,
+- [x] **T019** Run `py_compile`, `ruff`, `black`, `mypy`, `pylint`, `bandit`,
   `radon`, `vulture`, `pydocstyle`, `interrogate`, and `tools.symbol_diff` on the
   changed files. Run the new tests and the menu and portal guardrails.
 
-- [ ] **T020** Prove each new guard with a direct test of the guard decision: the
-  confirmation check, the comment check, the cap, and the page guard. Record the
-  count of checked cases in the pull request.
+- [x] **T020** Prove each new guard with a direct test of the guard decision. The
+  four guards are the confirmation check, the comment check, the cap, and the page
+  guard. Record the count of checked cases in the pull request.
 
-- [ ] **T021** Deploy the files into `misthelper-app` with a Class B deploy, and log
+- [x] **T021** Deploy the files into `misthelper-app` with a Class B deploy, and log
   the START line and the DONE line in the coordination log. Start no new container.
 
-- [ ] **T022** Run modes 1, 2, and 3 from the portal with Playwright. Confirm the
+- [x] **T022** Run modes 1, 2, and 3 from the portal with Playwright. Confirm the
   status, the log lines, and the Results panel.
 
-- [ ] **T023** Run modes 1 and 3 over SSH on port 2200. Confirm the tables and the
+- [x] **T023** Run modes 1 and 3 over SSH on port 2200. Confirm the tables and the
   messages.
 
-- [ ] **T024** Read `podman logs misthelper-app`, `data/script.log`, and the portal
+- [x] **T024** Read `podman logs misthelper-app`, `data/script.log`, and the portal
   error log. File or update an issue for each new problem.
 
-- [ ] **T025** Read `data/OrgMarvisActions.csv` and the ArangoDB collection
+- [x] **T025** Read `data/OrgMarvisActions.csv` and the ArangoDB collection
   `listOrgMarvisActions`. Compare the counts and three sample rows with the live
   list.
 
+- [x] **T029** Write `tests/e2e/test_marvis_actions_portal.py`. Prove in a real
+  browser that the page draws the six controls in prompt order. Prove that the page
+  selects the report mode first and sends the six answers in prompt order. Answer
+  the run request in the browser, so no operation starts. Satisfies FR-031 and
+  FR-032.
+
+- [x] **T030** Name the real output target. The `--output-format sqlite` run writes
+  no CSV file, so the log lines must name the SQLite table and the database path.
+  Add `MarvisOutputTarget` to `src/marvis/actions/operation.py` and four tests to
+  `tests/unit/marvis/actions/test_operation.py`. Keep the CSV text unchanged,
+  because the portal reads the file name from that line.
+
 ## Phase 8: Delivery
 
-- [ ] **T026** Commit, rebase on `origin/main`, and push. Open the pull request with
+- [x] **T026** Commit, rebase on `origin/main`, and push. Open the pull request with
   `Closes #3299`, the labels, and the checklist. Wait for every check, including
   CodeQL. Merge with a squash. Remove the worktree and post the DONE line.
 
@@ -150,4 +162,5 @@ in the same phase, because the two tasks touch no common file.
 - T005 and T007 come before T009.
 - T012 and T013 come before T015.
 - T019 comes before T021. T021 comes before T022 to T025.
+- T029 and T030 come before T026. The Phase 7 runs found the need for each one.
 - T026 comes last.
