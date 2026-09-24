@@ -1131,7 +1131,32 @@ def job_page(upgrade_id: str) -> str | tuple[Response, int]:
     if operation is not None:  # Aggregate paths keep the existing visible URL.
         _refresh_aggregate(cloud_session, operation)  # Read each child and preserve read failures.
         return _aggregate_job_page(upgrade_id, operation)  # Render all child results together.
+    refusal = _unowned_job_refusal(upgrade_id, org_id)  # Issue #3241: no page for a job of another browser.
+    if refusal is not None:  # This browser did not start the job.
+        return refusal  # Read no cloud job and render no control.
     return _org_job_page(cloud_session, org_id, upgrade_id)  # Keep the AP-only page behavior.
+
+
+def _unowned_job_refusal(upgrade_id: str, org_id: str) -> tuple[Response, int] | None:
+    """Refuse an AP-only job view that this browser session did not start.
+
+    Why:
+        Issue #3241. When no owned aggregate operation matched the identifier,
+        the page and the status poll read the cloud job of any identifier and
+        rendered it with an armed cancel form. The cancel route already refused
+        that job through `_owns_org_job`, so the view now follows the same rule.
+
+    Args:
+        upgrade_id: The job identifier of the address.
+        org_id: The selected organization.
+
+    Returns:
+        The refusal envelope, or None when this browser owns the job.
+    """
+    if _owns_org_job(upgrade_id, org_id):  # The signed marker names this job and this organization.
+        return None  # The caller reads and renders the job.
+    logger.warning("Refused an organization job view that this browser session did not start")  # No identifier.
+    return json_error(CONFLICT_STATUS, JOB_NOT_OWNED, "This browser session did not start that organization job.")
 
 
 def _status_context() -> tuple[str, Any] | tuple[Response, int]:
@@ -1217,6 +1242,9 @@ def upgrade_status(upgrade_id: str) -> tuple[Response, int]:
     if operation is not None:  # Return every aggregate child in one browser response.
         _refresh_aggregate(cloud_session, operation)  # Read and persist each child.
         return jsonify(aggregate_summary(operation)), OK_STATUS  # Preserve mixed results.
+    refusal = _unowned_job_refusal(upgrade_id, org_id)  # Issue #3241: no status for a job of another browser.
+    if refusal is not None:  # This browser did not start the job.
+        return refusal  # Read no cloud job.
     return _org_status_response(cloud_session, org_id, upgrade_id)  # Keep the AP-only response.
 
 
