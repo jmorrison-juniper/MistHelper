@@ -1851,7 +1851,11 @@ RUN_DEVICE_COUNT_FIELD: str = "device_count"
 # WHY: The sort follows `created_at`, because the run history index of
 # data-model.md line 396 is `site_id` and `created_at`. A sort on any other
 # field would read every run of the site and then sort it in memory.
-_RUN_LIST_HEAD = "FOR doc IN " + RUN_COLLECTION + "\n"
+# WHY: Issue #3248. The aggregate service writes each multi-site operation into
+# this collection too. Only an operation record holds `operation_id`, so the
+# filter keeps those records out of the single-site run history. The count
+# query and the page query share this head, so the total and the rows agree.
+_RUN_LIST_HEAD = "FOR doc IN " + RUN_COLLECTION + "\n  FILTER doc.operation_id == null\n"
 _RUN_LIST_TAIL = (
     "  SORT doc.created_at DESC\n"
     "  LIMIT @offset, @limit\n"
@@ -1860,6 +1864,47 @@ _RUN_LIST_TAIL = (
     + ","
     + RUN_DEVICE_COUNT_FIELD
     + ":LENGTH(doc.targets)"
+    + "}\n"
+)
+
+# WHY: Issue #3248. The fields of one multi-site operation row of the history
+# page. `owner` travels to the route for one ownership check only. The route
+# never gives the owner key to the template.
+OPERATION_LIST_FIELDS: tuple[str, ...] = (
+    "operation_id",
+    "org_id",
+    "site_ids",
+    "site_names",
+    "state",
+    "actor_email",
+    "cloud_account",
+    "created_at",
+    "updated_at",
+    "owner",
+)
+
+# WHY: Issue #3248. The device types of one operation live in its child jobs.
+# The query returns the unique family words instead of the children, because a
+# child holds one target record for each device.
+OPERATION_FAMILIES_FIELD: str = "families"
+
+# WHY: Issue #3248. The operation list reads the records that the run history
+# excludes. The organization filter matches the rule of the job page, which
+# shows an operation only inside its own organization.
+_OPERATION_LIST_HEAD = (
+    "FOR doc IN " + RUN_COLLECTION + "\n"  # The aggregate service writes each operation here.
+    "  FILTER doc.operation_id != null\n"  # Only an operation record holds this field.
+    "  FILTER doc.org_id == @org_id\n"  # The job page shows an operation only in its organization.
+)
+_OPERATION_SITE_CLAUSE = "  FILTER @site_id IN doc.site_ids\n"  # An operation holds a list of sites.
+_OPERATION_LIST_TAIL = (
+    "  SORT doc.created_at DESC, doc.updated_at DESC\n"  # A record of an older release holds no start time.
+    "  LIMIT @limit\n"  # The page size of the history page.
+    "  RETURN {"
+    + ",".join(name + ":doc." + name for name in OPERATION_LIST_FIELDS)  # The projected row fields.
+    + ","
+    + OPERATION_FAMILIES_FIELD
+    + ":UNIQUE(doc.children[*].device_family)"  # The family words, and never the child device lists.
     + "}\n"
 )
 
@@ -1959,6 +2004,46 @@ class RunListPage:
     total: int
     limit: int
     offset: int
+    database_available: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OperationQuery:
+    """The narrowing values and the page size of one operation list.
+
+    Why:
+        Issue #3248. The history page lists the multi-site operations of the
+        selected organization, and an optional site narrows the list. One record
+        keeps the store signature at two parameters, as ``RunQuery`` does.
+
+    Attributes:
+        org_id: The organization. An empty value reads nothing.
+        site_id: Keep only the operations that include this site.
+        limit: The largest number of rows in the list.
+    """
+
+    org_id: str
+    site_id: str = ""
+    limit: int = DEFAULT_LIST_LIMIT
+
+
+@dataclass(frozen=True, slots=True)
+class OperationListPage:
+    """One list of multi-site operation rows.
+
+    Why:
+        Issue #3248. The history page must tell a store outage apart from an
+        organization that holds no multi-site operation. The flag carries that
+        difference.
+
+    Attributes:
+        operations: The rows, newest first.
+        limit: The page size that produced these rows.
+        database_available: True when the database answered the query.
+    """
+
+    operations: tuple[dict[str, Any], ...]
+    limit: int
     database_available: bool
 
 
@@ -2151,6 +2236,62 @@ def list_runs(query: RunQuery, database: Any = None) -> RunListPage:
     return RunListPage(tuple(dict(row) for row in rows), total, query.limit, query.offset, True)
 
 
+def _operation_query(query: OperationQuery) -> tuple[str, dict[str, Any]]:
+    """Return the query text and the bind values of one operation list.
+
+    Why:
+        An unused bind parameter makes the server refuse the whole query. The
+        site bind therefore travels only with the site clause.
+
+    Args:
+        query: The list request.
+
+    Returns:
+        The query text and the bind values.
+    """
+    binds: dict[str, Any] = {"org_id": query.org_id, "limit": max(query.limit, 1)}  # A page holds one row at least.
+    if not query.site_id:  # The page names no site, so every operation of the organization matches.
+        return _OPERATION_LIST_HEAD + _OPERATION_LIST_TAIL, binds  # No site bind travels.
+    binds["site_id"] = query.site_id  # The site travels as a bind and never as query text.
+    return _OPERATION_LIST_HEAD + _OPERATION_SITE_CLAUSE + _OPERATION_LIST_TAIL, binds  # Narrow to the site.
+
+
+def list_operations(query: OperationQuery, database: Any = None) -> OperationListPage:
+    """Return the multi-site operation rows of one organization, newest first.
+
+    Why:
+        Issue #3248. A multi-site upgrade had no history entry, so an operator
+        who closed the progress page could not find the upgrade again. The query
+        reads the projected row and the unique device families. It never reads
+        the child jobs or their device lists.
+
+        A failed query reports the database as unavailable. The page then says
+        that it cannot read the list, and it does not show an empty list as a
+        fact.
+
+    Args:
+        query: The organization, the optional site, and the page size.
+        database: A database handle for a test.
+
+    Returns:
+        The page.
+    """
+    logger.info("Upgrade portal lists the multi-site operations of organization %s", query.org_id)  # Name the read.
+    if not query.org_id:  # An empty organization matches no record.
+        return OperationListPage((), query.limit, True)  # Read nothing, and report no outage.
+    handle = database if database is not None else connect_database()  # A test injects its own handle.
+    if handle is None:  # The store is out of reach.
+        return OperationListPage((), query.limit, False)  # The page states the outage.
+    text, binds = _operation_query(query)  # Only the filled narrowing values travel.
+    try:  # A failed read must not stop the history page.
+        rows = list(handle.aql.execute(text, bind_vars=binds))  # One query for the whole section.
+    except ArangoError as error:  # The database refused the query.
+        logger.warning("Upgrade portal could not list the multi-site operations: %s", type(error).__name__)
+        return OperationListPage((), query.limit, False)  # The page states that it cannot read the list.
+    logger.debug("Upgrade portal read %d multi-site operation rows", len(rows))  # Report a safe count.
+    return OperationListPage(tuple(dict(row) for row in rows), query.limit, True)  # Copies stop a caller edit.
+
+
 def load_capture(capture_id: str, database: Any = None) -> CaptureLoad:
     """Read one capture back and report whether it may join a comparison.
 
@@ -2223,6 +2364,8 @@ __all__ = [
     "EDGE_KEY_PREFIX",
     "INDEX_PLAN",
     "LIST_FIELDS",
+    "OPERATION_FAMILIES_FIELD",
+    "OPERATION_LIST_FIELDS",
     "REASON_ABSENT",
     "REASON_BAD_SCHEMA",
     "REASON_BAD_STATE",
@@ -2252,6 +2395,8 @@ __all__ = [
     "CaptureStateMachine",
     "CaptureTransitionError",
     "IndexPlan",
+    "OperationListPage",
+    "OperationQuery",
     "RunListPage",
     "RunQuery",
     "StoreResult",
@@ -2266,6 +2411,7 @@ __all__ = [
     "is_schema_version",
     "latest_standalone_precheck",
     "list_captures",
+    "list_operations",
     "list_runs",
     "load_capture",
     "load_capture_for_comparison",

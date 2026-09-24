@@ -115,6 +115,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         children: list[dict[str, Any]],
     ) -> dict[str, Any]:  # Return a JSON-safe parent record.
         """Create the durable parent record for confirmed children."""
+        moment = cls._now_text()  # Issue #3248: one clock read, so the first update equals the creation.
         return {  # Persist this whole record before the first destructive call.
             "_key": operation_id,  # The document store reads this key directly.
             "run_id": operation_id,  # The shared store expects a run identifier.
@@ -125,7 +126,8 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             "site_names": cls._site_names(request.sites),  # Issue #3249: the device table names each site.
             "request_nonce": request.request_nonce,  # A repeated confirmation cannot send the writes again.
             "record_version": 0,  # Every later state transition uses durable compare-and-set.
-            "updated_at": cls._now_text(),  # Issue #3249: the progress page shows the age of the last change.
+            "created_at": moment,  # Issue #3248: the history page sorts the operations by this moment.
+            "updated_at": moment,  # Issue #3249: the progress page shows the age of the last change.
             "state": "planned",  # No cloud call has left yet.
             "submission_claim_id": None,  # No request owns the parent submission yet.
             "submission_claimed_at": None,  # No parent claim lease exists yet.

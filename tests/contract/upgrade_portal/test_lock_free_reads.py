@@ -39,6 +39,7 @@ from src.upgrade_portal.runtime import identity, lock  # The real session guard 
 LOCK_CLIENT_KEY = "LOCK_STORE_CLIENT"  # The lock store seam, named by `app/routes/select.py`.
 CAPTURE_LOADER_KEY = "CAPTURE_LOADER"  # The capture reader seam, named by `app/routes/review.py`.
 CAPTURE_LISTER_KEY = "CAPTURE_LISTER"  # The picker reader seam of the same module.
+OPERATION_LISTER_KEY = "OPERATION_LISTER"  # Issue #3248: the operation reader seam of the same module.
 
 READER_EMAIL = "reader.operator@example.invalid"  # A reserved domain, so no real address appears.
 HOLDER_EMAIL = "holder.operator@example.invalid"  # The operator that holds the site during a read.
@@ -205,11 +206,11 @@ def lock_store() -> CountingLockStore:
 
 @pytest.fixture
 def read_app(portal_app: Flask, lock_store: CountingLockStore) -> Flask:
-    """Return the portal with the lock store and both capture readers injected.
+    """Return the portal with the lock store and the three record readers injected.
 
     Why:
         The comparison routes fall back to `capture.store`, and that module
-        imports a database driver. Injecting both readers keeps the test free of
+        imports a database driver. Injecting the readers keeps the test free of
         a database and leaves the lock rule as the only thing under test.
 
     Args:
@@ -217,11 +218,14 @@ def read_app(portal_app: Flask, lock_store: CountingLockStore) -> Flask:
         lock_store: The counting lock store.
 
     Returns:
-        The application with all three seams in place.
+        The application with all four seams in place.
     """
     portal_app.config[LOCK_CLIENT_KEY] = lock_store  # Every lock call now lands in the counter.
     portal_app.config[CAPTURE_LOADER_KEY] = read_capture  # A plain document, with no database.
     portal_app.config[CAPTURE_LISTER_KEY] = list_captures  # The two rows of the picker.
+    # Issue #3248: the history page reads the multi-site operations of the selected
+    # organization. The stand-in answers no row, so the page never probes a database.
+    portal_app.config[OPERATION_LISTER_KEY] = lambda org_id, site_id="", limit=25: []
     portal_app.config["WTF_CSRF_ENABLED"] = False  # Every call below is a read, so no token applies.
     return portal_app  # Every test below drives this application.
 

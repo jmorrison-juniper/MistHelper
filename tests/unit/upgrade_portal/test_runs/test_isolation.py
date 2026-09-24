@@ -50,7 +50,7 @@ def _overrides(test_run_id: str = "e2e-unit-owner") -> E2EFactoryOverrides:  # B
     audits = AuditRecordStore(test_run_id)  # Own audit records.
     cloud = ScriptedCloudStore(test_run_id)  # Own scripted cloud evidence.
     records = E2ERecordOverrides(  # Bind all run and capture seams.
-        portal, portal, _callable, portal.load_capture, portal.list_captures, portal.list_runs
+        portal, portal, _callable, portal.load_capture, portal.list_captures, portal.list_runs, portal.list_operations
     )
     action_values = E2EActionOverrides(  # Bind all action and upgrade seams.
         actions, _callable, _callable, _callable, _callable, _callable, portal

@@ -25,6 +25,7 @@ class E2ERecordOverrides:  # Group every process-owned run and capture seam.
     capture_loader: Callable[..., Any]  # Read one process-owned capture.
     capture_lister: Callable[..., Any]  # List process-owned capture rows.
     run_lister: Callable[..., Any]  # List process-owned run rows.
+    operation_lister: Callable[..., Any]  # Issue #3248: list process-owned multi-site operations.
 
     def config_values(self) -> Mapping[str, object]:  # Map record values to existing route keys.
         """Return the Flask values for run and capture records."""
@@ -35,6 +36,7 @@ class E2ERecordOverrides:  # Group every process-owned run and capture seam.
             "CAPTURE_LOADER": self.capture_loader,  # Read captures from the owned record graph.
             "CAPTURE_LISTER": self.capture_lister,  # List captures from the owned record graph.
             "RUN_LISTER": self.run_lister,  # List runs from the owned record graph.
+            "OPERATION_LISTER": self.operation_lister,  # Keep the history section away from the database.
         }
 
 

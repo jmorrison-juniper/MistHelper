@@ -253,6 +253,16 @@
     font-size: 0.85rem;
 }
 
+/* Issue #3248: a note inside a fixed pitch cell reads in the body font, on
+ * its own line, so that the operator does not read it as an identifier. */
+.portal-table .cell-note {
+    display: block;
+    font-family: var(--bs-body-font-family);
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--portal-text-muted);
+}
+
 .portal-table .cell-number {
     text-align: right;
     font-variant-numeric: tabular-nums;

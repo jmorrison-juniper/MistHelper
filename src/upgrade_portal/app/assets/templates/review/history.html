@@ -122,7 +122,7 @@
   <h2 class="portal-card-title">Runs</h2>
 
   <p class="portal-card-note">
-    Every upgrade run, newest first. Each row links to the capture from before
+    Every single-site upgrade run, newest first. Each row links to the capture from before
     the upgrade and to the capture from after it. Every moment reads as UTC.
   </p>
 </div>
@@ -265,6 +265,97 @@
             data-testid="bulk-result-refresh" hidden>Read stored result</button>
   </div>
 </dialog>
+
+{#
+  Issue #3248: a multi-site upgrade had no history entry, so the operator lost
+  the way back to its progress page. This section lists the operations of the
+  selected organization, because the job page shows an operation only inside
+  that organization. A page test that does not pass the value gets no section.
+#}
+{% set operations = operation_section | default(none, true) %}
+{% if operations %}
+<div class="portal-card" data-testid="history-operation-section">
+  <h2 class="portal-card-title">Multi-site upgrades</h2>
+
+  <p class="portal-card-note">
+    Every multi-site upgrade of the selected organization, newest first. The
+    upgrade identifier links to the progress page when this browser session
+    started the upgrade. Every moment reads as UTC.
+  </p>
+
+  {% if not operations.org_selected %}
+    <p class="portal-note" data-testid="history-operation-no-org">
+      Select an organization to see its multi-site upgrades.
+    </p>
+  {% elif not operations.database_available %}
+    <p class="portal-note" data-testid="history-operation-unavailable">
+      The portal cannot read the multi-site upgrades, because the database does not answer.
+    </p>
+  {% endif %}
+</div>
+
+{% if operations.org_selected and operations.database_available %}
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="history-operation-table" data-sortable>
+    <caption class="visually-hidden">
+      Every multi-site upgrade of the selected organization. Each row holds the
+      sites, the device types, the operator, the Mist account, the state, the
+      start moment, and the moment of the last update.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Upgrade</th>
+        <th scope="col">Sites</th>
+        <th scope="col">Device types</th>
+        <th scope="col">Typed operator</th>
+        <th scope="col">Mist account</th>
+        <th scope="col">State</th>
+        <th scope="col">Started</th>
+        <th scope="col">Last update</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for row in operations.rows %}
+        <tr data-testid="history-operation-row-{{ row.operation_id }}">
+          <th scope="row" class="cell-mono">
+            {#
+              The job page refuses a browser session that did not start the
+              upgrade, so only the owner session gets the link.
+            #}
+            {% if row.can_open %}
+              <a href="{{ row.progress_path }}"
+                 data-testid="history-operation-open-{{ row.operation_id }}">{{ row.operation_id }}</a>
+            {% else %}
+              {{ row.operation_id }}
+              <span class="cell-note"
+                    data-testid="history-operation-not-owned-{{ row.operation_id }}">Another browser session started this upgrade.</span>
+            {% endif %}
+          </th>
+          <td data-testid="history-operation-sites-{{ row.operation_id }}">{{ row.sites_text }}</td>
+          <td data-testid="history-operation-types-{{ row.operation_id }}">{{ row.families_text }}</td>
+          <td data-testid="history-operation-operator-address-{{ row.operation_id }}">{{ row.actor_email }}</td>
+          <td data-testid="history-operation-cloud-account-{{ row.operation_id }}">{{ row.cloud_account }}</td>
+          <td>
+            <span class="portal-badge badge-{{ row.state }}"
+                  data-testid="history-operation-state-{{ row.operation_id }}">{{ row.state }}</span>
+          </td>
+          <td title="{{ row.started_raw }}">{{ row.started_text }}</td>
+          <td title="{{ row.updated_raw }}">{{ row.updated_text }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="8" class="portal-table-empty" data-testid="history-operation-empty">
+            The selected organization holds no multi-site upgrade yet.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
 
 <div class="portal-card">
   <h2 class="portal-card-title">Audit log</h2>
