@@ -321,38 +321,52 @@ def test_prepare_safe_fields_appends_audit_columns(stub_deps: SimpleNamespace) -
 # ---------------------------------------------------------------------------
 
 
-def test_rollback_swallows_rollback_exception(stub_deps: SimpleNamespace) -> None:
+def test_rollback_swallows_rollback_exception(stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture) -> None:
     """Rollback failures must NOT propagate - they must be logged and swallowed."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     fake_conn = MagicMock(spec=sqlite3.Connection)  # Stand-in connection with rollback
     fake_conn.rollback.side_effect = RuntimeError("rollback-failed")  # Simulate rollback failure
     writer.connection = fake_conn  # Attach the failing connection
+    caplog.set_level("ERROR")  # WHY: the writer reports the swallowed error at the ERROR level.
     writer._rollback_transaction()  # Must NOT raise
-    fake_conn.rollback.assert_called_once()  # Rollback was attempted
+    fake_conn.rollback.assert_called_once_with()  # WHY: the writer tried the rollback one time, with no arguments.
+    assert "Failed to rollback transaction: rollback-failed" in caplog.text  # WHY: the log names the error.
 
 
-def test_rollback_no_op_when_no_connection(stub_deps: SimpleNamespace) -> None:
+def test_rollback_no_op_when_no_connection(stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture) -> None:
     """_rollback_transaction with connection=None must be a silent no-op."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     writer.connection = None  # No connection was ever opened
+    caplog.set_level("DEBUG")  # WHY: capture every level, so the test also sees the debug trace of a rollback.
+    caplog.clear()  # WHY: keep only the records of the call below.
     writer._rollback_transaction()  # Must return without raising
+    assert caplog.records == []  # WHY: a silent no-op writes no log line, not even the rollback trace.
 
 
-def test_close_connection_swallows_close_exception(stub_deps: SimpleNamespace) -> None:
+def test_close_connection_swallows_close_exception(
+    stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture
+) -> None:
     """Failures during close() must NOT propagate."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     fake_conn = MagicMock(spec=sqlite3.Connection)  # Stand-in connection
     fake_conn.close.side_effect = RuntimeError("close-failed")  # Simulate close failure
-    writer.connection = fake_conn
+    writer.connection = fake_conn  # Attach the failing connection
+    caplog.set_level("ERROR")  # WHY: the writer reports the swallowed error at the ERROR level.
     writer._close_connection()  # Must NOT raise
-    fake_conn.close.assert_called_once()  # Close was attempted
+    fake_conn.close.assert_called_once_with()  # WHY: the writer tried the close one time, with no arguments.
+    assert "Failed to close database connection: close-failed" in caplog.text  # WHY: the log names the error.
 
 
-def test_close_connection_no_op_when_no_connection(stub_deps: SimpleNamespace) -> None:
+def test_close_connection_no_op_when_no_connection(
+    stub_deps: SimpleNamespace, caplog: pytest.LogCaptureFixture
+) -> None:
     """_close_connection with connection=None must be a silent no-op."""
     writer = SQLiteDatabaseWriter([{"a": 1}], "t", "listX")
     writer.connection = None  # No connection was ever opened
+    caplog.set_level("DEBUG")  # WHY: capture every level, so the test also sees the debug trace of a close.
+    caplog.clear()  # WHY: keep only the records of the call below.
     writer._close_connection()  # Must return without raising
+    assert caplog.records == []  # WHY: a silent no-op writes no log line, not even the close trace.
 
 
 # ---------------------------------------------------------------------------
