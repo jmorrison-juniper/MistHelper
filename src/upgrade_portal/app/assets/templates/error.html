@@ -15,6 +15,8 @@
     error_message  - one plain sentence for the operator.
     error_code     - the stable lower-case code, such as site_locked.
     status_code    - the HTTP status code.
+    back_path      - a page of this portal that the link back opens. The
+                     factory checks the path before it supplies it (issue #3275).
 
   The message never holds a stack trace, a token, or a password. Jinja escapes
   every value, and this page marks no value as safe, because a message can carry
@@ -54,5 +56,9 @@
 
 </div>
 
+{# A refused form post names its form page, so the operator can open the form again (issue #3275). #}
+{% if back_path %}
+  <p><a href="{{ back_path }}" data-testid="error-back-link">Open the form again</a></p>
+{% endif %}
 <p><a href="/select/site" data-testid="error-site-list-link">Go to the site list</a></p>
 {% endblock %}
