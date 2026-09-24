@@ -13,7 +13,7 @@ devices, and your clients, and it writes what it finds to a file or to a
 database. It also runs a small set of change operations, such as a firmware
 upgrade.
 
-The tool holds **268 operations**, numbered 1 to 269 with one gap at 152. Menu 0
+The tool holds **269 operations**, numbered 1 to 270 with one gap at 152. Menu 0
 is Exit. Read [the menu reference](documentation/menu_reference.md) for the full
 list, which is generated from the code.
 
@@ -25,6 +25,14 @@ operations from issue #1807.
 Menus 263 through 268 run the remaining read-only endpoint families. They group
 SLE, map, site detail, org detail, MSP detail, and other endpoints by prompt
 flow.
+
+Menu 270 exports the Marvis Actions of an organization to a CSV file and to the
+database. You can filter the actions by category and by subcategory. Mode 3
+marks the open actions of the selected topics as resolved, with a resolution
+code and a comment. Mode 3 sends no request until you type `RESOLVE` and the
+action count. Read
+[the Marvis Actions API endpoint report](documentation/marvis-actions-api-endpoints.md)
+for every API call that the menu makes.
 
 ## What MistHelper does
 

@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **268 actionable menu entries**, numbered
-1 to 269 with gaps at 152.
-Menu 0 is Exit, so the registry holds 269 entries in total.
+MistHelper defines **269 actionable menu entries**, numbered
+1 to 270 with gaps at 152.
+Menu 0 is Exit, so the registry holds 270 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,7 +22,7 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268 | Interactive safe | 92 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270 | Interactive safe | 93 operations. They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. An operation that can change Mist data first asks for a typed value, such as a token or a count. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269 | Safe org exports | 73 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
@@ -303,6 +303,7 @@ never runs in an automated test pass.
 | 267 | Run any MSP detail endpoint with identifier prompts (10 operations) | Interactive safe | `EndpointFamilyExporter.msp_detail_endpoints` |
 | 268 | Run any remaining endpoint with identifier prompts (6 operations) | Interactive safe | `EndpointFamilyExporter.other_endpoints` |
 | 269 | Scan the organization for rogue DHCP servers on switches (30 days) | Safe org exports | `RogueDhcpScanOperation.run` |
+| 270 | Export or resolve Marvis Actions by category and subcategory | Interactive safe | `MarvisActionsOperation.run` |
 
 ### Endpoint family sub-menus (259-268)
 

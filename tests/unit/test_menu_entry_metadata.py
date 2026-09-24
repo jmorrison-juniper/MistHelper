@@ -7,7 +7,7 @@ import pytest  # WHY: tests assert SystemExit behavior for invalid menu input.
 import MistHelper  # WHY: the runtime menu table is the source under test.
 from src.utils.menu_entry import MenuEntry  # WHY: the test verifies the production row type.
 
-EXPECTED_MENU_ENTRY_COUNT = 269  # WHY: guard against lost rows during menu-table refactors.
+EXPECTED_MENU_ENTRY_COUNT = 270  # WHY: guard against lost rows during menu-table refactors.
 EXPECTED_DESTRUCTIVE_NUMBERS = frozenset(  # WHY: operators rely on these numbers as write-capable actions.
     {str(number) for number in range(154, 188)}
     | {str(number) for number in range(189, 192)}

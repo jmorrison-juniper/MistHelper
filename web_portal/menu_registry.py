@@ -181,6 +181,7 @@ MENU_DESCRIPTIONS = {
     "267": "Run any MSP detail endpoint with identifier prompts (10 operations)",
     "268": "Run any remaining endpoint with identifier prompts (6 operations)",
     "269": "Scan the organization for rogue DHCP servers on switches (30 days)",
+    "270": "Export or resolve Marvis Actions by category and subcategory",
 }
 
 

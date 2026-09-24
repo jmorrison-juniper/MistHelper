@@ -335,6 +335,18 @@ class OperationRegistry:
         # and it writes nothing back to the Mist cloud. The organization comes from the cache
         # or the environment, so no prompt blocks an automated pass.
         "269": {"category": "safe"},
+        # WHY: issue #3299. Menu 270 exports the Marvis Actions of the organization, and mode 3
+        # marks the open actions of the selected topics as resolved. The operations portal runs
+        # only `safe` and `interactive_safe` rows, and the user requires the portal, so the row
+        # is `interactive_safe` and not `destructive`. Mode 3 still counts as safe for three
+        # reasons. It writes an action status only and never a device configuration. The Mist UI
+        # can set each action back to Open. It sends no request until the operator types
+        # RESOLVE and the target count, which no automated pass can produce. The default mode 1
+        # reads only, so an unattended `--testinteractive` pass writes a report and changes nothing.
+        "270": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires a mode, a category, and a subcategory choice",
+        },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",

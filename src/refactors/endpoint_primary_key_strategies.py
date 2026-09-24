@@ -124,6 +124,26 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Webhooks with stable UUID identifiers",
     },
+    # Issue #3299: Mist gives each Marvis Action a stable ``uuid``, so a second
+    # export updates the same row. The builder derives the same kind of key from
+    # ``row_key`` when a row holds no ``uuid``, so no row ever lacks a key.
+    "listOrgMarvisActions": {
+        "type": "natural_pk",
+        "primary_key": ["uuid"],
+        "indexes": ["org_id", "site_id", "category", "symptom", "status"],
+        "unique_constraints": [],
+        "description": "Marvis Actions of one organization, keyed by the Mist action uuid",
+    },
+    # Issue #3299: ``result_id`` joins the action uuid and the resolve time of the
+    # run, so each resolve run keeps its own audit rows and never replaces the
+    # rows of an earlier run.
+    "resolveOrgMarvisActions": {
+        "type": "natural_pk",
+        "primary_key": ["result_id"],
+        "indexes": ["uuid", "outcome", "resolution_code"],
+        "unique_constraints": [],
+        "description": "One result row for each Marvis Action that a bulk resolve run targeted",
+    },
     # Type 2: Composite primary key for event and log APIs
     # These APIs return time-series data that requires composite keys for uniqueness
     "searchOrgAlarms": {
