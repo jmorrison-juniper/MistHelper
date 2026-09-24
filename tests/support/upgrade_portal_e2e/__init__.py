@@ -36,6 +36,7 @@ def _record_values(  # Build the complete run and capture dependency group.
         capture_loader=portal.load_capture,  # Read captures from the owned record graph.
         capture_lister=portal.list_captures,  # List captures from the owned record graph.
         run_lister=portal.list_runs,  # List runs from the owned record graph.
+        operation_lister=portal.list_operations,  # Issue #3248: list multi-site operations from the same graph.
     )
 
 

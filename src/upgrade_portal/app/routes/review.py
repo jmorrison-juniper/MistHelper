@@ -65,6 +65,7 @@ from ...compare import render as compare_render
 from ...compare import statistics as compare_statistics
 from ...runtime import identity
 from ...runtime.runs import RunStateMachine, RunTransitionError  # Use the canonical final-state authority.
+from ...upgrade.org_history import OperationHistorySection, OrgOperationHistory  # Issue #3248: the section rules.
 from ..factory import json_error
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
@@ -246,6 +247,9 @@ _DEFAULT_REFUSAL = (SERVER_ERROR_STATUS, COMPARISON_UNAVAILABLE, COMPARISON_UNAV
 CAPTURE_LOADER_KEY = "CAPTURE_LOADER"
 CAPTURE_LISTER_KEY = "CAPTURE_LISTER"
 RUN_LISTER_KEY = "RUN_LISTER"
+# Issue #3248: the multi-site operation list of the history page. The key lives
+# in this module, because the seam guard test reads the keys of this module.
+OPERATION_LISTER_KEY = "OPERATION_LISTER"
 
 PACKAGE_ROOT = __name__.rsplit(".", maxsplit=3)[0]
 STORE_MODULE = "capture.store"
@@ -262,6 +266,12 @@ RUN_LISTER_ATTRIBUTES = ("list_runs",)
 AUDIT_MODULE = "compare.lock_audit"
 AUDIT_READER_ATTRIBUTES = ("read_audit_rows",)
 RUN_QUERY_ATTRIBUTES = ("RunQuery",)
+
+# Issue #3248: the operation list of the capture store. `list_operations`
+# answers an `OperationListPage`, which carries `operations` and the
+# availability flag.
+OPERATION_LISTER_ATTRIBUTES = ("list_operations",)
+OPERATION_QUERY_ATTRIBUTES = ("OperationQuery",)
 
 # The history view of the compare package. The name is read at call time rather
 # than imported at module level. A portal whose render module has not grown the
@@ -387,6 +397,31 @@ def store_run_rows(site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int
     return lister(query_class(site_id=site_id, limit=limit, offset=offset))
 
 
+def store_operation_rows(org_id: str, site_id: str = "", limit: int = DEFAULT_HISTORY_LIMIT) -> Any:
+    """Read the multi-site operation rows of one organization from the capture store.
+
+    Why:
+        Issue #3248. The fallback follows ``store_run_rows``. The store owns the
+        query, the sort order, and the projection, and this route owns none of
+        them.
+
+    Args:
+        org_id: The selected organization.
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The largest number of rows to read.
+
+    Returns:
+        The store page, or an empty tuple when the operation list is absent.
+    """
+    module = load_optional_module(STORE_MODULE)  # The store imports the database driver, so load it late.
+    lister = find_attribute(module, OPERATION_LISTER_ATTRIBUTES)  # The reader of the operation rows.
+    query_class = find_attribute(module, OPERATION_QUERY_ATTRIBUTES)  # The request record of that reader.
+    if lister is None or query_class is None:  # The store offers no operation list.
+        logger.info("review: the capture store offers no operation list, so the section is empty")
+        return ()  # The section then states that it holds no operation.
+    return lister(query_class(org_id=org_id, site_id=site_id, limit=limit))  # One read for the section.
+
+
 def capture_loader() -> Callable[..., Any] | None:
     """Return the reader that loads one capture for a comparison.
 
@@ -429,6 +464,21 @@ def run_lister() -> Callable[..., Any]:
     """
     injected = injected_seam(RUN_LISTER_KEY)
     return injected if injected is not None else store_run_rows
+
+
+def operation_lister() -> Callable[..., Any]:
+    """Return the reader that fills the multi-site section of the history.
+
+    Why:
+        Issue #3248. The injected seam wins over the store, so a test never
+        reaches a database. The seam falls back to the store and never to
+        None, so the page needs no extra branch.
+
+    Returns:
+        The reader.
+    """
+    injected = injected_seam(OPERATION_LISTER_KEY)  # A test injects a stand-in through the config.
+    return injected if injected is not None else store_operation_rows  # A running portal reads the store.
 
 
 # ---------------------------------------------------------------------------
@@ -1915,6 +1965,29 @@ def audit_history_rows(site_id: str = "") -> list[dict[str, Any]]:
     return shaped
 
 
+def operation_history_section(site_id: str, limit: int) -> OperationHistorySection:
+    """Return the multi-site section of the history page.
+
+    Why:
+        Issue #3248. A multi-site upgrade had no history entry. The section
+        lists the operations of the selected organization, because the job page
+        shows an operation only inside that organization. The owner key stays
+        on the server, and the shaper uses it for one comparison only.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The page size of the history page.
+
+    Returns:
+        The section value that the template prints.
+    """
+    record = identity.current_session()  # The server-side session holds the owner key.
+    owner_key = record.owner.key if record is not None else ""  # An empty key owns no operation.
+    org_id = str(session.get("selected_org_id") or "")  # The organization that the picker stored.
+    history = OrgOperationHistory(owner_key, short_moment)  # One short moment rule for every section.
+    return history.section(operation_lister(), org_id, site_id, limit)  # One store read at most.
+
+
 @review_bp.get(HISTORY_PAGE_PATH)
 @identity.require_session
 def history_page() -> str:
@@ -1947,6 +2020,8 @@ def history_page() -> str:
         run_rows=run_history_rows(site_id, limit, offset),
         run_control_org_id=str(session.get("selected_org_id") or ""),
         run_control_history_scope=f"site:{site_id}" if site_id else "all-sites",
+        # Issue #3248 adds the multi-site operations of the selected organization.
+        operation_section=operation_history_section(site_id, limit),
         # Issue #2221 adds the audit log of every site lock action.
         # Issue #2596 narrows that log to the site that this page names.
         audit_rows=audit_history_rows(site_id),

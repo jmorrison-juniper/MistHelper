@@ -175,6 +175,14 @@ SEAM_SHAPES: tuple[SeamShape, ...] = (
         "The same window rule as the capture lister.",
     ),
     SeamShape(
+        "OPERATION_LISTER",
+        "review",
+        (SeamCall(positional=1, keywords=("site_id", "limit")),),
+        "app.routes.review",
+        ("store_operation_rows",),
+        "Issue #3248. The history page reads the multi-site operations of the selected organization.",
+    ),
+    SeamShape(
         "RUN_LAUNCHER",
         "upgrade",
         (SeamCall(positional=1),),

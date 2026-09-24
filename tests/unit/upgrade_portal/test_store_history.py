@@ -416,7 +416,7 @@ def test_list_runs_reads_every_site_when_the_caller_narrows_nothing() -> None:
     page = store.list_runs(store.RunQuery(), database)
     count_query, count_binds = database.aql.calls[0]
     assert count_binds == {}
-    assert "FILTER" not in count_query
+    assert count_query.count("FILTER") == 1  # Issue #3248: only the operation exclusion narrows the page.
     assert page.total == 4
     assert page.limit == store.DEFAULT_LIST_LIMIT
 
@@ -481,3 +481,139 @@ def test_list_runs_refuses_a_page_of_no_rows_at_all() -> None:
     page_binds = database.aql.calls[1][1]
     assert page_binds["limit"] == 1
     assert page_binds["offset"] == 0
+
+
+# WHY: Issue #3248. One organization owns every operation test below.
+_ORG = "org-0001"
+
+
+def test_list_runs_keeps_each_operation_record_out_of_the_run_history() -> None:
+    """Issue #3248: the run history excludes each multi-site operation record.
+
+    Why:
+        The aggregate service writes each operation into the run collection.
+        The Runs table showed each operation as a broken single-site row, and
+        the bulk boxes could select it. The count query and the page query share
+        the exclusion, so the total and the rows agree.
+    """
+    database = _FakeDatabase()
+    database.aql.answers = [[0], []]
+    store.list_runs(store.RunQuery(site_id=_SITE), database)
+    count_query = database.aql.calls[0][0]
+    page_query = database.aql.calls[1][0]
+    assert "FILTER doc.operation_id == null" in count_query
+    assert "FILTER doc.operation_id == null" in page_query
+
+
+def test_list_operations_binds_only_the_organization_and_the_limit() -> None:
+    """A page with no site binds the organization and the limit, and nothing more.
+
+    Why:
+        The server refuses a query that carries an unused bind. A site bind
+        without the site clause would therefore empty the whole section.
+    """
+    database = _FakeDatabase()
+    database.aql.answers = [[]]
+    store.list_operations(store.OperationQuery(org_id=_ORG, limit=7), database)
+    query, binds = database.aql.calls[0]
+    assert binds == {"org_id": _ORG, "limit": 7}
+    assert "@site_id" not in query
+    assert "FILTER doc.operation_id != null" in query
+    assert "FILTER doc.org_id == @org_id" in query
+    assert "FOR doc IN " + store.RUN_COLLECTION in query
+
+
+def test_list_operations_narrows_to_the_site_through_a_bind() -> None:
+    """A site travels as a bind, and the query matches it inside the site list.
+
+    Why:
+        The site value comes from a request. A value inside the query text
+        would let that request write the query.
+    """
+    database = _FakeDatabase()
+    database.aql.answers = [[]]
+    store.list_operations(store.OperationQuery(org_id=_ORG, site_id=_SITE), database)
+    query, binds = database.aql.calls[0]
+    assert binds == {"org_id": _ORG, "limit": store.DEFAULT_LIST_LIMIT, "site_id": _SITE}
+    assert "FILTER @site_id IN doc.site_ids" in query
+    assert _SITE not in query
+    assert _ORG not in query
+
+
+def test_list_operations_projects_the_row_and_never_the_child_jobs() -> None:
+    """The query returns the projected fields and the unique device families.
+
+    Why:
+        A child job holds one target record for each device. The section needs
+        only the family words, so the query never returns the children.
+    """
+    database = _FakeDatabase()
+    database.aql.answers = [[]]
+    store.list_operations(store.OperationQuery(org_id=_ORG), database)
+    query = database.aql.calls[0][0]
+    for name in store.OPERATION_LIST_FIELDS:
+        assert f"{name}:doc.{name}" in query
+    assert f"{store.OPERATION_FAMILIES_FIELD}:UNIQUE(doc.children[*].device_family)" in query
+    assert "children:doc.children" not in query
+    assert "SORT doc.created_at DESC, doc.updated_at DESC" in query
+
+
+def test_list_operations_returns_the_rows_of_the_database() -> None:
+    """The page carries a copy of each row, the limit, and the availability flag."""
+    database = _FakeDatabase()
+    rows = [{"operation_id": "org-run-0001", "state": "running"}, {"operation_id": "org-run-0002"}]
+    database.aql.answers = [rows]
+    page = store.list_operations(store.OperationQuery(org_id=_ORG, limit=2), database)
+    assert [row["operation_id"] for row in page.operations] == ["org-run-0001", "org-run-0002"]
+    assert page.limit == 2
+    assert page.database_available is True
+
+
+def test_list_operations_reports_the_database_out_of_reach(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty section states that the database never answered.
+
+    Why:
+        An empty list that reads as a fact would tell the operator that the
+        organization holds no multi-site upgrade.
+    """
+    monkeypatch.setattr(store, "connect_database", lambda: None)
+    page = store.list_operations(store.OperationQuery(org_id=_ORG))
+    assert page.operations == ()
+    assert page.database_available is False
+
+
+def test_list_operations_reports_a_failed_query_as_out_of_reach() -> None:
+    """A failed query empties the section and reports the database as unavailable.
+
+    Why:
+        The run list reports a failed query as available, and the run page then
+        shows an empty table. The section instead tells the operator that it
+        cannot read the list.
+    """
+    database = _FakeDatabase()
+    database.aql.execute_error = ArangoError("The query failed.")
+    page = store.list_operations(store.OperationQuery(org_id=_ORG), database)
+    assert page.operations == ()
+    assert page.database_available is False
+
+
+def test_list_operations_asks_for_one_row_at_least() -> None:
+    """A limit below one still asks the database for one row."""
+    database = _FakeDatabase()
+    database.aql.answers = [[]]
+    store.list_operations(store.OperationQuery(org_id=_ORG, limit=0), database)
+    assert database.aql.calls[0][1]["limit"] == 1
+
+
+def test_list_operations_reads_nothing_without_an_organization() -> None:
+    """An empty organization reads no record and reports no outage.
+
+    Why:
+        The job page shows an operation only inside its organization. With no
+        organization, no row could open, so the store makes no query at all.
+    """
+    database = _FakeDatabase()
+    page = store.list_operations(store.OperationQuery(org_id=""), database)
+    assert database.aql.calls == []
+    assert page.operations == ()
+    assert page.database_available is True

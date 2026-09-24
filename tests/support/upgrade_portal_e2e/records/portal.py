@@ -97,11 +97,54 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
     ) -> list[dict[str, Any]]:
         """Return one ordered page of owned run records."""
         logger.info("List one E2E run record page")  # Record the process-owned scan.
-        rows = list(self._runs.values())  # Preserve deterministic insertion order.
+        rows = [row for row in self._runs.values() if not row.get("operation_id")]  # Issue #3248: skip operations.
         scoped = [row for row in rows if not site_id or row.get("site_id") == site_id]  # Apply the site filter.
         page = [deepcopy(row) for row in scoped[offset : offset + limit]]  # Return only the requested page.
         logger.debug("The E2E run page holds %s record(s)", len(page))  # Report a safe count.
         return page  # Give the route isolated copies.
+
+    def list_operations(  # List the owned multi-site operations of one organization.
+        self, org_id: str, site_id: str = "", limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Return the owned operation rows in the projection of the capture store.
+
+        Why:
+            Issue #3248. A browser test reads the history section through this
+            seam, so the stand-in follows the store query. It applies the
+            organization filter, the site filter, the newest-first sort, the
+            limit, and the projected fields.
+        """
+        # The store imports the database driver, so the import waits for the first read.
+        from src.upgrade_portal.capture.store import OPERATION_FAMILIES_FIELD, OPERATION_LIST_FIELDS
+
+        logger.info("List the E2E operation records of one organization")  # Record the process-owned scan.
+        scoped = [row for row in self._runs.values() if self._operation_matches(row, org_id, site_id)]  # Filter.
+        scoped.sort(key=self._operation_sort_key, reverse=True)  # Newest first. A record with no time sorts last.
+        page = [  # Project only the fields that the store query returns.
+            {field: deepcopy(row.get(field)) for field in OPERATION_LIST_FIELDS}
+            | {OPERATION_FAMILIES_FIELD: self._operation_families(row)}
+            for row in scoped[: max(limit, 1)]
+        ]
+        logger.debug("The E2E operation page holds %s record(s)", len(page))  # Report a safe count.
+        return page  # Give the route isolated copies.
+
+    @staticmethod
+    def _operation_matches(row: dict[str, Any], org_id: str, site_id: str) -> bool:  # Apply the store filters.
+        """Return True for an operation of the organization that holds the site."""
+        if not row.get("operation_id") or row.get("org_id") != org_id:  # A run or a foreign organization.
+            return False  # The store query filters the same two values.
+        return not site_id or site_id in (row.get("site_ids") or [])  # An empty site reads every site.
+
+    @staticmethod
+    def _operation_sort_key(row: dict[str, Any]) -> tuple[str, str]:  # Follow the SORT clause of the store.
+        """Return the sort key of one operation: the creation moment, then the last update."""
+        return (str(row.get("created_at") or ""), str(row.get("updated_at") or ""))  # An empty text sorts last.
+
+    @staticmethod
+    def _operation_families(row: dict[str, Any]) -> list[str]:  # Follow the UNIQUE call of the store.
+        """Return each child device family once, in the order of the first child that names it."""
+        families = [str(child.get("device_family") or "") for child in row.get("children") or []]  # Every child.
+        return list(dict.fromkeys(family for family in families if family))  # Keep one copy of each word.
 
     def write_capture(self, capture: dict[str, Any]) -> bool:  # Store one owned capture record.
         """Store one owned capture record."""
