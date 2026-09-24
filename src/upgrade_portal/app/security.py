@@ -14,7 +14,7 @@ Why:
 import logging  # The portal logs with the standard library only.
 from ipaddress import ip_address  # Parses a client address for the allow list.
 
-from flask import Flask, Response, abort, request  # The application, the response, and the request context.
+from flask import Flask, Response, request  # The application, the response, and the request context.
 from flask_wtf.csrf import CSRFError, CSRFProtect  # The token check and the fault it raises.
 from werkzeug.middleware.proxy_fix import ProxyFix  # Reads the forwarded headers that the operator trusts.
 
@@ -171,13 +171,23 @@ class PortalSecurity:
             return  # Register no hook, so an open portal pays no cost for each request.
 
         @app.before_request  # The hook runs before the token check and before any view.
-        def check_address() -> None:
-            """Stop one request that arrives from an address outside the list."""
+        def check_address() -> tuple[Response, int] | None:
+            """Stop one request that arrives from an address outside the list.
+
+            Why:
+                A blocked address reads the short envelope and never a page,
+                even from a browser. A page names the portal and writes a
+                session cookie through its token fields. The hook returns the
+                envelope itself, because the fault handler gives a browser a
+                page (issue #3274).
+            """
             address = read_client_address()  # The socket address, or what a trusted proxy reported.
             if address_is_allowed(address, networks):  # A match ends the check.
-                return  # Let the request continue to the view.
+                return None  # Let the request continue to the view.
             logger.warning("The portal refused a request from the address %s.", address)  # Audit trail.
-            abort(BLOCKED_STATUS)  # Raise the 403 fault that the JSON handler answers.
+            from .factory import json_error  # The late import breaks the circle with the factory.
+
+            return json_error(BLOCKED_STATUS)  # The short envelope. A returned answer ends the request here.
 
     def _register_csrf(self, app: Flask) -> None:
         """Register the token check and the answer for a missing token.

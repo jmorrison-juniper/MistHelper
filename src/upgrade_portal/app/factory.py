@@ -36,6 +36,7 @@ from flask import (  # The web framework surface.
     has_app_context,
     has_request_context,
     jsonify,
+    make_response,
     render_template,
     request,
     send_from_directory,
@@ -109,6 +110,15 @@ SCRIPT_HEADER = "X-Requested-With"  # A script marks its own request with this h
 SCRIPT_HEADER_VALUE = "XMLHttpRequest"  # The one value that names a script request.
 HOST_PREFIX = "//"  # A browser reads a link that starts with two slashes as the address of another host.
 BACKSLASH = "\\"  # A browser reads a backslash in a link as a slash, so `/\\` also names another host.
+
+# A path that no route serves names no record, so the record sentence of the
+# 404 envelope misleads an operator who typed a wrong address (issue #3274).
+# The page reads these two values. The JSON envelope keeps its sentence.
+NO_PAGE_TITLE = "The portal found no such page"  # The heading of the page for an unknown address.
+NO_PAGE_MESSAGE = (  # The sentence of the page for an unknown address. It names the recovery.
+    "The portal holds no page at this address. Check the address, or go to the site list."
+)
+NOT_FOUND_STATUS = 404  # The status of a path that no route serves, and of a record that no store holds.
 
 RUN_FIELD = "run_id"  # The log field that follows one upgrade run.
 SITE_FIELD = "site_id"  # The log field that names the site.
@@ -387,6 +397,51 @@ def is_local_page_path(path: str) -> bool:
     return True  # A route serves this path for `GET`.
 
 
+def page_wording(status: int) -> tuple[str | None, str | None]:
+    """Choose the heading and the sentence of the error page for one status.
+
+    Why:
+        Issue #3274. The router finds no route for a wrong address, so the
+        404 sentence "The portal found no such record" misleads the operator.
+        A route that finds no record keeps that sentence, because its page
+        exists.
+
+    Args:
+        status: The HTTP status code of the answer.
+
+    Returns:
+        The heading and the sentence. None keeps the default of the template
+        and of `ERROR_MESSAGES`.
+    """
+    if status == NOT_FOUND_STATUS and request.url_rule is None:  # The router matched no route for this path.
+        return NO_PAGE_TITLE, NO_PAGE_MESSAGE  # Name the missing page and the recovery.
+    return None, None  # The tables and the template supply the wording.
+
+
+def error_answer(status: int) -> Response:
+    """Build the answer to one fault in the form that the client reads.
+
+    Why:
+        Issue #3274. A browser shows the JSON envelope as raw text, with no
+        portal layout and no link back. A page view reads `error.html`, and a
+        script or a JSON client keeps the envelope. The rule is the rule of
+        the token check (issue #3275), so the answers cannot drift apart.
+
+    Args:
+        status: The HTTP status code of the answer.
+
+    Returns:
+        A response object, so the caller can still add the `Allow` header.
+    """
+    if not wants_browser_page():  # A script, a JSON client, and a client with no preference read JSON.
+        response, _ = json_error(status)  # The status supplies the code and the sentence.
+        return response  # The envelope stays the same as before.
+    title, message = page_wording(status)  # A wrong address reads its own heading and sentence.
+    page, _ = error_page(status, message=message, title=title)  # The shared page for a person.
+    logger.debug("The fault answer for the status %s is a page.", status)  # The decision, never the path.
+    return make_response(page)  # A response object carries the headers that the caller adds.
+
+
 def handle_error(status: int, error: Exception) -> tuple[Response, int]:
     """Answer one fault with the bound status code.
 
@@ -400,16 +455,16 @@ def handle_error(status: int, error: Exception) -> tuple[Response, int]:
         error: The fault that Flask caught.
 
     Returns:
-        The error envelope and the status code.
+        The error page or the error envelope, and the status code.
     """
     logger.info(
         "The portal answered the status %s after the fault %s.",  # The class name only, never the message.
         status,
         type(error).__name__,
     )
-    response, code = json_error(status)  # The status supplies the code and the sentence.
+    response = error_answer(status)  # A page for a person, and the envelope for a script (issue #3274).
     copy_allow_header(error, response)  # A 405 answer must still name the methods the path accepts.
-    return response, code
+    return response, status  # Flask sets the bound status on the response.
 
 
 def copy_allow_header(error: Exception, response: Response) -> None:
