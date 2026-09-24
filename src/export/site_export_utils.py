@@ -249,22 +249,23 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         self, rows: list[dict[str, Any]], filename: str, site_name: str
     ) -> None:  # WHY: insight-rows CSV writer.
         """Write insight rows to CSV, emitting operator messages for empty-payload cases."""
+        display_path = _resolve_site_display_path(filename)  # WHY: name the file with the platform separator.
         if rows:  # WHY: happy-path when metric availability payload had data.
+            logger.info("Writing %s site SLE metric insight records", len(rows))  # WHY: log before the write.
             self.DataExporter.write_with_format_selection(
                 rows, filename, api_function_name="listSiteSlesMetrics"
             )  # WHY: persist rows.
-            # WHY: preserve legacy operator record-count notice verbatim.
-            logger.info("! %s records exported to data\\%s", len(rows), filename)
+            logger.info("! %s records exported to %s", len(rows), display_path)  # WHY: operator record-count notice.
             logger.info(
                 "Exported %s site SLE metric insight records to %s", len(rows), filename
             )  # WHY: success audit log.
             return  # WHY: skip empty-file emission when rows exist.
-        # WHY: preserve legacy empty-payload operator notice verbatim.
-        logger.warning("! 0 records exported to data\\%s (no metrics available)", filename)
+        logger.warning("! 0 records exported to %s (no metrics available)", display_path)  # WHY: operator notice.
         logger.warning("No site SLE metric insight data available for site %s", site_name)  # WHY: warn empty.
         self.DataExporter.write_with_format_selection(
             [], filename, api_function_name="listSiteSlesMetrics"
         )  # WHY: still emit empty file for pipeline.
+        logger.debug("Wrote an empty SLE metric insight file for site %s", site_name)  # WHY: confirm the write.
 
     def _resolve_insights_site_name(self, site_id: str) -> str:  # WHY: insights-flow name resolver with fallback.
         """Resolve site display name for insights export with fallback on API failure."""
