@@ -50,6 +50,11 @@ SETTLED_STATE_RULES = (  # Map one settled child-state group to one aggregate wo
     (frozenset({"failed", "rejected"}), "failed"),  # Only terminal failures remain.
 )
 CAS_ATTEMPTS = 4  # A bounded retry handles independent status updates without a blind write.
+UNCERTAIN_CHILD_STATES = frozenset({"submission_unknown", "unknown"})  # Issue #3247: states that a check can settle.
+VERDICT_FIELDS = ("proven", "matched", "total", "unread", "summary")  # Issue #3247: the stored parts of one verdict.
+RESCHEDULE_REFUSED_TEXT = "This aggregate upgrade already started, so its start time cannot move."  # Issue #3247.
+REBOOT_REFUSED_TEXT = "The portal cannot move the reboot moment of this plan. Save the options again."  # #3247.
+RECONCILE_REFUSED_TEXT = "A submission of this aggregate upgrade still runs, so the portal cannot check it now."
 LockRefresh = Callable[[Mapping[str, Any], Mapping[str, Any]], None]  # Revalidate locks before one child write.
 
 
@@ -86,6 +91,36 @@ class AggregateBuildInput:  # Group related build values below the parameter lim
     targets: Sequence[upgrade_service.DeviceTarget]  # Keep each confirmed device explicit.
     options: upgrade_service.UpgradeOptions  # Apply the confirmed choices to every child.
     request_nonce: str  # Prevent a confirmed request from starting twice.
+
+
+@dataclass(frozen=True, slots=True)  # Keep one reschedule request immutable.
+class RescheduleRequest:
+    """Hold the new start moment and the new reboot moment of one planned operation.
+
+    Why:
+        Issue #3247. The single-site portal can move the start time of a
+        planned run. This request carries the same change for every child job
+        of one multi-site operation.
+    """
+
+    start_time: int | None  # Epoch seconds, or None to start at once after the confirmation.
+    reboot_at: int | None  # Epoch seconds of the moved reboot, or None when the plan holds no reboot delay.
+    actor: str  # The digest of the operator address, never the address itself.
+
+
+@dataclass(frozen=True, slots=True)  # Keep one reconciliation result immutable.
+class ReconcileEvidence:
+    """Hold the verdicts and the running versions of one reconciliation check.
+
+    Why:
+        Issue #3247. The portal proves the outcome of an uncertain child job
+        from the running version of each device. The service stores the proof
+        beside the child job, so a later reader sees why the state changed.
+    """
+
+    verdicts: tuple[Mapping[str, Any], ...]  # One verdict for each uncertain child job.
+    readings: Mapping[str, str]  # The running version of each device, keyed by the normalized MAC address.
+    actor: str  # The digest of the operator address, never the address itself.
 
 
 class AggregateUpgradeService:  # Coordinate all child routes through one durable record.
@@ -250,6 +285,144 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         logger.info("Store %s version reading(s) for aggregate upgrade %s", len(readings), record.get("run_id", ""))
         self._cas(record, store, update)  # Store every reading through one write.
         logger.debug("Aggregate upgrade %s holds %s final child job(s)", record.get("run_id", ""), len(final_child_ids))
+
+    def reschedule(
+        self,
+        record: MutableMapping[str, Any],
+        store: RunStore,
+        change: RescheduleRequest,
+    ) -> MutableMapping[str, Any]:
+        """Move the start moment of every child job of one planned operation.
+
+        Why:
+            Issue #3247. The single-site portal can move the start time of a
+            planned run before the confirmation. One compare-and-set write
+            moves the start moment and the reboot moment of every child job,
+            so no child job keeps a stale schedule.
+
+        Args:
+            record: The caller snapshot of the operation record.
+            store: The durable store.
+            change: The new start moment, the new reboot moment, and the actor digest.
+
+        Returns:
+            The changed durable record.
+
+        Raises:
+            ValueError: The operation left the plan, or the portal cannot move a stored reboot moment.
+        """
+        moment = self._now_text()  # One time for the audit fields of this write.
+
+        def update(candidate: MutableMapping[str, Any]) -> None:
+            self._check_reschedule(candidate)  # Refuse an operation that left the plan.
+            for child in candidate.get("children", []):  # Move every child in the same write.
+                self._reschedule_child(child, change)  # Move the start and the reboot of one child.
+            self._reschedule_options(candidate, change.start_time)  # Keep the stored options in step.
+            candidate["rescheduled_by"] = change.actor  # Record the digest of the operator, never the address.
+            candidate["rescheduled_at"] = moment  # Record the time of the change.
+
+        logger.info("Move the start time of aggregate upgrade %s", record.get("operation_id", ""))  # Log before CAS.
+        self._cas(record, store, update)  # Store every child change through one write.
+        logger.debug("Aggregate upgrade %s now starts at %s", record.get("operation_id", ""), change.start_time)
+        return record  # The route answers with the confirmation page.
+
+    @staticmethod
+    def _check_reschedule(candidate: Mapping[str, Any]) -> None:
+        """Refuse a reschedule after any child job left the plan."""
+        children = candidate.get("children")  # Every child must still wait for the confirmation.
+        rows = children if isinstance(children, list) else []  # A damaged record holds no child.
+        planned = bool(rows) and all(isinstance(row, Mapping) and row.get("status") == "planned" for row in rows)
+        if candidate.get("state") != "planned" or candidate.get("submission_claim_id") or not planned:
+            raise ValueError(RESCHEDULE_REFUSED_TEXT)  # A submitted child keeps its schedule.
+
+    @staticmethod
+    def _reschedule_child(child: MutableMapping[str, Any], change: RescheduleRequest) -> None:
+        """Move the start moment and the reboot moment of one child job."""
+        body = child.get("body")  # The body that the confirmation sends to the cloud.
+        if not isinstance(body, MutableMapping):  # A damaged child cannot hold a schedule.
+            raise ValueError("The aggregate child record holds no request body.")  # Stop before any write.
+        if change.start_time is None:  # The operator starts the upgrade at once after the confirmation.
+            body.pop("start_time", None)  # The cloud starts a request with no start time at once.
+        else:  # The operator chose a new start moment.
+            body["start_time"] = change.start_time  # Every child starts at the same moment.
+        reboot_at = body.get("reboot_at")  # The value -1 disables the router reboot, so it stays.
+        if type(reboot_at) is not int or reboot_at < 0:  # No reboot moment exists to move.
+            return  # Keep the disabled reboot and the absent reboot unchanged.
+        if change.reboot_at is None:  # The portal cannot compute the new reboot moment.
+            raise ValueError(REBOOT_REFUSED_TEXT)  # A stale reboot moment can reboot a device before its upgrade.
+        body["reboot_at"] = change.reboot_at  # Move the reboot moment with the start.
+        child["reboot_at"] = change.reboot_at  # Keep the child copy in step with the body.
+
+    @staticmethod
+    def _reschedule_options(candidate: MutableMapping[str, Any], start_time: int | None) -> None:
+        """Keep the stored plan options in step with the moved start moment."""
+        options = candidate.get("plan_options")  # A record from an earlier release holds no options.
+        if not isinstance(options, MutableMapping):  # No stored options exist to keep in step.
+            return  # The children hold the schedule that the cloud reads.
+        if start_time is None:  # The operator starts the upgrade at once.
+            options.pop("start_time", None)  # The stored options then hold no stale start.
+        else:  # The operator chose a new start moment.
+            options["start_time"] = start_time  # The stored options name the moment that the children hold.
+
+    def reconcile(
+        self,
+        record: MutableMapping[str, Any],
+        store: RunStore,
+        evidence: ReconcileEvidence,
+    ) -> MutableMapping[str, Any]:
+        """Store the proof of each uncertain child job and settle each proven child.
+
+        Why:
+            Issue #3247. A child job with an unknown outcome blocks a retry and
+            hides the result from the operator. The portal reads the running
+            version of each device. A child whose devices all run the target
+            version moves to completed. Each verdict stays beside its child.
+
+        Args:
+            record: The caller snapshot of the operation record.
+            store: The durable store.
+            evidence: The verdict of each uncertain child, the running versions, and the actor digest.
+
+        Returns:
+            The changed durable record.
+
+        Raises:
+            ValueError: A live submission can still write to the cloud.
+        """
+        moment = self._now_text()  # One time for every verdict of this check.
+
+        def update(candidate: MutableMapping[str, Any]) -> None:
+            if candidate.get("submission_claim_id"):  # A live submission can still change a child.
+                raise ValueError(RECONCILE_REFUSED_TEXT)  # Refuse to decide the outcome during the write.
+            for verdict in evidence.verdicts:  # Store each verdict beside its child.
+                self._apply_verdict(candidate, verdict, evidence.actor, moment)  # Skip a settled child.
+            self._merge_readings(candidate, evidence.readings, moment)  # Keep the device table in step.
+            candidate["state"] = self._aggregate_state(candidate)  # The state follows the children.
+
+        logger.info("Reconcile %s child job(s) of %s", len(evidence.verdicts), record.get("operation_id", ""))
+        self._cas(record, store, update)  # Store every verdict through one write.
+        logger.debug("Aggregate upgrade %s reads %s after the check", record.get("operation_id", ""), record["state"])
+        return record  # The route answers with the progress page.
+
+    @classmethod
+    def _apply_verdict(
+        cls,
+        candidate: MutableMapping[str, Any],
+        verdict: Mapping[str, Any],
+        actor: str,
+        moment: str,
+    ) -> None:
+        """Store one verdict beside its child, and settle the child when the verdict proves the outcome."""
+        child = cls._find_child(candidate, str(verdict.get("child_id", "")))  # The child of this verdict.
+        if child is None or str(child.get("status", "")).lower() not in UNCERTAIN_CHILD_STATES:
+            return  # A poll settled the child during the check, so the result of that poll stays.
+        proof = {field: verdict.get(field) for field in VERDICT_FIELDS}  # Copy the known parts only.
+        proof.update(checked_at=moment, checked_by=actor)  # Record when and by whom the check ran.
+        proof.update(prior_status=child.get("status"), prior_error=child.get("error"))  # Keep the old outcome.
+        child["reconciliation"] = proof  # Keep the proof beside the child job.
+        if verdict.get("proven") is True:  # Every device runs the target version.
+            child["status"] = "completed"  # The upgrade reached every device.
+            child["error"] = None  # The check resolved the uncertainty.
 
     @staticmethod
     def _merge_readings(candidate: MutableMapping[str, Any], readings: Mapping[str, str], read_at: str) -> None:

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Blueprint, Response, current_app, jsonify, request, session
+from flask import Blueprint, Response, current_app, g, jsonify, request, session
 from requests.exceptions import RequestException  # Name the transport faults that the Mist SDK can raise.
 
 from ....firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
@@ -31,7 +31,9 @@ from ...upgrade.options import (
     build_options_record,
     build_options_view,
 )
+from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
 from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for each device of the operation.
+from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
 from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
 from ..factory import json_error
 from . import select as select_routes
@@ -44,6 +46,7 @@ from .select import (
     ORG_UPGRADE_OPTIONS_KEY,
     ORG_UPGRADE_OPTIONS_NONCE_KEY,
     ORG_UPGRADE_OPTIONS_ORG_KEY,
+    ORG_UPGRADE_RETRY_KEY,
     build_site_rows,
     next_page_answer,
     org_display_name,
@@ -79,6 +82,8 @@ OPTIONS_VIEW_CONFIG_KEY = "ORG_UPGRADE_OPTIONS_VIEW"
 OPTIONS_BUILDER_CONFIG_KEY = "ORG_UPGRADE_OPTIONS_BUILDER"
 WRITES_ENABLED_CONFIG_KEY = "ORG_UPGRADE_WRITES_ENABLED"
 DEVICE_VERSION_READER_CONFIG_KEY = "ORG_DEVICE_VERSION_READER"  # Issue #3249: a test replaces the stats read.
+RETRY_CACHE_KEY = "org_retry_plan"  # Issue #3247: one request builds the retry plan one time.
+PLAN_OPTION_DROPPED = frozenset({"operation_id", "target_count"})  # Issue #3247: values of the browser session only.
 
 MODE_REQUIRED = "multi_site_mode_required"
 MODE_REQUIRED_MESSAGE = "Choose the multi-site mode before you configure an organization upgrade."
@@ -275,7 +280,7 @@ def selected_rows(org_id: str, site_ids: list[str]) -> list[dict[str, Any]]:
 
 def read_options() -> dict[str, Any]:
     """Read and normalize the supported form or JSON option fields."""
-    source = _request_source()  # Read one request representation.
+    source = request_source()  # Read one request representation.
     request_body = _base_request_options(source)  # Normalize the shared AP fields.
     OrgUpgradeScheduleReader.add_start_option(request_body, source)  # Add the optional schedule.
     OrgUpgradeScheduleReader.add_reboot_option(request_body, source)  # Add the optional reboot delay.
@@ -285,8 +290,13 @@ def read_options() -> dict[str, Any]:
     return request_body  # Return one validated input shape.
 
 
-def _request_source() -> Mapping[str, Any]:
-    """Return the JSON object or form collection for this request."""
+def request_source() -> Mapping[str, Any]:
+    """Return the JSON object or form collection for this request.
+
+    Why:
+        Issue #3247. The reschedule route of `org_controls.py` reads the same
+        start time field, so the two modules share this one parser.
+    """
     payload: Any = request.get_json(silent=True)  # Read JSON without raising for a form request.
     return payload if isinstance(payload, Mapping) else request.form  # Prefer a valid JSON object.
 
@@ -395,7 +405,7 @@ def _site_option_record(
 ) -> dict[str, Any]:
     """Build one site's options through the existing option mapper."""
     logger.info("Read aggregate upgrade options for site %s", site_id)  # Log before the inventory read.
-    view = aggregate_options_view(cloud_session, org_id, site_id)  # Read the approved site inventory.
+    view = narrowed_view(aggregate_options_view(cloud_session, org_id, site_id))  # Issue #3247: a retry narrows.
     rows = _selected_target_rows(view, options, selected)  # Select explicit targets with a chosen version.
     logger.debug("The site option view selected %s target(s)", len(rows))  # Log after the transformation.
     logger.info("Validate aggregate upgrade options for site %s", site_id)  # Log before validation.
@@ -428,6 +438,63 @@ def stored_options() -> dict[str, Any]:
         return {}
     value: Any = session.get(OPTIONS_SESSION_KEY)
     return dict(value) if isinstance(value, dict) else {}
+
+
+def retry_plan_of(
+    record: Mapping[str, Any],
+    rows: Sequence[Mapping[str, Any]] | None = None,
+) -> OrgRetryPlan | None:
+    """Return the retry plan of one settled operation, or None.
+
+    Why:
+        Issue #3247. A retry while a child job can still write firmware can
+        upgrade one device twice at the same time. The retry control therefore
+        waits until every child job holds a final state.
+
+    Args:
+        record: The durable operation record.
+        rows: The device rows, when the caller already built them.
+
+    Returns:
+        The retry plan, or None when a child can still write or no device needs a retry.
+    """
+    if not _operation_is_settled(record):  # A child that can still write firmware blocks a retry.
+        return None  # The page shows no retry control yet.
+    return OrgRetrySelection.plan(record, rows)  # Select the devices that need a second attempt.
+
+
+def current_retry_plan() -> OrgRetryPlan | None:
+    """Return the retry plan that narrows the current options, or None.
+
+    Why:
+        Issue #3247. The signed cookie holds only a reference to the settled
+        operation, because the cookie holds 4 KB at most. Each request builds
+        the plan again from the durable record, and one request builds it one time.
+    """
+    if RETRY_CACHE_KEY not in g:  # The first read of this request builds the plan.
+        setattr(g, RETRY_CACHE_KEY, _read_retry_plan())  # Keep the plan for the other reads of this request.
+    cached: OrgRetryPlan | None = getattr(g, RETRY_CACHE_KEY)  # The plan of this request, or None.
+    return cached  # Every site of one save reads the same plan.
+
+
+def _read_retry_plan() -> OrgRetryPlan | None:
+    """Build the retry plan that the signed cookie names, or None."""
+    context = active_context()  # A retry needs the multi-site scope.
+    org_id = context[0] if context is not None else ""  # No scope means no retry.
+    reference = OrgRetryPlan.session_reference(session.get(ORG_UPGRADE_RETRY_KEY), org_id) if org_id else None
+    if reference is None:  # The operator opened no retry, or opened it for another organization.
+        return None  # The page plans every device.
+    logger.info("Read the retry plan of aggregate upgrade %s", reference)  # Log before the store read.
+    operation = owned_saved_operation(reference, org_id)  # The operator must own the settled operation.
+    plan = retry_plan_of(operation) if operation is not None else None  # Build the devices again.
+    logger.debug("The retry plan of %s holds %s device(s)", reference, len(plan.devices) if plan else 0)
+    return plan if plan is not None else OrgRetryPlan.empty(reference, org_id)  # Fail closed: plan no device.
+
+
+def narrowed_view(view: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one site view that holds only the retry devices when a retry applies."""
+    retry = current_retry_plan()  # The retry that the operator opened, or None.
+    return retry.narrow(view) if retry is not None else dict(view)  # A plain plan keeps every device.
 
 
 def request_for_service(site_ids: list[str], options: Mapping[str, Any]) -> dict[str, Any]:
@@ -640,25 +707,36 @@ def remember_job_state(org_id: str, upgrade_id: str, state: object) -> None:
 @identity.require_session
 def options_page() -> str | tuple[Response, int]:
     """Show the multi-device organization upgrade options."""
-    context = active_context()
-    if context is None:
+    context = active_context()  # Read the signed organization and site selection.
+    if context is None:  # The page belongs to the multi-site mode.
         return json_error(BAD_REQUEST_STATUS, MODE_REQUIRED, MODE_REQUIRED_MESSAGE)
-    org_id, site_ids = context
-    rows = selected_rows(org_id, site_ids)
-    if not rows:
+    org_id, site_ids = context  # Use only the validated active context.
+    rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
+    if not rows:  # Show no device of a missing or foreign site.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
-    cloud_session = current_cloud_session()  # The options page reads the same inventory as the single-site page.
-    device_views = []  # Keep one visible device list for each selected site.
-    if cloud_session is not None:  # A signed session normally supplies the cloud connection.
-        for row in rows:  # Each site keeps its identity beside its devices.
-            view = aggregate_options_view(cloud_session, org_id, str(row["site_id"]))
-            device_views.append({"site": row, **view})
-    return render_page(
+    retry = current_retry_plan()  # Issue #3247: a retry keeps only the devices that need a second attempt.
+    prefill = retry.options if retry is not None else {}  # A retry shows the earlier choices first.
+    return render_page(  # Render the options form with one device list for each site.
         OPTIONS_TEMPLATE,
         sites=rows,
-        device_views=device_views,
-        options=options_view(stored_options()),
+        device_views=_option_device_views(org_id, rows),
+        options=options_view(stored_options() or prefill),
+        retry=retry,
     )
+
+
+def _option_device_views(org_id: str, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Return the device view of each selected site, narrowed to the retry devices when a retry applies."""
+    cloud_session = current_cloud_session()  # The options page reads the same inventory as the single-site page.
+    if cloud_session is None:  # A signed session normally supplies the cloud connection.
+        return []  # Show no device without a cloud connection.
+    logger.info("Read the option device views of %s site(s)", len(rows))  # Log before the inventory reads.
+    device_views = []  # Keep one visible device list for each selected site.
+    for row in rows:  # Each site keeps its identity beside its devices.
+        view = narrowed_view(aggregate_options_view(cloud_session, org_id, str(row["site_id"])))  # One site.
+        device_views.append({"site": row, **view})  # The template reads the site beside its devices.
+    logger.debug("The options page shows %s device view(s)", len(device_views))  # Log after the reads.
+    return device_views  # The template paints one table for each site.
 
 
 @org_upgrade_bp.post(OPTIONS_API_PATH)
@@ -710,10 +788,27 @@ def _aggregate_saved_options(
     logger.info("Build the durable aggregate upgrade plan for organization %s", org_id)  # Log before the build.
     operation = aggregate_service().build(request_data)  # Build every child without a cloud write.
     logger.debug("The aggregate plan holds %s child job(s)", len(operation["children"]))  # Log after the build.
+    _attach_plan_options(operation, options)  # Issue #3247: a later retry reads the choices of this plan.
     _write_operation(operation)  # Persist the complete plan before confirmation.
     options["operation_id"] = operation["operation_id"]  # Keep only the durable identity in the browser.
     options["target_count"] = len(aggregate["targets"])  # Keep a small confirmation value.
     return options, str(operation["request_nonce"])  # Return the durable replay nonce.
+
+
+def _attach_plan_options(operation: MutableMapping[str, Any], options: Mapping[str, Any]) -> None:
+    """Store the choices of the operator and the retry source beside one new plan.
+
+    Why:
+        Issue #3247. A retry opens the options form with the earlier choices.
+        The browser cookie holds no device list, so the durable record keeps
+        the choices, and the new plan names the operation that it repeats.
+    """
+    choices = {key: value for key, value in options.items() if key not in PLAN_OPTION_DROPPED}  # Durable values.
+    operation["plan_options"] = choices  # The retry prefill of a later operation reads these values.
+    retry = current_retry_plan()  # The retry that narrowed this plan, or None.
+    if retry is not None:  # The new plan repeats an earlier operation.
+        operation["retry_of_operation_id"] = retry.operation_id  # The audit link to the earlier operation.
+        logger.debug("The new plan repeats aggregate upgrade %s", retry.operation_id)  # Log the link.
 
 
 @org_upgrade_bp.get(CONFIRM_PAGE_PATH)
@@ -728,7 +823,8 @@ def confirm_page() -> str | tuple[Response, int]:
     rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
     if not rows:  # Do not show an operation for missing or foreign sites.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
-    target_count, families = _confirmation_targets(options)  # Read only the durable aggregate child summary.
+    operation = _saved_operation(options)  # Read the durable plan one time for every value of the page.
+    target_count, families = _confirmation_targets(operation)  # Read only the durable aggregate child summary.
     view = options_view(options)  # Build the display values one time.
     return render_page(  # Render the existing typed confirmation page.
         CONFIRM_TEMPLATE,  # Keep the existing template.
@@ -739,13 +835,18 @@ def confirm_page() -> str | tuple[Response, int]:
         options=view,  # Show the confirmed choices.
         firmware_summary=firmware_summary(view, families),  # Name the target version of each family.
         writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.
+        schedule=OrgScheduleView.build(operation, view["start_time"]),  # Issue #3247: the start line and form.
     )
 
 
-def _confirmation_targets(options: Mapping[str, Any]) -> tuple[int, list[str]]:
-    """Return the aggregate target count and device families."""
+def _saved_operation(options: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return the durable plan that the saved options name, or None for an AP-only request."""
     operation_id = str(options.get("operation_id", ""))  # Read only the durable identity from the session.
-    operation = _read_operation(operation_id) if operation_id else None  # Read the confirmed plan from storage.
+    return _read_operation(operation_id) if operation_id else None  # Read the confirmed plan from storage.
+
+
+def _confirmation_targets(operation: Mapping[str, Any] | None) -> tuple[int, list[str]]:
+    """Return the aggregate target count and device families."""
     children = _mapping_children(operation)  # Ignore malformed child rows.
     return _aggregate_target_count(children), _aggregate_families(children)  # Build the display values.
 
@@ -771,11 +872,11 @@ def _site_device_count(rows: Sequence[Mapping[str, Any]]) -> int:
     return sum(int(row.get("device_count", 0)) for row in rows)  # Preserve the existing site total.
 
 
-def _confirmation_value() -> str:
+def confirmation_value() -> str:
     """Return the typed confirmation from JSON or form data."""
-    payload: Any = request.get_json(silent=True)
-    source = payload if isinstance(payload, Mapping) else request.form
-    return str(source.get("confirmation", ""))
+    payload: Any = request.get_json(silent=True)  # A body that is not JSON reads as None, never a fault.
+    source = payload if isinstance(payload, Mapping) else request.form  # Prefer a valid JSON object.
+    return str(source.get("confirmation", ""))  # An absent field reads as empty text, which matches no word.
 
 
 def _submission_is_repeated(request_nonce: object) -> bool:
@@ -958,7 +1059,7 @@ FINAL_WRITE_STATES = frozenset(  # Child states in which no firmware write can f
 )
 
 
-def _release_operation_locks(operation: MutableMapping[str, Any]) -> None:
+def release_operation_locks(operation: MutableMapping[str, Any]) -> None:
     """Release every stored site lock after one operation settles.
 
     Why:
@@ -1045,7 +1146,8 @@ def _submit_aggregate(
             SUBMISSION_FAILED,
             "One or more child outcomes are unknown. Read the operation before another action.",
         )
-    _release_operation_locks(operation)  # Free every site when no child can still write firmware.
+    release_operation_locks(operation)  # Free every site when no child can still write firmware.
+    session.pop(ORG_UPGRADE_RETRY_KEY, None)  # Issue #3247: the retry ends when its new plan reaches the cloud.
     return next_page_answer(f"/upgrade/org/jobs/{operation['operation_id']}")  # Show one seamless operation.
 
 
@@ -1107,7 +1209,7 @@ def _submission_guard(request_nonce: object) -> tuple[Response, int] | None:
         return json_error(
             CONFLICT_STATUS, ALREADY_SUBMITTED, "This confirmed request already started an organization upgrade."
         )
-    if _confirmation_value() != "CONFIRM":  # Require the exact typed confirmation.
+    if confirmation_value() != "CONFIRM":  # Require the exact typed confirmation.
         return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED, CONFIRMATION_MESSAGE)
     if _operator_cannot_answer():  # A multi-site write reaches many devices, so it needs an accountable name.
         return json_error(BAD_REQUEST_STATUS, UNREACHABLE_OPERATOR, UNREACHABLE_OPERATOR_MESSAGE)  # Names the cure.
@@ -1221,12 +1323,14 @@ def _aggregate_record_view(record: Mapping[str, Any]) -> dict[str, Any]:
         The public fields that the page and the poll add to the summary.
     """
     age = RunStalePolicy(datetime.now(tz=UTC)).assess(record)  # The age rule of the single-site page.
+    rows = OrgDeviceRows(record).rows()  # One row for each target of each child, built one time.
     return {
-        "devices": OrgDeviceRows(record).rows(),  # One row for each target of each child.
+        "devices": rows,  # The device table of the page and the poll.
         "operator_address": str(record.get("actor_email") or ""),  # An earlier record holds no address.
         "cloud_account": str(record.get("cloud_account") or ""),  # An earlier record holds no account.
         "updated_at": age.updated_at,  # The normalized UTC time, or empty text.
         "age_text": age.age_text,  # A short age, or "unknown".
+        "controls": OrgControlsView.build(record, retry_plan_of(record, rows)),  # Issue #3247: the recovery.
     }
 
 
@@ -1265,7 +1369,7 @@ def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
     return (counts[0], nested_counts[1], nested_counts[2]) if has_nested_targets else counts  # Prefer nested counts.
 
 
-def _owned_saved_operation(operation_id: str, org_id: str) -> dict[str, Any] | None:
+def owned_saved_operation(operation_id: str, org_id: str) -> dict[str, Any] | None:
     """Return one operation when the signed operator owns it."""
     operation = _read_operation(operation_id)  # Read from the durable store.
     if operation is None or operation.get("owner") != _owner_key() or operation.get("org_id") != org_id:
@@ -1281,7 +1385,7 @@ def job_page(upgrade_id: str) -> str | tuple[Response, int]:
     if not isinstance(context[0], str):  # Return the existing incomplete-context response.
         return context  # Stop before a storage or cloud read.
     org_id, cloud_session = context  # Use the validated status context.
-    operation = _owned_saved_operation(upgrade_id, org_id)  # Read only an owned durable operation.
+    operation = owned_saved_operation(upgrade_id, org_id)  # Read only an owned durable operation.
     if operation is not None:  # Aggregate paths keep the existing visible URL.
         _refresh_aggregate(cloud_session, operation)  # Read each child and preserve read failures.
         return _aggregate_job_page(upgrade_id, operation)  # Render all child results together.
@@ -1334,7 +1438,7 @@ def _refresh_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) 
             error,
         )  # Record the unknown read outcome.
     _refresh_device_versions(cloud_session, operation)  # Issue #3249: read the versions that the table needs.
-    _release_operation_locks(operation)  # Free every site as soon as the operation settles.
+    release_operation_locks(operation)  # Free every site as soon as the operation settles.
     logger.debug("The aggregate upgrade refresh finished with state %s", operation.get("state", "unknown"))
 
 
@@ -1424,7 +1528,7 @@ def upgrade_status(upgrade_id: str) -> tuple[Response, int]:
     if not isinstance(context[0], str):  # Return the existing incomplete-context response.
         return context  # Stop before a storage or cloud read.
     org_id, cloud_session = context  # Use the validated status context.
-    operation = _owned_saved_operation(upgrade_id, org_id)  # Read only an owned durable operation.
+    operation = owned_saved_operation(upgrade_id, org_id)  # Read only an owned durable operation.
     if operation is not None:  # Return every aggregate child in one browser response.
         _refresh_aggregate(cloud_session, operation)  # Read and persist each child.
         return jsonify(aggregate_summary(operation)), OK_STATUS  # Preserve mixed results.
@@ -1512,7 +1616,7 @@ def _cancel_operation(upgrade_id: str, org_id: str | None) -> dict[str, Any] | N
     """Return an owned aggregate operation for cancellation."""
     if org_id is None:  # An operation cannot cross an absent organization scope.
         return None  # Continue to the existing context error.
-    return _owned_saved_operation(upgrade_id, org_id)  # Enforce owner and organization matches.
+    return owned_saved_operation(upgrade_id, org_id)  # Enforce owner and organization matches.
 
 
 def _cancellation_guard() -> tuple[Response, int] | None:
@@ -1523,7 +1627,7 @@ def _cancellation_guard() -> tuple[Response, int] | None:
             WRITE_DISABLED,
             "Organization upgrade writes stay disabled until the multi-site safety gates are complete.",
         )
-    if _confirmation_value() != "CANCEL":  # Require the exact typed confirmation.
+    if confirmation_value() != "CANCEL":  # Require the exact typed confirmation.
         return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED, "Type CANCEL before you request cancellation.")
     return None  # Continue to ownership and scope checks.
 
@@ -1551,7 +1655,7 @@ def _cancel_aggregate(
             "One or more cancellation outcomes are unknown. Read the operation before another action.",
         )
     logger.debug("The aggregate cancellation %s finished with state %s", upgrade_id, operation.get("state", ""))
-    _release_operation_locks(operation)  # Free every site after each child holds a cancellation result.
+    release_operation_locks(operation)  # Free every site after each child holds a cancellation result.
     if _wants_html():  # Keep the browser on one visible operation.
         return next_page_answer(f"/upgrade/org/jobs/{upgrade_id}")  # Return the existing redirect response.
     return jsonify(aggregate_summary(operation)), OK_STATUS  # Show every child cancellation result.

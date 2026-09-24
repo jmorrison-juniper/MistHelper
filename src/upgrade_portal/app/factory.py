@@ -68,8 +68,19 @@ FAVICON_CACHE_SECONDS = 86400  # Cache the small icon for one day.
 # The five route modules match the five stages of the operator journey: sign in,
 # choose a site, capture the state, drive the upgrade, and review the difference.
 # Comparison route module added for T-014 delta analysis and approval workflow.
-# Keep the route order aligned with the operator journey.
-BLUEPRINT_NAMES = ("auth", "select", "capture", "upgrade", "org_upgrade", "review", "comparison", "run_controls")
+# Keep the route order aligned with the operator journey. Issue #3247 adds the
+# recovery controls of a multi-site operation after the multi-site routes.
+BLUEPRINT_NAMES = (
+    "auth",
+    "select",
+    "capture",
+    "upgrade",
+    "org_upgrade",
+    "org_controls",
+    "review",
+    "comparison",
+    "run_controls",
+)
 
 # Each route module publishes its blueprint under one of these names. The first
 # match wins, so a module needs no registration list of its own.

@@ -44,7 +44,7 @@ def test_request_source_empty_body_uses_form_mapping() -> None:
     """A zero-byte options body must fall back to the form mapping."""
     app = Flask(__name__)  # WHY: request parsing needs an application context.
     with app.test_request_context(ORG_OPTIONS_API, method="POST", data=b""):  # WHY: model an empty request body.
-        result = org_upgrade._request_source()  # WHY: drive the product request parser.
+        result = org_upgrade.request_source()  # WHY: drive the product request parser.
     assert dict(result) == {}  # WHY: the route must continue to its explicit missing-option error.
 
 
@@ -58,7 +58,7 @@ def test_request_source_malformed_json_uses_form_mapping() -> None:
         data="{not valid JSONDecodeError",
         headers=headers,
     ):
-        result = org_upgrade._request_source()  # WHY: drive the product request parser.
+        result = org_upgrade.request_source()  # WHY: drive the product request parser.
     assert dict(result) == {}  # WHY: the route must continue to its explicit missing-option error.
 
 

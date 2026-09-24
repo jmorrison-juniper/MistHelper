@@ -21,6 +21,40 @@
     One operation targets {{ rows | length }} selected sites. The portal selects the safe route for each device family.
   </p>
 
+  {#
+    Issue #3247. A retry keeps only the devices of a settled operation that did
+    not reach the target version. The banner names each device, so the
+    operator sees the narrowed plan before the save. The second form ends the
+    retry, and the page then plans every device of the selected sites.
+  #}
+  {% if retry %}
+    <div class="alert alert-warning" role="status" data-testid="org-upgrade-retry-banner">
+      <p class="mb-2">
+        This plan retries operation <span class="cell-mono">{{ retry.operation_id }}</span>.
+        {% if retry.devices %}
+          It holds only the {{ retry.devices | length }} {{ 'device' if retry.devices | length == 1 else 'devices' }} that did not reach the target version.
+        {% else %}
+          No device of that operation needs a retry now, so the plan holds no device.
+        {% endif %}
+      </p>
+      {% if retry.devices %}
+        <ul class="mb-2" data-testid="org-upgrade-retry-banner-devices">
+          {% for device in retry.devices %}
+            <li><span class="cell-mono">{{ device.mac }}</span> {{ device.name | default('Unnamed device', true) }} at {{ device.site_name | default('an unnamed site', true) }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <form method="post" action="/api/org-upgrades/options/retry/clear">
+        <input type="hidden"
+               name="csrf_token"
+               value="{{ csrf_token() if csrf_token is defined else '' }}">
+        <button type="submit"
+                class="portal-button"
+                data-testid="org-upgrade-retry-clear">Plan every device instead</button>
+      </form>
+    </div>
+  {% endif %}
+
   <form method="post" action="/api/org-upgrades/options">
     <input type="hidden"
            name="csrf_token"
