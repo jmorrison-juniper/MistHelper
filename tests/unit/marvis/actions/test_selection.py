@@ -236,9 +236,8 @@ class TestResolutionCode:
     )
     def test_each_form_names_its_code(self, answer: str, expected: str) -> None:
         """The number and the key of a code are equal."""
-        code = MarvisResolvePrompts.parse_code(answer)
-        assert code is not None
-        assert code.key == expected
+        code = MarvisResolvePrompts.parse_code(answer)  # Parse the operator answer through the product prompt.
+        assert code == CODES[expected]  # The key, the name, and the comment rule all match the listed code.
 
     @pytest.mark.parametrize("answer", ["", "0", "5", "resolved", "1,2"])
     def test_an_unknown_answer_names_no_code(self, answer: str) -> None:
@@ -247,10 +246,9 @@ class TestResolutionCode:
 
     def test_a_blank_code_answer_gives_the_suggested_code(self, scripted_input: Any) -> None:
         """The Mist UI preselects the suggested code."""
-        scripted_input("")
-        code = MarvisResolvePrompts.ask_code()
-        assert code is not None
-        assert code.key == "suggested"
+        scripted_input("")  # The operator presses Enter at the resolution code prompt.
+        code = MarvisResolvePrompts.ask_code()  # Ask for the code through the product prompt.
+        assert code == CODES["suggested"]  # The blank answer selects the full suggested code entry.
 
     def test_a_bad_code_answer_is_refused(self, scripted_input: Any, caplog: Any) -> None:
         """The web dashboard reports the refusal as a failed run."""

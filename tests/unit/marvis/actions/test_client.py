@@ -113,11 +113,17 @@ class TestListRead:
         result = client_for(session, page_limit=2).list_actions()
         assert (result.rows, result.status_code, result.complete) == ([], 403, False)
 
-    def test_a_refused_page_names_the_status(self) -> None:
-        """The operator must learn the HTTP status."""
-        session = FakeMistSession(rows(1))
-        session.list_statuses = [500]
-        assert client_for(session).list_actions().problem == "The API returned HTTP 500."
+    def test_a_server_error_page_names_the_status(self) -> None:
+        """The operator must learn the HTTP status when the Mist cloud fails."""
+        session = FakeMistSession(rows(1))  # One stored row, so only the status can empty the result.
+        session.list_statuses = [500]  # The first list page returns a server error.
+        result = client_for(session).list_actions()  # Read the list through the product client.
+        assert result.status_code == 500  # The result keeps the server error status for the log line.
+        assert (result.rows, result.complete, result.problem) == (
+            [],
+            False,
+            "The API returned HTTP 500.",
+        )  # A server error gives no rows, an incomplete read, and a named status.
 
     def test_a_missing_answer_points_to_the_script_log(self) -> None:
         """mistapi returns no status when no HTTP answer arrived."""
@@ -235,6 +241,15 @@ class TestResolveRequest:
         session.put_statuses = [400]
         status, error = client_for(session).resolve_action({"row_key": "x"})
         assert (status, error) == (400, 'HTTP 400 {"detail": "the request was refused"}')
+
+    def test_a_server_error_returns_the_status_and_the_body(self) -> None:
+        """A 5xx answer means that Mist did not resolve the action."""
+        session = FakeMistSession([make_raw(1)])  # One stored row, so the request has a real target.
+        session.put_statuses = [503]  # The resolve request returns a server error.
+        status, error = client_for(session).resolve_action({"row_key": "synthetic-row-key-0001"})  # Send one request.
+        assert status == 503  # The caller receives the server error status, not a success.
+        assert error == 'HTTP 503 {"detail": "the request was refused"}'  # The results file names the status.
+        assert session.rows[0]["status"] == "open"  # The fake session applied no status change.
 
     def test_a_long_error_body_is_shortened(self) -> None:
         """One results cell stays short enough to read."""
