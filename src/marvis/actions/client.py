@@ -9,6 +9,10 @@ Evidence:
     endpoints below. The public OpenAPI document does not describe them.
     Research R1 to R6 in ``specs/3299-marvis-actions-bulk-resolve`` holds the
     read-only probes that confirmed each path, each query value, and each body.
+
+    The Marvis alarm search is a public endpoint of the organization alarms.
+    Research R1 to R4 in ``specs/3339-marvis-alarm-join`` holds its live
+    read-only test: the join key, the window, the next page links, and the fields.
 """
 
 from __future__ import annotations  # WHY: enable PEP 604 unions in the annotations of this module.
@@ -31,11 +35,14 @@ SCHEMA_PATH = "/api/v1/labs/suggestions_schema"  # WHY: the topic names and the 
 MAX_LIST_PAGES = 100  # WHY: a guard against an API that never returns a short page.
 SITE_PAGE_LIMIT = 1000  # WHY: the largest page that the site list accepts.
 ERROR_TEXT_LIMIT = 300  # WHY: keep one results cell short enough to read.
+ALARM_GROUP = "marvis"  # WHY: the alarm group that holds the alarm of a Marvis Action.
+ALARM_PAGE_LIMIT = 1000  # WHY: the largest page that the alarm search accepts.
+MAX_ALARM_PAGES = 100  # WHY: a guard against an alarm search that never ends its list.
 
 
 @dataclass(slots=True)
 class MarvisListResult:
-    """The outcome of one full read of the Marvis Actions list.
+    """The outcome of one full read of a paged Mist list.
 
     Attributes:
         rows: The raw rows, in the order that the API returned them.
@@ -51,12 +58,12 @@ class MarvisListResult:
 
 
 class MarvisActionsClient:
-    """Read and change the Marvis Actions of one organization.
+    """Read and change the Marvis Actions of one organization, and read their Marvis alarms.
 
     Why:
-        The list read, the schema read, the site read, and the resolve request
-        share one session and one organization. The class keeps both, so each
-        call needs only its own values.
+        The list read, the schema read, the site read, the alarm search, and
+        the resolve request share one session and one organization. The class
+        keeps both, so each call needs only its own values.
     """
 
     def __init__(self, apisession: Any, org_id: str, page_limit: int) -> None:
@@ -135,6 +142,36 @@ class MarvisActionsClient:
         logger.debug("Read %d site names", len(names))  # WHY: result summary.
         return names  # WHY: the builder adds the name to each row.
 
+    def search_marvis_alarms(self, start: int, end: int) -> MarvisListResult:
+        """Read every page of the Marvis alarms in one time window.
+
+        Args:
+            start: The start of the window, in epoch seconds.
+            end: The end of the window, in epoch seconds.
+
+        Returns:
+            The Marvis alarm rows. If one page fails, the result holds no rows and names the problem.
+        """
+        logger.info("Searching the Marvis alarms of org %s from %d to %d", self._org_id, start, end)  # WHY: log.
+        rows: list[dict[str, Any]] = []  # WHY: collect the Marvis rows of every page.
+        links: set[str] = set()  # WHY: a repeated next link would read the same page again and again.
+        response = self._read_first_alarm_page(start, end)  # WHY: page 1 carries the query values.
+        for page in range(1, MAX_ALARM_PAGES + 1):  # WHY: the guard stops an API that never ends the list.
+            problem = self._alarm_page_problem(response)  # WHY: one bad page makes the join unsafe.
+            if problem:  # WHY: a partial alarm list would show an empty alarm cell as a fact.
+                return MarvisListResult([], getattr(response, "status_code", None), False, problem)  # WHY: no rows.
+            results = response.data["results"]  # WHY: the problem check proved that this list exists.
+            rows.extend(self._marvis_alarms(results))  # WHY: keep only the rows of the Marvis group.
+            link = MarvisFieldReader.text(response.data.get("next"))  # WHY: the path of the next page, or empty.
+            if not results or not link:  # WHY: an empty page or a page without a link ends the list.
+                logger.debug("Read %d Marvis alarms on %d pages", len(rows), page)  # WHY: result summary.
+                return MarvisListResult(rows, response.status_code)  # WHY: the read is complete.
+            if link in links or page == MAX_ALARM_PAGES:  # WHY: a loop of links or the guard stops the read.
+                break  # WHY: the guard result keeps the rows that the read collected.
+            links.add(link)  # WHY: remember the link, so a loop of links stops the read.
+            response = self._read_next_alarm_page(response, page + 1)  # WHY: follow the link of this page.
+        return self._alarm_guard_result(rows, len(links) + 1)  # WHY: the read stopped before the last page.
+
     def resolve_action(self, body: dict[str, Any]) -> tuple[int | None, str]:
         """Send one status change for one action.
 
@@ -185,6 +222,52 @@ class MarvisActionsClient:
             return rows_read >= total  # WHY: the next page would be empty.
         page_size = MarvisFieldReader.integer(data.get("limit")) or self._page_limit  # WHY: the API can cap it.
         return results_count < page_size  # WHY: without a total, a short page is the last page.
+
+    def _read_first_alarm_page(self, start: int, end: int) -> Any:
+        """Read the first page of the Marvis alarm search and return the mistapi response."""
+        logger.info("Reading Marvis alarm page 1")  # WHY: action log before the read.
+        response = mistapi.api.v1.orgs.alarms.searchOrgAlarms(  # WHY: the public search of the org alarms.
+            self._apisession,
+            self._org_id,
+            group=ALARM_GROUP,  # WHY: the Marvis alarms only. The other groups hold no action.
+            start=str(start),  # WHY: the SDK sends the window as text in epoch seconds.
+            end=str(end),  # WHY: the end of the window, in epoch seconds.
+            limit=ALARM_PAGE_LIMIT,  # WHY: the largest page, so the lab organization needs one request.
+        )
+        logger.debug("Marvis alarm page 1 returned HTTP %s", response.status_code)  # WHY: result summary.
+        return response  # WHY: the caller checks the status and the body.
+
+    def _read_next_alarm_page(self, response: Any, page: int) -> Any:
+        """Follow the next link of one alarm page and return the mistapi response, or None."""
+        logger.info("Reading Marvis alarm page %d", page)  # WHY: action log before the read.
+        next_response = mistapi.get_next(self._apisession, response)  # WHY: the link keeps the search position.
+        status = getattr(next_response, "status_code", None)  # WHY: get_next returns None without a link.
+        logger.debug("Marvis alarm page %d returned HTTP %s", page, status)  # WHY: result summary.
+        return next_response  # WHY: the caller checks the status and the body.
+
+    @classmethod
+    def _alarm_page_problem(cls, response: Any) -> str:
+        """Return the reason that an alarm page is not usable, or an empty string."""
+        if response is None:  # WHY: get_next returns None when the response holds no next link.
+            return "The alarm search returned no next page."  # WHY: name the missing page.
+        return cls._page_problem(response)  # WHY: the alarm pages share the status and shape checks of the list.
+
+    @staticmethod
+    def _marvis_alarms(results: list[Any]) -> list[dict[str, Any]]:
+        """Return the alarm rows of the Marvis group, in the order of the page."""
+        return [  # WHY: the API filters by group, and this check keeps a stray row out of the join.
+            row for row in results if isinstance(row, dict) and row.get("group") == ALARM_GROUP
+        ]
+
+    @staticmethod
+    def _alarm_guard_result(rows: list[dict[str, Any]], pages: int) -> MarvisListResult:
+        """Warn the operator, and return the alarm rows that the read collected before it stopped."""
+        logger.warning(  # WHY: the operator must know that some alarm cells can be empty by mistake.
+            "The Marvis alarm search stopped at page %d before its last page. The join holds the first %d alarms only.",
+            pages,
+            len(rows),
+        )
+        return MarvisListResult(rows, 200, complete=False)  # WHY: keep the rows, and mark the read incomplete.
 
     @staticmethod
     def _guard_result(rows: list[dict[str, Any]]) -> MarvisListResult:

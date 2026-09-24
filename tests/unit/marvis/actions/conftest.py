@@ -3,8 +3,9 @@
 Why:
     The client, the selector, and the operation all read raw Mist rows. One
     factory builds a realistic row, and one fake session answers the list
-    read, the schema read, and the resolve request. Each test then states only
-    the values that it checks.
+    read, the schema read, and the resolve request. A second factory builds a
+    realistic Marvis alarm for the alarm join. Each test then states only the
+    values that it checks.
 
 Privacy:
     Every identifier below is synthetic. No value comes from a live organization.
@@ -83,6 +84,44 @@ def make_raw(number: int = 1, **overrides: Any) -> dict[str, Any]:
     }
     row.update(overrides)
     return row
+
+
+def make_alarm(number: int = 1, **overrides: Any) -> dict[str, Any]:
+    """Return one realistic raw Marvis alarm row with synthetic identifiers.
+
+    Args:
+        number: The number of the action of the alarm. The alarm ``id`` equals the ``uuid`` of ``make_raw(number)``.
+        **overrides: The fields to replace.
+
+    Returns:
+        The raw alarm row, in the shape of the live alarm search of 2026-09-24.
+    """
+    start_seconds = (BASE_START_MS + number * 60_000) // 1000  # The alarm timestamp equals the action start.
+    alarm: dict[str, Any] = {
+        "id": f"00000000-0000-4000-8000-{number:012d}",
+        "org_id": ORG_ID,
+        "site_id": SITE_ID,
+        "group": "marvis",
+        "type": "switch_offline",
+        "severity": "critical",
+        "status": "resolved",
+        "timestamp": start_seconds,
+        "last_seen": start_seconds + 600,
+        "resolved_time": start_seconds + 900,
+        "count": 1,
+        "entity_macs": [f"02000000{number:04d}"],
+        "impacted_entities": [],
+    }
+    alarm.update(overrides)
+    return alarm
+
+
+def make_alarm_page(alarms: list[Any], next_link: str | None = None) -> FakeResponse:
+    """Return one page of the Marvis alarm search, with a next link when one is given."""
+    data: dict[str, Any] = {"results": list(alarms), "total": len(alarms), "limit": 1000}
+    if next_link is not None:
+        data["next"] = next_link
+    return FakeResponse(200, data)
 
 
 class FakeMistSession:
@@ -191,10 +230,11 @@ def scripted_input(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
 @pytest.fixture
 def site_api() -> Iterator[MagicMock]:
-    """Replace the mistapi module of the client, so the site read needs no network."""
+    """Replace the mistapi module of the client, so the site read and the alarm search need no network."""
     with patch("src.marvis.actions.client.mistapi") as mistapi_module:
         mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = FakeResponse(200, [])
         mistapi_module.get_all.return_value = [{"id": SITE_ID, "name": SITE_NAME}]
+        mistapi_module.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([])  # No alarm by default.
         yield mistapi_module
 
 

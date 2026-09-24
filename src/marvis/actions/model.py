@@ -210,6 +210,24 @@ class MarvisFieldReader:
             return ""  # WHY: an invalid time must not stop the export.
 
     @staticmethod
+    def iso_seconds(value: Any) -> str:
+        """Return an epoch second value as ISO 8601 UTC text.
+
+        Args:
+            value: An epoch time in seconds, such as the ``resolved_time`` of a Marvis alarm.
+
+        Returns:
+            The UTC time as text, or an empty string when the value holds no valid time.
+        """
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):  # WHY: a flag or an object is no time.
+            return ""  # WHY: an empty cell tells the reader that no time exists.
+        try:  # WHY: a string can hold any text, and a very large integer cannot become a float.
+            epoch_ms = float(value) * 1000  # WHY: the iso reader takes milliseconds, and a decimal second stays exact.
+        except (OverflowError, ValueError):  # WHY: the text holds no number, or the number is too large.
+            return ""  # WHY: an invalid time must not stop the export.
+        return MarvisFieldReader.iso(int(epoch_ms)) if math.isfinite(epoch_ms) else ""  # WHY: inf and NaN hold no time.
+
+    @staticmethod
     def first_text(mapping: Mapping[str, Any], keys: Iterable[str]) -> str:
         """Return the first value that holds text, in the order of the keys.
 
@@ -293,7 +311,9 @@ class MarvisActionRecord:
     Why:
         The field order is the column order of ``OrgMarvisActions.csv``. The
         record holds readable times only. The database document keeps the raw
-        epoch values, so no precision is lost.
+        epoch values, so no precision is lost. The last eight fields hold the
+        Marvis alarm of the action (issue #3339). They keep their empty
+        defaults until the alarm join fills them.
     """
 
     uuid: str  # WHY: the stable key of the action, the same as in the Mist UI.
@@ -339,6 +359,14 @@ class MarvisActionRecord:
     zendesk_ticket: str  # WHY: the support case of the action.
     details_json: str  # WHY: every topic value, for an audit.
     exported_at: str  # WHY: the time of the export run.
+    alarm_id: str = ""  # WHY: the Marvis alarm of the action. Empty when the join found no alarm.
+    alarm_type: str = ""  # WHY: the alarm type, such as switch_offline. It differs from the topic name.
+    alarm_status: str = ""  # WHY: the alarm status that Mist sets, such as open or resolved.
+    alarm_resolved_time_iso: str = ""  # WHY: when Mist resolved the alarm.
+    alarm_acked: bool | None = None  # WHY: True when an operator acknowledged the alarm. None when Mist sent no flag.
+    alarm_acked_time_iso: str = ""  # WHY: when an operator acknowledged the alarm.
+    alarm_ack_admin_name: str = ""  # WHY: the operator who acknowledged the alarm.
+    alarm_note: str = ""  # WHY: the note that an operator wrote on the alarm.
 
     @classmethod
     def column_names(cls) -> list[str]:
@@ -413,7 +441,7 @@ class MarvisActionRecordBuilder:
         parts.update(self._entity_part(raw, details))  # WHY: the device, MAC, port, and cause columns.
         parts.update(self._time_part(raw))  # WHY: the readable time and the count columns.
         parts.update(self._audit_part(raw, details))  # WHY: the self-drive and the audit columns.
-        return MarvisActionRecord(**parts)  # WHY: the dataclass rejects a missing or an extra column.
+        return MarvisActionRecord(**parts)  # WHY: the eight alarm columns keep their defaults until the join.
 
     @staticmethod
     def document(raw: Mapping[str, Any], record: MarvisActionRecord) -> dict[str, Any]:

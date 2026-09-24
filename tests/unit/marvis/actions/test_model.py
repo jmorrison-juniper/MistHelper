@@ -12,6 +12,7 @@ import uuid
 
 import pytest
 
+from src.marvis.actions.alarms import ALARM_COLUMNS
 from src.marvis.actions.model import (
     CATEGORY_NAMES,
     OPEN_STATUSES,
@@ -114,6 +115,34 @@ class TestFieldReaderFlagAndTime:
     def test_first_text_returns_an_empty_string_when_no_key_holds_text(self) -> None:
         """No match gives an empty cell."""
         assert MarvisFieldReader.first_text({"other": "x"}, ("entity_name",)) == ""
+
+
+class TestFieldReaderSeconds:
+    """Issue #3339: the alarm search writes epoch seconds, and the seconds reader never guesses a time."""
+
+    @pytest.mark.parametrize(
+        "value",
+        [1_700_000_000, 1_700_000_000.0, 1_700_000_000.4, "1700000000", "1700000000.0", " 1700000000 "],
+    )
+    def test_an_epoch_second_value_becomes_utc_text(self, value: object) -> None:
+        """A whole number, a decimal number, and numeric text give the same second."""
+        assert MarvisFieldReader.iso_seconds(value) == "2023-11-14T22:13:20+00:00"
+
+    @pytest.mark.parametrize(
+        "value",
+        [None, 0, -5, 0.0, "never", "", True, False, [1_700_000_000], {"t": 1}, 10**400, "1e400", float("inf")],
+    )
+    def test_a_missing_or_invalid_time_is_an_empty_cell(self, value: object) -> None:
+        """A flag, an object, text, zero, and a value out of range all give an empty cell."""
+        assert MarvisFieldReader.iso_seconds(value) == ""
+
+    def test_nan_is_an_empty_cell(self) -> None:
+        """NaN holds no time."""
+        assert MarvisFieldReader.iso_seconds(float("nan")) == ""
+
+    def test_a_time_after_the_year_9999_is_an_empty_cell(self) -> None:
+        """The datetime range ends at the year 9999, and the export must continue."""
+        assert MarvisFieldReader.iso_seconds(10**15) == ""
 
 
 class TestCatalogs:
@@ -289,9 +318,28 @@ class TestRecordBuilder:
         """The CSV header must follow the dataclass declaration."""
         assert list(build_record(make_raw()).as_row()) == MarvisActionRecord.column_names()
 
-    def test_the_record_declares_43_columns(self) -> None:
-        """The endpoint report and the portal documentation name 43 columns."""
-        assert len(MarvisActionRecord.column_names()) == 43
+    def test_the_record_declares_51_columns(self) -> None:
+        """The endpoint report and the portal documentation name 51 columns: 43 action columns and 8 alarm columns."""
+        assert len(MarvisActionRecord.column_names()) == 51
+
+    def test_the_last_eight_columns_are_the_alarm_columns(self) -> None:
+        """Issue #3339: the alarm columns follow exported_at, so the first 43 columns keep their positions."""
+        names = MarvisActionRecord.column_names()
+        assert (names[42], tuple(names[43:])) == ("exported_at", ALARM_COLUMNS)
+
+    def test_a_built_record_holds_the_empty_alarm_defaults(self) -> None:
+        """The builder fills no alarm column. The join fills them later."""
+        row = build_record(make_raw()).as_row()
+        assert {name: row[name] for name in ALARM_COLUMNS} == {
+            "alarm_id": "",
+            "alarm_type": "",
+            "alarm_status": "",
+            "alarm_resolved_time_iso": "",
+            "alarm_acked": None,
+            "alarm_acked_time_iso": "",
+            "alarm_ack_admin_name": "",
+            "alarm_note": "",
+        }
 
     def test_the_details_column_holds_sorted_json(self) -> None:
         """An auditor can read every topic value."""
@@ -322,6 +370,12 @@ class TestDocument:
         """The raw details object is already in the document."""
         raw = make_raw()
         assert "details_json" not in MarvisActionRecordBuilder.document(raw, build_record(raw))
+
+    def test_the_document_holds_the_eight_alarm_columns(self) -> None:
+        """Issue #3339: every document holds the alarm columns, so a database query can filter on them."""
+        raw = make_raw()
+        document = MarvisActionRecordBuilder.document(raw, build_record(raw))
+        assert [name for name in ALARM_COLUMNS if name in document] == list(ALARM_COLUMNS)
 
     def test_a_row_without_a_uuid_receives_the_derived_key(self) -> None:
         """Every document must hold its primary key."""

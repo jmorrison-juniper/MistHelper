@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.marvis.actions.operation import MarvisActionsOperation, MarvisBulkResolver
 from src.marvis.actions.selection import DISPLAY_LEVEL
-from tests.unit.marvis.actions.conftest import make_raw
+from tests.unit.marvis.actions.conftest import FakeResponse, make_alarm, make_alarm_page, make_raw
 
 CONSOLE_LEVEL = 30  # The CONSOLE_LOG_LEVEL value of the container .env.
 
@@ -138,6 +139,28 @@ class TestTheExportConsole:
         harness([make_raw(1, status="snoozed")], "4", "", "")
         lines = run_menu(caplog)
         assert has_line(lines, "Caution: MistHelper does not know these status keys")
+
+    def test_the_alarm_count_lines_reach_the_console(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Issue #3339: the SSH operator sees the two alarm counts. The search step stays in script.log."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), make_alarm(7)])
+        harness([make_raw(1), make_raw(2)], "", "", "")
+        lines = run_menu(caplog)
+        assert "Marvis alarm join: 1 of 2 exported actions have a Marvis alarm. 1 have no alarm." in lines
+        assert "Marvis alarms in the search window without an action in the list: 1" in lines
+        for start in ("Searching the Marvis alarms", "Reading Marvis alarm page 1", "Joining 2 Marvis alarms"):
+            assert not has_line(lines, start), start
+
+    def test_a_failed_alarm_search_reaches_the_console(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Issue #3339: the SSH operator learns why every alarm cell is empty."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = FakeResponse(403, {"detail": "refused"})
+        harness([make_raw(1)], "", "", "")
+        lines = run_menu(caplog)
+        assert has_line(lines, "The Marvis alarm search returned no usable result. The API returned HTTP 403.")
+        assert has_line(lines, "Completed the Marvis Actions export and wrote results to OrgMarvisActions.csv")
 
 
 class TestTheResolveConsole:
