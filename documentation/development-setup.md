@@ -125,11 +125,22 @@ $env:UPGRADE_PORTAL_E2E_STRICT = "1"
 python -m pytest tests/e2e/upgrade_portal
 ```
 
-If the browser download failed, repair it with one command.
+If the browser download failed, repair it with one command. The command sets
+the Node option `--use-system-ca`, so the download trusts the certificate store
+of the system.
 
 ```powershell
-python -m playwright install chromium
+$env:NODE_OPTIONS = "--use-system-ca"; python -m playwright install chromium
 ```
+
+On Linux, run `NODE_OPTIONS=--use-system-ca python -m playwright install chromium`.
+
+Playwright downloads the browser with its own Node runtime. That runtime trusts
+only its own certificate list by default. A proxy that inspects TLS, such as
+Zscaler, signs each certificate with a root that only the system store holds.
+Without the option, the download fails with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`.
+The option removes no certificate, so it is safe on a network without a proxy.
+The bootstrap sets the option for its own download. See issue #3302.
 
 The tests start their own portal, because only that portal holds the sign-in
 seam. If another process already listens on port 8056, every test reports an
