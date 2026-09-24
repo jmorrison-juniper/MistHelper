@@ -183,12 +183,52 @@ or a resolve.
 | `start_time`, `end_time`, `suggestion_time`, `resolve_time`, `validation_time`, `reoccur_time` | Times in epoch milliseconds. | `1790196720000` |
 | `duration` | The length of the problem in seconds. | `806` |
 | `reoccur_count`, `batch_count` | The count of repeats and the count of grouped entities. | `1` |
-| `self_drivable`, `self_driven` | Marvis can fix the problem alone, and Marvis did fix the problem alone. | `false` |
+| `self_drivable`, `self_driven` | Two flags of the Marvis self-drive feature. No Mist document defines them. See [The self-drive fields](#the-self-drive-fields). | `false` |
 | `zendesk_ticket` | The link to the support case. | `null` |
 
 Do not use `unique_key` as a key. The value repeats across rows. Do not use
 `suggestion_id` as a key, because some rows do not hold it. The research found
 `uuid` on all 112 rows of the lab organization.
+
+### The self-drive fields
+
+No Mist document defines the fields `self_drivable` and `self_driven`. The OpenAPI
+document of Mist does not describe the `labs` rows. The topic schema describes each
+topic, but it does not describe the fields of a row.
+
+Do not use `self_driven` alone as proof that Marvis fixed the problem. Two signals
+can show a change by Marvis, and each signal misses the rows that the other signal
+finds.
+
+| Signal | Rows in the lab organization on 2026-09-24 | What the rows hold |
+| - | - | - |
+| `self_driven` is `True` | 8 | Six `bad_wan_link` rows and two `non_compliant` rows of the `gateway` category. Each row holds the status `validated`. In each row, the `resolve_time` is equal to the `validation_time`. |
+| The status is `marvis_self_driven` | 1 | One `site_radar_channel_punishment` row. The row holds no `self_driven` value, no `resolve_time`, and no `validation_time`. |
+
+To find each action that Marvis can have changed, read both signals. Keep a row if
+`self_driven` is `True` or if `status` is `marvis_self_driven`.
+
+`self_drivable` is `True` on 10 rows. The 10 rows belong to three topics:
+`bad_wan_link`, the `gateway` topic `non_compliant`, and
+`site_radar_channel_punishment`. Each of the three topics has a flag in the org
+setting `marvis.auto_operations`.
+
+A live read on 2026-09-24 tested the settings as a cause. The read sent GET
+requests only.
+
+- The org setting `marvis.auto_operations` held nine flags, and each flag held `true`.
+
+- The org audit log holds two changes to that setting since 2026-01-01. The change
+  of 2026-04-23 added `gateway_bad_wan_link` and `ap_site_radar_channel_punishment`
+  with the value `true`. `gateway_non_compliant` held `true` before that change. The
+  change of 2026-09-24 added `switch_missing_vlan` and `switch_stp_loop`.
+
+- The site settings of the two sites that hold these rows held no `marvis` value.
+
+The flags of the three topics held `true` before the oldest action started on
+2026-07-02. The settings therefore do not explain the difference between the
+signals. The two `site_radar_channel_punishment` rows hold no `self_driven` value,
+but the eight `gateway` rows hold `True`. Issue #3340 holds the evidence.
 
 ## Step 2. Read the topic schema
 
