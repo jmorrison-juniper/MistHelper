@@ -8,11 +8,13 @@ Why:
     chosen topics in one run.
 
 Output:
-    Modes 1 and 2 write ``OrgMarvisActions.csv`` under the data directory and
-    write the same rows to the configured database backend. Mode 3 writes
-    ``OrgMarvisActionsResolveResults.csv``, with one row for each request.
-    With ``--output-format sqlite``, each write goes to a SQLite table that has
-    the file name without ``.csv``, and the run writes no CSV file.
+    Modes 1, 2, and 4 write ``OrgMarvisActions.csv`` under the data directory
+    and write the same rows to the configured database backend. Mode 1 writes
+    every action, mode 2 writes the open actions, and mode 4 writes the closed
+    actions. Mode 3 writes ``OrgMarvisActionsResolveResults.csv``, with one row
+    for each request. With ``--output-format sqlite``, each write goes to a
+    SQLite table that has the file name without ``.csv``, and the run writes no
+    CSV file.
 
 Safety:
     Mode 3 changes Mist records. It sends nothing until the operator types
@@ -39,6 +41,7 @@ from src.dataclasses.export_backend_options import ExportBackendOptions  # WHY: 
 from src.marvis.actions.client import MarvisActionsClient, MarvisListResult  # WHY: every API call of the feature.
 from src.marvis.actions.model import (  # WHY: the status catalog, the records, and the field reader.
     OPEN_STATUSES,
+    STATUS_NAMES,
     MarvisActionRecord,
     MarvisActionRecordBuilder,
     MarvisCatalog,
@@ -47,7 +50,8 @@ from src.marvis.actions.model import (  # WHY: the status catalog, the records, 
 from src.marvis.actions.selection import (  # WHY: the modes, the filter prompts, and the resolve prompts.
     ANSWER_ECHO_LIMIT,
     DISPLAY_LEVEL,
-    MODE_EXPORT_ALL,
+    MODE_ACTION_NOUNS,
+    MODE_IS_OPEN_VALUES,
     MODE_RESOLVE,
     MODES,
     MarvisFilterPrompts,
@@ -521,7 +525,7 @@ class MarvisActionsOperation:
         mode = MarvisFilterPrompts.ask_mode()  # WHY: prompt 1 of the portal contract.
         if mode not in MODES:  # WHY: an unknown mode must not guess an action.
             logger.error(  # WHY: the handled refusal that the web dashboard reports as failed.
-                "MistHelper could not match the mode answer '%s'. Enter 1, 2, or 3. No file was written.",
+                "MistHelper could not match the mode answer '%s'. Enter 1, 2, 3, or 4. No file was written.",
                 mode[:ANSWER_ECHO_LIMIT],  # WHY: repeat the start of a bad answer only.
             )
             return  # WHY: stop before any API call.
@@ -534,7 +538,7 @@ class MarvisActionsOperation:
         if mode == MODE_RESOLVE:  # WHY: mode 3 changes Mist records.
             MarvisResolveWorkflow(loaded).resolve_open_actions(selected)  # WHY: preview, confirm, resolve, and verify.
             return  # WHY: mode 3 writes the results file only.
-        cls._export(loaded, selected)  # WHY: modes 1 and 2 write the report.
+        cls._export(loaded, selected)  # WHY: modes 1, 2, and 4 write the report.
 
     @classmethod
     def _load(cls, mode: str) -> MarvisLoadedActions | None:
@@ -554,11 +558,12 @@ class MarvisActionsOperation:
             )
             return None  # WHY: stop the run.
         loaded = cls._build(org_id, client, listing.rows)  # WHY: one flat record for each action.
-        if mode != MODE_EXPORT_ALL and not any(record.is_open for record in loaded.records):  # WHY: open only.
-            logger.log(  # WHY: a clear answer on every console.
-                DISPLAY_LEVEL, "No open Marvis Actions exist in this organization. %s", cls._tail(mode)
+        kept_values = MODE_IS_OPEN_VALUES[mode]  # WHY: the is_open values that the mode keeps.
+        if not any(record.is_open in kept_values for record in loaded.records):  # WHY: the mode keeps no action.
+            logger.log(  # WHY: a clear answer on every console. Mode 1 keeps every action, so it never stops here.
+                DISPLAY_LEVEL, "No %s exist in this organization. %s", MODE_ACTION_NOUNS[mode], cls._tail(mode)
             )
-            return None  # WHY: modes 2 and 3 have nothing to do.
+            return None  # WHY: modes 2, 3, and 4 can have nothing to do.
         return loaded  # WHY: the filter step reads these records.
 
     @staticmethod
@@ -581,8 +586,7 @@ class MarvisActionsOperation:
     @classmethod
     def _filter(cls, loaded: MarvisLoadedActions, mode: str) -> list[MarvisActionRecord]:
         """Ask the two filter prompts and return the matching records, or log why none remain."""
-        open_only = mode != MODE_EXPORT_ALL  # WHY: modes 2 and 3 work on open actions only.
-        selector = MarvisTopicSelector(loaded.records, loaded.catalog, open_only)  # WHY: the tables and the grammar.
+        selector = MarvisTopicSelector(loaded.records, loaded.catalog, mode)  # WHY: the mode sets the kept actions.
         answer = MarvisFilterPrompts.ask_categories(selector.category_counts())  # WHY: prompt 2.
         categories, bad_token = selector.match_categories(answer)  # WHY: read the category answer.
         if bad_token or not categories:  # WHY: a typo or an empty category stops the run.
@@ -607,24 +611,21 @@ class MarvisActionsOperation:
                 cls._tail(mode),
             )
             return  # WHY: one message for each stop.
-        scope = "Marvis Actions" if mode == MODE_EXPORT_ALL else "open Marvis Actions"  # WHY: name the mode scope.
-        logger.log(DISPLAY_LEVEL, "No %s match the filter. %s", scope, cls._tail(mode))  # WHY: a clear empty answer.
+        logger.log(  # WHY: a clear empty answer that names the actions of the mode.
+            DISPLAY_LEVEL, "No %s match the filter. %s", MODE_ACTION_NOUNS[mode], cls._tail(mode)
+        )
 
     @staticmethod
     def _tail(mode: str) -> str:
         """Return the sentence that states what the stop left unchanged."""
         return "No action was changed." if mode == MODE_RESOLVE else "No file was written."  # WHY: mode scope.
 
-    @staticmethod
-    def _export(loaded: MarvisLoadedActions, selected: Sequence[MarvisActionRecord]) -> None:
+    @classmethod
+    def _export(cls, loaded: MarvisLoadedActions, selected: Sequence[MarvisActionRecord]) -> None:
         """Write the selected records to the CSV file and the database backend."""
         rows = [record.as_row() for record in selected]  # WHY: one CSV row for each action.
         documents = [loaded.documents[record.uuid] for record in selected]  # WHY: the raw rows for the database.
-        statuses = Counter(record.status_name for record in selected)  # WHY: the status mix of the report.
-        status_text = ", ".join(f"{name}={count}" for name, count in sorted(statuses.items()))  # WHY: one line.
-        logger.log(  # WHY: the status summary before the write.
-            DISPLAY_LEVEL, "Selected Marvis Actions by status: %s", status_text
-        )
+        cls._log_status_mix(selected)  # WHY: the status summary before the write.
         target = MarvisOutputTarget.describe(EXPORT_FILENAME)  # WHY: the file or the table of the active format.
         logger.info("Writing %d Marvis Actions to %s", len(rows), target)  # WHY: action log.
         written = SourceDependencyResolver.DataExporter.write_with_format_selection(
@@ -642,4 +643,27 @@ class MarvisActionsOperation:
             return  # WHY: the error is the last word of the run.
         logger.log(  # WHY: the completion line names the file that the web dashboard offers.
             DISPLAY_LEVEL, "Completed the Marvis Actions export and wrote results to %s", target
+        )
+
+    @staticmethod
+    def _log_status_mix(selected: Sequence[MarvisActionRecord]) -> None:
+        """Log the status mix of the report, and one caution line for the status keys without a known name."""
+        statuses = Counter(record.status_name for record in selected)  # WHY: the status mix of the report.
+        mix = sorted(statuses.items())  # WHY: a stable order for the log line.
+        status_text = ", ".join(f"{name or repr(name)}={count}" for name, count in mix)  # WHY: '' names an empty key.
+        logger.log(  # WHY: the operator sees the mix before the write.
+            DISPLAY_LEVEL, "Selected Marvis Actions by status: %s", status_text
+        )
+        unknown = Counter(  # WHY: issue #3342. The report counts an action with an unknown key as closed.
+            record.status for record in selected if record.status not in STATUS_NAMES
+        )
+        if not unknown:  # WHY: each key has a known name, so the open flag of each action is certain.
+            return  # WHY: no caution line.
+        pairs = sorted(unknown.items())  # WHY: a stable order for the log line.
+        unknown_text = ", ".join(f"{key!r}={count}" for key, count in pairs)  # WHY: repr shows an empty key as ''.
+        logger.log(  # WHY: Mist can add an open status without a notice, so the operator must check these actions.
+            DISPLAY_LEVEL,
+            "Caution: MistHelper does not know these status keys, so the report counts their actions as closed: "
+            "%s. Compare these actions with the Mist UI.",
+            unknown_text,
         )

@@ -58,7 +58,7 @@ class TestTheDisplayLevel:
 
 
 class TestTheExportConsole:
-    """Modes 1 and 2 show the tables, the status mix, and the completion line."""
+    """Modes 1, 2, and 4 show the tables, the status mix, and the completion line."""
 
     def test_the_report_run_shows_each_table_and_the_completion(
         self, harness: Any, caplog: pytest.LogCaptureFixture
@@ -106,6 +106,38 @@ class TestTheExportConsole:
         harness(raws, "3", "switch", "ap")
         lines = run_menu(caplog)
         assert "No open Marvis Actions match the filter. No action was changed." in lines
+
+    def test_the_closed_report_shows_its_mode_line_and_the_closed_column(
+        self, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Issue #3342: the SSH operator sees mode 4, the Closed column, and the status mix of the closed actions."""
+        harness([make_raw(1), make_raw(2, status="validated")], "4", "", "")
+        lines = run_menu(caplog)
+        for start in (
+            "  4. Export the closed Marvis Actions only",
+            "Selected Marvis Actions by status: AI Validated=1",
+            "Completed the Marvis Actions export and wrote results to OrgMarvisActions.csv",
+        ):
+            assert has_line(lines, start), start
+        headers = [line for line in lines if line.startswith("  No.  Key")]
+        assert len(headers) == 2
+        assert all(line.split()[-3:] == ["Actions", "Open", "Closed"] for line in headers)
+
+    def test_an_organization_without_closed_actions_says_so(
+        self, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A mode 4 run that stops early must still tell the SSH operator why."""
+        harness([make_raw(1), make_raw(2, status="inprogress")], "4")
+        lines = run_menu(caplog)
+        assert "No closed Marvis Actions exist in this organization. No file was written." in lines
+
+    def test_the_unknown_status_caution_reaches_the_console(
+        self, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The SSH operator must see the caution, because the report counts an unknown key as closed."""
+        harness([make_raw(1, status="snoozed")], "4", "", "")
+        lines = run_menu(caplog)
+        assert has_line(lines, "Caution: MistHelper does not know these status keys")
 
 
 class TestTheResolveConsole:

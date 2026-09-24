@@ -49,7 +49,7 @@ GROUP_BUTTON = "#operationAccordion .accordion-button"  # The header button of e
 RUN_BUTTON = '[data-testid="run-btn"]'  # The Run button of the operations panel.
 RUN_ROUTE_GLOB = "**/api/operations/run"  # The run request that the browser sends.
 PLACEHOLDER_OPTIONS = 1  # Each choice list starts with one "-- Select --" option.
-MODE_COUNT = 3  # The CLI offers three modes: two reports and one resolve.
+MODE_COUNT = 4  # The CLI offers four modes: three reports and one resolve.
 CONTROL_NAMES = (  # The six controls, in the order of the six CLI prompts.
     "marvis_mode",
     "marvis_category",
@@ -196,6 +196,20 @@ class TestMenu270Controls:
         """Mode 3 writes a status to Mist, so its label must tell the operator before the run."""
         label = marvis_page.locator("#param-marvis_mode option[value='3']").inner_text()  # Read the mode 3 label.
         assert "changes Mist" in label
+
+    def test_the_closed_report_mode_states_that_it_reads_only(self, marvis_page: Any) -> None:
+        """Issue #3342. Mode 4 exports the closed actions and changes nothing, and its label says so."""
+        label = marvis_page.locator("#param-marvis_mode option[value='4']").inner_text()  # Read the mode 4 label.
+        print(f"The mode 4 label of menu {MARVIS_MENU} is '{label}'.")
+        assert label == "4 - Export the closed Marvis Actions (report only)"
+
+    def test_a_closed_report_run_sends_the_answers_in_prompt_order(self, marvis_page: Any) -> None:
+        """Mode 4 with one category sends the category key, and it keeps the three unused answers in place."""
+        marvis_page.select_option("#param-marvis_mode", "4")  # Choose the closed actions report.
+        marvis_page.select_option("#param-marvis_category", "ap")  # Choose the Wireless category.
+        body = send_run(marvis_page)  # Click Run and read the body that the browser sent.
+        assert str(body["menu_number"]) == MARVIS_MENU
+        assert body["parameters"]["input_answers"] == ["4", "ap", "all", RESOLUTION_CODES[0].key, "", ""]
 
     def test_a_report_run_sends_the_answers_in_prompt_order(self, marvis_page: Any) -> None:
         """Mode 2 with one topic sends the pair key, because two categories share a subcategory key."""

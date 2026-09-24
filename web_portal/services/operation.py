@@ -481,8 +481,9 @@ def _build_registry() -> dict:
     }
 
     # Issue #3299: menu 270 asks up to six questions, and the controls below
-    # follow that prompt order. Modes 1 and 2 read the first three answers only,
-    # and the input queue drops the rest when the run ends. Mode 3 reads all six.
+    # follow that prompt order. Modes 1, 2, and 4 read the first three answers
+    # only, and the input queue drops the rest when the run ends. Mode 3 reads
+    # all six. Issue #3342 adds mode 4, the report of the closed actions.
     # The subcategory values use the category/subcategory pair, because the
     # categories ap and gateway both hold the subcategory key non_compliant.
     from src.marvis.actions.model import CATEGORY_NAMES  # Read the category names that the CLI table shows.
@@ -495,10 +496,11 @@ def _build_registry() -> dict:
             _choice_param(  # Answer prompt 1, the mode.
                 "marvis_mode",  # Name the control for the mode prompt.
                 "Mode",  # Show a short label above the list.
-                [  # Offer the three modes with the words that the CLI prompt uses.
+                [  # Offer the four modes with the words that the CLI prompt uses.
                     {"value": "1", "label": "1 - Export every Marvis Action (report only)"},  # Read only.
                     {"value": "2", "label": "2 - Export the open Marvis Actions (report only)"},  # Read only.
                     {"value": "3", "label": "3 - Resolve the open Marvis Actions (changes Mist)"},  # Writes a status.
+                    {"value": "4", "label": "4 - Export the closed Marvis Actions (report only)"},  # Read only.
                 ],
                 default="1",  # Preselect the report, because it changes nothing.
             ),

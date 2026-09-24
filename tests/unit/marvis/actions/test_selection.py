@@ -18,9 +18,17 @@ import pytest
 from src.marvis.actions.model import RESOLUTION_CODES, MarvisActionRecord, MarvisActionRecordBuilder, MarvisCatalog
 from src.marvis.actions.selection import (
     COMMENT_MAX_LENGTH,
+    MODE_ACTION_NOUNS,
+    MODE_EXPORT_ALL,
+    MODE_EXPORT_CLOSED,
+    MODE_EXPORT_OPEN,
+    MODE_IS_OPEN_VALUES,
+    MODE_RESOLVE,
+    MODES,
     MarvisFilterPrompts,
     MarvisResolvePrompts,
     MarvisResolveRequest,
+    MarvisTopicCount,
     MarvisTopicSelector,
 )
 from src.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
@@ -55,12 +63,45 @@ def sample_records() -> list[MarvisActionRecord]:
     )
 
 
-def selector(open_only: bool = False) -> MarvisTopicSelector:
-    """Return a selector over the sample records."""
-    return MarvisTopicSelector(sample_records(), MarvisCatalog([]), open_only)
+def selector(mode: str = MODE_EXPORT_ALL) -> MarvisTopicSelector:
+    """Return a selector over the sample records for one mode."""
+    return MarvisTopicSelector(sample_records(), MarvisCatalog([]), mode)
 
 
 ALL_TOPICS = frozenset({"ap/ap_disconnect", "ap/non_compliant", "gateway/non_compliant", "switch/sw_offline"})
+OPEN_MODES = (MODE_EXPORT_OPEN, MODE_RESOLVE)  # The two modes that keep the open actions only.
+
+
+class TestModeTables:
+    """Issue #3342: one table holds the status rule of each mode."""
+
+    def test_the_modes_are_the_four_numbers_in_table_order(self) -> None:
+        """The mode prompt accepts these answers only."""
+        assert MODES == ("1", "2", "3", "4")
+
+    def test_each_mode_has_a_status_rule_and_a_noun(self) -> None:
+        """A mode without a rule would fail at run time instead of at test time."""
+        assert set(MODE_IS_OPEN_VALUES) == set(MODES) == set(MODE_ACTION_NOUNS)
+
+    def test_the_resolve_mode_keeps_the_open_actions_only(self) -> None:
+        """Mode 3 must never send a request for a closed action."""
+        assert MODE_IS_OPEN_VALUES[MODE_RESOLVE] == frozenset({True})
+
+    def test_the_open_and_closed_reports_split_the_full_report(self) -> None:
+        """Modes 2 and 4 share no action, and together they hold every action of mode 1."""
+        open_values = MODE_IS_OPEN_VALUES[MODE_EXPORT_OPEN]
+        closed_values = MODE_IS_OPEN_VALUES[MODE_EXPORT_CLOSED]
+        assert not open_values & closed_values
+        assert open_values | closed_values == MODE_IS_OPEN_VALUES[MODE_EXPORT_ALL]
+
+    def test_the_closed_mode_names_the_closed_actions(self) -> None:
+        """The stop lines of mode 4 name the closed actions."""
+        assert MODE_ACTION_NOUNS[MODE_EXPORT_CLOSED] == "closed Marvis Actions"
+
+    def test_an_unknown_mode_has_no_selector(self) -> None:
+        """The run refuses a bad mode first, so a bad mode here is a code defect that must fail loud."""
+        with pytest.raises(KeyError):
+            MarvisTopicSelector(sample_records(), MarvisCatalog([]), "5")
 
 
 class TestCounts:
@@ -84,10 +125,33 @@ class TestCounts:
         rows = selector().topic_counts(frozenset({"switch/sw_offline"}))
         assert [(row.name, row.total, row.open_count) for row in rows] == [("Wired / Switch Offline", 4, 2)]
 
-    def test_the_open_tables_hide_a_topic_without_an_open_action(self) -> None:
+    @pytest.mark.parametrize("mode", OPEN_MODES)
+    def test_the_open_tables_hide_a_topic_without_an_open_action(self, mode: str) -> None:
         """Modes 2 and 3 show only the topics that hold an open action."""
-        topics = [row.key for row in selector(open_only=True).topic_counts(ALL_TOPICS)]
+        topics = [row.key for row in selector(mode).topic_counts(ALL_TOPICS)]
         assert topics == ["ap/ap_disconnect", "gateway/non_compliant", "switch/sw_offline"]
+
+    def test_the_closed_tables_hide_a_topic_without_a_closed_action(self) -> None:
+        """Mode 4 shows only the topics that hold a closed action."""
+        topics = [row.key for row in selector(MODE_EXPORT_CLOSED).topic_counts(ALL_TOPICS)]
+        assert topics == ["ap/non_compliant", "switch/sw_offline"]
+
+    def test_the_closed_category_table_hides_a_category_without_a_closed_action(self) -> None:
+        """The gateway category holds one open action only, so mode 4 hides it."""
+        rows = {
+            row.key: (row.name, row.total, row.open_count, row.closed_count)
+            for row in selector(MODE_EXPORT_CLOSED).category_counts()
+        }
+        assert rows == {"ap": ("Wireless", 1, 0, 1), "switch": ("Wired", 4, 2, 2)}
+
+    def test_the_closed_count_is_the_total_minus_the_open_count(self) -> None:
+        """Each row shows the Closed column in every mode."""
+        rows = {row.key: row.closed_count for row in selector().category_counts()}
+        assert rows == {"ap": 1, "gateway": 0, "switch": 2}
+
+    def test_the_closed_count_of_one_row(self) -> None:
+        """The property reads the two stored counts."""
+        assert MarvisTopicCount("switch", "Wired", "switch", 5, 2).closed_count == 3
 
     def test_the_topic_table_shows_only_the_allowed_topics(self) -> None:
         """The subcategory table holds only the topics of the kept categories."""
@@ -141,6 +205,14 @@ class TestCategoryGrammar:
         """The word all anywhere in the list keeps every topic."""
         assert selector().match_categories("2, all") == (ALL_TOPICS, "")
 
+    def test_a_category_without_a_closed_action_selects_nothing_in_the_closed_mode(self) -> None:
+        """The gateway category is known, but mode 4 hides its only topic."""
+        assert selector(MODE_EXPORT_CLOSED).match_categories("gateway") == (frozenset(), "")
+
+    def test_a_number_names_a_row_of_the_closed_category_table(self) -> None:
+        """Mode 4 hides the gateway row, so row 2 is the switch category."""
+        assert selector(MODE_EXPORT_CLOSED).match_categories("2") == (frozenset({"switch/sw_offline"}), "")
+
 
 class TestSubcategoryGrammar:
     """The subcategory answer stays inside the categories that the first step kept."""
@@ -173,10 +245,22 @@ class TestSelect:
         chosen = selector().select(frozenset({"switch/sw_offline"}))
         assert [record.suggestion_id for record in chosen] == ["swoff-1", "swoff-2", "swoff-3", "swoff-4"]
 
-    def test_the_open_modes_keep_the_open_actions_only(self) -> None:
+    @pytest.mark.parametrize("mode", OPEN_MODES)
+    def test_the_open_modes_keep_the_open_actions_only(self, mode: str) -> None:
         """Mode 3 must never send a request for a closed action."""
-        chosen = selector(open_only=True).select(frozenset({"switch/sw_offline"}))
+        chosen = selector(mode).select(frozenset({"switch/sw_offline"}))
         assert [record.suggestion_id for record in chosen] == ["swoff-1", "swoff-2"]
+
+    def test_the_closed_mode_keeps_the_closed_actions_only(self) -> None:
+        """Mode 4 reports the validated and the resolved actions, and no open action."""
+        chosen = selector(MODE_EXPORT_CLOSED).select(frozenset({"switch/sw_offline"}))
+        assert [record.suggestion_id for record in chosen] == ["swoff-3", "swoff-4"]
+
+    def test_the_closed_mode_keeps_the_api_order_across_topics(self) -> None:
+        """The report lists the closed actions in the order that the API returns them."""
+        chosen = selector(MODE_EXPORT_CLOSED).select(ALL_TOPICS)
+        assert [record.suggestion_id for record in chosen] == ["swoff-3", "swoff-4", "swoff-6"]
+        assert not any(record.is_open for record in chosen)
 
 
 class TestFilterPrompts:
@@ -192,12 +276,19 @@ class TestFilterPrompts:
         scripted_input()
         assert MarvisFilterPrompts.ask_mode() == "1"
 
-    def test_the_mode_table_names_all_three_modes(self, scripted_input: Any, caplog: Any) -> None:
+    def test_the_mode_table_names_all_four_modes(self, scripted_input: Any, caplog: Any) -> None:
         """The operator reads the modes before the prompt."""
         scripted_input("2")
         with caplog.at_level(logging.INFO):
             MarvisFilterPrompts.ask_mode()
         assert "3. Mark the open Marvis Actions of the chosen topics as resolved" in caplog.text
+        assert "4. Export the closed Marvis Actions only" in caplog.text
+
+    def test_the_mode_prompt_names_the_four_answers(self, scripted_input: Any) -> None:
+        """The prompt states each answer that the run accepts."""
+        scripted = scripted_input("4")
+        assert MarvisFilterPrompts.ask_mode() == MODE_EXPORT_CLOSED
+        assert scripted.prompts == ["Enter the mode number (1, 2, 3, or 4) [1]: "]
 
     def test_a_blank_category_answer_gives_all(self, scripted_input: Any) -> None:
         """The default keeps every topic."""
@@ -210,6 +301,15 @@ class TestFilterPrompts:
         with caplog.at_level(logging.INFO):
             MarvisFilterPrompts.ask_categories(selector().category_counts())
         assert re.search(r"1\s+ap\s+Wireless\s+2\s+1", caplog.text)
+
+    def test_the_tables_show_the_closed_column(self, scripted_input: Any, caplog: Any) -> None:
+        """Issue #3342: the Closed column shows the count that mode 4 exports."""
+        scripted_input("")
+        with caplog.at_level(logging.INFO):
+            MarvisFilterPrompts.ask_categories(selector().category_counts())
+        assert re.search(r"No\.\s+Key\s+Name\s+Actions\s+Open\s+Closed", caplog.text)
+        assert re.search(r"1\s+ap\s+Wireless\s+2\s+1\s+1\n", caplog.text)
+        assert re.search(r"2\s+gateway\s+WAN\s+1\s+1\s+0\n", caplog.text)
 
     def test_a_blank_subcategory_answer_gives_all(self, scripted_input: Any) -> None:
         """The default keeps every topic of the kept categories."""
