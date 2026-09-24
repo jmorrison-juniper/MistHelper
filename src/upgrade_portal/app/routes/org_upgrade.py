@@ -23,7 +23,13 @@ from ....firmware.aggregate_upgrade_service import AggregateBuildInput, Aggregat
 from ....firmware.org_upgrade_body import OrgUpgradeBody
 from ....firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
 from ...runtime import identity, lock
-from ...upgrade.options import build_options, build_options_record, build_options_view
+from ...upgrade.options import (
+    ORG_OPTION_HELP,
+    BadOptionError,
+    build_options,
+    build_options_record,
+    build_options_view,
+)
 from ..factory import json_error
 from . import select as select_routes
 from . import upgrade as upgrade_routes
@@ -116,7 +122,11 @@ class OrgUpgradeScheduleReader:
         if not start_text:  # Omit an empty schedule to preserve the current immediate-start behavior.
             return  # Keep an immediate start when the operator leaves the existing control empty.
         logger.info("Read the organization upgrade start time")  # Log before parsing the submitted schedule.
-        start = datetime.fromisoformat(start_text)  # Parse the submitted ISO value from the existing form field.
+        try:  # A JSON client can send text that names no date and no time.
+            start = datetime.fromisoformat(start_text)  # Parse the submitted ISO value from the existing form field.
+        except ValueError as error:  # The parser text repeats the typed value, so it never reaches the page.
+            logger.warning("The organization upgrade refused a start time that names no date and time")
+            raise BadOptionError("start_time", labels=ORG_OPTION_HELP) from error
         start = start.replace(tzinfo=UTC) if start.tzinfo is None else start  # Give a naive value the portal zone.
         body["start_time"] = int(start.timestamp())  # Store the same epoch format as the existing service.
         logger.debug("The organization upgrade start time is present")  # Log after parsing without naming the value.
@@ -137,6 +147,74 @@ class OrgUpgradeScheduleReader:
         """Return the reboot delay text that the options page and confirmation page show."""
         reboot_at = options.get("reboot_at")  # Read the raw duration saved by the organization route.
         return str(reboot_at) if reboot_at is not None else ""  # Preserve the operator text without a unit change.
+
+
+class OrgOptionRefusal:
+    """Name the multi-site control in each option refusal.
+
+    Why:
+        Issue #3273 records the cause. The shared option mapper names the
+        controls of the single-site page. The multi-site page paints other
+        labels, and it holds one target version control for each device type.
+        A refusal with a single-site label sent the operator to a control that
+        the multi-site page does not hold.
+
+        Issue #3206 also forbids a refusal that names an internal field. The
+        parser text of Python names no control and repeats the typed value, so
+        this class replaces that text too.
+    """
+
+    @staticmethod
+    def translate(error: BadOptionError, rows: Sequence[Mapping[str, Any]] = ()) -> BadOptionError:
+        """Return the same refusal with the label of the multi-site page.
+
+        Args:
+            error: The refusal of the shared option mapper.
+            rows: The device rows of the site, which map a model to its device type.
+
+        Returns:
+            A refusal with the same model and code, and the multi-site label.
+        """
+        field = OrgOptionRefusal.page_field(error, rows)  # Find the control that the multi-site page paints.
+        logger.debug("The multi-site refusal of %s names the field %s", error.field, field)  # Log the translation.
+        return BadOptionError(field, error.model, labels=ORG_OPTION_HELP)  # Keep the model and the error code.
+
+    @staticmethod
+    def page_field(error: BadOptionError, rows: Sequence[Mapping[str, Any]]) -> str:
+        """Return the field of the multi-site control that matches one refusal.
+
+        Args:
+            error: The refusal of the shared option mapper.
+            rows: The device rows of the site.
+
+        Returns:
+            The family version field for a refused model, or the field of the refusal.
+        """
+        if error.field != "version_target":  # Every other field keeps its name on both pages.
+            return error.field
+        families = {str(row.get("device_type", "")) for row in rows if str(row.get("model", "")) == error.model}
+        field = f"version_{families.pop()}" if len(families) == 1 else "targets"  # One model has one family.
+        return field if field in ORG_OPTION_HELP else "targets"  # An unknown family names the device type legend.
+
+    @staticmethod
+    def whole_number(text: str, field: str) -> int:
+        """Read one whole number, or refuse it with the multi-site label.
+
+        Args:
+            text: The text of one number that the operator typed.
+            field: The field that holds the number.
+
+        Returns:
+            The number.
+
+        Raises:
+            BadOptionError: If the text holds no whole number.
+        """
+        try:  # The parser text repeats the typed value, so it never reaches the page.
+            return int(text)  # Convert the text for the shared mapper, which applies the range rules.
+        except ValueError as error:  # A word, a decimal point, or an empty entry holds no whole number.
+            logger.warning("The organization upgrade refused the field %s, which holds no whole number", field)
+            raise BadOptionError(field, labels=ORG_OPTION_HELP) from error
 
 
 def upgrade_service() -> Any:
@@ -215,7 +293,8 @@ def _base_request_options(source: Mapping[str, Any]) -> dict[str, Any]:
     strategy = str(source.get("strategy", "canary")).strip()  # Read the rollout strategy.
     body: dict[str, Any] = {"versions": [{"firmware_type": "ap", "version": version}], "strategy": strategy}
     if strategy != "big_bang":  # Big-bang upgrades do not use a failure threshold.
-        body["max_failure_percentage"] = int(str(source.get("max_failure_percentage", "5")).strip())
+        percentage = str(source.get("max_failure_percentage", "5")).strip()  # Read the failure limit text.
+        body["max_failure_percentage"] = OrgOptionRefusal.whole_number(percentage, "max_failure_percentage")
     if strategy == "canary":  # Canary upgrades require phase percentages.
         body["canary_phases"] = _phase_values(source)  # Preserve the submitted phase order.
     return body  # The caller adds optional multi-device fields.
@@ -224,7 +303,8 @@ def _base_request_options(source: Mapping[str, Any]) -> dict[str, Any]:
 def _phase_values(source: Mapping[str, Any]) -> list[int]:
     """Return the submitted canary phase percentages."""
     text = str(source.get("canary_phases", "")).strip()  # Read the comma-separated field.
-    return [int(part.strip()) for part in text.split(",") if part.strip()] if text else []  # Parse each value.
+    parts = [part.strip() for part in text.split(",") if part.strip()] if text else []  # Drop each empty entry.
+    return [OrgOptionRefusal.whole_number(part, "canary_phases") for part in parts]  # Parse each value in order.
 
 
 def _selected_types(source: Mapping[str, Any]) -> list[str] | None:
@@ -296,10 +376,9 @@ def _complete_aggregate_options(
     selected: tuple[str, ...],
 ) -> dict[str, Any]:
     """Validate and return the combined site option record."""
-    if not targets:  # A confirmed request must name a real device.
-        raise ValueError("Choose a target version for at least one supported device type.")
-    if options is None:  # Every selected site must produce the common option record.
-        raise ValueError("Choose a target version for at least one supported device type.")
+    if not targets or options is None:  # A confirmed request must name a real device at a selected site.
+        logger.warning("The organization upgrade options name no device at the selected sites")
+        raise BadOptionError("targets", labels=ORG_OPTION_HELP)  # Name the legend that the multi-site page paints.
     return {"targets": targets, "options": options, "selected_types": list(selected)}  # Return detached values.
 
 
@@ -316,7 +395,11 @@ def _site_option_record(
     rows = _selected_target_rows(view, options, selected)  # Select explicit targets with a chosen version.
     logger.debug("The site option view selected %s target(s)", len(rows))  # Log after the transformation.
     logger.info("Validate aggregate upgrade options for site %s", site_id)  # Log before validation.
-    built = aggregate_options_record(cloud_session, org_id, site_id, _site_option_body(options, rows))
+    try:  # The shared mapper names the controls of the single-site page.
+        built = aggregate_options_record(cloud_session, org_id, site_id, _site_option_body(options, rows))
+    except BadOptionError as error:  # Issue #3273: name the control that the multi-site page paints.
+        logger.warning("The option mapper refused the options of site %s", site_id)  # Log the refusal.
+        raise OrgOptionRefusal.translate(error, view.get("targets", [])) from error  # The rows map a model to a type.
     logger.debug("The site option record holds %s target(s)", len(built.get("targets", [])))  # Log after validation.
     return built  # The caller combines the detached site records.
 
@@ -353,11 +436,16 @@ def request_for_service(site_ids: list[str], options: Mapping[str, Any]) -> dict
 def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
     """Return form values from the validated service option shape."""
     first = _first_version(options.get("versions"))  # Read the legacy AP version record.
+    selected_types = list(options.get("selected_types", ["ap", "switch", "gateway"]))  # Restore chosen families.
     return {  # Return the existing template field names.
         "version": options.get("version_ap", first.get("version", "")),
         "version_ap": str(options.get("version_ap", first.get("version", ""))),  # Keep the AP target visible.
         "version_switch": str(options.get("version_switch", "")),  # Keep the switch target visible.
         "version_gateway": str(options.get("version_gateway", "")),  # Keep the gateway target visible.
+        "selected_types": selected_types,  # Keep the selected family boxes stable after Back.
+        "reboot": options.get("reboot", True),  # Keep the reboot radio group stable after Back.
+        "junos_file_action": options.get("junos_file_action", True),  # Keep the Junos radio group stable.
+        "force": options.get("force", False),  # Keep the force checkbox stable after Back.
         "strategy": options.get("strategy", "canary"),
         "canary_phases": _phase_text(options.get("canary_phases")),
         "max_failure_percentage": options.get("max_failure_percentage", 5),
@@ -579,6 +667,8 @@ def save_options() -> Response | tuple[Response, int]:
     org_id, site_ids = context  # Use only the validated active context.
     try:  # Map option and storage failures to the existing response.
         options, nonce = _validated_saved_options(org_id, site_ids)  # Build the legacy or aggregate record.
+    except BadOptionError as error:  # Issue #3273: every refusal names a control that this page paints.
+        return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, str(OrgOptionRefusal.translate(error)))
     except (TypeError, ValueError, OverflowError, RuntimeError) as error:
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, str(error))
     session[OPTIONS_SESSION_KEY] = options  # Keep the validated display options in the signed session.

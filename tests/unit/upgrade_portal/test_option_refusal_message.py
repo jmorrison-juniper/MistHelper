@@ -36,6 +36,14 @@ OPTIONS_TEMPLATE = (
     / "options.html"
 )
 
+# The multi-site page. Issue #3273 records the drift. That page names three
+# controls differently from the single-site page, and it holds one target
+# version control for each device type.
+ORG_OPTIONS_TEMPLATE = OPTIONS_TEMPLATE.with_name("org_options.html")
+
+# The form field that carries the request forgery token. It names no option.
+FORGERY_TOKEN_FIELD = "csrf_token"
+
 # One value that the operator typed and that the portal refused. No message may
 # repeat it, because the value arrives straight from the browser.
 TYPED_VALUE = "300"
@@ -52,6 +60,30 @@ def page_text() -> str:
         The page text on one line.
     """
     return re.sub(r"\s+", " ", OPTIONS_TEMPLATE.read_text(encoding="utf-8"))
+
+
+def org_page_text() -> str:
+    """Return the multi-site options page with every run of whitespace collapsed.
+
+    Returns:
+        The page text on one line.
+    """
+    return re.sub(r"\s+", " ", ORG_OPTIONS_TEMPLATE.read_text(encoding="utf-8"))
+
+
+def posted_org_fields() -> set[str]:
+    """Return the name of each option field that the multi-site form posts.
+
+    Why:
+        The multi-site form posts a plain form body, so each `name` attribute is
+        one option that the route can refuse. The single-site page posts through
+        its script, so its `name` attributes do not list its options.
+
+    Returns:
+        The posted field names, without the request forgery token.
+    """
+    names = set(re.findall(r'name="([a-z_]+)"', ORG_OPTIONS_TEMPLATE.read_text(encoding="utf-8")))  # Read each field.
+    return names - {FORGERY_TOKEN_FIELD}  # The token names no option, so no refusal can name it.
 
 
 @pytest.mark.parametrize("field", sorted(options.OPTION_HELP))
@@ -116,3 +148,49 @@ def test_an_unmapped_field_still_reads_plainly() -> None:
     message = str(options.BadOptionError("nonesuch"))
     assert "nonesuch" in message  # The reader still learns which option failed.
     assert options.UNKNOWN_OPTION_RULE in message  # The reader learns where to find the rule.
+
+
+@pytest.mark.parametrize("field", sorted(options.ORG_OPTION_HELP))
+def test_every_multisite_label_matches_the_page(field: str) -> None:
+    """Issue #3273: a multi-site label must name a control that the multi-site page paints.
+
+    Args:
+        field: The cloud field name under test.
+    """
+    assert options.ORG_OPTION_HELP[field][0] in org_page_text()  # The multi-site page paints this exact label.
+
+
+@pytest.mark.parametrize("field", sorted(options.ORG_OPTION_HELP))
+def test_a_multisite_refusal_names_the_label_and_the_rule(field: str) -> None:
+    """A multi-site refusal names the multi-site label, states its rule, and repeats no typed value.
+
+    Args:
+        field: The cloud field name under test.
+    """
+    label, rule = options.ORG_OPTION_HELP[field]  # The label and the rule of the multi-site control.
+    message = str(options.BadOptionError(field, labels=options.ORG_OPTION_HELP))  # Build the multi-site refusal.
+    assert f'"{label}"' in message  # The message names the control that the operator sees.
+    assert rule in message  # The message states the rule that the value broke.
+    assert TYPED_VALUE not in message  # No value reaches the page or the log.
+
+
+def test_every_posted_multisite_field_has_a_label() -> None:
+    """Issue #3273: each field that the multi-site form posts has a multi-site label.
+
+    Why:
+        A posted field with no entry gives a refusal that names the internal
+        field. Issue #3206 forbids that text on the multi-site page.
+    """
+    posted = posted_org_fields()  # Read the option fields from the template.
+    assert "version_switch" in posted  # Prove that the parse reads the real form, not an empty file.
+    missing = sorted(posted - set(options.ORG_OPTION_HELP))  # Find each posted field with no label.
+    assert not missing, f"The form posts {len(posted)} fields. These fields have no label: {missing}"
+
+
+def test_the_label_table_parameter_changes_only_the_label() -> None:
+    """The multi-site table changes the label, and the field and the code stay the same."""
+    error = options.BadOptionError("max_failure_percentage", labels=options.ORG_OPTION_HELP)  # A multi-site refusal.
+    assert error.field == "max_failure_percentage"  # A caller still reads the field name.
+    assert error.code == "bad_option"  # The contract code does not change.
+    assert '"Maximum failure percentage"' in str(error)  # The multi-site page paints this label.
+    assert "Failures allowed across the whole run" not in str(error)  # The single-site label is absent.

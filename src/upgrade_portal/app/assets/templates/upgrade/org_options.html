@@ -1,5 +1,15 @@
 {% extends 'layout.html' %}
 {% set rows = sites | default([], true) %}
+{% set selected_types = options.selected_types if options.selected_types is defined else ['ap', 'switch', 'gateway'] %}
+{% set has_ap = 'ap' in selected_types %}
+{% set has_switch = 'switch' in selected_types %}
+{% set has_gateway = 'gateway' in selected_types %}
+{% set has_junos_device = has_switch or has_gateway %}
+{% set selected_reboot = options.reboot if options.reboot is defined else true %}
+{% set selected_junos_action = options.junos_file_action if options.junos_file_action is defined else true %}
+{% set selected_force = options.force if options.force is defined else false %}
+{% set selected_strategy = options.strategy | default('canary', true) %}
+{% set uses_canary = selected_strategy == 'canary' %}
 
 {% block title %}Configure the upgrade{% endblock %}
 {% block heading %}<h1>Configure the upgrade</h1>{% endblock %}
@@ -26,40 +36,43 @@
                  name="selected_types"
                  value="{{ value }}"
                  data-testid="org-upgrade-type-{{ value }}"
-                 checked>
+                 {{ 'checked' if value in selected_types else '' }}>
           <label class="bubble-option-label" for="org-upgrade-type-{{ value }}">{{ label }}</label>
         </span>
       {% endfor %}
     </fieldset>
 
-    <div class="mb-3">
+    <div class="mb-3" data-testid="org-upgrade-ap-version-group" {{ '' if has_ap else 'hidden' }}>
       <label class="form-label" for="firmware-version">Access point target version</label>
       <input class="form-control"
              id="firmware-version"
              name="version_ap"
              data-testid="org-upgrade-version"
              value="{{ options.version | default('', true) }}"
-             placeholder="For example, 0.15.1">
+             placeholder="For example, 0.15.1"
+             {{ '' if has_ap else 'disabled' }}>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-3" data-testid="org-upgrade-switch-version-group" {{ '' if has_switch else 'hidden' }}>
       <label class="form-label" for="switch-firmware-version">Switch target version</label>
       <input class="form-control"
              id="switch-firmware-version"
              name="version_switch"
              data-testid="org-upgrade-switch-version"
              value="{{ options.version_switch | default('', true) }}"
-             placeholder="For example, 23.4R1.9">
+             placeholder="For example, 23.4R1.9"
+             {{ '' if has_switch else 'disabled' }}>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-3" data-testid="org-upgrade-gateway-version-group" {{ '' if has_gateway else 'hidden' }}>
       <label class="form-label" for="gateway-firmware-version">Gateway target version</label>
       <input class="form-control"
              id="gateway-firmware-version"
              name="version_gateway"
              data-testid="org-upgrade-gateway-version"
              value="{{ options.version_gateway | default('', true) }}"
-             placeholder="For example, 23.4R1.9">
+             placeholder="For example, 23.4R1.9"
+             {{ '' if has_gateway else 'disabled' }}>
     </div>
 
     <fieldset class="bubble-group mb-3">
@@ -72,36 +85,51 @@
                  name="strategy"
                  value="{{ value }}"
                  data-testid="org-strategy-{{ value }}"
-                 {{ 'checked' if options.strategy | default('canary', true) == value else '' }}>
+                 {{ 'checked' if selected_strategy == value else '' }}>
           <label class="bubble-option-label" for="org-strategy-{{ value }}">{{ label }}</label>
         </span>
       {% endfor %}
     </fieldset>
 
-    <div class="mb-3">
+    <div class="mb-3" data-testid="org-upgrade-canary-phases-field" {{ '' if uses_canary else 'hidden' }}>
       <label class="form-label" for="canary-phases">Canary phases</label>
       <input class="form-control"
              id="canary-phases"
              name="canary_phases"
              data-testid="org-upgrade-canary-phases"
              value="{{ options.canary_phases | default('1,10,50,100', true) }}"
-             aria-describedby="canary-phases-help">
+             aria-describedby="canary-phases-help"
+             {{ '' if uses_canary else 'disabled' }}>
       <p class="portal-card-note" id="canary-phases-help">Enter increasing percentages that end with 100.</p>
     </div>
 
-    <fieldset class="bubble-group mb-3" data-testid="org-upgrade-reboot-group">
+    <fieldset class="bubble-group mb-3"
+              data-testid="org-upgrade-reboot-group"
+              {{ '' if has_junos_device else 'hidden disabled' }}>
       <legend class="bubble-group-legend">Reboot each switch and each gateway after the write</legend>
       <span class="bubble-option">
-        <input class="bubble-option-input" type="radio" name="reboot" value="yes" id="org-reboot-yes" checked>
+        <input class="bubble-option-input"
+               type="radio"
+               name="reboot"
+               value="yes"
+               id="org-reboot-yes"
+               data-testid="org-reboot-yes"
+               {{ 'checked' if selected_reboot else '' }}>
         <label class="bubble-option-label" for="org-reboot-yes">Yes</label>
       </span>
       <span class="bubble-option">
-        <input class="bubble-option-input" type="radio" name="reboot" value="no" id="org-reboot-no">
+        <input class="bubble-option-input"
+               type="radio"
+               name="reboot"
+               value="no"
+               id="org-reboot-no"
+               data-testid="org-reboot-no"
+               {{ 'checked' if not selected_reboot else '' }}>
         <label class="bubble-option-label" for="org-reboot-no">No</label>
       </span>
     </fieldset>
 
-    <div class="mb-3" data-testid="org-upgrade-reboot-at-field">
+    <div class="mb-3" data-testid="org-upgrade-reboot-at-field" {{ '' if has_junos_device else 'hidden' }}>
       <label class="form-label" for="org-upgrade-reboot-at">
         Reboot each switch and each gateway after this much time
       </label>
@@ -111,9 +139,10 @@
              name="reboot_at"
              data-testid="org-upgrade-reboot-at"
              autocomplete="off"
-             placeholder="8h"
+             placeholder="Empty: reboot as soon as the write ends"
              value="{{ options.reboot_at | default('', true) }}"
-             aria-describedby="org-upgrade-reboot-at-note">
+             aria-describedby="org-upgrade-reboot-at-note"
+             {{ '' if has_junos_device else 'disabled' }}>
       <p class="portal-card-note" id="org-upgrade-reboot-at-note">
         Write a number and a unit. Use s for seconds, m for minutes, h for
         hours, and d for days. An example is 8h. The time counts from the moment
@@ -122,7 +151,9 @@
       </p>
     </div>
 
-    <fieldset class="bubble-group mb-3" data-testid="org-upgrade-junos-file-action-group">
+    <fieldset class="bubble-group mb-3"
+              data-testid="org-upgrade-junos-file-action-group"
+              {{ '' if has_junos_device else 'hidden disabled' }}>
       <legend class="bubble-group-legend">Complete the Junos file action after the reboot</legend>
       <span class="bubble-option">
         <input class="bubble-option-input"
@@ -130,7 +161,8 @@
                name="junos_file_action"
                value="yes"
                id="org-junos-yes"
-               checked>
+               data-testid="org-junos-yes"
+               {{ 'checked' if selected_junos_action else '' }}>
         <label class="bubble-option-label" for="org-junos-yes">Yes</label>
       </span>
       <span class="bubble-option">
@@ -138,13 +170,20 @@
                type="radio"
                name="junos_file_action"
                value="no"
-               id="org-junos-no">
+               id="org-junos-no"
+               data-testid="org-junos-no"
+               {{ 'checked' if not selected_junos_action else '' }}>
         <label class="bubble-option-label" for="org-junos-no">No</label>
       </span>
     </fieldset>
 
     <div class="form-check mb-3">
-      <input class="form-check-input" type="checkbox" id="org-upgrade-force" name="force">
+      <input class="form-check-input"
+             type="checkbox"
+             id="org-upgrade-force"
+             name="force"
+             data-testid="org-upgrade-force"
+             {{ 'checked' if selected_force else '' }}>
       <label class="form-check-label" for="org-upgrade-force">Write the firmware when a device already runs it</label>
     </div>
 

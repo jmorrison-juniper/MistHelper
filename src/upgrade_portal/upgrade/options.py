@@ -222,6 +222,89 @@ OPTION_HELP: Mapping[str, tuple[str, str]] = {
         "Order of the mesh access points",
         "Choose a listed order.",
     ),
+    "selected_types": (
+        "Device types to upgrade",
+        "Choose at least one listed device type, and choose each device type no more than once.",
+    ),
+    "targets": (
+        "Target version",
+        "Choose a target version for at least one selected device type.",
+    ),
+    "version_target": (
+        "Target version",
+        "Choose a version that the device model offers.",
+    ),
+}
+
+# The rule of a yes or no control on the multi-site page.
+YES_OR_NO_RULE = "Choose Yes or No."
+
+# The label of each control that `upgrade/org_options.html` paints, and its
+# rule. Issue #3273 records the cause. The multi-site page names three controls
+# differently from the single-site page. It also holds one target version
+# control for each device type, and a date and time control for the start. A
+# refusal on that page must name the control that the operator sees there.
+#
+# The label must match the text that `upgrade/org_options.html` paints. The
+# single-site table above must match `upgrade/options.html`. A test reads each
+# page, so a label that drifts fails the gate.
+ORG_OPTION_HELP: Mapping[str, tuple[str, str]] = {
+    "selected_types": OPTION_HELP["selected_types"],
+    "targets": (
+        "Device types to upgrade",
+        (
+            "Type a target version for at least one selected device type. "
+            "At least one selected site must hold a device of that type."
+        ),
+    ),
+    "mac": (
+        "Device types to upgrade",
+        "A device left a selected site while the portal read the site. Choose Review again.",
+    ),
+    "version_ap": (
+        "Access point target version",
+        "Type a version that each selected access point model offers.",
+    ),
+    "version_switch": (
+        "Switch target version",
+        "Type a version that each selected switch model offers.",
+    ),
+    "version_gateway": (
+        "Gateway target version",
+        "Type a version that each selected gateway model offers.",
+    ),
+    "strategy": (
+        "Upgrade strategy",
+        "Choose a listed strategy.",
+    ),
+    "canary_phases": (
+        "Canary phases",
+        OPTION_HELP["canary_phases"][1],
+    ),
+    "reboot": (
+        "Reboot each switch and each gateway after the write",
+        YES_OR_NO_RULE,
+    ),
+    "reboot_at": OPTION_HELP["reboot_at"],
+    "junos_file_action": (
+        "Complete the Junos file action after the reboot",
+        YES_OR_NO_RULE,
+    ),
+    "force": (
+        "Write the firmware when a device already runs it",
+        "Select the box to write the firmware again, or clear the box.",
+    ),
+    "max_failure_percentage": (
+        "Maximum failure percentage",
+        OPTION_HELP["max_failure_percentage"][1],
+    ),
+    "start_time": (
+        "Start time (UTC)",
+        (
+            "Choose a date and a time that is not in the past. "
+            f"The time must fall inside the next {START_TIME_HORIZON_SECONDS // 3600} hours."
+        ),
+    ),
 }
 
 # The message that a field with no entry above receives. It still names the
@@ -229,7 +312,7 @@ OPTION_HELP: Mapping[str, tuple[str, str]] = {
 UNKNOWN_OPTION_RULE = "Read the note under the control for the rule."
 
 
-def option_message(field: str) -> str:
+def option_message(field: str, model: str = "", labels: Mapping[str, tuple[str, str]] | None = None) -> str:
     """Return the refusal sentence of one option.
 
     Why:
@@ -237,21 +320,29 @@ def option_message(field: str) -> str:
         and to state the rule that the value broke. The operator reads a page of
         labels and never a list of cloud field names.
 
+        Issue #3273 adds the label table. The multi-site page paints other
+        labels than the single-site page, so its route passes its own table.
+
     Warning: this sentence never repeats the value that the operator typed. A
     refused value arrives straight from the browser, and a message that echoed
     it would carry that text into the page and into the log.
 
     Args:
         field: The cloud field name of the option that failed.
+        model: The device model that refused a target version, when known.
+        labels: The label table of the page that shows the refusal. None
+            selects the single-site table.
 
     Returns:
         The sentence that names the control and states the rule.
     """
-    label, rule = OPTION_HELP.get(field, ("", UNKNOWN_OPTION_RULE))  # An unmapped field still reads plainly.
+    table = OPTION_HELP if labels is None else labels  # The single-site page is the default reader.
+    label, rule = table.get(field, ("", UNKNOWN_OPTION_RULE))  # An unmapped field still reads plainly.
+    model_text = f" for model {model}" if model else ""  # Name the model only when the validator knows it.
     if not label:  # No label means the portal knows the field and not its control.
         logger.warning("Upgrade portal refused the option %s, which names no control", field)
         return f'The control for "{field}" holds a value that the portal refuses. {rule}'
-    return f'The control "{label}" holds a value that the portal refuses. {rule}'
+    return f'The control "{label}"{model_text} holds a value that the portal refuses. {rule}'
 
 
 class BadOptionError(ValueError):
@@ -274,15 +365,19 @@ class BadOptionError(ValueError):
         field: The name of the option that failed.
     """
 
-    def __init__(self, field: str) -> None:
+    def __init__(self, field: str, model: str = "", labels: Mapping[str, tuple[str, str]] | None = None) -> None:
         """Build the refusal for one named option.
 
         Args:
             field: The name of the option that failed.
+            model: The model that rejected the version, when known.
+            labels: The label table of the page that shows the refusal. None
+                selects the single-site table.
         """
         self.code = ERROR_BAD_OPTION
         self.field = field
-        super().__init__(option_message(field))  # The sentence names the control and states the rule.
+        self.model = model  # Keep the model available to a caller that wants structured refusal detail.
+        super().__init__(option_message(field, model, labels))  # The sentence names the control and states the rule.
 
 
 @dataclass(frozen=True, slots=True)
@@ -1582,7 +1677,7 @@ def _validate_target_versions(
         offered = {_normalized_version(item) for item in versions_by_model.get(model, ())}
         if version not in offered:
             logger.warning("Upgrade portal refused an unavailable target for model %s", model)
-            raise BadOptionError("version_target")
+            raise BadOptionError("version_target", model=model)
 
 
 def build_targets(
