@@ -31,7 +31,7 @@ STATUS_NAMES = {  # WHY: the status names that the Mist UI shows, so the CSV rea
     "inprogress": "In Progress",  # WHY: an operator marked the action as in progress.
     "resolved": "Resolved By User",  # WHY: an operator resolved the action with a resolution code.
     "validated": "AI Validated",  # WHY: Marvis saw the problem stop and closed the action.
-    "marvis_self_driven": "Marvis Self Driven",  # WHY: Marvis fixed the problem by itself.
+    "marvis_self_driven": "Marvis Self Driven",  # WHY: the Mist UI text. No Mist document defines it (issue #3340).
     "reoccured": "Reoccurred",  # WHY: the problem came back after a close.
     "expired action": "Expired Action",  # WHY: the action aged out without a close.
 }
@@ -334,8 +334,8 @@ class MarvisActionRecord:
     duration: int | None  # WHY: the length of the problem.
     reoccur_count: int | None  # WHY: how often the problem came back.
     batch_count: int | None  # WHY: the number of grouped entities.
-    self_drivable: bool | None  # WHY: True when Marvis can fix the problem alone.
-    self_driven: bool | None  # WHY: True when Marvis did fix the problem alone.
+    self_drivable: bool | None  # WHY: a self-drive flag of the row. No Mist document defines it (issue #3340).
+    self_driven: bool | None  # WHY: a self-drive flag. It is not proof of a fix, so read it with the status.
     zendesk_ticket: str  # WHY: the support case of the action.
     details_json: str  # WHY: every topic value, for an audit.
     exported_at: str  # WHY: the time of the export run.
@@ -509,8 +509,8 @@ class MarvisActionRecordBuilder:
     def _audit_part(self, raw: Mapping[str, Any], details: Mapping[str, Any]) -> dict[str, Any]:
         """Return the self-drive and the audit columns of a row."""
         return {
-            "self_drivable": MarvisFieldReader.flag(raw.get("self_drivable")),  # WHY: Marvis can fix it alone.
-            "self_driven": MarvisFieldReader.flag(raw.get("self_driven")),  # WHY: Marvis did fix it alone.
+            "self_drivable": MarvisFieldReader.flag(raw.get("self_drivable")),  # WHY: keep the raw self-drive flag.
+            "self_driven": MarvisFieldReader.flag(raw.get("self_driven")),  # WHY: keep the raw flag (see issue #3340).
             "zendesk_ticket": MarvisFieldReader.text(raw.get("zendesk_ticket")),  # WHY: the support case link.
             "details_json": MarvisFieldReader.text(dict(details)),  # WHY: keep every topic value for an audit.
             "exported_at": self._exported_at,  # WHY: the time of this run.
