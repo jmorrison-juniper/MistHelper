@@ -18,6 +18,9 @@ The script also protects the install against an unreachable pip index. It reads
 the configured index one time, probes the host for 3 seconds, and falls back to
 the public index for that run only. It never writes your pip configuration. See
 issue #2000.
+
+The browser download trusts the certificate store of the system. A proxy that
+inspects TLS, such as Zscaler, otherwise stops the download. See issue #3302.
 """
 
 from __future__ import annotations
@@ -55,6 +58,15 @@ PLAYWRIGHT_BROWSER = "chromium"
 # The command that repairs a failed download. The report prints this line, so an
 # engineer never has to search for the package name or the browser name.
 PLAYWRIGHT_INSTALL_HINT = f"python -m playwright install {PLAYWRIGHT_BROWSER}"
+
+# The Node option that makes the browser download trust the certificate store of
+# the system. Playwright downloads each browser with its own Node runtime, and
+# that runtime trusts only its own certificate list by default. A proxy that
+# inspects TLS, such as Zscaler, signs each certificate with a root that only the
+# system store holds. The download then fails with the error text
+# UNABLE_TO_GET_ISSUER_CERT_LOCALLY. The option adds the system store to the
+# list of Node, and it removes no certificate. See issue #3302.
+NODE_SYSTEM_CA_OPTION = "--use-system-ca"
 
 # The public index that the script uses when the configured index does not
 # answer. See issue #2000.
@@ -219,15 +231,29 @@ class WorktreeBootstrapper:
         command = [str(self.interpreter), "-m", "playwright", "install", PLAYWRIGHT_BROWSER]
         started = time.monotonic()  # Time the download, because it is the slowest step after pip.
         result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
-            command, check=False, env=self._install_environment()
+            command, check=False, env=self._browser_environment()
         )
         LOGGER.info("The browser download took %.1f seconds.", time.monotonic() - started)
         if result.returncode != 0:  # A failed download must not stop a bootstrap that otherwise worked.
+            repair = self.browser_repair_command(sys.platform)  # Build the repair line for the shell of this platform.
             LOGGER.warning("The browser download failed with code %d.", result.returncode)
-            LOGGER.warning("Run this command before the browser tests: %s", PLAYWRIGHT_INSTALL_HINT)
+            LOGGER.warning("Run this command before the browser tests: %s", repair)
             return False  # Report the failure, so the final report names the missing step.
         LOGGER.debug("The %s browser is ready", PLAYWRIGHT_BROWSER)
         return True  # The browser tests can now open a page.
+
+    @staticmethod
+    def browser_repair_command(platform: str) -> str:
+        """Return the command that repairs a failed browser download in the shell of the platform.
+
+        Why:
+            Issue #3302. Behind a proxy that inspects TLS, the plain download
+            command fails again. The repair command therefore sets the Node
+            option that trusts the certificate store of the system.
+        """
+        if platform == "win32":  # PowerShell sets an environment variable with the $env prefix.
+            return f'$env:NODE_OPTIONS = "{NODE_SYSTEM_CA_OPTION}"; {PLAYWRIGHT_INSTALL_HINT}'
+        return f"NODE_OPTIONS={NODE_SYSTEM_CA_OPTION} {PLAYWRIGHT_INSTALL_HINT}"  # A POSIX shell sets it for one run.
 
     def check_environment_health(self) -> None:
         """Report corrupt package install records without stopping setup."""
@@ -255,6 +281,23 @@ class WorktreeBootstrapper:
             environment.pop("PIP_EXTRA_INDEX_URL", None)  # Drop the extra index, because the override replaces it.
         LOGGER.debug("The pip subprocess uses index override %s", self.index_override or "none")
         return environment  # Give the caller the environment for the subprocess alone.
+
+    def _browser_environment(self) -> dict[str, str]:
+        """Build the environment that the browser download reads.
+
+        Why:
+            Issue #3302. The download runs in the Node runtime of Playwright. The
+            environment adds the option that trusts the certificate store of the
+            system, and it keeps every other value of the caller.
+        """
+        environment = self._install_environment()  # Keep the caller values and the pip settings of the old path.
+        current = environment.get("NODE_OPTIONS", "").strip()  # Read the Node options that the caller set.
+        if NODE_SYSTEM_CA_OPTION in current.split():  # The caller already set the option.
+            LOGGER.debug("NODE_OPTIONS already holds %s", NODE_SYSTEM_CA_OPTION)
+            return environment  # Keep the caller value, because a second copy adds nothing.
+        environment["NODE_OPTIONS"] = f"{current} {NODE_SYSTEM_CA_OPTION}".strip()  # Append, so caller options stay.
+        LOGGER.debug("The browser download adds %s to NODE_OPTIONS", NODE_SYSTEM_CA_OPTION)
+        return environment  # Give the caller the environment for the download subprocess alone.
 
     def _install_file(self, path: Path) -> None:
         """Install one requirement file with pip."""
@@ -294,7 +337,7 @@ def report_result(bootstrapper: WorktreeBootstrapper, installed: list[str], brow
         return  # No repair line is needed, because every step succeeded.
     LOGGER.warning("Caution: the browser download failed, so every browser test will report a skip.")
     LOGGER.warning("A skip reads as a pass. Run this command before you trust a browser result:")
-    LOGGER.warning("  %s", PLAYWRIGHT_INSTALL_HINT)
+    LOGGER.warning("  %s", bootstrapper.browser_repair_command(sys.platform))
 
 
 class GitHubAccountChecker:
