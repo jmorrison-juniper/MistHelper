@@ -114,9 +114,10 @@ class TestExecuteHappyPath:
         def _fresh_response(*_args, **_kwargs) -> MagicMock:
             resp = MagicMock()  # WHY: new response object per call
             resp.data = {"value": 42}  # WHY: new dict payload per call
+            resp.status_code = 200  # WHY: the path form answers with HTTP 200 and data
             return resp  # WHY: caller gets a fresh object each invocation
 
-        deps["mistapi"].api.v1.sites.insights.getSiteInsightMetrics.side_effect = _fresh_response
+        deps["apisession"].mist_get.side_effect = _fresh_response  # WHY: menu 74 requests the path form (#3266)
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
             op.execute()  # WHY: exercise full happy path
@@ -139,8 +140,8 @@ class TestFetchOneMetricBranches:
     def test_api_exception_returns_none(self) -> None:
         # WHY: per-metric API failure logs debug and returns None (batch continues)
         deps = _make_deps()  # WHY: baseline
-        # WHY: force API call to raise
-        deps["mistapi"].api.v1.sites.insights.getSiteInsightMetrics.side_effect = RuntimeError("boom")
+        # WHY: force the path form request to raise
+        deps["apisession"].mist_get.side_effect = RuntimeError("boom")
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         ctx = _make_context()  # WHY: build a context bundle
         result = op._fetch_one_metric(ctx, "metric-x")  # WHY: exercise exception branch
@@ -151,7 +152,7 @@ class TestFetchOneMetricBranches:
         deps = _make_deps()  # WHY: baseline
         empty_response = MagicMock()  # WHY: response wrapper
         empty_response.data = {}  # WHY: empty payload
-        deps["mistapi"].api.v1.sites.insights.getSiteInsightMetrics.return_value = empty_response  # WHY: empty
+        deps["apisession"].mist_get.return_value = empty_response  # WHY: the path form answers with an empty body
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         ctx = _make_context()  # WHY: context bundle
         result = op._fetch_one_metric(ctx, "metric-x")  # WHY: exercise empty-payload branch
@@ -161,7 +162,7 @@ class TestFetchOneMetricBranches:
         # WHY: getattr(response, "data", response) uses the response itself when .data missing
         deps = _make_deps()  # WHY: baseline
         # WHY: use a plain dict (no .data attribute) so getattr returns the dict itself
-        deps["mistapi"].api.v1.sites.insights.getSiteInsightMetrics.return_value = {"foo": "bar"}  # WHY: dict
+        deps["apisession"].mist_get.return_value = {"foo": "bar"}  # WHY: a plain dict holds no .data attribute
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         ctx = _make_context()  # WHY: context bundle
         result = op._fetch_one_metric(ctx, "metric-x")  # WHY: exercise fallback branch
