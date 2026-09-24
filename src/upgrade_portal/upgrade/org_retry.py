@@ -134,17 +134,34 @@ class OrgRetrySelection:
         logger.info("Select the retry devices of aggregate upgrade %s", record.get("operation_id", ""))
         source = OrgDeviceRows(record).rows() if rows is None else rows  # Reuse the rows of the caller.
         site_ids = cls._approved_sites(record)  # The retry keeps the approved sites only.
-        chosen = [row for row in source if str(row.get("site_id") or "") in site_ids and cls.needs_retry(row)]
+        chosen = cls._retry_rows(source, site_ids)  # The devices that did not reach the requested version.
         logger.debug("Aggregate upgrade %s holds %s retry device(s)", record.get("operation_id", ""), len(chosen))
         if not chosen:  # No device needs a second attempt.
             return None  # The page then shows no retry control.
-        return OrgRetryPlan(  # Keep the plan small, so every page can build it again.
-            operation_id=str(record.get("operation_id") or ""),
-            org_id=str(record.get("org_id") or ""),
-            site_ids=cls._retry_sites(site_ids, chosen),
-            devices=tuple({field: str(row.get(field) or "") for field in DEVICE_FIELDS} for row in chosen),
-            options=cls._prefill(record, chosen),
+        return cls._build(record, site_ids, chosen)  # Keep the plan small, so every page can build it again.
+
+    @classmethod
+    def _retry_rows(cls, source: Sequence[Mapping[str, Any]], site_ids: tuple[str, ...]) -> list[Mapping[str, Any]]:
+        """Return the device rows of the approved sites that need a second attempt."""
+        return [row for row in source if str(row.get("site_id") or "") in site_ids and cls.needs_retry(row)]
+
+    @classmethod
+    def _build(
+        cls, record: Mapping[str, Any], site_ids: tuple[str, ...], chosen: Sequence[Mapping[str, Any]]
+    ) -> OrgRetryPlan:
+        """Return the retry plan of the chosen device rows of one operation."""
+        return OrgRetryPlan(
+            operation_id=str(record.get("operation_id") or ""),  # The settled operation that the retry repeats.
+            org_id=str(record.get("org_id") or ""),  # The retry never crosses into another organization.
+            site_ids=cls._retry_sites(site_ids, chosen),  # Only the sites that hold a retry device.
+            devices=tuple(cls._device_row(row) for row in chosen),  # One small row for each retry device.
+            options=cls._prefill(record, chosen),  # The earlier choices, narrowed to the retry.
         )
+
+    @staticmethod
+    def _device_row(row: Mapping[str, Any]) -> dict[str, str]:
+        """Return the small row of one retry device that the pages show."""
+        return {field: str(row.get(field) or "") for field in DEVICE_FIELDS}  # Text only, never a nested value.
 
     @staticmethod
     def _approved_sites(record: Mapping[str, Any]) -> tuple[str, ...]:
@@ -158,16 +175,21 @@ class OrgRetrySelection:
         wanted = {str(row.get("site_id") or "") for row in chosen}  # The sites of the retry devices.
         return tuple(site_id for site_id in site_ids if site_id in wanted)  # Keep the approved order.
 
-    @staticmethod
-    def _prefill(record: Mapping[str, Any], chosen: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    @classmethod
+    def _prefill(cls, record: Mapping[str, Any], chosen: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         """Return the earlier choices, narrowed to the device types of the retry."""
         stored = record.get("plan_options")  # An operation from an earlier release holds no choices.
         source: Mapping[str, Any] = stored if isinstance(stored, Mapping) else {}  # A damaged value is empty.
         options = {key: value for key, value in source.items() if key not in PREFILL_DROPPED}  # Drop the old plan.
         families = {str(row.get("device_type") or "") for row in chosen}  # The device types of the retry.
         options["selected_types"] = [family for family in FAMILY_ORDER if family in families]  # Page order.
-        for row in chosen:  # Fill each missing target version from the stored device rows.
+        cls._fill_versions(options, chosen)  # An operation from an earlier release holds no version choice.
+        return options  # The options form shows these values first.
+
+    @staticmethod
+    def _fill_versions(options: dict[str, Any], chosen: Sequence[Mapping[str, Any]]) -> None:
+        """Fill each missing target version from the stored device rows."""
+        for row in chosen:  # Read the requested version of each retry device.
             key = f"version_{row.get('device_type')}"  # The field of one device type.
             if not str(options.get(key) or "").strip() and row.get("version_target"):  # Keep a stored choice.
                 options[key] = str(row["version_target"])  # The version that the operator asked for before.
-        return options  # The options form shows these values first.

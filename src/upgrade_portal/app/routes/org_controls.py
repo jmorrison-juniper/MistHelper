@@ -91,6 +91,10 @@ RESCHEDULE_REFUSED = "org_upgrade_reschedule_refused"  # The saved plan of the s
 RESCHEDULE_REFUSED_MESSAGE = (  # The cure is a new save of the options.
     "Only the saved plan of this browser session can move before its confirmation. Save the options again."
 )
+START_FIELD = "start_time"  # The one field of the form that moves the start time.
+START_FIELD_MESSAGE = (  # A damaged body must never read as a request to start at once.
+    "The request holds no start time field. Send an empty start time field to start the upgrade at once."
+)
 STORE_FAILED = "org_upgrade_store_failed"  # The durable store did not accept the change.
 STORE_FAILED_MESSAGE = "The portal could not store the change. Read the operation again before another action."
 WRITE_DISABLED_MESSAGE = "Organization upgrade writes stay disabled until the multi-site safety gates are complete."
@@ -290,6 +294,9 @@ def reschedule_operation(upgrade_id: str) -> Response | tuple[Response, int]:
     Returns:
         The answer that opens the confirmation page, or a refusal.
     """
+    if START_FIELD not in request_source():  # An empty body or a malformed JSON body holds no field.
+        logger.warning("The move of aggregate upgrade %s holds no start time field", upgrade_id)
+        return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, START_FIELD_MESSAGE)  # Keep the planned start.
     options = stored_options()  # The saved plan of the current browser session.
     operation = _planned_operation(upgrade_id, options)  # Only the plan of the page can move.
     if operation is None:  # The session names another plan, or no plan.

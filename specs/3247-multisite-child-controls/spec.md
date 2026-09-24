@@ -54,11 +54,13 @@ As a NOC engineer, I read the confirmation page of a multi-site plan. I want to 
 - **FR-006**: Each new operation stores the typed options as `plan_options`. A retry operation also stores `retry_of_operation_id`.
 - **FR-007**: A change of the organization, the mode, or the site set drops the retry plan. A successful submission also drops the retry plan.
 - **FR-008**: The reconciliation control shows for each child job in the state `submission_unknown` or `unknown`. The typed word is `RECONCILE <operation identifier>`.
+- **FR-008a**: The operation identifier holds small letters. If the typed word differs from the word in letter case only, the hint tells the operator to copy the capital and small letters of the page. The hint does not ask for capital letters.
 - **FR-009**: The reconciliation reads the running version of each device through `listSiteDevicesStats`, as issue #2006 requires. The route reads each site one time.
 - **FR-010**: A child job moves to `completed` only when every device runs the target version and the version before differs from the target version. The child job stores the evidence, the time, and a digest of the operator address.
 - **FR-011**: The reconciliation needs the deployment write gate, because it changes the outcome of an operation.
 - **FR-012**: The reschedule changes a plan only when the operation, every child job, and the parent claim prove that no cloud call started. The change uses one compare-and-set write.
 - **FR-013**: The reschedule reads the time with the parser of the options page, and it applies the window rule of the single-site start time.
+- **FR-013a**: The reschedule refuses a request that holds no start time field, with the code `org_upgrade_options_invalid`. An empty body and a malformed JSON body hold no field. Only an empty field starts the upgrade at once, so a damaged request never clears a planned start time.
 - **FR-014**: The progress poll reloads the page one time when the set of controls changes, so that each control shows its typed word.
 
 ## Assumptions

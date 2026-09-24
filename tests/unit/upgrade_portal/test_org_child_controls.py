@@ -105,7 +105,7 @@ def settled_record() -> dict[str, Any]:
 def test_a_refused_device_and_a_mismatched_device_need_a_retry() -> None:
     """The retry holds a refused switch and a gateway that runs the old version, and never the matched AP."""
     plan = OrgRetrySelection.plan(settled_record())
-    assert plan is not None
+    assert isinstance(plan, OrgRetryPlan)  # A retry device exists, so the selection returns a plan.
     assert sorted(device["mac"] for device in plan.devices) == [GATEWAY, SWITCH]
     assert plan.site_ids == (SITE_ONE, SITE_TWO)
     assert plan.operation_id == OPERATION_ID
@@ -137,7 +137,7 @@ def test_a_quiet_state_with_no_mismatch_needs_no_retry(state: str) -> None:
 def test_the_prefill_narrows_the_families_and_drops_the_old_start() -> None:
     """The retry form keeps the earlier choices, narrows the families, and drops the start and the identity."""
     plan = OrgRetrySelection.plan(settled_record())
-    assert plan is not None
+    assert isinstance(plan, OrgRetryPlan)  # A retry device exists, so the selection returns a plan.
     assert plan.options["selected_types"] == ["switch", "gateway"]
     assert plan.options["version_switch"] == JUNOS_TARGET
     assert plan.options["strategy"] == "big_bang"
@@ -152,7 +152,7 @@ def test_the_prefill_without_stored_options_uses_the_device_versions() -> None:
     older = settled_record()
     del older["plan_options"]
     plan = OrgRetrySelection.plan(older)
-    assert plan is not None
+    assert isinstance(plan, OrgRetryPlan)  # A retry device exists, so the selection returns a plan.
     assert plan.options == {
         "selected_types": ["switch", "gateway"],
         "version_switch": JUNOS_TARGET,
@@ -163,7 +163,7 @@ def test_the_prefill_without_stored_options_uses_the_device_versions() -> None:
 def test_the_narrow_keeps_only_the_retry_devices() -> None:
     """The narrow keeps each retry device in any MAC spelling and keeps the other view fields."""
     plan = OrgRetrySelection.plan(settled_record())
-    assert plan is not None
+    assert isinstance(plan, OrgRetryPlan)  # A retry device exists, so the selection returns a plan.
     view = {
         "targets": [
             {"mac": "00:00:00:00:00:01", "device_type": "ap"},
@@ -181,7 +181,7 @@ def test_the_narrow_keeps_only_the_retry_devices() -> None:
 def test_the_session_value_holds_the_reference_only() -> None:
     """The signed cookie holds the operation identity and the organization, and never a device list."""
     plan = OrgRetrySelection.plan(settled_record())
-    assert plan is not None
+    assert isinstance(plan, OrgRetryPlan)  # A retry device exists, so the selection returns a plan.
     value = plan.to_session()
     assert value == {"operation_id": OPERATION_ID, "org_id": ORG_ID}
     assert OrgRetryPlan.session_reference(value, ORG_ID) == OPERATION_ID

@@ -480,10 +480,12 @@ def test_the_submit_of_a_retry_plan_ends_the_retry(harness: ControlsHarness) -> 
     """The confirmed submission of a retry plan drops the retry reference."""
     harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
     post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry.
+    assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
     operation_id = save_plan(harness)  # Save the narrowed plan.
     started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})  # The typed confirmation.
     assert started.status_code == 200, started.get_json()  # The submission starts.
     assert started.get_json() == {"next": f"/upgrade/org/jobs/{operation_id}"}  # The progress page opens.
+    assert planned_macs(harness.store.records[operation_id]) == {AP_TWO, SWITCH_ONE}  # Only the retry devices.
     assert browser_value(harness, RETRY_SESSION_KEY) is None  # The next plan covers every device again.
     assert harness.store.records[operation_id]["state"] == "running"  # The stand-in cloud accepted each job.
 
@@ -504,6 +506,7 @@ def test_a_changed_site_selection_ends_the_retry(harness: ControlsHarness) -> No
     """A new site selection drops the retry reference of the earlier selection."""
     harness.store.write_run(settled_record(harness))  # Both sites hold a retry device.
     post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both sites.
+    assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
     changed = post_json(harness, SITE_SELECTION, {"site_ids": [harness.site_one]})  # A smaller selection.
     assert changed.status_code == 200, changed.get_json()  # The selection is valid.
     assert browser_value(harness, RETRY_SESSION_KEY) is None  # A retry of the earlier scope must not narrow.
@@ -622,7 +625,8 @@ def test_a_failed_site_read_proves_nothing_and_keeps_the_site(harness: ControlsH
     assert second["status"] == "submission_unknown"  # An empty read proves nothing.
     assert second["reconciliation"]["summary"].startswith("0 of 1 devices run the target version.")  # Evidence.
     assert set(stored["site_locks"]) == {harness.site_one, SITE_TWO}  # A live child job keeps each site.
-    assert lock.read_lock(harness.org_id, SITE_TWO, harness.locks) is not None  # No new work can start.
+    held = lock.read_lock(harness.org_id, SITE_TWO, harness.locks)  # The lock of the site that answered nothing.
+    assert getattr(held, "run_id", None) == RECONCILE_ID  # The operation still holds the site.
     assert 'data-testid="org-upgrade-reconcile-evidence-child-switch-two"' in page  # The page shows the evidence.
     assert 'data-testid="org-upgrade-reconcile-child-child-switch-one"' not in page  # The proven job leaves.
 
@@ -632,6 +636,26 @@ def test_the_check_refuses_a_wrong_typed_word(harness: ControlsHarness, typed: s
     """Only the exact typed word of this operation starts the check."""
     harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs.
     answer = post_json(harness, f"/api/org-upgrades/{RECONCILE_ID}/reconcile", {"confirmation": typed})
+    assert answer.status_code == 400 and error_code(answer) == "confirmation_required"  # The word guard refuses.
+    assert harness.reader.calls == []  # The guard runs before any cloud read.
+    assert harness.store.records[RECONCILE_ID]["record_version"] == 0  # Nothing changes.
+
+
+def test_the_check_refuses_an_empty_body(harness: ControlsHarness) -> None:
+    """A request with no body holds no typed word, so the check refuses it before any read."""
+    harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs.
+    answer = harness.client.post(f"/api/org-upgrades/{RECONCILE_ID}/reconcile", data="")  # No body at all.
+    assert answer.status_code == 400 and error_code(answer) == "confirmation_required"  # The word guard refuses.
+    assert harness.reader.calls == []  # The guard runs before any cloud read.
+    assert harness.store.records[RECONCILE_ID]["record_version"] == 0  # Nothing changes.
+
+
+def test_the_check_refuses_a_malformed_json_body(harness: ControlsHarness) -> None:
+    """A body that is not valid JSON holds no typed word, so the check refuses it before any read."""
+    harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs.
+    answer = harness.client.post(  # A damaged body from a scripted client.
+        f"/api/org-upgrades/{RECONCILE_ID}/reconcile", data="{bad json", content_type="application/json"
+    )
     assert answer.status_code == 400 and error_code(answer) == "confirmation_required"  # The word guard refuses.
     assert harness.reader.calls == []  # The guard runs before any cloud read.
     assert harness.store.records[RECONCILE_ID]["record_version"] == 0  # Nothing changes.
@@ -742,6 +766,30 @@ def test_the_move_refuses_a_time_outside_the_window(harness: ControlsHarness, mo
     assert answer.status_code == 400 and error_code(answer) == "org_upgrade_options_invalid"  # The guard.
     assert stored["record_version"] == 0  # Nothing changes.
     assert {body["start_time"] for body in child_bodies(stored)} == {epoch_of(start)}  # The start stays.
+
+
+def test_the_move_refuses_an_empty_body(harness: ControlsHarness) -> None:
+    """A request with no start time field never clears the planned start time."""
+    operation_id, start = save_scheduled_plan(harness)  # A plan that starts in two hours.
+    answer = harness.client.post(reschedule_path(operation_id), data="")  # No body at all.
+    stored = harness.store.records[operation_id]  # The durable plan after the refusal.
+    assert answer.status_code == 400 and error_code(answer) == "org_upgrade_options_invalid"  # The field guard.
+    assert stored["record_version"] == 0  # Nothing changes.
+    assert {body["start_time"] for body in child_bodies(stored)} == {epoch_of(start)}  # The start stays.
+    assert browser_value(harness, OPTIONS_SESSION_KEY)["start_time"] == epoch_of(start)  # The session keeps it.
+
+
+def test_the_move_refuses_a_malformed_json_body(harness: ControlsHarness) -> None:
+    """A body that is not valid JSON never reads as a request to start the upgrade at once."""
+    operation_id, start = save_scheduled_plan(harness)  # A plan that starts in two hours.
+    answer = harness.client.post(  # A damaged body from a scripted client.
+        reschedule_path(operation_id), data="{bad json", content_type="application/json"
+    )
+    stored = harness.store.records[operation_id]  # The durable plan after the refusal.
+    assert answer.status_code == 400 and error_code(answer) == "org_upgrade_options_invalid"  # The field guard.
+    assert stored["record_version"] == 0  # Nothing changes.
+    assert {body["start_time"] for body in child_bodies(stored)} == {epoch_of(start)}  # The start stays.
+    assert browser_value(harness, OPTIONS_SESSION_KEY)["start_time"] == epoch_of(start)  # The session keeps it.
 
 
 def test_the_move_refuses_a_plan_that_the_session_did_not_save(harness: ControlsHarness) -> None:

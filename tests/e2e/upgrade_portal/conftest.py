@@ -57,6 +57,11 @@ from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the 
 from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
 from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
 from src.upgrade_portal.runtime.server import build_server_command  # Start the platform server safely.
+from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the seeds of the recovery journeys.
+    CONTROLS_BROWSER_ID,
+    CONTROLS_EMAIL,
+    OrgControlSeeds,
+)
 from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, stores, and traps.
     allocate_resources,
     build_child_environment,
@@ -1538,6 +1543,19 @@ def firmware_operator_cookies() -> list[dict[str, str]]:
     return operator_session_cookies(FIRMWARE_EMAIL, FIRMWARE_BROWSER_ID)  # The write gate accepts this address.
 
 
+def controls_operator_cookies() -> list[dict[str, str]]:
+    """Build the two cookies of the operator that owns the recovery seeds.
+
+    Why:
+        Issue #3247. A retry changes the site selection of its operator. A
+        separate operator keeps that change away from every other journey.
+
+    Returns:
+        One record for each cookie, in the shape that `add_cookies` takes.
+    """
+    return operator_session_cookies(CONTROLS_EMAIL, CONTROLS_BROWSER_ID)  # The owner of both recovery seeds.
+
+
 @pytest.fixture
 def browser_token_value() -> str:
     """Return the fake browser token that the server stand-in accepts.
@@ -1765,6 +1783,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
             stale_stopping_written = upgrade.save_run(_stale_stopping_run_record())
             bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())
             lifecycle_written = upgrade.save_run(_lifecycle_run_record())
+            org_controls_written = OrgControlSeeds.write(upgrade, identity)  # Issue #3247: two operations.
     except Exception as failure:
         logger.warning(
             "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
@@ -1774,7 +1793,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
     logger.info(
         (
             "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
-            "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s"
+            "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s org_controls=%s"
         ),
         failed_written,
         stopped_written,
@@ -1784,6 +1803,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
         stale_stopping_written,
         bulk_retry_written,
         lifecycle_written,
+        org_controls_written,
     )
 
 
@@ -1897,6 +1917,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
     _register_operator(STAND_IN_EMAIL, RENEWED_BROWSER_ID)  # The renewed session keeps the durable actor.
     _register_operator(FIRMWARE_EMAIL, FIRMWARE_BROWSER_ID)  # The operator that may start firmware writes.
+    _register_operator(CONTROLS_EMAIL, CONTROLS_BROWSER_ID)  # Issue #3247: the owner of the recovery seeds.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
 
@@ -2046,6 +2067,31 @@ def firmware_operator_page(context: Any, capture_portal_server: str) -> Iterator
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
     yield opened  # The test uses the reachable operator only where it starts firmware.
+    opened.close()  # A page left open would hold a browser target for the whole run.
+
+
+@pytest.fixture
+def controls_operator_page(context: Any, capture_portal_server: str) -> Iterator[Any]:
+    """Open a browser page of the operator that owns the recovery seeds.
+
+    Why:
+        Issue #3247. The retry and the check open only for the owner of an
+        operation. The server writes both seeds for this operator.
+
+    Args:
+        context: The browser context that `pytest-playwright` built.
+        capture_portal_server: The address of the running portal.
+
+    Yields:
+        The browser page, with the session cookies of the controls operator.
+    """
+    del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
+    context.add_cookies(controls_operator_cookies())  # Both cookies, against the portal address.
+    opened = context.new_page()  # The page then carries the session on its first request.
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    yield opened  # The test drives the recovery controls of the seeded operations.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
 

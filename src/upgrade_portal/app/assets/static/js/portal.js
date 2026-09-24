@@ -1485,10 +1485,27 @@
             return;
         }
         if (typed.toUpperCase() === word.toUpperCase()) {
-            setText(hint, "Type the word in capital letters.");
+            setText(hint, caseHint(word));  // Only the letter case differs, so name the case that the word wants.
             return;
         }
         setText(hint, "The typed word does not match " + word + ".");
+    }
+
+    /**
+     * Names the letter case that a typed-word gate wants.
+     *
+     * Why: Issue #3247 adds a check word that holds an operation identifier,
+     * and that identifier holds small letters. Advice to type capital letters
+     * is then wrong, because capital letters keep the button locked.
+     *
+     * @param {string} word The word that unlocks the button.
+     * @returns {string} The advice for a typed word that differs in case only.
+     */
+    function caseHint(word) {
+        if (word === word.toUpperCase()) {  // Every letter of the word is a capital letter.
+            return "Type the word in capital letters.";  // Keep the usual advice for a word such as CANCEL.
+        }
+        return "Type the word exactly as the page shows it, with the same capital and small letters.";  // The word mixes the two cases.
     }
 
     /**
