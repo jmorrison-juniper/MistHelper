@@ -107,8 +107,9 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         logger.debug("The aggregate upgrade holds %s child job(s)", len(children))  # Log after the build.
         return record  # The caller writes the record before submission.
 
-    @staticmethod  # This record builder needs no service state.
+    @classmethod  # This record builder needs the shared clock only.
     def _build_record(
+        cls,
         request: AggregateBuildInput,
         operation_id: str,
         children: list[dict[str, Any]],
@@ -121,13 +122,17 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             "owner": request.owner,  # The signed operator owns status and cancellation.
             "org_id": request.org_id,  # Every child stays inside one organization.
             "site_ids": [str(site["site_id"]) for site in request.sites],  # Keep the approved site order.
+            "site_names": cls._site_names(request.sites),  # Issue #3249: the device table names each site.
             "request_nonce": request.request_nonce,  # A repeated confirmation cannot send the writes again.
             "record_version": 0,  # Every later state transition uses durable compare-and-set.
+            "updated_at": cls._now_text(),  # Issue #3249: the progress page shows the age of the last change.
             "state": "planned",  # No cloud call has left yet.
             "submission_claim_id": None,  # No request owns the parent submission yet.
             "submission_claimed_at": None,  # No parent claim lease exists yet.
             "site_locks": {},  # The route stores each acquired lock before submission.
             "children": children,  # Each child keeps its route, targets, and outcome.
+            "device_versions": {},  # Issue #3249: no running version reading exists before the upgrade.
+            "versions_final": [],  # Issue #3249: no child has its final reading yet.
             "errors": [],  # One child error must not replace another result.
             "cancellation": {"requested": False, "results": []},  # Keep each cancellation result.
         }
@@ -212,6 +217,59 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         self._finish_cancellation(record, store)  # Persist the aggregate state and result list.
         logger.debug("Aggregate cancellation %s recorded every child result", record.get("operation_id", ""))
         return record  # The route returns the aggregate cancellation view.
+
+    def record_device_versions(
+        self,
+        record: MutableMapping[str, Any],
+        store: RunStore,
+        readings: Mapping[str, str],
+        final_child_ids: Sequence[str],
+    ) -> None:
+        """Store the running version readings and the final children of one refresh.
+
+        Why:
+            Issue #3249. The multi-site device table shows the version that
+            each device runs after the upgrade. One compare-and-set write
+            stores every reading, so a second browser tab reads the stored
+            value and does not read the same site again.
+
+        Args:
+            record: The caller snapshot of the operation record.
+            store: The durable store.
+            readings: The running version of each device, keyed by the normalized MAC address.
+            final_child_ids: The children that no later refresh reads again.
+        """
+        read_at = self._now_text()  # One time for every reading of this refresh.
+
+        def update(candidate: MutableMapping[str, Any]) -> None:
+            self._merge_readings(candidate, readings, read_at)  # Count each read of each device.
+            self._merge_final_ids(candidate, final_child_ids)  # Close each final child one time.
+
+        logger.info("Store %s version reading(s) for aggregate upgrade %s", len(readings), record.get("run_id", ""))
+        self._cas(record, store, update)  # Store every reading through one write.
+        logger.debug("Aggregate upgrade %s holds %s final child job(s)", record.get("run_id", ""), len(final_child_ids))
+
+    @staticmethod
+    def _merge_readings(candidate: MutableMapping[str, Any], readings: Mapping[str, str], read_at: str) -> None:
+        """Replace the stored reading of each device that the refresh read."""
+        stored = candidate.get("device_versions")  # A record from an earlier release holds no map.
+        merged = dict(stored) if isinstance(stored, Mapping) else {}  # A damaged map starts empty.
+        for mac, version in readings.items():  # Replace each reading, and count each read.
+            prior = merged.get(mac)  # The reading of an earlier refresh.
+            count = prior.get("reads") if isinstance(prior, Mapping) else 0  # A new device has no read yet.
+            reads = (count if type(count) is int else 0) + 1  # A damaged count restarts at one.
+            merged[mac] = {"version": version, "read_at": read_at, "reads": reads}  # The newest reading wins.
+        candidate["device_versions"] = merged  # Store the whole map in the same write.
+
+    @staticmethod
+    def _merge_final_ids(candidate: MutableMapping[str, Any], final_child_ids: Sequence[str]) -> None:
+        """Add each final child to the stored list one time, in the order of the refresh."""
+        stored = candidate.get("versions_final")  # A record from an earlier release holds no list.
+        merged = [str(child_id) for child_id in stored] if isinstance(stored, list) else []  # Accept a list only.
+        for child_id in final_child_ids:  # Keep the plan order of the refresh.
+            if child_id not in merged:  # A second browser tab can report the same child.
+                merged.append(child_id)  # Close the child for every later refresh.
+        candidate["versions_final"] = merged  # Store the whole list in the same write.
 
     def _start_cancellation(self, record: MutableMapping[str, Any], store: RunStore) -> None:
         """Mark cancellation requested without rejecting a later recovery."""
@@ -308,6 +366,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         child.update(  # Add the AP-specific route and target values.
             site_name=", ".join(site_names.get(site_id, site_id) for site_id in site_ids),
             target_ids=[target.mac for target in targets],
+            targets=[cls._target_record(target) for target in targets],  # Issue #3249: one row for each AP.
             body=body,
         )
         logger.debug("The organization AP child holds %s target(s)", len(targets))  # Log after the build.
@@ -997,6 +1056,8 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
                 raise RuntimeError("The aggregate record version is invalid.")  # Fail closed.
             candidate: MutableMapping[str, Any] = deepcopy(current)  # Keep failed attempts detached.
             update(candidate)  # Apply the requested state transition.
+            if candidate != current:  # Issue #3249: only a real change moves the update time.
+                candidate["updated_at"] = self._now_text()  # The progress page shows the age of the last change.
             candidate["record_version"] = expected + 1  # Advance exactly one version.
             if store.compare_and_set_run(str(candidate["run_id"]), expected, dict(candidate)):  # Try atomic CAS.
                 record.clear()  # Replace the caller snapshot only after success.

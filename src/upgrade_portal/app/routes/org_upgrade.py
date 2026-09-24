@@ -22,6 +22,7 @@ from requests.exceptions import RequestException  # Name the transport faults th
 from ....firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
 from ....firmware.org_upgrade_body import OrgUpgradeBody
 from ....firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
+from ...api.run_controls.views import RunStalePolicy  # Issue #3249: the age rule of the single-site page.
 from ...runtime import identity, lock
 from ...upgrade.options import (
     ORG_OPTION_HELP,
@@ -30,6 +31,8 @@ from ...upgrade.options import (
     build_options_record,
     build_options_view,
 )
+from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for each device of the operation.
+from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
 from ..factory import json_error
 from . import select as select_routes
 from . import upgrade as upgrade_routes
@@ -75,6 +78,7 @@ AGGREGATE_SERVICE_CONFIG_KEY = "AGGREGATE_UPGRADE_SERVICE"
 OPTIONS_VIEW_CONFIG_KEY = "ORG_UPGRADE_OPTIONS_VIEW"
 OPTIONS_BUILDER_CONFIG_KEY = "ORG_UPGRADE_OPTIONS_BUILDER"
 WRITES_ENABLED_CONFIG_KEY = "ORG_UPGRADE_WRITES_ENABLED"
+DEVICE_VERSION_READER_CONFIG_KEY = "ORG_DEVICE_VERSION_READER"  # Issue #3249: a test replaces the stats read.
 
 MODE_REQUIRED = "multi_site_mode_required"
 MODE_REQUIRED_MESSAGE = "Choose the multi-site mode before you configure an organization upgrade."
@@ -866,6 +870,8 @@ def _cas_operation(record: MutableMapping[str, Any], replacement: Mapping[str, A
     if type(expected) is not int:  # A malformed version cannot coordinate a destructive action.
         return False  # Fail closed before any cloud write.
     candidate = dict(replacement)  # Detach the replacement from the caller.
+    if candidate != dict(record):  # Issue #3249: only a real change moves the update time.
+        candidate["updated_at"] = datetime.now(UTC).isoformat()  # The progress page shows the age of the change.
     candidate["record_version"] = expected + 1  # Advance exactly one application version.
     store = upgrade_routes.run_store()  # Use the same durable seam as all run routes.
     changed = store.compare_and_set_run(str(record["run_id"]), expected, candidate)  # Apply one atomic CAS.
@@ -1009,6 +1015,12 @@ def _submit_aggregate(
     operation: MutableMapping[str, Any],
 ) -> Response | tuple[Response, int]:
     """Submit every child through the aggregate boundary."""
+    if not _record_operator(operation):  # FR-009: the record names the operator before any lock or cloud write.
+        return json_error(
+            SERVICE_UNAVAILABLE_STATUS,
+            SUBMISSION_FAILED,
+            "The portal could not record the operator. Read the operation before another action.",
+        )
     site_ids = [str(value) for value in operation.get("site_ids", [])]  # Read the durable lock scope.
     refusal = _acquire_operation_locks(operation, str(operation.get("org_id", "")), site_ids)  # Lock all sites.
     if refusal is not None:  # Stop before the parent or child claim.
@@ -1035,6 +1047,33 @@ def _submit_aggregate(
         )
     _release_operation_locks(operation)  # Free every site when no child can still write firmware.
     return next_page_answer(f"/upgrade/org/jobs/{operation['operation_id']}")  # Show one seamless operation.
+
+
+def _record_operator(operation: MutableMapping[str, Any]) -> bool:
+    """Store the typed operator address and the Mist account before the first cloud write.
+
+    Why:
+        Issue #3249. A single-site run records the typed address and the Mist
+        account of the operator who started it. FR-009 asks the multi-site
+        record for the same two facts, before any child reaches the cloud.
+
+    Args:
+        operation: The durable operation record.
+
+    Returns:
+        True when the record holds both facts, and False when the write failed.
+    """
+    if "actor_email" in operation:  # A repeated submission keeps the first operator record.
+        return True  # Write nothing, and continue.
+    logger.info("Record the operator of aggregate upgrade %s", operation.get("operation_id", ""))  # Before the read.
+    replacement = {  # Keep every field of the plan, and add the two audit facts.
+        **operation,
+        "actor_email": upgrade_routes.actor_address(),  # The typed address of the signed operator.
+        "cloud_account": upgrade_routes.read_cloud_account(),  # The Mist account behind the cloud session.
+    }
+    recorded = _cas_operation(operation, replacement)  # One compare-and-set write, before any site lock.
+    logger.debug("The operator record write returned %s", recorded)  # Log the result, not the address.
+    return recorded  # A stale record stops the submission before any lock.
 
 
 @org_upgrade_bp.post(SUBMIT_PATH)
@@ -1163,6 +1202,31 @@ def aggregate_summary(record: Mapping[str, Any]) -> dict[str, Any]:
         "children": rows,
         "errors": list(record.get("errors", [])),
         "cancellation": record.get("cancellation"),
+        **_aggregate_record_view(record),  # Issue #3249: the device rows, the operator, and the age.
+    }
+
+
+def _aggregate_record_view(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the device rows, the operator, the Mist account, and the age of one operation.
+
+    Why:
+        Issue #3249. The single-site page shows each device, the typed operator
+        address, the Mist account, and the last update time. The multi-site
+        page and its poll now show the same facts from the durable record.
+
+    Args:
+        record: The durable operation record.
+
+    Returns:
+        The public fields that the page and the poll add to the summary.
+    """
+    age = RunStalePolicy(datetime.now(tz=UTC)).assess(record)  # The age rule of the single-site page.
+    return {
+        "devices": OrgDeviceRows(record).rows(),  # One row for each target of each child.
+        "operator_address": str(record.get("actor_email") or ""),  # An earlier record holds no address.
+        "cloud_account": str(record.get("cloud_account") or ""),  # An earlier record holds no account.
+        "updated_at": age.updated_at,  # The normalized UTC time, or empty text.
+        "age_text": age.age_text,  # A short age, or "unknown".
     }
 
 
@@ -1269,8 +1333,40 @@ def _refresh_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) 
             type(error).__name__,
             error,
         )  # Record the unknown read outcome.
+    _refresh_device_versions(cloud_session, operation)  # Issue #3249: read the versions that the table needs.
     _release_operation_locks(operation)  # Free every site as soon as the operation settles.
     logger.debug("The aggregate upgrade refresh finished with state %s", operation.get("state", "unknown"))
+
+
+def _refresh_device_versions(cloud_session: Any, operation: MutableMapping[str, Any]) -> None:
+    """Read the running versions that the device table needs, and store them.
+
+    Why:
+        Issue #3249. FR-005 names the running version as the version after.
+        FR-007 bounds the reads, and FR-008 stores them through one write. A
+        fault here must not hide the page, so this function logs the fault and
+        keeps the last durable readings.
+
+    Args:
+        cloud_session: The signed cloud session of the operator.
+        operation: The durable operation record. A stored change updates it in place.
+    """
+    reader = current_app.config.get(DEVICE_VERSION_READER_CONFIG_KEY, OrgVersionRefresh.running_versions)
+    try:
+        result = OrgVersionRefresh(reader).collect(cloud_session, operation)  # Read only the sites that need it.
+        if result.changes:  # A refresh with no news writes nothing, so the update time stays.
+            aggregate_service().record_device_versions(  # Store every reading through one write.
+                operation,
+                upgrade_routes.run_store(),
+                result.readings,
+                result.final_child_ids,
+            )
+    except Exception as error:  # Keep broad because the progress page must show the last durable readings.
+        logger.exception(
+            "The device version refresh failed with %s: %s",
+            type(error).__name__,
+            error,
+        )  # Record the fault, and keep the page readable.
 
 
 def _aggregate_job_page(upgrade_id: str, operation: Mapping[str, Any]) -> str:

@@ -33,6 +33,11 @@ UPGRADE_ID = "33333333-3333-3333-3333-333333333333"
 SITE_UPGRADE_ID = "44444444-4444-4444-4444-444444444444"
 PROBE_EMAIL = "org-upgrade.operator@juniper.net"  # Issue #2615: a firmware write needs a reachable address.
 RESERVED_EMAIL = "org-upgrade.operator@example.invalid"  # The reserved address that a firmware write must refuse.
+CLOUD_ACCOUNT = "mist.account@juniper.net"  # Issue #3249: the account label behind the signed cloud session.
+SECOND_SITE_ID = "55555555-5555-5555-5555-555555555555"  # Issue #3249: a second selected site.
+AP_ONE = "001122334455"  # The access point at the first site.
+AP_TWO = "001122334466"  # The access point at the second site.
+SWITCH_ONE = "001122334477"  # The switch at the first site.
 
 
 def test_request_source_empty_body_uses_form_mapping() -> None:
@@ -221,6 +226,45 @@ class AggregateBoundaryStandIn:
         store.write_run(record)
         return record
 
+    def record_device_versions(
+        self,
+        record: dict[str, Any],
+        store: Any,
+        readings: dict[str, str],
+        final_child_ids: tuple[str, ...],
+    ) -> dict[str, Any]:
+        """Merge the running version readings, as the production service does."""
+        versions = record.setdefault("device_versions", {})  # Keep each earlier reading.
+        for mac, version in readings.items():  # Store each new reading under its MAC address.
+            versions[mac] = {"version": version, "reads": 1}
+        record["versions_final"] = [*record.get("versions_final", []), *final_child_ids]  # Close each child.
+        store.write_run(record)
+        return record
+
+
+class VersionReaderStandIn:
+    """Answer the running versions of each site, and record every site read."""
+
+    def __init__(self) -> None:
+        """Start with no answer and no read."""
+        self.answers: dict[str, dict[str, str]] = {}  # A test fills the answer of each site.
+        self.calls: list[str] = []  # Each entry names one site read.
+
+    def __call__(self, cloud_session: Any, site_id: str) -> dict[str, str]:
+        """Record the site read and return its fixed answer."""
+        del cloud_session  # The stand-in opens no socket.
+        self.calls.append(site_id)
+        return dict(self.answers.get(site_id, {}))
+
+
+class QuietAggregateService(AggregateUpgradeService):
+    """Keep the production version store, and read no child job."""
+
+    def status(self, cloud_session: Any, record: Any, store: Any) -> Any:
+        """Return the stored record as it is."""
+        del cloud_session, store  # The test record already holds the cloud answers.
+        return record
+
 
 @pytest.fixture
 def org_service() -> OrgUpgradeServiceStandIn:
@@ -242,6 +286,8 @@ def org_upgrade_client(
     portal_app.config["SITE_LOCK_READER"] = lambda org_id, site_ids: {site_id: None for site_id in site_ids}
     portal_app.config[select.LOCK_CLIENT_KEY] = FakeLockStore()
     portal_app.config["ORG_UPGRADE_SERVICE"] = org_service
+    portal_app.config[org_upgrade.DEVICE_VERSION_READER_CONFIG_KEY] = VersionReaderStandIn()  # No stats read.
+    portal_app.config["MIST_SELF_READER"] = lambda cloud_session: {"email": CLOUD_ACCOUNT}  # No self read.
     owner = identity.build_owner(PROBE_EMAIL, identity.issue_browser_id())
     operator_session = identity.OperatorSession(
         owner=owner,
@@ -1115,3 +1161,195 @@ def test_a_reserved_operator_address_cannot_start_a_multi_site_upgrade(
     body = answer.get_json() or {}  # Read the refusal envelope that the contract fixes.
     assert body.get("error", {}).get("code") == "unreachable_operator_address"  # Name the exact refusal code.
     assert len(org_service.calls) == before, "The refusal must reach no cloud service at all."
+
+
+def table_target(mac: str, device_type: str, site_id: str, version: str) -> dict[str, str]:
+    """Build one stored target record of the device table test."""
+    return {
+        "mac": mac,
+        "name": f"{device_type}-{mac[-2:]}",
+        "device_type": device_type,
+        "model": "AP45" if device_type == "ap" else "EX4400",
+        "version_before": "0.14.1" if device_type == "ap" else "23.4R1.8",
+        "version_target": version,
+        "site_id": site_id,
+    }
+
+
+def device_table_record(owner: str, org_id: str, site_id: str) -> dict[str, Any]:
+    """Build one finished operation with an access point at each site and one switch."""
+    ap_status = {
+        "site_upgrades": [
+            {"site_id": site_id, "upgrade": {"targets": {"upgraded": [AP_ONE]}}},
+            {"site_id": SECOND_SITE_ID, "upgrade": {"targets": {"failed": [AP_TWO]}}},
+        ]
+    }
+    ap_child = {
+        "child_id": "child-ap",
+        "route": "upgradeOrgDevices",
+        "site_id": None,
+        "site_name": "Site One, Site Two",
+        "device_family": "ap",
+        "status": "failed",
+        "target_ids": [AP_ONE, AP_TWO],
+        "targets": [
+            table_target(AP_ONE, "ap", site_id, "0.15.1"),
+            table_target(AP_TWO, "ap", SECOND_SITE_ID, "0.15.1"),
+        ],
+        "status_data": ap_status,
+        "error": None,
+        "cancellation": None,
+    }
+    switch_child = {
+        "child_id": "child-switch",
+        "route": "upgradeSiteDevices",
+        "site_id": site_id,
+        "site_name": "Site One",
+        "device_family": "switch",
+        "status": "completed",
+        "target_ids": [SWITCH_ONE],
+        "targets": [table_target(SWITCH_ONE, "switch", site_id, "23.4R1.9")],
+        "status_data": {"targets": {"upgraded": [SWITCH_ONE]}},
+        "error": None,
+        "cancellation": None,
+    }
+    return {
+        "_key": "org-run-devices",
+        "run_id": "org-run-devices",
+        "operation_id": "org-run-devices",
+        "owner": owner,
+        "org_id": org_id,
+        "site_ids": [site_id, SECOND_SITE_ID],
+        "record_version": 0,
+        "state": "failed",
+        "site_names": {site_id: "Site One", SECOND_SITE_ID: "Site Two"},
+        "device_versions": {},
+        "versions_final": [],
+        "updated_at": "2026-09-24T01:00:00+00:00",
+        "actor_email": PROBE_EMAIL,
+        "cloud_account": CLOUD_ACCOUNT,
+        "site_locks": {},
+        "children": [ap_child, switch_child],
+        "errors": [],
+        "cancellation": {"requested": False, "results": []},
+    }
+
+
+def test_the_multisite_page_shows_one_row_for_each_device(
+    org_upgrade_client: FlaskClient,
+    fake_org_id: str,
+    fake_site_id: str,
+) -> None:
+    """Issue #3249: each device shows its site, its state, its versions, and its version check.
+
+    Why:
+        The single-site page shows one row for each device. The multi-site
+        page showed counts only, so an operator could not see which device
+        failed or which firmware each device runs after the upgrade.
+    """
+    store = AggregateStoreStandIn()  # Hold the finished operation without a database.
+    org_upgrade_client.application.config["RUN_STORE"] = store
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = QuietAggregateService()
+    reader = org_upgrade_client.application.config[org_upgrade.DEVICE_VERSION_READER_CONFIG_KEY]
+    reader.answers = {fake_site_id: {AP_ONE: "0.15.1", SWITCH_ONE: "23.4R1.8"}, SECOND_SITE_ID: {AP_TWO: "0.14.1"}}
+    with org_upgrade_client.session_transaction() as browser_session:
+        owner_key = browser_session[identity.SESSION_OWNER_KEY]  # The operation belongs to this browser.
+    store.write_run(device_table_record(owner_key, fake_org_id, fake_site_id))
+
+    page = org_upgrade_client.get("/upgrade/org/jobs/org-run-devices")
+
+    assert page.status_code == 200
+    text = page.get_data(as_text=True)
+    assert 'data-testid="org-upgrade-device-table"' in text
+    assert f'data-testid="org-upgrade-device-row-{AP_ONE}"' in text
+    assert f'data-testid="org-upgrade-device-row-{AP_TWO}"' in text
+    assert f'data-testid="org-upgrade-device-row-{SWITCH_ONE}"' in text
+    assert "Site Two" in text
+    assert text.count("Version matches") == 1  # The access point at the first site runs the target.
+    assert text.count("Version mismatch") == 2  # The failed access point and the switch run other firmware.
+    assert "The cloud lists this device as failed." in text
+    assert PROBE_EMAIL in text and CLOUD_ACCOUNT in text  # The page names who started the operation.
+    assert 'data-testid="org-upgrade-last-update-age"' in text
+    assert sorted(reader.calls) == sorted([fake_site_id, SECOND_SITE_ID])  # One read for each site.
+
+    polled = org_upgrade_client.get("/api/org-upgrades/org-run-devices")
+
+    body = polled.get_json()
+    assert len(reader.calls) == 2  # SC-002: a finished operation causes no second read.
+    assert {row["mac"]: row["version_after"] for row in body["devices"]} == {
+        AP_ONE: "0.15.1",
+        AP_TWO: "0.14.1",
+        SWITCH_ONE: "23.4R1.8",
+    }
+    assert {row["mac"]: row["site_name"] for row in body["devices"]}[AP_TWO] == "Site Two"
+    assert (body["operator_address"], body["cloud_account"]) == (PROBE_EMAIL, CLOUD_ACCOUNT)
+    assert body["updated_at"] and body["age_text"] != "unknown"  # The record change set a fresh time.
+
+
+def test_the_multisite_submission_records_the_operator_and_the_account(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #3249: the multi-site record keeps the typed address and the Mist account, as a run does."""
+    store = AggregateStoreStandIn()  # Hold the plan without a database.
+    boundary = AggregateBoundaryStandIn()  # Stop before the cloud seam.
+    org_upgrade_client.application.config["RUN_STORE"] = store
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary
+    devices = [{"mac": AP_ONE, "name": "ap", "device_type": "ap", "model": "AP45"}]
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+    monkeypatch.setattr(
+        org_upgrade,
+        "build_options_record",
+        lambda session, org_id, site_id, body: {
+            "targets": [{**devices[0], "version_before": "old", "version_target": "0.15.1", "site_id": site_id}],
+            "options": {"strategy": "big_bang", "reboot": True},
+        },
+    )
+    saved = org_upgrade_client.post(
+        ORG_OPTIONS_API, json={"selected_types": ["ap"], "version_ap": "0.15.1", "strategy": "big_bang"}
+    )
+    assert saved.status_code == 200
+
+    started = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+
+    assert started.status_code == 200
+    stored = store.records["org-run-contract"]
+    assert (stored["actor_email"], stored["cloud_account"]) == (PROBE_EMAIL, CLOUD_ACCOUNT)
+    page = org_upgrade_client.get("/upgrade/org/jobs/org-run-contract")
+    assert PROBE_EMAIL in page.get_data(as_text=True)
+    assert CLOUD_ACCOUNT in page.get_data(as_text=True)
+
+
+def test_the_operator_record_write_failure_stops_before_any_lock(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_org_id: str,
+    fake_site_id: str,
+) -> None:
+    """A stale record refuses the write before the portal takes a site lock or calls the cloud."""
+    store = AggregateStoreStandIn()  # Hold the plan without a database.
+    boundary = AggregateBoundaryStandIn()  # Stop before the cloud seam.
+    org_upgrade_client.application.config["RUN_STORE"] = store
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary
+    devices = [{"mac": AP_ONE, "name": "ap", "device_type": "ap", "model": "AP45"}]
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+    monkeypatch.setattr(
+        org_upgrade,
+        "build_options_record",
+        lambda session, org_id, site_id, body: {
+            "targets": [{**devices[0], "version_before": "old", "version_target": "0.15.1", "site_id": site_id}],
+            "options": {"strategy": "big_bang", "reboot": True},
+        },
+    )
+    saved = org_upgrade_client.post(
+        ORG_OPTIONS_API, json={"selected_types": ["ap"], "version_ap": "0.15.1", "strategy": "big_bang"}
+    )
+    assert saved.status_code == 200
+    monkeypatch.setattr(store, "compare_and_set_run", lambda run_id, expected, replacement: False)
+
+    started = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+
+    assert started.status_code == 503
+    assert started.get_json()["error"]["code"] == "org_upgrade_submission_failed"
+    assert boundary.submit_count == 0  # No child reached the cloud.
+    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # No site lock exists.
