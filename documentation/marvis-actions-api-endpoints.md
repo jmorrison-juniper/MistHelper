@@ -41,7 +41,8 @@ A closed action holds a status that the Open tab of the Mist UI does not show. S
 Mode 4 sends the same GET requests as mode 1, and it changes no Mist data.
 
 No `search` endpoint serves the Marvis Actions list. The older alarm search is not
-a replacement, because its rows hold no `row_key`. See
+a replacement, because its rows hold no `row_key`. The `marvis_configs` search is
+not a replacement either, because it reads a different object. See
 [Endpoints that menu 270 does not call](#endpoints-that-menu-270-does-not-call).
 
 ## Common request values
@@ -438,20 +439,94 @@ MistHelper waits between two PUT requests.
 
 ## Endpoints that menu 270 does not call
 
-| Method | Path | Reason |
-| - | - | - |
-| GET | `/api/v1/labs/orgs/{org_id}/suggestions?query=get_suggestion` | The plural path returns 100 rows at most, and it does not page. |
-| GET | `/api/v1/orgs/{org_id}/alarms/search?group=marvis` | The older alarm view. Its rows hold no `row_key`, so a resolve cannot use them. |
-| POST | `/api/v1/labs/sites/{site_id}/suggestions/fix` | It starts a Marvis self-drive fix, which changes the device configuration. |
-| POST | `/api/v1/orgs/{org_id}/tickets` | It opens a support ticket for an RMA. |
-| POST | `/api/v1/labs/orgs/{org_id}/jcloud/request_virtualassistant_url` | It opens a Marvis chat session. |
-| GET | `/api/v1/labs/orgs/{org_id}/suggestion?query=time_series` | It returns a trend of counts, not the rows. |
-| GET | `/api/v1/labs/orgs/{org_id}/suggestion?query=group_by_category_symptom` | It returns counts. Menu 270 counts the rows that it already holds. |
-| GET | `/api/v1/labs/orgs/{org_id}/suggestion_detail/{id}/suggestion_id` | It returns one detail record. The list already holds the fields that the export needs. |
-| GET | `/api/v1/msps/{msp_id}/suggestion/count` | The public document describes it, but it returns the counts of an MSP only. |
+| Method | Path | Reason | Changes Mist data |
+| - | - | - | - |
+| GET | `/api/v1/labs/orgs/{org_id}/suggestions?query=get_suggestion` | The plural path returns 100 rows at most, and it does not page. | No |
+| GET | `/api/v1/orgs/{org_id}/alarms/search?group=marvis` | The older alarm view. Its rows hold no `row_key`, so a resolve cannot use them. | No |
+| POST | `/api/v1/labs/sites/{site_id}/suggestions/fix` | It starts a Marvis self-drive fix, which changes the device configuration. | Yes |
+| POST | `/api/v1/orgs/{org_id}/tickets` | It opens a support ticket for an RMA. | Yes |
+| POST | `/api/v1/labs/orgs/{org_id}/jcloud/request_virtualassistant_url` | It opens a Marvis chat session. | Yes |
+| GET | `/api/v1/labs/orgs/{org_id}/suggestion?query=time_series` | It returns a trend of counts, not the rows. | No |
+| GET | `/api/v1/labs/orgs/{org_id}/suggestion?query=group_by_category_symptom` | It returns counts. Menu 270 counts the rows that it already holds. | No |
+| GET | `/api/v1/labs/orgs/{org_id}/suggestion_detail/{id}/suggestion_id` | It returns one detail record. The list already holds the fields that the export needs. | No |
+| GET | `/api/v1/msps/{msp_id}/suggestion/count` | The public document describes it, but it returns the counts of an MSP only. | No |
+| GET | `/api/v1/sites/{site_id}/marvis_configs/search` | It reads Marvis Config Actions, which are not Marvis Actions. See [The Marvis Config Actions](#the-marvis-config-actions). | No |
+| GET | `/api/v1/sites/{site_id}/marvis_configs/count` | It counts Marvis Config Actions by one field. | No |
+| DELETE | `/api/v1/sites/{site_id}/marvis_configs/{id}` | It deletes one Marvis Config Action. | Yes |
+| POST | `/api/v1/sites/{site_id}/marvis_configs/{id}/feedback` | It marks one Marvis Config Action as invalid. It cannot resolve a Marvis Action. | Yes |
 
 Warning: a call to the self-drive endpoint can change the configuration of a live
 device and stop client traffic. Do not call that endpoint from a script.
+
+### The Marvis Config Actions
+
+The Mist API holds a second family with "Marvis" and "action" in its names. The
+OpenAPI tag of the family is "Sites Marvis Configs". The family does not serve the
+Marvis Actions of menu 270.
+
+| Operation | Method | Path | SDK function in `mistapi.api.v1.sites.marvis_configs` |
+| - | - | - | - |
+| Search | GET | `/api/v1/sites/{site_id}/marvis_configs/search` | `searchSiteMarvisConfigActions` |
+| Count | GET | `/api/v1/sites/{site_id}/marvis_configs/count` | `countSiteMarvisConfigActions` |
+| Delete | DELETE | `/api/v1/sites/{site_id}/marvis_configs/{id}` | `deleteSiteMarvisConfigAction` |
+| Feedback | POST | `/api/v1/sites/{site_id}/marvis_configs/{id}/feedback` | `submitSiteMarvisConfigFeedback` |
+
+The OpenAPI document added the family in release 2605.1.0. The SDK `mistapi` added
+the four functions in 0.63.0.
+
+A Marvis Action is one problem that Marvis found. A Marvis Config Action is the
+record of one configuration change on a switch port. This table shows the
+differences.
+
+| Item | Marvis Action | Marvis Config Action |
+| - | - | - |
+| Scope | One organization | One site |
+| Key | `row_key` | `id` |
+| Status | `open`, `resolved`, `validated`, and the other values in [Status values](#status-values) | No status field |
+| Change | A PUT with a resolution code | A DELETE, or a feedback POST with the `type` value `invalid` |
+| Example content | The topic `sw_offline` | The `op` value `disable_port` with the `reason` value `rogue_dhcp_server_detected` |
+
+The schema `marvis_config_action` holds the fields `admin_id`, `id`, `mac`, `op`,
+`org_id`, `port_id`, `reason`, `site_id`, `src`, `timestamp`, `type`, and `vlan_ids`.
+The document gives the `op` examples `disable_port`, `enable_port`, `update_mtu`,
+and `add_vlans_to_port`. The feedback body holds `type` and `note`.
+
+Warning: a DELETE call removes the record of a Marvis change, and no endpoint can
+restore the record. A feedback POST changes the record in the Mist cloud. Do not
+call either operation from a script. The document does not tell if a DELETE also
+changes the port.
+
+#### Live read of the Marvis Config Actions
+
+On 2026-09-24, MistHelper read the search endpoint and the count endpoint with GET
+requests only.
+
+- Both endpoints returned HTTP 200 on all 144 sites of the organization. Each answer held 0 records.
+- Each answer covered one hour. The window started one hour before the request and ended at the request.
+- The window stayed at one hour for `duration=1d`, `duration=30d`, `start` alone, and `start` with `end`. The research sent `start` and `end` in seconds and in milliseconds, on 3 sites.
+
+A read therefore cannot show a Marvis Config Action from before the last hour. In
+three places, the live answers do not agree with the OpenAPI document.
+
+| Item | OpenAPI document | Live answer |
+| - | - | - |
+| Default window | `duration` default `1d` | One hour |
+| Default `limit` | 100 | 10 |
+| Type of `start` and `end` in the answer | Integer epoch seconds | Decimal epoch seconds |
+
+#### Sources for the Marvis Actions endpoints
+
+MistHelper checked three sources on 2026-09-24.
+
+| Source | Version | Result |
+| - | - | - |
+| The bundled `documentation/mist-api-openapi31json.json` | Release 2607.1.1, 756 paths | The four operations of the family. No list path, schema path, or resolve path for Marvis Actions. |
+| The `master` branch of `mistsys/mist_openapi`, commit `0613a22acd` of 2026-09-18 | Release 2609.1.0, 762 paths | The same four operations. No list path, schema path, or resolve path for Marvis Actions. |
+| `mistapi` 0.64.0 on PyPI, the newest release | Uploaded on 2026-09-15 | The same four functions. No function for a `labs` path. |
+
+The only Marvis Actions path in the public document is the MSP count path. Menu 270
+therefore keeps its direct calls to the `labs` paths. The Caution at the top of this
+report stays correct.
 
 ## Where MistHelper keeps the results
 
