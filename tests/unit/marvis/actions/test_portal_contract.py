@@ -34,7 +34,7 @@ from src.marvis.actions.model import (
     MarvisCatalog,
 )
 from src.marvis.actions.operation import MarvisActionsOperation
-from src.marvis.actions.selection import MODES, MarvisResolvePrompts, MarvisTopicSelector
+from src.marvis.actions.selection import MODE_EXPORT_ALL, MODES, MarvisResolvePrompts, MarvisTopicSelector
 from src.utils.menu_entry import MenuEntry
 from tests.unit.marvis.actions.conftest import OperationHarness, make_raw
 from web_portal.services.input_hook import InputInterceptor, web_input_context
@@ -50,7 +50,7 @@ CONTROL_NAMES = [  # The six controls, in the order of the six prompts. FR-032.
     "marvis_confirmation",
 ]
 DEFAULT_ANSWERS = ("1", "all", "all", "suggested", "", "")  # The browser answers when the operator changes nothing.
-EXPORT_FILE = "OrgMarvisActions.csv"  # The report of modes 1 and 2.
+EXPORT_FILE = "OrgMarvisActions.csv"  # The report of modes 1, 2, and 4.
 RESULTS_FILE = "OrgMarvisActionsResolveResults.csv"  # The results file of mode 3.
 
 
@@ -71,7 +71,7 @@ def every_topic_selector() -> MarvisTopicSelector:
         for number, (category, symptom) in enumerate(sorted(TOPIC_NAMES), start=1)
     ]
     builder = MarvisActionRecordBuilder(MarvisCatalog([]), {}, "2026-09-23T00:00:00+00:00")
-    return MarvisTopicSelector([builder.build(raw) for raw in raws], MarvisCatalog([]), False)
+    return MarvisTopicSelector([builder.build(raw) for raw in raws], MarvisCatalog([]), MODE_EXPORT_ALL)
 
 
 def portal_rows() -> list[dict[str, Any]]:
@@ -198,9 +198,20 @@ class TestTheRegistryRow:
 class TestTheChoicesMatchTheGrammar:
     """Each choice value must be an answer that the prompt accepts."""
 
-    def test_the_mode_values_are_the_three_modes(self) -> None:
+    def test_the_mode_values_are_the_four_modes(self) -> None:
         """A mode value outside MODES makes the run stop."""
         assert option_values("marvis_mode") == sorted(MODES)
+
+    def test_the_closed_report_label_names_the_closed_actions(self) -> None:
+        """Issue #3342: the operator must see that mode 4 exports the closed actions."""
+        labels = {option["value"]: option["label"] for option in control("marvis_mode")["options"]}
+        assert labels["4"] == "4 - Export the closed Marvis Actions (report only)"
+
+    def test_only_the_resolve_mode_label_warns_about_a_change(self) -> None:
+        """The three report modes read only, and the label of each one says so."""
+        labels = {option["value"]: option["label"] for option in control("marvis_mode")["options"]}
+        assert [value for value, label in labels.items() if label.endswith("(report only)")] == ["1", "2", "4"]
+        assert labels["3"].endswith("(changes Mist)")
 
     def test_every_category_value_is_accepted(self) -> None:
         """A category value must never read as an unknown token. FR-010."""
@@ -269,6 +280,24 @@ class TestPortalRuns:
         message = run.executor._completion_message(run.record)
         assert message == (
             "Operation completed with no output file: No open Marvis Actions match the filter. No file was written."
+        )
+
+    def test_the_closed_report_exports_the_closed_actions(self, portal: PortalRunner) -> None:
+        """Issue #3342: mode 4 reads three answers, and it exports the one closed AP action."""
+        run = portal.run(portal_rows(), ("4", "all", "all", "suggested", "", ""))
+        assert [row["suggestion_id"] for row in run.exported_rows()] == ["swoff-3"]
+        assert run.puts() == []
+        assert (run.missing_input(), run.handled_error()) == (None, None)
+        assert EXPORT_FILE in run.record["output_files"]
+
+    def test_a_category_without_closed_actions_completes_with_a_reason(self, portal: PortalRunner) -> None:
+        """The switch actions are open, so mode 4 finds nothing and says so."""
+        run = portal.run(portal_rows(), ("4", "switch", "all", "suggested", "", ""))
+        assert run.fakes.exports() == []
+        assert (run.missing_input(), run.handled_error()) == (None, None)
+        message = run.executor._completion_message(run.record)
+        assert message == (
+            "Operation completed with no output file: No closed Marvis Actions match the filter. No file was written."
         )
 
     def test_a_blank_confirmation_shows_the_count_and_sends_nothing(self, portal: PortalRunner) -> None:

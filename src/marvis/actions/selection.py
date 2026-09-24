@@ -38,11 +38,35 @@ logger = logging.getLogger(__name__)  # WHY: name the logger for this module so 
 MODE_EXPORT_ALL = "1"  # WHY: mode 1 exports every action.
 MODE_EXPORT_OPEN = "2"  # WHY: mode 2 exports the open actions only.
 MODE_RESOLVE = "3"  # WHY: mode 3 marks the open actions of the chosen topics as resolved.
-MODES = (MODE_EXPORT_ALL, MODE_EXPORT_OPEN, MODE_RESOLVE)  # WHY: the only answers that the mode prompt accepts.
+MODE_EXPORT_CLOSED = "4"  # WHY: mode 4 exports the closed actions only, as a report of the past fixes.
+MODES = (  # WHY: the only answers that the mode prompt accepts, in the order of the mode table.
+    MODE_EXPORT_ALL,
+    MODE_EXPORT_OPEN,
+    MODE_RESOLVE,
+    MODE_EXPORT_CLOSED,
+)
+# Issue #3342: one table holds the status rule of each mode. The tables, the select step, and the
+# stop check read the same table, so the four modes cannot disagree about which actions they keep.
+MODE_IS_OPEN_VALUES: dict[str, frozenset[bool]] = {  # WHY: the is_open values that each mode keeps.
+    MODE_EXPORT_ALL: frozenset({True, False}),  # WHY: mode 1 keeps every action.
+    MODE_EXPORT_OPEN: frozenset({True}),  # WHY: mode 2 keeps the open actions.
+    MODE_RESOLVE: frozenset({True}),  # WHY: mode 3 resolves open actions only, because a closed one needs no fix.
+    MODE_EXPORT_CLOSED: frozenset({False}),  # WHY: mode 4 keeps the closed actions.
+}
+MODE_ACTION_NOUNS: dict[str, str] = {  # WHY: the words that name the kept actions in each stop line of a run.
+    MODE_EXPORT_ALL: "Marvis Actions",  # WHY: mode 1 covers every action.
+    MODE_EXPORT_OPEN: "open Marvis Actions",  # WHY: mode 2 covers the open actions.
+    MODE_RESOLVE: "open Marvis Actions",  # WHY: mode 3 covers the open actions.
+    MODE_EXPORT_CLOSED: "closed Marvis Actions",  # WHY: mode 4 covers the closed actions.
+}
 ALL_KEYWORD = "all"  # WHY: the answer that keeps every topic. The name avoids a false Bandit B105 match.
 COMMENT_MAX_LENGTH = 1000  # WHY: a guard against a pasted log file in the comment field.
 MAX_NUMBER_DIGITS = 6  # WHY: a longer number cannot name a table row, and int() refuses very long text.
 ANSWER_ECHO_LIMIT = 40  # WHY: a refusal message repeats the start of a bad answer only.
+# Issue #3342: the Name column comes last, so a long name that wraps in the portal log viewer
+# moves only the end of the name to the next line. The numbers stay in their columns.
+TABLE_HEADINGS = ("No.", "Key", "Actions", "Open", "Closed", "Name")  # WHY: the column headings of a filter table.
+NUMBER_COLUMN_WIDTH = 4  # WHY: the No. column keeps its first width, so the table still starts with "  No.  Key".
 # Issue #886 Phase 2: the container .env sets CONSOLE_LOG_LEVEL=30, so the SSH menu console hides
 # every INFO line. The tables, the preview, and the summaries are operator output, so they log at
 # WARNING, as the site menu of PromptUtils does. script.log and the web dashboard keep every line.
@@ -59,6 +83,7 @@ class MarvisTopicCount:
         category: The category key of the row.
         total: The number of actions that the row covers.
         open_count: The number of those actions that are open.
+        closed_count: The number of those actions that are not open. The class calculates it.
     """
 
     key: str  # WHY: the key that a filter answer accepts.
@@ -66,6 +91,15 @@ class MarvisTopicCount:
     category: str  # WHY: the category key of the row.
     total: int  # WHY: the Actions column of the table.
     open_count: int  # WHY: the Open column of the table.
+
+    @property
+    def closed_count(self) -> int:
+        """Return the number of actions of the row that are not open.
+
+        Returns:
+            The Closed column of the table.
+        """
+        return self.total - self.open_count  # WHY: each action is open or closed, so the difference is closed.
 
 
 class MarvisTopicSelector:
@@ -77,17 +111,17 @@ class MarvisTopicSelector:
         so the category step and the subcategory step follow the same rules.
     """
 
-    def __init__(self, records: Sequence[MarvisActionRecord], catalog: MarvisCatalog, open_only: bool) -> None:
+    def __init__(self, records: Sequence[MarvisActionRecord], catalog: MarvisCatalog, mode: str) -> None:
         """Count the topics of the records.
 
         Args:
             records: Every action of the organization.
             catalog: The catalog that names the known topics.
-            open_only: True when the tables and the result must hold open actions only.
+            mode: One value of ``MODES``. The mode sets the actions that the tables and the result hold.
         """
         self._records = records  # WHY: the select step filters these records.
-        self._open_only = open_only  # WHY: modes 2 and 3 work on open actions only.
-        self._topics = self._count_topics(records, open_only)  # WHY: the rows of the subcategory table.
+        self._is_open_values = MODE_IS_OPEN_VALUES[mode]  # WHY: the mode keeps open, closed, or all actions.
+        self._topics = self._count_topics(records, self._is_open_values)  # WHY: the rows of the subcategory table.
         pairs = catalog.known_pairs() | {(record.category, record.symptom) for record in records}  # WHY: all keys.
         self._known_pairs = frozenset(f"{category}/{symptom}" for category, symptom in pairs)  # WHY: pair tokens.
         pair_categories = frozenset(category for category, _ in pairs)  # WHY: the categories that hold a topic.
@@ -157,20 +191,23 @@ class MarvisTopicSelector:
             topics: The topic keys to keep.
 
         Returns:
-            The matching records. In the open-only modes, the open records only.
+            The matching records whose ``is_open`` value the mode keeps.
         """
         return [
             record
             for record in self._records
-            if record.topic in topics and (record.is_open or not self._open_only)  # WHY: honor the mode.
+            if record.topic in topics and record.is_open in self._is_open_values  # WHY: honor the mode.
         ]
 
     @staticmethod
-    def _count_topics(records: Sequence[MarvisActionRecord], open_only: bool) -> dict[str, MarvisTopicCount]:
+    def _count_topics(
+        records: Sequence[MarvisActionRecord], is_open_values: frozenset[bool]
+    ) -> dict[str, MarvisTopicCount]:
         """Return one count row for each topic that the table shows, keyed and sorted by topic key."""
         totals = Counter(record.topic for record in records)  # WHY: the Actions column.
         opens = Counter(record.topic for record in records if record.is_open)  # WHY: the Open column.
-        shown = sorted(opens if open_only else totals)  # WHY: the open-only modes hide a closed topic.
+        kept = Counter(record.topic for record in records if record.is_open in is_open_values)  # WHY: mode rule.
+        shown = sorted(kept)  # WHY: a table hides each topic without an action that the mode keeps.
         first = {record.topic: record for record in reversed(records)}  # WHY: the first record names each topic.
         return {  # WHY: one count row for each shown topic, keyed by the topic key.
             key: MarvisTopicCount(
@@ -256,8 +293,9 @@ class MarvisFilterPrompts:
         logger.log(  # WHY: mode 3 changes Mist.
             DISPLAY_LEVEL, "  3. Mark the open Marvis Actions of the chosen topics as resolved"
         )
+        logger.log(DISPLAY_LEVEL, "  4. Export the closed Marvis Actions only")  # WHY: mode 4 reads only.
         answer = InputUtils.safe_input(  # WHY: the EOF-safe prompt returns the default on a closed stream.
-            "Enter the mode number (1, 2, or 3) [1]: ",
+            "Enter the mode number (1, 2, 3, or 4) [1]: ",
             default_value=MODE_EXPORT_ALL,  # WHY: the safe default reads only.
             context="marvis_actions.mode",  # WHY: name the prompt in the input log.
         )
@@ -306,15 +344,44 @@ class MarvisFilterPrompts:
 
     @staticmethod
     def _log_table(title: str, rows: Sequence[MarvisTopicCount]) -> None:
-        """Log one numbered table of topic counts."""
+        """Log one numbered table of topic counts.
+
+        Why:
+            The portal log viewer shows 120 characters on one line, and its time
+            prefix uses up to 14 of them. Each column fits the widest cell of the
+            table, so a short table stays narrow. If a table line is wider than
+            the viewer, only the end of the name wraps, because the Name column
+            comes last. The numbers stay in their columns.
+        """
+        cells = MarvisFilterPrompts._table_cells(rows)  # WHY: the heading cells, then the cells of each row.
+        widths = [max(len(line[index]) for line in cells) for index in range(len(TABLE_HEADINGS) - 1)]  # WHY: fit.
         logger.log(DISPLAY_LEVEL, "%s:", title)  # WHY: the heading of the table.
-        logger.log(  # WHY: the column headings.
-            DISPLAY_LEVEL, "  %-4s %-34s %-48s %7s %5s", "No.", "Key", "Name", "Actions", "Open"
-        )
-        for number, row in enumerate(rows, start=1):  # WHY: the numbers start at 1, as in every MistHelper menu.
-            logger.log(  # WHY: one line for each row.
-                DISPLAY_LEVEL, "  %-4d %-34s %-48s %7d %5d", number, row.key, row.name, row.total, row.open_count
+        for line in cells:  # WHY: the column headings first, then one line for each row.
+            logger.log(DISPLAY_LEVEL, "  %s", MarvisFilterPrompts._table_line(line, widths))  # WHY: indent each line.
+
+    @staticmethod
+    def _table_cells(rows: Sequence[MarvisTopicCount]) -> list[tuple[str, ...]]:
+        """Return the column headings, then the text cells of each row, in the order of ``TABLE_HEADINGS``."""
+        body = [  # WHY: one tuple of text cells for each row. The Closed cell serves the closed report of mode 4.
+            (str(number), row.key, str(row.total), str(row.open_count), str(row.closed_count), row.name)
+            for number, row in enumerate(rows, start=1)  # WHY: the numbers start at 1, as in every MistHelper menu.
+        ]
+        return [TABLE_HEADINGS, *body]  # WHY: the headings share the widths of the rows.
+
+    @staticmethod
+    def _table_line(cells: tuple[str, ...], widths: list[int]) -> str:
+        """Return one table line. The text aligns left, the counts align right, and the name holds no padding."""
+        number, key, total, open_count, closed_count, name = cells  # WHY: name each cell by its column.
+        return " ".join(  # WHY: one space separates two columns.
+            (
+                number.ljust(max(widths[0], NUMBER_COLUMN_WIDTH)),  # WHY: the No. column keeps its first width.
+                key.ljust(widths[1]),  # WHY: the Key column fits the longest key of this table.
+                total.rjust(widths[2]),  # WHY: a count aligns right, so the digits line up.
+                open_count.rjust(widths[3]),  # WHY: the Open column aligns right.
+                closed_count.rjust(widths[4]),  # WHY: the Closed column aligns right.
+                name,  # WHY: the last column needs no padding.
             )
+        )
 
 
 @dataclass(frozen=True, slots=True)

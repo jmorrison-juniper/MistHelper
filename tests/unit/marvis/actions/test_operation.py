@@ -2,7 +2,7 @@
 
 Each test runs the real operation through ``MarvisActionsOperation.run`` with a
 scripted ``input``, a fake Mist session, and a mocked exporter. The tests prove
-the three modes, every refusal before the first request, the verify step, and
+the four modes, every refusal before the first request, the verify step, and
 the log lines that the web dashboard reads.
 """
 
@@ -58,7 +58,7 @@ def run_menu(caplog: pytest.LogCaptureFixture) -> str:
 
 
 class TestExport:
-    """Modes 1 and 2 write the report and never send a request."""
+    """Modes 1 and 2 write the report and never send a request. The TestClosedReport class covers mode 4."""
 
     def test_the_default_answers_export_every_action(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
         """Blank answers give mode 1 with all topics, the read-only report."""
@@ -163,6 +163,141 @@ class TestExport:
         assert built.session.puts == []
 
 
+class TestClosedReport:
+    """Issue #3342: mode 4 writes the closed actions only, and it never sends a request."""
+
+    CLOSED_ANSWERS = ("4", *DEFAULT_FILTERS)  # Mode 4 with every topic.
+    UNKNOWN_CAUTION = (  # The start of the caution line for a status key that the code does not know.
+        "Caution: MistHelper does not know these status keys, so the report counts their actions as closed"
+    )
+
+    def test_mode_4_exports_the_closed_actions_only(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The report holds every closed status, and no open, In Progress, or Reoccurred action."""
+        raws = [
+            make_raw(1),
+            make_raw(2, status="validated"),
+            make_raw(3, status="inprogress"),
+            make_raw(4, status="resolved", label="known"),
+            make_raw(5, status="reoccured"),
+            make_raw(6, status="marvis_self_driven"),
+            make_raw(7, status="expired action"),
+        ]
+        built = harness(raws, *self.CLOSED_ANSWERS)
+        text = run_menu(caplog)
+        rows, filename, kwargs = only_write(built)
+        assert [row["suggestion_id"] for row in rows] == ["swoff-2", "swoff-4", "swoff-6", "swoff-7"]
+        assert {row["is_open"] for row in rows} == {False}
+        assert filename == EXPORT_FILENAME
+        assert kwargs["api_function_name"] == EXPORT_ENDPOINT_NAME
+        assert kwargs["fieldnames"] == MarvisActionRecord.column_names()
+        assert built.session.puts == []
+        assert EXPORT_DONE in text
+
+    def test_mode_4_sends_only_the_read_requests_of_mode_1(
+        self, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A report run reads the list and the schema, and it never writes to Mist."""
+        built = harness([make_raw(1, status="validated")], *self.CLOSED_ANSWERS)
+        run_menu(caplog)
+        assert len(built.session.list_gets()) == 1
+        assert built.session.puts == []
+        assert built.pacer.pace.call_count == 0
+
+    def test_mode_4_keeps_how_each_action_closed(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The NOC engineer reads the code, the comment, and the close time of each fix."""
+        raw = make_raw(
+            1,
+            status="resolved",
+            label="nonsuggested",
+            comment="Bounced the port on the uplink switch.",
+            resolve_time=1_700_000_900_000,
+        )
+        built = harness([raw], *self.CLOSED_ANSWERS)
+        run_menu(caplog)
+        row = only_write(built)[0][0]
+        assert (row["status_name"], row["label"]) == ("Resolved By User", "nonsuggested")
+        assert row["label_name"] == "Solved using another method (please comment below)"
+        assert row["comment"] == "Bounced the port on the uplink switch."
+        assert row["resolve_time_iso"] == "2023-11-14T22:28:20+00:00"
+
+    def test_mode_4_logs_the_status_mix_of_the_closed_actions(
+        self, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The operator sees how many actions each close path covers."""
+        raws = [
+            make_raw(1),
+            make_raw(2, status="validated"),
+            make_raw(3, status="validated"),
+            make_raw(4, status="resolved"),
+        ]
+        harness(raws, *self.CLOSED_ANSWERS)
+        text = run_menu(caplog)
+        assert "Selected Marvis Actions by status: AI Validated=2, Resolved By User=1" in text
+        assert self.UNKNOWN_CAUTION not in text
+
+    def test_mode_4_stops_when_no_action_is_closed(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The run stops before the filter prompts, and it writes no file."""
+        built = harness([make_raw(1), make_raw(2, status="inprogress")], "4")
+        text = run_menu(caplog)
+        assert "No closed Marvis Actions exist in this organization. No file was written." in text
+        assert built.exports() == []
+        assert built.input is not None and len(built.input.prompts) == 1
+
+    def test_mode_4_with_a_category_without_a_closed_action_writes_nothing(
+        self, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The switch category holds one open action only, so mode 4 has nothing to report."""
+        raws = [make_raw(1), make_raw(2, category="ap", symptom="ap_disconnect", status="validated")]
+        built = harness(raws, "4", "switch")
+        text = run_menu(caplog)
+        assert "No closed Marvis Actions match the filter. No file was written." in text
+        assert "could not match" not in text
+        assert built.exports() == []
+
+    def test_mode_4_with_a_topic_filter(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The two filter prompts narrow the closed report the same way that they narrow the other modes."""
+        raws = [
+            make_raw(1, status="validated"),
+            make_raw(2, status="resolved"),
+            make_raw(3, category="ap", symptom="ap_disconnect", status="validated"),
+            make_raw(4, symptom="port_flap", status="validated"),
+            make_raw(5),
+        ]
+        built = harness(raws, "4", "switch", "sw_offline")
+        run_menu(caplog)
+        assert [row["suggestion_id"] for row in only_write(built)[0]] == ["swoff-1", "swoff-2"]
+
+    @pytest.mark.parametrize("mode", ["", "4"])
+    def test_an_unknown_status_key_is_reported_as_closed_with_a_caution(
+        self, mode: str, harness: Any, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Mist can add a status without a notice, so the operator must see each key that the code does not know."""
+        raws = [
+            make_raw(1, status="snoozed"),
+            make_raw(2, status="validated"),
+            make_raw(3, status="snoozed"),
+            make_raw(4, status=None),
+        ]
+        built = harness(raws, mode, *DEFAULT_FILTERS)
+        text = run_menu(caplog)
+        rows = only_write(built)[0]
+        assert [(row["status"], row["status_name"], row["is_open"]) for row in rows] == [
+            ("snoozed", "snoozed", False),
+            ("validated", "AI Validated", False),
+            ("snoozed", "snoozed", False),
+            ("", "", False),
+        ]
+        assert "Selected Marvis Actions by status: ''=1, AI Validated=1, snoozed=2" in text
+        assert f"{self.UNKNOWN_CAUTION}: ''=1, 'snoozed'=2. Compare these actions with the Mist UI." in text
+
+    def test_mode_2_leaves_out_an_unknown_status_key(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
+        """The open report holds the open statuses only, so it needs no caution line."""
+        built = harness([make_raw(1), make_raw(2, status="snoozed")], "2", *DEFAULT_FILTERS)
+        text = run_menu(caplog)
+        assert [row["suggestion_id"] for row in only_write(built)[0]] == ["swoff-1"]
+        assert self.UNKNOWN_CAUTION not in text
+
+
 class TestFilterStep:
     """The category and the subcategory answers decide the rows."""
 
@@ -235,8 +370,8 @@ class TestStops:
 
     def test_an_unknown_mode_stops_before_any_api_call(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
         """An unknown mode must not guess an action."""
-        built = harness([make_raw(1)], "4")
-        assert "MistHelper could not match the mode answer '4'. Enter 1, 2, or 3." in run_menu(caplog)
+        built = harness([make_raw(1)], "5")
+        assert "MistHelper could not match the mode answer '5'. Enter 1, 2, 3, or 4." in run_menu(caplog)
         assert built.session.gets == []
 
     def test_an_organization_without_actions_writes_nothing(

@@ -27,10 +27,11 @@ SLE, map, site detail, org detail, MSP detail, and other endpoints by prompt
 flow.
 
 Menu 270 exports the Marvis Actions of an organization to a CSV file and to the
-database. You can filter the actions by category and by subcategory. Mode 3
-marks the open actions of the selected topics as resolved, with a resolution
-code and a comment. Mode 3 sends no request until you type `RESOLVE` and the
-action count. Read
+database. You can filter the actions by category and by subcategory. Mode 1
+exports every action. Mode 2 exports the open actions, and mode 4 exports the
+closed actions. Mode 3 marks the open actions of the selected topics as
+resolved, with a resolution code and a comment. Mode 3 sends no request until
+you type `RESOLVE` and the action count. Read
 [the Marvis Actions API endpoint report](documentation/marvis-actions-api-endpoints.md)
 for every API call that the menu makes.
 

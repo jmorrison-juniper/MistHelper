@@ -20,13 +20,20 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from src.marvis.actions.model import (
+    STATUS_NAMES,
     TOPIC_NAMES,
     MarvisActionRecord,
     MarvisActionRecordBuilder,
     MarvisCatalog,
     MarvisFieldReader,
 )
-from src.marvis.actions.selection import MarvisResolvePrompts, MarvisTopicSelector
+from src.marvis.actions.selection import (
+    MODE_EXPORT_ALL,
+    MODE_EXPORT_CLOSED,
+    MODE_EXPORT_OPEN,
+    MarvisResolvePrompts,
+    MarvisTopicSelector,
+)
 from tests.unit.marvis.actions.conftest import make_raw
 
 # Issue #1803: a full-suite run applies memory and CPU pressure that an isolated run
@@ -57,6 +64,9 @@ ANSWER_TOKENS = st.one_of(
     st.text(max_size=10),
 )
 ANSWERS = st.lists(ANSWER_TOKENS, max_size=4).map(", ".join)
+ALL_KNOWN_TOPICS = frozenset(f"{category}/{symptom}" for category, symptom in TOPIC_NAMES)
+STATUS_KEYS = st.one_of(st.sampled_from(sorted(STATUS_NAMES)), st.text(max_size=12), st.none())  # Known and new keys.
+ACTION_ROWS = st.lists(st.tuples(STATUS_KEYS, st.sampled_from(sorted(TOPIC_NAMES))), min_size=1, max_size=12)
 
 
 def sample_selector() -> MarvisTopicSelector:
@@ -69,7 +79,16 @@ def sample_selector() -> MarvisTopicSelector:
         make_raw(4, category="ap", symptom="non_compliant", status="resolved"),
         make_raw(5, category="gateway", symptom="non_compliant", status="validated"),
     ]
-    return MarvisTopicSelector([builder.build(raw) for raw in raws], MarvisCatalog([]), open_only=False)
+    return MarvisTopicSelector([builder.build(raw) for raw in raws], MarvisCatalog([]), MODE_EXPORT_ALL)
+
+
+def records_of(rows: list[tuple[Any, tuple[str, str]]]) -> list[MarvisActionRecord]:
+    """Return one record for each status key and topic pair."""
+    builder = MarvisActionRecordBuilder(MarvisCatalog([]), {}, "2026-09-23T00:00:00+00:00")
+    return [
+        builder.build(make_raw(number, status=status, category=category, symptom=symptom))
+        for number, (status, (category, symptom)) in enumerate(rows, start=1)
+    ]
 
 
 SELECTOR = sample_selector()
@@ -138,6 +157,37 @@ class TestGrammar:
         topics, bad_token = SELECTOR.match_topics(answer, frozenset(kept))
         assert topics <= kept
         assert not (bad_token and topics)
+
+
+class TestModeSplit:
+    """Issue #3342: the open report and the closed report split the full report for any status mix."""
+
+    @_NO_DEADLINE
+    @given(ACTION_ROWS)
+    def test_modes_2_and_4_split_mode_1_with_no_overlap_and_no_gap(self, rows: list[Any]) -> None:
+        """A new status key must land in one report, never in both and never in neither."""
+        records = records_of(rows)
+        chosen = {
+            mode: MarvisTopicSelector(records, MarvisCatalog([]), mode).select(ALL_KNOWN_TOPICS)
+            for mode in (MODE_EXPORT_ALL, MODE_EXPORT_OPEN, MODE_EXPORT_CLOSED)
+        }
+        opened = {record.uuid for record in chosen[MODE_EXPORT_OPEN]}
+        closed = {record.uuid for record in chosen[MODE_EXPORT_CLOSED]}
+        assert not opened & closed
+        assert opened | closed == {record.uuid for record in chosen[MODE_EXPORT_ALL]} == {r.uuid for r in records}
+        assert all(record.is_open for record in chosen[MODE_EXPORT_OPEN])
+        assert not any(record.is_open for record in chosen[MODE_EXPORT_CLOSED])
+
+    @_NO_DEADLINE
+    @given(ACTION_ROWS)
+    def test_each_table_row_holds_an_action_of_its_mode(self, rows: list[Any]) -> None:
+        """The operator never picks a row that exports nothing in the chosen mode."""
+        records = records_of(rows)
+        for mode, count_name in ((MODE_EXPORT_OPEN, "open_count"), (MODE_EXPORT_CLOSED, "closed_count")):
+            shown = MarvisTopicSelector(records, MarvisCatalog([]), mode)
+            for row in [*shown.category_counts(), *shown.topic_counts(ALL_KNOWN_TOPICS)]:
+                assert getattr(row, count_name) > 0
+                assert row.open_count + row.closed_count == row.total
 
 
 class TestConfirmation:

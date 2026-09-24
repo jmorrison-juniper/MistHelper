@@ -19,20 +19,26 @@ Mist UI again. MistHelper confirmed each endpoint against the Mist UI version
 
 | Step | Method | Path | Purpose | Modes | Changes Mist data |
 | - | - | - | - | - | - |
-| 1 | GET | `/api/v1/labs/orgs/{org_id}/suggestion` | Read the Marvis Actions list, one page at a time. | 1, 2, 3 | No |
-| 2 | GET | `/api/v1/labs/suggestions_schema` | Read the topic names and the recommended actions. | 1, 2, 3 | No |
-| 3 | GET | `/api/v1/orgs/{org_id}/sites` | Read the site names. | 1, 2, 3 | No |
+| 1 | GET | `/api/v1/labs/orgs/{org_id}/suggestion` | Read the Marvis Actions list, one page at a time. | 1, 2, 3, 4 | No |
+| 2 | GET | `/api/v1/labs/suggestions_schema` | Read the topic names and the recommended actions. | 1, 2, 3, 4 | No |
+| 3 | GET | `/api/v1/orgs/{org_id}/sites` | Read the site names. | 1, 2, 3, 4 | No |
 | 4 | PUT | `/api/v1/labs/orgs/{org_id}/suggestions` | Resolve one action. | 3 | Yes |
 | 5 | GET | `/api/v1/labs/orgs/{org_id}/suggestion` | Read the list again to verify each resolve. | 3 | No |
 
 The list path ends in `suggestion`. The resolve path ends in `suggestions`. Do not
 mix the two paths.
 
-The menu has three modes.
+The menu has four modes.
 
 - Mode 1 exports every action.
 - Mode 2 exports the open actions only.
 - Mode 3 resolves the open actions that the filter selects.
+- Mode 4 exports the closed actions only. Issue #3342 added this mode.
+
+A closed action holds a status that the Open tab of the Mist UI does not show. See
+[Status values](#status-values). The columns `status_name`, `label_name`, `comment`,
+`resolve_time_iso`, and `validation_time_iso` show how and when each action closed.
+Mode 4 sends the same GET requests as mode 1, and it changes no Mist data.
 
 No `search` endpoint serves the Marvis Actions list. The older alarm search is not
 a replacement, because its rows hold no `row_key`. See
@@ -363,6 +369,11 @@ change after Marvis sets AI Validated, Reoccurred, or Marvis Self Driven.
 
 The API writes `reoccured` with one `r`. Use that exact text in a filter.
 
+Mode 2 and mode 3 keep the rows that show Yes in the Open tab column. Mode 4 keeps
+the rows that show No. If Mist returns a status key that this table does not hold,
+MistHelper counts the action as closed. Mode 4 then exports the action and prints a
+caution line that names the key. Compare those actions with the Mist UI.
+
 ## Permissions
 
 The Mist UI shows the status controls to a user with the permission
@@ -376,7 +387,7 @@ this report. The research did not test a token with a lower role.
 
 | Mode | Requests for one run |
 | - | - |
-| 1 or 2 | One list read for each 1,000 rows, one schema read, and one site read for each 1,000 sites. |
+| 1, 2, or 4 | One list read for each 1,000 rows, one schema read, and one site read for each 1,000 sites. |
 | 3 | The reads of mode 1, one PUT for each action, and one more list read for each 1,000 rows. |
 
 All users of MistHelper share one Mist token. Mist allows about 5,000 requests each
@@ -406,7 +417,7 @@ device and stop client traffic. Do not call that endpoint from a script.
 
 | File | SQLite table | ArangoDB collection | Primary key | Content |
 | - | - | - | - | - |
-| `data/OrgMarvisActions.csv` | `OrgMarvisActions` | `listOrgMarvisActions` | `uuid` | One row for each action. Modes 1 and 2 write it. |
+| `data/OrgMarvisActions.csv` | `OrgMarvisActions` | `listOrgMarvisActions` | `uuid` | One row for each action. Modes 1, 2, and 4 write it. |
 | `data/OrgMarvisActionsResolveResults.csv` | `OrgMarvisActionsResolveResults` | `resolveOrgMarvisActions` | `result_id` | One row for each action that a mode 3 run touched. |
 
 The default format writes the CSV file. The `--output-format sqlite` flag writes
