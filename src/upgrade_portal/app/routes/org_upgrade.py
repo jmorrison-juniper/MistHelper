@@ -31,6 +31,7 @@ from ...upgrade.options import (
     build_options_record,
     build_options_view,
 )
+from ...upgrade.org_cancel_outcomes import OrgCancelOutcomes  # Issue #3246: the three lists of each cancel.
 from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
 from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for each device of the operation.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
@@ -1331,6 +1332,7 @@ def _aggregate_record_view(record: Mapping[str, Any]) -> dict[str, Any]:
         "updated_at": age.updated_at,  # The normalized UTC time, or empty text.
         "age_text": age.age_text,  # A short age, or "unknown".
         "controls": OrgControlsView.build(record, retry_plan_of(record, rows)),  # Issue #3247: the recovery.
+        "cancel_outcomes": OrgCancelOutcomes.rows(record),  # Issue #3246: the three lists of each cancel.
     }
 
 

@@ -57,6 +57,7 @@ from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the 
 from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
 from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
 from src.upgrade_portal.runtime.server import build_server_command  # Start the platform server safely.
+from tests.e2e.upgrade_portal.org_cancel_seeds import CANCEL_AP_JOB_ID, OrgCancelSeeds  # Issue #3246: the cancel.
 from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the seeds of the recovery journeys.
     CONTROLS_BROWSER_ID,
     CONTROLS_EMAIL,
@@ -860,6 +861,9 @@ class E2EOrgUpgradeService:
     @staticmethod
     def status(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
         """Return progress for both selected sites, or the end state of a cancelled job."""
+        if upgrade_id == CANCEL_AP_JOB_ID:  # Issue #3246: the seeded job names one rebooting access point.
+            answer = OrgCancelSeeds.status_data(upgrade_id, CancelledJobs.holds(upgrade_id))  # The nested shape.
+            return OrgUpgradeResult(org_id, upgrade_id, 200, answer, None)  # A valid answer of the stand-in cloud.
         state = "cancelled" if CancelledJobs.holds(upgrade_id) else "inprogress"  # A real cloud ends a cancelled job.
         site_state = "cancelled" if state == "cancelled" else "running"  # Each site follows the job.
         return OrgUpgradeResult(
@@ -1784,6 +1788,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
             bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())
             lifecycle_written = upgrade.save_run(_lifecycle_run_record())
             org_controls_written = OrgControlSeeds.write(upgrade, identity)  # Issue #3247: two operations.
+            org_cancel_written = OrgCancelSeeds.write(upgrade, identity)  # Issue #3246: the running operation.
     except Exception as failure:
         logger.warning(
             "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
@@ -1793,7 +1798,8 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
     logger.info(
         (
             "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
-            "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s org_controls=%s"
+            "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s org_controls=%s "
+            "org_cancel=%s"
         ),
         failed_written,
         stopped_written,
@@ -1804,6 +1810,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
         bulk_retry_written,
         lifecycle_written,
         org_controls_written,
+        org_cancel_written,
     )
 
 

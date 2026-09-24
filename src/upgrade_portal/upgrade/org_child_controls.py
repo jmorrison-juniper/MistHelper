@@ -13,6 +13,7 @@ import logging  # Record each view build without a secret.
 from collections.abc import Mapping  # Accept each stored record without a concrete type.
 from typing import Any  # The stored record holds JSON values of mixed types.
 
+from src.upgrade_portal.upgrade.org_cancel_outcomes import OrgCancelOutcomes  # Issue #3246: the cancel status.
 from src.upgrade_portal.upgrade.org_reconcile import OrgReconcileCheck  # The uncertain child jobs.
 from src.upgrade_portal.upgrade.org_retry import OrgRetryPlan  # The retry devices.
 
@@ -75,6 +76,11 @@ class OrgControlsView:
     def build(cls, record: Mapping[str, Any], retry_plan: OrgRetryPlan | None) -> dict[str, Any]:
         """Return the retry control, the reconciliation control, and their signature.
 
+        Why:
+            Issue #3246. The signature also names the cancel status of each
+            child job. A second tab then loads the page again after a cancel,
+            and it shows the cancel outcome panel.
+
         Args:
             record: The durable operation record.
             retry_plan: The retry plan of the operation, or None.
@@ -86,7 +92,8 @@ class OrgControlsView:
         retry = cls._retry(retry_plan)  # The devices that a retry upgrades again.
         reconcile = cls._reconcile(record)  # The child jobs that a check can settle.
         child_ids = ",".join(str(child["child_id"]) for child in reconcile["children"])  # A stable order.
-        signature = f"retry={retry['count']};reconcile={child_ids}"  # The poll reloads the page on a change.
+        cancel = OrgCancelOutcomes.signature(record)  # Issue #3246: the cancel status of each child job.
+        signature = f"retry={retry['count']};reconcile={child_ids};cancel={cancel}"  # The poll reloads on a change.
         logger.debug("The recovery controls read %s", signature)  # The signature holds no secret.
         return {"retry": retry, "reconcile": reconcile, "signature": signature}  # The page reads each part.
 

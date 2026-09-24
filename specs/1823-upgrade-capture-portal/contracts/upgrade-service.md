@@ -201,6 +201,44 @@ If a future family offers no cancel function, the function places every MAC
 address into `no_cancel_available` and writes a message that says so plainly.
 FR-038f covers that case.
 
+### `reboot_macs(status) -> frozenset[str] | None`
+
+Reads the MAC addresses that one upgrade status marks as rebooting. Pure.
+Performs no cloud call.
+
+- The function reads `reboot_in_progress` at the top level first, then inside
+  the `targets` mapping.
+- The function returns an empty set when the status holds an upgrade job and
+  names no rebooting device.
+- The function returns `None` when the status holds no upgrade job, or when the
+  field holds a shape that is not a list.
+
+`None` means that the portal cannot tell. An empty set claims that no device
+writes firmware. Never read `None` as an empty set.
+
+Issue #3246 made this function public. The access point child job of a
+multi-site operation reads each site job of the organization answer with this
+rule. `OrgRebootLists` in `src/firmware/org_cancel_sort.py` joins the site
+lists.
+
+### `sort_cancel(macs, writing, status) -> CancelOutcome`
+
+Sorts the MAC addresses of one cancel into the three groups. Pure. Performs no
+cloud call.
+
+| Condition | `cancelled` | `already_writing` | Message |
+| --- | --- | --- | --- |
+| `status` is not an accepted status | None | Every MAC address | The cloud refused the cancel. |
+| `writing` is `None` | None | Every MAC address | The portal could not read the device state. |
+| `writing` is a set | Each MAC address outside the set | Each MAC address inside the set | Both counts |
+
+The function keeps the plan order in each group. The function never puts a MAC
+address into `cancelled` when the portal cannot prove the stop.
+
+Issue #3246 made this function public. `cancel_upgrade` and the access point
+child job of a multi-site operation share the rule. Each caller reads its own
+reboot list, so the function takes the list instead of the status.
+
 ### `read_upgrade_status(session, scope, identifier, upgrade_id, family=GatewayFamily.JUNOS) -> Mapping[str, object]`
 
 Reads the status of one upgrade.

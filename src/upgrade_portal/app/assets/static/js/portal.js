@@ -2965,6 +2965,10 @@
      * The server builds the signature from the durable record, so the new page
      * holds the same signature and the poll loads the page one time only.
      *
+     * Issue #3246. The signature also names the cancel status of each child
+     * job. A new cancel result therefore loads the page again, and the new page
+     * shows the cancellation result panel with its three device lists.
+     *
      * @param {Element} region The progress region. It holds the rendered signature.
      * @param {Object} status The status that the poll read.
      * @returns {boolean} True when the page must load again.

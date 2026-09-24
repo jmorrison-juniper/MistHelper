@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta  # Bound destructive claim leases 
 from typing import Any, Protocol  # Accept the SDK and define the durable store seam.
 
 from src.firmware import upgrade_service  # Reuse the proven site and SSR planner.
+from src.firmware.org_cancel_sort import OrgCancelSort  # Issue #3246: sort the access points of one AP cancel.
 from src.firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService  # Reuse the AP boundary.
 
 logger = logging.getLogger(__name__)  # Use the module logger without secret fields.
@@ -1056,13 +1057,15 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         return self._cancel_device_child(cloud_session, child)  # Use the proven site or SSR helper.
 
     def _cancel_org_child(self, cloud_session: Any, child: Mapping[str, Any]) -> dict[str, Any]:
-        """Cancel one organization AP child."""
+        """Cancel one organization AP child, and sort its access points into three lists.
+
+        Why:
+            Issue #3246. The site child job stores the three device lists of
+            its cancel. The AP child job stored only a status word, so the
+            operator could not see which access point still wrote firmware.
+        """
         result = self._org_service.cancel(cloud_session, str(child["org_id"]), str(child["upgrade_id"]))  # Send once.
-        return {  # Preserve the complete normalized cancel result.
-            "status": "requested" if result.error is None else "failed",  # Do not claim a failed request.
-            "raw_status": result.raw_status,  # Preserve the exact HTTP status.
-            "message": result.error,  # Preserve the validation or cloud error.
-        }
+        return OrgCancelSort.result(child, result)  # Keep the status, the HTTP status, and the three lists.
 
     def _cancel_device_child(self, cloud_session: Any, child: Mapping[str, Any]) -> dict[str, Any]:
         """Cancel one site or SSR child through the proven helper."""
