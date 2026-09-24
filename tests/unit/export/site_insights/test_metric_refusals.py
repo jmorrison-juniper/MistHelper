@@ -80,6 +80,19 @@ def test_reason_reads_the_first_known_key(body: Any, expected: str) -> None:
     assert MetricRefusalLog.reason(body) == expected  # WHY: The operator reads the text of the Mist API.
 
 
+@pytest.mark.parametrize(  # WHY: The live site insight answers hold the reason in the key details (issue #3266).
+    ("body", "expected"),
+    [
+        ({"details": "unknown"}, "unknown"),
+        ({"detail": "first", "details": "second"}, "first"),
+        ({"details": "", "error": "third"}, "third"),
+    ],
+)
+def test_reason_reads_the_details_key_after_the_detail_key(body: Any, expected: str) -> None:
+    """FR-008 of #3266: the key details holds a reason, and the key detail stays first."""
+    assert MetricRefusalLog.reason(body) == expected  # WHY: The operator reads the reason that the body holds.
+
+
 @pytest.mark.parametrize("body", [{}, [], None, "", {"other": 1}, "   "])  # WHY: Bodies that hold no reason.
 def test_reason_names_no_reason_for_an_empty_body(body: Any) -> None:
     """A body without a reason gives a fixed text, so the operator line is never empty."""

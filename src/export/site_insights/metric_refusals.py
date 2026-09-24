@@ -28,7 +28,8 @@ class MetricRefusal:
 class MetricRefusalLog:
     """Collect the metric requests that the Mist API refused during one export run."""
 
-    REASON_KEYS = ("detail", "error", "message")  # WHY: A Mist error body holds its reason in one of these keys.
+    # WHY: A Mist error body holds its reason in one of these keys. The site insight answers use details (#3266).
+    REASON_KEYS = ("detail", "details", "error", "message")
     REASON_LIMIT = 200  # WHY: Keep each operator line short.
     NO_REASON = "The error body holds no reason."  # WHY: An operator line must never end with an empty reason.
 

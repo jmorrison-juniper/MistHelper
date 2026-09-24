@@ -4,6 +4,9 @@ from __future__ import annotations  # WHY: Defer annotation evaluation for cheap
 
 import logging  # WHY: Standard logging keeps ops-visible trace + error output aligned with legacy behaviour
 from dataclasses import dataclass  # WHY: Frozen slotted bundle keeps helper signatures under STRUCT-PARAMS limit
+from urllib.parse import quote  # WHY: Keep each metric name as one path segment of the request URL.
+
+from src.export.site_insights.metric_refusals import MetricRefusalLog  # WHY: Issue #3266 refusal record and report
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
@@ -15,6 +18,9 @@ _EMPTY_METRICS_PROMPT = "! No metrics found for site scope. Check ConstInsightMe
 _EMPTY_METRICS_LOG = "No site-scope metrics found in const insight metrics"  # WHY: Failure log for missing const file
 _NO_SITE_LOG = "No site selected. Exiting."  # WHY: Match legacy error log message verbatim on user cancel
 _FILENAME_TEMPLATE = "SiteInsightMetrics_{site}.csv"  # WHY: Filename pattern preserved verbatim from legacy
+# WHY: The live cloud serves the metric in the path. It answers the SDK query form with HTTP 404 (issue #3266).
+_SITE_METRIC_URI_TMPL = "/api/v1/sites/{site_id}/insights/{metric}"
+_REFUSAL_SCOPE = "site insight"  # WHY: The refusal lines name this scope for the operator.
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +53,7 @@ class SiteMetricOperation:
         self.EnhancedSSHRunner = EnhancedSSHRunner  # WHY: bind filename sanitizer.
         self.InsightMetricsUtils = InsightMetricsUtils  # WHY: bind insight metric helpers.
         self.mistapi = mistapi  # WHY: bind mistapi module for API dispatch.
+        self._refusal_log = MetricRefusalLog(_REFUSAL_SCOPE)  # WHY: Hold the refused metrics of this run.
 
     def execute(self) -> None:  # WHY: Menu 74 dispatcher entry point invoked by MistHelper top-level menu
         """Top-level entry point invoked by the menu dispatcher for menu 74."""
@@ -76,6 +83,7 @@ class SiteMetricOperation:
             return
         all_data, retrieved = self._collect_metrics(context, site_metrics)  # WHY: Per-metric API loop
         self._finalize(all_data, retrieved, filename, context)  # WHY: Flatten + save + summary print
+        self._refusal_log.report(context.site_name)  # WHY: Tell the operator which metrics the API refused
 
     def _refresh_const_metrics(self) -> None:  # WHY: Isolated call keeps execute() short and testable
         """Refresh ConstInsightMetrics.csv so metric lists reflect the latest API surface."""
@@ -148,6 +156,7 @@ class SiteMetricOperation:
         """Iterate the metric list and collect any insight data the API returns."""
         all_insight_data: list[dict] = []  # WHY: Accumulator for every non-empty metric response
         retrieved = 0  # WHY: User-facing counter shown in the final summary line
+        self._refusal_log.clear()  # WHY: Each run starts with no refused metric
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Retrieving %s different site insight metrics...", len(site_metrics))
         for metric in site_metrics:  # WHY: One API call per metric. Individual failures must not abort the batch
@@ -159,18 +168,22 @@ class SiteMetricOperation:
 
     def _fetch_one_metric(self, context: SiteRunContext, metric: str) -> dict | None:  # WHY: Per-metric API + annotate
         """Fetch a single site insight metric, returning the enriched dict or None on miss / error."""
+        uri = _SITE_METRIC_URI_TMPL.format(  # WHY: The SDK builds the query form, which the live cloud refuses
+            site_id=context.site_id, metric=quote(metric, safe="")
+        )
         try:
-            response = self.mistapi.api.v1.sites.insights.getSiteInsightMetrics(  # WHY: Single-metric API call
-                self.apisession,
-                context.site_id,
-                metric,
-            )
+            logger.info("Requesting site insight metric %s for site %s", metric, context.site_id)  # WHY: Trace
+            response = self.apisession.mist_get(uri)  # WHY: GET the path form that the live cloud serves
             raw = getattr(response, "data", response) or {}  # WHY: Mistapi returns raw dict or wrapper with .data
         except Exception as exception:
             logging.debug(  # WHY: Non-fatal per-metric failure - continue with next metric
                 "Failed to get site insight data for metric %s: %s", metric, exception
             )
             return None
+        status_code = getattr(response, "status_code", None)  # WHY: Read the HTTP status for the trace line
+        logger.debug("Received site insight metric %s with HTTP %s", metric, status_code)  # WHY: Trace the answer
+        if self._refusal_log.record(metric, response):  # WHY: mistapi returns an HTTP 400 as a response, not a raise
+            return None  # WHY: An error body is not metric data, so it must not become an export row
         return self._annotate_row(raw, metric, context)  # WHY: Annotate + short-circuit empty payload
 
     @staticmethod

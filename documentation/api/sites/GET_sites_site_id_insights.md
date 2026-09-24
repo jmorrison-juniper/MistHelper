@@ -115,6 +115,9 @@ Retrieves site-wide insight metrics aggregated across all devices and clients. P
 ## Gotchas
 
 - Available metrics depend on site configuration and device types deployed.
+- The live cloud does not serve the query form that this page shows. On 2026-09-23, a GET with `?metrics=<name>` got HTTP 404 and the body `{}`. A comma list got the same result. Issue #3266 records the probe.
+- The live cloud serves the path form `GET /api/v1/sites/{site_id}/insights/{metric}`. The same probe got HTTP 200 with data for 55 of 64 metrics, and HTTP 400 for 9 metrics.
+- mistapi does not raise an exception for an HTTP 400. It returns the error body in `data`. A caller must read `status_code` before it uses the body as metric data.
 
 ## Related Endpoints
 
@@ -123,4 +126,4 @@ Retrieves site-wide insight metrics aggregated across all devices and clients. P
 
 ## MistHelper Notes
 
-Used by Menu **68** via `getSiteInsightMetrics`.
+Menu **74** (Export Site Insight Metrics) reads this endpoint. It sends the path form through `apisession.mist_get()`, because the SDK function `getSiteInsightMetrics()` sends the query form. The export keeps `api_function_name="getSiteInsightMetrics"`, so the table name does not change. Menu 74 tells the operator each refused metric, with its HTTP status and its reason.
