@@ -268,18 +268,10 @@ def _build_registry() -> dict:
 
     # --- Simple site-only operations (1 prompt: site) ---
     site_only_menus = [
-        "29",
-        "30",
         "31",
         "32",
-        "34",
-        "49",
-        "50",
-        "51",
-        "52",
-        "53",
-        "66",  # Menu 66 prompts for a site before it can list site beacons.
-        "68",
+        "66",  # Menu 66 prompts for a site through SiteExportUtils._export_data.
+        "68",  # Menu 68 prompts for a site through SiteExportUtils._export_data.
         "70",
         "71",
         "84",
@@ -416,13 +408,6 @@ def _build_registry() -> dict:
             "parameters": [_site_param(), _device_param("all")],
         }
 
-    # --- Site + switch ---
-    for menu in ["5", "33"]:
-        registry[menu] = {
-            "category": "interactive",
-            "parameters": [_site_param(), _device_param("switch")],
-        }
-
     # --- Site + gateway ---
     registry["73"] = {
         "category": "interactive",
@@ -448,21 +433,23 @@ def _build_registry() -> dict:
         "parameters": [_site_param(), _device_param("all")],  # Answer the site and device prompts.
     }
 
-    # --- Ping device (menu 87) ---
-    registry["87"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("all"),
-            _text_param("target_host", "Target Host/IP", default="8.8.8.8", placeholder="8.8.8.8"),
-            _number_param("ping_count", "Ping Count", default="4", min_value=1, max_value=100),
-        ],
+    registry["87"] = {  # Menu 87 asks only for the site before it exports gateway HA data.
+        "category": "interactive",  # The portal must render the one prompt that the handler reaches.
+        "parameters": [_site_param()],  # Answer the single site prompt and do not ask stale device questions.
     }
 
-    # --- ARP device (menu 88) ---
-    registry["88"] = {
-        "category": "interactive",
-        "parameters": [_site_param(), _device_param("all")],
+    registry["88"] = {  # Menu 88 asks for one AP model number after it prints the model table.
+        "category": "interactive",  # The portal must feed exactly one answer to the raw prompt.
+        "parameters": [
+            _number_param(  # Answer the numbered model prompt without stale site or device selectors.
+                "ap_model_number",
+                "AP Model Number",
+                required=True,
+                default="1",
+                min_value=1,
+                placeholder="Enter 1 to use the first model, or use SSH to view the model table",
+            ),
+        ],
     }
 
     # --- Client operations ---
@@ -489,19 +476,6 @@ def _build_registry() -> dict:
             _required_text_param(  # Build the required beacon identifier control.
                 "beacon_id", "Beacon ID", placeholder="Mist beacon UUID"  # API path beacon identifier.
             ),
-        ],
-    }
-
-    # --- Service ping (menu 89): gateway + many params ---
-    registry["89"] = {
-        "category": "interactive",
-        "parameters": [
-            _site_param(),
-            _device_param("gateway"),
-            _text_param("tenant", "Tenant", placeholder="select index or skip"),
-            _text_param("service", "Service", placeholder="select index or enter custom"),
-            _text_param("host", "Target Host/IP", default="8.8.8.8", placeholder="8.8.8.8"),
-            _number_param("count", "Ping Count", default="4", min_value=1, max_value=100),
         ],
     }
 
