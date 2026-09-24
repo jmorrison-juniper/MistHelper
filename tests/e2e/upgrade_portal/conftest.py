@@ -199,6 +199,12 @@ SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second site for o
 SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The text of the second site row.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
+# WHY: Issue #3249. The multi-site device table keys each row by the MAC
+# address, so the second site holds its own addresses. The cloud job of the
+# access points lists the first-site AP as upgraded and the second-site AP as
+# failed, so the table shows one version match and one version mismatch.
+FIRST_SITE_AP_MAC = "000000000001"  # The access point of the first site, which is device one.
+SECOND_SITE_AP_MAC = "000000000101"  # The access point of the second site, which is device one.
 
 STAND_IN_RUN_ID = "e2e-run-0001"  # The run that owns the comparison captures below.
 PRE_CAPTURE_ID = "e2e-capture-pre-0001"  # The pre-check that the picker offers first.
@@ -863,13 +869,13 @@ class E2EOrgUpgradeService:
                         "site_id": STAND_IN_SITE_ID,
                         "id": "55555555-5555-5555-5555-555555555555",
                         "status": site_state,
-                        "targets": {"total": 2, "upgraded": ["a"], "failed": []},
+                        "targets": {"total": 2, "upgraded": [FIRST_SITE_AP_MAC], "failed": []},  # Issue #3249.
                     },
                     {
                         "site_id": SECOND_SITE_ID,
                         "id": "66666666-6666-6666-6666-666666666666",
                         "status": site_state,
-                        "targets": {"total": 2, "upgraded": [], "failed": ["b"]},
+                        "targets": {"total": 2, "upgraded": [], "failed": [SECOND_SITE_AP_MAC]},  # Issue #3249.
                     },
                 ],
             },
@@ -1031,6 +1037,59 @@ def stand_in_device_read(**parameters: Any) -> list[dict[str, Any]]:
     return [stand_in_device(number, kind) for number, kind in enumerate(STAND_IN_DEVICE_TYPES, start=1)]
 
 
+def stand_in_site_devices(site_id: str) -> list[dict[str, Any]]:
+    """Answer the device inventory of one named stand-in site.
+
+    Why:
+        Issue #3249. The multi-site device table shows one row for each device,
+        and each row keys its test identifier by the MAC address. Two sites
+        with the same addresses would give two rows the same identifier. The
+        second site therefore holds its own addresses and its own identifiers.
+
+    Args:
+        site_id: The site whose inventory the caller reads.
+
+    Returns:
+        One device record for each device type of the named site.
+    """
+    devices = stand_in_device_read()  # The first site keeps the inventory of every single-site test.
+    if site_id != SECOND_SITE_ID:  # Only the second site needs other addresses.
+        return devices  # Keep the first site unchanged.
+    return [
+        {
+            **device,  # Keep the type, the model, the version, and the state of the first-site device.
+            "id": f"e2e-device-010{number}",  # A row key that no first-site device holds.
+            "name": f"E2E Site Two {device['type']} {number}",  # A name that no first-site device holds.
+            "mac": f"00000000010{number}",  # An address that no first-site device holds.
+            "serial": f"E2ESERIAL010{number}",  # A serial number that no first-site device holds.
+            "ip": f"192.0.2.10{number}",  # A documentation-range address that no first-site device holds.
+            "site_id": SECOND_SITE_ID,  # The site that owns this device.
+        }
+        for number, device in enumerate(devices, start=1)
+    ]
+
+
+def stand_in_running_versions(cloud_session: Any, site_id: str) -> dict[str, str]:
+    """Answer the running version of each device of one stand-in site.
+
+    Why:
+        Issue #3249. The multi-site device table reads the version after the
+        upgrade through `RunningFirmwareVersionResolver`, which calls the Mist
+        cloud. This reader answers fixed values. The first site runs the new
+        version, and the second site still runs the old version.
+
+    Args:
+        cloud_session: The cloud session. This stand-in reads none of it.
+        site_id: The site whose devices the caller reads.
+
+    Returns:
+        The running version of each device, keyed by the MAC address.
+    """
+    del cloud_session  # The stand-in reads no credential.
+    version = STAND_IN_VERSIONS[1] if site_id == STAND_IN_SITE_ID else STAND_IN_VERSIONS[0]  # New, then old.
+    return {str(device["mac"]): version for device in stand_in_site_devices(site_id)}  # One reading each.
+
+
 def stand_in_version_map() -> dict[str, tuple[str, ...]]:
     """Return the version list that the cloud names for each stand-in model.
 
@@ -1070,7 +1129,35 @@ def stand_in_options_view(session: Any, org_id: str, site_id: str) -> dict[str, 
     return {"targets": options.build_version_options(stand_in_device_read(), by_model), "versions_by_model": by_model}
 
 
-def stand_in_options_builder(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+def stand_in_org_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+    """Answer the device rows of one named site for the multi-site options page.
+
+    Why:
+        Issue #3249. `stand_in_options_view` answers one site for every call,
+        so each selected site showed the same MAC addresses. This view reads the
+        inventory of the named site through the shipped `build_version_options`.
+
+    Args:
+        session: The cloud session. This stand-in reads none of it.
+        org_id: The organization that holds the site.
+        site_id: The site under upgrade.
+
+    Returns:
+        One row for each device of the named site and the version list of each model.
+    """
+    del session, org_id  # One organization answers every call.
+    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
+
+    by_model = stand_in_version_map()  # Both stand-in sites hold the same models.
+    devices = stand_in_site_devices(site_id)  # The inventory of the named site.
+    return {"targets": options.build_version_options(devices, by_model), "versions_by_model": by_model}
+
+
+def stand_in_options_builder(
+    record: dict[str, Any],
+    body: dict[str, Any],
+    devices: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Widen the two fields of each browser choice into the whole target record.
 
     Why:
@@ -1082,6 +1169,8 @@ def stand_in_options_builder(record: dict[str, Any], body: dict[str, Any]) -> di
     Args:
         record: The run record. The site of every stand-in run is the same one.
         body: The request body of the options call.
+        devices: The inventory of the named site, or None for the first site.
+            Issue #3249: a multi-site call names the inventory of its site.
 
     Returns:
         The target list, the chosen options, and the warning sentences.
@@ -1091,7 +1180,8 @@ def stand_in_options_builder(record: dict[str, Any], body: dict[str, Any]) -> di
 
     choices = body.get("targets")
     rows = [one for one in choices if isinstance(one, dict)] if isinstance(choices, list) else []
-    entries = options.build_targets(stand_in_device_read(), rows)
+    inventory = stand_in_device_read() if devices is None else devices  # A single-site run reads the first site.
+    entries = options.build_targets(inventory, rows)
     return {
         "targets": entries,
         "options": asdict(options.build_options(body)),
@@ -1786,10 +1876,14 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     built.config[upgrade_routes.SELF_READER_KEY] = lambda _session: {"email": STAND_IN_EMAIL}
 
     built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService
-    built.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = stand_in_options_view
+    built.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = stand_in_org_options_view  # Issue #3249: one inventory each.
     built.config[org_upgrade.OPTIONS_BUILDER_CONFIG_KEY] = lambda cloud_session, org_id, site_id, body: (
-        stand_in_options_builder({}, body)
+        stand_in_options_builder({}, body, stand_in_site_devices(site_id))  # Issue #3249: the named site only.
     )
+    # WHY: Issue #3249. The device table reads the running version of each
+    # device. This seam answers fixed versions, so the browser suite opens no
+    # socket to the Mist cloud.
+    built.config[org_upgrade.DEVICE_VERSION_READER_CONFIG_KEY] = stand_in_running_versions
     from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
 
     built.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = AggregateUpgradeService(

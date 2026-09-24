@@ -2812,6 +2812,134 @@
         });
     }
 
+    /**
+     * Builds one cell of the multi-site device table.
+     *
+     * Why: Issue #3249. The painter builds each cell with textContent, so a
+     * device name from the cloud can never add markup to the page.
+     *
+     * @param {string} tag The cell tag, "th" or "td".
+     * @param {string} text The cell text.
+     * @param {string} className The cell class, or an empty string.
+     * @param {string} testId The test identifier, or an empty string.
+     * @returns {Element} The cell.
+     */
+    function orgDeviceCell(tag, text, className, testId) {
+        var cell = document.createElement(tag);  /* One cell of one device row. */
+        if (tag === "th") {  /* The device name is the header of its row. */
+            cell.scope = "row";  /* A screen reader names the row by the device. */
+        }
+        if (className) {  /* An address or a version uses the fixed-width font. */
+            cell.className = className;
+        }
+        if (testId) {  /* A browser test reads the cells that the poll changes. */
+            cell.setAttribute("data-testid", testId);
+        }
+        cell.textContent = String(text);  /* Plain text only, never markup. */
+        return cell;
+    }
+
+    /**
+     * Builds the version check cell of one device.
+     *
+     * @param {Object} device One device row of the status answer.
+     * @param {string} testId The test identifier, or an empty string.
+     * @returns {Element} The cell that holds the badge.
+     */
+    function orgDeviceCheckCell(device, testId) {
+        var outcome = runVersionOutcome(device);  /* The rule of the single-site badge. */
+        var cell = orgDeviceCell("td", "", "", testId);  /* The badge sits inside the cell. */
+        var badge = document.createElement("span");  /* Words and color, never color alone. */
+        badge.className = "portal-badge " + (RUN_VERSION_CHECK_CLASSES[outcome] || RUN_VERSION_CHECK_CLASSES[RUN_VERSION_PENDING]);
+        badge.textContent = RUN_VERSION_CHECK_WORDS[outcome] || RUN_VERSION_CHECK_WORDS[RUN_VERSION_PENDING];
+        cell.appendChild(badge);
+        return cell;
+    }
+
+    /**
+     * Builds one row of the multi-site device table.
+     *
+     * @param {Object} device One device row of the status answer.
+     * @returns {Element} The row.
+     */
+    function orgDeviceRow(device) {
+        var mac = String(device.mac || "");  /* The address that the child stored. */
+        var key = SAFE_DEVICE_KEY.test(mac) ? mac : "";  /* An unsafe address gets no test identifier. */
+        var testId = function (name) {  /* Build one cell identifier from the safe address. */
+            return key ? "org-upgrade-device-" + name + "-" + key : "";
+        };
+        var row = document.createElement("tr");
+        if (key) {
+            row.setAttribute("data-testid", "org-upgrade-device-row-" + key);
+        }
+        row.appendChild(orgDeviceCell("td", device.site_name || device.site_id || "Unknown", "", ""));
+        row.appendChild(orgDeviceCell("th", device.name || "Unnamed device", "", ""));
+        row.appendChild(orgDeviceCell("td", mac, "cell-mono", ""));
+        row.appendChild(orgDeviceCell("td", device.device_type || "unknown", "", ""));
+        row.appendChild(orgDeviceCell("td", device.state || "pending", "", testId("state")));
+        row.appendChild(orgDeviceCell("td", device.version_before || "unknown", "cell-mono", ""));
+        row.appendChild(orgDeviceCell("td", device.version_target || "none", "cell-mono", ""));
+        row.appendChild(orgDeviceCell("td", device.version_after || "not yet", "cell-mono", testId("version-after")));
+        row.appendChild(orgDeviceCheckCell(device, testId("version-check")));
+        row.appendChild(orgDeviceCell("td", device.failure_reason || "", "", testId("failure")));
+        return row;
+    }
+
+    /**
+     * Repaints the device table of a multi-site operation from one poll answer.
+     *
+     * Why: Issue #3249. The poll answer carries one row for each device, so
+     * the table follows the cloud without a reload. The answer of an earlier
+     * organization job holds no device list, so the painter changes nothing.
+     *
+     * @param {Object} status The status answer of the operation.
+     * @returns {void}
+     */
+    function paintOrgUpgradeDevices(status) {
+        var body = document.querySelector("[data-org-upgrade-devices]");  /* The body of the device table. */
+        if (!body || !status || !Array.isArray(status.devices)) {  /* No table, or no device list. */
+            return;  /* Keep the rows of the first render. */
+        }
+        body.textContent = "";  /* Replace every row with the rows of this answer. */
+        if (!status.devices.length) {  /* The operation holds no device record yet. */
+            var emptyRow = document.createElement("tr");
+            var emptyCell = orgDeviceCell("td", "No device record exists yet.", "portal-table-empty", "");
+            emptyCell.colSpan = 10;  /* Span every column of the table. */
+            emptyRow.appendChild(emptyCell);
+            body.appendChild(emptyRow);
+            return;
+        }
+        status.devices.forEach(function (device) {  /* Keep the plan order of the answer. */
+            body.appendChild(orgDeviceRow(device || {}));
+        });
+    }
+
+    /**
+     * Repaints the age, the operator address, and the Mist account.
+     *
+     * Why: Issue #3249. The single-site page shows the age of the last change.
+     * The age attribute also feeds the shared timer, so the text keeps its
+     * minute between two polls. An answer with no audit fields changes nothing.
+     *
+     * @param {Object} status The status answer of the operation.
+     * @returns {void}
+     */
+    function paintOrgUpgradeAudit(status) {
+        var age = byTestId("org-upgrade-last-update-age");  /* Only an aggregate operation shows the age. */
+        if (!age || !status || !Object.prototype.hasOwnProperty.call(status, "updated_at")) {
+            return;  /* Keep the audit lines of the first render. */
+        }
+        var updatedText = typeof status.updated_at === "string" ? status.updated_at : "";  /* The server UTC time. */
+        var updatedMilliseconds = Date.parse(updatedText);  /* An empty or damaged time reads as not a number. */
+        var nowMilliseconds = Date.now();  /* One browser clock value for this paint. */
+        age.setAttribute(RUN_AGE_UPDATED_ATTRIBUTE, updatedText);  /* The shared timer reads this attribute. */
+        age.textContent = Number.isFinite(updatedMilliseconds) && updatedMilliseconds <= nowMilliseconds
+            ? runAgeText((nowMilliseconds - updatedMilliseconds) / MILLISECONDS_PER_SECOND)
+            : (status.age_text || "unknown");  /* A future or absent time keeps the server words. */
+        setText(byTestId("org-upgrade-operator-address"), status.operator_address || "Not recorded");
+        setText(byTestId("org-upgrade-cloud-account"), status.cloud_account || "Not recorded");
+    }
+
     function paintOrgUpgradeStatus(region, status) {
         if (!region || !status) {
             return;
@@ -2823,6 +2951,8 @@
             setText(document.querySelector('[data-org-upgrade-field="' + field + '"]'), value === null || value === undefined || value === "" ? fallback : value);
         });
         paintOrgUpgradeSites(status);
+        paintOrgUpgradeDevices(status);  /* Issue #3249: one row for each device. */
+        paintOrgUpgradeAudit(status);  /* Issue #3249: the age, the operator, and the account. */
         var state = String(status.status || "unknown").toLowerCase();
         region.setAttribute("data-job-status", state);
         if (ORG_UPGRADE_FINISHED_STATES.indexOf(state) !== -1) {

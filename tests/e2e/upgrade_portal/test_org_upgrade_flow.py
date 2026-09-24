@@ -14,6 +14,29 @@ MODE_PATH = "/select/mode"
 SITE_ID = "22222222-2222-2222-2222-222222222222"
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"
 UPGRADE_ID = "44444444-4444-4444-4444-444444444444"
+# WHY: Issue #3249. `conftest.py` fixes these values. The cloud job lists the
+# first-site AP as upgraded and the second-site AP as failed. The first site
+# runs the new version, and the second site still runs the old version.
+FIRST_SITE_AP_MAC = "000000000001"
+FIRST_SITE_SWITCH_MAC = "000000000003"
+SECOND_SITE_AP_MAC = "000000000101"
+SECOND_SITE_SWITCH_MAC = "000000000103"
+FIRMWARE_EMAIL = "e2e.operator@juniper.net"  # The typed address of the firmware operator.
+CLOUD_ACCOUNT = "e2e.operator@example.invalid"  # The Mist account that the self-read seam answers.
+LISTED_FAILURE = "The cloud lists this device as failed."  # The reason when the child holds no error text.
+
+
+def expect_device(page: Any, mac: str, cells: dict[str, str]) -> None:
+    """Require the text of each named cell of one device row.
+
+    Args:
+        page: The browser page.
+        mac: The MAC address that keys the row.
+        cells: The cell name, such as "state", and the text that the cell must hold.
+    """
+    sync_api.expect(page.get_by_test_id(f"org-upgrade-device-row-{mac}")).to_be_visible()  # One row per device.
+    for name, text in cells.items():  # Read each cell that the poll can change.
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-device-{name}-{mac}")).to_have_text(text)
 
 
 class TestOrganizationUpgradeBrowserFlow:
@@ -80,6 +103,31 @@ class TestOrganizationUpgradeBrowserFlow:
         sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("gateway")
         sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("Cancellation")
 
+        # WHY: Issue #3249. The page shows one row for each device of each site,
+        # with the version after, the version check, and the failure reason.
+        sync_api.expect(page.get_by_test_id("org-upgrade-device-table")).to_be_visible()
+        device_rows = page.locator("[data-org-upgrade-devices] tr[data-testid^='org-upgrade-device-row-']")
+        assert device_rows.count() == 6  # One access point, one switch, and one gateway at each of two sites.
+        expect_device(
+            page,
+            FIRST_SITE_AP_MAC,
+            {"state": "upgraded", "version-after": "0.15.1", "version-check": "Version matches", "failure": ""},
+        )
+        expect_device(
+            page,
+            SECOND_SITE_AP_MAC,
+            {
+                "state": "failed",
+                "version-after": "0.14.29216",
+                "version-check": "Version mismatch",
+                "failure": LISTED_FAILURE,
+            },
+        )
+        expect_device(page, FIRST_SITE_SWITCH_MAC, {"state": "pending", "version-check": "Awaiting version"})
+        expect_device(page, SECOND_SITE_SWITCH_MAC, {"state": "pending", "version-check": "Awaiting version"})
+        sync_api.expect(page.get_by_test_id("org-upgrade-operator-address")).to_have_text(FIRMWARE_EMAIL)
+        sync_api.expect(page.get_by_test_id("org-upgrade-cloud-account")).to_have_text(CLOUD_ACCOUNT)
+        sync_api.expect(page.get_by_test_id("org-upgrade-last-update-age")).not_to_have_text("unknown")
         cancel_input = page.get_by_test_id("org-upgrade-cancel-confirmation")
         sync_api.expect(page.get_by_test_id("org-upgrade-cancel")).to_be_disabled()
         cancel_input.fill("CAN")
@@ -151,3 +199,8 @@ class TestOrganizationUpgradeBrowserFlow:
         page.reload(wait_until="domcontentloaded")  # The job page reads every child again.
         status = page.locator("[data-org-upgrade-field='status']")  # The aggregate state.
         sync_api.expect(status).to_have_text("cancelled")  # Every child ended on the cancel.
+        # WHY: Issue #3249. A cancelled child is final, so the table reads the
+        # version that each device runs now. The first site runs the new
+        # version, and the second site still runs the old version.
+        expect_device(page, FIRST_SITE_SWITCH_MAC, {"state": "cancelled", "version-check": "Version matches"})
+        expect_device(page, SECOND_SITE_SWITCH_MAC, {"state": "cancelled", "version-check": "Version mismatch"})

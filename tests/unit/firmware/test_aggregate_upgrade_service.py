@@ -401,3 +401,65 @@ def test_an_invalid_status_answer_stays_readable() -> None:
     service.submit(SAFE_SESSION, record, store, permit_lock)  # Create known child identifiers.
     service.status(SAFE_SESSION, record, store)  # The read answers an error.
     assert record["children"][0]["status"] == "read_unknown"  # The next poll reads the child again.
+
+
+def test_the_build_keeps_the_site_names_and_an_empty_version_store() -> None:
+    """Issue #3249: the record names each site and starts with no running version reading."""
+    record = build_record(AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn()))  # Offline plan.
+    assert record["site_names"] == {SITE_ONE: "One", SITE_TWO: "Two"}  # The device table names each site.
+    assert (record["device_versions"], record["versions_final"]) == ({}, [])  # No reading exists yet.
+    assert datetime.fromisoformat(record["updated_at"]).utcoffset() == timedelta(0)  # A UTC time gives an age.
+
+
+def test_the_access_point_child_stores_one_target_record_for_each_access_point() -> None:
+    """Issue #3249: the device table needs the name, the site, and the versions of each access point."""
+    record = build_record(AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn()))  # Offline plan.
+    ap_child = next(child for child in record["children"] if child["device_family"] == "ap")  # The AP child.
+    assert ap_child["targets"] == [
+        {
+            "mac": "001122334455",
+            "name": "ap",
+            "device_type": "ap",
+            "model": "AP45",
+            "version_before": "old",
+            "version_target": "0.15.1",
+            "site_id": SITE_ONE,
+        }
+    ]
+
+
+def test_recorded_device_versions_merge_readings_and_final_ids_once() -> None:
+    """Issue #3249: each reading counts its reads, and a final child is stored one time."""
+    service = AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn())  # Keep all calls offline.
+    record = build_record(service)  # Build the complete plan.
+    store = CasStore(record)  # Coordinate each transition.
+    service.record_device_versions(record, store, {"001122334466": "23.4R1.9"}, ("child-a",))  # First read.
+    service.record_device_versions(record, store, {"001122334466": "23.4R1.8"}, ("child-a",))  # Second read.
+    entry = store.record["device_versions"]["001122334466"]  # The durable reading of the switch.
+    assert (entry["version"], entry["reads"]) == ("23.4R1.8", 2)  # The newest reading wins.
+    assert datetime.fromisoformat(entry["read_at"]).utcoffset() == timedelta(0)  # The read time is in UTC.
+    assert store.record["versions_final"] == ["child-a"]  # The final child appears one time.
+    assert store.record["record_version"] == 2  # Each call made one compare-and-set write.
+    assert record == store.record  # The caller snapshot follows the durable record.
+
+
+def test_a_damaged_read_count_restarts_at_one() -> None:
+    """A read count that is not a whole number cannot block the read budget."""
+    service = AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn())  # Keep all calls offline.
+    record = build_record(service)  # Build the complete plan.
+    record["device_versions"] = {"001122334466": {"version": "x", "reads": "many"}}  # A damaged count.
+    store = CasStore(record)  # Coordinate each transition.
+    service.record_device_versions(record, store, {"001122334466": "23.4R1.9"}, ())  # Store one reading.
+    assert store.record["device_versions"]["001122334466"]["reads"] == 1  # The count starts again.
+
+
+def test_a_change_moves_the_update_time_and_a_repeat_does_not() -> None:
+    """Issue #3249: the page age shows the last change of the record."""
+    service = AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn())  # Keep all calls offline.
+    record = build_record(service)  # Build the complete plan.
+    record["updated_at"] = "2000-01-01T00:00:00+00:00"  # A known old time.
+    store = CasStore(record)  # Coordinate each transition.
+    service.record_device_versions(record, store, {}, ())  # A write that changes nothing.
+    assert store.record["updated_at"] == "2000-01-01T00:00:00+00:00"  # No change keeps the time.
+    service.record_device_versions(record, store, {"001122334466": "23.4R1.9"}, ())  # A real change.
+    assert store.record["updated_at"] != "2000-01-01T00:00:00+00:00"  # The change moves the time.

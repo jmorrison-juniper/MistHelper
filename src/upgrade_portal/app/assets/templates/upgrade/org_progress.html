@@ -28,6 +28,29 @@
   <p><strong>Total targets:</strong> <span data-org-upgrade-field="total">{{ status.total | default(0, true) }}</span></p>
   <p><strong>Upgraded:</strong> <span data-org-upgrade-field="upgraded_count">{{ status.upgraded_count | default(0, true) }}</span></p>
   <p><strong>Failed:</strong> <span data-org-upgrade-field="failed_count">{{ status.failed_count | default(0, true) }}</span></p>
+  {#
+    Issue #3249. The single-site page shows the age of the last change, the
+    typed operator address, and the Mist account. The multi-site page shows
+    the same three facts. Only an aggregate operation carries them, so the
+    page of an earlier organization job shows none of the three. A record from
+    an earlier release holds no address and no account, so each reads
+    "Not recorded". `portal.js` repaints the three values on each poll.
+  #}
+  {% if status.devices is defined %}
+    <p class="portal-card-note">
+      Last update:
+      <span class="run-age-text"
+            data-testid="org-upgrade-last-update-age"
+            data-run-age
+            data-age-updated-at="{{ status.updated_at | default('', true) }}">{{ status.age_text | default('unknown', true) }}</span>
+    </p>
+    <p class="portal-card-note">
+      The typed operator address is <span data-testid="org-upgrade-operator-address">{{ status.operator_address | default('Not recorded', true) }}</span>.
+    </p>
+    <p class="portal-card-note">
+      The Mist account is <span data-testid="org-upgrade-cloud-account">{{ status.cloud_account | default('Not recorded', true) }}</span>.
+    </p>
+  {% endif %}
   <form method="post" action="/api/org-upgrades/{{ upgrade_id }}/cancel" class="mt-3">
     <input type="hidden"
            name="csrf_token"
@@ -98,4 +121,75 @@
     </tbody>
   </table>
 </div>
+
+{#
+  Issue #3249. The single-site page shows one row for each device. This table
+  shows the same columns for each device of each child, with the site added.
+  The version after is the running version that the portal reads from
+  `listSiteDevicesStats`, as issue #2006 requires.
+
+  The two maps repeat the maps of `upgrade/progress.html` and of `portal.js`,
+  so the first render and each poll use the same words. The badge carries
+  words, never color alone, because WCAG 1.4.1 refuses color as the only
+  signal.
+#}
+{% if status.devices is defined %}
+  {% set version_check_class = {
+       'version_match': 'badge-verified',
+       'version_mismatch': 'badge-failed',
+       'version_pending': 'badge-partial'
+     } %}
+  {% set version_check_text = {
+       'version_match': 'Version matches',
+       'version_mismatch': 'Version mismatch',
+       'version_pending': 'Awaiting version'
+     } %}
+  <div class="portal-card" data-testid="org-upgrade-devices">
+    <h2 class="portal-card-title">Devices</h2>
+    <div class="portal-table-scroll">
+      <table class="portal-table" data-testid="org-upgrade-device-table">
+        <caption class="visually-hidden">
+          Every device of the operation, with its site, its state, its firmware
+          before and after the upgrade, and the result of the firmware check.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Site</th>
+            <th scope="col">Name</th>
+            <th scope="col">MAC address</th>
+            <th scope="col">Type</th>
+            <th scope="col">State</th>
+            <th scope="col">Version before</th>
+            <th scope="col">Target version</th>
+            <th scope="col">Version after</th>
+            <th scope="col">Version check</th>
+            <th scope="col">Failure reason</th>
+          </tr>
+        </thead>
+        <tbody data-org-upgrade-devices>
+          {% for device in status.devices %}
+            {% set mac = device.mac | default('', true) %}
+            {% set outcome = device.version_outcome | default('version_pending', true) %}
+            <tr data-testid="org-upgrade-device-row-{{ mac }}">
+              <td>{{ device.site_name | default(device.site_id, true) | default('Unknown', true) }}</td>
+              <th scope="row">{{ device.name | default('Unnamed device', true) }}</th>
+              <td class="cell-mono">{{ mac }}</td>
+              <td>{{ device.device_type | default('unknown', true) }}</td>
+              <td data-testid="org-upgrade-device-state-{{ mac }}">{{ device.state | default('pending', true) }}</td>
+              <td class="cell-mono">{{ device.version_before | default('unknown', true) }}</td>
+              <td class="cell-mono">{{ device.version_target | default('none', true) }}</td>
+              <td class="cell-mono" data-testid="org-upgrade-device-version-after-{{ mac }}">{{ device.version_after | default('not yet', true) }}</td>
+              <td data-testid="org-upgrade-device-version-check-{{ mac }}">
+                <span class="portal-badge {{ version_check_class.get(outcome, 'badge-partial') }}">{{ version_check_text.get(outcome, 'Awaiting version') }}</span>
+              </td>
+              <td data-testid="org-upgrade-device-failure-{{ mac }}">{{ device.failure_reason | default('', true) }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="10" class="portal-table-empty">No device record exists yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
 {% endblock %}
