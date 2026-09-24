@@ -173,6 +173,10 @@ The engineer runs mode 4 on an organization that holds no closed action.
 - **FR-013**: The unattended `--testinteractive` pass MUST still take mode 1.
 - **FR-014**: The README and both copies of the NOC endpoint report MUST describe
   mode 4.
+- **FR-015**: A table line of one known topic MUST fit 106 characters. The portal
+  log viewer shows 120 characters on one line, and its time prefix uses 14 of
+  them. The Name column MUST come last, so a wider line wraps only at the end of a
+  name.
 
 ### Key Entities
 
@@ -196,6 +200,8 @@ The engineer runs mode 4 on an organization that holds no closed action.
   Closed column.
 - **SC-005**: Every menu 270 test passes, and each functional requirement has at
   least one test.
+- **SC-006**: A screenshot of the live portal run shows each row of the mode 4
+  tables on one line of the log viewer.
 
 ## Assumptions
 

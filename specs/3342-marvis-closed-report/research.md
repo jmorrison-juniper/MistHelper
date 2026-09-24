@@ -112,6 +112,39 @@ Decision: add no class and no public method. A constant table maps each mode to
 the `is_open` values that it keeps. A second table maps each mode to the words
 of its stop lines. The selector takes the mode instead of `open_only`.
 
+## R9. The table width
+
+The live Playwright run of 2026-09-24 at 18:25Z showed a defect. The first
+layout of commit ab86c95b used fixed widths, and each table line held 111
+characters. The portal log viewer put the Closed value of each row on a second
+line.
+
+The viewer uses `white-space: pre-wrap` and `word-break: break-all`. A
+Playwright measurement found these limits:
+
+| Screen width | Characters on one line of the viewer |
+| - | - |
+| 1600 pixels or more | 120, because the panel stops at 872 pixels |
+| 1366 pixels | 104 |
+
+The viewer adds a time prefix, such as `[12:59:59 PM] `, to each line. The prefix
+uses up to 14 characters, so a table line can use 106 characters.
+
+The catalog holds 36 topics. The longest key is
+`gateway/intermittent_wan_connectivity`, with 37 characters. The longest name is
+`Data Center/Application / Reachability Failure`, with 46 characters. The two
+are on different rows. The widest single row uses 78 characters of key and name.
+
+A second fixed layout of 106 characters failed too. The 37-character key pushed
+its row to 110 characters, so its Closed value wrapped again.
+
+Decision: fit each column to its widest cell, and move the Name column to the
+end with no padding. A one-row table of each known topic then fits 106
+characters, with a total of 100,000 and an open count of 9,999. In a table of
+all 36 topics, the last count ends at column 65. A long name can then wrap only
+at its end, and the numbers stay in their columns. The No. column keeps its
+first width of 4, so each table still starts with `  No.  Key`.
+
 ## Alternatives that were rejected
 
 | Alternative | Why it was rejected |
@@ -121,3 +154,5 @@ of its stop lines. The selector takes the mode instead of `open_only`.
 | A filter on `status_name`. | An unknown key has no fixed name, so the filter misses it. |
 | An enum class for the status rule. | It adds a sixth class to `selection.py`. |
 | A Closed column in mode 4 only. | A table that changes its columns by mode confuses the reader. |
+| A fixed table layout of 106 characters. | The longest key still pushes its row past the viewer width. |
+| A name that the table cuts to fit. | The operator loses part of the name, and the cut name can match two topics. |

@@ -70,7 +70,7 @@ new class. Research R8 states the reason.
 | `MarvisTopicSelector.select` | Keep a record when its topic is selected and its `is_open` value is in the kept set. |
 | `MarvisTopicSelector._count_topics` | Show a topic when at least one of its records has a kept `is_open` value. |
 | `MarvisFilterPrompts.ask_mode` | Log the mode 4 line. Change the prompt text to name four modes. |
-| `MarvisFilterPrompts._log_table` | Add the Closed column. |
+| `MarvisFilterPrompts._log_table` | Add the Closed column. Fit each column to its widest cell, and move the Name column to the end. See research R9. |
 
 ### `src/marvis/actions/operation.py`
 
@@ -110,7 +110,7 @@ Add the choice `{"value": "4", "label": "4 - Export the closed Marvis Actions
 | No closed action | `No closed Marvis Actions exist in this organization. No file was written.` |
 | Empty filter | `No closed Marvis Actions match the filter. No file was written.` |
 | Unknown status | `Caution: MistHelper does not know these status keys, so the report counts their actions as closed: '<key>'=<count>. Compare these actions with the Mist UI.` |
-| Table header | `  No.  Key  Name  Actions  Open  Closed`, with the current widths |
+| Table header | `  No.  Key  Actions  Open  Closed  Name`. Each column fits its widest cell. The Name column comes last and holds no padding. |
 
 The lines for modes 1, 2, and 3 do not change, except the refusal of a bad mode.
 
@@ -125,7 +125,8 @@ The lines for modes 1, 2, and 3 do not change, except the refusal of a bad mode.
 
 | File | New or changed tests |
 | - | - |
-| `tests/unit/marvis/actions/test_selection.py` | The selector helper takes a mode. The mode 4 tables, the Closed column, the mode 4 select, the mode table, and the prompt text. |
+| `tests/unit/marvis/actions/test_selection.py` | The selector helper takes a mode. The mode 4 tables, the Closed column, the table layout, the mode 4 select, the mode table, and the prompt text. |
+| `tests/unit/marvis/actions/test_console_visibility.py` | The mode 4 line, the column headings, the stop line, and the caution line on the SSH console. |
 | `tests/unit/marvis/actions/test_operation.py` | The mode 4 export, the kept resolution columns, the stop line, the empty filter, the unknown status, and the new refusal. |
 | `tests/unit/marvis/actions/test_portal_contract.py` | The four mode values, the mode 4 label, and two portal runs of mode 4. |
 | `tests/unit/marvis/actions/test_properties.py` | Modes 2 and 4 split the mode 1 rows for any status mix. |
@@ -139,7 +140,8 @@ The lines for modes 1, 2, and 3 do not change, except the refusal of a bad mode.
 3. Run the STE linter on every changed Markdown file and Python file.
 4. Copy the changed files into `misthelper-app` with the class B method. Send HUP
    to the 8055 Gunicorn master only.
-5. Run mode 4 and mode 2 from the operations portal with Playwright.
+5. Run mode 4 and mode 2 from the operations portal with Playwright. Take a
+   screenshot of the log viewer, and confirm that each table row holds one line.
 6. Run mode 4 through SSH on port 2200.
 7. Read `podman logs misthelper-app` and `data/script.log`.
 8. Read the CSV file, the SQLite table, and the ArangoDB collection.

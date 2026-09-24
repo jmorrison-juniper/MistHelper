@@ -80,12 +80,19 @@ in the same phase, because the two tasks touch no common file.
 - [X] **T016** Run the local gates: `py_compile`, `ruff`, `black`, `mypy`, the
   menu 270 tests, the guardrail, the browser tests, and the STE linter.
 
-- [ ] **T017** Copy the changed files into `misthelper-app` with the class B
+- [X] **T017** Copy the changed files into `misthelper-app` with the class B
   method, and send HUP to the 8055 Gunicorn master. Log START and DONE lines in
   the coordination log.
 
 - [ ] **T018** Run mode 4 and mode 2 on port 8055 with Playwright. Run mode 4
   through SSH on port 2200. Satisfies SC-003 and SC-004.
+
+- [ ] **T018a** The live screenshot of T018 showed the Closed value on a second
+  line of the portal log. In `src/marvis/actions/selection.py`, fit each column of
+  `_log_table` to its widest cell, and move the Name column to the end. Update the
+  table tests in `test_selection.py` and `test_console_visibility.py`. Deploy the
+  file again, and repeat the Playwright check. Satisfies FR-015 and SC-006. See
+  research R9.
 
 - [ ] **T019** Read the container log and `data/script.log`. Read the CSV file,
   the SQLite table, and the ArangoDB collection. Satisfies SC-001 and SC-002.
@@ -100,4 +107,5 @@ in the same phase, because the two tasks touch no common file.
 - T007 needs T001.
 - T008 to T012a need T001 to T007.
 - T016 needs T001 to T015. T017 needs T016. T018 and T019 need T017.
-- T020 needs T018 and T019.
+- T018a needs T018.
+- T020 needs T018, T018a, and T019.

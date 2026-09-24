@@ -121,7 +121,7 @@ class TestTheExportConsole:
             assert has_line(lines, start), start
         headers = [line for line in lines if line.startswith("  No.  Key")]
         assert len(headers) == 2
-        assert all(line.split()[-3:] == ["Actions", "Open", "Closed"] for line in headers)
+        assert all(line.split() == ["No.", "Key", "Actions", "Open", "Closed", "Name"] for line in headers)
 
     def test_an_organization_without_closed_actions_says_so(
         self, harness: Any, caplog: pytest.LogCaptureFixture

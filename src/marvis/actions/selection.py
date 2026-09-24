@@ -63,6 +63,10 @@ ALL_KEYWORD = "all"  # WHY: the answer that keeps every topic. The name avoids a
 COMMENT_MAX_LENGTH = 1000  # WHY: a guard against a pasted log file in the comment field.
 MAX_NUMBER_DIGITS = 6  # WHY: a longer number cannot name a table row, and int() refuses very long text.
 ANSWER_ECHO_LIMIT = 40  # WHY: a refusal message repeats the start of a bad answer only.
+# Issue #3342: the Name column comes last, so a long name that wraps in the portal log viewer
+# moves only the end of the name to the next line. The numbers stay in their columns.
+TABLE_HEADINGS = ("No.", "Key", "Actions", "Open", "Closed", "Name")  # WHY: the column headings of a filter table.
+NUMBER_COLUMN_WIDTH = 4  # WHY: the No. column keeps its first width, so the table still starts with "  No.  Key".
 # Issue #886 Phase 2: the container .env sets CONSOLE_LOG_LEVEL=30, so the SSH menu console hides
 # every INFO line. The tables, the preview, and the summaries are operator output, so they log at
 # WARNING, as the site menu of PromptUtils does. script.log and the web dashboard keep every line.
@@ -340,22 +344,44 @@ class MarvisFilterPrompts:
 
     @staticmethod
     def _log_table(title: str, rows: Sequence[MarvisTopicCount]) -> None:
-        """Log one numbered table of topic counts."""
+        """Log one numbered table of topic counts.
+
+        Why:
+            The portal log viewer shows 120 characters on one line, and its time
+            prefix uses up to 14 of them. Each column fits the widest cell of the
+            table, so a short table stays narrow. If a table line is wider than
+            the viewer, only the end of the name wraps, because the Name column
+            comes last. The numbers stay in their columns.
+        """
+        cells = MarvisFilterPrompts._table_cells(rows)  # WHY: the heading cells, then the cells of each row.
+        widths = [max(len(line[index]) for line in cells) for index in range(len(TABLE_HEADINGS) - 1)]  # WHY: fit.
         logger.log(DISPLAY_LEVEL, "%s:", title)  # WHY: the heading of the table.
-        logger.log(  # WHY: the column headings. The Closed column serves the closed report of mode 4.
-            DISPLAY_LEVEL, "  %-4s %-34s %-48s %7s %5s %6s", "No.", "Key", "Name", "Actions", "Open", "Closed"
-        )
-        for number, row in enumerate(rows, start=1):  # WHY: the numbers start at 1, as in every MistHelper menu.
-            logger.log(  # WHY: one line for each row.
-                DISPLAY_LEVEL,
-                "  %-4d %-34s %-48s %7d %5d %6d",  # WHY: the same widths as the column headings.
-                number,
-                row.key,
-                row.name,
-                row.total,
-                row.open_count,
-                row.closed_count,
+        for line in cells:  # WHY: the column headings first, then one line for each row.
+            logger.log(DISPLAY_LEVEL, "  %s", MarvisFilterPrompts._table_line(line, widths))  # WHY: indent each line.
+
+    @staticmethod
+    def _table_cells(rows: Sequence[MarvisTopicCount]) -> list[tuple[str, ...]]:
+        """Return the column headings, then the text cells of each row, in the order of ``TABLE_HEADINGS``."""
+        body = [  # WHY: one tuple of text cells for each row. The Closed cell serves the closed report of mode 4.
+            (str(number), row.key, str(row.total), str(row.open_count), str(row.closed_count), row.name)
+            for number, row in enumerate(rows, start=1)  # WHY: the numbers start at 1, as in every MistHelper menu.
+        ]
+        return [TABLE_HEADINGS, *body]  # WHY: the headings share the widths of the rows.
+
+    @staticmethod
+    def _table_line(cells: tuple[str, ...], widths: list[int]) -> str:
+        """Return one table line. The text aligns left, the counts align right, and the name holds no padding."""
+        number, key, total, open_count, closed_count, name = cells  # WHY: name each cell by its column.
+        return " ".join(  # WHY: one space separates two columns.
+            (
+                number.ljust(max(widths[0], NUMBER_COLUMN_WIDTH)),  # WHY: the No. column keeps its first width.
+                key.ljust(widths[1]),  # WHY: the Key column fits the longest key of this table.
+                total.rjust(widths[2]),  # WHY: a count aligns right, so the digits line up.
+                open_count.rjust(widths[3]),  # WHY: the Open column aligns right.
+                closed_count.rjust(widths[4]),  # WHY: the Closed column aligns right.
+                name,  # WHY: the last column needs no padding.
             )
+        )
 
 
 @dataclass(frozen=True, slots=True)

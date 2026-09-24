@@ -15,7 +15,14 @@ from unittest.mock import patch
 
 import pytest
 
-from src.marvis.actions.model import RESOLUTION_CODES, MarvisActionRecord, MarvisActionRecordBuilder, MarvisCatalog
+from src.marvis.actions.model import (
+    CATEGORY_NAMES,
+    RESOLUTION_CODES,
+    TOPIC_NAMES,
+    MarvisActionRecord,
+    MarvisActionRecordBuilder,
+    MarvisCatalog,
+)
 from src.marvis.actions.selection import (
     COMMENT_MAX_LENGTH,
     MODE_ACTION_NOUNS,
@@ -36,12 +43,30 @@ from src.utils.input_utils import InputUtils
 from tests.unit.marvis.actions.conftest import make_raw
 
 CODES = {code.key: code for code in RESOLUTION_CODES}
+PORTAL_LOG_WIDTH = 120  # The characters on one line of the portal log viewer, on a screen 1600 pixels wide.
+PORTAL_TIME_PREFIX = "[12:59:59 PM] "  # The longest time prefix that the portal log viewer adds to a line.
+PORTAL_LINE_BUDGET = PORTAL_LOG_WIDTH - len(PORTAL_TIME_PREFIX)  # The characters that one table line can use.
 
 
 def records_of(raws: list[dict[str, Any]]) -> list[MarvisActionRecord]:
     """Return the records of raw rows with the built-in catalog."""
     builder = MarvisActionRecordBuilder(MarvisCatalog([]), {}, "2026-09-23T00:00:00+00:00")
     return [builder.build(raw) for raw in raws]
+
+
+def known_topic_rows(total: int, open_count: int) -> list[MarvisTopicCount]:
+    """Return one table row for each topic of the built-in catalog, named as the subcategory table names it."""
+    return [
+        MarvisTopicCount(
+            f"{category}/{symptom}", f"{CATEGORY_NAMES.get(category, category)} / {name}", category, total, open_count
+        )
+        for (category, symptom), name in sorted(TOPIC_NAMES.items())
+    ]
+
+
+def table_lines(caplog: Any) -> list[str]:
+    """Return the indented lines of the logged tables: the column headings and the rows."""
+    return [record.getMessage() for record in caplog.records if record.getMessage().startswith("  ")]
 
 
 def sample_records() -> list[MarvisActionRecord]:
@@ -300,16 +325,54 @@ class TestFilterPrompts:
         scripted_input("")
         with caplog.at_level(logging.INFO):
             MarvisFilterPrompts.ask_categories(selector().category_counts())
-        assert re.search(r"1\s+ap\s+Wireless\s+2\s+1", caplog.text)
+        assert re.search(r"1\s+ap\s+2\s+1\s+1\s+Wireless", caplog.text)
 
     def test_the_tables_show_the_closed_column(self, scripted_input: Any, caplog: Any) -> None:
-        """Issue #3342: the Closed column shows the count that mode 4 exports."""
+        """Issue #3342: the Closed column shows the count that mode 4 exports, and the Name column comes last."""
         scripted_input("")
         with caplog.at_level(logging.INFO):
             MarvisFilterPrompts.ask_categories(selector().category_counts())
-        assert re.search(r"No\.\s+Key\s+Name\s+Actions\s+Open\s+Closed", caplog.text)
-        assert re.search(r"1\s+ap\s+Wireless\s+2\s+1\s+1\n", caplog.text)
-        assert re.search(r"2\s+gateway\s+WAN\s+1\s+1\s+0\n", caplog.text)
+        assert re.search(r"No\.\s+Key\s+Actions\s+Open\s+Closed\s+Name\n", caplog.text)
+        assert re.search(r"1\s+ap\s+2\s+1\s+1\s+Wireless\n", caplog.text)
+        assert re.search(r"2\s+gateway\s+1\s+1\s+0\s+WAN\n", caplog.text)
+
+    def test_each_known_topic_fits_one_line_of_the_portal_log(self, scripted_input: Any, caplog: Any) -> None:
+        """Issue #3342: the Closed column must not push a row of one topic onto a second line of the portal log."""
+        rows = known_topic_rows(100_000, 9_999)  # A six-digit total and a four-digit open count.
+        for row in rows:
+            caplog.clear()
+            scripted_input("")
+            with caplog.at_level(logging.INFO):
+                MarvisFilterPrompts.ask_subcategories([row])
+            lines = table_lines(caplog)
+            assert len(lines) == 2, "The table must log one line of headings and one row."
+            assert max(len(line) for line in lines) <= PORTAL_LINE_BUDGET, lines
+            assert lines[1].split()[:5] == ["1", row.key, "100000", "9999", "90001"]
+        widest = max(len(row.key) + len(row.name) for row in rows)
+        print(
+            f"The widest known topic uses {widest} characters of key and name. The line budget is {PORTAL_LINE_BUDGET}."
+        )
+
+    def test_the_numbers_stay_in_their_columns_for_every_known_topic(self, scripted_input: Any, caplog: Any) -> None:
+        """Issue #3342: a long name can wrap in the portal log viewer, but the numbers never move."""
+        rows = [  # The counts use one to six digits, because the client reads at most 100,000 actions.
+            MarvisTopicCount(row.key, row.name, row.category, 10 ** (index % 6), 10 ** (index % 6) // 2)
+            for index, row in enumerate(known_topic_rows(1, 0))
+        ]
+        scripted_input("")
+        with caplog.at_level(logging.INFO):
+            MarvisFilterPrompts.ask_subcategories(rows)
+        headings, *body = table_lines(caplog)
+        assert headings.split() == ["No.", "Key", "Actions", "Open", "Closed", "Name"]
+        ends = [headings.index(word) + len(word) for word in ("Actions", "Open", "Closed")]  # A count aligns right.
+        for line, row in zip(body, rows, strict=True):
+            counts = [str(row.total), str(row.open_count), str(row.closed_count)]
+            assert all(
+                line[:end].endswith(count) and line[end] == " " for end, count in zip(ends, counts, strict=True)
+            ), line
+            assert line[headings.index("Name") :] == row.name, "Every name must start under the Name heading."
+        assert max(ends) < PORTAL_LINE_BUDGET, "The numbers must end inside one line of the portal log."
+        print(f"The counts end at column {max(ends)} for {len(body)} known topics.")
 
     def test_a_blank_subcategory_answer_gives_all(self, scripted_input: Any) -> None:
         """The default keeps every topic of the kept categories."""
