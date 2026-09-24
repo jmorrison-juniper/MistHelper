@@ -75,7 +75,7 @@ from ...runtime.signals import (  # The stop request rides inside the run record
     StopRequestError,
     StopRequestStore,
 )
-from ..factory import build_error_envelope, json_error  # The one error envelope that the contract allows.
+from ..factory import build_error_envelope, error_page, json_error  # The two error shapes that the contract allows.
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 from .select import (  # The sibling module owns these rules, so no copy of them lives here.
     LOCK_STATE_FREE,
@@ -197,6 +197,10 @@ SITE_LOCKED_MESSAGE = "Another operator holds this site. Ask that operator befor
 SITE_NOT_CHOSEN_MESSAGE = "Choose a site before you start a run."  # Names the missing step.
 ORG_NOT_CHOSEN_MESSAGE = "Choose an organization before you start a run."  # Names the missing step.
 RUN_NOT_FOUND_MESSAGE = "The portal holds no run with that identifier."  # No cure exists.
+# Issue #3276: a run page names the ID that the operator opened, so a mistyped
+# link reads as a wrong link and not as an empty run.
+RUN_PAGE_NOT_FOUND_MESSAGE = "The portal holds no run with the identifier {run_id}."  # Jinja escapes the ID.
+RUN_NOT_FOUND_TITLE = "The portal found no such run"  # The heading of the error page for an unknown run ID.
 CONFIRM_REQUIRED_MESSAGE = "The start control needs the exact text CONFIRM."  # Names the word and the case.
 STOP_REQUIRED_MESSAGE = "The stop control needs the exact text STOP."  # Names the word and the case.
 PRE_CAPTURE_MISSING_MESSAGE = "Save a verified pre-check capture before you start the upgrade."  # The cure.
@@ -526,6 +530,30 @@ def run_not_found() -> tuple[Response, int]:
         The 404 answer with the contract code.
     """
     return json_error(NOT_FOUND_STATUS, RUN_NOT_FOUND_CODE, RUN_NOT_FOUND_MESSAGE)  # One code for every run path.
+
+
+def run_page_not_found(run_id: str) -> tuple[str, int]:
+    """Answer a run page for a run ID that the store does not hold.
+
+    Why:
+        Issue #3276. Each run page read `load_run(run_id) or {}`, so a mistyped
+        link rendered an empty run page with status 200. The operator could not
+        tell that link from a real run. The error page names the ID, keeps the
+        code of `run_not_found`, and links to the site list.
+
+    Args:
+        run_id: The run ID from the page path. Jinja escapes it in the page.
+
+    Returns:
+        The HTML error page and the status 404.
+    """
+    # `ascii()` escapes a line break and every character that is not ASCII, so
+    # a crafted path cannot write a second log line.
+    logger.info("upgrade: the page %s found no run %s", request.endpoint, ascii(run_id))
+    message = RUN_PAGE_NOT_FOUND_MESSAGE.format(run_id=run_id)  # The sentence names the ID that the operator opened.
+    answer = error_page(NOT_FOUND_STATUS, RUN_NOT_FOUND_CODE, message, RUN_NOT_FOUND_TITLE)  # The shared page.
+    logger.debug("upgrade: the unknown run page answers the status %s", answer[1])  # The status only.
+    return answer  # A page view reads the page, and the status tells a client the same fact.
 
 
 def write_failed() -> tuple[Response, int]:
@@ -1869,7 +1897,7 @@ def live_upgrade_device_count(record: Mapping[str, Any]) -> int:
 
 @upgrade_bp.get(RUN_PAGE_PATH)
 @identity.require_session
-def run_page(run_id: str) -> str:
+def run_page(run_id: str) -> str | tuple[str, int]:
     """Render the live run view of one run.
 
     Why:
@@ -1882,9 +1910,11 @@ def run_page(run_id: str) -> str:
         run_id: The run key.
 
     Returns:
-        The rendered page.
+        The rendered page, or the 404 error page for an unknown run ID.
     """
-    record = load_run(run_id) or {}  # An absent run still renders, so the operator reads a page and not a fault.
+    record = load_run(run_id)  # The store answers None for an unknown run ID.
+    if record is None:  # Issue #3276: a mistyped link must not read as a real run.
+        return run_page_not_found(run_id)  # The 404 page names the ID and links to the site list.
     poll_seconds = current_app.config.get("POLL_INTERVAL_SECONDS", 30)  # Decision D3 fixes this period.
     logger.info("upgrade: assess the age of the run page")  # Record the shared stale decision before it starts.
     stale = RunStalePolicy(datetime.now(tz=UTC)).assess(record)  # Supply one UTC clock value for this page.
@@ -1924,7 +1954,7 @@ def run_page(run_id: str) -> str:
 
 @upgrade_bp.get(OPTIONS_PAGE_PATH)
 @identity.require_session
-def options_page(run_id: str) -> str:
+def options_page(run_id: str) -> str | tuple[str, int]:
     """Render the version picker and the three option controls of one run.
 
     Why:
@@ -1938,9 +1968,11 @@ def options_page(run_id: str) -> str:
         run_id: The run key.
 
     Returns:
-        The rendered page.
+        The rendered page, or the 404 error page for an unknown run ID.
     """
-    record = load_run(run_id) or {}  # An absent run still renders an empty picker.
+    record = load_run(run_id)  # `create_run` writes the record first, so None means an unknown run ID.
+    if record is None:  # Issue #3276: an unknown run has no device to pick a version for.
+        return run_page_not_found(run_id)  # The 404 page names the ID and links to the site list.
     view = options_view(record)  # The site inventory fills a new run, and a saved choice outranks it.
     logger.info("upgrade: show the options page of %s with %s device(s)", run_id, len(view[TARGETS_FIELD]))
     context = {
@@ -1963,7 +1995,7 @@ def options_page(run_id: str) -> str:
 
 @upgrade_bp.get(CONFIRM_PAGE_PATH)
 @identity.require_session
-def confirm_page(run_id: str) -> str:
+def confirm_page(run_id: str) -> str | tuple[str, int]:
     """Render the last page before the portal sends any upgrade.
 
     Why:
@@ -1975,9 +2007,11 @@ def confirm_page(run_id: str) -> str:
         run_id: The run key.
 
     Returns:
-        The rendered page.
+        The rendered page, or the 404 error page for an unknown run ID.
     """
-    record = load_run(run_id) or {}  # An absent run renders a locked page, which is the safe answer.
+    record = load_run(run_id)  # The store answers None for an unknown run ID.
+    if record is None:  # Issue #3276: the error page holds no start control at all, which is the safe answer.
+        return run_page_not_found(run_id)  # The 404 page names the ID and links to the site list.
     logger.info("upgrade: show the confirmation page of %s", run_id)  # One line for each page read.
     return render_page(
         CONFIRM_TEMPLATE,

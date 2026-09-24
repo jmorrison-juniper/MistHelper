@@ -24,16 +24,17 @@
 
 {% block title %}{{ error_title | default('The request failed', true) }}{% endblock %}
 
-{% block heading %}<h1>{{ error_title | default('The request failed', true) }}</h1>{% endblock %}
+{% block heading %}<h1 data-testid="error-title">{{ error_title | default('The request failed', true) }}</h1>{% endblock %}
 
 {% block content %}
-<div class="portal-card">
+{# Each `data-testid` value gives a browser test one stable handle for each part of the page (issue #3276). #}
+<div class="portal-card" data-testid="error-page">
 
   {#
     The class flash-danger gives the sentence the prefix "Warning:" through
     portal.css. The level therefore reads without color, as WCAG 1.4.1 requires.
   #}
-  <p class="flash-item flash-danger">
+  <p class="flash-item flash-danger" data-testid="error-message">
     {{ error_message | default('The portal cannot complete this request.', true) }}
   </p>
 
@@ -41,17 +42,17 @@
     <dl class="row mb-0">
       {% if status_code %}
         <dt class="col-sm-3">Status code</dt>
-        <dd class="col-sm-9 font-monospace">{{ status_code }}</dd>
+        <dd class="col-sm-9 font-monospace" data-testid="error-status-code">{{ status_code }}</dd>
       {% endif %}
       {% if error_code %}
         {# A support request quotes this code. The code never changes for a wording change. #}
         <dt class="col-sm-3">Error code</dt>
-        <dd class="col-sm-9 font-monospace">{{ error_code }}</dd>
+        <dd class="col-sm-9 font-monospace" data-testid="error-code">{{ error_code }}</dd>
       {% endif %}
     </dl>
   {% endif %}
 
 </div>
 
-<p><a href="/select/site">Go to the site list</a></p>
+<p><a href="/select/site" data-testid="error-site-list-link">Go to the site list</a></p>
 {% endblock %}

@@ -35,6 +35,7 @@ from flask import (  # The web framework surface.
     has_app_context,
     has_request_context,
     jsonify,
+    render_template,
     request,
     send_from_directory,
 )
@@ -93,6 +94,8 @@ ERROR_MESSAGES = {
     429: "The cloud rate limit stopped the portal. Wait and try again.",  # The cloud, not the portal.
     500: "The portal met an unexpected fault.",  # The log line holds the detail, not the browser.
 }
+
+ERROR_PAGE_TEMPLATE = "error.html"  # The one fault page that a person reads, for every status code.
 
 RUN_FIELD = "run_id"  # The log field that follows one upgrade run.
 SITE_FIELD = "site_id"  # The log field that names the site.
@@ -255,6 +258,44 @@ def json_error(status: int, code: str | None = None, message: str | None = None)
     chosen_code = code or ERROR_CODES.get(status, ERROR_CODES[500])  # An unknown status reads as a fault.
     chosen_message = message or ERROR_MESSAGES.get(status, ERROR_MESSAGES[500])  # The matching sentence.
     return jsonify(build_error_envelope(chosen_code, chosen_message)), status  # The one shape, every time.
+
+
+def error_page(
+    status: int,
+    code: str | None = None,
+    message: str | None = None,
+    title: str | None = None,
+) -> tuple[str, int]:
+    """Build one HTML error page for a person who opened a page.
+
+    Why:
+        Issue #3276. A page route that found no record rendered an empty page
+        with status 200, and every error handler answers the JSON envelope. A
+        person needs a page with the cause and a link back. The page reads the
+        same two tables as `json_error`, so the page and the envelope give one
+        code and one sentence for each status.
+
+    Args:
+        status: The HTTP status code.
+        code: The error code. The status supplies the default.
+        message: The sentence for the operator. The status supplies the default.
+        title: The page heading. The template supplies the default.
+
+    Returns:
+        The rendered page and the status code.
+    """
+    chosen_code = code or ERROR_CODES.get(status, ERROR_CODES[500])  # An unknown status reads as a fault.
+    chosen_message = message or ERROR_MESSAGES.get(status, ERROR_MESSAGES[500])  # The matching sentence.
+    logger.info("The portal renders the error page for the status %s and the code %s.", status, chosen_code)
+    page = render_template(  # Jinja escapes each value, and the template marks no value as safe.
+        ERROR_PAGE_TEMPLATE,  # The shared fault page.
+        status_code=status,  # The page prints the status code.
+        error_code=chosen_code,  # A support request quotes this stable code.
+        error_message=chosen_message,  # One plain sentence for the operator.
+        error_title=title,  # None keeps the default heading of the template.
+    )
+    logger.debug("The error page holds %s characters.", len(page))  # The size only, never the page text.
+    return page, status  # Flask reads the pair as the body and the status.
 
 
 def handle_error(status: int, error: Exception) -> tuple[Response, int]:

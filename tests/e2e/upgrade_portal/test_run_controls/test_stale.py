@@ -19,6 +19,7 @@ HISTORY_PATH = "/history"  # Open the real history route.
 RUN_PATH = f"/runs/{FAILED_RUN_ID}"  # Open the real run page for the same record.
 SEED_TRIES = 20  # Bound the wait for the asynchronous process-owned seed.
 SEED_PAUSE_MILLISECONDS = 500  # Give the seed thread a short interval between reads.
+NOT_FOUND_STATUS = 404  # The run page answers this status until the seed thread writes the run.
 VIEWPORT_WIDTHS = (360, 768, 1280)  # Cover each width that the UI contract requires.
 
 
@@ -27,10 +28,12 @@ def _open_seeded_page(page: Any, path: str, test_id: str) -> Any:  # Wait for on
     locator = page.get_by_test_id(test_id)  # Build the exact contract selector once.
     for _attempt in range(SEED_TRIES):  # The seed can finish after the server starts listening.
         answer = page.goto(path)  # Read only the isolated portal route.
-        assert answer is not None and answer.ok  # A route fault must not become a skip.
-        locator = page.get_by_test_id(test_id)  # Refresh the locator after page navigation.
-        if locator.count() == 1:  # The process-owned run is now visible.
-            return locator  # Give the test the exact contract element.
+        assert answer is not None  # A route fault must not become a skip.
+        if answer.status != NOT_FOUND_STATUS:  # Issue #3276: a run page answers 404 until the seed writes the run.
+            assert answer.ok  # Every other refusal is a route fault.
+            locator = page.get_by_test_id(test_id)  # Refresh the locator after page navigation.
+            if locator.count() == 1:  # The process-owned run is now visible.
+                return locator  # Give the test the exact contract element.
         page.wait_for_timeout(SEED_PAUSE_MILLISECONDS)  # Let the seed thread complete.
     pytest.fail(f"The isolated portal did not show {test_id}.")  # Report a missing seed as a test failure.
 
@@ -67,6 +70,6 @@ class TestStaleBrowserViews:  # Group browser assertions for the two stale view 
         age = _open_seeded_page(page, RUN_PATH, "run-last-update-age")  # Open the real responsive run page.
         sync_api.expect(age).to_be_visible()  # Keep the age available to an operator.
         box = age.bounding_box()  # Read the rendered position after the responsive rules apply.
-        assert box is not None  # A visible age must have a layout box.
+        assert box is not None and box["width"] > 0  # A visible age must have a layout box with a real width.
         assert box["x"] >= 0  # Keep the left edge inside the viewport.
         assert box["x"] + box["width"] <= width  # Keep the right edge inside the viewport.
