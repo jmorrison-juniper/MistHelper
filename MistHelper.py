@@ -672,6 +672,9 @@ from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main e
 
 MainEntrypoint.bind_host_module(sys.modules[__name__])  # Give source packages a bound host without root imports.
 
+from src.marvis.actions.operation import (
+    MarvisActionsOperation,  # Menu 270 (issue #3299) -- Marvis Actions export and bulk resolve.
+)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.marvis_data_utils import (
     MarvisDataUtilsFactory,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
@@ -4495,6 +4498,14 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("269"),  # Read the safety class.
         destructive=False,  # The scan reads only, so it changes no Mist configuration.
         supports_fast=False,  # The scan already limits its own request count.
+    ),
+    "270": GlobalImportManager.MenuEntry(  # Use named fields for menu 270.
+        menu_id="270",  # Store key for drift checks.
+        handler=MarvisActionsOperation.run,
+        title="Export or resolve Marvis Actions by category and subcategory",
+        category=OperationRegistry.skip_category("270"),  # Read the safety class.
+        destructive=False,  # Mode 3 writes an action status only, never a device configuration.
+        supports_fast=False,  # The resolve paces its own requests with AdaptivePacer.
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.

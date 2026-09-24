@@ -22,7 +22,11 @@ _CATEGORY_TITLES = {
 
 _CATEGORY_SUMMARIES = {
     "safe": "Read-only org exports. The --test run includes them.",
-    "interactive_safe": "Read-only, but they prompt for a site or a device. The --testinteractive run includes them.",
+    "interactive_safe": (
+        "They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. "
+        "An operation that can change Mist data first asks for a typed value, such as a token or a count. "
+        "The --testinteractive run includes them."
+    ),
     "destructive": "They change the Mist cloud configuration. Each one needs a typed confirmation.",
     "interactive": "They prompt the operator, so no automated run includes them.",
     "websocket": "They open a WebSocket stream to a device.",

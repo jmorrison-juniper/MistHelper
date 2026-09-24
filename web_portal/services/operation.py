@@ -44,6 +44,7 @@ CATEGORY_RANGES = [
     (235, 247, "Counts & Summaries"),
     (248, 268, "Endpoint Explorer"),
     (269, 269, "Network Security Scans"),
+    (270, 270, "Marvis Actions"),  # Issue #3299: the Marvis Actions export and bulk resolve.
 ]
 
 # Menu numbers whose range gives the wrong category name. Issue #3153.
@@ -475,6 +476,77 @@ def _build_registry() -> dict:
             _required_text_param("site_id", "Site ID", placeholder="Mist site UUID"),  # API path site identifier.
             _required_text_param(  # Build the required beacon identifier control.
                 "beacon_id", "Beacon ID", placeholder="Mist beacon UUID"  # API path beacon identifier.
+            ),
+        ],
+    }
+
+    # Issue #3299: menu 270 asks up to six questions, and the controls below
+    # follow that prompt order. Modes 1 and 2 read the first three answers only,
+    # and the input queue drops the rest when the run ends. Mode 3 reads all six.
+    # The subcategory values use the category/subcategory pair, because the
+    # categories ap and gateway both hold the subcategory key non_compliant.
+    from src.marvis.actions.model import CATEGORY_NAMES  # Read the category names that the CLI table shows.
+    from src.marvis.actions.model import RESOLUTION_CODES  # Read the four codes in the order of the Mist UI.
+    from src.marvis.actions.model import TOPIC_NAMES  # Read the subcategory names that the CLI table shows.
+
+    registry["270"] = {  # Menu 270 exports or resolves the Marvis Actions of one topic set.
+        "category": "interactive",  # The portal must render the six controls before Run.
+        "parameters": [
+            _choice_param(  # Answer prompt 1, the mode.
+                "marvis_mode",  # Name the control for the mode prompt.
+                "Mode",  # Show a short label above the list.
+                [  # Offer the three modes with the words that the CLI prompt uses.
+                    {"value": "1", "label": "1 - Export every Marvis Action (report only)"},  # Read only.
+                    {"value": "2", "label": "2 - Export the open Marvis Actions (report only)"},  # Read only.
+                    {"value": "3", "label": "3 - Resolve the open Marvis Actions (changes Mist)"},  # Writes a status.
+                ],
+                default="1",  # Preselect the report, because it changes nothing.
+            ),
+            _choice_param(  # Answer prompt 2, the category.
+                "marvis_category",  # Name the control for the category prompt.
+                "Category",  # Show a short label above the list.
+                [{"value": "all", "label": "All categories"}]  # Offer every category first.
+                + [  # Offer each category key, sorted like the CLI table.
+                    {"value": key, "label": f"{name} ({key})"}  # Show the Mist UI name and the key.
+                    for key, name in sorted(CATEGORY_NAMES.items())  # Keep the order of the CLI table.
+                ],
+                default="all",  # Preselect every category, like the blank CLI answer.
+            ),
+            _choice_param(  # Answer prompt 3, the subcategory.
+                "marvis_subcategory",  # Name the control for the subcategory prompt.
+                "Subcategory",  # Show a short label above the list.
+                [{"value": "all", "label": "All subcategories of the selected categories"}]  # Offer all first.
+                + [  # Offer each category/subcategory pair, sorted like the CLI table.
+                    {  # Build one option for one topic.
+                        "value": f"{category}/{symptom}",  # Send the pair, which names one topic only.
+                        "label": f"{CATEGORY_NAMES[category]} - {name} ({category}/{symptom})",  # Show both names.
+                    }
+                    for (category, symptom), name in sorted(TOPIC_NAMES.items())  # Keep the CLI table order.
+                ],
+                default="all",  # Preselect every subcategory, like the blank CLI answer.
+            ),
+            _choice_param(  # Answer prompt 4, the resolution code. Only mode 3 reads it.
+                "marvis_resolution_code",  # Name the control for the resolution code prompt.
+                "Resolution Code (mode 3 only)",  # Tell the operator that the report modes skip it.
+                [  # Offer the four codes in the order of the Mist UI.
+                    {"value": code.key, "label": f"{code.name} ({code.key})"}  # Show the Mist UI text and the key.
+                    for code in RESOLUTION_CODES  # Keep the order of the Mist UI.
+                ],
+                default=RESOLUTION_CODES[0].key,  # Preselect the suggested code, like the Mist UI.
+                required=False,  # Let a report run start without a code.
+            ),
+            _text_param(  # Answer prompt 5, the comment. Only mode 3 reads it.
+                "marvis_comment",  # Name the control for the comment prompt.
+                "Comment (mode 3 only)",  # Tell the operator that the report modes skip it.
+                placeholder="Required for the code nonsuggested. Up to 1000 characters.",  # State the rule.
+            ),
+            _text_param(  # Answer prompt 6, the typed confirmation. Only mode 3 reads it.
+                "marvis_confirmation",  # Name the control for the confirmation prompt.
+                "Confirmation (mode 3 only)",  # Tell the operator that the report modes skip it.
+                placeholder=(  # State the typed answer, and state how a blank answer shows the count.
+                    "Type RESOLVE and the count, for example RESOLVE 12. "  # The exact form that the check accepts.
+                    "Leave it blank to see the count."  # A blank answer logs the preview and the count.
+                ),
             ),
         ],
     }
