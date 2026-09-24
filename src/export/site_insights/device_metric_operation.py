@@ -5,6 +5,7 @@ from __future__ import annotations  # WHY: Defer annotation evaluation for cheap
 import logging  # WHY: Standard logging keeps ops-visible trace + error output aligned with legacy behaviour
 from dataclasses import dataclass  # WHY: Frozen slotted bundle keeps helper signatures under STRUCT-PARAMS limit
 
+from src.export.site_insights.metric_refusals import MetricRefusalLog  # WHY: Issue #3267 refusal record and report
 from src.export.site_insights_exporter import SiteInsightsExporter  # WHY: Static classifier + MAC normalizer access
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
@@ -55,6 +56,7 @@ class DeviceMetricOperation:
         self.mistapi = mistapi  # WHY: bind mistapi module for API dispatch.
         # WHY: Sibling insights exporter instance provides MAC normalizer using PacketCaptureManager.
         self._insights_exporter = SiteInsightsExporter(PacketCaptureManager=PacketCaptureManager)
+        self._refusal_log = MetricRefusalLog("device insight")  # WHY: Hold the refused metrics of this run.
 
     def execute(self) -> None:  # WHY: Menu 76 dispatcher entry point invoked by MistHelper top-level menu
         """Top-level entry point invoked by the menu dispatcher for menu 76."""
@@ -118,6 +120,7 @@ class DeviceMetricOperation:
             return
         all_data, retrieved = self._collect_metrics(context, device_metrics)  # WHY: Per-metric loop
         self._finalize(all_data, retrieved, filename, context)  # WHY: Flatten + save + summary
+        self._refusal_log.report(context.device_name)  # WHY: Tell the operator which metrics the API refused
 
     def _emit_empty_metric_list(self, filename: str) -> None:  # WHY: Defensive branch used when const file is empty
         """Emit the empty-file + error trio when scope filter yields zero metrics."""
@@ -231,6 +234,7 @@ class DeviceMetricOperation:
         """Iterate the device-scope metric list and collect any insight data the API returns."""
         all_device_data: list[dict] = []  # WHY: Accumulator for every non-empty metric response
         retrieved = 0  # WHY: User-facing counter shown in final summary line
+        self._refusal_log.clear()  # WHY: Each run starts with no refused metric
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "! Retrieving %s different device insight metrics for %s...",
@@ -249,6 +253,7 @@ class DeviceMetricOperation:
     ) -> dict | None:  # WHY: Per-metric API + annotate
         """Fetch a single device insight metric, returning the enriched dict or None on miss / error."""
         try:
+            logger.info("Requesting device insight metric %s for device %s", metric, context.device_id)  # WHY: Trace
             response = self.mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(  # WHY: Device endpoint
                 self.apisession,
                 context.site_id,
@@ -261,6 +266,9 @@ class DeviceMetricOperation:
                 "Failed to get device insight data for metric %s: %s", metric, exception
             )
             return None
+        logger.debug("Received device insight metric %s", metric)  # WHY: Trace the answer before the status check
+        if self._refusal_log.record(metric, response):  # WHY: mistapi returns an HTTP 400 as a response, not a raise
+            return None  # WHY: An error body is not metric data, so it must not become an export row
         return self._annotate_row(raw, metric, context)  # WHY: Annotate + short-circuit empty payload
 
     @staticmethod
