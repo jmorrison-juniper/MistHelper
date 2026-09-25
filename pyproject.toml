@@ -121,8 +121,9 @@ Issues = "https://github.com/jmorrison-juniper/MistHelper/issues"
 
 [project.scripts]
 misthelper = "MistHelper:main"
-test-quality-analyzer = "tools.test_quality_analyzer.__main__:main"
-ste-linter = "tools.ste_linter.__main__:main"
+# Issue #3404: the `test-quality-analyzer` and `ste-linter` entries moved to the
+# `misthelper-devtools` repository. A customer never runs an in-house analyzer,
+# so the shipped wheel must not expose one.
 
 [tool.ste_linter]
 # Default settings for the STE writing linter. See tools/ste_linter/README.md.
@@ -166,7 +167,12 @@ build-backend = "hatchling.build"
 # `src` stays a top-level name on purpose. Every module of this project imports
 # `src.<area>`, so the package name is `src` and a rename would touch every
 # import in the repository.
-packages = ["src", "tools", "web_portal"]
+#
+# Issue #3404: `tools` left this list. That tree holds the in-house analyzers
+# and linters, and a customer never runs one. The repository
+# `jmorrison-juniper/misthelper-devtools` now owns that code. The local `tools/`
+# tree stays in the working tree, because the quality gates still read it.
+packages = ["src", "web_portal"]
 
 # The three modules below sit at the repository root, so no package entry can
 # reach them. `MistHelper.py` carries the `misthelper` console script, and the

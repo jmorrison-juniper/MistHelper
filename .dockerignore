@@ -131,6 +131,15 @@ node_modules/
 tests/
 specs/
 
+# Development tooling (not needed in container)
+# Issue #3404: `tools/` holds the in-house analyzers and linters. `scripts/`
+# holds the worktree bootstrap, the test-shard runner, and the repository
+# analyzers. No product module reads a file in either tree, and a customer
+# never runs one. The pattern is anchored at the build context root, so
+# `container/scripts/` stays available for the entrypoint copy lines.
+tools/
+scripts/
+
 # Other unnecessary files
 MIGRATION.md
 READY_FOR_MIGRATION.md
