@@ -1,0 +1,16 @@
+{
+  "workflow": "speckit",
+  "specName": "Upgrade portal journey harness and multi-site parity",
+  "branch": "test/3200-upgrade-portal-journeys",
+  "currentStep": "plan",
+  "status": "planned",
+  "history": [
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-23T18:01:20.724Z"
+    }
+  ]
+}

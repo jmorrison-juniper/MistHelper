@@ -1,0 +1,812 @@
+[
+  {
+    "id": "P-01",
+    "capability": "Choose single-site or multi-site mode",
+    "group": "scope selection",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1026"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:177"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-02",
+    "capability": "Select one or more approved sites",
+    "group": "scope selection",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:863"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:177"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-03",
+    "capability": "Read upgrade inventory before options render",
+    "group": "inventory",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/options.py:855"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:324"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-04",
+    "capability": "Show supported device inventory in the options page",
+    "group": "inventory",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:862"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:180"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-05",
+    "capability": "Select AP, switch, and gateway families",
+    "group": "device selection",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:145"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:19"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-06",
+    "capability": "Run AP-only upgrades",
+    "group": "family options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/firmware/upgrade_service.py:65"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:118"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-07",
+    "capability": "Run switch-only upgrades",
+    "group": "family options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/firmware/upgrade_service.py:65"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:136"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-08",
+    "capability": "Run gateway-only upgrades",
+    "group": "family options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/firmware/upgrade_service.py:65"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:136"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-09",
+    "capability": "Run mixed-family upgrades",
+    "group": "family options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/firmware/upgrade_service.py:916"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:113"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-10",
+    "capability": "Choose a target version per device",
+    "group": "per-device versions",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:889"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+    },
+    "gap": "Multi-site offers one text field per family, not one control per device.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-11",
+    "capability": "Validate target versions against each device model",
+    "group": "per-device versions",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/options.py:799"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:306"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-12",
+    "capability": "Show incompatible or missing common version warnings",
+    "group": "per-device versions",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/options.py:113"
+    },
+    "multi_site": {
+      "status": "partial",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:331"
+    },
+    "gap": "Multi-site filters rows by family version but does not show per-model warning text on the page.",
+    "severity": "high"
+  },
+  {
+    "id": "P-13",
+    "capability": "Choose the big-bang strategy",
+    "group": "strategy",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:213"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-14",
+    "capability": "Choose the canary strategy",
+    "group": "strategy",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:226"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-15",
+    "capability": "Choose the serial strategy",
+    "group": "strategy",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:245"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-16",
+    "capability": "Choose the RRM strategy for APs",
+    "group": "strategy",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:257"
+    },
+    "multi_site": {
+      "status": "partial",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+    },
+    "gap": "Multi-site shows RRM but the aggregate AP body only sends canary fields.",
+    "severity": "high"
+  },
+  {
+    "id": "P-17",
+    "capability": "Set canary phases",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/options.py:483"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:224"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-18",
+    "capability": "Set maximum failure percentage",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/options.py:493"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:218"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-19",
+    "capability": "Set maximum failures per phase",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/options.py:483"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:148"
+    },
+    "gap": "Multi-site has only a failure percentage field.",
+    "severity": "high"
+  },
+  {
+    "id": "P-20",
+    "capability": "Set force write for devices already on the version",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:490"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:145"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-21",
+    "capability": "Ask the cloud for the vendor stable build",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:523"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+    },
+    "gap": "Multi-site requires literal family versions and has no stable-build choice.",
+    "severity": "high"
+  },
+  {
+    "id": "P-22",
+    "capability": "Configure AP peer-to-peer download",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:557"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+    },
+    "gap": "Multi-site has no peer-to-peer AP controls.",
+    "severity": "high"
+  },
+  {
+    "id": "P-23",
+    "capability": "Configure RRM batch percentages and order",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:640"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+    },
+    "gap": "Multi-site shows the RRM strategy but no RRM detail controls.",
+    "severity": "high"
+  },
+  {
+    "id": "P-24",
+    "capability": "Configure SSR release train",
+    "group": "advanced options",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:765"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+    },
+    "gap": "Multi-site has no SSR channel field.",
+    "severity": "high"
+  },
+  {
+    "id": "P-25",
+    "capability": "Schedule firmware download start",
+    "group": "schedule",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:450"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:163"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-26",
+    "capability": "Schedule switch and gateway reboot",
+    "group": "schedule",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:455"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:104"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-27",
+    "capability": "Run and require a pre-check capture before start",
+    "group": "pre-check capture",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/confirm.html:194"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
+    },
+    "gap": "Multi-site confirm does not show or require a pre-check capture.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-28",
+    "capability": "Show full confirmation content before write",
+    "group": "confirmation content",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/confirm.html:160"
+    },
+    "multi_site": {
+      "status": "partial",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
+    },
+    "gap": "Multi-site omits pre-check, warnings, cloud call count, and advanced summary rows.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-29",
+    "capability": "Require typed CONFIRM before start",
+    "group": "typed confirmation",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:441"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:680"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-30",
+    "capability": "Protect forms with CSRF tokens",
+    "group": "CSRF and owner checks",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/confirm.html:341"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:32"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-31",
+    "capability": "Refuse a write from an unreachable operator address",
+    "group": "CSRF and owner checks",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:549"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:972"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-32",
+    "capability": "Bind writes to the current browser owner",
+    "group": "CSRF and owner checks",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1647"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:428"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-33",
+    "capability": "Acquire and refresh site locks through the write",
+    "group": "site locks and heartbeat",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/driver.py:33"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:788"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-34",
+    "capability": "Release site locks after a settled operation",
+    "group": "site locks and heartbeat",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/driver.py:33"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:857"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-35",
+    "capability": "Submit each destructive child no more than once",
+    "group": "submit safety",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1680"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:91"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-36",
+    "capability": "Refuse replay of a confirmed request",
+    "group": "submit safety",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1597"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:687"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-37",
+    "capability": "Record unknown submission outcomes without retry",
+    "group": "submit safety",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1626"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:416"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-38",
+    "capability": "Show cascade phases and settled counts",
+    "group": "progress detail",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
+    },
+    "gap": "Multi-site shows current phase text but no gateway, switch, AP, or client phase blocks.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-39",
+    "capability": "Show per-device state, before version, target version, and after version",
+    "group": "progress detail",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:319"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:59"
+    },
+    "gap": "Multi-site shows one row per site child, not one row per device.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-40",
+    "capability": "Show settle gate and wireless client phase status",
+    "group": "progress detail",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
+    },
+    "gap": "Multi-site does not expose the settle gate or clients phase.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-41",
+    "capability": "Stop a running firmware write with per-device outcome",
+    "group": "stop",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/stop.html:83"
+    },
+    "multi_site": {
+      "status": "partial",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
+    },
+    "gap": "Multi-site has best-effort cancellation only and no single-site stop outcome controls.",
+    "severity": "high"
+  },
+  {
+    "id": "P-42",
+    "capability": "Cancel a not-yet-started scheduled run",
+    "group": "cancel",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:564"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
+    },
+    "gap": "Multi-site has no not-yet-started cancel control apart from job cancellation.",
+    "severity": "high"
+  },
+  {
+    "id": "P-43",
+    "capability": "Retry failed or stopped runs",
+    "group": "retry",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:503"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+    },
+    "gap": "Multi-site has no retry control.",
+    "severity": "high"
+  },
+  {
+    "id": "P-44",
+    "capability": "Reschedule a planned run",
+    "group": "reschedule",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:540"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+    },
+    "gap": "Multi-site has no reschedule control.",
+    "severity": "high"
+  },
+  {
+    "id": "P-45",
+    "capability": "Reconcile stale or unknown runs from read-only evidence",
+    "group": "reconciliation",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/api/run_controls/routes.py:320"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:1193"
+    },
+    "gap": "Multi-site has no reconciliation endpoint or UI.",
+    "severity": "high"
+  },
+  {
+    "id": "P-46",
+    "capability": "Run post-check capture after the upgrade",
+    "group": "post-check capture",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/upgrade/driver.py:84"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:1193"
+    },
+    "gap": "Multi-site never starts a post-check capture.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-47",
+    "capability": "Compare pre-check and post-check captures",
+    "group": "comparison",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:309"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+    },
+    "gap": "Multi-site has no captures to compare and no comparison link.",
+    "severity": "critical"
+  },
+  {
+    "id": "P-48",
+    "capability": "List run history and capture history",
+    "group": "history and run list",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/review.py:1856"
+    },
+    "multi_site": {
+      "status": "partial",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:1107"
+    },
+    "gap": "Multi-site can show a known job but has no organization run list or capture history entry.",
+    "severity": "medium"
+  },
+  {
+    "id": "P-49",
+    "capability": "Write audit log records for operations",
+    "group": "audit log records",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/runs.py:129"
+    },
+    "multi_site": {
+      "status": "partial",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:936"
+    },
+    "gap": "Multi-site logs with module logging but does not use the queryable audit logger path.",
+    "severity": "medium"
+  },
+  {
+    "id": "P-50",
+    "capability": "Show the Mist account label",
+    "group": "Mist account label",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:210"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+    },
+    "gap": "Multi-site progress does not show the Mist account label.",
+    "severity": "medium"
+  },
+  {
+    "id": "P-51",
+    "capability": "Render error responses on portal pages",
+    "group": "error pages",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:522"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:549"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-52",
+    "capability": "Gate destructive writes behind a deployment flag",
+    "group": "deployment write gate",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/upgrade.py:549"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:172"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-53",
+    "capability": "Classify Junos gateway and SSR gateway routes",
+    "group": "SSR and Mist Edge classification",
+    "single_site": {
+      "status": "present",
+      "evidence": "src/firmware/upgrade_service.py:593"
+    },
+    "multi_site": {
+      "status": "present",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:233"
+    },
+    "gap": "",
+    "severity": "low"
+  },
+  {
+    "id": "P-54",
+    "capability": "Classify Mist Edge devices separately from other gateways",
+    "group": "SSR and Mist Edge classification",
+    "single_site": {
+      "status": "absent",
+      "evidence": "src/firmware/upgrade_service.py:593"
+    },
+    "multi_site": {
+      "status": "absent",
+      "evidence": "src/firmware/aggregate_upgrade_service.py:233"
+    },
+    "gap": "Neither mode has a Mist Edge family classifier in the audited upgrade path.",
+    "severity": "high"
+  }
+]

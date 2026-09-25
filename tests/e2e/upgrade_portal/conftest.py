@@ -113,8 +113,13 @@ CONFIG_MODULE_NAME = "upgrade_portal_playwright_config"
 # its port. Issue #1998: this comment once cited a fixture of
 # tests/e2e/conftest.py that no longer exists. That file starts no server now,
 # so it names no budget to match.
-READY_TRIES = 20
 READY_PAUSE_SECONDS = 0.5
+# WHY: Issue #3200. Under load, for example when the journey runner starts
+# several portals at once, the import alone takes longer than 10 seconds and
+# every test of that server errors at setup. The variable raises the budget for
+# such a run and leaves the default of 20 tries for every other run.
+READY_BUDGET_VARIABLE = "UPGRADE_PORTAL_E2E_READY_SECONDS"  # The optional start budget in seconds.
+READY_TRIES = max(20, int(float(os.environ.get(READY_BUDGET_VARIABLE, "10")) / READY_PAUSE_SECONDS))
 PROBE_TIMEOUT_SECONDS = 0.5  # One connection attempt against a port that may hold no listener.
 STOP_TIMEOUT_SECONDS = 5  # The server gets 5 seconds to stop before this fixture ends it.
 
