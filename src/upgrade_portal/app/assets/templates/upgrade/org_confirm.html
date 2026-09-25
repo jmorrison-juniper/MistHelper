@@ -18,6 +18,19 @@
   {% endif %}
 
   {#
+    Issue #3383. The operator must read each advanced value before the typed
+    confirmation. The route lists only a value that a child job of the plan
+    sends, in the order of the options page.
+  #}
+  {% if advanced_summary %}
+    <ul data-testid="org-upgrade-advanced-summary">
+      {% for line in advanced_summary %}
+        <li data-testid="{{ line.test_id }}"><strong>{{ line.label }}:</strong> {{ line.text }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {#
     Issue #3247. The single-site confirmation page names the start time and
     can move it before the confirmation. The multi-site page now does the
     same. The form moves the start time of every child job through one write,

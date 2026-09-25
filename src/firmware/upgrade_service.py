@@ -772,45 +772,52 @@ def _add_junos_fields(body: dict[str, object], options: UpgradeOptions) -> None:
         _copy_present(body, {"reboot_at": options.reboot_at})
 
 
-def _add_canary_fields(body: dict[str, object], options: UpgradeOptions) -> None:
+def add_canary_fields(body: dict[str, object], options: UpgradeOptions) -> None:
     """Add the staged-upgrade fields of one batch body.
 
     Why:
         The request body schema reads ``canary_phases`` and ``max_failures``
         only for the canary strategy, and ``max_failure_percentage`` for every
         strategy above ``big_bang``. A field outside its own strategy makes the
-        cloud refuse the whole call.
+        cloud refuse the whole call. The organization access point child of
+        the multi-site plan calls this function too, so one rule serves both
+        calls (issue #3383).
 
     Args:
         body: The body under construction. The function changes it in place.
         options: The choices of the operator.
     """
-    canary = options.canary
-    if options.strategy == STRATEGY_CANARY:
+    canary = options.canary  # Read the staged-upgrade record one time.
+    if options.strategy == STRATEGY_CANARY:  # Only the canary strategy reads a phase list or a count list.
         body["canary_phases"] = list(canary.canary_phases or _CANARY_PHASES)  # The cloud default stays the default.
-        _copy_present(body, {"max_failures": list(canary.max_failures) if canary.max_failures else None})
+        _copy_present(body, {"max_failures": list(canary.max_failures) if canary.max_failures else None})  # Counts.
     if options.strategy != STRATEGY_DEFAULT:  # One write of every device allows no partial failure.
-        _copy_present(body, {"max_failure_percentage": canary.max_failure_percentage})
+        _copy_present(body, {"max_failure_percentage": canary.max_failure_percentage})  # The failure limit.
+    _logger().debug("the staged-upgrade fields leave the body with the keys %s", sorted(body))  # Log the result.
 
 
-def _add_access_point_fields(body: dict[str, object], options: UpgradeOptions) -> None:
+def add_access_point_fields(body: dict[str, object], options: UpgradeOptions) -> None:
     """Add the fields that an access point group alone reads.
 
     Why:
         The request body schema marks the peer-to-peer fields and every radio
         resource management field "For APs only". A switch body that carried one
-        would send a field that its own platform never reads.
+        would send a field that its own platform never reads. The organization
+        access point child of the multi-site plan calls this function too, so
+        one rule serves both calls (issue #3383).
 
     Args:
         body: The body under construction. The function changes it in place.
         options: The choices of the operator.
     """
-    peer = options.peer_to_peer
+    peer = options.peer_to_peer  # Read the peer download record one time.
     if peer.enable_p2p:  # The two size fields reach the cloud only with the flag.
-        body["enable_p2p"] = True
-        _copy_present(body, {"p2p_cluster_size": peer.p2p_cluster_size, "p2p_parallelism": peer.p2p_parallelism})
+        body["enable_p2p"] = True  # The operator chose the peer download.
+        sizes = {"p2p_cluster_size": peer.p2p_cluster_size, "p2p_parallelism": peer.p2p_parallelism}  # Both sizes.
+        _copy_present(body, sizes)  # Copy each size that the operator set.
     if options.strategy == STRATEGY_RRM:  # Every field of this record names its own cloud key.
-        _copy_present(body, asdict(options.rrm))
+        _copy_present(body, asdict(options.rrm))  # Copy each radio batch value that the operator set.
+    _logger().debug("the access point fields leave the body with the keys %s", sorted(body))  # Log the result.
 
 
 def _add_orchestration_fields(body: dict[str, object], device_type: str, options: UpgradeOptions) -> None:
@@ -826,11 +833,11 @@ def _add_orchestration_fields(body: dict[str, object], device_type: str, options
         device_type: The device type of the group.
         options: The choices of the operator.
     """
-    _add_canary_fields(body, options)
+    add_canary_fields(body, options)  # The phase list, the count list, and the failure limit.
     if options.force:  # The cloud writes the firmware even onto a device that already runs it.
-        body["force"] = True
-    if device_type == DEVICE_TYPE_AP:
-        _add_access_point_fields(body, options)
+        body["force"] = True  # The operator chose the forced write.
+    if device_type == DEVICE_TYPE_AP:  # Only an access point group reads the peer and radio fields.
+        add_access_point_fields(body, options)  # The peer download and the radio batch fields.
 
 
 def _add_family_fields(

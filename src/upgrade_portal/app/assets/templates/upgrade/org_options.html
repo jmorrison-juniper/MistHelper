@@ -10,6 +10,11 @@
 {% set selected_force = options.force if options.force is defined else false %}
 {% set selected_strategy = options.strategy | default('canary', true) %}
 {% set uses_canary = selected_strategy == 'canary' %}
+{% set uses_rrm = selected_strategy == 'rrm' %}
+{% set p2p_chosen = options.enable_p2p | default(false, true) %}
+{% set stable_chosen = options.stable_version | default(false, true) %}
+{% set shows_p2p_sizes = has_ap and p2p_chosen %}
+{% set shows_radio_batches = has_ap and uses_rrm %}
 
 {% block title %}Configure the upgrade{% endblock %}
 {% block heading %}<h1>Configure the upgrade</h1>{% endblock %}
@@ -243,6 +248,306 @@
              data-testid="org-upgrade-start-time"
              value="{{ options.start_time | default('', true) }}">
     </div>
+
+    {#
+      Issue #3383. The single-site page offers eleven advanced controls that
+      this page did not offer. Each control below posts the cloud field name,
+      so the shared option mapper reads the same value for each device family.
+      A rule attribute names the device types, the strategy, or the radio
+      choice that a control needs. portal.js reads each rule. It hides each
+      control that the plan does not read, and it disables the inputs of that
+      control, so a hidden control posts no value.
+    #}
+    <section class="portal-card mb-3" data-testid="org-upgrade-advanced-options">
+      <h2 class="portal-card-title">Advanced upgrade controls</h2>
+
+      <p class="portal-card-note">
+        Each control below keeps the cloud default until you change it. The page
+        hides a control that the device types and the strategy of this plan do
+        not read.
+      </p>
+
+      <div class="mb-3"
+           data-org-requires-strategy="canary"
+           data-testid="org-upgrade-max-failures-per-phase-field"
+           {{ '' if uses_canary else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-max-failures-per-phase">
+          Failures allowed inside each canary phase
+        </label>
+        <input class="form-control"
+               type="text"
+               id="org-upgrade-max-failures-per-phase"
+               name="max_failures"
+               data-testid="org-upgrade-max-failures-per-phase"
+               inputmode="numeric"
+               autocomplete="off"
+               value="{{ options.max_failures | default('', true) }}"
+               aria-describedby="org-upgrade-max-failures-per-phase-note"
+               {{ '' if uses_canary else 'disabled' }}>
+        <p class="portal-card-note" id="org-upgrade-max-failures-per-phase-note">
+          Write one count for each canary phase, separated by commas. The portal
+          refuses a list that does not match the phase list. Leave the field
+          empty to use the maximum failure percentage instead.
+        </p>
+      </div>
+
+      <fieldset class="bubble-group mb-3"
+                data-org-requires-type="switch gateway"
+                data-testid="org-upgrade-stable-version-group"
+                aria-describedby="org-upgrade-stable-version-note"
+                {{ '' if has_junos_device else 'hidden disabled' }}>
+        <legend class="bubble-group-legend">Firmware version of each switch and each gateway</legend>
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="radio"
+                 name="stable_version"
+                 value="no"
+                 id="org-upgrade-stable-version-no"
+                 data-testid="org-upgrade-stable-version-no"
+                 {{ 'checked' if not stable_chosen else '' }}>
+          <label class="bubble-option-label" for="org-upgrade-stable-version-no">Use the version that I typed above</label>
+        </span>
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="radio"
+                 name="stable_version"
+                 value="yes"
+                 id="org-upgrade-stable-version-yes"
+                 data-testid="org-upgrade-stable-version-yes"
+                 {{ 'checked' if stable_chosen else '' }}>
+          <label class="bubble-option-label" for="org-upgrade-stable-version-yes">Use the vendor stable build</label>
+        </span>
+        <p class="bubble-option-hint" id="org-upgrade-stable-version-note">
+          Warning: the second choice ignores the versions that you typed for the
+          switches and the gateways. The cloud picks the build, and this page
+          cannot name it before the run. The save refuses the second choice for
+          a plan that holds an access point. Each device type still needs a
+          typed version, because the portal selects the devices with it.
+        </p>
+      </fieldset>
+
+      <fieldset class="bubble-group mb-3"
+                data-org-requires-type="ap"
+                data-testid="org-upgrade-p2p-group"
+                aria-describedby="org-upgrade-p2p-note"
+                {{ '' if has_ap else 'hidden disabled' }}>
+        <legend class="bubble-group-legend">Let an access point take the firmware from a neighbor</legend>
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="radio"
+                 name="enable_p2p"
+                 value="no"
+                 id="org-upgrade-enable-p2p-no"
+                 data-testid="org-upgrade-enable-p2p-no"
+                 {{ 'checked' if not p2p_chosen else '' }}>
+          <label class="bubble-option-label" for="org-upgrade-enable-p2p-no">No, every access point downloads from the cloud</label>
+        </span>
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="radio"
+                 name="enable_p2p"
+                 value="yes"
+                 id="org-upgrade-enable-p2p-yes"
+                 data-testid="org-upgrade-enable-p2p-yes"
+                 {{ 'checked' if p2p_chosen else '' }}>
+          <label class="bubble-option-label" for="org-upgrade-enable-p2p-yes">Yes, an access point may take the firmware from a neighbor</label>
+        </span>
+        <p class="bubble-option-hint" id="org-upgrade-p2p-note">
+          The second choice saves the link of a site with a slow connection. The
+          cloud reads this control for an access point only.
+        </p>
+      </fieldset>
+
+      <div class="mb-3"
+           data-org-requires-type="ap"
+           data-org-requires-choice="enable_p2p:yes"
+           data-testid="org-upgrade-p2p-cluster-size-field"
+           {{ '' if shows_p2p_sizes else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-p2p-cluster-size">Access points of one download group</label>
+        <input class="form-control"
+               type="number"
+               min="0"
+               step="1"
+               id="org-upgrade-p2p-cluster-size"
+               name="p2p_cluster_size"
+               data-testid="org-upgrade-p2p-cluster-size"
+               value="{{ options.p2p_cluster_size | default('', true) }}"
+               aria-describedby="org-upgrade-p2p-cluster-size-note"
+               {{ '' if shows_p2p_sizes else 'disabled' }}>
+        <p class="portal-card-note" id="org-upgrade-p2p-cluster-size-note">
+          Leave the field empty to keep the cloud default of 10. The cloud reads
+          this field only when the control above says yes.
+        </p>
+      </div>
+
+      <div class="mb-3"
+           data-org-requires-type="ap"
+           data-org-requires-choice="enable_p2p:yes"
+           data-testid="org-upgrade-p2p-parallelism-field"
+           {{ '' if shows_p2p_sizes else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-p2p-parallelism">Download groups that run together</label>
+        <input class="form-control"
+               type="number"
+               min="0"
+               step="1"
+               id="org-upgrade-p2p-parallelism"
+               name="p2p_parallelism"
+               data-testid="org-upgrade-p2p-parallelism"
+               value="{{ options.p2p_parallelism | default('', true) }}"
+               aria-describedby="org-upgrade-p2p-parallelism-note"
+               {{ '' if shows_p2p_sizes else 'disabled' }}>
+        <p class="portal-card-note" id="org-upgrade-p2p-parallelism-note">
+          Leave the field empty to keep the cloud default. The cloud reads this
+          field only when the control above says yes.
+        </p>
+      </div>
+
+      <div class="mb-3"
+           data-org-requires-type="ap"
+           data-org-requires-strategy="rrm"
+           data-testid="org-upgrade-rrm-first-batch-percentage-field"
+           {{ '' if shows_radio_batches else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-rrm-first-batch-percentage">Access points of the first radio batch, as a percentage</label>
+        <input class="form-control"
+               type="number"
+               min="0"
+               max="100"
+               step="1"
+               id="org-upgrade-rrm-first-batch-percentage"
+               name="rrm_first_batch_percentage"
+               data-testid="org-upgrade-rrm-first-batch-percentage"
+               value="{{ options.rrm_first_batch_percentage | default('', true) }}"
+               aria-describedby="org-upgrade-rrm-first-batch-percentage-note"
+               {{ '' if shows_radio_batches else 'disabled' }}>
+        <p class="portal-card-note" id="org-upgrade-rrm-first-batch-percentage-note">
+          Leave the field empty to keep the cloud default.
+        </p>
+      </div>
+
+      <div class="mb-3"
+           data-org-requires-type="ap"
+           data-org-requires-strategy="rrm"
+           data-testid="org-upgrade-rrm-max-batch-percentage-field"
+           {{ '' if shows_radio_batches else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-rrm-max-batch-percentage">Largest radio batch after the first, as a percentage</label>
+        <input class="form-control"
+               type="number"
+               min="0"
+               max="100"
+               step="1"
+               id="org-upgrade-rrm-max-batch-percentage"
+               name="rrm_max_batch_percentage"
+               data-testid="org-upgrade-rrm-max-batch-percentage"
+               value="{{ options.rrm_max_batch_percentage | default('', true) }}"
+               aria-describedby="org-upgrade-rrm-max-batch-percentage-note"
+               {{ '' if shows_radio_batches else 'disabled' }}>
+        <p class="portal-card-note" id="org-upgrade-rrm-max-batch-percentage-note">
+          Leave the field empty to keep the cloud default.
+        </p>
+      </div>
+
+      <div class="mb-3"
+           data-org-requires-type="ap"
+           data-org-requires-strategy="rrm"
+           data-testid="org-upgrade-rrm-node-order-field"
+           {{ '' if shows_radio_batches else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-rrm-node-order">Order of the radio batches across each site</label>
+        <select class="form-select"
+                id="org-upgrade-rrm-node-order"
+                name="rrm_node_order"
+                data-testid="org-upgrade-rrm-node-order"
+                aria-describedby="org-upgrade-rrm-node-order-note"
+                {{ '' if shows_radio_batches else 'disabled' }}>
+          <option value="">Keep the cloud default</option>
+          {% for word, text in [('center_to_fringe', 'Start at the center of each site'),
+                                ('fringe_to_center', 'Start at the edge of each site')] %}
+            <option value="{{ word }}" {{ 'selected' if options.rrm_node_order == word else '' }}>{{ text }}</option>
+          {% endfor %}
+        </select>
+        <p class="portal-card-note" id="org-upgrade-rrm-node-order-note">
+          The cloud walks the radio neighborhood of each site in this order.
+        </p>
+      </div>
+
+      <div class="mb-3"
+           data-org-requires-type="ap"
+           data-org-requires-strategy="rrm"
+           data-testid="org-upgrade-rrm-mesh-upgrade-field"
+           {{ '' if shows_radio_batches else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-rrm-mesh-upgrade">Order of the mesh access points at the end of the run</label>
+        <select class="form-select"
+                id="org-upgrade-rrm-mesh-upgrade"
+                name="rrm_mesh_upgrade"
+                data-testid="org-upgrade-rrm-mesh-upgrade"
+                aria-describedby="org-upgrade-rrm-mesh-upgrade-note"
+                {{ '' if shows_radio_batches else 'disabled' }}>
+          <option value="">Keep the cloud default</option>
+          {% for word, text in [('parallel', 'All mesh access points together'),
+                                ('sequential', 'One mesh access point at a time')] %}
+            <option value="{{ word }}" {{ 'selected' if options.rrm_mesh_upgrade == word else '' }}>{{ text }}</option>
+          {% endfor %}
+        </select>
+        <p class="portal-card-note" id="org-upgrade-rrm-mesh-upgrade-note">
+          A mesh access point carries the traffic of another access point, so the
+          cloud upgrades it last.
+        </p>
+      </div>
+
+      <div class="mb-3"
+           data-org-requires-type="ap"
+           data-org-requires-strategy="rrm"
+           data-testid="org-upgrade-rrm-slow-ramp-field"
+           {{ '' if shows_radio_batches else 'hidden' }}>
+        <label class="form-label" for="org-upgrade-rrm-slow-ramp">Growth of each radio batch</label>
+        <select class="form-select"
+                id="org-upgrade-rrm-slow-ramp"
+                name="rrm_slow_ramp"
+                data-testid="org-upgrade-rrm-slow-ramp"
+                aria-describedby="org-upgrade-rrm-slow-ramp-note"
+                {{ '' if shows_radio_batches else 'disabled' }}>
+          <option value="">Keep the cloud default</option>
+          {% for word, text in [('yes', 'Grow each batch slowly'),
+                                ('no', 'Grow each batch at the usual rate')] %}
+            <option value="{{ word }}" {{ 'selected' if options.rrm_slow_ramp == word else '' }}>{{ text }}</option>
+          {% endfor %}
+        </select>
+        <p class="portal-card-note" id="org-upgrade-rrm-slow-ramp-note">
+          A slow growth keeps more coverage while the firmware moves.
+        </p>
+      </div>
+
+      {#
+        Only the cloud schema of a session smart router holds a release train.
+        The route paints this control only when a selected site holds a router,
+        and portal.js hides it while the gateway type is not selected.
+      #}
+      {% if ssr_present %}
+        <div class="mb-3"
+             data-org-requires-type="gateway"
+             data-testid="org-upgrade-ssr-channel-field"
+             {{ '' if has_gateway else 'hidden' }}>
+          <label class="form-label" for="org-upgrade-ssr-channel">Release train of each session smart router</label>
+          <select class="form-select"
+                  id="org-upgrade-ssr-channel"
+                  name="channel"
+                  data-testid="org-upgrade-ssr-channel"
+                  aria-describedby="org-upgrade-ssr-channel-note"
+                  {{ '' if has_gateway else 'disabled' }}>
+            <option value="">Keep the train that the router follows now</option>
+            {% for word, text in [('stable', 'Stable, the tested build'),
+                                  ('beta', 'Beta, the build under test'),
+                                  ('alpha', 'Alpha, the earliest build')] %}
+              <option value="{{ word }}" {{ 'selected' if options.channel == word else '' }}>{{ text }}</option>
+            {% endfor %}
+          </select>
+          <p class="portal-card-note" id="org-upgrade-ssr-channel-note">
+            Warning: an alpha build or a beta build carries defects that no test
+            found yet. A router on such a build can drop the wide area network of
+            the site. Choose the stable train for a production site.
+          </p>
+        </div>
+      {% endif %}
+    </section>
 
     <button type="submit"
             class="portal-button portal-button-primary"

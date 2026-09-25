@@ -3200,6 +3200,61 @@
         return control ? control.value : "";  /* Return an empty value when no strategy is selected. */
     }
 
+    /**
+     * Tells whether the choice rule of one advanced control holds.
+     *
+     * Why: Issue #3383. A peer download size means nothing while the peer
+     * download is off, so the size field names the radio choice that it needs.
+     *
+     * @param {Element} form The organization form.
+     * @param {string} choice The rule: a field name, a colon, and a value.
+     * @returns {boolean} True when the checked radio of that field holds the value.
+     */
+    function orgChoiceAllows(form, choice) {
+        var parts = choice.split(":");  /* The field name comes before the colon, and the value after it. */
+        var control = form.querySelector('[name="' + parts[0] + '"]:checked');  /* The checked radio of the field. */
+        return Boolean(control && !control.disabled && control.value === parts[1]);  /* A hidden radio allows nothing. */
+    }
+
+    /**
+     * Tells whether every rule of one advanced control holds.
+     *
+     * Why: Issue #3383. Each advanced control names the device types, the
+     * strategies, and the radio choice that it needs. The control shows only
+     * when the plan reads it, so a hidden control posts no value.
+     *
+     * @param {Element} form The organization form.
+     * @param {Element} group The control group that carries the rule attributes.
+     * @returns {boolean} True when the plan reads the control.
+     */
+    function orgRuleAllows(form, group) {
+        var types = (group.getAttribute("data-org-requires-type") || "").split(" ").filter(Boolean);  /* Types that read it. */
+        var strategies = (group.getAttribute("data-org-requires-strategy") || "").split(" ").filter(Boolean);  /* Strategies. */
+        var choice = group.getAttribute("data-org-requires-choice") || "";  /* The radio choice that it needs, if any. */
+        var typeAllows = types.length === 0 || types.some(function (family) {
+            return orgFamilySelected(form, family);  /* One selected type that reads the control is enough. */
+        });
+        var strategyAllows = strategies.length === 0 || strategies.indexOf(orgSelectedStrategy(form)) !== -1;  /* The strategy. */
+        return typeAllows && strategyAllows && (choice === "" || orgChoiceAllows(form, choice));  /* Every rule must hold. */
+    }
+
+    /**
+     * Shows each advanced control that the plan reads, and hides each other one.
+     *
+     * Why: Issue #3383. The multi-site page offers the eleven advanced controls
+     * of the single-site page. The rule attributes of each control decide its
+     * state, so the page and the template read one rule.
+     *
+     * @param {Element} form The organization form.
+     * @returns {void}
+     */
+    function updateOrgAdvancedVisibility(form) {
+        var rules = "[data-org-requires-type], [data-org-requires-strategy], [data-org-requires-choice]";  /* Each rule. */
+        form.querySelectorAll(rules).forEach(function (group) {
+            setOrgGroupVisibility(group, orgRuleAllows(form, group));  /* Show the control only when the plan reads it. */
+        });
+    }
+
     function updateOrgOptionsVisibility(form) {
         var hasAp = orgFamilySelected(form, "ap");  /* Access point fields apply only to access points. */
         var hasSwitch = orgFamilySelected(form, "switch");  /* Switch fields apply only to switches. */
@@ -3212,13 +3267,14 @@
         setOrgGroupVisibility(byTestId("org-upgrade-reboot-at-field", form), hasJunosDevice);  /* Hide reboot delay. */
         setOrgGroupVisibility(byTestId("org-upgrade-junos-file-action-group", form), hasJunosDevice);  /* Hide action. */
         setOrgGroupVisibility(byTestId("org-upgrade-canary-phases-field", form), orgSelectedStrategy(form) === "canary");  /* Hide non-canary phases. */
+        updateOrgAdvancedVisibility(form);  /* Issue #3383: repaint each advanced control from its own rules. */
     }
 
     function initOrgOptionsVisibility(form) {
         updateOrgOptionsVisibility(form);  /* Match the first paint to the checked controls. */
-        form.querySelectorAll('[name="selected_types"], [name="strategy"]').forEach(function (control) {
+        form.querySelectorAll('[name="selected_types"], [name="strategy"], [name="enable_p2p"]').forEach(function (control) {
             control.addEventListener("change", function () {
-                updateOrgOptionsVisibility(form);  /* Repaint as soon as a family or strategy changes. */
+                updateOrgOptionsVisibility(form);  /* Repaint as soon as a family, a strategy, or a peer choice changes. */
             });
         });
     }

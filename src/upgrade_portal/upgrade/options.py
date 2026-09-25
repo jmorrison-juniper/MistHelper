@@ -27,6 +27,11 @@ from typing import Any
 
 import mistapi
 
+from src.firmware.org_upgrade_body import (  # Issue #3383: the count limit and the shared field names.
+    FAILURE_COUNT_HIGHEST,
+    PEER_SIZE_FIELDS,
+    RADIO_BATCH_FIELDS,
+)
 from src.firmware.upgrade_service import (
     MESH_UPGRADE_CHOICES,
     NODE_ORDER_CHOICES,
@@ -305,6 +310,56 @@ ORG_OPTION_HELP: Mapping[str, tuple[str, str]] = {
             f"The time must fall inside the next {START_TIME_HORIZON_SECONDS // 3600} hours."
         ),
     ),
+    # Issue #3383: the advanced controls of the multi-site page. Each label names
+    # the device family that reads the control, because one plan can hold every
+    # family at once.
+    "max_failures": (
+        "Failures allowed inside each canary phase",
+        (
+            "Write one whole number for each canary phase, separated by commas. "
+            f"Each number must be {FAILURE_COUNT_HIGHEST} or less."
+        ),
+    ),
+    "stable_version": (
+        "Firmware version of each switch and each gateway",
+        (
+            "Choose Yes or No. Choose Yes only when the plan holds no access point, "
+            "because the organization access point upgrade names no stable build."
+        ),
+    ),
+    "enable_p2p": (
+        "Let an access point take the firmware from a neighbor",
+        YES_OR_NO_RULE,
+    ),
+    "p2p_cluster_size": (
+        "Access points of one download group",
+        f"Write a whole number from 0 to {_P2P_SIZE_HIGHEST}.",
+    ),
+    "p2p_parallelism": (
+        "Download groups that run together",
+        f"Write a whole number from 0 to {_P2P_SIZE_HIGHEST}.",
+    ),
+    "rrm_first_batch_percentage": (
+        "Access points of the first radio batch, as a percentage",
+        OPTION_HELP["max_failure_percentage"][1],
+    ),
+    "rrm_max_batch_percentage": (
+        "Largest radio batch after the first, as a percentage",
+        OPTION_HELP["max_failure_percentage"][1],
+    ),
+    "rrm_node_order": (
+        "Order of the radio batches across each site",
+        OPTION_HELP["rrm_node_order"][1],
+    ),
+    "rrm_mesh_upgrade": (
+        "Order of the mesh access points at the end of the run",
+        OPTION_HELP["rrm_mesh_upgrade"][1],
+    ),
+    "rrm_slow_ramp": (
+        "Growth of each radio batch",
+        "Choose a listed growth rate.",
+    ),
+    "channel": OPTION_HELP["channel"],
 }
 
 # The message that a field with no entry above receives. It still names the
@@ -1453,20 +1508,15 @@ def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
         The text of each advanced control, keyed by its cloud field name.
     """
     flat = _flat_payload(stored)  # One shape, whether the record nests the groups or not.
-    names = (
+    names = (  # Issue #3383: the peer sizes and the radio fields come from the one list of the organization body.
         "max_failure_percentage",
         "canary_phases",
         "max_failures",
-        "p2p_cluster_size",
-        "p2p_parallelism",
-        "rrm_first_batch_percentage",
-        "rrm_max_batch_percentage",
-        "rrm_node_order",
-        "rrm_mesh_upgrade",
-        "rrm_slow_ramp",
+        *PEER_SIZE_FIELDS,
+        *RADIO_BATCH_FIELDS,
         "channel",
     )
-    shown = {name: _display_text(flat.get(name)) for name in names}
+    shown = {name: _display_text(flat.get(name)) for name in names}  # One text for each advanced control.
     # Issue #2187. The two schedule controls hold a duration, so the page shows
     # the duration that the operator wrote and never the epoch second behind it.
     for field in ("start_time", "reboot_at"):
