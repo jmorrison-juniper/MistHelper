@@ -93,7 +93,7 @@ def test_wheel_packages_hold_no_development_tooling() -> None:
     assert isinstance(tool_table, dict), "The `tool` table must be a mapping."  # Guard the type before the walk.
     wheel_table = tool_table.get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {})  # type: ignore[union-attr]
     packages = wheel_table.get("packages")  # Read the list that decides the wheel contents.
-    assert packages, "The wheel package list is absent, so the guard measured nothing."  # Fail on no input.
+    assert len(packages) > 0, "The wheel package list is absent, so the guard measured nothing."  # Fail on no input.
 
     LOGGER.info("Checking %d wheel package entries for development tooling", len(packages))  # Log before the check.
     offenders = sorted(set(packages) & DEVELOPMENT_TOOLING_TREES)  # Find every forbidden entry.
@@ -113,7 +113,7 @@ def test_console_scripts_name_no_development_tooling() -> None:
     project_table = parsed.get("project", {})  # The console scripts sit under the `project` table.
     assert isinstance(project_table, dict), "The `project` table must be a mapping."  # Guard the type.
     scripts = project_table.get("scripts")  # Read the console script mapping.
-    assert scripts, "The console script table is absent, so the guard measured nothing."  # Fail on no input.
+    assert len(scripts) > 0, "The console script table is absent, so the guard measured nothing."  # Fail on no input.
 
     LOGGER.info("Checking %d console script entries for development tooling", len(scripts))  # Log before the check.
     offenders = sorted(
@@ -134,7 +134,7 @@ def test_console_scripts_name_no_development_tooling() -> None:
 def test_container_copies_no_development_tooling() -> None:
     """No `COPY` line in the Dockerfile brings a development tooling tree in."""
     sources = _copy_sources()  # Read every COPY source argument.
-    assert sources, "The container recipe holds no COPY source, so the guard measured nothing."  # Fail on no input.
+    assert len(sources) > 0, "The container recipe holds no COPY source, so the guard measured nothing."
 
     LOGGER.info("Checking %d container copy sources for development tooling", len(sources))  # Log before the check.
     offenders = sorted(
@@ -167,7 +167,7 @@ def test_dockerignore_excludes_every_development_tooling_tree() -> None:
         for line in DOCKERIGNORE_PATH.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")  # Drop the blank lines and the comments.
     ]
-    assert lines, "The container exclude list is empty, so the guard measured nothing."  # Fail on no input.
+    assert len(lines) > 0, "The container exclude list is empty, so the guard measured nothing."  # Fail on no input.
 
     patterns = {line.rstrip("/") for line in lines}  # Compare without the trailing separator.
     tree_count = len(DEVELOPMENT_TOOLING_TREES)  # Name the count so the log line stays inside the width limit.

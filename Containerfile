@@ -116,7 +116,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # wsgi_capture.py is the entry point of the upgrade capture portal on port 8056.
 COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
 COPY src/ ./src/
-COPY scripts/ ./scripts/
+# Issue #3404: the image no longer copies `scripts/`. That directory holds
+# development tooling, such as a worktree bootstrap, a test-shard runner, and a
+# set of repository analyzers. No product module reads a file there, and a
+# customer never runs one. `.dockerignore` also excludes the directory, so a
+# future `COPY . .` cannot bring it back.
 COPY web_portal/ ./web_portal/
 # Issue #3104: menu 243 generates the SNMP MIB from the Mist OpenAPI document,
 # and the operation failed on every container run while this file was absent.

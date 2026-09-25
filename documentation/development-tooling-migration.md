@@ -26,7 +26,7 @@ from this repository, so every local command still works.
 | - | - |
 | The wheel no longer packages `tools/`. | `pyproject.toml` |
 | The wheel no longer exposes the `test-quality-analyzer` and the `ste-linter` commands. | `pyproject.toml` |
-| The container image no longer copies `scripts/`. | `Dockerfile` |
+| The container image no longer copies `scripts/`. | `Dockerfile` and `Containerfile` |
 | The build context excludes `tools/` and `scripts/`. | `.dockerignore` |
 | A guard keeps the tooling out of both artifacts. | `tests/guardrails/test_shipped_artifacts.py` |
 
@@ -40,6 +40,12 @@ same way in an earlier change.
 Warning: a product module must never import from `scripts/` or from `tools/`.
 The container no longer ships either tree, so such an import breaks the image
 at start time. The guard test reports that class of defect.
+
+Caution: `Containerfile` and `Dockerfile` must stay byte-identical. Podman reads
+`Containerfile` first, so an edit to `Dockerfile` alone leaves the local build
+on the old recipe. Edit `Containerfile`, then run
+`Copy-Item Containerfile Dockerfile -Force`.
+`tests/unit/container/test_build_files_match.py` enforces the rule.
 
 ## Phase 2: delete the local copy
 
