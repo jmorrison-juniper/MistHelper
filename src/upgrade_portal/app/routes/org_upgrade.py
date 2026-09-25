@@ -38,6 +38,11 @@ from ...upgrade.options import (
     build_options_record,
     build_options_view,
 )
+from ...upgrade.org_advanced_options import (  # Issue #3383: the advanced controls of the multi-site page.
+    OrgAdvancedOptions,
+    OrgAdvancedRules,
+    OrgAdvancedSummary,
+)
 from ...upgrade.org_cancel_outcomes import OrgCancelOutcomes  # Issue #3246: the three lists of each cancel.
 from ...upgrade.org_cancel_text import OrgCancelText  # Issue #3225: one Cancellation text for the page and the poll.
 from ...upgrade.org_cascade.readers import OrgSettleAnchors  # Issue #3245: the anchors before the first write.
@@ -332,6 +337,7 @@ def read_options() -> dict[str, Any]:
     selected = _selected_types(source)  # Read all selected device families.
     if selected is not None:  # The legacy AP-only request omits this field.
         _add_device_options(request_body, source, selected)  # Add the multi-device controls.
+        request_body.update(OrgAdvancedOptions.read(source))  # Issue #3383: add each advanced control that is set.
     return request_body  # Return one validated input shape.
 
 
@@ -395,17 +401,18 @@ def _yes_value(value: object) -> bool:
 
 def _site_option_body(options: Mapping[str, Any], targets: list[dict[str, str]]) -> dict[str, Any]:
     """Build the single-site option body that the proven mapper validates."""
-    return {
-        "targets": targets,
-        "selected_types": list(options["selected_types"]),
-        "strategy": options.get("strategy", "big_bang"),
-        "reboot": options.get("reboot", True),
-        "junos_file_action": options.get("junos_file_action", True),
-        "force": options.get("force", False),
-        "start_time": options.get("start_time"),
-        "reboot_at": options.get("reboot_at"),
-        "canary_phases": ",".join(str(value) for value in options.get("canary_phases", [])),
-        "max_failure_percentage": options.get("max_failure_percentage"),
+    return {  # The shared mapper reads the flat field names of the single-site page.
+        "targets": targets,  # The explicit devices of this site.
+        "selected_types": list(options["selected_types"]),  # The checked device families.
+        "strategy": options.get("strategy", "big_bang"),  # The rollout strategy of the whole plan.
+        "reboot": options.get("reboot", True),  # The reboot choice of each switch and each gateway.
+        "junos_file_action": options.get("junos_file_action", True),  # The Junos file action choice.
+        "force": options.get("force", False),  # The forced write choice.
+        "start_time": options.get("start_time"),  # The epoch start of the job, or None.
+        "reboot_at": options.get("reboot_at"),  # The reboot delay text, or None.
+        "canary_phases": ",".join(str(value) for value in options.get("canary_phases", [])),  # The phase text.
+        "max_failure_percentage": options.get("max_failure_percentage"),  # The failure limit of the whole run.
+        **OrgAdvancedOptions.site_fields(options),  # Issue #3383: each advanced value reaches the mapper.
     }
 
 
@@ -554,7 +561,7 @@ def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
     first = _first_version(options.get("versions"))  # Read the legacy AP version record.
     selected_types = list(options.get("selected_types", ["ap", "switch", "gateway"]))  # Restore chosen families.
     return {  # Return the existing template field names.
-        "version": options.get("version_ap", first.get("version", "")),
+        "version": options.get("version_ap", first.get("version", "")),  # The legacy AP version field.
         "version_ap": str(options.get("version_ap", first.get("version", ""))),  # Keep the AP target visible.
         "version_switch": str(options.get("version_switch", "")),  # Keep the switch target visible.
         "version_gateway": str(options.get("version_gateway", "")),  # Keep the gateway target visible.
@@ -562,15 +569,18 @@ def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
         "reboot": options.get("reboot", True),  # Keep the reboot radio group stable after Back.
         "junos_file_action": options.get("junos_file_action", True),  # Keep the Junos radio group stable.
         "force": options.get("force", False),  # Keep the force checkbox stable after Back.
-        "strategy": options.get("strategy", "canary"),
-        "canary_phases": _phase_text(options.get("canary_phases")),
-        "max_failure_percentage": options.get("max_failure_percentage", 5),
-        "start_time": _start_text(options.get("start_time")),
-        "reboot_at": OrgUpgradeScheduleReader.reboot_text(options),
+        "strategy": options.get("strategy", "canary"),  # Keep the strategy radio group stable after Back.
+        "canary_phases": _phase_text(options.get("canary_phases")),  # Show the phases as the operator typed them.
+        "max_failure_percentage": options.get("max_failure_percentage", 5),  # The failure limit of the whole run.
+        "start_time": _start_text(options.get("start_time")),  # Show the start in the date and time control.
+        "reboot_at": OrgUpgradeScheduleReader.reboot_text(options),  # Show the reboot delay text.
+        **OrgAdvancedOptions.form_values(options),  # Issue #3383: keep each advanced control stable after Back.
     }
 
 
 FAMILY_LABELS = (("version_ap", "Access points"), ("version_switch", "Switches"), ("version_gateway", "Gateways"))
+STABLE_FAMILY_FIELDS = frozenset({"version_switch", "version_gateway"})  # Issue #3383: these read the stable build.
+STABLE_BUILD_TEXT = "the vendor stable build"  # Issue #3383: the cloud picks the build, so no version number shows.
 
 
 def firmware_summary(view: Mapping[str, Any], families: Sequence[str]) -> str:
@@ -578,16 +588,25 @@ def firmware_summary(view: Mapping[str, Any], families: Sequence[str]) -> str:
 
     Why:
         An operator must read every target version before the typed
-        confirmation. One empty line would hide the exact change.
+        confirmation. One empty line would hide the exact change. The stable
+        build replaces the typed version of each switch and each gateway, so
+        the line names the stable build for those two families (issue #3383).
     """
     logger.info("Build the firmware summary for %s device families", len(families))  # Log before the build.
     parts = [  # Name one version for each family that this operation upgrades.
-        f"{label} {view[field]}"
-        for field, label in FAMILY_LABELS
-        if view.get(field) and (not families or field.removeprefix("version_") in families)
+        f"{label} {_summary_version(view, field)}"  # The family and the build that it receives.
+        for field, label in FAMILY_LABELS  # Keep the fixed family order of the options page.
+        if view.get(field) and (not families or field.removeprefix("version_") in families)  # Selected families.
     ]
     logger.debug("The firmware summary names %s device families", len(parts))  # Log after the build.
     return ", ".join(parts) if parts else str(view.get("version") or "Not selected")  # Keep the AP fallback.
+
+
+def _summary_version(view: Mapping[str, Any], field: str) -> str:
+    """Return the build text of one device family in the firmware summary."""
+    if view.get("stable_version") is True and field in STABLE_FAMILY_FIELDS:  # The cloud picks the stable build.
+        return STABLE_BUILD_TEXT
+    return str(view[field])  # The typed target version.
 
 
 def _first_version(value: object) -> Mapping[str, Any]:
@@ -770,12 +789,14 @@ def options_page() -> str | tuple[Response, int]:
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
     retry = current_retry_plan()  # Issue #3247: a retry keeps only the devices that need a second attempt.
     prefill = retry.options if retry is not None else {}  # A retry shows the earlier choices first.
+    device_views = _option_device_views(org_id, rows)  # One device list for each selected site.
     return render_page(  # Render the options form with one device list for each site.
         OPTIONS_TEMPLATE,
         sites=rows,
-        device_views=_option_device_views(org_id, rows),
+        device_views=device_views,
         options=options_view(stored_options() or prefill),
         retry=retry,
+        ssr_present=OrgAdvancedRules.holds_router(device_views),  # Issue #3383: the release train control.
     )
 
 
@@ -831,6 +852,8 @@ def _aggregate_saved_options(
     aggregate = _aggregate_option_record(org_id, site_ids, options)  # Validate each explicit target.
     rows = selected_rows(org_id, site_ids)  # Preserve approved site names with the operation.
     choices = build_options(aggregate["options"], now=None)  # Reuse the proven option mapping.
+    OrgAdvancedRules.refuse_stable_access_points(choices, aggregate["targets"])  # Issue #3383: no stable AP build.
+    OrgAdvancedRules.refuse_large_failure_counts(choices)  # Issue #3383: each count fits the organization body.
     request_data = AggregateBuildInput(  # Group the confirmed build values below the parameter limit.
         owner=_owner_key(),  # Bind the operation to the signed operator.
         org_id=org_id,  # Bind every child to the selected organization.
@@ -890,6 +913,7 @@ def confirm_page() -> str | tuple[Response, int]:
         device_families=families,  # Show each planned family.
         options=view,  # Show the confirmed choices.
         firmware_summary=firmware_summary(view, families),  # Name the target version of each family.
+        advanced_summary=OrgAdvancedSummary.lines(view, _mapping_children(operation)),  # Each stored child body.
         writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.
         schedule=OrgScheduleView.build(operation, view["start_time"]),  # Issue #3247: the start line and form.
         prechecks=prechecks,  # Issue #3243: the card and the gate of the confirmation field.

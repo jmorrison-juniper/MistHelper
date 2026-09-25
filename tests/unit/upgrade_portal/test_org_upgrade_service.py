@@ -300,11 +300,9 @@ class TestOrgUpgradeBody:
             "models",
             "rules",
             "snapshot",
-            "enable_p2p",
             "download_strategy",
             "reboot_strategy",
             "start_datetime",
-            "max_failures",
         ),
     )
     def test_unsupported_fields_do_not_disappear(self, request_body: dict[str, object], field: str) -> None:
@@ -316,6 +314,19 @@ class TestOrgUpgradeBody:
         request_body[field] = None
         with pytest.raises(ValueError, match="unsupported field"):
             OrgUpgradeBody.build(request_body)
+
+    @pytest.mark.parametrize("field", ("enable_p2p", "max_failures"))
+    def test_an_empty_advanced_field_does_not_disappear(self, request_body: dict[str, object], field: str) -> None:
+        """Refuse an advanced field that holds no value.
+
+        Why:
+            Issue #3383 moved these two fields into the supported subset. A null
+            value must still stop the build, because a silent drop could
+            misrepresent the request that the operator approved.
+        """
+        request_body[field] = None  # A client that sends the field with no value.
+        with pytest.raises(ValueError, match=field):  # The refusal names the field, so no value disappears.
+            OrgUpgradeBody.build(request_body)  # The build refuses the body before any cloud call.
 
     @pytest.mark.parametrize(
         "phases",

@@ -19,6 +19,7 @@ from typing import Any, Protocol  # Accept the SDK and define the durable store 
 
 from src.firmware import upgrade_service  # Reuse the proven site and SSR planner.
 from src.firmware.org_cancel_sort import OrgCancelSort  # Issue #3246: sort the access points of one AP cancel.
+from src.firmware.org_upgrade_body import OrgUpgradeBody  # Issue #3383: check the AP body at plan time.
 from src.firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService  # Reuse the AP boundary.
 
 logger = logging.getLogger(__name__)  # Use the module logger without secret fields.
@@ -590,7 +591,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
     ) -> dict[str, Any]:
         """Build the one AP organization child."""
         logger.debug("Build the organization AP child")  # Log before the body transformation.
-        body = cls._ap_body(targets, options)  # Build the validated organization request body.
+        body = OrgUpgradeBody.build(cls._ap_body(targets, options))  # Issue #3383: the submit check runs first here.
         site_ids = list(dict.fromkeys(target.site_id for target in targets))  # Keep explicit approved sites.
         child = cls._base_child("upgradeOrgDevices", "org", org_id, None, "ap")  # Create the common state.
         child.update(  # Add the AP-specific route and target values.
@@ -608,7 +609,17 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         targets: Sequence[upgrade_service.DeviceTarget],
         options: upgrade_service.UpgradeOptions,
     ) -> dict[str, object]:
-        """Build the organization AP request body."""
+        """Build the organization AP request body.
+
+        Raises:
+            ValueError: If the targets need more than one version, or the
+                operator chose the vendor stable build. The organization
+                schema names no stable word, so the build refuses the choice
+                instead of sending a typed version that the operator did not
+                confirm (issue #3383).
+        """
+        if options.stable_version:  # The save refuses this choice first. This check guards a direct caller.
+            raise ValueError("The organization access point upgrade cannot use the vendor stable build.")
         versions = {target.version_target for target in targets}  # Check the one-version contract.
         if len(versions) != 1:  # Never send one version for targets that requested another.
             raise ValueError("All access points in an organization child need one target version.")
@@ -637,19 +648,18 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
 
     @staticmethod
     def _add_ap_schedule(body: dict[str, object], options: upgrade_service.UpgradeOptions) -> None:
-        """Add the optional AP schedule and canary fields."""
+        """Add the optional AP schedule, canary, peer download, and radio batch fields.
+
+        Why:
+            The site body and the organization body read the same schema rules
+            for these fields. Issue #3383 found a separate copy here that
+            dropped the canary counts and every access point field. The shared
+            helpers now serve both calls, so the two bodies cannot drift.
+        """
         if options.start_time is not None:  # Omit an unset schedule.
             body["start_time"] = options.start_time  # Preserve the confirmed epoch value.
-        AggregateUpgradeService._add_ap_canary(body, options)  # Add strategy-specific fields separately.
-
-    @staticmethod
-    def _add_ap_canary(body: dict[str, object], options: upgrade_service.UpgradeOptions) -> None:
-        """Add optional AP canary controls."""
-        if options.strategy == upgrade_service.STRATEGY_CANARY:  # Add phases only for canary.
-            body["canary_phases"] = list(options.canary.canary_phases or (1, 10, 50, 100))  # Keep defaults.
-        failure = options.canary.max_failure_percentage  # Read the optional failure threshold once.
-        if options.strategy != upgrade_service.STRATEGY_DEFAULT and failure is not None:  # Match the schema.
-            body["max_failure_percentage"] = failure  # Preserve the confirmed threshold.
+        upgrade_service.add_canary_fields(body, options)  # The phase list, the count list, and the failure limit.
+        upgrade_service.add_access_point_fields(body, options)  # The peer download and the radio batch fields.
 
     @classmethod
     def _plan_child(

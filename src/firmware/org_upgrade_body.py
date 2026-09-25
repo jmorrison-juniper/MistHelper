@@ -7,8 +7,9 @@ Why:
 
     The contract is ``upgrade_org_devices`` in
     ``documentation/mist-api-openapi31json.json``. The service supports only
-    explicit sites, AP version records, and the scheduling fields below.
-    Other documented fields need a separate safety review.
+    explicit sites, AP version records, the scheduling fields below, and the
+    advanced fields of issue #3383. Each advanced field keeps the rule of the
+    site body. Other documented fields need a separate safety review.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from uuid import UUID
 
 from src.firmware.upgrade_service import (
     DEVICE_TYPE_AP,
+    MESH_UPGRADE_CHOICES,
+    NODE_ORDER_CHOICES,
     STRATEGY_CANARY,
     STRATEGY_DEFAULT,
     STRATEGY_RRM,
@@ -26,6 +29,28 @@ from src.firmware.upgrade_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+# The largest failure count of one canary phase. The body uses the same signed
+# 32-bit limit for the start time, and the multi-site save refuses a larger
+# count before the plan exists (issue #3383).
+FAILURE_COUNT_HIGHEST = 2**31 - 1
+
+# The largest peer download size. The site mapper accepts the same limit.
+PEER_SIZE_HIGHEST = 1000
+
+# The two sizes of the peer download. Each size acts only with the peer download
+# on. The multi-site options page reads the same names (issue #3383).
+PEER_SIZE_FIELDS = ("p2p_cluster_size", "p2p_parallelism")
+
+# The five fields of the rrm strategy, in the order of the options page. The
+# multi-site options page reads the same names (issue #3383).
+RADIO_BATCH_FIELDS = (
+    "rrm_first_batch_percentage",
+    "rrm_max_batch_percentage",
+    "rrm_node_order",
+    "rrm_mesh_upgrade",
+    "rrm_slow_ramp",
+)
 
 
 class OrgUpgradeBody:
@@ -45,8 +70,16 @@ class OrgUpgradeBody:
         "start_time",
         "canary_phases",
         "max_failure_percentage",
+        "max_failures",
+        "enable_p2p",
+        *PEER_SIZE_FIELDS,
+        *RADIO_BATCH_FIELDS,
     )
     _STRATEGIES = (STRATEGY_DEFAULT, STRATEGY_CANARY, STRATEGY_RRM, STRATEGY_SERIAL)
+    _PEER_SIZES = PEER_SIZE_FIELDS  # Each size acts only with the peer download on.
+    _RADIO_PERCENTAGES = ("rrm_first_batch_percentage", "rrm_max_batch_percentage")  # Two radio batch shares.
+    _RADIO_WORDS = {"rrm_node_order": NODE_ORDER_CHOICES, "rrm_mesh_upgrade": MESH_UPGRADE_CHOICES}  # Cloud lists.
+    _RADIO_FIELDS = RADIO_BATCH_FIELDS  # Every field of the rrm strategy.
 
     @classmethod
     def build(cls, request: Mapping[str, object]) -> dict[str, object]:
@@ -203,19 +236,139 @@ class OrgUpgradeBody:
             An absent field uses the cloud default. A supplied null or invalid
             value must not silently select that default.
         """
-        strategy = body["strategy"]
-        if "start_time" in request:
-            body["start_time"] = cls._integer(request["start_time"], "start_time", (0, 2**31 - 1))
-        if "canary_phases" in request:
-            if strategy != STRATEGY_CANARY:
+        strategy = body["strategy"]  # The strategy decides which optional field the body may carry.
+        if "start_time" in request:  # An absent start time lets the cloud start the job at once.
+            body["start_time"] = cls._integer(request["start_time"], "start_time", (0, 2**31 - 1))  # The epoch.
+        if "canary_phases" in request:  # An absent phase list keeps the cloud default phases.
+            if strategy != STRATEGY_CANARY:  # Only the canary strategy reads a phase list.
                 raise ValueError("The canary_phases field requires the canary strategy.")
-            body["canary_phases"] = cls._phases(request["canary_phases"])
-        if "max_failure_percentage" in request:
-            if strategy == STRATEGY_DEFAULT:
+            body["canary_phases"] = cls._phases(request["canary_phases"])  # Rising shares that end at 100.
+        if "max_failure_percentage" in request:  # An absent limit keeps the cloud default limit.
+            if strategy == STRATEGY_DEFAULT:  # One write of every device allows no partial failure.
                 raise ValueError("The max_failure_percentage field cannot use the big_bang strategy.")
-            body["max_failure_percentage"] = cls._integer(
+            body["max_failure_percentage"] = cls._integer(  # A share of the devices from 0 to 100.
                 request["max_failure_percentage"], "max_failure_percentage", (0, 100)
             )
+        cls._add_advanced_fields(body, request)  # Issue #3383: the counts, the peer download, and the radio fields.
+
+    @classmethod
+    def _add_advanced_fields(cls, body: dict[str, object], request: Mapping[str, object]) -> None:
+        """Add the canary counts, the peer download fields, and the radio batch fields.
+
+        Why:
+            Issue #3383 gives the multi-site plan the advanced controls of the
+            single-site plan. Each field keeps the rule of the site body, so a
+            value outside that rule stops here and never reaches the cloud.
+        """
+        logger.info("Validate the advanced fields of the organization AP body")  # Log before the three checks.
+        cls._add_failure_counts(body, request)  # One failure count for each canary phase.
+        cls._add_peer_fields(body, request)  # The peer download flag and its two sizes.
+        cls._add_radio_fields(body, request)  # The five fields of the rrm strategy.
+        logger.debug("The organization AP body holds %d fields after the advanced checks", len(body))  # Log after.
+
+    @classmethod
+    def _add_failure_counts(cls, body: dict[str, object], request: Mapping[str, object]) -> None:
+        """Copy one failure count for each canary phase.
+
+        Why:
+            The schema reads ``max_failures`` only for the canary strategy, and
+            the list needs one count for each phase. A shorter list would leave
+            a later phase with no limit, and the run would continue through a
+            failure that the operator meant to stop.
+
+        Raises:
+            ValueError: If the strategy, the phase list, or a count does not
+                match the rule.
+        """
+        if "max_failures" not in request:  # An absent list leaves the failure percentage alone in charge.
+            return
+        phases = body.get("canary_phases")  # The phase list that the body holds already.
+        if body["strategy"] != STRATEGY_CANARY or not isinstance(phases, list):  # The counts need the phases.
+            raise ValueError("The max_failures field requires the canary strategy and the canary_phases field.")
+        entries = cls._array(request["max_failures"], "max_failures")  # An ordered list, never a text.
+        counts = [cls._integer(count, "max_failures", (0, FAILURE_COUNT_HIGHEST)) for count in entries]  # Whole.
+        if len(counts) != len(phases):  # One count for each phase, as the schema asks.
+            raise ValueError("The max_failures field needs one count for each canary phase.")
+        body["max_failures"] = counts  # A fresh list, so a later change of the input cannot change the body.
+
+    @classmethod
+    def _add_peer_fields(cls, body: dict[str, object], request: Mapping[str, object]) -> None:
+        """Copy the peer download flag and its two sizes.
+
+        Why:
+            The two sizes act only when the peer download is on. A size without
+            the flag sets a limit that the cloud never reads, so the check
+            refuses the size instead of a silent drop.
+
+        Raises:
+            ValueError: If the flag is not a boolean, or a size has no flag or
+                sits outside its range.
+        """
+        if "enable_p2p" in request:  # An absent flag keeps the cloud default.
+            body["enable_p2p"] = cls._boolean(request["enable_p2p"], "enable_p2p")  # A real boolean only.
+        for field in cls._PEER_SIZES:  # The two sizes share one rule.
+            if field not in request:  # An absent size keeps the cloud default.
+                continue
+            if body.get("enable_p2p") is not True:  # A size acts only with the peer download on.
+                raise ValueError(f"The {field} field requires the enable_p2p field set to true.")
+            body[field] = cls._integer(request[field], field, (0, PEER_SIZE_HIGHEST))  # A whole number only.
+
+    @classmethod
+    def _add_radio_fields(cls, body: dict[str, object], request: Mapping[str, object]) -> None:
+        """Copy the five radio batch fields of the rrm strategy.
+
+        Why:
+            The schema reads each field only for the rrm strategy. A field under
+            another strategy sets a batch rule that the cloud never reads.
+
+        Raises:
+            ValueError: If a field sits outside the rrm strategy or outside
+                its own rule.
+        """
+        present = [field for field in cls._RADIO_FIELDS if field in request]  # The radio fields of this request.
+        if present and body["strategy"] != STRATEGY_RRM:  # Only the rrm strategy reads a radio field.
+            raise ValueError("The radio batch fields require the rrm strategy.")
+        for field in present:  # Each field keeps its own type rule.
+            body[field] = cls._radio_value(request[field], field)  # A checked value only.
+
+    @classmethod
+    def _radio_value(cls, value: object, field: str) -> object:
+        """Return one checked radio batch value.
+
+        Raises:
+            ValueError: If the value does not match the rule of its field.
+        """
+        if field in cls._RADIO_PERCENTAGES:  # A batch share of the access points.
+            return cls._integer(value, field, (0, 100))
+        if field in cls._RADIO_WORDS:  # A word from the cloud list.
+            return cls._word(value, field, cls._RADIO_WORDS[field])
+        return cls._boolean(value, field)  # The slow ramp flag.
+
+    @staticmethod
+    def _word(value: object, field: str, choices: tuple[str, ...]) -> str:
+        """Return one word from a fixed cloud list.
+
+        Raises:
+            ValueError: If the value is not a listed word.
+        """
+        if not isinstance(value, str) or value not in choices:  # Only a listed word reaches the cloud.
+            raise ValueError(f"The {field} field must be one of these words: {', '.join(choices)}.")
+        return value
+
+    @staticmethod
+    def _boolean(value: object, field: str) -> bool:
+        """Return one real boolean.
+
+        Why:
+            A text such as ``yes`` is true in Python, but the cloud reads only
+            a JSON boolean. The check refuses the text instead of a guess.
+
+        Raises:
+            ValueError: If the value is not a boolean.
+        """
+        if not isinstance(value, bool):  # Only a real boolean reaches the cloud.
+            raise ValueError(f"The {field} field must be a boolean.")
+        return value
 
     @classmethod
     def _phases(cls, value: object) -> list[int]:
