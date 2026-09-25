@@ -61,9 +61,9 @@ SDK_CALLS = _sdk_calls()
 # A call that already fails on main, with the issue that tracks its repair. The
 # guard skips each entry below, and the companion test fails when an entry is
 # repaired, so no exemption outlives its defect. This list must only shrink.
-KNOWN_DRIFT = {
-    ("web_portal/routes/maps.py", "mistapi.api.v1.orgs.maps.getOrgMapImage"): "#3236",
-}
+# The last entry, for #3236, left when the Maps image route stopped its call to
+# the missing getOrgMapImage function.
+KNOWN_DRIFT: dict[tuple[str, str], str] = {}
 
 
 def test_the_guard_found_the_portal_sdk_calls():

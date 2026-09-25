@@ -374,12 +374,15 @@ List sites for map viewer dropdown.
 
 List maps for a specific site.
 
+`has_image` is true only when the map record holds an `https` image link. A
+Google map or a map with no floor plan file reports false.
+
 **Response** (200):
 ```json
 {
   "maps": [
     {
-      "id": "map-001",
+      "id": "b2c3d4e5-0000-4000-8000-000000000002",
       "name": "Floor 1",
       "width": 1200,
       "height": 800,
@@ -393,12 +396,15 @@ List maps for a specific site.
 
 Get map data for Plotly.js rendering.
 
+`image_url` names the portal image path below. If the map has no image, the
+value is an empty string.
+
 **Response** (200):
 ```json
 {
-  "map_id": "map-001",
+  "map_id": "b2c3d4e5-0000-4000-8000-000000000002",
   "name": "Floor 1",
-  "image_url": "/api/maps/image/map-001",
+  "image_url": "/api/maps/site/a1b2c3d4-0000-4000-8000-000000000001/map/b2c3d4e5-0000-4000-8000-000000000002/image",
   "width": 1200,
   "height": 800,
   "devices": [
@@ -414,11 +420,23 @@ Get map data for Plotly.js rendering.
 }
 ```
 
-### GET /api/maps/image/{map_id}
+### GET /api/maps/site/{site_id}/map/{map_id}/image
 
-Serve a map background image.
+Serve the floor plan image of one map from the portal origin.
 
-**Response** (200): Image file (PNG/JPEG) with appropriate content type
+The portal reads the map record with `getSiteMap` and downloads the image from
+the record `url` field. The content security policy allows `img-src 'self'
+data:` only, so the browser cannot load the Mist link directly. The portal
+never writes a link secret to a log. The `jwt` value of the Mist link and the
+signature values of the storage redirect each grant access to the file.
+
+| Status | Body | Condition |
+| - | - | - |
+| 200 | The image bytes. The type is PNG, JPEG, GIF, or WebP. | The download succeeded. The answer holds `Cache-Control: private, max-age=300`. |
+| 401 | `{"error": "Not authenticated"}` | The portal holds no API session. |
+| 404 | `{"error": "Map not found"}` | An identifier is not a UUID, or the read cannot find the map. |
+| 404 | `{"error": "This floor plan has no image."}` | The map record holds no `https` image link. |
+| 502 | `{"error": "The portal could not download the floor plan image."}` | The download failed, the file is larger than 25 MiB, or the file is not a raster image. |
 
 ---
 
