@@ -18,6 +18,8 @@ import logging  # Record each build before and after its action.
 from collections.abc import Mapping  # Name the read-only shape of a stored record.
 from typing import Any  # Accept the stored record as plain JSON.
 
+from src.firmware.aggregate_upgrade_service import ENDED_CHILD_STATUS  # Issue #3367: the ended result word.
+
 logger = logging.getLogger(__name__)  # Use the module logger without secret fields.
 
 NEVER_STARTED_NOTE = (  # The note of a child job that has no cloud job.
@@ -27,6 +29,10 @@ UNSORTED_NOTE = (  # The note of a child job whose cancel result holds no comple
     "The portal cannot tell which devices of this child job stopped. "
     "Treat each device as a device that can still write firmware."
 )
+# WHY: Issue #3367. An ended child job gets no cancel request, so no list can
+# name a device of it. The empty text of the third list states that every
+# device has a cancel path, which is false here, so the panel shows no list.
+ENDED_NOTE = "This child job ended before the cancel, so the cancel changed no device of it."  # The ended note.
 
 
 class OrgCancelLists:
@@ -47,9 +53,11 @@ class OrgCancelLists:
             The three lists, and the note, or an empty note for a stored result.
         """
         cancellation = child["cancellation"]  # The stored cancel result.
+        empty: dict[str, list[str]] = {key: [] for key in cls.KEYS}  # The lists of a job with no device result.
+        if cancellation.get("status") == ENDED_CHILD_STATUS:  # Issue #3367: the job ended before the cancel.
+            return empty, ENDED_NOTE  # No cancel request went out, so no stored list can name a device.
         if all(isinstance(cancellation.get(key), list) for key in cls.KEYS):  # The result holds every list.
             return {key: [str(mac) for mac in cancellation[key]] for key in cls.KEYS}, ""  # Copy each list.
-        empty: dict[str, list[str]] = {key: [] for key in cls.KEYS}  # A partial result is not trusted.
         if cls._never_started(child, claimed):  # The record proves that no cloud job exists.
             return empty, NEVER_STARTED_NOTE  # No device of this child job writes firmware.
         return {**empty, "already_writing": cls._macs(child)}, UNSORTED_NOTE  # Claim no stop for any device.
@@ -143,5 +151,6 @@ class OrgCancelOutcomes:
             "status": str(cancellation.get("status") or ""),  # The status word of the cancel.
             "message": str(cancellation.get("message") or ""),  # The exact sentence of the cancel, or no text.
             "note": note,  # The sentence that explains the lists, or no text.
+            "ended": cancellation.get("status") == ENDED_CHILD_STATUS,  # Issue #3367: the panel hides the lists.
             **lists,  # The three device lists.
         }

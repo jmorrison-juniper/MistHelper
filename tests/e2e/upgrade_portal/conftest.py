@@ -64,6 +64,7 @@ from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the see
     CONTROLS_EMAIL,
     OrgControlSeeds,
 )
+from tests.e2e.upgrade_portal.org_ended_seeds import OrgEndedSeeds  # Issue #3367: a child job that ended first.
 from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, stores, and traps.
     allocate_resources,
     build_child_environment,
@@ -1865,6 +1866,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
             lifecycle_written = upgrade.save_run(_lifecycle_run_record())
             org_controls_written = OrgControlSeeds.write(upgrade, identity)  # Issue #3247: two operations.
             org_cancel_written = OrgCancelSeeds.write(upgrade, identity)  # Issue #3246: the running operation.
+            org_ended_written = OrgEndedSeeds.write(upgrade, identity)  # Issue #3367: one child job ended first.
     except Exception as failure:
         logger.warning(
             "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
@@ -1875,7 +1877,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
         (
             "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
             "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s org_controls=%s "
-            "org_cancel=%s"
+            "org_cancel=%s org_ended=%s"
         ),
         failed_written,
         stopped_written,
@@ -1887,6 +1889,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
         lifecycle_written,
         org_controls_written,
         org_cancel_written,
+        org_ended_written,
     )
 
 

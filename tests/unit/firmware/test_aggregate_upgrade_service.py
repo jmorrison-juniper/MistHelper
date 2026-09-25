@@ -170,10 +170,12 @@ def test_mixed_status_and_cancellation_keep_all_results() -> None:
     assert len(results) == len(record["children"])  # No child result disappears.
     assert any(result["status"] == "unavailable" for result in results)  # The rejected child has no job identifier.
     ap_child = next(child for child in record["children"] if child["route"] == "upgradeOrgDevices")  # Issue #3246.
-    assert ap_child["cancellation"]["cancelled"] == ["001122334455"]  # The root list names no rebooting AP.
-    assert ap_child["cancellation"]["already_writing"] == []  # The portal read the list, so no AP writes.
+    assert ap_child["cancellation"]["status"] == "already_ended"  # Issue #3367: the AP child job completed first.
+    assert ap_child["cancellation"]["cancelled"] == []  # No upgraded access point reads as cancelled.
+    assert org.calls.count("cancel") == 0  # The completed AP child job got no cancel request.
     service.cancel(SAFE_SESSION, record, store)  # A repeated request continues without duplicate cloud calls.
-    assert org.calls.count("cancel") == 1  # The AP cancellation did not repeat.
+    assert org.calls.count("cancel") == 0  # The completed AP child job still got no cancel request.
+    assert len([call for call in devices.calls if call[0] == "cancel"]) == 2  # Each running gateway job once.
 
 
 def test_concurrent_parent_claim_allows_one_submitter() -> None:
