@@ -34,6 +34,7 @@
     <!-- Right: Map Render Area -->
     <div class="col-md-9">
         <div class="portal-card p-2" id="mapContainer" data-testid="map-container">
+            <div class="text-muted small px-2 pt-1 d-none" id="mapImageNote" role="status" data-testid="map-image-note"></div>
             <div id="plotArea" class="plot-area">
                 <div class="text-center text-muted py-5" id="mapPlaceholder">
                     Select a site and floor plan to view the map.
@@ -50,6 +51,25 @@
 /* global Plotly */
 
 var currentDevices = [];
+// Count each map view. A late answer of an older view must not draw over a newer map.
+var mapViewNumber = 0;
+// The note for a map that holds no floor plan image, such as a Google map.
+var NO_IMAGE_NOTE = 'This floor plan has no image. The map shows the device positions only.';
+// The note for a floor plan image that did not load, such as an expired link.
+var IMAGE_FAILED_NOTE = 'The portal could not load the floor plan image. The map shows the device positions only.';
+
+function showImageNote(text) {
+    var note = document.getElementById('mapImageNote');
+    // Write the note with textContent, so the text can never run as markup.
+    note.textContent = text;
+    note.classList.remove('d-none');
+}
+
+function hideImageNote() {
+    var note = document.getElementById('mapImageNote');
+    note.textContent = '';
+    note.classList.add('d-none');
+}
 
 function loadSites() {
     fetch('/api/maps/sites')
@@ -93,22 +113,27 @@ function onMapChange() {
     var mapId = document.getElementById('mapSelect').value;
     clearMap();
     if (!siteId || !mapId) { return; }
+    // Keep the number of this view. A newer choice changes the number.
+    var view = mapViewNumber;
 
     fetch('/api/maps/site/' + siteId + '/map/' + mapId + '/data')
         .then(function(r) { return r.json(); })
         .then(function(data) {
+            // Ignore the answer if the operator chose another map first.
+            if (view !== mapViewNumber) { return; }
             if (data.error) {
                 document.getElementById('mapPlaceholder').textContent = data.error;
                 return;
             }
-            renderMap(data);
+            renderMap(data, view);
         })
         .catch(function() {
+            if (view !== mapViewNumber) { return; }
             document.getElementById('mapPlaceholder').textContent = 'Failed to load map data.';
         });
 }
 
-function renderMap(data) {
+function renderMap(data, view) {
     document.getElementById('mapPlaceholder').classList.add('d-none');
     currentDevices = data.devices || [];
 
@@ -170,8 +195,19 @@ function renderMap(data) {
     Plotly.newPlot('plotArea', [trace], layout, {
         responsive: true,
         scrollZoom: true
+    }).then(function(plot) {
+        // The promise ends after the image load. Plotly removes an image that
+        // fails to load and shows no sign, so read the plot to find the failure.
+        if (view !== mapViewNumber) { return; }
+        if (imgUrl && !plot.querySelector('.imagelayer image')) {
+            showImageNote(IMAGE_FAILED_NOTE);
+        }
     });
 
+    if (!imgUrl) {
+        // Explain the empty field, because this map has no floor plan image.
+        showImageNote(NO_IMAGE_NOTE);
+    }
     renderDeviceList(currentDevices);
 }
 
@@ -225,6 +261,9 @@ function renderDeviceList(devices) {
 }
 
 function clearMap() {
+    // Start a new view. A late answer of the old view now draws nothing.
+    mapViewNumber += 1;
+    hideImageNote();
     var area = document.getElementById('plotArea');
     Plotly.purge(area);
     area.innerHTML = '';
