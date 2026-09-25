@@ -21,7 +21,7 @@ import functools
 import logging
 import threading
 import time
-from collections.abc import Callable, Mapping, MutableMapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, ClassVar, Final
@@ -30,14 +30,13 @@ from src.upgrade_portal.runtime.lock import MAX_LOCK_LIFE_SECONDS
 from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState
 from src.upgrade_portal.upgrade import driver, events, gate, phase_gate
 from src.upgrade_portal.upgrade.driver import CLIENT_PHASE, PhaseOutcome
+from src.upgrade_portal.upgrade.org_cascade.close import OrgCascadeClose
 from src.upgrade_portal.upgrade.org_cascade.readers import BudgetSleep, OrgStatisticsReader
 from src.upgrade_portal.upgrade.org_cascade.record import (
     FAILED_NOTE,
     FINAL_WATCH_STATES,
-    FINISHED_NOTE,
     PHASE_ENDED_STATES,
     RUNNING_NOTE,
-    STOPPED_NOTE,
     SUBMISSION_OPEN_STATES,
     WAITING_FOR_START_NOTE,
     WATCH_KEY,
@@ -48,6 +47,7 @@ from src.upgrade_portal.upgrade.org_cascade.record import (
     PhaseTargetSet,
     WatchState,
 )
+from src.upgrade_portal.upgrade.org_postcheck import PostCheckTaker
 
 logger = logging.getLogger(__name__)  # One logger for the phase watch thread.
 
@@ -70,6 +70,7 @@ class OrgCascadeDeps:
         clock: The clock in epoch seconds. A test passes a fake clock.
         sleep: The wait. A test passes a callable that moves the fake clock.
         deadline_seconds: The time limit of one phase.
+        post_check: The seam that takes the post-check capture of one site, or None (issue #3244).
     """
 
     store: Any  # The durable record of the operation lives in this store.
@@ -77,6 +78,7 @@ class OrgCascadeDeps:
     clock: Callable[[], float] = time.time  # A test passes a fake clock.
     sleep: Callable[[float], None] = time.sleep  # A test moves the fake clock instead of a real wait.
     deadline_seconds: int = phase_gate.PHASE_DEADLINE_SECONDS  # The single-site time limit of one phase.
+    post_check: PostCheckTaker | None = None  # Last member, so every existing keyword call still builds.
 
 
 class OrgPhaseGates:
@@ -137,6 +139,7 @@ class OrgCascade:
         self._deps = deps  # Every outside collaborator of the walk.
         self._operation_id = operation_id  # The key of the operation record.
         self._records = OrgPhaseStore(deps.store, operation_id, self._now_text)  # FR-014: bounded writes.
+        self._close = OrgCascadeClose(self._records, deps.post_check, operation_id)  # Issue #3244: captures first.
 
     def run(self) -> str:
         """Walk every phase that has not ended, and return the final watch state.
@@ -154,19 +157,19 @@ class OrgCascade:
             return state  # The caller logs the state and ends the thread.
         gates = OrgPhaseGates(self._deps, str(record.get("org_id", "")), self._stop_signal)  # One event window.
         if not self._wait_for_start():  # FR-010: a scheduled upgrade starts later.
-            return self._stop()  # The operator cancelled the schedule.
+            return self._close.stop()  # The operator cancelled the schedule.
         self._write_watch(WatchState.RUNNING, RUNNING_NOTE, None)  # The page shows the active watch.
         for name in PHASE_ORDER:  # FR-005: the fixed cascade order.
             if not self._run_phase(name, gates):  # A cancellation stops the walk at once.
-                return self._stop()  # The page shows the stopped watch.
-        return self._finish()  # Every phase ended.
+                return self._close.stop()  # The page shows the stopped watch.
+        return self._close.finish()  # Every phase ended.
 
     def fail(self) -> None:
         """Write the failed watch state after an internal error, and never raise."""
         logger.info("org cascade: write the failed watch state of %s", self._operation_id)  # Before the write.
         try:  # A fault in the store must not keep the thread alive.
             self._records.update(  # The page then shows the failed watch.
-                functools.partial(self._end, state=WatchState.FAILED, note=FAILED_NOTE)
+                functools.partial(OrgCascadeClose.end, state=WatchState.FAILED, note=FAILED_NOTE)
             )
         except Exception as error:  # Keep broad: the thread must end even when the store fails.
             logger.error(  # After the failed write. The record keeps the last state.
@@ -306,37 +309,6 @@ class OrgCascade:
         """Return True when the record holds a cancellation request."""
         cancellation = record.get("cancellation")  # The cancel route sets requested to True.
         return isinstance(cancellation, Mapping) and cancellation.get("requested") is True  # A strict check.
-
-    def _finish(self) -> str:
-        """Write the finished watch state with the first failure, and return the state."""
-        record = self._records.read() or {}  # The entries of every phase.
-        reason = OrgPhaseEntries.first_failure(record)  # FR-007: the root cause, or None.
-        self._write_watch(WatchState.FINISHED, reason or FINISHED_NOTE, reason)  # The page shows the verdict.
-        logger.info(  # After the write of the final state.
-            "org cascade: the watch of %s finished with reason %s", self._operation_id, reason
-        )
-        return WatchState.FINISHED.value  # The thread ends.
-
-    def _stop(self) -> str:
-        """Write the stopped watch state, and return the state."""
-        logger.info("org cascade: stop the watch of %s after a cancellation", self._operation_id)  # Before.
-        self._records.update(  # The page shows the stopped watch, and no phase waits.
-            functools.partial(self._end, state=WatchState.STOPPED, note=STOPPED_NOTE)
-        )
-        logger.debug("org cascade: wrote the stopped watch state of %s", self._operation_id)  # After the write.
-        return WatchState.STOPPED.value  # The thread ends.
-
-    @staticmethod
-    def _end(record: MutableMapping[str, Any], state: WatchState, note: str) -> None:
-        """End the watch in a candidate record, and put each waiting phase back to pending.
-
-        Why:
-            A single-site phase that a stop interrupts keeps its pending entry.
-            The multi-site entry goes back to pending too, so the page does not
-            show a wait that no thread performs.
-        """
-        OrgPhaseEntries.reset_waiting(record)  # No thread waits for a phase after this write.
-        OrgPhaseWatch.set_state(record, state, note, None)  # The page shows the end of the watch.
 
     def _write_watch(self, state: WatchState, note: str, reason: str | None) -> None:
         """Write one watch state through the bounded compare-and-set."""

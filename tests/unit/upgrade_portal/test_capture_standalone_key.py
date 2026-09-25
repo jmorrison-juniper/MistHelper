@@ -49,6 +49,13 @@ def test_standalone_key_matches_the_capture_key_form() -> None:
     assert match and match.group(0) == key  # The key holds the prefix, the hex, and the ordinal.
 
 
+def test_standalone_key_carries_the_post_check_ordinal() -> None:
+    """Issue #3244: a multi-site post-check key ends in the second ordinal."""
+    key = assembly.standalone_capture_key(2)  # The ordinal of a post-check capture.
+    assert re.fullmatch(r"cap-[0-9a-f]{32}-02", key)  # The same form as a single-site post-check key.
+    assert key != assembly.standalone_capture_key(2)  # Each post-check key holds a fresh nonce.
+
+
 def test_two_standalone_keys_differ() -> None:
     """Two run-less captures hold different keys, so neither overwrites the other."""
     first = assembly.standalone_capture_key()  # The key of the first run-less capture.

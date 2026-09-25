@@ -1,0 +1,54 @@
+{#
+  Issue #3244. The single-site run takes a post-check capture after the last
+  phase ends, and its page links the comparison of the two captures. This card
+  shows the same two links for each site of a multi-site operation. The walk
+  writes one row for each site in the field `post_captures`, and
+  `OrgPostCheckView` builds the rows of this card from that field.
+
+  A record of an earlier release holds no phase watch. The route then returns
+  an empty list, and the card does not render (FR-016). The
+  `paintOrgPostChecks` function of portal.js repaints each row on each poll,
+  with no reload (FR-014).
+
+  Each link always exists, so the poll can fill it. The `hidden` attribute
+  removes a link that has no target from the page.
+
+  Inputs:
+    status.postchecks - one row for each site, in the plan order. Each row
+                        holds the state, the label, one sentence, the capture
+                        link, and the comparison link.
+#}
+{% set org_postchecks = status.postchecks | default([], true) %}
+{% if org_postchecks %}
+  <section class="portal-card"
+           data-testid="org-upgrade-postcheck-list"
+           data-org-postcheck-region
+           aria-live="polite">
+    <h2 class="portal-card-title">Post-check captures</h2>
+    <p class="portal-card-note" data-testid="org-upgrade-postcheck-cadence">
+      The portal takes one post-check capture of each site after the last
+      phase ends. The comparison link shows when the capture of a site is
+      verified and the operation holds a pre-check capture of that site.
+    </p>
+    <ul class="list-unstyled mb-0">
+      {% for row in org_postchecks %}
+        <li data-testid="org-upgrade-postcheck-row-{{ row.site_id }}"
+            data-org-postcheck-site="{{ row.site_id }}">
+          <strong>{{ row.site_name }}</strong>:
+          <span data-testid="org-upgrade-postcheck-state-{{ row.site_id }}"
+                data-org-postcheck-field="state_label"
+                data-org-postcheck-state="{{ row.state }}">{{ row.state_label }}</span>.
+          <span data-testid="org-upgrade-postcheck-message-{{ row.site_id }}"
+                data-org-postcheck-field="message">{{ row.message }}</span>
+          <a class="cell-mono"
+             data-testid="org-upgrade-postcheck-capture-{{ row.site_id }}"
+             data-org-postcheck-field="capture"
+             {% if row.capture_href %}href="{{ row.capture_href }}"{% else %}hidden{% endif %}>{{ row.capture_id }}</a>
+          <a data-testid="org-upgrade-postcheck-compare-{{ row.site_id }}"
+             data-org-postcheck-field="compare"
+             {% if row.compare_href %}href="{{ row.compare_href }}"{% else %}hidden{% endif %}>Compare the two captures of this site</a>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}

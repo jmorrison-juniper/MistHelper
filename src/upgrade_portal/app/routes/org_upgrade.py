@@ -39,12 +39,14 @@ from ...upgrade.org_cascade.view import OrgPhaseView  # Issue #3245: the phase c
 from ...upgrade.org_cascade.walk import OrgCascadeDeps, OrgCascadeRegistry  # Issue #3245: one watch thread.
 from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
 from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for each device of the operation.
+from ...upgrade.org_postcheck_view import OrgPostCheckView  # Issue #3244: the post-check card of each site.
 from ...upgrade.org_precheck import PRECHECK_FIELD, OrgPrecheckGate, OrgPrecheckState  # Issue #3243: the gate.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
 from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
 from ..factory import json_error
 from . import select as select_routes
 from . import upgrade as upgrade_routes
+from .org_postcheck import OrgPostCheckBridge  # Issue #3244: the post-check seam of the watch thread.
 from .select import (
     BAD_REQUEST_STATUS,
     MULTI_SITE_MODE,
@@ -1338,13 +1340,38 @@ def _start_phase_watch(cloud_session: Any, operation: Mapping[str, Any]) -> None
     """
     starter = current_app.config.get(CASCADE_STARTER_CONFIG_KEY, OrgCascadeRegistry.ensure_running)  # A test seam.
     logger.info("Check the phase watch of aggregate upgrade %s", operation.get("operation_id", ""))  # Before.
+    post_check = _bind_post_check(operation, cloud_session)  # Issue #3244: None when the seam cannot bind.
     try:  # The page must answer even when the watch cannot start.
-        deps = OrgCascadeDeps(store=upgrade_routes.run_store(), session=cloud_session)  # The wall clock and wait.
+        deps = OrgCascadeDeps(
+            store=upgrade_routes.run_store(), session=cloud_session, post_check=post_check
+        )  # The wall clock, the wait, and the post-check seam.
         started = starter(operation, deps)  # FR-012: at most one thread for each operation.
     except Exception as error:  # Keep broad: a fault in the watch start must not hide the progress page.
         logger.warning("The phase watch start failed with %s", type(error).__name__)  # Name the type only.
         return  # The next poll tries again.
     logger.debug("The phase watch start returned %s", started)  # True only when this call started a thread.
+
+
+def _bind_post_check(operation: Mapping[str, Any], cloud_session: Any) -> OrgPostCheckBridge | None:
+    """Bind the post-check seam of one operation, or return None when it cannot bind.
+
+    Why:
+        Issue #3244. The walk takes the post-check capture of each site through
+        this seam. A fault in the seam must not stop the phase watch, so the
+        walk then ends each phase and takes no post-check capture.
+
+    Args:
+        operation: The durable operation record.
+        cloud_session: The signed cloud session of the operator.
+
+    Returns:
+        The bridge, or None when a seam cannot bind.
+    """
+    try:  # The phase watch must start even when the seam cannot bind.
+        return OrgPostCheckBridge.bind(operation, cloud_session)  # Binds inside this request.
+    except Exception as error:  # Keep broad: FR-011 keeps the watch alive after a post-check fault.
+        logger.warning("The post-check seam bind failed with %s", type(error).__name__)  # Name the type only.
+        return None  # The walk logs that it holds no post-check seam.
 
 
 def _record_operator(operation: MutableMapping[str, Any]) -> bool:
@@ -1550,6 +1577,7 @@ def _aggregate_record_view(record: Mapping[str, Any]) -> dict[str, Any]:
     """
     age = RunStalePolicy(datetime.now(tz=UTC)).assess(record)  # The age rule of the single-site page.
     rows = OrgDeviceRows(record).rows()  # One row for each target of each child, built one time.
+    phase = OrgPhaseView.build(record)  # Issue #3245: built one time, because the post-check card reads its flag.
     return {
         "devices": rows,  # The device table of the page and the poll.
         "operator_address": str(record.get("actor_email") or ""),  # An earlier record holds no address.
@@ -1559,7 +1587,8 @@ def _aggregate_record_view(record: Mapping[str, Any]) -> dict[str, Any]:
         "controls": OrgControlsView.build(record, retry_plan_of(record, rows)),  # Issue #3247: the recovery.
         "cancel_outcomes": OrgCancelOutcomes.rows(record),  # Issue #3246: the three lists of each cancel.
         "prechecks": OrgPrecheckGate.rows_of(record),  # Issue #3243: the pre-check capture of each site.
-        **OrgPhaseView.build(record),  # Issue #3245: the four phases, the watch line, and the poll rule.
+        "postchecks": OrgPostCheckView.rows(record, bool(phase["phase_active"])),  # Issue #3244: FR-012 and FR-014.
+        **phase,  # Issue #3245: the four phases, the watch line, and the poll rule.
     }
 
 
