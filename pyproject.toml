@@ -305,8 +305,8 @@ explicit_package_bases = true
 #                            untyped code into src/. The CI mypy gate now scans it through
 #                            MYPY_PATHS in .github/workflows/ci.yml. Proved by injecting a
 #                            type error and confirming the gate caught it.
-#   starlink_dashboard.py -- standalone dashboard app; 76 strict errors. Needs its own
-#                            typing sweep — track separately.
+#   starlink_dashboard.py -- REMOVED from this list on 2026-09-25 for issue #3403. The
+#                            file moved to jmorrison-juniper/starlink-dashboard.
 # Dropped from prior list in #884: ops-portal (0 .py files), maps_manager (never existed
 # as top-level module), specs (no runtime Python; one inline script annotation fixed).
 exclude = [
@@ -316,7 +316,6 @@ exclude = [
     "tests",
     "scripts",
     "tools",
-    "starlink_dashboard.py",
 ]
 
 [[tool.mypy.overrides]]

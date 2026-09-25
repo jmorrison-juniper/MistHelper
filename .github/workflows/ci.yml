@@ -74,27 +74,26 @@ env:
   #
   # mypy: clean on src/, MistHelper.py, and wsgi.py under the strict settings.
   # MistHelper.py is genuinely checked here, proved by injecting a type error and
-  # watching the gate catch it. Excludes starlink_dashboard.py (76 errors),
-  # web_portal (168), and tools (61). See [tool.mypy] exclude in pyproject.toml.
+  # watching the gate catch it. Excludes web_portal (168) and tools (61). See
+  # [tool.mypy] exclude in pyproject.toml.
   # The two openai-importing script packages (issue #1948) pass explicitly with a
   # targeted override in pyproject.toml, so a dependency bump cannot merge with no
   # gate above the code it changes.
   MYPY_PATHS: 'src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py'
   # radon: no block passes complexity 10 in src/, MistHelper.py, wsgi.py,
-  # starlink_dashboard.py, scripts/analyze_marvis_pcap.py,
-  # scripts/probe_zscaler_endpoints.py, or
+  # scripts/analyze_marvis_pcap.py, scripts/probe_zscaler_endpoints.py, or
   # tests/unit/utils/test_zscaler_catalogue.py. Measurement date is 2026-09-11.
   # Excludes remaining scripts (33 blocks), remaining tests (51 blocks),
   # web_portal (2 blocks), and tools (20 blocks).
-  RADON_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py'
+  RADON_PATHS: 'src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py'
   # vulture: 0 findings at confidence 70 everywhere except tools, which reports 6.
-  VULTURE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal'
+  VULTURE_PATHS: 'src/ MistHelper.py wsgi.py web_portal'
   # pydocstyle: 0 violations in src/, wsgi.py, and web_portal. Excludes
-  # MistHelper.py (3), starlink_dashboard.py (11), and tools (2).
+  # MistHelper.py (3) and tools (2).
   PYDOCSTYLE_PATHS: 'src/ wsgi.py web_portal'
   # interrogate: every target clears the 90 percent floor, so this gate covers the
   # whole project. Lowest measured value is web_portal at 97.5 percent.
-  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py starlink_dashboard.py web_portal tools'
+  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   # Issue #1895: the ops platform suite keeps its own denominator and its own
   # floor, so it can never move the root percentage. Issue #1883 unified the

@@ -282,9 +282,8 @@ def test_scorer_grades_and_minimums() -> None:
 def test_generated_and_vendored_paths_are_excluded(tmp_path: Path) -> None:
     """Generated/vendored trees are skipped by default so they do not inflate counts (issue #451)."""
     sample = "x = 1  # trivial module body.\n"  # Minimal valid Python for each throwaway file.
-    # Files that MUST be excluded by default: generated protobuf + vendored skill scripts.
+    # Files that MUST be excluded by default: vendored skill scripts.
     excluded_rel = [
-        "starlink-api-reference/device-api/device_pb2_grpc.py",  # Generated gRPC stub.
         ".agents/skills/caveman/scripts/compress.py",  # Vendored skill script.
         "data/skills/caveman/scripts/validate.py",  # Mirror of the vendored skill script.
     ]

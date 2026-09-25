@@ -149,7 +149,6 @@ class ComplianceAnalyzer:
         "node_modules",
         "tests/fixtures",
         "tests\\fixtures",
-        "starlink-api-reference",  # Third-party reference + generated gRPC protobuf (device_pb2*.py).
         ".agents/skills",  # Vendored Copilot skill scripts -- not project source.
         "data/skills",  # Mirror of the vendored skill scripts under the runtime data dir.
     )

@@ -138,8 +138,5 @@ ROLLBACK_FEATURES.md
 init-standalone-repo.ps1
 publish-containers.ps1
 compose.yml
-starlink_requirements.txt
-starlink_dashboard.py
-starlink_tui.py
 show_command_help.json
 junk/
