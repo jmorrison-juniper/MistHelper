@@ -359,18 +359,18 @@ class TestTheLogsHoldNoSecret:
     def test_a_urllib3_debug_line_hides_the_storage_signature(self, caplog: pytest.LogCaptureFixture) -> None:
         """The Mist link redirects to a signed storage link, and urllib3 logs that path too."""
         pool_logger = logging.getLogger("urllib3.connectionpool")  # The logger that writes each request path.
-        secrets = {  # Each value grants access to the file until the link expires.
+        link_values = {  # Fake values in the shape of a signed storage link. Each real value grants access.
             "X-Amz-Credential": "TESTKEYID%2F20260925%2Fus-east-1%2Fs3%2Faws4_request",
             "X-Amz-Security-Token": "TESTSESSIONTOKENVALUE",
             "x-amz-signature": "0123456789abcdef0123456789abcdef",
         }
-        query = "&".join(f"{name}={value}" for name, value in secrets.items())  # Mix the case, like a proxy can.
+        query = "&".join(f"{name}={value}" for name, value in link_values.items())  # Mix the case, like a proxy can.
         path = f"/floor-plan.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&{query}&X-Amz-Expires=300"  # The storage path.
         with caplog.at_level(logging.DEBUG, logger="urllib3.connectionpool"):  # Capture the debug line.
             pool_logger.debug(
                 '%s://%s:%s "%s %s %s" %s %s', "https", "storage.example", 443, "GET", path, "HTTP/1.1", 200, 0
             )
-        assert caplog.text.count("***REDACTED***") == len(secrets)  # Each secret value is hidden.
+        assert caplog.text.count("***REDACTED***") == len(link_values)  # Each signed value is hidden.
         assert "X-Amz-Expires=300" in caplog.text  # A value that grants nothing stays readable for triage.
-        for value in secrets.values():  # No secret value reaches a handler.
-            assert value not in caplog.text, "a storage link secret reached the log"
+        for value in link_values.values():  # No signed value reaches a handler.
+            assert value not in caplog.text, "a signed storage link value reached the log"
