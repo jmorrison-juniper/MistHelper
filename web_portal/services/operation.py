@@ -241,6 +241,56 @@ def _indexed_options(operation_names: list) -> list:
     return [{"value": str(position), "label": name} for position, name in enumerate(operation_names, start=1)]
 
 
+def _identifier_label(identifier: str) -> str:
+    """Return the label that the portal shows for one endpoint identifier."""
+    labels = {  # Keep common Mist identifiers readable for a junior operator.
+        "site_id": "Site",  # The site selector accepts the site name and resolves the ID.
+        "msp_id": "MSP ID",  # The MSP prompt asks for a Mist MSP UUID.
+        "org_id": "Organization ID",  # The portal usually resolves this from its active context.
+    }
+    if identifier in labels:  # Use the curated label when one exists.
+        return labels[identifier]  # Return the approved label for this known identifier.
+    return identifier.replace("_", " ").title()  # Fall back to a readable title for endpoint-specific IDs.
+
+
+def _endpoint_family_prompt_parameter(identifier: str) -> dict | None:
+    """Build the parameter that answers one endpoint family prompt."""
+    if identifier == "org_id":  # The portal application context supplies the organization ID.
+        return None  # Do not queue an answer that the handler will not read from input().
+    if identifier == "site_id":  # Site prompts use the shared site selector.
+        return _site_param()  # Return the existing site control so site labels stay consistent.
+    return _required_text_param(  # All remaining endpoint identifiers are typed into CLI prompts.
+        identifier,
+        _identifier_label(identifier),
+        placeholder=f"Enter {_identifier_label(identifier)}",
+    )
+
+
+def _endpoint_family_dynamic_parameters(required: tuple[str, ...]) -> list[dict]:
+    """Return the dynamic portal controls for one endpoint operation."""
+    parameters = []  # Preserve the prompt order that the exporter table states.
+    for identifier in required:  # Convert each required identifier into the prompt the browser must answer.
+        parameter = _endpoint_family_prompt_parameter(identifier)  # Build one prompt control when input() reads it.
+        if parameter is not None:  # Cached identifiers do not need a queued answer.
+            parameters.append(parameter)  # Add only the controls that feed web_input_context.
+    return parameters  # Return the controls in exporter order.
+
+
+def _endpoint_family_choice_options(operations: tuple) -> tuple[list[dict], dict[str, list[dict]]]:
+    """Build chooser options and per-choice prompt controls for one endpoint family."""
+    from src.export.endpoint_catalog import menu_text  # Use the same readable text the CLI chooser prints.
+
+    options = []  # Store the choices that the browser renders.
+    dynamic_parameters = {}  # Store the later controls by one-based chooser value.
+    for position, operation in enumerate(operations, start=1):  # Match the CLI one-based chooser.
+        value = str(position)  # The handler expects this exact digit from the first prompt.
+        options.append(  # Add one readable browser option with the exporter contract attached.
+            {"value": value, "label": menu_text(operation.operation), "required": list(operation.required)}
+        )
+        dynamic_parameters[value] = _endpoint_family_dynamic_parameters(operation.required)  # Map later prompts.
+    return options, dynamic_parameters  # Return both pieces so one registry entry owns the full model.
+
+
 def _site_scoped_chooser_options() -> tuple:
     """Return the count and simple-endpoint choices that menus 236 and 261 offer.
 
@@ -586,6 +636,12 @@ def _build_registry() -> dict:
     # --- Issue #3230 required plain prompts and endpoint family explorers ---
     from src.export.count_exporter import _MSP_OPS as msp_count_ops  # Read the MSP chooser source of truth.
     from src.export.count_exporter import _ORG_OPS as org_count_ops  # Read the org chooser source of truth.
+    from src.export.endpoint_family_exporter import _MSP_DETAIL_OPS as msp_detail_ops  # Read menu 267 table.
+    from src.export.endpoint_family_exporter import _ORG_DETAIL_OPS as org_detail_ops  # Read menu 266 table.
+    from src.export.endpoint_family_exporter import _OTHER_DETAIL_OPS as other_detail_ops  # Read menu 268 table.
+    from src.export.endpoint_family_exporter import _SITE_DETAIL_OPS as site_detail_ops  # Read menu 265 table.
+    from src.export.endpoint_family_exporter import _SITE_MAP_OPS as site_map_ops  # Read menu 264 table.
+    from src.export.endpoint_family_exporter import _SITE_SLE_OPS as site_sle_ops  # Read menu 263 table.
     from src.export.simple_endpoint_exporter import _MSP_OPS as msp_endpoint_ops  # Read the MSP endpoint table.
     from src.export.simple_endpoint_exporter import _NONE_OPS as global_endpoint_ops  # Read the global endpoint table.
     from src.export.simple_endpoint_exporter import _ORG_OPS as org_endpoint_ops  # Read the org endpoint table.
@@ -597,6 +653,14 @@ def _build_registry() -> dict:
     )
     org_endpoint_options = _indexed_options([entry.operation for entry in org_endpoint_ops])  # Match menu 260 order.
     msp_endpoint_options = _indexed_options([entry.operation for entry in msp_endpoint_ops])  # Match menu 262 order.
+    endpoint_family_tables = {  # Map each endpoint family menu to its source table.
+        "263": site_sle_ops,  # Site SLE endpoints ask for SLE scope identifiers after choice.
+        "264": site_map_ops,  # Site map endpoints ask for map and site identifiers after choice.
+        "265": site_detail_ops,  # Site detail endpoints ask for site and endpoint identifiers after choice.
+        "266": org_detail_ops,  # Organization detail endpoints use context org and later identifiers.
+        "267": msp_detail_ops,  # MSP detail endpoints ask for MSP identifiers after choice.
+        "268": other_detail_ops,  # Other endpoints range from global to single identifier prompts.
+    }
 
     registry["235"] = {  # Menu 235 asks for an org count operation before it uses the cached org.
         "category": "interactive",  # The portal can run this row after it records the chooser answer.
@@ -650,15 +714,18 @@ def _build_registry() -> dict:
             _required_text_param("msp_id", "MSP ID", placeholder="Mist MSP UUID"),  # Answer the required MSP prompt.
         ],
     }
-    for menu in ("263", "264", "265", "266", "267", "268"):  # These families ask different prompts per choice.
-        registry[menu] = {  # Replace the runnable row with an honest browser limitation.
-            "category": "cli_only",  # Hide Run, because the portal cannot model dynamic prompts yet.
-            "parameters": [],  # A browser row must not collect a fixed list that can drift from the choice.
-            "cli_only_message": (  # Tell the operator why the browser cannot run this row and what to do.
-                "This endpoint family explorer asks for different identifiers after the endpoint choice. "
-                "The browser cannot model those per-choice prompts yet. Start it with "
-                f"python MistHelper.py --menu {menu}, or use SSH access on port 2200."
-            ),
+    for menu, operations in endpoint_family_tables.items():  # These families ask different prompts per choice.
+        options, dynamic_parameters = _endpoint_family_choice_options(operations)  # Build the per-choice model.
+        registry[menu] = {  # Return the row to the browser after the dynamic prompt model exists.
+            "category": "interactive",  # The portal can now collect the selected operation's prompts.
+            "parameters": [
+                _choice_param(  # First answer the chooser prompt that selects the endpoint operation.
+                    "endpoint_operation",
+                    "Endpoint",
+                    options,
+                    dynamic_parameters=dynamic_parameters,
+                )
+            ],
         }
 
     return registry
