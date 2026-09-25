@@ -3029,6 +3029,77 @@
         return ORG_UPGRADE_FINISHED_STATES.indexOf(state) !== -1 && !phaseActive;  /* Both ends are required. */
     }
 
+    /**
+     * Repaints the post-check card of a multi-site operation (issue #3244).
+     *
+     * Why: The walk takes one post-check capture of each site after the last
+     * phase ends. The poll returns one row for each site in the field
+     * `postchecks`, so the page shows each state with no reload (FR-014). The
+     * paint matches each row by its site attribute. It builds no selector from
+     * the data, because a site identifier comes from the cloud.
+     *
+     * @param {Object} status The status body.
+     * @returns {void}
+     */
+    function paintOrgPostChecks(status) {
+        var card = document.querySelector("[data-org-postcheck-region]");  /* A record with no watch has no card. */
+        if (!card || !status || !Array.isArray(status.postchecks)) {
+            return;  /* Keep the rows of the first render. */
+        }
+        var rowsBySite = Object.create(null);  /* No prototype, so a site key cannot reach a built-in name. */
+        status.postchecks.forEach(function (row) {
+            if (row && typeof row.site_id === "string") {
+                rowsBySite[row.site_id] = row;  /* The poll row of each site. */
+            }
+        });
+        Array.prototype.forEach.call(card.querySelectorAll("[data-org-postcheck-site]"), function (item) {
+            var row = rowsBySite[item.getAttribute("data-org-postcheck-site")];  /* The poll row of this item. */
+            if (row) {
+                paintOrgPostCheckRow(item, row);  /* A site with no poll row keeps its first render. */
+            }
+        });
+    }
+
+    /**
+     * Repaints the state, the sentence, and the two links of one site.
+     *
+     * @param {Element} item The list item of the site.
+     * @param {Object} row The poll row of the site.
+     * @returns {void}
+     */
+    function paintOrgPostCheckRow(item, row) {
+        var state = item.querySelector('[data-org-postcheck-field="state_label"]');  /* The short label. */
+        setText(state, row.state_label || row.state || "");
+        if (state) {
+            state.setAttribute("data-org-postcheck-state", String(row.state || ""));  /* The machine state. */
+        }
+        setText(item.querySelector('[data-org-postcheck-field="message"]'), row.message || "");
+        var capture = item.querySelector('[data-org-postcheck-field="capture"]');  /* The link to the capture. */
+        paintOrgPostCheckLink(capture, row.capture_href);
+        setText(capture, row.capture_id || "");  /* The key is the link text. */
+        paintOrgPostCheckLink(item.querySelector('[data-org-postcheck-field="compare"]'), row.compare_href);
+    }
+
+    /**
+     * Sets the target of one link, and hides the link when it has no target.
+     *
+     * @param {Element|null} link The link element.
+     * @param {*} href The target that the server built, or empty text.
+     * @returns {void}
+     */
+    function paintOrgPostCheckLink(link, href) {
+        if (!link) {
+            return;
+        }
+        var target = typeof href === "string" ? href : "";  /* The server builds and quotes each target. */
+        if (target) {
+            link.setAttribute("href", target);
+        } else {
+            link.removeAttribute("href");  /* A link with no target leads nowhere. */
+        }
+        link.hidden = target === "";  /* FR-013: the comparison link shows only for a pair. */
+    }
+
     function paintOrgUpgradeStatus(region, status) {
         if (!region || !status) {
             return;
@@ -3048,6 +3119,7 @@
         paintOrgUpgradeDevices(status);  /* Issue #3249: one row for each device. */
         paintOrgUpgradeAudit(status);  /* Issue #3249: the age, the operator, and the account. */
         paintOrgPhaseWatch(region, status);  /* Issue #3245: the four phases and the watch line. */
+        paintOrgPostChecks(status);  /* Issue #3244: the post-check capture of each site. */
         var state = String(status.status || "unknown").toLowerCase();
         region.setAttribute("data-job-status", state);
         if (orgUpgradePollDone(state, status.phase_active === true)) {  /* Issue #3245: wait for the phase watch. */

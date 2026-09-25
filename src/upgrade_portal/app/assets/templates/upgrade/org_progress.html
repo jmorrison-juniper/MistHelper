@@ -120,6 +120,13 @@
 {% include 'partials/org_phase_list.html' %}
 
 {#
+  Issue #3244. The post-check capture of each site, with the link that
+  compares it to the pre-check capture of the same site. The partial explains
+  its inputs, and it renders nothing for a record that holds no phase watch.
+#}
+{% include 'partials/org_postcheck_list.html' %}
+
+{#
   Issue #3246. The single-site stop page shows three device lists after a
   stop. This panel shows the same three lists for each child job that holds a
   cancel result. `OrgCancelOutcomes` builds the rows from the stored record,

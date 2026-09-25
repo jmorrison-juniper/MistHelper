@@ -206,6 +206,10 @@ SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second site for o
 SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The text of the second site row.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
+# WHY: Issue #3244. A standalone capture names no run. The pre-check reads the
+# version before the upgrade, and the post-check reads the version after it,
+# so the comparison of one site shows a firmware change.
+STANDALONE_ROLE_VERSIONS = {"pre": STAND_IN_VERSIONS[0], "post": STAND_IN_VERSIONS[1]}  # The version of each role.
 # WHY: Issue #3249. The multi-site device table keys each row by the MAC
 # address, so the second site holds its own addresses. The cloud job of the
 # access points lists the first-site AP as upgraded and the second-site AP as
@@ -1246,6 +1250,10 @@ def stand_in_capture_runner(job: dict[str, Any]) -> None:
         run. The multi-site gate reads that stored capture, so this seam stores
         one in the process-owned capture store before it reports the end state.
 
+        Issue #3244. The multi-site watch takes a post-check capture of each
+        site after the last phase ends. That capture names no run either, and
+        the compare page reads it, so this seam stores it with the new version.
+
     Args:
         job: The capture job. This seam reads the key, the tier, the run, the
             role, and the site.
@@ -1253,13 +1261,14 @@ def stand_in_capture_runner(job: dict[str, Any]) -> None:
     from src.upgrade_portal.app.routes import capture  # Late, so a plain collection never loads the portal.
 
     tier = int(job.get("tier", capture.TIER_STANDARD))  # The tier that the operator chose.
-    if not job.get("run_id") and job.get("role") == "pre":  # A standalone pre-check stores its own capture.
-        logger.info("The stand-in capture runner stores the standalone pre-check %s", job["capture_id"])
+    role = str(job.get("role") or "")  # The pre-check or the post-check.
+    if not job.get("run_id") and role in STANDALONE_ROLE_VERSIONS:  # A standalone capture stores its own capture.
+        logger.info("The stand-in capture runner stores the standalone %s capture %s", role, job["capture_id"])
         stored = stand_in_capture(  # The same shape as each seeded capture, for the named site.
-            str(job["capture_id"]), "pre", STAND_IN_VERSIONS[0], stand_in_stamp(), site_id=str(job["site_id"])
+            str(job["capture_id"]), role, STANDALONE_ROLE_VERSIONS[role], stand_in_stamp(), site_id=str(job["site_id"])
         )
         flask.current_app.config["CAPTURE_STORE"].write_capture({**stored, "run_id": "", "tier": tier})
-        logger.debug("The stand-in capture runner stored one standalone pre-check")  # Log after the write.
+        logger.debug("The stand-in capture runner stored one standalone %s capture", role)  # Log after the write.
     opened = capture.section_map(tier)  # One state for each section name.
     read = {name: capture.SECTION_DONE if state != capture.SECTION_SKIPPED else state for name, state in opened.items()}
     capture.record_status(

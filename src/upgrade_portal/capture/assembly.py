@@ -433,7 +433,7 @@ def capture_key(run_id: str, ordinal: int) -> str:
     return f"{KEY_PREFIX}{run_hex(run_id)}-{_whole_number(ordinal):02d}"
 
 
-def standalone_capture_key() -> str:
+def standalone_capture_key(ordinal: int = FIRST_ORDINAL) -> str:
     """Build the key of one run-less capture from a fresh nonce.
 
     Why:
@@ -441,12 +441,17 @@ def standalone_capture_key() -> str:
         empty run, so it landed under ``cap--01`` and the next run-less capture
         overwrote it. This builder reads a fresh ``uuid4`` hex nonce in place of
         the run, so two run-less captures never collide (D1, FR-096). The key
-        keeps the run-capture form, so a reader meets no new shape.
+        keeps the run-capture form, so a reader meets no new shape. Issue #3244
+        adds the ordinal, so a multi-site post-check key ends in ``-02``, as the
+        post-check key of a single-site run does.
+
+    Args:
+        ordinal: The capture ordinal. The default names a pre-check.
 
     Returns:
-        A key in the form ``cap-{nonce_hex}-01``.
+        A key in the form ``cap-{nonce_hex}-{ordinal:02d}``.
     """
-    return f"{KEY_PREFIX}{uuid.uuid4().hex}-{FIRST_ORDINAL:02d}"
+    return f"{KEY_PREFIX}{uuid.uuid4().hex}-{_whole_number(ordinal):02d}"  # A fresh nonce for each key.
 
 
 def tier_of(sections: CaptureSections) -> int:

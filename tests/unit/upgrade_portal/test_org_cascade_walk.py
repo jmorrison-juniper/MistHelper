@@ -11,6 +11,7 @@ Why:
 
 from __future__ import annotations
 
+import dataclasses
 import threading
 from typing import Any
 
@@ -27,7 +28,14 @@ from src.upgrade_portal.upgrade.org_cascade.record import (
     OrgPhaseEntries,
 )
 from src.upgrade_portal.upgrade.org_cascade.walk import OrgCascade, OrgCascadeDeps, OrgCascadeRegistry, OrgPhaseGates
-from tests.support.org_cascade import OPERATION_ID, SITE_IDS, OrgRecordBuilder, VersionedStore
+from src.upgrade_portal.upgrade.org_postcheck import OrgPostCheckRows
+from tests.support.org_cascade import (
+    OPERATION_ID,
+    SITE_IDS,
+    OrgRecordBuilder,
+    StandInPostCheckTaker,
+    VersionedStore,
+)
 from tests.support.rehearsal import (
     TYPE_ACCESS_POINT,
     TYPE_GATEWAY,
@@ -430,3 +438,67 @@ def test_the_registry_keeps_one_thread_for_each_operation(monkeypatch: pytest.Mo
     assert (
         OrgCascadeRegistry.ensure_running(store.read_run(OPERATION_ID) or {}, deps) is False
     )  # The registry must reject the watch.
+
+
+def post_rows(store: VersionedStore) -> list[str]:
+    """Return the state of each stored post-check row, in the plan order (issue #3244)."""
+    return [row["state"] for row in OrgPostCheckRows.of(store.read_run(OPERATION_ID) or {}).values()]  # The states.
+
+
+def test_the_walk_takes_each_postcheck_after_the_last_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3244, FR-001. The post-check capture of each site starts only after every phase ended."""
+    clock = RehearsalClock()  # The clock controls the test time.
+    fleet = cascade_fleet(clock.now())  # The fleet defines the test devices.
+    attach(monkeypatch, clock, fleet)  # The stand-in cloud handles the reads.
+    store = VersionedStore(OrgRecordBuilder.with_site_plan(OrgRecordBuilder.build(fleet)))  # The plan of two sites.
+    taker = StandInPostCheckTaker()  # Every capture verifies.
+    ended: list[dict[str, str]] = []  # The phase states inside each capture.
+    taker.on_take = lambda site: ended.append({name: row[0] for name, row in phases(store).items()})  # Read.
+    deps = dataclasses.replace(deps_of(store, clock), post_check=taker)  # The walk receives the seam.
+    assert OrgCascade(deps, OPERATION_ID).run() == "finished"  # The walk must finish.
+    assert ended == [dict.fromkeys(PHASE_ORDER, "settled")] * 2  # Every phase ended before each capture.
+    assert [site for site, _key, _tier in taker.taken] == list(SITE_IDS)  # One capture for each site.
+    assert post_rows(store) == ["verified", "verified"]  # Both rows verified.
+    assert watch(store)["note"] == FINISHED_NOTE  # No failure, so the finished note stays.
+
+
+def test_a_cancellation_during_a_phase_still_takes_each_postcheck(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3244, FR-002. A cancel during the switch phase takes the captures, then stops the watch."""
+    clock = RehearsalClock()  # The clock controls the test time.
+    lost = (DeviceScript("bb0000000001", TYPE_SWITCH, reconnect_at=NEVER, version_at=NEVER),)  # Never settles.
+    fleet = fleet_of(  # The fleet defines the test devices.
+        clock, DeviceScript("aa0000000001", TYPE_GATEWAY), *lost, DeviceScript("cc0000000001", TYPE_ACCESS_POINT)
+    )
+    log = attach(monkeypatch, clock, fleet)  # The log records the cloud reads.
+    store = VersionedStore(OrgRecordBuilder.with_site_plan(OrgRecordBuilder.build(fleet)))  # The plan of two sites.
+    log.on_read = lambda keywords: (
+        store.cancel(OPERATION_ID) if keywords.get("type") == TYPE_SWITCH else None
+    )  # The hook cancels the switch phase.
+    taker = StandInPostCheckTaker()  # Every capture verifies.
+    deps = dataclasses.replace(deps_of(store, clock), post_check=taker)  # The walk receives the seam.
+    assert OrgCascade(deps, OPERATION_ID).run() == "stopped"  # The cancellation must stop the watch.
+    assert [site for site, _key, _tier in taker.taken] == list(SITE_IDS)  # One capture for each site.
+    assert phases(store)["switches"] == ("pending", 0, 0, "")  # The switch phase went back to pending.
+    assert watch(store)["note"] == STOPPED_NOTE  # The page shows the stop.
+
+
+def test_a_cancelled_schedule_still_takes_each_postcheck(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3244, FR-002. A cancel during the start wait takes the captures, then stops the watch."""
+    clock = RehearsalClock()  # The clock controls the test time.
+    start = int(clock.now()) + 3600  # The upgrade starts in one hour.
+    fleet = cascade_fleet(clock.now() + 3600)  # The fleet defines the test devices.
+    log = attach(monkeypatch, clock, fleet)  # The log records the cloud reads.
+    store = VersionedStore(OrgRecordBuilder.with_site_plan(OrgRecordBuilder.build(fleet, start_time=start)))  # Plan.
+
+    def cancelling_sleep(seconds: float) -> None:
+        clock.sleep(seconds)  # Move the driven clock one slice.
+        store.cancel(OPERATION_ID)  # The operator cancels during the wait.
+
+    taker = StandInPostCheckTaker()  # Every capture verifies.
+    deps = OrgCascadeDeps(
+        store=store, session=None, clock=clock.now, sleep=cancelling_sleep, post_check=taker
+    )  # The dependencies use the test clock and the seam.
+    assert OrgCascade(deps, OPERATION_ID).run() == "stopped"  # The start wait must stop.
+    assert log.reads == []  # The watch read no statistics.
+    assert post_rows(store) == ["verified", "verified"]  # Both captures ran.
+    assert watch(store)["note"] == STOPPED_NOTE  # The page shows the stop.

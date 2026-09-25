@@ -345,6 +345,35 @@ The portal takes the post-check capture in every end case. A run that finishes
 gets a post-check capture. A run that you stop also gets a post-check capture.
 The portal takes the capture before it writes the final state of the run.
 
+### The post-check captures of a multi-site upgrade
+
+A multi-site upgrade takes one post-check capture of each site. The portal
+takes the captures after the last phase ends, and also after you cancel the
+operation. The portal reads one site at a time, in the order of your site
+selection. Each capture uses the data tier of the pre-check capture of that
+site.
+
+The progress page shows the card "Post-check captures", with one row for each
+site. The page repaints each row on each status poll, and the page does not
+reload.
+
+| Label | Meaning |
+| --- | --- |
+| Waiting | The portal takes this capture after the last phase ends. |
+| Running | The portal reads the site now. |
+| Verified | The portal read the capture back, and the record matches. |
+| Failed | The capture did not verify. If no phase failed, the watch reason names the first site with a failed capture. |
+| Held | The post-check mode is manual, so the portal took no capture. |
+| Skipped | The cloud accepted no firmware write for the site. |
+| Not taken | The phase watch ended before the portal took this capture. |
+
+A verified row links to the capture and to the comparison. The comparison link
+appears only when the operation holds a pre-check capture of that site. The
+link opens `/compare` with the two captures of that site.
+
+The operation reads "Finished" or "Stopped" only after the last capture ends.
+If one capture fails, the portal continues with the next site.
+
 ## Read the comparison
 
 Open the comparison page at `/compare` and choose the two captures. The two

@@ -11,6 +11,7 @@ Why:
 
 from __future__ import annotations
 
+import html
 import re
 from collections.abc import Callable, Iterator, Mapping, MutableMapping
 from contextlib import contextmanager
@@ -25,6 +26,7 @@ from flask.testing import FlaskClient
 
 from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
 from src.upgrade_portal.app.routes import org_upgrade, select
+from src.upgrade_portal.app.routes.org_postcheck import OrgPostCheckBridge
 from src.upgrade_portal.runtime import identity
 from src.upgrade_portal.runtime.runs import PHASE_ORDER
 from src.upgrade_portal.upgrade import options as option_rules
@@ -38,6 +40,8 @@ from src.upgrade_portal.upgrade.org_cascade.record import (
     OrgPhaseWatch,
     WatchState,
 )
+from src.upgrade_portal.upgrade.org_postcheck import OrgPostCheckRows, PostCheckResult
+from src.upgrade_portal.upgrade.org_postcheck_view import WAITING_MESSAGE
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
 from tests.support.org_precheck_seams import PrecheckAdopterStandIn
@@ -73,6 +77,7 @@ BROKEN_BODIES = (  # Two request bodies that hold no JSON object: an empty body 
     pytest.param(b"", id="empty-body"),
     pytest.param(b"{bad json", id="malformed-json"),
 )
+POST_CAPTURE_KEYS = ("cap-" + "a" * 32 + "-02", "cap-" + "b" * 32 + "-02")  # Issue #3244: one for each site.
 
 
 class RecordStore:
@@ -142,17 +147,19 @@ class RecordingStarter:
 
     Attributes:
         calls: The child states and the watch state of each call, in order.
+        deps: The seams of each call, in order. Issue #3244 reads the post-check seam.
         fault: An error that each call raises, or None.
     """
 
     def __init__(self) -> None:
         """Start with no call and no fault."""
         self.calls: list[dict[str, Any]] = []  # The tests read the order and the count of the calls.
+        self.deps: list[Any] = []  # Issue #3244: the seams that the route bound for each call.
         self.fault: Exception | None = None  # A test sets an error to prove that the page still answers.
 
     def __call__(self, record: Mapping[str, Any], deps: Any) -> bool:
         """Record one call, and raise the fault when a test set one."""
-        del deps  # The recorder starts no walk.
+        self.deps.append(deps)  # The recorder starts no walk, so it only keeps the seams.
         children = [str(child.get("status", "")) for child in record.get("children", [])]  # The child states.
         self.calls.append({"children": children, "watch": OrgPhaseWatch.state_of(record)})  # One entry.
         if self.fault is not None:  # The test asks for a fault in the watch start.
@@ -506,3 +513,88 @@ def test_no_accepted_child_job_names_the_gap_and_stops_the_poll_rule(harness: Wa
     status = job_status(harness, operation_id)  # The poll.
     assert status["phase_watch"]["note"] == NO_CHILD_NOTE  # The watch line names the gap.
     assert status["phase_active"] is False  # No watch can start, so the poll can stop.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3244. The watch close takes the post-check capture of each site.
+# ---------------------------------------------------------------------------
+
+
+def plan_sites(harness: WatchHarness, operation_id: str) -> list[str]:
+    """Return the selected sites of one operation, in the plan order."""
+    return [str(site_id) for site_id in harness.store.records[operation_id]["site_ids"]]  # The stored selection.
+
+
+def post_checks_verified(record: MutableMapping[str, Any]) -> None:
+    """Store a finished watch with one verified post-check capture for each site."""
+    watch_finished(record)  # The walk ended every phase.
+    for site, key in zip(OrgPostCheckRows.sites_of(record), POST_CAPTURE_KEYS, strict=True):  # One key for each.
+        OrgPostCheckRows.put(record, site.ended_row(PostCheckResult(key, True)))  # The production row shape.
+
+
+def compare_attributes(page: str, site_id: str) -> str:
+    """Return the attributes of the comparison link of one site."""
+    found = re.search(rf'data-testid="org-upgrade-postcheck-compare-{site_id}"([^>]*)>', page)  # The link.
+    assert found is not None, f"The page holds no comparison link for site {site_id}."  # FR-012: one link.
+    return found.group(1)  # The attributes that follow the test identifier.
+
+
+def test_the_watch_start_receives_the_post_check_seam(harness: WatchHarness) -> None:
+    """FR-001: the route gives the walk a post-check seam, so the walk can take each capture."""
+    operation_id = save_plan(harness)  # The planned operation.
+    confirm(harness, operation_id)  # The operator types CONFIRM.
+    seam = harness.starter.deps[0].post_check  # The seam of the first start call.
+    assert isinstance(seam, OrgPostCheckBridge)  # The production bridge, not a stand-in.
+    assert seam.mode == "automatic"  # FR-009: the default mode takes each capture.
+
+
+def test_a_fault_in_the_seam_bind_never_blocks_the_watch(
+    harness: WatchHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-011: a bind fault gives the walk no seam, and the watch still starts."""
+
+    def broken_bind(operation: Any, cloud_session: Any) -> Any:
+        """Raise the fault of a seam that cannot bind."""
+        del operation, cloud_session  # The fault comes before any read.
+        raise RuntimeError("The capture runner is missing.")  # The route must catch the fault.
+
+    monkeypatch.setattr(OrgPostCheckBridge, "bind", broken_bind)  # Replace the bind of the bridge.
+    operation_id = save_plan(harness)  # The planned operation.
+    confirm(harness, operation_id)  # The submission answers.
+    assert [deps.post_check for deps in harness.starter.deps] == [None]  # The walk runs with no seam.
+    assert 'data-testid="org-upgrade-phases"' in job_page(harness, operation_id)  # The page still answers.
+
+
+def test_the_page_and_the_poll_show_a_waiting_row_for_each_site(harness: WatchHarness) -> None:
+    """FR-012 and FR-014: the page and the poll show the same row for each site while the watch runs."""
+    operation_id = save_plan(harness)  # The planned operation.
+    confirm(harness, operation_id)  # The operator types CONFIRM.
+    page, rows = job_page(harness, operation_id), job_status(harness, operation_id)["postchecks"]  # Both reads.
+    assert [row["site_id"] for row in rows] == plan_sites(harness, operation_id)  # One row in the plan order.
+    assert {(row["state_label"], row["message"]) for row in rows} == {("Waiting", WAITING_MESSAGE)}  # No capture.
+    assert 'data-testid="org-upgrade-postcheck-list"' in page  # FR-012: the card.
+    assert all(" hidden" in compare_attributes(page, row["site_id"]) for row in rows)  # FR-013: no pair yet.
+
+
+def test_a_verified_post_check_links_the_comparison_of_each_site(harness: WatchHarness) -> None:
+    """FR-013: a verified capture links the compare page with the pre-check key and the post-check key."""
+    operation_id = save_plan(harness)  # The planned operation.
+    confirm(harness, operation_id)  # The operator types CONFIRM.
+    put_watch(harness, operation_id, post_checks_verified)  # The walk verified both captures.
+    rows = job_status(harness, operation_id)["postchecks"]  # The poll after the stage.
+    sites = plan_sites(harness, operation_id)  # The pre-check stand-in keys each capture by its site.
+    expected = [f"/compare?before=pre-{site}&after={key}" for site, key in zip(sites, POST_CAPTURE_KEYS, strict=True)]
+    assert [row["compare_href"] for row in rows] == expected  # FR-013: one pair for each site.
+    page = job_page(harness, operation_id)  # A reload shows the same links.
+    for site, href in zip(sites, expected, strict=True):  # Each link carries its target and shows.
+        attributes = compare_attributes(page, site)  # The attributes of the link of this site.
+        assert f'href="{html.escape(href)}"' in attributes and "hidden" not in attributes  # FR-012: it shows.
+
+
+def test_a_record_with_no_watch_shows_no_post_check_card(harness: WatchHarness) -> None:
+    """FR-016: a record of an earlier release shows no post-check card, and the poll returns no row."""
+    operation_id = save_plan(harness)  # The planned operation.
+    confirm(harness, operation_id)  # The operator types CONFIRM.
+    put_watch(harness, operation_id, earlier_release)  # An earlier release stored no watch fields.
+    assert 'data-testid="org-upgrade-postcheck-list"' not in job_page(harness, operation_id)  # No card.
+    assert job_status(harness, operation_id)["postchecks"] == []  # No row.
