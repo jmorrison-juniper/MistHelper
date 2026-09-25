@@ -21,12 +21,14 @@ Why:
 
 from __future__ import annotations
 
+import html  # Issue #3240 reads the plain text of a flashed sentence.
 import re  # Issue #1989 collapses the wrapped text of a template.
 from collections.abc import Iterator
+from dataclasses import dataclass  # Issue #3240 holds each picker refusal case in one record.
 from typing import Any
 
 import pytest
-from flask import Flask, render_template, session
+from flask import Flask, Response, jsonify, render_template, session
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
@@ -109,6 +111,27 @@ ABSENT_SITE_ID = "00000000-0000-0000-0000-0000000000dd"
 # call only, so a device type here would fail against the live cloud.
 FORBIDDEN_ORG_DEVICE_READ = "searchOrgDevices"
 FORBIDDEN_READ_PARAMETER = "type"
+
+# WHY: Issue #3240. A browser form post names HTML in its `Accept` header, and
+# the page script names itself in `X-Requested-With`. The two header sets pick
+# the two answers of one refused post.
+BROWSER_HEADERS = {"Accept": "text/html"}
+SCRIPT_HEADERS = {"X-Requested-With": "XMLHttpRequest"}
+REDIRECT_STATUS = 303  # See Other, so a back step never sends the post again.
+LOCATION_HEADER = "Location"
+
+# WHY: Issue #3240. The refusal sentences that the envelope holds, and that the
+# picker page shows again in its message region.
+ORG_NOT_CHOSEN_SENTENCE = "Choose an organization before you read the site list."
+ORG_NOT_PERMITTED_SENTENCE = "This session may not act on that organization."
+MODE_NOT_CHOSEN_SENTENCE = "Choose a single-site or a multi-site operation."
+SITES_NOT_CHOSEN_SENTENCE = "Choose one or more sites for the multi-site operation."
+SITE_NOT_FOUND_SENTENCE = "The portal found no such site in this organization."
+FALLBACK_REFUSAL_SENTENCE = "The portal cannot use that choice. Make the choice again."
+
+# WHY: Issue #3240. `partials/flash.html` renders one flashed sentence of the
+# level `warning` in this shape, and `portal.css` prints "Caution: " before it.
+WARNING_FLASH_PATTERN = re.compile(r'<div class="flash-item flash-warning">(.*?)</div>', re.DOTALL)
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +619,330 @@ def test_multi_site_selection_refuses_an_empty_set(signed_in_client: FlaskClient
     )
     assert answer.status_code == 400
     assert read_error_code(answer) == "sites_not_chosen"
+
+
+# ---------------------------------------------------------------------------
+# Issue #3240: a refused picker post from a browser page
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PickerRefusalCase:
+    """One refused picker post, its cause, and the page that corrects it.
+
+    Why:
+        Issue #3240. A browser showed the JSON envelope of a refused picker
+        post as the whole page. Each refusal must send a browser to the page
+        that corrects its cause. One record for each refusal keeps the browser
+        tests and the script tests on one table.
+    """
+
+    name: str  # The test identifier of the case.
+    post_path: str  # The picker path that receives the post.
+    body: dict[str, Any]  # The form fields, or the JSON body of a script.
+    mode: str | None  # The stored mode before the post. None writes no mode.
+    keeps_org: bool  # False removes the stored organization before the post.
+    target_path: str  # The page that corrects the cause.
+    status: int  # The status of the envelope for a script.
+    code: str  # The code of the envelope for a script.
+    sentence: str  # The sentence of the envelope and of the page.
+
+
+PICKER_REFUSAL_CASES = (  # WHY: Every refusal of the three picker posts, in the order of the checks.
+    PickerRefusalCase(
+        "no-site",
+        SITE_PAGE_PATH,
+        {},
+        "multi_site",
+        True,
+        SITE_PAGE_PATH,
+        400,
+        "sites_not_chosen",
+        SITES_NOT_CHOSEN_SENTENCE,
+    ),
+    PickerRefusalCase(
+        "unknown-site",
+        SITE_PAGE_PATH,
+        {"site_ids": [ABSENT_SITE_ID]},
+        "multi_site",
+        True,
+        SITE_PAGE_PATH,
+        404,
+        SITE_NOT_FOUND_CODE,
+        SITE_NOT_FOUND_SENTENCE,
+    ),
+    PickerRefusalCase(
+        "site-in-single-site-mode",
+        SITE_PAGE_PATH,
+        {"site_ids": [ABSENT_SITE_ID]},
+        "single_site",
+        True,
+        MODE_PAGE_PATH,
+        400,
+        "mode_not_chosen",
+        MODE_NOT_CHOSEN_SENTENCE,
+    ),
+    PickerRefusalCase(
+        "site-with-no-org",
+        SITE_PAGE_PATH,
+        {"site_ids": [ABSENT_SITE_ID]},
+        "multi_site",
+        False,
+        ORG_PAGE_PATH,
+        400,
+        ORG_NOT_CHOSEN_CODE,
+        ORG_NOT_CHOSEN_SENTENCE,
+    ),
+    PickerRefusalCase(
+        "no-mode",
+        MODE_PAGE_PATH,
+        {},
+        None,
+        True,
+        MODE_PAGE_PATH,
+        400,
+        "mode_not_chosen",
+        MODE_NOT_CHOSEN_SENTENCE,
+    ),
+    PickerRefusalCase(
+        "mode-with-no-org",
+        MODE_PAGE_PATH,
+        {"mode": "multi_site"},
+        None,
+        False,
+        ORG_PAGE_PATH,
+        400,
+        ORG_NOT_CHOSEN_CODE,
+        ORG_NOT_CHOSEN_SENTENCE,
+    ),
+    PickerRefusalCase(
+        "no-org",
+        ORG_PAGE_PATH,
+        {"org_id": ""},
+        None,
+        True,
+        ORG_PAGE_PATH,
+        400,
+        ORG_NOT_CHOSEN_CODE,
+        ORG_NOT_CHOSEN_SENTENCE,
+    ),
+)
+
+
+def prepare_refusal(client: FlaskClient, app: Flask, case: PickerRefusalCase) -> None:
+    """Write the stored choices that cause one refusal case.
+
+    Why:
+        Issue #3240. The cause of each refusal sits in the stored state: no
+        organization, or a mode that does not fit the post. One helper writes
+        that state, so each test reads the same cause.
+
+    Args:
+        client: The signed-in client.
+        app: The application, so that the post needs no form token.
+        case: The refusal case to prepare.
+    """
+    app.config["WTF_CSRF_ENABLED"] = False  # WHY: The token check has its own tests, and this post has no token.
+    with client.session_transaction() as browser_session:  # One write of the stored choices.
+        if case.mode is not None:  # The case names a stored mode.
+            browser_session[SELECTED_MODE_SESSION_KEY] = case.mode  # The mode that the post meets.
+        if not case.keeps_org:  # The case removes the organization.
+            browser_session.pop(SELECTED_ORG_SESSION_KEY, None)  # The post then meets no organization.
+
+
+def read_warning_sentences(response: TestResponse) -> list[str]:
+    """Return each warning sentence that the message region of a page shows.
+
+    Why:
+        Issue #3240. The message region renders one flashed sentence in one
+        `flash-item flash-warning` element. The reader returns the plain text,
+        so a test compares the sentence and not the markup.
+
+    Args:
+        response: The answer that holds the rendered page.
+
+    Returns:
+        The plain text of each warning sentence, in page order.
+    """
+    page = response.get_data(as_text=True)  # The rendered page.
+    found = WARNING_FLASH_PATTERN.findall(page)  # Each sentence inside one warning element.
+    return [html.unescape(sentence).strip() for sentence in found]  # Jinja escaped each sentence.
+
+
+@pytest.mark.parametrize("case", PICKER_REFUSAL_CASES, ids=lambda case: case.name)
+def test_a_browser_refusal_returns_to_the_page_that_corrects_it(
+    signed_in_client: FlaskClient,
+    wired_app: Flask,
+    case: PickerRefusalCase,
+) -> None:
+    """A refused form post answers 303 and names the page that corrects it.
+
+    Why:
+        Issue #3240. A browser showed the JSON envelope of a refusal as the
+        whole page. A redirect keeps the operator inside the picker, and 303
+        keeps the back button from sending the post again.
+
+    Args:
+        signed_in_client: The signed-in client.
+        wired_app: The application with the seams injected.
+        case: The refusal case under test.
+    """
+    prepare_refusal(signed_in_client, wired_app, case)  # Write the cause of the refusal.
+    answer = signed_in_client.post(case.post_path, data=case.body, headers=BROWSER_HEADERS)  # A form post.
+    assert answer.status_code == REDIRECT_STATUS, f"The {case.name} post answered {answer.status_code}."
+    assert answer.headers.get(LOCATION_HEADER) == case.target_path
+
+
+@pytest.mark.parametrize("case", PICKER_REFUSAL_CASES, ids=lambda case: case.name)
+def test_the_corrected_page_shows_the_refusal_sentence_one_time(
+    signed_in_client: FlaskClient,
+    wired_app: Flask,
+    case: PickerRefusalCase,
+) -> None:
+    """The page after a refusal shows the sentence one time, as a caution.
+
+    Why:
+        Issue #3240. The operator must read why the portal refused the choice.
+        The sentence must then leave, so a later visit to the page does not
+        repeat an old refusal.
+
+    Args:
+        signed_in_client: The signed-in client.
+        wired_app: The application with the seams injected.
+        case: The refusal case under test.
+    """
+    prepare_refusal(signed_in_client, wired_app, case)  # Write the cause of the refusal.
+    signed_in_client.post(case.post_path, data=case.body, headers=BROWSER_HEADERS)  # The refused form post.
+    first = signed_in_client.get(case.target_path)  # The page that the redirect names.
+    second = signed_in_client.get(case.target_path)  # A later visit to the same page.
+    assert first.status_code == 200, f"The {case.target_path} page answered {first.status_code}."
+    assert read_warning_sentences(first) == [case.sentence]
+    assert read_warning_sentences(second) == []
+
+
+@pytest.mark.parametrize("case", PICKER_REFUSAL_CASES, ids=lambda case: case.name)
+def test_a_script_keeps_the_refusal_envelope(
+    signed_in_client: FlaskClient,
+    wired_app: Flask,
+    case: PickerRefusalCase,
+) -> None:
+    """A script post keeps the code and the status of each refusal.
+
+    Why:
+        Issue #3240. The contract fixes one error shape for a script and a JSON
+        client. A script inside a page inherits the page `Accept` header, so
+        the post carries both header sets. The script shows the sentence
+        itself, so the session holds no flashed sentence.
+
+    Args:
+        signed_in_client: The signed-in client.
+        wired_app: The application with the seams injected.
+        case: The refusal case under test.
+    """
+    prepare_refusal(signed_in_client, wired_app, case)  # Write the cause of the refusal.
+    headers = {**BROWSER_HEADERS, **SCRIPT_HEADERS}  # WHY: Both headers arrive on one real script request.
+    answer = signed_in_client.post(case.post_path, json=case.body, headers=headers)  # A script post.
+    assert answer.status_code == case.status, f"The {case.name} post answered {answer.status_code}."
+    assert read_error_code(answer) == case.code
+    with signed_in_client.session_transaction() as browser_session:  # Read the stored session.
+        assert "_flashes" not in browser_session, "A script refusal stored a sentence for a page."
+
+
+def test_a_post_with_no_page_preference_keeps_the_envelope(signed_in_client: FlaskClient, wired_app: Flask) -> None:
+    """A form post that states no page preference keeps the JSON envelope.
+
+    Why:
+        Issue #3240. Only a stated preference for HTML earns a page. A command
+        line client sends no `Accept` header, and it must keep the contract.
+
+    Args:
+        signed_in_client: The signed-in client.
+        wired_app: The application with the seams injected.
+    """
+    prepare_refusal(signed_in_client, wired_app, PICKER_REFUSAL_CASES[0])  # The empty site choice.
+    answer = signed_in_client.post(SITE_PAGE_PATH, data={})  # No header states a preference.
+    assert answer.status_code == 400, f"The post answered {answer.status_code}."
+    assert read_error_code(answer) == "sites_not_chosen"
+
+
+def test_a_browser_post_outside_the_scope_returns_to_the_org_page(
+    select_client: FlaskClient,
+    scoped_owner: identity.SessionOwner,
+    wired_app: Flask,
+    fake_org_id: str,
+) -> None:
+    """An organization outside the scope sends a browser back to the picker.
+
+    Why:
+        Issue #3240. The scope refusal comes from `runtime.identity` as a built
+        envelope. The browser path must read the same sentence out of it.
+
+    Args:
+        select_client: The test client for the wired application.
+        scoped_owner: An operator whose session reaches one other organization.
+        wired_app: The application with the seams injected.
+        fake_org_id: An organization outside the scope.
+    """
+    wired_app.config["WTF_CSRF_ENABLED"] = False  # WHY: The token check has its own tests.
+    sign_in_client(select_client, scoped_owner)  # The session reaches one other organization only.
+    answer = select_client.post(ORG_PAGE_PATH, data={"org_id": fake_org_id}, headers=BROWSER_HEADERS)
+    page = select_client.get(ORG_PAGE_PATH)  # The page that the redirect names.
+    assert answer.status_code == REDIRECT_STATUS, f"The form post answered {answer.status_code}."
+    assert answer.headers.get(LOCATION_HEADER) == ORG_PAGE_PATH
+    assert read_warning_sentences(page) == [ORG_NOT_PERMITTED_SENTENCE]
+
+
+def test_a_refused_site_choice_keeps_every_stored_choice(
+    signed_in_client: FlaskClient,
+    wired_app: Flask,
+    registered_owner: identity.SessionOwner,
+    fake_org_id: str,
+    fake_site_id: str,
+) -> None:
+    """A refused browser post changes no stored choice.
+
+    Why:
+        Issue #3240, FR-004. The page after a refusal shows the stored state.
+        A refusal that cleared the site set or the saved options would make
+        the operator repeat the earlier steps.
+
+    Args:
+        signed_in_client: The signed-in client.
+        wired_app: The application with the seams injected.
+        registered_owner: The registered operator.
+        fake_org_id: The chosen organization.
+        fake_site_id: A site of the chosen organization.
+    """
+    prepare_refusal(signed_in_client, wired_app, PICKER_REFUSAL_CASES[0])  # The multi-site mode.
+    signed_in_client.post(SITE_PAGE_PATH, json={"site_ids": [fake_site_id]})  # Store one site set first.
+    with signed_in_client.session_transaction() as browser_session:  # Save the options of that set.
+        browser_session["org_upgrade_options"] = {"operation_id": "kept-plan"}  # The plan of the set.
+    answer = signed_in_client.post(SITE_PAGE_PATH, data={}, headers=BROWSER_HEADERS)  # The empty choice.
+    record = identity.SESSION_REGISTRY.get(registered_owner.key)  # The server record of the operator.
+    assert answer.status_code == REDIRECT_STATUS, f"The empty choice answered {answer.status_code}."
+    assert record is not None and record.selected_site_ids == (fake_site_id,)
+    with signed_in_client.session_transaction() as browser_session:  # Read the stored session.
+        assert browser_session[SELECTED_ORG_SESSION_KEY] == fake_org_id
+        assert browser_session[SELECTED_MODE_SESSION_KEY] == "multi_site"
+        assert browser_session["org_upgrade_options"] == {"operation_id": "kept-plan"}
+
+
+def test_the_refusal_reader_gives_a_fixed_sentence_for_a_body_with_no_sentence(portal_app: Flask) -> None:
+    """A refusal body with no readable sentence still gives the operator a sentence.
+
+    Why:
+        Issue #3240. The page must never show an empty caution. A body with no
+        `error.message` field, or a body that is not JSON, reads as one fixed
+        sentence.
+
+    Args:
+        portal_app: The real application.
+    """
+    with portal_app.test_request_context():  # `jsonify` needs an application context.
+        empty = select.PickerRefusal.message_of(jsonify({"error": {}}))  # No sentence in the envelope.
+        not_json = select.PickerRefusal.message_of(Response("plain text"))  # A body that is not JSON.
+    assert empty == FALLBACK_REFUSAL_SENTENCE
+    assert not_json == FALLBACK_REFUSAL_SENTENCE
 
 
 def test_one_site_list_endpoint_carries_both_documented_paths(portal_app: Flask) -> None:

@@ -201,6 +201,25 @@ Each site row shows the lock state.
 
 Choose one site. The portal takes the site lock for you.
 
+### When the portal refuses a choice
+
+The portal refuses a choice that it cannot use. For example, it refuses a
+multi-site choice with no site, or a site that the organization does not hold.
+If the refusal comes from a picker page, the portal opens the correct picker
+page again. The page shows one sentence that starts with `Caution:`, and the
+sentence tells you what to choose. The portal keeps your earlier choices. Make
+the choice again, and then continue.
+
+| Refusal | The page that opens |
+| --- | --- |
+| No organization, or an organization outside this sign-in | `/select/org` |
+| No upgrade mode | `/select/mode` |
+| A site choice outside multi-site mode | `/select/mode` |
+| No site, or a site that the organization does not hold | `/select/site` |
+
+A script that sends `X-Requested-With` or `Accept: application/json` still
+gets the JSON refusal with the same status. Issue #3240 records the change.
+
 ## Device types
 
 The portal works with three device types.
