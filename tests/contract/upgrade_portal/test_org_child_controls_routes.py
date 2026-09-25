@@ -28,6 +28,7 @@ from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.runtime import identity, lock
 from src.upgrade_portal.upgrade import options as option_rules
+from src.upgrade_portal.upgrade.org_site_records import UNREAD_MESSAGE
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
 from tests.support.org_precheck_seams import PrecheckAdopterStandIn
@@ -478,6 +479,55 @@ def test_the_retry_save_plans_only_the_retry_devices(harness: ControlsHarness) -
     assert planned_macs(plan) == {AP_TWO, SWITCH_ONE}  # The healthy devices stay out of the plan.
     assert plan["retry_of_operation_id"] == RETRY_ID  # The audit link names the earlier operation.
     assert {"operation_id", "target_count"}.isdisjoint(plan["plan_options"])  # Browser values stay in the browser.
+
+
+def test_a_retry_save_with_a_cleared_type_plans_the_other_retry_device(harness: ControlsHarness) -> None:
+    """Issue #3389: a cleared type leaves one retry site with no device, and the retry save still plans."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both sites.
+    saved = post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})  # Clear the switch type.
+    assert saved.status_code == 200, saved.get_json()  # The Sites page would end the retry, so no refusal.
+    plan = harness.store.records[saved_operation_id(harness)]  # The new durable plan.
+    assert planned_macs(plan) == {AP_TWO}  # The failed access point, and no healthy device.
+    assert plan["retry_of_operation_id"] == RETRY_ID  # The plan stays a retry of the earlier operation.
+    assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
+
+
+def test_a_retry_save_plans_the_other_device_when_a_retry_device_left_its_site(harness: ControlsHarness) -> None:
+    """Issue #3389: a retry device that left its site gives that site no device, and the retry save still plans."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both sites.
+    views = {  # The failed switch left the first site after the earlier run.
+        harness.site_one: [inventory_row(AP_ONE)],
+        SITE_TWO: [inventory_row(AP_TWO), inventory_row(SWITCH_TWO)],
+    }
+    harness.client.application.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = lambda session, org, site: {
+        "targets": deepcopy(views[site])  # Each read returns a detached copy of the site view.
+    }
+    saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save the prefilled choices.
+    assert saved.status_code == 200, saved.get_json()  # The first site holds no retry device, and the save goes on.
+    plan = harness.store.records[saved_operation_id(harness)]  # The new durable plan.
+    assert planned_macs(plan) == {AP_TWO}  # The retry device that stays, and no healthy device.
+    assert plan["retry_of_operation_id"] == RETRY_ID  # The plan stays a retry of the earlier operation.
+
+
+def test_a_retry_save_refuses_a_site_whose_view_read_failed(harness: ControlsHarness) -> None:
+    """Issue #3389: a failed view read at a retry site stops the save, so no retry device goes out of the plan."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both sites.
+    views = {  # The view read of the first site failed, and the stand-in record read still answers.
+        harness.site_one: [],
+        SITE_TWO: [inventory_row(AP_TWO), inventory_row(SWITCH_TWO)],
+    }
+    harness.client.application.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = lambda session, org, site: {
+        "targets": deepcopy(views[site]),  # Each read returns a detached copy of the site view.
+        "versions_by_model": {},  # The shape of `build_options_view` after a failed read.
+    }
+    saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save the prefilled choices.
+    assert saved.status_code == 400, saved.get_json()  # The failed switch stays in the retry.
+    assert saved.get_json()["error"]["message"] == UNREAD_MESSAGE.format(names="Test Site")  # The unread site.
+    assert set(harness.store.records) == {RETRY_ID}  # The save wrote no new plan.
+    assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
 
 
 def test_the_submit_of_a_retry_plan_ends_the_retry(harness: ControlsHarness) -> None:

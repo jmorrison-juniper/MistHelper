@@ -58,6 +58,12 @@ from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the 
 from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
 from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
 from src.upgrade_portal.runtime.server import build_server_command  # Start the platform server safely.
+from tests.e2e.upgrade_portal.empty_site_seeds import (  # Issue #3389: the site with no device.
+    EMPTY_SITE_BROWSER_ID,
+    EMPTY_SITE_EMAIL,
+    EMPTY_SITE_ID,
+    EMPTY_SITE_NAME,
+)
 from tests.e2e.upgrade_portal.org_cancel_seeds import CANCEL_AP_JOB_ID, OrgCancelSeeds  # Issue #3246: the cancel.
 from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the seeds of the recovery journeys.
     CONTROLS_BROWSER_ID,
@@ -1058,12 +1064,14 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
             {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The first row, which most journeys read.
             {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},  # The second row, which the multi-site journeys add.
             {"id": JOURNEY_SITE_ID, "name": JOURNEY_SITE_NAME},  # Issue #3377: the last row, so no first row moves.
+            {"id": EMPTY_SITE_ID, "name": EMPTY_SITE_NAME},  # Issue #3389: a site with no device, after every row.
         ]
     if name == "listOrgSiteStats":  # The device count of each site, read from `num_devices`.
         return [
             {"id": STAND_IN_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
             {"id": SECOND_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
             {"id": JOURNEY_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
+            {"id": EMPTY_SITE_ID, "num_devices": 0},  # Issue #3389: the picker shows zero devices.
         ]
     return []  # An unknown read name shows an empty list, and never a fault.
 
@@ -1123,8 +1131,11 @@ def stand_in_site_devices(site_id: str) -> list[dict[str, Any]]:
         site_id: The site whose inventory the caller reads.
 
     Returns:
-        One device record for each device type of the named site.
+        One device record for each device type of the named site. The empty
+        site of issue #3389 holds no device.
     """
+    if site_id == EMPTY_SITE_ID:  # Issue #3389: the site that the picker shows with zero devices.
+        return []  # The inventory read of the site finds no device.
     devices = stand_in_device_read()  # The first site keeps the inventory of every single-site test.
     if site_id != SECOND_SITE_ID:  # Only the second site needs other addresses.
         return devices  # Keep the first site unchanged.
@@ -1272,11 +1283,15 @@ def stand_in_options_builder(
             Issue #3249: a multi-site call names the inventory of its site.
 
     Returns:
-        The target list, the chosen options, and the warning sentences.
+        The target list, the chosen options, and the warning sentences. An
+        empty mapping when the named site holds no device, as the shipped
+        `build_options_record` answers.
     """
     del record  # One site answers every call, so the run record changes nothing.
     from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
 
+    if devices is not None and not devices:  # Issue #3389: the shipped rule for a site with no device.
+        return {}  # The route then names the site in its refusal.
     choices = body.get("targets")
     rows = [one for one in choices if isinstance(one, dict)] if isinstance(choices, list) else []
     inventory = stand_in_device_read() if devices is None else devices  # A single-site run reads the first site.
@@ -2123,6 +2138,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     _register_operator(STAND_IN_EMAIL, RENEWED_BROWSER_ID)  # The renewed session keeps the durable actor.
     _register_operator(FIRMWARE_EMAIL, FIRMWARE_BROWSER_ID)  # The operator that may start firmware writes.
     _register_operator(CONTROLS_EMAIL, CONTROLS_BROWSER_ID)  # Issue #3247: the owner of the recovery seeds.
+    _register_operator(EMPTY_SITE_EMAIL, EMPTY_SITE_BROWSER_ID)  # Issue #3389: the operator of the empty site.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
 
@@ -2297,6 +2313,32 @@ def controls_operator_page(context: Any, capture_portal_server: str) -> Iterator
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
     yield opened  # The test drives the recovery controls of the seeded operations.
+    opened.close()  # A page left open would hold a browser target for the whole run.
+
+
+@pytest.fixture
+def empty_site_operator_page(context: Any, capture_portal_server: str) -> Iterator[Any]:
+    """Open a browser page of the operator that selects the empty site.
+
+    Why:
+        Issue #3389. The stored site set lasts across journeys. A separate
+        operator keeps the empty site out of the site set of every other
+        journey, also when the journey fails.
+
+    Args:
+        context: The browser context that `pytest-playwright` built.
+        capture_portal_server: The address of the running portal.
+
+    Yields:
+        The browser page, with the session cookies of the empty-site operator.
+    """
+    del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
+    context.add_cookies(operator_session_cookies(EMPTY_SITE_EMAIL, EMPTY_SITE_BROWSER_ID))  # The separate pair.
+    opened = context.new_page()  # The page then carries the session on its first request.
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    yield opened  # The test selects the empty site and then clears it.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
 

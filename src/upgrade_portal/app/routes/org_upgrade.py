@@ -54,6 +54,7 @@ from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for eac
 from ...upgrade.org_postcheck_view import OrgPostCheckView  # Issue #3244: the post-check card of each site.
 from ...upgrade.org_precheck import PRECHECK_FIELD, OrgPrecheckGate, OrgPrecheckState  # Issue #3243: the gate.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
+from ...upgrade.org_site_records import OrgSiteRecords  # Issue #3389: the record of each selected site.
 from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
 from ..factory import build_error_envelope, json_error  # Issue #3242: a replay refusal can carry details.
 from . import select as select_routes
@@ -417,18 +418,57 @@ def _site_option_body(options: Mapping[str, Any], targets: list[dict[str, str]])
 
 
 def _aggregate_option_record(org_id: str, site_ids: list[str], options: Mapping[str, Any]) -> dict[str, Any]:
-    """Build every explicit target through the existing site option mapper."""
+    """Build every explicit target through the existing site option mapper.
+
+    Why:
+        Issue #3389. The loop kept the options of the last site only, so a
+        site with an empty record replaced the choices of the operator with the
+        defaults. `OrgSiteRecords` keeps the options of each site that answers
+        and names each selected site that the plan cannot cover. A retry of
+        issue #3247 chooses its own sites, so a site with no retry device
+        does not stop the retry save.
+    """
     cloud_session = current_cloud_session()  # The inventory and version reads use the signed operator session.
     if cloud_session is None:  # No cloud scope can validate a target.
         raise ValueError("The organization upgrade context is incomplete.")
     selected = _selected_families(options)  # Keep the checked family order.
-    all_targets: list[dict[str, Any]] = []  # The operation stores every selected device explicitly.
-    common_options: dict[str, Any] | None = None  # Every site uses the same visible controls.
+    every_site_planned = current_retry_plan() is None  # Issue #3247: the request cache holds the retry plan.
+    records = OrgSiteRecords(every_site_planned)  # Issue #3389: collect the targets and the options of each site.
+    logger.info("Build the option record of %s selected site(s)", len(site_ids))  # Log before the site reads.
     for site_id in site_ids:  # Reuse the single-site inventory and compatibility rules for each site.
-        built = _site_option_record(cloud_session, org_id, site_id, options, selected)  # Validate one site.
-        all_targets.extend({**dict(target), "site_id": site_id} for target in built.get("targets", []))
-        common_options = dict(built.get("options", {}))
-    return _complete_aggregate_options(all_targets, common_options, selected)  # Validate the combined record.
+        records.add(site_id, _site_option_record(cloud_session, org_id, site_id, options, selected))  # One site.
+    logger.debug("The selected sites add %s target(s) to the plan", len(records.targets))  # Log after the reads.
+    refusal = records.refusal(partial(_site_labels, org_id))  # Issue #3389: a site that the plan cannot cover.
+    if refusal is not None:  # The save stops before a plan or a cookie holds a partial choice.
+        raise refusal  # `save_options` answers each `ValueError` with status 400 and the message.
+    return _complete_aggregate_options(records.targets, records.options, selected)  # Validate the combined record.
+
+
+def _site_labels(org_id: str, site_ids: list[str]) -> list[str]:
+    """Return the name of each site for a refusal, or the site identifier.
+
+    Why:
+        Issue #3389. The refusal names each site that the plan cannot cover.
+        Only the refusal path reads the names. A transport fault of that read
+        must not hide the refusal, so each site then shows its identifier.
+
+    Args:
+        org_id: The organization that holds the sites.
+        site_ids: The sites that the refusal names, in the order of the selection.
+
+    Returns:
+        One label for each site, in the same order.
+    """
+    logger.info("Read the site names of %s refused site(s)", len(site_ids))  # Log before the site list read.
+    try:  # The site list read reaches the Mist cloud.
+        rows = build_site_rows(org_id)  # The site list of the organization.
+        names = {str(row.get("site_id", "")): str(row.get("name") or "") for row in rows}  # One name per site.
+    except RequestException:  # A transport fault leaves the identifiers as the labels.
+        logger.warning("The site list read failed. The refusal names each site by its identifier.")  # No name.
+        names = {}  # No name is known.
+    labels = [names.get(site_id) or site_id for site_id in site_ids]  # A site with no name shows its identifier.
+    logger.debug("The refusal names %s site(s)", len(labels))  # Log after the read.
+    return labels  # The refusal joins the labels in the order of the selection.
 
 
 def _selected_families(options: Mapping[str, Any]) -> tuple[str, ...]:
@@ -455,9 +495,21 @@ def _site_option_record(
     options: Mapping[str, Any],
     selected: tuple[str, ...],
 ) -> dict[str, Any]:
-    """Build one site's options through the existing option mapper."""
+    """Build one site's options through the existing option mapper.
+
+    Why:
+        Issue #3389. A failed view read gives a view with no device. The
+        narrow step of a retry then hides the loss, because a retry skips a
+        site with no planned device. An empty view therefore returns the empty
+        record of a failed read, and the save names the site. The mapper then
+        reads no inventory a second time.
+    """
     logger.info("Read aggregate upgrade options for site %s", site_id)  # Log before the inventory read.
-    view = narrowed_view(aggregate_options_view(cloud_session, org_id, site_id))  # Issue #3247: a retry narrows.
+    full_view = aggregate_options_view(cloud_session, org_id, site_id)  # Every device of the site.
+    if not full_view.get("targets"):  # The inventory read found no device, or the read failed.
+        logger.warning("The option view of site %s holds no device", site_id)  # The save names this site.
+        return {}  # The empty record of a failed read, which `OrgSiteRecords` refuses in a retry too.
+    view = narrowed_view(full_view)  # Issue #3247: a retry keeps only its failed devices.
     rows = _selected_target_rows(view, options, selected)  # Select explicit targets with a chosen version.
     logger.debug("The site option view selected %s target(s)", len(rows))  # Log after the transformation.
     logger.info("Validate aggregate upgrade options for site %s", site_id)  # Log before validation.

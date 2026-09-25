@@ -54,6 +54,7 @@ GATEWAY_TARGET = "6.3.0"  # The gateway version that each gateway plan requests.
 OPTIONS_SESSION_KEY = "org_upgrade_options"  # The cookie key that holds the saved options.
 OPTIONS_PAGE = "/upgrade/org/options"  # The multi-site options page.
 OPTIONS_API = "/api/org-upgrades/options"  # The save of the multi-site options.
+SITE_PAGE = "/select/site"  # The site picker, which stores the ordered site set.
 CONFIRM_PAGE = "/upgrade/org/confirm"  # The typed confirmation page.
 MALFORMED_BODY = '{"selected_types": ["ap"], "enable_p2p": "yes", bad json'  # No JSON reader accepts it.
 BASE_PLAN = {  # The choices of a canary plan of the access points and the switches, as the browser posts them.
@@ -476,9 +477,15 @@ def test_the_confirm_page_names_each_radio_value(harness: AdvancedHarness) -> No
     assert "Grow each batch at the usual rate" in element_text(page, "org-upgrade-summary-rrm-slow-ramp")
 
 
-def test_a_router_plan_confirms_no_failure_count(harness: AdvancedHarness, fake_site_id: str) -> None:
-    """A canary plan of one router lists no count, because the router body holds no canary field."""
-    harness.devices[fake_site_id] = [inventory_row(AP_ONE), inventory_row(SWITCH_ONE)]  # The Junos gateway leaves.
+def test_a_router_plan_confirms_no_failure_count(harness: AdvancedHarness) -> None:
+    """A canary plan of one router lists no count, because the router body holds no canary field.
+
+    Why:
+        Issue #3389. A selected site with no planned device now stops the
+        save. The operator therefore chooses only the site of the router.
+    """
+    chosen = harness.client.post(SITE_PAGE, json={"site_ids": [SITE_TWO]})  # The picker keeps the router site.
+    assert chosen.status_code == 200  # The picker accepts the site of the router.
     answer = save(harness, selected_types=["gateway"], version_gateway=GATEWAY_TARGET, max_failures="0,0,0,0")
     assert answer.status_code == 200  # The save accepts a count for each phase.
     _, record = saved_plan(harness)  # Read the durable plan.
