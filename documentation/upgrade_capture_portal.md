@@ -693,6 +693,22 @@ The text holds the cancel status, the cloud message, and three device lists:
 `Cancelled`, `Writing firmware`, and `No cancel available`. The first render
 and each poll show the same text.
 
+A child job can end before the cancel of a running upgrade. The final child
+states are `cancelled`, `completed`, `failed`, and `rejected`. The portal sends
+no cancel request to a child job in a final state. Issue #3367 records the
+defect that this rule repairs.
+
+For that child job, the cancel result panel shows the status `already_ended`
+and this sentence: `The child job already ended: <state>. The portal sent no
+cancel request.` The panel also shows this note: `This child job ended before
+the cancel, so the cancel changed no device of it.` The panel shows no device
+list for that child job. A child job with no cloud job keeps the status
+`unavailable`.
+
+The portal reads the child state that the last status poll stored. If a child
+job ends after the last poll, the portal still sends one cancel request for it.
+The cloud then gives the answer for that job.
+
 ## Reconcile a stale run
 
 Open a stale run to find the reconciliation control. The control appears only

@@ -64,6 +64,13 @@ FINAL_OPERATION_STATES = frozenset(
     {"cancelled", "completed", "failed"}
 )  # Operation states that a cancel cannot change.
 FINAL_CANCEL_TEXT = "The operation is final: {state}. The portal sent no cancel request."  # The refusal text.
+# WHY: Issue #3367. A cancel of a running operation sent one cloud cancel call
+# to each child job with an upgrade identifier, also to a child job that already
+# ended. The cancel sort then listed each upgraded access point as a cancelled
+# device. The service now stores this result for an ended child job, and it
+# sends no cloud request for that job.
+ENDED_CHILD_STATUS = "already_ended"  # The result word of a child job that ended before the cancel.
+ENDED_CHILD_TEXT = "The child job already ended: {state}. The portal sent no cancel request."  # The result text.
 LockRefresh = Callable[[Mapping[str, Any], Mapping[str, Any]], None]  # Revalidate locks before one child write.
 
 
@@ -1096,12 +1103,44 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         self._cas(record, store, update)  # Persist the stale recovery atomically.
 
     def _cancellation_result(self, cloud_session: Any, child: Mapping[str, Any]) -> dict[str, Any]:
-        """Return the cancellation result for one known child."""
+        """Return the cancellation result for one known child.
+
+        Why:
+            Issue #3367. A child job in a final state gets no cloud request.
+            The cancel keeps the identifier check first, so a rejected child
+            job with no cloud job still reads `unavailable`.
+        """
         if not child.get("upgrade_id"):  # No known cloud identity can receive a cancel.
             return {"status": "unavailable", "message": "The child has no known upgrade identifier."}
+        state = str(child.get("status") or "").lower()  # The stored state of the last status read.
+        if state in FINAL_CHILD_STATES:  # The cloud job already ended, so a cancel cannot change it.
+            return self._ended_cancellation(str(child.get("child_id", "")), state)  # Send no cloud call.
         if child.get("route") == "upgradeOrgDevices":  # The AP child uses its organization cancel.
             return self._cancel_org_child(cloud_session, child)  # Send one organization cancel.
         return self._cancel_device_child(cloud_session, child)  # Use the proven site or SSR helper.
+
+    @staticmethod
+    def _ended_cancellation(child_id: str, state: str) -> dict[str, Any]:
+        """Return the stored result of a child job that ended before the cancel.
+
+        Args:
+            child_id: The child job, for the log record only.
+            state: The final state of the child job.
+
+        Returns:
+            The result with the status word, the state, the text, and three empty lists.
+        """
+        logger.info("Skip the cloud cancel of aggregate child %s, which ended as %s", child_id, state)  # Before.
+        result = {  # The ended job changed no device, so each device list stays empty.
+            "status": ENDED_CHILD_STATUS,  # The word that the progress page prints.
+            "state": state,  # The final state of the child job.
+            "cancelled": [],  # No device stopped, because the portal sent no cancel request.
+            "already_writing": [],  # No device writes firmware for an ended job.
+            "no_cancel_available": [],  # No device needs a cancel path.
+            "message": ENDED_CHILD_TEXT.format(state=state),  # The operator reads the reason.
+        }
+        logger.debug("Aggregate child %s keeps its final state %s with no cloud call", child_id, state)  # After.
+        return result  # The caller stores the result under the same claim.
 
     def _cancel_org_child(self, cloud_session: Any, child: Mapping[str, Any]) -> dict[str, Any]:
         """Cancel one organization AP child, and sort its access points into three lists.

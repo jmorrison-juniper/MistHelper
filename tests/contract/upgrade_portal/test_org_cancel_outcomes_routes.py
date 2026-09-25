@@ -27,7 +27,12 @@ from src.firmware.org_upgrade_service import OrgUpgradeResult
 from src.firmware.upgrade_service import CancelOutcome, DeviceTarget, UpgradeOptions, UpgradeSubmission
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.runtime import identity
-from src.upgrade_portal.upgrade.org_cancel_outcomes import NEVER_STARTED_NOTE, UNSORTED_NOTE, OrgCancelOutcomes
+from src.upgrade_portal.upgrade.org_cancel_outcomes import (
+    ENDED_NOTE,
+    NEVER_STARTED_NOTE,
+    UNSORTED_NOTE,
+    OrgCancelOutcomes,
+)
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
 
@@ -41,6 +46,7 @@ GATEWAY_TWO = "001122334488"  # The gateway at the second site. The cloud refuse
 WRITE_SESSION = SimpleNamespace(_MAX_429_RETRIES=0, _session=SimpleNamespace(adapters={}))  # A no-retry session.
 CAUTION = "Caution: the cancellation stops each upgrade that waits to start."  # The first words of the caution.
 SWITCH_TEXT = "The cloud stopped 1 device(s), and no device was writing firmware."  # The switch cancel sentence.
+ENDED_MESSAGE = "The child job already ended: completed. The portal sent no cancel request."  # Issue #3367.
 
 
 class RecordStore:
@@ -308,6 +314,30 @@ def test_a_stored_operation_shows_one_section_for_each_cancel_result(harness: Ca
     assert items(page, f"org-cancel-outcome-writing-{switch['child_id']}") == [SWITCH_ONE]  # No stop claim.
     assert text_of(page, f"org-cancel-outcome-note-{switch['child_id']}") == UNSORTED_NOTE  # The reason.
     assert text_of(page, f"org-cancel-outcome-note-{gateway['child_id']}") == NEVER_STARTED_NOTE  # No cloud job.
+
+
+def test_an_ended_child_job_gets_no_cancel_and_shows_no_list(harness: CancelHarness) -> None:
+    """The access point job completed before the cancel, so it gets no request and names no device (issue #3367)."""
+    stored = harness.store.records[harness.operation_id]  # The durable operation of the page.
+    ap_child = next(child for child in stored["children"] if child["device_family"] == "ap")  # The AP child job.
+    ap_child["status"] = "completed"  # The last status read found the job at its end.
+    answer = cancel(harness)  # The operator types CANCEL and presses the button.
+    ap_id, switch_id = child_id(harness, "ap"), child_id(harness, "switch")  # The two child jobs of the check.
+    page = page_of(harness)  # The progress page after the cancel.
+    poll = harness.client.get(f"/api/org-upgrades/{harness.operation_id}").get_json()  # The status poll.
+    assert (answer.status_code, harness.org.cancels) == (303, [])  # The completed job got no cancel request.
+    assert text_of(page, f"org-cancel-outcome-status-{ap_id}") == "already_ended"  # The word of the result.
+    assert text_of(page, f"org-cancel-outcome-message-{ap_id}") == ENDED_MESSAGE  # The sentence of the result.
+    assert text_of(page, f"org-cancel-outcome-note-{ap_id}") == ENDED_NOTE  # The note explains the missing lists.
+    assert f'data-testid="org-cancel-outcome-cancelled-{ap_id}"' not in page  # The panel hides the three lists.
+    ap_section = re.search(rf'data-testid="org-cancel-outcome-{ap_id}".*?</div>', page, re.DOTALL)  # One section.
+    assert ap_section and AP_ONE not in ap_section.group(0) and AP_TWO not in ap_section.group(0)  # No device.
+    assert f"<td>Status: already_ended. {ENDED_MESSAGE}</td>" in page  # The Cancellation cell of the site table.
+    ap_row = next(row for row in poll["site_upgrades"] if row["child_id"] == ap_id)  # The poll row of the job.
+    assert ap_row["cancellation_text"] == f"Status: already_ended. {ENDED_MESSAGE}"  # The poll prints the same text.
+    assert next(row for row in poll["cancel_outcomes"] if row["child_id"] == ap_id)["ended"] is True  # The flag.
+    assert items(page, f"org-cancel-outcome-cancelled-{switch_id}") == [SWITCH_ONE]  # The running job stopped.
+    assert panel_of(page_of(harness)) == panel_of(page)  # A reload shows the same stored panel.
 
 
 def test_a_refused_access_point_cancel_lists_each_access_point_as_writing(harness: CancelHarness) -> None:

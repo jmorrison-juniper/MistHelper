@@ -13,7 +13,12 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_cancel_outcomes import NEVER_STARTED_NOTE, UNSORTED_NOTE, OrgCancelOutcomes
+from src.upgrade_portal.upgrade.org_cancel_outcomes import (
+    ENDED_NOTE,
+    NEVER_STARTED_NOTE,
+    UNSORTED_NOTE,
+    OrgCancelOutcomes,
+)
 
 AP_ONE = "001122334455"  # The access point at the first site.
 AP_TWO = "001122334466"  # The access point at the second site.
@@ -79,10 +84,39 @@ def test_a_stored_result_keeps_its_three_lists() -> None:
         "status": "requested",
         "message": "The cloud stopped 1 device(s), and no device was writing firmware.",
         "note": "",
+        "ended": False,
         "cancelled": [SWITCH],
         "already_writing": [],
         "no_cancel_available": [],
     }
+
+
+def ended_result(**fields: Any) -> dict[str, Any]:
+    """Build the stored result of a child job that ended before the cancel (issue #3367)."""
+    result: dict[str, Any] = {
+        "status": "already_ended",
+        "state": "completed",
+        "cancelled": [],
+        "already_writing": [],
+        "no_cancel_available": [],
+        "message": "The child job already ended: completed. The portal sent no cancel request.",
+    }
+    result.update(fields)  # Replace the fields that one test changes.
+    return result
+
+
+def test_an_ended_child_job_lists_no_device() -> None:
+    """The child job ended before the cancel, so the row names no device and hides the lists."""
+    row = only_row(record(child("child-1", "completed", ended_result())))
+    assert (row["status"], row["note"], row["ended"]) == ("already_ended", ENDED_NOTE, True)
+    assert (row["cancelled"], row["already_writing"], row["no_cancel_available"]) == ([], [], [])
+    assert row["message"] == "The child job already ended: completed. The portal sent no cancel request."
+
+
+def test_an_ended_result_with_a_damaged_list_still_lists_no_device() -> None:
+    """The status proves that no cancel request went out, so no stored list can name a device."""
+    row = only_row(record(child("child-1", "failed", ended_result(cancelled=[SWITCH], already_writing=None))))
+    assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [], ENDED_NOTE)
 
 
 def test_a_partial_result_puts_every_device_in_the_writing_list() -> None:
