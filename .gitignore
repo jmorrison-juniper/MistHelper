@@ -31,8 +31,8 @@ documentation/references/
 # Issue #2754 staged 9,337 extracted PDF files and 4,006 converted Markdown files
 # below the corpus root. The corpus root is the JUNIPER_CORPUS_ROOT setting, and
 # it sits outside the worktree. The corpus measures 744 MB, so it never enters
-# the repository. The distilled skill at .github/skills/hardening-junos/ is
-# committed instead.
+# the repository. The distilled skill hardening-junos lives at the user level in
+# ~/.copilot/skills/, outside the repository as well.
 # Rebuild the corpus with:
 #   python scripts/pdf_to_markdown.py <downloaded.pdf>
 # The rules below guard against a corpus copy inside the worktree. git applies an
@@ -90,9 +90,6 @@ DEVICE*.csv
 !documentation/APUpgradeSiteListSample.CSV
 !documentation/VCConvertSample.CSV
 !documentation/GatewayTemplateRebootListSample.CSV
-# The skill index names Juniper document titles only. It holds no customer data,
-# so the rule above that blocks a Mist data export does not apply to it.
-!.github/skills/**/references/*.csv
 *.xlsx
 *.xls
 data/

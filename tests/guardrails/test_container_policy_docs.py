@@ -51,11 +51,12 @@ PRODUCTION_STORE_VOLUMES = frozenset(
 VOLUME_RM_PATTERN = re.compile(r"\bpodman\s+volume\s+rm\s+([^\r\n]+)")  # Match each documented volume cleanup command.
 
 # Every document that states the policy or links to it. A code block in one of
-# these files is a command that a reader copies.
+# these files is a command that a reader copies. The `managing-podman` skill
+# left this list when the agent skills moved to the user level at
+# ~/.copilot/skills, because a repository test cannot read a home directory.
 POLICY_DOCUMENTS = (
     Path(".github") / "copilot-instructions.md",
     Path(".github") / "instructions" / "git-flow-multi-agent.instructions.md",
-    Path(".github") / "skills" / "managing-podman" / "SKILL.md",
     Path("documentation") / "container-deployment.md",
     Path("documentation") / "development-setup.md",
     Path("documentation") / "wiki" / "Container-Setup.md",

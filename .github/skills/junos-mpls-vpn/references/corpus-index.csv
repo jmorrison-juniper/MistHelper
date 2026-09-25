@@ -1,7 +1,0 @@
-file,title,topic,train,pages,path
-mpls,Junos OS MPLS Applications User Guide,"MPLS, LDP, RSVP, L3VPN, L2VPN, VPLS, and segment routing",26.2,2540,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/mpls.md
-evpn,Junos OS EVPN User Guide,"EVPN MPLS, EVPN VPWS, EVPN E-LAN, EVPN E-Tree, and multihoming",26.2,2130,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/evpn.md
-evpn-vxlan,Junos OS EVPN User Guide,"EVPN VXLAN, VNI policy, type routes, and data center overlay",26.2,1948,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/evpn-vxlan.md
-ovsdb-vxlan,Junos OS OVSDB and VXLAN User Guide for MX Series Routers and EX9200 Switches,OVSDB VXLAN for MX and EX9200,26.2,182,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/ovsdb-vxlan.md
-ovsdb-vxlan-qfx,Junos OS OVSDB-VXLAN User Guide for QFX Series Switches,OVSDB VXLAN for QFX with VMware NSX,26.2,148,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/ovsdb-vxlan-qfx.md
-ovsdb-vxlan-contrail,Junos OS OVSDB and VXLAN User Guide for QFX Series Switches,OVSDB VXLAN for QFX with Contrail,26.2,121,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/ovsdb-vxlan-contrail.md

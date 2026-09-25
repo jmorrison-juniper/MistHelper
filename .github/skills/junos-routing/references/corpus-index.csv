@@ -1,8 +1,0 @@
-file,title,topic,train,pages,path
-routing-policy,"Junos OS Routing Policies, Firewall Filters, and Traffic Policers User Guide",routing-policy,26.2,2418,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/routing-policy.md
-bgp,"Junos OS BGP User Guide",bgp,26.2,1648,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/bgp.md
-automation-scripting,"Junos OS Automation Scripting User Guide",automation,26.2,1159,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/automation-scripting.md
-is-is,"Junos OS IS-IS User Guide",is-is,26.2,832,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/is-is.md
-ospf,"Junos OS OSPF User Guide",ospf,26.2,796,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/ospf.md
-segment-routing,"Segment Routing User Guide",segment-routing,26.2,484,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/segment-routing.md
-rip,"Junos OS RIP User Guide",rip,26.2,233,markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/rip.md
