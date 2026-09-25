@@ -14,13 +14,15 @@
 
 - [x] T003 Change line 195 of `options.html` to `default(<text>, true)`.
 - [x] T004 Run the two tests green. The contract file gave 51 passed.
-- [ ] T005 After pull request #3382 merges, rebase, and add the browser check
-  of each visible type note to `test_upgrade.py`.
+- [x] T005 After pull request #3382 merges, rebase, and add the browser check
+  of each visible type note to `test_upgrade.py`. The browser test failed on
+  the old template, because each of the three notes read `None`. The test then
+  passed on the repaired template, and the module gave 15 passed.
 
 ## Phase 3: Finish
 
 - [x] T006 Add the release note under `changelog.d/`.
-- [ ] T007 Run every gate: ruff, black, pydocstyle, interrogate, bandit, radon,
+- [x] T007 Run every gate: ruff, black, pydocstyle, interrogate, bandit, radon,
   vulture, the STE lint, and the test quality gate.
 - [ ] T008 Run the portal suites and the browser suite of the upgrade portal.
 - [ ] T009 After the merge, deploy the template to port 8056 with a class B

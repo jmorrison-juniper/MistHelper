@@ -69,6 +69,13 @@ TYPE_VERSION_SELECT_IDS = (
     "upgrade-version-select-switch",
     "upgrade-version-select-gateway",
 )
+# Issue #3381: the default note under each type control, in the order of the controls above.
+TYPE_NOTE_TEXTS = (
+    "The portal applies this version only to compatible access points.",
+    "The portal applies this version only to compatible switches.",
+    "The portal applies this version only to compatible gateways.",
+)
+TYPE_NOTE_SUFFIX = "-note"  # Each control names its note in `aria-describedby` with this suffix.
 REBOOT_GROUP_ID = "upgrade-reboot-group"
 REBOOT_YES_ID = "upgrade-reboot-yes"
 REBOOT_NO_ID = "upgrade-reboot-no"
@@ -657,6 +664,26 @@ class TestUpgradeOptions:
         shot = tmp_path / "options-type-controls.png"  # The evidence that an engineer compares with the page.
         options_page.screenshot(path=str(shot), full_page=True)  # Keep the page that offered each version.
         assert shot.exists(), f"The screenshot {shot} was not written."  # A missing file is missing evidence.
+
+    def test_options_page_names_each_type_in_its_note(self, options_page: Any) -> None:
+        """The note under each type control names its type and never reads None.
+
+        Why:
+            Issue #3381. The selector writes `warning` as None for a type with
+            no warning, and the page printed the word None under each type
+            control. The operator could not tell whether the portal found a
+            fault.
+
+        Args:
+            options_page: The page that shows the version picker.
+        """
+        notes: dict[str, str] = {}  # The text that the operator reads under each type control.
+        for test_id in TYPE_VERSION_SELECT_IDS:  # The stand-in site holds one device of each type.
+            note = options_page.locator(f"#{test_id}{TYPE_NOTE_SUFFIX}")  # The paragraph that the control names.
+            sync_api.expect(note).to_be_visible()  # The operator can read the note beside the control.
+            notes[test_id] = " ".join(note.inner_text().split())  # Fold the template line breaks into spaces.
+        expected = dict(zip(TYPE_VERSION_SELECT_IDS, TYPE_NOTE_TEXTS, strict=True))  # One default note for each type.
+        assert notes == expected, f"The type notes read {notes}, not the default note of each type."
 
     def test_options_page_gives_one_version_control_to_each_device(self, options_page: Any) -> None:
         """Every target row carries its own version control.
