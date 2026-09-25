@@ -27,7 +27,6 @@ TARGET_PATHS = (  # Paths whose G-rule cleanup is locked in by issue #433 Phase 
     "src",  # The main src/ tree (789 sites converted).
     "tools",  # Already clean before issue #433; verified by Phase A pre-sweep.
     "web_portal",  # 3 sites converted during Phase A.
-    "starlink_dashboard.py",  # 12 sites converted during Phase A.
     "wsgi.py",  # Already clean before issue #433; verified by Phase A pre-sweep.
 )
 

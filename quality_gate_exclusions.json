@@ -63,12 +63,6 @@
       "recorded_count": 71
     },
     {
-      "gate": "mypy",
-      "path": "starlink_dashboard.py",
-      "scan_path": "starlink_dashboard.py",
-      "recorded_count": 76
-    },
-    {
       "gate": "bandit",
       "path": "tests",
       "scan_path": "tests",
