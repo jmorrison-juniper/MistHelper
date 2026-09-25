@@ -23,6 +23,7 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -36,7 +37,7 @@ from src.marvis.actions.model import (
 from src.marvis.actions.operation import MarvisActionsOperation
 from src.marvis.actions.selection import MODE_EXPORT_ALL, MODES, MarvisResolvePrompts, MarvisTopicSelector
 from src.utils.menu_entry import MenuEntry
-from tests.unit.marvis.actions.conftest import OperationHarness, make_raw
+from tests.unit.marvis.actions.conftest import FakeResponse, OperationHarness, make_alarm, make_alarm_page, make_raw
 from web_portal.services.input_hook import InputInterceptor, web_input_context
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor, _RunLogHandler
 
@@ -346,3 +347,22 @@ class TestPortalRuns:
         run = portal.run(portal_rows(), ("1",))
         assert len(run.exported_rows()) == 4
         assert run.puts() == []
+
+    def test_a_joined_report_completes_with_the_alarm_values(self, portal: PortalRunner, site_api: MagicMock) -> None:
+        """Issue #3339: the two alarm count lines hold no failure word, so the portal reports a completed run."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), make_alarm(9)])
+        run = portal.run(portal_rows(), DEFAULT_ANSWERS)
+        assert [row["alarm_id"] for row in run.exported_rows()] == [make_alarm(1)["id"], "", "", ""]
+        assert (run.missing_input(), run.handled_error()) == (None, None)
+        messages = [entry["message"] for entry in run.record["log_messages"]]
+        assert "Marvis alarm join: 1 of 4 exported actions have a Marvis alarm. 3 have no alarm." in messages
+        assert "Marvis alarms in the search window without an action in the list: 1" in messages
+        assert EXPORT_FILE in run.record["output_files"]
+
+    def test_a_refused_alarm_search_still_completes(self, portal: PortalRunner, site_api: MagicMock) -> None:
+        """Issue #3339: the report is the result, so a refused alarm search must not turn the run into a failure."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = FakeResponse(403, {"detail": "refused"})
+        run = portal.run(portal_rows(), DEFAULT_ANSWERS)
+        assert {row["alarm_id"] for row in run.exported_rows()} == {""}
+        assert (run.missing_input(), run.handled_error()) == (None, None)
+        assert EXPORT_FILE in run.record["output_files"]

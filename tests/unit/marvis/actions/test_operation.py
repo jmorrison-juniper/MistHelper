@@ -2,19 +2,20 @@
 
 Each test runs the real operation through ``MarvisActionsOperation.run`` with a
 scripted ``input``, a fake Mist session, and a mocked exporter. The tests prove
-the four modes, every refusal before the first request, the verify step, and
-the log lines that the web dashboard reads.
+the four modes, every refusal before the first request, the verify step, the
+alarm join of issue #3339, and the log lines that the web dashboard reads.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.config import runtime_settings
+from src.marvis.actions.alarms import ALARM_COLUMNS, ALARM_MAX_WINDOW_SECONDS
 from src.marvis.actions.model import MarvisActionRecord
 from src.marvis.actions.operation import (
     DEFAULT_MAX_ACTIONS,
@@ -30,7 +31,15 @@ from src.marvis.actions.operation import (
 )
 from src.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
 from src.utils.input_utils import InputUtils
-from tests.unit.marvis.actions.conftest import SITE_NAME, OperationHarness, make_raw
+from tests.unit.marvis.actions.conftest import (
+    ORG_ID,
+    SITE_NAME,
+    FakeResponse,
+    OperationHarness,
+    make_alarm,
+    make_alarm_page,
+    make_raw,
+)
 
 EXPORT_DONE = "Completed the Marvis Actions export and wrote results to OrgMarvisActions.csv"
 RESOLVE_DONE = "Completed the Marvis Actions resolve and wrote results to OrgMarvisActionsResolveResults.csv"
@@ -686,3 +695,130 @@ class TestOutputTarget:
         assert text.rstrip().endswith(done)
         assert "OrgMarvisActionsResolveResults.csv" not in text
         assert only_write(built)[1] == RESULTS_FILENAME
+
+
+class TestAlarmJoin:
+    """Issue #3339: modes 1, 2, and 4 add the Marvis alarm of each action, and mode 3 sends no alarm search."""
+
+    ALARM_VALUES = {  # The alarm columns of action 1, from the default make_alarm(1) row.
+        "alarm_id": make_alarm(1)["id"],
+        "alarm_type": "switch_offline",
+        "alarm_status": "resolved",
+        "alarm_resolved_time_iso": "2023-11-14T22:29:20+00:00",
+        "alarm_acked": None,
+        "alarm_acked_time_iso": "",
+        "alarm_ack_admin_name": "",
+        "alarm_note": "",
+    }
+    EMPTY_VALUES = {  # The alarm columns of an action without an alarm.
+        "alarm_id": "",
+        "alarm_type": "",
+        "alarm_status": "",
+        "alarm_resolved_time_iso": "",
+        "alarm_acked": None,
+        "alarm_acked_time_iso": "",
+        "alarm_ack_admin_name": "",
+        "alarm_note": "",
+    }
+
+    @staticmethod
+    def search(site_api: MagicMock) -> MagicMock:
+        """Return the mock of the mistapi alarm search."""
+        return site_api.api.v1.orgs.alarms.searchOrgAlarms
+
+    @staticmethod
+    def alarm_part(row: dict[str, Any]) -> dict[str, Any]:
+        """Return the eight alarm columns of one row or one document."""
+        return {name: row[name] for name in ALARM_COLUMNS}
+
+    @pytest.mark.parametrize("case", [("", "open"), ("2", "open"), ("4", "resolved")], ids=["mode1", "mode2", "mode4"])
+    def test_the_rows_and_the_documents_hold_the_alarm_values(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture, case: tuple[str, str]
+    ) -> None:
+        """The CSV row and the database document of each action hold the same alarm values."""
+        mode, status = case
+        self.search(site_api).return_value = make_alarm_page([make_alarm(1)])
+        built = harness([make_raw(1, status=status), make_raw(2, status=status)], mode, *DEFAULT_FILTERS)
+        text = run_menu(caplog)
+        rows, _, kwargs = only_write(built)
+        documents = kwargs["backend_options"].raw_data
+        assert [self.alarm_part(row) for row in rows] == [self.ALARM_VALUES, self.EMPTY_VALUES]
+        assert [self.alarm_part(document) for document in documents] == [self.ALARM_VALUES, self.EMPTY_VALUES]
+        assert kwargs["fieldnames"] == MarvisActionRecord.column_names()
+        assert text.rstrip().endswith(EXPORT_DONE)
+
+    def test_the_join_keeps_every_action_column(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An alarm adds its eight values only. The Marvis Actions values stay the values of the list."""
+        self.search(site_api).return_value = make_alarm_page([make_alarm(1, status="open", type="other_type")])
+        built = harness([make_raw(1)], "", *DEFAULT_FILTERS)
+        run_menu(caplog)
+        row = only_write(built)[0][0]
+        assert (row["status"], row["status_name"], row["suggestion_id"]) == ("open", "Open", "swoff-1")
+        assert (row["alarm_status"], row["alarm_type"]) == ("open", "other_type")
+
+    def test_one_search_names_the_marvis_group_and_the_capped_window(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The run sends one search. The 2023 test rows are older than 400 days, so the cap sets the start."""
+        built = harness([make_raw(1), make_raw(2)], "", *DEFAULT_FILTERS)
+        run_menu(caplog)
+        search = self.search(site_api)
+        assert search.call_count == 1
+        args, kwargs = search.call_args
+        assert args == (built.session, ORG_ID)
+        assert (kwargs["group"], kwargs["limit"]) == ("marvis", 1000)
+        assert int(kwargs["end"]) - int(kwargs["start"]) == ALARM_MAX_WINDOW_SECONDS
+
+    def test_mode_3_sends_no_alarm_search(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The resolve writes its results file only, so it needs no alarm value."""
+        harness(list(TestResolve.RAWS), "3", *DEFAULT_FILTERS, "", "", "RESOLVE 2")
+        text = run_menu(caplog)
+        assert self.search(site_api).call_count == 0
+        assert "Marvis alarm join" not in text
+        assert text.rstrip().endswith(RESOLVE_DONE)
+
+    @pytest.mark.parametrize(
+        "response",
+        [FakeResponse(403, {"detail": "refused"}), FakeResponse(None, None), FakeResponse(200, {"detail": "no list"})],
+        ids=["refused", "no-answer", "changed-shape"],
+    )
+    def test_a_failed_search_still_writes_every_action(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture, response: FakeResponse
+    ) -> None:
+        """A failed alarm search leaves the alarm columns empty, and the export still completes."""
+        self.search(site_api).return_value = response
+        built = harness([make_raw(1), make_raw(2)], "", *DEFAULT_FILTERS)
+        text = run_menu(caplog)
+        rows = only_write(built)[0]
+        assert [self.alarm_part(row) for row in rows] == [self.EMPTY_VALUES, self.EMPTY_VALUES]
+        assert "The Marvis alarm search returned no usable result." in text
+        assert "The alarm columns stay empty." in text
+        assert "Marvis alarm join:" not in text
+        assert text.rstrip().endswith(EXPORT_DONE)
+
+    def test_the_count_lines_come_after_the_status_mix_and_before_the_write(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The operator reads the status mix, then the two alarm counts, then the write line."""
+        self.search(site_api).return_value = make_alarm_page([make_alarm(1), make_alarm(9)])
+        harness([make_raw(1), make_raw(2)], "", *DEFAULT_FILTERS)
+        text = run_menu(caplog)
+        mix = text.index("Selected Marvis Actions by status:")
+        joined = text.index("Marvis alarm join: 1 of 2 exported actions have a Marvis alarm. 1 have no alarm.")
+        unmatched = text.index("Marvis alarms in the search window without an action in the list: 1")
+        write = text.index("Writing 2 Marvis Actions to OrgMarvisActions.csv")
+        assert mix < joined < unmatched < write
+
+    def test_the_unmatched_count_reads_every_action_of_the_list(
+        self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Mode 2 exports the open action only. The alarm of the closed action still has an action in the list."""
+        self.search(site_api).return_value = make_alarm_page([make_alarm(1), make_alarm(2)])
+        harness([make_raw(1), make_raw(2, status="validated")], "2", *DEFAULT_FILTERS)
+        text = run_menu(caplog)
+        assert "Marvis alarm join: 1 of 1 exported actions have a Marvis alarm. 0 have no alarm." in text
+        assert "Marvis alarms in the search window without an action in the list: 0" in text

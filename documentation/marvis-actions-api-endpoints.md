@@ -8,7 +8,7 @@ The examples use placeholder values. Replace `<org_id>`, `<API token>`, and
 `<row_key>` with your own values. A value such as `<uuid>` or `<mac>` in a response
 example replaces a real identifier.
 
-Caution: three of the four endpoints are `labs` endpoints, so a Mist release can
+Caution: three of the five endpoints are `labs` endpoints, so a Mist release can
 change them without notice and stop your script. The OpenAPI document of Mist does
 not describe the `labs` endpoints, and `mistapi` 0.64.0 holds no method for them. If
 a request returns HTTP 404 or a changed response shape, compare the request with the
@@ -22,8 +22,9 @@ Mist UI again. MistHelper confirmed each endpoint against the Mist UI version
 | 1 | GET | `/api/v1/labs/orgs/{org_id}/suggestion` | Read the Marvis Actions list, one page at a time. | 1, 2, 3, 4 | No |
 | 2 | GET | `/api/v1/labs/suggestions_schema` | Read the topic names and the recommended actions. | 1, 2, 3, 4 | No |
 | 3 | GET | `/api/v1/orgs/{org_id}/sites` | Read the site names. | 1, 2, 3, 4 | No |
-| 4 | PUT | `/api/v1/labs/orgs/{org_id}/suggestions` | Resolve one action. | 3 | Yes |
-| 5 | GET | `/api/v1/labs/orgs/{org_id}/suggestion` | Read the list again to verify each resolve. | 3 | No |
+| 4 | GET | `/api/v1/orgs/{org_id}/alarms/search` | Read the Marvis alarms, and add the alarm values to each exported action. | 1, 2, 4 | No |
+| 5 | PUT | `/api/v1/labs/orgs/{org_id}/suggestions` | Resolve one action. | 3 | Yes |
+| 6 | GET | `/api/v1/labs/orgs/{org_id}/suggestion` | Read the list again to verify each resolve. | 3 | No |
 
 The list path ends in `suggestion`. The resolve path ends in `suggestions`. Do not
 mix the two paths.
@@ -40,9 +41,11 @@ A closed action holds a status that the Open tab of the Mist UI does not show. S
 `resolve_time_iso`, and `validation_time_iso` show how and when each action closed.
 Mode 4 sends the same GET requests as mode 1, and it changes no Mist data.
 
-No `search` endpoint serves the Marvis Actions list. The older alarm search is not
-a replacement, because its rows hold no `row_key`. The `marvis_configs` search is
-not a replacement either, because it reads a different object. See
+No `search` endpoint serves the Marvis Actions list. The alarm search is not a
+replacement, because its rows hold no `row_key` value. Modes 1, 2, and 4 read the
+alarm search only to add eight alarm columns to each exported action. See
+[Step 4](#step-4-read-the-marvis-alarms). The `marvis_configs` search is not a
+replacement either, because it reads a different object. See
 [Endpoints that menu 270 does not call](#endpoints-that-menu-270-does-not-call).
 
 ## Common request values
@@ -291,7 +294,192 @@ MistHelper reads `id` and `name` from each site, and it fills the `site_name`
 column. If this read fails, the export continues. The `site_name` column stays
 empty, and the log states the HTTP status.
 
-## Step 4. Resolve one action
+## Step 4. Read the Marvis alarms
+
+`GET /api/v1/orgs/{org_id}/alarms/search`
+
+Modes 1, 2, and 4 send this search one time for each export. The search occurs
+after the filter prompts and before the write. Mode 3 does not send it. The
+OpenAPI document of Mist describes this endpoint, and MistHelper calls it through
+the SDK. Issue #3339 added this step.
+
+Mist keeps a Marvis alarm for many Marvis Actions. The alarm holds its own status,
+its resolved time, and its acknowledge values. MistHelper copies eight alarm
+values into the row of each exported action. You then read one file instead of
+two lists.
+
+### Query parameters for the alarm search
+
+| Name | Value that MistHelper sends | Purpose |
+| - | - | - |
+| `group` | `marvis` | Return the Marvis alarms only. The `infrastructure` group and the `security` group hold no Marvis Action. |
+| `start` | Epoch seconds, as text | The start of the search window. |
+| `end` | Epoch seconds, as text | The end of the search window. MistHelper sends the time of the run. |
+| `limit` | `1000` | The number of alarms on each page. The default of the API is 100. |
+
+MistHelper builds the search window from three rules.
+
+1. The window starts one day before the oldest `start_time` of the exported
+   actions.
+2. The start is never earlier than 400 days before the end. A live test on
+   2026-09-24 proved that width.
+3. The window is at least one day wide.
+
+The Marvis Actions list holds `start_time` in epoch milliseconds. The alarm search
+reads epoch seconds. MistHelper divides each action time by 1,000 before it
+builds the window.
+
+Caution: a request without `start` and `end` can miss an old alarm. The search
+then reads a short default window, and the alarm columns of the old action stay
+empty.
+
+### Example request for the alarm search
+
+```text
+curl.exe -s -H "Authorization: Token <API token>" "https://api.mist.com/api/v1/orgs/<org_id>/alarms/search?group=marvis&start=<epoch seconds>&end=<epoch seconds>&limit=1000"
+```
+
+The same request through `mistapi`:
+
+```python
+response = mistapi.api.v1.orgs.alarms.searchOrgAlarms(  # Read the first page.
+    apisession, org_id, group="marvis", start=str(start), end=str(end), limit=1000
+)
+next_page = mistapi.get_next(apisession, response)  # Follow the next link, or get None without a link.
+```
+
+### Response of the alarm search
+
+```json
+{
+  "results": [
+    {
+      "id": "<uuid>",
+      "org_id": "<uuid>",
+      "site_id": "<uuid>",
+      "group": "marvis",
+      "type": "switch_offline",
+      "severity": "critical",
+      "status": "resolved",
+      "count": 1,
+      "timestamp": 1790196720,
+      "last_seen": 1790197526,
+      "resolved_time": 1790198345,
+      "entity_macs": ["<mac>"],
+      "impacted_entities": [
+        {
+          "entity_mac": "<mac>",
+          "entity_name": "<switch name>",
+          "entity_type": "switch"
+        }
+      ]
+    }
+  ],
+  "start": 1755903503.0,
+  "end": 1790463503.0,
+  "limit": 1000,
+  "total": 33
+}
+```
+
+The alarm times hold whole epoch seconds. The `start` value and the `end` value of
+the response hold decimal epoch seconds. If more alarms exist than one page holds,
+the body also holds a `next` link with a `search_after` value. Do not build that
+value yourself. Follow the link.
+
+### Paging rule for the alarm search
+
+MistHelper stops the read when the first of these conditions is true.
+
+1. A page holds no `next` link.
+2. A page holds no alarm.
+3. A page holds a `next` link that the read already followed.
+4. The read reached 100 pages.
+
+After condition 3 or condition 4, MistHelper logs one warning line. The join then
+holds the alarms of the pages that MistHelper read, so some alarm cells can stay
+empty by mistake.
+
+A page fails when it returns no HTTP answer, a status that is not 200, or a body
+without a `results` list. If a page fails, MistHelper discards every alarm row.
+The export continues, and it writes every action with empty alarm columns. One
+warning line names the reason, and the portal still marks the run as completed.
+
+MistHelper keeps only the rows whose `group` is `marvis`. The example `next` link
+of the API reference holds no `group` value, so a next page can hold other groups.
+
+### How MistHelper joins an alarm to an action
+
+1. MistHelper matches the alarm `action_id` to the action `uuid`.
+2. If no alarm matches, MistHelper matches the alarm `id` to the action `uuid`.
+3. If two alarms hold one key, the alarm with the larger `last_seen` value wins.
+
+The join does not use the topic names, because the alarm types use other names.
+For example, the topic `switch/sw_offline` joins to the alarm type
+`switch_offline`, and the topic `ap/ap_disconnect` joins to `ap_offline`.
+
+A live test on 2026-09-24 read 112 actions and 33 Marvis alarms. The alarm `id`
+equaled the action `uuid` for 31 actions. No alarm held an `action_id` value. 81
+actions had no alarm, and 79 of them started before the oldest alarm that the
+search returned. Mist does not document how long it keeps an alarm, so an old
+action can have no alarm.
+
+### The alarm columns
+
+| Column | Alarm field | Value |
+| - | - | - |
+| `alarm_id` | `id` | The alarm UUID. |
+| `alarm_type` | `type` | The alarm type, for example `switch_offline`. |
+| `alarm_status` | `status` | The alarm status, for example `open` or `resolved`. |
+| `alarm_resolved_time_iso` | `resolved_time` | The resolve time as ISO 8601 UTC text, in whole seconds. |
+| `alarm_acked` | `acked` | `True` when an operator acknowledged the alarm. |
+| `alarm_acked_time_iso` | `acked_time` | The acknowledge time as ISO 8601 UTC text, in whole seconds. |
+| `alarm_ack_admin_name` | `ack_admin_name` | The name of the administrator who acknowledged the alarm. |
+| `alarm_note` | `note` | The note that the administrator wrote with the acknowledge. |
+
+The eight columns come after `exported_at`, so the first 43 columns keep their
+positions. If an action has no alarm, the eight cells stay empty. The live
+organization held no acknowledged alarm, so the last four columns stayed empty on
+every row.
+
+### The count lines of the join
+
+After the join, the run shows two lines in the SSH session and in the portal.
+
+```text
+Marvis alarm join: 31 of 112 exported actions have a Marvis alarm. 81 have no alarm.
+Marvis alarms in the search window without an action in the list: 2
+```
+
+The second line counts the alarms whose two keys name no action of the list. Such
+an alarm can be newer than the list read.
+
+A later live run on 2026-09-24 at 23:55Z proved this case. The list then held
+114 actions, and two of them were the actions of the two newer alarms. All 33
+alarms joined an action, and the second count line showed 0.
+
+### The limits of an acknowledge step
+
+Menu 270 reads the acknowledge values of each alarm, but it does not acknowledge
+an alarm. Issue #3357 tracks that change as phase 2 of issue #3339. A person must
+review that change before it merges. Read these limits before you plan an
+acknowledge script.
+
+- An acknowledge changes Mist data for every engineer who reads the alarm.
+- The research did not test if a resolve changes the alarm, or if an acknowledge
+  changes the action.
+- The `ack_all` request has no group filter, so it also acknowledges the
+  `infrastructure` alarms and the `security` alarms.
+- The organization API has no path that removes the acknowledge of one alarm. To
+  undo one acknowledge, send `unack` with a list that holds one alarm ID.
+- The bundled API document limits one `ack` batch or one `unack` batch to 1,000
+  alarm IDs.
+
+Warning: do not send `ack_all` from a script, because it will acknowledge every
+alarm of the organization. No request can restore the acknowledge state that each
+alarm held before.
+
+## Step 5. Resolve one action
 
 `PUT /api/v1/labs/orgs/{org_id}/suggestions`
 
@@ -428,8 +616,8 @@ this report. The research did not test a token with a lower role.
 
 | Mode | Requests for one run |
 | - | - |
-| 1, 2, or 4 | One list read for each 1,000 rows, one schema read, and one site read for each 1,000 sites. |
-| 3 | The reads of mode 1, one PUT for each action, and one more list read for each 1,000 rows. |
+| 1, 2, or 4 | One list read for each 1,000 rows, one schema read, one site read for each 1,000 sites, and one alarm search for each 1,000 Marvis alarms. |
+| 3 | The list read, the schema read, and the site read of mode 1, one PUT for each action, and one more list read for each 1,000 rows. Mode 3 sends no alarm search. |
 
 All users of MistHelper share one Mist token. Mist allows about 5,000 requests each
 hour for one token. The setting `MARVIS_RESOLVE_MAX_ACTIONS` in `.env` limits one
@@ -442,7 +630,11 @@ MistHelper waits between two PUT requests.
 | Method | Path | Reason | Changes Mist data |
 | - | - | - | - |
 | GET | `/api/v1/labs/orgs/{org_id}/suggestions?query=get_suggestion` | The plural path returns 100 rows at most, and it does not page. | No |
-| GET | `/api/v1/orgs/{org_id}/alarms/search?group=marvis` | The older alarm view. Its rows hold no `row_key`, so a resolve cannot use them. | No |
+| POST | `/api/v1/orgs/{org_id}/alarms/{alarm_id}/ack` | It acknowledges one alarm. See [The limits of an acknowledge step](#the-limits-of-an-acknowledge-step). | Yes |
+| POST | `/api/v1/orgs/{org_id}/alarms/ack` | It acknowledges a list of alarms. | Yes |
+| POST | `/api/v1/orgs/{org_id}/alarms/ack_all` | It acknowledges every alarm of the organization, in every alarm group. | Yes |
+| POST | `/api/v1/orgs/{org_id}/alarms/unack` | It removes the acknowledge of a list of alarms. | Yes |
+| POST | `/api/v1/orgs/{org_id}/alarms/unack_all` | It removes the acknowledge of every alarm of the organization. | Yes |
 | POST | `/api/v1/labs/sites/{site_id}/suggestions/fix` | It starts a Marvis self-drive fix, which changes the device configuration. | Yes |
 | POST | `/api/v1/orgs/{org_id}/tickets` | It opens a support ticket for an RMA. | Yes |
 | POST | `/api/v1/labs/orgs/{org_id}/jcloud/request_virtualassistant_url` | It opens a Marvis chat session. | Yes |
@@ -532,7 +724,7 @@ report stays correct.
 
 | File | SQLite table | ArangoDB collection | Primary key | Content |
 | - | - | - | - | - |
-| `data/OrgMarvisActions.csv` | `OrgMarvisActions` | `listOrgMarvisActions` | `uuid` | One row for each action. Modes 1, 2, and 4 write it. |
+| `data/OrgMarvisActions.csv` | `OrgMarvisActions` | `listOrgMarvisActions` | `uuid` | One row for each action, with 43 action columns and 8 alarm columns. Modes 1, 2, and 4 write it. |
 | `data/OrgMarvisActionsResolveResults.csv` | `OrgMarvisActionsResolveResults` | `resolveOrgMarvisActions` | `result_id` | One row for each action that a mode 3 run touched. |
 
 The default format writes the CSV file. The `--output-format sqlite` flag writes
@@ -540,8 +732,12 @@ the SQLite table in `data/mist_data.db` and writes no CSV file. When ArangoDB
 answers, each run also writes the ArangoDB collection.
 
 The `result_id` joins the action `uuid` and the `resolve_time` of the run, so each
-run adds new rows. The database document of an action holds the full raw row and
-the readable columns.
+run adds new rows. The database document of an action holds the full raw row, the
+readable columns, and the eight alarm columns.
+
+A SQLite table from a release before issue #3339 holds 43 columns. The next
+SQLite write adds the eight alarm columns to the table. Pull request #3351 added
+that step.
 
 ## Where the code lives
 
@@ -550,6 +746,8 @@ the readable columns.
 | List | `MarvisActionsClient.list_actions` | `src/marvis/actions/client.py` |
 | Schema | `MarvisActionsClient.read_schema` | `src/marvis/actions/client.py` |
 | Sites | `MarvisActionsClient.read_site_names` | `src/marvis/actions/client.py` |
+| Alarm search | `MarvisActionsClient.search_marvis_alarms` | `src/marvis/actions/client.py` |
+| Alarm join | `MarvisAlarmJoin.apply` | `src/marvis/actions/alarms.py` |
 | Resolve | `MarvisActionsClient.resolve_action` | `src/marvis/actions/client.py` |
 | Verify | `MarvisBulkResolver.verify` | `src/marvis/actions/operation.py` |
 

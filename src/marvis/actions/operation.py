@@ -11,8 +11,10 @@ Output:
     Modes 1, 2, and 4 write ``OrgMarvisActions.csv`` under the data directory
     and write the same rows to the configured database backend. Mode 1 writes
     every action, mode 2 writes the open actions, and mode 4 writes the closed
-    actions. Mode 3 writes ``OrgMarvisActionsResolveResults.csv``, with one row
-    for each request. With ``--output-format sqlite``, each write goes to a
+    actions. Before the write, these modes search the Marvis alarms one time
+    and add the alarm of each action to its row (issue #3339). Mode 3 writes
+    ``OrgMarvisActionsResolveResults.csv``, with one row for each request, and
+    it searches no alarm. With ``--output-format sqlite``, each write goes to a
     SQLite table that has the file name without ``.csv``, and the run writes no
     CSV file.
 
@@ -38,6 +40,7 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: reach the shared session, config helper, and exporter without the root module.
 )
 from src.dataclasses.export_backend_options import ExportBackendOptions  # WHY: send the raw documents to the DB.
+from src.marvis.actions.alarms import MarvisAlarmJoin  # WHY: add the Marvis alarm of each action to its row.
 from src.marvis.actions.client import MarvisActionsClient, MarvisListResult  # WHY: every API call of the feature.
 from src.marvis.actions.model import (  # WHY: the status catalog, the records, and the field reader.
     OPEN_STATUSES,
@@ -623,9 +626,9 @@ class MarvisActionsOperation:
     @classmethod
     def _export(cls, loaded: MarvisLoadedActions, selected: Sequence[MarvisActionRecord]) -> None:
         """Write the selected records to the CSV file and the database backend."""
-        rows = [record.as_row() for record in selected]  # WHY: one CSV row for each action.
-        documents = [loaded.documents[record.uuid] for record in selected]  # WHY: the raw rows for the database.
-        cls._log_status_mix(selected)  # WHY: the status summary before the write.
+        cls._log_status_mix(selected)  # WHY: the status summary before the alarm search and the write.
+        records, documents = MarvisAlarmJoin(loaded.client).apply(selected, loaded.documents)  # WHY: issue #3339.
+        rows = [record.as_row() for record in records]  # WHY: one CSV row for each action, with its alarm columns.
         target = MarvisOutputTarget.describe(EXPORT_FILENAME)  # WHY: the file or the table of the active format.
         logger.info("Writing %d Marvis Actions to %s", len(rows), target)  # WHY: action log.
         written = SourceDependencyResolver.DataExporter.write_with_format_selection(

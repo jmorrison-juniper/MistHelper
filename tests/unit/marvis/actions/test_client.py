@@ -1,21 +1,23 @@
 """Tests for the Mist API client of menu 270.
 
 The client reads the Marvis Actions list page by page, reads the topic schema
-and the site names, and sends one resolve request at a time. These tests prove
-the paging rules, the refusal of a partial list, and the exact request shapes.
-No test touches the network.
+and the site names, and sends one resolve request at a time. It also searches
+the Marvis alarms page by page. These tests prove the paging rules, the refusal
+of a partial list, and the exact request shapes. No test touches the network.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
 from src.marvis.actions import client as client_module
 from src.marvis.actions.client import (
+    ALARM_GROUP,
+    ALARM_PAGE_LIMIT,
     ERROR_TEXT_LIMIT,
     LIST_PATH,
     RESOLVE_PATH,
@@ -23,7 +25,16 @@ from src.marvis.actions.client import (
     SITE_PAGE_LIMIT,
     MarvisActionsClient,
 )
-from tests.unit.marvis.actions.conftest import ORG_ID, SITE_ID, SITE_NAME, FakeMistSession, FakeResponse, make_raw
+from tests.unit.marvis.actions.conftest import (
+    ORG_ID,
+    SITE_ID,
+    SITE_NAME,
+    FakeMistSession,
+    FakeResponse,
+    make_alarm,
+    make_alarm_page,
+    make_raw,
+)
 
 
 def rows(count: int) -> list[dict[str, Any]]:
@@ -210,6 +221,138 @@ class TestSiteRead:
         """A malformed item must not stop the export."""
         site_api.get_all.return_value = [{"id": SITE_ID, "name": SITE_NAME}, "noise"]
         assert client_for(MagicMock()).read_site_names() == {SITE_ID: SITE_NAME}
+
+
+def alarm_ids(result: Any) -> list[str]:
+    """Return the id of each alarm row of one search result, in order."""
+    return [row["id"] for row in result.rows]
+
+
+class TestAlarmSearch:
+    """Issue #3339: the alarm search reads every page of the Marvis group, and a failure returns no rows."""
+
+    def test_the_search_sends_the_group_the_window_and_the_largest_page(self, site_api: MagicMock) -> None:
+        """The NOC endpoint report names these query values."""
+        session = MagicMock()
+        client_for(session).search_marvis_alarms(1_700_000_000, 1_700_086_400)
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.assert_called_once_with(
+            session, ORG_ID, group=ALARM_GROUP, start="1700000000", end="1700086400", limit=ALARM_PAGE_LIMIT
+        )
+
+    def test_the_group_is_marvis_and_the_page_is_the_largest(self) -> None:
+        """The other alarm groups hold no action, and a large page saves requests."""
+        assert (ALARM_GROUP, ALARM_PAGE_LIMIT) == ("marvis", 1000)
+
+    def test_one_page_without_a_link_holds_every_alarm(self, site_api: MagicMock) -> None:
+        """The live organization returned 33 alarms on one page without a next link."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), make_alarm(2)])
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        expected = [make_alarm(1)["id"], make_alarm(2)["id"]]
+        assert (alarm_ids(result), result.status_code, result.complete, result.problem) == (expected, 200, True, "")
+        assert site_api.get_next.call_count == 0
+
+    def test_the_search_follows_each_next_link(self, site_api: MagicMock) -> None:
+        """The next link carries the search_after value of the page."""
+        first = make_alarm_page([make_alarm(1)], next_link="/api/v1/orgs/org/alarms/search?search_after=a")
+        second = make_alarm_page([make_alarm(2)], next_link="/api/v1/orgs/org/alarms/search?search_after=b")
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = first
+        site_api.get_next.side_effect = [second, make_alarm_page([make_alarm(3)])]
+        session = MagicMock()
+        result = client_for(session).search_marvis_alarms(1, 2)
+        assert (alarm_ids(result), result.complete) == ([make_alarm(n)["id"] for n in (1, 2, 3)], True)
+        site_api.get_next.assert_has_calls([call(session, first), call(session, second)])
+
+    def test_a_refused_page_discards_every_alarm(self, site_api: MagicMock) -> None:
+        """A token without the alarm role receives HTTP 403."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = FakeResponse(403, {"detail": "forbidden"})
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert (result.rows, result.status_code, result.complete) == ([], 403, False)
+        assert result.problem == "The API returned HTTP 403."
+
+    def test_a_refused_second_page_discards_the_first_page(self, site_api: MagicMock) -> None:
+        """A partial alarm list would show an empty alarm cell as a fact."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1)], next_link="/next")
+        site_api.get_next.return_value = FakeResponse(500, None)
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert (result.rows, result.status_code, result.problem) == ([], 500, "The API returned HTTP 500.")
+
+    def test_a_missing_next_page_is_a_problem(self, site_api: MagicMock) -> None:
+        """The get_next helper returns None when the response holds no next link."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1)], next_link="/next")
+        site_api.get_next.return_value = None
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert (result.rows, result.status_code, result.complete) == ([], None, False)
+        assert result.problem == "The alarm search returned no next page."
+
+    def test_a_missing_answer_points_to_the_script_log(self, site_api: MagicMock) -> None:
+        """The mistapi library returns no status when no HTTP answer arrived."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = FakeResponse(None, None)
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert result.problem == "No HTTP answer arrived. Read the mistapi line in script.log."
+
+    def test_a_changed_response_shape_is_refused(self, site_api: MagicMock) -> None:
+        """A body without a results list holds no alarm."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = FakeResponse(200, [make_alarm(1)])
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert (result.rows, result.problem) == ([], "The response holds no results list.")
+
+    def test_a_repeated_link_stops_the_read_and_warns(self, site_api: MagicMock, caplog: Any) -> None:
+        """A link that repeats would read the same page again and again."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1)], next_link="/same")
+        site_api.get_next.side_effect = [make_alarm_page([make_alarm(2)], next_link="/same")]
+        with caplog.at_level(logging.WARNING):
+            result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert (len(result.rows), result.complete, result.problem, site_api.get_next.call_count) == (2, False, "", 1)
+        assert "stopped at page 2 before its last page. The join holds the first 2 alarms only." in caplog.text
+
+    def test_the_page_guard_keeps_the_alarms_and_warns(
+        self, monkeypatch: pytest.MonkeyPatch, site_api: MagicMock, caplog: Any
+    ) -> None:
+        """A server that never ends the alarm list must not hold the run forever."""
+        monkeypatch.setattr(client_module, "MAX_ALARM_PAGES", 3)
+        numbers = iter(range(2, 10))
+
+        def next_page(session: Any, response: Any) -> FakeResponse:
+            number = next(numbers)
+            return make_alarm_page([make_alarm(number)], next_link=f"/page/{number}")
+
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1)], next_link="/page/1")
+        site_api.get_next.side_effect = next_page
+        with caplog.at_level(logging.WARNING):
+            result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert (len(result.rows), result.complete, result.problem, site_api.get_next.call_count) == (3, False, "", 2)
+        assert "stopped at page 3 before its last page. The join holds the first 3 alarms only." in caplog.text
+
+    def test_an_alarm_of_another_group_is_skipped(self, site_api: MagicMock) -> None:
+        """The API filters by group, and the client keeps a stray row out of the join."""
+        page = [make_alarm(1), make_alarm(2, group="infrastructure"), make_alarm(3, group=None), make_alarm(4)]
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page(page)
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert alarm_ids(result) == [make_alarm(1)["id"], make_alarm(4)["id"]]
+
+    def test_an_item_that_is_not_an_object_is_skipped(self, site_api: MagicMock) -> None:
+        """A malformed item must not stop the export."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), "noise", None, [1]])
+        assert alarm_ids(client_for(MagicMock()).search_marvis_alarms(1, 2)) == [make_alarm(1)["id"]]
+
+    def test_an_empty_page_ends_the_read_even_with_a_link(self, site_api: MagicMock) -> None:
+        """An empty page holds no search position, so a next read would find nothing new."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([], next_link="/more")
+        result = client_for(MagicMock()).search_marvis_alarms(1, 2)
+        assert (result.rows, result.complete, result.problem, site_api.get_next.call_count) == ([], True, "", 0)
+
+    def test_the_search_logs_each_page_and_the_result(self, site_api: MagicMock, caplog: Any) -> None:
+        """The script log shows the window, each page, and the count."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1)])
+        with caplog.at_level(logging.DEBUG, logger=client_module.__name__):
+            client_for(MagicMock()).search_marvis_alarms(10, 20)
+        for line in (
+            f"Searching the Marvis alarms of org {ORG_ID} from 10 to 20",
+            "Reading Marvis alarm page 1",
+            "Marvis alarm page 1 returned HTTP 200",
+            "Read 1 Marvis alarms on 1 pages",
+        ):
+            assert line in caplog.text, line
 
 
 class TestResolveRequest:

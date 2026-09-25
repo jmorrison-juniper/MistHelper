@@ -1,16 +1,19 @@
-"""Property tests for the menu 270 readers, the record builder, and the answer grammar.
+"""Property tests for the menu 270 readers, the record builder, the alarm join, and the answer grammar.
 
 The unit tests pin the row shapes that the lab organization returns. These
 property tests widen the input space, so a new Mist topic or a changed field
 still holds the invariants that an operator depends on: the export never stops
-on a strange value, a filter answer never widens past the offered topics, and
-only the exact confirmation text starts a resolve.
+on a strange value, the alarm join never changes an action column, a filter
+answer never widens past the offered topics, and only the exact confirmation
+text starts a resolve.
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,6 +22,14 @@ pytest.importorskip("hypothesis")
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from src.marvis.actions.alarms import (
+    ALARM_COLUMNS,
+    ALARM_MAX_WINDOW_SECONDS,
+    ALARM_WINDOW_MARGIN_SECONDS,
+    MarvisAlarmIndex,
+    MarvisAlarmJoin,
+)
+from src.marvis.actions.client import MarvisActionsClient, MarvisListResult
 from src.marvis.actions.model import (
     STATUS_NAMES,
     TOPIC_NAMES,
@@ -34,7 +45,7 @@ from src.marvis.actions.selection import (
     MarvisResolvePrompts,
     MarvisTopicSelector,
 )
-from tests.unit.marvis.actions.conftest import make_raw
+from tests.unit.marvis.actions.conftest import make_alarm, make_raw
 
 # Issue #1803: a full-suite run applies memory and CPU pressure that an isolated run
 # does not. The deadline is disabled, and the assertions stay unchanged.
@@ -67,6 +78,18 @@ ANSWERS = st.lists(ANSWER_TOKENS, max_size=4).map(", ".join)
 ALL_KNOWN_TOPICS = frozenset(f"{category}/{symptom}" for category, symptom in TOPIC_NAMES)
 STATUS_KEYS = st.one_of(st.sampled_from(sorted(STATUS_NAMES)), st.text(max_size=12), st.none())  # Known and new keys.
 ACTION_ROWS = st.lists(st.tuples(STATUS_KEYS, st.sampled_from(sorted(TOPIC_NAMES))), min_size=1, max_size=12)
+ALARM_KEYS = (*make_alarm(1), "action_id", "acked", "acked_time", "ack_admin_name", "note")  # Live and issue keys.
+ALARM_OVERRIDES = st.dictionaries(st.sampled_from(ALARM_KEYS), JSON_VALUES, max_size=6)
+ALARM_ROWS = st.lists(  # An alarm of actions 1 to 3 with strange values, or a row that is not an object.
+    st.one_of(
+        st.tuples(st.integers(min_value=1, max_value=3), ALARM_OVERRIDES).map(
+            lambda pair: {**make_alarm(pair[0]), **pair[1]}
+        ),
+        JSON_VALUES,
+    ),
+    max_size=5,
+)
+FAILED_SEARCH_STATUS_CODES = (400, 401, 403, 404, 429, 500, 502, 503, 504)  # Client errors and server errors.
 
 
 def sample_selector() -> MarvisTopicSelector:
@@ -107,6 +130,7 @@ class TestReaders:
         assert number is None or (isinstance(number, int) and not isinstance(number, bool))
         assert MarvisFieldReader.flag(value) in (True, False, None)
         assert isinstance(MarvisFieldReader.iso(value), str)
+        assert isinstance(MarvisFieldReader.iso_seconds(value), str)
 
     @_NO_DEADLINE
     @given(st.integers(min_value=1, max_value=LAST_WINDOWS_EPOCH_MS))
@@ -137,6 +161,77 @@ class TestBuilder:
         key = MarvisActionRecordBuilder.action_key(raw)
         assert key == MarvisActionRecordBuilder.action_key(dict(raw))
         assert str(uuid.UUID(key)) == key
+
+
+def joined_actions(result: MarvisListResult) -> tuple[list[MarvisActionRecord], list[MarvisActionRecord], list[dict]]:
+    """Return the records of actions 1 and 2, the joined records, and the joined documents."""
+    builder = MarvisActionRecordBuilder(MarvisCatalog([]), {}, "2026-09-24T00:00:00+00:00")
+    raws = [make_raw(1), make_raw(2)]
+    records = [builder.build(raw) for raw in raws]
+    documents = {record.uuid: builder.document(raw, record) for raw, record in zip(raws, records, strict=True)}
+    client = MagicMock(spec=MarvisActionsClient)
+    client.search_marvis_alarms.return_value = result
+    joined, joined_documents = MarvisAlarmJoin(client).apply(records, documents)
+    return records, joined, joined_documents
+
+
+def action_part(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Return every column of one row or document that is not an alarm column."""
+    return {name: value for name, value in row.items() if name not in ALARM_COLUMNS}
+
+
+class TestAlarmJoin:
+    """Issue #3339: the alarm join fills only the eight alarm columns, for any alarm row shape."""
+
+    @_NO_DEADLINE
+    @given(ALARM_ROWS)
+    def test_the_join_never_changes_an_action_column(self, alarms: list[Any]) -> None:
+        """A strange alarm value must not change an action value in the CSV file or in the database."""
+        records, joined, joined_documents = joined_actions(MarvisListResult(alarms, 200))
+        before = [action_part(record.as_row()) for record in records]
+        assert [action_part(record.as_row()) for record in joined] == before
+        assert [action_part(document) for document in joined_documents] == [
+            action_part(MarvisActionRecordBuilder.document(make_raw(number), record))
+            for number, record in enumerate(records, start=1)
+        ]
+
+    @_NO_DEADLINE
+    @given(ALARM_ROWS)
+    def test_each_alarm_column_keeps_its_type(self, alarms: list[Any]) -> None:
+        """Every store receives text in seven alarm columns and a flag or None in alarm_acked."""
+        _, joined, joined_documents = joined_actions(MarvisListResult(alarms, 200))
+        rows = [record.as_row() for record in joined]
+        assert all(row["alarm_acked"] in (True, False, None) for row in [*rows, *joined_documents])
+        texts = [row[name] for row in [*rows, *joined_documents] for name in ALARM_COLUMNS if name != "alarm_acked"]
+        assert all(isinstance(value, str) for value in texts)
+
+    @_NO_DEADLINE
+    @given(ALARM_ROWS, st.sampled_from(FAILED_SEARCH_STATUS_CODES))
+    def test_a_failed_search_leaves_every_alarm_column_empty(self, alarms: list[Any], status_code: int) -> None:
+        """A client error or a server error writes every action, and no row of the failed answer reaches a column."""
+        problem = f"The API returned HTTP {status_code}."
+        result = MarvisListResult(alarms, status_code=status_code, complete=False, problem=problem)
+        records, joined, joined_documents = joined_actions(result)
+        assert joined == records
+        assert [action_part(document) for document in joined_documents] == [
+            action_part(MarvisActionRecordBuilder.document(make_raw(number), record))
+            for number, record in enumerate(records, start=1)
+        ]
+
+    @_NO_DEADLINE
+    @given(ALARM_ROWS)
+    def test_the_unmatched_count_stays_inside_the_alarm_count(self, alarms: list[Any]) -> None:
+        """The count line never reports more alarms than the search returned."""
+        count = MarvisAlarmIndex(alarms).unmatched_alarm_count([str(make_raw(1)["uuid"])])
+        assert 0 <= count <= sum(1 for alarm in alarms if isinstance(alarm, Mapping))
+
+    @_NO_DEADLINE
+    @given(st.lists(JSON_VALUES, max_size=4), st.integers(min_value=1, max_value=LAST_WINDOWS_EPOCH_MS // 1000))
+    def test_the_window_width_stays_inside_its_bounds(self, starts: list[Any], now: int) -> None:
+        """Any start_time value gives a window from one day to 400 days that ends at the time of the run."""
+        start, end = MarvisAlarmJoin.window([{"start_time": value} for value in starts], now=now)
+        assert end == now
+        assert ALARM_WINDOW_MARGIN_SECONDS <= end - start <= ALARM_MAX_WINDOW_SECONDS
 
 
 class TestGrammar:
