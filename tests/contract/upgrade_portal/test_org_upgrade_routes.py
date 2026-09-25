@@ -819,6 +819,39 @@ def test_cancellation_refuses_a_job_from_another_browser_session(
     assert org_service.calls == []
 
 
+@pytest.mark.parametrize("state", ["cancelled", "completed", "failed"])
+def test_cancellation_refuses_a_final_organization_job_with_no_cloud_call(
+    org_upgrade_client: FlaskClient,
+    org_service: OrgUpgradeServiceStandIn,
+    fake_org_id: str,
+    state: str,
+) -> None:
+    """Issue #3225: an organization job in a final state offers no cancel and sends no cancel request."""
+    org_service.job_status = state  # The cloud reports the final state.
+    with org_upgrade_client.session_transaction() as browser_session:  # This browser started the job.
+        browser_session["org_upgrade_last_job"] = {"upgrade_id": UPGRADE_ID, "org_id": fake_org_id, "site_count": 1}
+    page = org_upgrade_client.get(f"/upgrade/org/jobs/{UPGRADE_ID}").get_data(as_text=True)  # Stores the state.
+    answer = org_upgrade_client.post(f"/api/org-upgrades/{UPGRADE_ID}/cancel", json={"confirmation": "CANCEL"})
+    assert (answer.status_code, answer.get_json()["error"]["code"]) == (409, "org_upgrade_not_cancellable")
+    assert (
+        answer.get_json()["error"]["message"] == f"The operation is final: {state}. The portal sent no cancel request."
+    )
+    assert [call[0] for call in org_service.calls] == ["status"]  # The page read only. No cancel call left.
+    assert 'data-testid="org-upgrade-cancel-confirmation"' not in page  # The page offered no cancel form.
+
+
+def test_the_organization_job_rows_name_the_access_point_family(
+    org_upgrade_client: FlaskClient,
+    fake_org_id: str,
+) -> None:
+    """Issue #3225: the organization job upgrades access points only, so each row names that family."""
+    with org_upgrade_client.session_transaction() as browser_session:  # This browser started the job.
+        browser_session["org_upgrade_last_job"] = {"upgrade_id": UPGRADE_ID, "org_id": fake_org_id}
+    answer = org_upgrade_client.get(f"/api/org-upgrades/{UPGRADE_ID}").get_json()  # The poll of a live job.
+    assert [row["device_family"] for row in answer["site_upgrades"]] == ["ap"]  # The server names the family.
+    assert answer["cancel_allowed"] is True  # The cloud word "inprogress" is a live state.
+
+
 def test_multidevice_operation_is_durable_transparent_and_replay_safe(
     org_upgrade_client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,

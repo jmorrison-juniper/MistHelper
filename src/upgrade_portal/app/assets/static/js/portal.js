@@ -2768,19 +2768,6 @@
         }
     }
 
-    function cancellationText(cancellation) {
-        if (!cancellation) {  // A child without a cancellation result shows an empty cell.
-            return "";  // Never imply that the portal requested a cancellation.
-        }
-        var parts = [cancellation.status || "", cancellation.message || ""];  // Keep the exact cloud words.
-        ["cancelled", "already_writing", "no_cancel_available"].forEach(function (field) {  // Keep every group.
-            if (Array.isArray(cancellation[field]) && cancellation[field].length) {  // Show only a filled group.
-                parts.push(field.replace(/_/g, " ") + ": " + cancellation[field].join(", "));  // Name each device.
-            }
-        });
-        return parts.filter(Boolean).join(" - ");  // Join with an ASCII separator for every terminal and browser.
-    }
-
     /**
      * Returns the state text of one child row.
      *
@@ -2814,26 +2801,29 @@
             return;
         }
         sites.forEach(function (site) {
-            var row = document.createElement("tr");
+            var row = document.createElement("tr");  /* One row for each child job. */
             [
                 site.site_name || site.site_id || "Unknown",
-                site.device_family || "ap",
+                site.device_family || "unknown",  /* Issue #3225: the page never guesses a family. */
                 orgChildStatusText(site),
                 site.total || 0,
                 site.upgraded || 0,
                 site.failed || 0,
                 site.id || "",
                 site.error || "",
-                cancellationText(site.cancellation)
+                site.cancellation_text || ""  /* Issue #3225: the server builds the one cancellation text. */
             ].forEach(function (value, index) {
-                var cell = document.createElement(index === 0 ? "th" : "td");
+                var cell = document.createElement(index === 0 ? "th" : "td");  /* The site name heads the row. */
                 if (index === 0) {
-                    cell.scope = "row";
+                    cell.scope = "row";  /* A screen reader reads the site name with each cell. */
+                }
+                if (index === 1 || index === 2) {
+                    cell.className = "cell-word";  /* Issue #3225: a short word never breaks inside itself. */
                 }
                 if (index === 6) {
-                    cell.className = "cell-mono";
+                    cell.className = "cell-mono";  /* The child identifier uses the fixed-width font. */
                 }
-                cell.textContent = String(value);
+                cell.textContent = String(value);  /* textContent keeps cloud text out of the markup. */
                 row.appendChild(cell);
             });
             body.appendChild(row);
@@ -2900,11 +2890,11 @@
         if (key) {
             row.setAttribute("data-testid", "org-upgrade-device-row-" + key);
         }
-        row.appendChild(orgDeviceCell("td", device.site_name || device.site_id || "Unknown", "", ""));
+        row.appendChild(orgDeviceCell("td", device.site_name || device.site_id || "Unknown", "cell-word", ""));  /* Issue #3225. */
         row.appendChild(orgDeviceCell("th", device.name || "Unnamed device", "", ""));
         row.appendChild(orgDeviceCell("td", mac, "cell-mono", ""));
-        row.appendChild(orgDeviceCell("td", device.device_type || "unknown", "", ""));
-        row.appendChild(orgDeviceCell("td", device.state || "pending", "", testId("state")));
+        row.appendChild(orgDeviceCell("td", device.device_type || "unknown", "cell-word", ""));  /* Issue #3225: whole words. */
+        row.appendChild(orgDeviceCell("td", device.state || "pending", "cell-word", testId("state")));  /* Issue #3225. */
         row.appendChild(orgDeviceCell("td", device.version_before || "unknown", "cell-mono", ""));
         row.appendChild(orgDeviceCell("td", device.version_target || "none", "cell-mono", ""));
         row.appendChild(orgDeviceCell("td", device.version_after || "not yet", "cell-mono", testId("version-after")));
@@ -3107,6 +3097,35 @@
         link.hidden = target === "";  /* FR-013: the comparison link shows only for a pair. */
     }
 
+    /**
+     * Closes the cancel controls when the operation reaches a final state.
+     *
+     * Why: Issue #3225. A final operation cannot change, so a cancel request
+     * only misreports it. The server renders no form for a final operation.
+     * This painter closes the form when a poll reports the final state on a
+     * page that loaded while the operation still ran.
+     *
+     * @param {Object} status The status answer of the poll.
+     * @returns {void}
+     */
+    function paintOrgCancelControls(status) {
+        if (status.cancel_allowed !== false) {
+            return;  /* A live operation keeps its cancel form. */
+        }
+        var controls = document.querySelector("[data-org-cancel-controls]");  /* The form and its caution. */
+        if (controls) {
+            controls.querySelectorAll("input, button").forEach(function (control) {
+                control.disabled = true;  /* A hidden form must not submit from a keyboard either. */
+            });
+            controls.hidden = true;  /* The operator sees no control that cannot act. */
+        }
+        setText(document.querySelector("[data-org-cancel-state]"), String(status.status || "unknown"));  /* The final word. */
+        var closed = document.querySelector("[data-org-cancel-closed]");  /* The note that replaces the form. */
+        if (closed) {
+            closed.hidden = false;  /* Tell the operator why the cancel is gone. */
+        }
+    }
+
     function paintOrgUpgradeStatus(region, status) {
         if (!region || !status) {
             return;
@@ -3127,6 +3146,7 @@
         paintOrgUpgradeAudit(status);  /* Issue #3249: the age, the operator, and the account. */
         paintOrgPhaseWatch(region, status);  /* Issue #3245: the four phases and the watch line. */
         paintOrgPostChecks(status);  /* Issue #3244: the post-check capture of each site. */
+        paintOrgCancelControls(status);  /* Issue #3225: a final operation shows no cancel form. */
         var state = String(status.status || "unknown").toLowerCase();
         region.setAttribute("data-job-status", state);
         if (orgUpgradePollDone(state, status.phase_active === true)) {  /* Issue #3245: wait for the phase watch. */

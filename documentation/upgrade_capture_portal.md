@@ -665,6 +665,34 @@ neither of the two protected groups.
 After a stop, the portal takes the post-check capture. Read the comparison to
 learn which devices changed before the stop.
 
+### Cancel a multi-site upgrade
+
+The progress page of a multi-site upgrade holds the cancel form. Type `CANCEL`
+in capital letters to cancel each child job that waits to start.
+
+A multi-site upgrade in a final state cannot change. The final states are
+`cancelled`, `completed`, and `failed`. The states `planned`, `running`,
+`partial`, and `attention_required` keep the cancel form.
+
+For a final upgrade, the page shows no cancel form. The page shows this note
+instead: `The operation is final: <state>. The portal sends no cancel request
+for it.` If a status poll reports a final state, the page hides the form and
+disables its controls. Issue #3225 records the defect that this rule repairs.
+
+If a cancel request reaches the portal for a final upgrade, the portal refuses
+with the code `org_upgrade_not_cancellable` and the HTTP status 409. The
+message is `The operation is final: <state>. The portal sent no cancel
+request.` The portal sends no request to Mist. The single-site stop page obeys
+the same rule for a final run.
+
+An organization job of an earlier release has no stored record. For that job,
+the portal reads the state that the last page view or the last poll stored.
+
+The Cancellation column of the site table shows one text for each child job.
+The text holds the cancel status, the cloud message, and three device lists:
+`Cancelled`, `Writing firmware`, and `No cancel available`. The first render
+and each poll show the same text.
+
 ## Reconcile a stale run
 
 Open a stale run to find the reconciliation control. The control appears only

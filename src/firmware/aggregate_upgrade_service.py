@@ -56,7 +56,25 @@ VERDICT_FIELDS = ("proven", "matched", "total", "unread", "summary")  # Issue #3
 RESCHEDULE_REFUSED_TEXT = "This aggregate upgrade already started, so its start time cannot move."  # Issue #3247.
 REBOOT_REFUSED_TEXT = "The portal cannot move the reboot moment of this plan. Save the options again."  # #3247.
 RECONCILE_REFUSED_TEXT = "A submission of this aggregate upgrade still runs, so the portal cannot check it now."
+# WHY: Issue #3225. A cancel of a completed operation sent one cloud cancel call
+# for each child job, and the result listed each upgraded access point as a
+# cancelled device. The single-site stop refuses a final run with no cloud
+# request. The page script holds the same three words in its poll rule.
+FINAL_OPERATION_STATES = frozenset(
+    {"cancelled", "completed", "failed"}
+)  # Operation states that a cancel cannot change.
+FINAL_CANCEL_TEXT = "The operation is final: {state}. The portal sent no cancel request."  # The refusal text.
 LockRefresh = Callable[[Mapping[str, Any], Mapping[str, Any]], None]  # Revalidate locks before one child write.
+
+
+class FinalOperationError(ValueError):
+    """Refuse a cancel of an operation that already reached a final state.
+
+    Why:
+        Issue #3225. The class extends `ValueError`, so each existing handler
+        of a cancel conflict still catches it. The cancel route catches it
+        first and answers with its own error code.
+    """
 
 
 class RunStore(Protocol):
@@ -246,8 +264,14 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         record: MutableMapping[str, Any],
         store: RunStore,
     ) -> MutableMapping[str, Any]:  # Return the changed durable record.
-        """Request cancellation for each eligible child one time."""
+        """Request cancellation for each eligible child one time.
+
+        Raises:
+            FinalOperationError: The stored operation is already final, so the
+                service writes nothing and sends no cloud request.
+        """
         OrgUpgradeService.check_write_session(cloud_session)  # Require the no-retry write session.
+        self._refuse_final(record, store)  # Issue #3225: a final operation gets no write and no cloud call.
         self._start_cancellation(record, store)  # Persist the aggregate cancellation marker.
         child_ids = [str(child.get("child_id", "")) for child in record.get("children", [])]  # Keep durable order.
         for child_id in child_ids:  # Keep every child cancellation result.
@@ -446,6 +470,29 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             if child_id not in merged:  # A second browser tab can report the same child.
                 merged.append(child_id)  # Close the child for every later refresh.
         candidate["versions_final"] = merged  # Store the whole list in the same write.
+
+    def _refuse_final(self, record: MutableMapping[str, Any], store: RunStore) -> None:
+        """Refuse a cancel when the stored operation is already final.
+
+        Why:
+            Issue #3225. The durable record decides, not the copy of the
+            caller. A stale page or a second browser tab can hold an old
+            state, so the read goes to the store before any cancel write.
+
+        Args:
+            record: The operation of the caller. The read replaces it with the durable copy.
+            store: The durable store of the operation.
+
+        Raises:
+            FinalOperationError: The stored state is final.
+        """
+        operation_id = record.get("operation_id", "")  # The log names the operation, never a secret.
+        logger.info("Read the stored state of aggregate upgrade %s before the cancel", operation_id)  # Before.
+        state = str(self._current(record, store).get("state", ""))  # The durable state of the operation.
+        logger.debug("Aggregate upgrade %s holds the stored state %s", operation_id, state)  # After the read.
+        if state in FINAL_OPERATION_STATES:  # A final operation cannot change, so a cancel only misreports it.
+            logger.warning("Refused the cancel of aggregate upgrade %s in the final state %s", operation_id, state)
+            raise FinalOperationError(FINAL_CANCEL_TEXT.format(state=state))  # No write and no cloud call follow.
 
     def _start_cancellation(self, record: MutableMapping[str, Any], store: RunStore) -> None:
         """Mark cancellation requested without rejecting a later recovery."""
