@@ -1,7 +1,7 @@
 """Contract test of `GET /api/captures/<capture_id>/status`.
 
 Why:
-    The browser polls this endpoint every 30 seconds while a capture runs. The
+    The browser polls this endpoint every 3 seconds while a capture runs. The
     portal sends no server-sent event, so this one body is the whole progress
     channel. `tasks.md` T059 names seven fields: `state`, `percent`, `sections`,
     `counts`, `partial_reasons`, `verified`, and `message`. A missing field
@@ -75,15 +75,22 @@ ABSENT_CAPTURE_ID = "cap-00000000-99"  # An identifier the portal never issued.
 WORKER_WAIT_SECONDS = 5.0  # A generous wait, so a slow machine does not fail the test.
 
 # WHY: The shape of one stored capture, cut down to the fields the status route
-# reads. `data-model.md` fixes every name below.
+# reads. `data-model.md` fixes every name below. Issue #3378: the shipped store
+# writes `complete`, `partial`, or `failed` into `capture_status`, and it writes
+# the lifecycle word into `state`. An earlier seed held `verified` in
+# `capture_status`, which the store never writes, so this module missed a poll
+# that never stopped.
 STORED_CAPTURE: dict[str, Any] = {
     "capture_id": "cap-abcdef12-01",
     "schema_version": 1,
-    "capture_status": VERIFIED_STATE,
+    "state": VERIFIED_STATE,
+    "capture_status": "complete",
     "partial_reasons": [],
     "counts": {"devices_total": 3, "clients_wireless": 7},
     "stored_size_bytes": 4096,
 }
+FAILED_STATE = "failed"  # The live path sends this word when the read-back did not hold.
+REFUSED_REASON = "capture_not_verified"  # The store refuses a capture that never reached the verified state.
 
 
 # --------------------------------------------------------------------------
@@ -554,7 +561,10 @@ def test_the_message_is_text(
 # --------------------------------------------------------------------------
 
 
-def test_a_stored_capture_reads_as_verified(wired_app: Flask, owner: identity.SessionOwner, fake_org_id: str) -> None:
+@pytest.mark.parametrize("content_word", ["complete", "partial"])
+def test_a_stored_capture_reads_as_verified(
+    wired_app: Flask, owner: identity.SessionOwner, fake_org_id: str, content_word: str
+) -> None:
     """A capture that ended before a restart still reports its result.
 
     Why:
@@ -562,17 +572,47 @@ def test_a_stored_capture_reads_as_verified(wired_app: Flask, owner: identity.Se
         status route reads the stored capture instead, so the operator sees the
         result of a capture the portal already finished.
 
+        Issue #3378: the page stops its poll on `verified`, and never on the
+        content word. A stored capture must therefore send the word of the
+        read-back, as the live path does.
+
     Args:
         wired_app: The portal with every seam injected.
         owner: The registered owner.
         fake_org_id: The chosen organization.
+        content_word: The `capture_status` value that the shipped store wrote.
     """
-    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(dict(STORED_CAPTURE), True, ""))
+    stored = dict(STORED_CAPTURE, capture_status=content_word)  # The shipped shape of this content word.
+    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(stored, True, ""))
     with wired_app.test_client() as client:
         sign_in_client(client, owner, fake_org_id)
         body = status_body(client, str(STORED_CAPTURE["capture_id"]))
     assert body["state"] == VERIFIED_STATE
     assert body["verified"] is True
+
+
+def test_a_stored_capture_that_cannot_join_a_comparison_reads_as_failed(
+    wired_app: Flask, owner: identity.SessionOwner, fake_org_id: str
+) -> None:
+    """A stored capture that never reached the verified state ends the poll as failed.
+
+    Why:
+        Issue #3378. The live path sends `failed` when the read-back did not
+        hold. The page then stops the poll and offers a new capture, because
+        this release cannot compare the stored one.
+
+    Args:
+        wired_app: The portal with every seam injected.
+        owner: The registered owner.
+        fake_org_id: The chosen organization.
+    """
+    stored = dict(STORED_CAPTURE, state="writing")  # A worker stopped before the read-back.
+    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(stored, False, REFUSED_REASON))
+    with wired_app.test_client() as client:
+        sign_in_client(client, owner, fake_org_id)
+        body = status_body(client, str(STORED_CAPTURE["capture_id"]))
+    assert body["state"] == FAILED_STATE
+    assert body["verified"] is False
 
 
 def test_an_unknown_capture_is_refused(

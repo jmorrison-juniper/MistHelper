@@ -232,6 +232,16 @@ RUN_OWNED_CAPTURE_IDS = (PRE_CAPTURE_ID, POST_CAPTURE_ID, TIER3_CAPTURE_ID)  # T
 # capture picker keeps its first choice and its last choice.
 STANDALONE_PRE_CAPTURE_ID = "e2e-capture-standalone-0001"  # The seeded pre-check that names no run.
 STANDALONE_PRE_CAPTURE_STAMP = "2026-08-19T10:15:00+00:00"  # Between the seeded pre-check and post-check.
+# WHY: Issue #3378. The shipped store writes `complete` into `capture_status`
+# and `verified` into `state`. Every other seed holds `verified` in
+# `capture_status`, which issue #3375 repairs. This seed holds the shipped shape,
+# so its page reads the stored status path that a page reads after a restart.
+# It sits on its own site and between the post-check and the Tier 3 capture, so
+# no count, no first or last picker choice, and no pre-check adopter reads it.
+STORED_POLL_CAPTURE_ID = "e2e-capture-stored-poll-0001"  # The seed in the shipped shape.
+STORED_POLL_SITE_ID = "e2e-stored-poll-site"  # A site that no other journey reads.
+STORED_POLL_SITE_NAME = "E2E Stored Poll Site"  # The site name of the history row.
+STORED_POLL_CAPTURE_STAMP = "2026-08-19T10:45:00+00:00"  # Between the seeded post-check and the Tier 3 capture.
 # `capture/store.py` names this reason for a key that the database does not hold,
 # and `app/routes/capture.py` turns it into the 404 of the contract.
 CAPTURE_NOT_FOUND_REASON = "capture_not_found"  # The refusal for a key that the stand-in never published.
@@ -1462,6 +1472,29 @@ def stand_in_standalone_precheck() -> dict[str, Any]:
     return capture  # The index stores it before the Tier 3 capture.
 
 
+def stand_in_shipped_shape_capture() -> dict[str, Any]:
+    """Build the one seed that holds both status words of the shipped store.
+
+    Why:
+        Issue #3378. The status endpoint reads a stored capture after a restart.
+        It used to copy the content word into the lifecycle word, and the page
+        polls until the lifecycle word ends. This seed holds `complete` and
+        `verified`, which the shipped store writes, so a journey proves that the
+        page stops.
+
+    Returns:
+        One stored capture on its own site, in the shipped shape.
+    """
+    capture = stand_in_capture(  # The same device map and client rows as every other seed.
+        STORED_POLL_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], STORED_POLL_CAPTURE_STAMP, STORED_POLL_SITE_ID
+    )
+    capture["site_name"] = STORED_POLL_SITE_NAME  # The history row names the site of this seed.
+    capture["run_id"] = ""  # No run owns this seed, so no run page reads it.
+    capture["capture_status"] = "complete"  # The content word that `resolve_status` writes.
+    capture["state"] = "verified"  # The lifecycle word that the store writes after the read-back.
+    return capture  # The index stores it between the post-check and the Tier 3 capture.
+
+
 def stand_in_capture_index() -> dict[str, dict[str, Any]]:
     """Build all stored captures of the stand-in site.
 
@@ -1474,17 +1507,23 @@ def stand_in_capture_index() -> dict[str, dict[str, Any]]:
         capture. A stand-in that ignores the run therefore adopts the Tier 3
         capture, and the multi-site pre-check journey reports that defect.
 
+        Issue #3378. The seed in the shipped shape sits on its own site,
+        between the post-check and the Tier 3 capture. The first entry and the
+        last entry of the index therefore stay the same.
+
     Returns:
         One capture document for each identifier that the picker publishes.
     """
     before = stand_in_capture(PRE_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], PRE_CAPTURE_STAMP)
     standalone = stand_in_standalone_precheck()  # Issue #3360: the one seed that the adopter may adopt.
     after = stand_in_capture(POST_CAPTURE_ID, "post", STAND_IN_VERSIONS[1], POST_CAPTURE_STAMP)
+    shipped = stand_in_shipped_shape_capture()  # Issue #3378: the seed that reads the stored status path.
     tier3 = stand_in_tier3_capture()
     return {  # The store order follows the start times, and the Tier 3 capture comes last.
         PRE_CAPTURE_ID: before,
         STANDALONE_PRE_CAPTURE_ID: standalone,
         POST_CAPTURE_ID: after,
+        STORED_POLL_CAPTURE_ID: shipped,
         TIER3_CAPTURE_ID: tier3,
     }
 
