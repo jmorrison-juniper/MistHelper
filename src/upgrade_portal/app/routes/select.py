@@ -46,7 +46,7 @@ from types import ModuleType  # The return type of a late import.
 from typing import Any  # A cloud payload and an injected seam are both free-form.
 from urllib.parse import quote, urlencode  # Escapes values inside links and paging links.
 
-from flask import Blueprint, Response, current_app, jsonify, render_template, request, session  # The framework.
+from flask import Blueprint, Response, current_app, flash, jsonify, render_template, request, session  # The framework.
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
 
 from ...capture.devices import normalize_device_mac  # Match inventory rows to the upgrade target records.
@@ -683,6 +683,62 @@ def next_page_answer(path: str = NEXT_AFTER_ORG) -> Response | tuple[Response, i
     if wants_browser_page():  # A browser form post cannot read a JSON body.
         return Response(status=REDIRECT_STATUS, headers={LOCATION_HEADER: path})
     return jsonify({"next": path}), OK_STATUS
+
+
+class PickerRefusal:
+    """Answer one refused picker post in the form that its client reads.
+
+    Why:
+        Issue #3240. The three picker pages send a plain form post. A refusal
+        answered the JSON envelope, and a browser showed that envelope as the
+        whole page, with no layout, no link, and no form. A browser now reads a
+        303 redirect to the picker page that corrects the choice, and that page
+        shows the sentence in the shared message region. A script and a JSON
+        client keep the envelope, because the contract fixes one error shape
+        for them.
+
+        The redirect follows the pattern of `next_page_answer`, so the browser
+        history holds GET entries only. A reload or a back step then never asks
+        the operator to send the form again.
+    """
+
+    FLASH_LEVEL = "warning"  # `portal.css` prints "Caution: ", because the operator can correct the choice.
+    FALLBACK_MESSAGE = "The portal cannot use that choice. Make the choice again."  # A body with no sentence.
+
+    @classmethod
+    def answer(cls, refusal: tuple[Response, int], page_path: str) -> Response | tuple[Response, int]:
+        """Return the refusal envelope, or a redirect that carries its sentence.
+
+        Args:
+            refusal: The envelope and the status that the route built.
+            page_path: The picker page that corrects the choice. A fixed path of
+                this module, so no client text reaches the `Location` header.
+
+        Returns:
+            The envelope pair for a script, or the 303 redirect for a browser.
+        """
+        if not wants_browser_page():  # A script, a JSON client, and a client with no preference read JSON.
+            return refusal  # The code and the status stay as the contract fixes them.
+        message = cls.message_of(refusal[0])  # FR-006: the page shows the sentence of the envelope.
+        logger.info("select: send the %s refusal to the page %s", refusal[1], page_path)  # Report before the flash.
+        flash(message, cls.FLASH_LEVEL)  # The signed session carries the sentence to the next page.
+        logger.debug("select: the session holds the refusal sentence for the next page")  # The flash worked.
+        return Response(status=REDIRECT_STATUS, headers={LOCATION_HEADER: page_path})  # The browser reads GET.
+
+    @classmethod
+    def message_of(cls, response: Response) -> str:
+        """Read the refusal sentence out of one envelope.
+
+        Args:
+            response: The envelope response that the route built.
+
+        Returns:
+            The sentence, or the fixed sentence when the body holds none.
+        """
+        payload: Any = response.get_json(silent=True)  # A body that is not JSON reads as None.
+        error: Any = payload.get("error") if isinstance(payload, dict) else None  # The envelope object.
+        message: Any = error.get("message") if isinstance(error, dict) else None  # The operator sentence.
+        return message if isinstance(message, str) and message else cls.FALLBACK_MESSAGE  # Never empty.
 
 
 def lock_reader() -> Callable[..., Any] | None:
@@ -1494,18 +1550,23 @@ def choose_org() -> Response | tuple[Response, int]:
         `text/html` and no `X-Requested-With: XMLHttpRequest` header marks a
         script. A page request reads a 303 redirect to the path that
         `contracts/http-api.md` names next. Every other post reads the
-        `{"next": ...}` body of that same contract. A refusal keeps the JSON
-        envelope for both clients, because the contract fixes one error shape
-        for every caller.
+        `{"next": ...}` body of that same contract.
+
+        A refusal follows the same rule (issue #3240). A script and a JSON
+        client read the envelope with the code that the contract fixes. A page
+        request reads a 303 redirect back to this picker, and the picker shows
+        the sentence of the envelope as a caution.
 
     Returns:
-        The redirect, the next path as JSON, or the refusal envelope.
+        The redirect, the next path as JSON, or the refusal for its client.
     """
+    logger.info("select: read the organization choice of the picker post")  # Report before the checks.
     chosen = read_chosen_org()  # An empty value means the body named no organization.
     refusal = org_refusal(chosen)  # None means the pick passed both checks.
     if refusal is not None:  # The body named no organization, or named one out of scope.
-        return refusal  # The contract fixes the code of both refusals.
+        return PickerRefusal.answer(refusal, ORG_PAGE_PATH)  # The organization picker corrects both causes.
     store_chosen_org(chosen)  # The signed session carries the pick to every later request.
+    logger.debug("select: the portal accepted the organization choice")  # Report after the store.
     return next_page_answer()  # The rule above chooses the redirect or the JSON body.
 
 
@@ -1525,14 +1586,27 @@ def mode_page() -> str:
 @select_bp.post(MODE_PAGE_PATH)
 @identity.require_session
 def choose_mode() -> Response | tuple[Response, int]:
-    """Store the operation mode that the operator selected."""
-    if resolve_org(None) is None:
-        return json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN, ORG_NOT_CHOSEN_MESSAGE)
-    chosen = read_chosen_mode()
-    if chosen not in UPGRADE_MODES:
-        return json_error(BAD_REQUEST_STATUS, MODE_NOT_CHOSEN, MODE_NOT_CHOSEN_MESSAGE)
-    store_chosen_mode(chosen)
-    return next_page_answer(NEXT_AFTER_MODE)
+    """Store the operation mode that the operator selected.
+
+    Why:
+        Issue #3240. The mode page sends a plain form post. `PickerRefusal`
+        sends a refused browser post to the page that corrects the cause, and
+        a script keeps the envelope.
+
+    Returns:
+        The redirect, the next path as JSON, or the refusal for its client.
+    """
+    logger.info("select: read the operation mode choice of the picker post")  # Report before the checks.
+    if resolve_org(None) is None:  # The mode belongs to one chosen organization.
+        refusal = json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN, ORG_NOT_CHOSEN_MESSAGE)  # The contract code.
+        return PickerRefusal.answer(refusal, ORG_PAGE_PATH)  # The organization picker corrects this cause.
+    chosen = read_chosen_mode()  # An empty value means the body named no mode.
+    if chosen not in UPGRADE_MODES:  # The body named no mode, or a mode that the portal does not know.
+        refusal = json_error(BAD_REQUEST_STATUS, MODE_NOT_CHOSEN, MODE_NOT_CHOSEN_MESSAGE)  # The contract code.
+        return PickerRefusal.answer(refusal, MODE_PAGE_PATH)  # The mode picker corrects this cause.
+    store_chosen_mode(chosen)  # The signed session carries the mode to the site page.
+    logger.debug("select: the portal accepted the %s operation mode", chosen)  # Report after the store.
+    return next_page_answer(NEXT_AFTER_MODE)  # The redirect or the JSON body.
 
 
 @select_bp.get(SITE_PAGE_PATH)
@@ -1567,20 +1641,57 @@ def sites_page() -> str:
 @select_bp.post(SITE_PAGE_PATH)
 @identity.require_session
 def choose_sites() -> Response | tuple[Response, int]:
-    """Store the site set for a multi-site operation."""
-    org_id = resolve_org(None)
-    if org_id is None:
-        return json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN, ORG_NOT_CHOSEN_MESSAGE)
-    if selected_mode() != MULTI_SITE_MODE:
-        return json_error(BAD_REQUEST_STATUS, MODE_NOT_CHOSEN, MODE_NOT_CHOSEN_MESSAGE)
-    chosen = read_chosen_site_ids()
-    if not chosen:
-        return json_error(BAD_REQUEST_STATUS, SITES_NOT_CHOSEN, SITES_NOT_CHOSEN_MESSAGE)
-    permitted = {str(row.get("site_id", "")) for row in build_site_rows(org_id)}
-    if any(site_id not in permitted for site_id in chosen):
-        return json_error(NOT_FOUND_STATUS, SITE_NOT_FOUND, SITE_NOT_FOUND_MESSAGE)
-    store_chosen_sites(chosen)
-    return next_page_answer(NEXT_AFTER_MULTI_SITE)
+    """Store the site set for a multi-site operation.
+
+    Why:
+        Issue #3240. The site page sends a plain form post. A refusal as JSON
+        showed the envelope as the whole page. `PickerRefusal` now sends a
+        refused browser post to the page that corrects the cause, and a script
+        keeps the envelope.
+
+    Returns:
+        The redirect, the next path as JSON, or the refusal for its client.
+    """
+    logger.info("select: read the site choice of the multi-site picker post")  # Report before the checks.
+    chosen = read_chosen_site_ids()  # The unique identifiers of the form or of the JSON body.
+    refused = site_choice_refusal(resolve_org(None), chosen)  # None means that every check passed.
+    if refused is not None:  # The choice failed one check, so no stored choice changes (FR-004).
+        return PickerRefusal.answer(*refused)  # The envelope for a script, or the page for a browser.
+    store_chosen_sites(chosen)  # The server record carries the set to the options page.
+    logger.debug("select: the portal accepted %s sites for the operation", len(chosen))  # Report after the store.
+    return next_page_answer(NEXT_AFTER_MULTI_SITE)  # The redirect or the JSON body.
+
+
+def site_choice_refusal(org_id: str | None, chosen: list[str]) -> tuple[tuple[Response, int], str] | None:
+    """Return the refusal of one multi-site site choice, and the page that corrects it.
+
+    Why:
+        Issue #3240. Each check has its own cause, and each cause has its own
+        picker page. The checks run in the old order, so a script reads the
+        same code as before. The cheap checks run first, and the site read
+        runs only when they pass.
+
+    Args:
+        org_id: The chosen organization, or None when the session holds none.
+        chosen: The unique site identifiers of the post.
+
+    Returns:
+        The envelope pair and the picker path, or None when the choice passes.
+    """
+    if org_id is None:  # No organization means no site list to check against.
+        refusal = json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN, ORG_NOT_CHOSEN_MESSAGE)  # The contract code.
+        return refusal, ORG_PAGE_PATH  # The organization picker corrects this cause.
+    if selected_mode() != MULTI_SITE_MODE:  # A site set belongs to the multi-site mode only.
+        refusal = json_error(BAD_REQUEST_STATUS, MODE_NOT_CHOSEN, MODE_NOT_CHOSEN_MESSAGE)  # The contract code.
+        return refusal, MODE_PAGE_PATH  # The mode picker corrects this cause.
+    if not chosen:  # The operator selected no site.
+        refusal = json_error(BAD_REQUEST_STATUS, SITES_NOT_CHOSEN, SITES_NOT_CHOSEN_MESSAGE)  # The contract code.
+        return refusal, SITE_PAGE_PATH  # The site picker corrects this cause.
+    permitted = {str(row.get("site_id", "")) for row in build_site_rows(org_id)}  # The sites of the organization.
+    if any(site_id not in permitted for site_id in chosen):  # A stale page or a changed value names a site.
+        refusal = json_error(NOT_FOUND_STATUS, SITE_NOT_FOUND, SITE_NOT_FOUND_MESSAGE)  # The contract code.
+        return refusal, SITE_PAGE_PATH  # The site picker corrects this cause.
+    return None  # Every check passed.
 
 
 @select_bp.get(SITE_INVENTORY_PAGE_PATH)
