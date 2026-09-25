@@ -24,6 +24,8 @@
 - [x] T006 Add the release note under `changelog.d/`.
 - [x] T007 Run every gate: ruff, black, pydocstyle, interrogate, bandit, radon,
   vulture, the STE lint, and the test quality gate.
-- [ ] T008 Run the portal suites and the browser suite of the upgrade portal.
+- [x] T008 Run the portal suites and the browser suite of the upgrade portal.
+  The portal suites gave 5745 passed. The browser suite gave 262 passed and 1
+  skipped. The skip is `test_capture.py:745`, which issue #3380 covers.
 - [ ] T009 After the merge, deploy the template to port 8056 with a class B
   reload, and read the note on the served page.
