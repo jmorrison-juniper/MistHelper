@@ -1357,3 +1357,133 @@ def test_the_operator_record_write_failure_stops_before_any_lock(
     assert started.get_json()["error"]["code"] == "org_upgrade_submission_failed"
     assert boundary.submit_count == 0  # No child reached the cloud.
     assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # No site lock exists.
+
+
+# --------------------------------------------------------------------------
+# Issue #3242: the refusal of a repeated start names the job that started.
+# --------------------------------------------------------------------------
+
+REPLAY_CODE = "org_upgrade_already_submitted"  # The code of each refusal of a repeated start.
+AGGREGATE_ID = "org-run-contract"  # The operation identifier of `AggregateBoundaryStandIn.build`.
+LEGACY_SENTENCE = "This confirmed request already started an organization upgrade."  # The access point path.
+AGGREGATE_SENTENCE = "This confirmed request already started a multi-site upgrade."  # The durable path.
+UNKNOWN_SENTENCE = (  # The legacy path after a cloud answer that named no job.
+    "The cloud response to the last organization upgrade request is unknown. "
+    "Reconcile the job history before another submission."
+)
+WRITE_SESSION_REFUSAL = "Use an OrgUpgradeSession with SDK write retries disabled."  # A service refusal of no job.
+
+
+class RefusingBoundaryStandIn(AggregateBoundaryStandIn):
+    """Refuse each submission as `check_write_session` does, and change no child."""
+
+    def submit(self, cloud_session: Any, record: dict[str, Any], store: Any, refresh_lock: Any) -> dict[str, Any]:
+        """Raise the refusal of a cloud session that can retry a write."""
+        del cloud_session, record, store, refresh_lock  # The refusal comes before any claim.
+        raise ValueError(WRITE_SESSION_REFUSAL)
+
+
+def save_durable_ap_plan(
+    client: FlaskClient, monkeypatch: pytest.MonkeyPatch, boundary: AggregateBoundaryStandIn
+) -> AggregateStoreStandIn:
+    """Install the aggregate stand-ins, and save one access point plan through the options route.
+
+    Args:
+        client: The signed client of the operator.
+        monkeypatch: The pytest helper that replaces the device reads.
+        boundary: The aggregate service stand-in of the test.
+
+    Returns:
+        The store that holds the durable plan.
+    """
+    store = AggregateStoreStandIn()  # Hold the plan without a database.
+    client.application.config["RUN_STORE"] = store  # Route the plan to the test store.
+    client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary  # Stop before the cloud seam.
+    devices = [{"mac": AP_ONE, "name": "ap", "device_type": "ap", "model": "AP45"}]  # One access point.
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+    monkeypatch.setattr(
+        org_upgrade,
+        "build_options_record",
+        lambda session, org_id, site_id, body: {
+            "targets": [{**devices[0], "version_before": "old", "version_target": "0.15.1", "site_id": site_id}],
+            "options": {"strategy": "big_bang", "reboot": True},
+        },
+    )
+    body = {"selected_types": ["ap"], "version_ap": "0.15.1", "strategy": "big_bang"}  # One access point plan.
+    saved = client.post(ORG_OPTIONS_API, json=body)  # The options route saves the durable plan.
+    assert saved.status_code == 200  # The durable plan exists.
+    return store  # The caller reads the plan after the submission.
+
+
+def test_a_legacy_replay_names_the_job_that_started(org_upgrade_client: FlaskClient) -> None:
+    """FR-003 and FR-004: the access point path links the cloud job of the browser marker."""
+    save_valid_options(org_upgrade_client)  # The legacy access point plan.
+    first = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+    second = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+
+    error = second.get_json()["error"]
+    assert first.status_code == 200  # The first request started the job.
+    assert (second.status_code, error["code"], error["message"]) == (409, REPLAY_CODE, LEGACY_SENTENCE)
+    assert error["details"] == {"upgrade_id": UPGRADE_ID, "next": f"/upgrade/org/jobs/{UPGRADE_ID}"}
+
+
+def test_a_legacy_replay_after_an_unknown_answer_names_no_job(org_upgrade_client: FlaskClient) -> None:
+    """FR-005: a marker with no job gets the sentence about the unknown answer and no link."""
+
+    class UnknownService:
+        @staticmethod
+        def submit(cloud_session: Any, org_id: str, body: dict[str, object]) -> OrgUpgradeResult:
+            raise RuntimeError("connection ended after the write")
+
+    org_upgrade_client.application.config["ORG_UPGRADE_SERVICE"] = UnknownService
+    save_valid_options(org_upgrade_client)  # The legacy access point plan.
+    first = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+    second = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+
+    error = second.get_json()["error"]
+    assert first.status_code == 503  # The cloud answer is unknown.
+    assert (second.status_code, error["code"], error["message"]) == (409, REPLAY_CODE, UNKNOWN_SENTENCE)
+    assert "details" not in error  # No code knows the job, so the page links to nothing.
+
+
+def test_a_durable_replay_names_the_operation_that_runs(
+    org_upgrade_client: FlaskClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-003 and FR-004: the aggregate path links the operation of the saved plan."""
+    boundary = AggregateBoundaryStandIn()  # The first submission touches each child.
+    save_durable_ap_plan(org_upgrade_client, monkeypatch, boundary)
+    started = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+    repeated = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+
+    error = repeated.get_json()["error"]
+    assert started.get_json() == {"next": f"/upgrade/org/jobs/{AGGREGATE_ID}"}  # The first request started it.
+    assert (repeated.status_code, error["code"], error["message"]) == (409, REPLAY_CODE, AGGREGATE_SENTENCE)
+    assert error["details"] == {"upgrade_id": AGGREGATE_ID, "next": f"/upgrade/org/jobs/{AGGREGATE_ID}"}
+    assert boundary.submit_count == 1  # No child went to the cloud again.
+
+
+def test_a_refusal_of_an_untouched_plan_names_no_job(
+    org_upgrade_client: FlaskClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-004: a service refusal that started no job keeps its text and gets no link."""
+    store = save_durable_ap_plan(org_upgrade_client, monkeypatch, RefusingBoundaryStandIn())
+    refused = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+
+    error = refused.get_json()["error"]
+    assert (refused.status_code, error["code"], error["message"]) == (409, REPLAY_CODE, WRITE_SESSION_REFUSAL)
+    assert "details" not in error  # The plan started no job, so the page links to nothing.
+    assert {child["status"] for child in store.records[AGGREGATE_ID]["children"]} == {"planned"}  # No child left.
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    (
+        ({"state": "planned", "children": [{"status": "planned"}]}, False),
+        ({"state": "planned", "children": []}, False),
+        ({"state": "submission_claimed", "children": [{"status": "planned"}]}, True),
+        ({"state": "running", "children": [{"status": "planned"}, {"status": "accepted"}]}, True),
+    ),
+)
+def test_the_durable_record_decides_whether_a_job_started(record: dict[str, Any], expected: bool) -> None:
+    """D6: a claim or a child that left the plan proves a start, and nothing else does."""
+    assert org_upgrade.OrgReplayRefusal.started(record) is expected

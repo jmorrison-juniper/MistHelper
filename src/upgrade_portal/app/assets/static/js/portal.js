@@ -127,6 +127,13 @@
     var ORG_PRECHECK_ERROR_TESTID = "org-upgrade-precheck-error";  /* Issue #3243: the refusal beside the buttons. */
     var ORG_PRECHECK_STATE_PREFIX = "org-upgrade-precheck-state-";  /* Issue #3243: one state cell for each site. */
     var ORG_PRECHECK_PATH = "/api/org-upgrades/prechecks/";  /* Issue #3243: the start path of one pre-check. */
+    var ORG_FORM_STATE = "data-org-form-state";  /* Issue #3242: marks an org form that must send nothing more. */
+    var ORG_FORM_SENDING = "sending";  /* Issue #3242: one request of the form is in flight. */
+    var ORG_FORM_CLOSED = "closed";  /* Issue #3242: a replay refusal closed the form for this page. */
+    var ORG_REPLAY_CODE = "org_upgrade_already_submitted";  /* Issue #3242: the code of a repeated start. */
+    var ORG_JOB_PATH = /^\/upgrade\/org\/jobs\/[A-Za-z0-9_-]{1,128}$/;  /* Issue #3242: the one safe link target. */
+    var ORG_JOB_LINK_TESTID = "org-upgrade-job-link";  /* Issue #3242: the link to the job of the first start. */
+    var ORG_FORM_CONTROLS = 'button:not([type]), button[type="submit"], input[type="submit"], [data-confirm-word]';  /* Issue #3242: each control that can send a form. */
     var SIGNIN_EMAIL_TESTID = "signin-email";  /* The browser-token mode must relax this provider field. */
     var SIGNIN_PASSWORD_TESTID = "signin-password";  /* The browser-token mode must relax this provider field. */
     var SIGNIN_ERROR_TESTID = "signin-error";  /* The sign-in page already owns a dedicated error region. */
@@ -3212,20 +3219,136 @@
         return body;  /* The caller sends this object as JSON. */
     }
 
+    /**
+     * Closes one organization form while its request is in flight.
+     *
+     * Why: Issue #3242. A double click sent two requests, because the form
+     * stayed open until the answer arrived. The form now marks its state and
+     * closes each control that can send it again. A control that another rule
+     * already locked stays out of the list, so a later open never unlocks it.
+     *
+     * @param {Element} form The organization form.
+     * @returns {Array<Element>} The controls that this call closed.
+     */
+    function closeOrgForm(form) {
+        var closed = [];  /* Only the controls that this call closed can open again. */
+        form.setAttribute(ORG_FORM_STATE, ORG_FORM_SENDING);  /* The submit handler ignores a second submit. */
+        form.querySelectorAll(ORG_FORM_CONTROLS).forEach(function (control) {
+            if (control.disabled) {  /* Another rule locked this control, so that rule keeps it. */
+                return;
+            }
+            control.disabled = true;  /* No second click and no Enter key can send the form again. */
+            closed.push(control);  /* Keep the control for a refusal that started nothing. */
+        });
+        return closed;  /* The caller keeps the list until the answer arrives. */
+    }
+
+    /**
+     * Opens one organization form again after a refusal that started nothing.
+     *
+     * Why: Issue #3242, FR-007. A cloud fault or a lock store fault starts no
+     * job, so the operator can try the same request again. Each typed-word
+     * gate then decides its button again from the word in its field.
+     *
+     * @param {Element} form The organization form.
+     * @param {Array<Element>} closed The controls that closeOrgForm closed.
+     * @returns {void}
+     */
+    function openOrgForm(form, closed) {
+        closed.forEach(function (control) {
+            control.disabled = false;  /* The operator can send the same request again. */
+        });
+        form.removeAttribute(ORG_FORM_STATE);  /* The submit handler accepts the next submit. */
+        form.querySelectorAll("[data-confirm-word]").forEach(function (input) {
+            applyConfirmGate(input);  /* The typed word decides the button again. */
+        });
+    }
+
+    /**
+     * Shows the refusal of a repeated start, and keeps the form closed.
+     *
+     * Why: Issue #3242, FR-007. The first request already started a job, so
+     * this page must never send the plan again. The typed word clears, and the
+     * refusal links the job when the server names it.
+     *
+     * @param {Element} form The organization form.
+     * @param {Error} error The refusal from fetchJson.
+     * @returns {void}
+     */
+    function showOrgReplayRefusal(form, error) {
+        form.setAttribute(ORG_FORM_STATE, ORG_FORM_CLOSED);  /* The form stays closed for this page. */
+        form.querySelectorAll("[data-confirm-word]").forEach(function (input) {
+            input.value = "";  /* A typed word must not stay ready for a second start. */
+            input.disabled = true;  /* The operator cannot type the word again on this page. */
+            applyConfirmGate(input);  /* A closed field keeps its button closed. */
+        });
+        var item = showRequestError(error);  /* The plain sentence of the server. */
+        var next = error.details && error.details.next;  /* The job page, when the server knows the job. */
+        if (item && typeof next === "string" && ORG_JOB_PATH.test(next)) {  /* FR-006: link only a job page. */
+            appendOrgJobLink(item, next);  /* The operator can open the job that runs. */
+        }
+    }
+
+    /**
+     * Adds the link to the job of the first start to one flash message.
+     *
+     * Why: Issue #3242, FR-006. The page builds the link from nodes and never
+     * from markup, and the caller checked the path first. The focus moves to
+     * the link, so a keyboard operator lands on the next step.
+     *
+     * @param {Element} item The flash message.
+     * @param {string} next The path of the job page.
+     * @returns {void}
+     */
+    function appendOrgJobLink(item, next) {
+        var line = document.createElement("span");  /* The flash lays out each child as one flex item, so one span keeps the sentence whole. */
+        var link = document.createElement("a");  /* A plain link to the job page. */
+        link.href = next;  /* The checked path of this portal. */
+        link.setAttribute("data-testid", ORG_JOB_LINK_TESTID);  /* The stable name for the browser tests. */
+        link.textContent = next.split("/").pop();  /* The job identifier is the last part of the path. */
+        line.appendChild(document.createTextNode(" Open its progress page: "));  /* The lead space keeps the text of the flash readable. */
+        line.appendChild(link);  /* The link to the job. */
+        line.appendChild(document.createTextNode("."));  /* The end of the sentence. */
+        item.appendChild(line);  /* The flash gap then separates the two sentences. */
+        link.focus();  /* A keyboard operator lands on the link. */
+    }
+
     function sendOrgForm(form) {
-        var body = orgFormBody(form);  /* Build the JSON body from the visible controls. */
+        var body = orgFormBody(form);  /* Build the JSON body before a control closes. */
+        var closed = closeOrgForm(form);  /* Issue #3242: one request at a time for this form. */
         fetchJson(form.getAttribute("action"), { method: "POST", body: body })
             .then(function (answer) {
                 if (answer && answer.next) {  /* The route names the next page after it accepts the request. */
-                    window.location.assign(answer.next);  /* Open the next page of the same workflow. */
+                    window.location.assign(answer.next);  /* The form stays closed while the next page loads. */
                     return;
                 }
-                window.location.reload();  /* An answer without a next page shows the current state again. */
+                window.location.reload();  /* The form stays closed while the page loads again. */
             })
             .catch(function (error) {
-                console.error("The organization upgrade request failed.", error && error.code);
+                console.error("The organization upgrade request failed.", error && error.code, error && error.status);  /* FR-008: no body. */
+                if (error && error.code === ORG_REPLAY_CODE) {  /* The first request already started a job. */
+                    showOrgReplayRefusal(form, error);  /* Keep the form closed, and link the job. */
+                    return;
+                }
+                openOrgForm(form, closed);  /* Nothing started, so the operator can try again. */
                 showRequestError(error);  /* Show the refusal in the page, never as a raw JSON document. */
             });
+    }
+
+    /**
+     * Loads a restored page again when one of its organization forms is closed.
+     *
+     * Why: Issue #3242, FR-009. A form stays closed while the next page loads.
+     * The back-forward cache can restore the old page with that closed form,
+     * and the form would then never open. A new load shows the true state.
+     *
+     * @param {PageTransitionEvent} event The pageshow event of the window.
+     * @returns {void}
+     */
+    function reloadRestoredOrgPage(event) {
+        if (event.persisted && document.querySelector("form[" + ORG_FORM_STATE + "]")) {  /* A closed form came back. */
+            window.location.reload();  /* The server paints each form open again. */
+        }
     }
 
     function initOrgUpgradeForms() {
@@ -3234,9 +3357,15 @@
             initOrgOptionsVisibility(form);  /* Keep multi-site option groups aligned with their family boxes. */
             form.addEventListener("submit", function (event) {
                 event.preventDefault();  /* Stop the native post that would open a raw JSON document. */
+                if (form.hasAttribute(ORG_FORM_STATE)) {  /* Issue #3242: a request runs, or a replay closed the form. */
+                    return;  /* Send nothing more from this form. */
+                }
                 sendOrgForm(form);  /* Send the same fields as JSON and read the answer.  */
             });
         });
+        if (forms.length) {  /* Issue #3242: only a page with an org form needs the restore rule. */
+            window.addEventListener("pageshow", reloadRestoredOrgPage);  /* FR-009: no form stays closed. */
+        }
     }
 
     /**
