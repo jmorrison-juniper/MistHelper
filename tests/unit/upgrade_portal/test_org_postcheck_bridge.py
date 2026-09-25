@@ -137,7 +137,7 @@ def test_a_capture_that_did_not_verify_reads_failed(change: Callable[[str], None
 
 def test_a_dropped_progress_record_reads_the_stored_capture(monkeypatch: pytest.MonkeyPatch) -> None:
     """After a trim, the verdict comes from the stored capture and its read-back flag."""
-    stored = {"state": "complete", "verified": True, "message": ""}  # The stored status of a verified capture.
+    stored = {"state": "verified", "verified": True, "message": ""}  # Issue #3378: a verified stored capture.
     monkeypatch.setattr(capture_routes, "read_progress", lambda capture_id: None)  # The trim dropped the record.
     monkeypatch.setattr(capture_routes, "stored_body", lambda capture_id: dict(stored) if has_app_context() else None)
     bridge = bridge_for(StandInRunner())  # Bound inside the request.

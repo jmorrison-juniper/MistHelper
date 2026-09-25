@@ -120,7 +120,7 @@ SECTION_FAILED = "failed"  # The read of this section did not finish.
 STATE_PENDING = "pending"  # The capture is queued and has read nothing yet.
 STATE_COLLECTING = "collecting"  # The capture is reading the cloud.
 STATE_VERIFIED = "verified"  # The portal read the stored key back unchanged.
-STATE_FAILED = "failed"  # The capture stopped before it wrote anything.
+STATE_FAILED = "failed"  # The capture stopped, or the portal cannot read its stored record back for a comparison.
 
 # The seven fields that `tasks.md` T059 names, and the identifier that the
 # contract sample carries beside them. The status body holds these fields and no
@@ -923,6 +923,20 @@ def lost_sections(document: dict[str, Any]) -> set[str]:
 def stored_progress(document: dict[str, Any], comparable: bool) -> dict[str, Any]:
     """Build the progress fields of one capture that already ended.
 
+    Why:
+        Issue #3378. The page stops its poll when `state` holds a finished
+        word. The document holds two words, and only one of them names the
+        lifecycle. `capture_status` holds `complete`, `partial`, or `failed`,
+        and it reports how much the capture read. The page does not stop on
+        `complete` or `partial`, so a copy of that word kept the poll alive, and
+        each poll read the whole document from the store again.
+
+        The live path sends `verified` after a matching read-back and `failed`
+        in every other case (`progress_change` in the collector). The stored
+        path uses the same rule, so `state` names `verified` exactly when
+        `verified` holds true. The page shows a partial capture through
+        `partial_reasons`, and the history page still reads `capture_status`.
+
     Args:
         document: The stored capture document.
         comparable: True when the portal read the key back unchanged.
@@ -932,8 +946,10 @@ def stored_progress(document: dict[str, Any], comparable: bool) -> dict[str, Any
     """
     tier = int(document.get(TIER_FIELD, TIER_STANDARD))  # A document with no tier reads as tier 2.
     lost = lost_sections(document)  # Every section that this capture did not read.
+    state = STATE_VERIFIED if comparable else STATE_FAILED  # The two end words of the live path.
+    logger.debug("capture: the stored capture reports the end state %s", state)  # The word that stops the poll.
     return {
-        "state": str(document.get("capture_status", STATE_VERIFIED)),  # The store names the end state.
+        "state": state,  # A finished word, so the page stops the poll after this answer.
         "percent": WHOLE_PERCENT,  # A stored capture read all that it was going to read.
         "sections": {name: stored_section_state(name, tier, lost) for name in SECTION_NAMES},
         "counts": document.get("counts") or {},  # An older document may hold no counts.
@@ -1235,9 +1251,10 @@ def capture_status(capture_id: str) -> tuple[Response, int]:
     """Report the progress of one capture.
 
     Why:
-        The browser polls this endpoint every 30 seconds. The body holds the
-        seven fields that the capture page paints, and holds no internal field,
-        so the server render and the poll never disagree.
+        The browser polls this endpoint every 3 seconds (`POLL_SECONDS`), and it
+        stops after an answer that holds `verified` or `failed`. The body holds
+        the seven fields that the capture page paints, and holds no internal
+        field, so the server render and the poll never disagree.
 
     Args:
         capture_id: The capture the path named.

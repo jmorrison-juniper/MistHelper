@@ -248,8 +248,17 @@ unreachable, and it states that a capture reads only.
 }
 ```
 
-The browser polls this endpoint every 30 seconds. The portal does not use
+The browser polls this endpoint every 3 seconds. The portal does not use
 server-sent events.
+
+The poll stops after an answer whose `state` holds `verified` or `failed`. A
+live capture ends with one of these two words. After a restart or a trim, the
+endpoint reads the stored capture and uses the same rule. It sends `verified`
+when the stored capture passed its read-back check and this release can compare
+it. It sends `failed` in every other case. The `verified` field holds the same
+result. The content word of the stored capture, `complete`, `partial`, or
+`failed`, stays in the `capture_status` field of the capture document. The
+status body does not carry it (issue #3378).
 
 ### `GET /api/captures/<capture_id>` — the whole capture
 

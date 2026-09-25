@@ -161,9 +161,10 @@ class OrgPostCheckBridge:
 
         Why:
             A live progress record ends with the state and the read-back flag.
-            A stored capture reports its stored status as the state, and the
-            read-back flag again. Only the read-back flag proves the capture, so
-            the verdict reads that flag first in both shapes.
+            A stored capture sends the same two words, `verified` or `failed`,
+            from the same read-back result (issue #3378). Only the read-back
+            flag proves the capture, so the verdict reads that flag first in
+            both shapes.
         """
         body = capture_routes.read_progress(capture_id)  # The progress store holds the last state.
         if body is None:  # The progress store dropped the record.
