@@ -205,6 +205,12 @@ STAND_IN_SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first site in t
 STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The text of the first site row.
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second site for organization tests.
 SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The text of the second site row.
+# WHY: Issue #3377. Seeded live runs and multi-site journeys hold the first two
+# sites, and FR-037 allows one live run for each site. The single-site upgrade
+# journey of `test_upgrade.py` therefore owns this third site. No seed and no
+# other module names it, so every run on it belongs to that journey.
+JOURNEY_SITE_ID = "44444444-4444-4444-4444-444444444444"  # The site of the single-site upgrade journey.
+JOURNEY_SITE_NAME = "E2E Upgrade Journey Site"  # The text of the third site row.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
 # WHY: Issue #3244. A standalone capture names no run. The pre-check reads the
@@ -1049,13 +1055,15 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
     del parameters  # One organization answers every call, so no parameter changes the result.
     if name == "listOrgSites":  # The name and the identifier of each site.
         return [
-            {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},
-            {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},
+            {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The first row, which most journeys read.
+            {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},  # The second row, which the multi-site journeys add.
+            {"id": JOURNEY_SITE_ID, "name": JOURNEY_SITE_NAME},  # Issue #3377: the last row, so no first row moves.
         ]
     if name == "listOrgSiteStats":  # The device count of each site, read from `num_devices`.
         return [
-            {"id": STAND_IN_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},
-            {"id": SECOND_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},
+            {"id": STAND_IN_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
+            {"id": SECOND_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
+            {"id": JOURNEY_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
         ]
     return []  # An unknown read name shows an empty list, and never a fault.
 
@@ -1170,14 +1178,45 @@ def stand_in_version_map() -> dict[str, tuple[str, ...]]:
     return {str(device["model"]): STAND_IN_VERSIONS for device in stand_in_device_read()}
 
 
+def stand_in_view_of(devices: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build the options view of one stand-in inventory with the shipped helpers.
+
+    Why:
+        Issue #3377. The shipped `build_options_view` answers three fields. Each
+        type control of the options page draws its versions from the
+        `type_selections` field, so a view without it gives each control the
+        empty prompt only. This helper calls the two shipped helpers in the
+        shipped order, so the browser reads the view shape that ships.
+
+    Args:
+        devices: The inventory of one stand-in site.
+
+    Returns:
+        The device rows, the version list of each model, and the version
+        selection of each device type.
+    """
+    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
+
+    logger.info("Build the stand-in options view of %s device(s)", len(devices))  # Record the build before it runs.
+    by_model = stand_in_version_map()  # Every stand-in model offers the same two versions.
+    type_selections = options.TypedVersionSelector().select(devices, by_model)  # The shipped default of each type.
+    rows = options.build_version_options(devices, by_model, type_selections)  # The shipped rows use the same pick.
+    logger.debug("The stand-in options view holds %s row(s) and %s type(s)", len(rows), len(type_selections))
+    return {
+        "targets": rows,  # One row for each device.
+        "versions_by_model": {name: list(items) for name, items in by_model.items()},  # The shipped list shape.
+        "type_selections": type_selections,  # The candidates of each type control.
+    }
+
+
 def stand_in_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
     """Answer the device rows and the version map that the options page draws.
 
     Why:
         `build_options_view` reads the site inventory from the cloud. This seam
-        joins the stand-in inventory to the fixed version map with the shipped
-        `build_version_options`, so the browser reads the rows that ship and the
-        test never proves a shape that only this file builds.
+        answers the stand-in inventory through `stand_in_view_of`, which calls
+        the shipped helpers. The browser therefore reads the rows that ship and
+        the test never proves a shape that only this file builds.
 
     Args:
         session: The cloud session. This stand-in reads none of it.
@@ -1185,13 +1224,11 @@ def stand_in_options_view(session: Any, org_id: str, site_id: str) -> dict[str, 
         site_id: The site under upgrade.
 
     Returns:
-        One row for each stand-in device and the version list of each model.
+        The device rows, the version list of each model, and the version
+        selection of each device type.
     """
     del session, org_id, site_id  # One site answers every call, so no argument changes the result.
-    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
-
-    by_model = stand_in_version_map()
-    return {"targets": options.build_version_options(stand_in_device_read(), by_model), "versions_by_model": by_model}
+    return stand_in_view_of(stand_in_device_read())  # The first-site inventory serves every single-site run.
 
 
 def stand_in_org_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
@@ -1200,7 +1237,7 @@ def stand_in_org_options_view(session: Any, org_id: str, site_id: str) -> dict[s
     Why:
         Issue #3249. `stand_in_options_view` answers one site for every call,
         so each selected site showed the same MAC addresses. This view reads the
-        inventory of the named site through the shipped `build_version_options`.
+        inventory of the named site through `stand_in_view_of`.
 
     Args:
         session: The cloud session. This stand-in reads none of it.
@@ -1208,14 +1245,11 @@ def stand_in_org_options_view(session: Any, org_id: str, site_id: str) -> dict[s
         site_id: The site under upgrade.
 
     Returns:
-        One row for each device of the named site and the version list of each model.
+        The device rows of the named site, the version list of each model, and
+        the version selection of each device type.
     """
     del session, org_id  # One organization answers every call.
-    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
-
-    by_model = stand_in_version_map()  # Both stand-in sites hold the same models.
-    devices = stand_in_site_devices(site_id)  # The inventory of the named site.
-    return {"targets": options.build_version_options(devices, by_model), "versions_by_model": by_model}
+    return stand_in_view_of(stand_in_site_devices(site_id))  # The inventory of the named site.
 
 
 def stand_in_options_builder(
