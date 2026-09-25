@@ -49,7 +49,10 @@ quality gate settings, two tools, and two ignore files name them.
 - **FR-004**: No gate setting, tool default, or ignore rule in MistHelper names
   the dashboard or the `starlink-api-reference` folder.
 
-- **FR-005**: The release note names the new repository.
+- **FR-005**: The performance catalog of #2448 names no deleted file. Its three
+  summaries state the counts of its tables.
+
+- **FR-006**: The release note names the new repository.
 
 ## Out of scope
 
@@ -57,8 +60,9 @@ quality gate settings, two tools, and two ignore files name them.
   register job compares the register with the dismissed alerts. GitHub keeps a
   dismissed alert in the dismissed state after a commit deletes its file.
 
-- `CHANGELOG.md` and the `specs/` folders keep their Starlink text, because
-  that text records past work.
+- `CHANGELOG.md` and most `specs/` folders keep their Starlink text, because
+  that text records past work. The one exception is the performance catalog of
+  #2448, because a guard test compares its rows with the tracked files.
 
 - Historical comments in `ci.yml`, `pyproject.toml`, and
   `tests/test_issue_433_src_g_no_regress.py` keep the file name.

@@ -54,3 +54,17 @@ a `fixed_at` date, and their state stayed `dismissed`.
 
 **Decision**: keep rows #193 and #194. The two alerts stay in the dismissed
 set, so the register still matches the API.
+
+## Decision 6: Remove the dashboard rows from the performance catalog
+
+**Evidence**: the first CI run of pull request #3407 failed three tests in
+`tests/guardrails/test_performance_hook_catalog.py`. The catalog of #2448
+named `starlink_dashboard.py` in the inventory and in four hook rows. A local
+search had skipped the `specs/` folders, so it missed these rows. Pull request
+#2915 set the pattern: it removed the rows of two deleted files and counted
+each summary again.
+
+**Decision**: remove the 2 inventory rows and the 4 hook rows. Count
+`hook-catalog-summary.json`, `scan-summary.json`, and `strategy-coverage.csv`
+again. A script first proved that its count gave the current summaries. It
+then wrote the new counts, and the same check passed on the new files.

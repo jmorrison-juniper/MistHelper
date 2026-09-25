@@ -1,11 +1,11 @@
 strategy,hook_count,file_count,primary_monitors
-1 algorithms/repeated work,685,495,"`loop_counter`, `compute_span`, `cProfile correlation`"
-2 I/O/sequential batching,150,127,"`http_transport`, `database_events`, `file_io`"
+1 algorithms/repeated work,683,494,"`loop_counter`, `compute_span`, `cProfile correlation`"
+2 I/O/sequential batching,148,126,"`http_transport`, `database_events`, `file_io`"
 3 data structures,396,369,"`cProfile correlation`, `allocation_trace`"
-4 allocations/copying,607,432,"`allocation_trace`, `loop_counter`, `serializer`"
-5 serialization/validation,200,186,"`serializer`, `http_transport`, `cache`"
-6 bounded caching,62,48,"`cache`, `http_transport`"
-7 measured Python loops,655,479,"`loop_counter`, `compute_span`"
+4 allocations/copying,605,431,"`allocation_trace`, `loop_counter`, `serializer`"
+5 serialization/validation,198,185,"`serializer`, `http_transport`, `cache`"
+6 bounded caching,61,47,"`cache`, `http_transport`"
+7 measured Python loops,653,478,"`loop_counter`, `compute_span`"
 8 object layout/GC,287,274,"`gc_diagnostic`, `allocation_trace`"
-9 startup/imports,11,11,`startup_import`
-10 native acceleration,17,16,`native_boundary`
+9 startup/imports,10,10,`startup_import`
+10 native acceleration,16,15,`native_boundary`

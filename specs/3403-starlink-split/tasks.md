@@ -25,12 +25,19 @@
 - [x] T007 Edit `ci.yml`, `pyproject.toml`, `quality_gate_exclusions.json`,
   `.dockerignore`, `.gitignore`, the compliance analyzer, and two tests.
 - [x] T008 Add the release note under `changelog.d/`.
-- [ ] T009 Run every local gate: ruff, black, mypy, radon, vulture,
-  interrogate, the STE lint, the changed tests, and the test quality gate.
-- [ ] T010 Rebase onto `main` after pull request #3405 merges. Open the pull
-  request, and merge it after every check passes.
+- [x] T009 Run every local gate: ruff, black, mypy, radon, vulture,
+  pydocstyle, interrogate, bandit, the STE lint, the changed tests, and the
+  test quality gate. All passed. The full ratchet checked 880 files and gave
+  `gate: 0 new findings vs baseline`.
+- [x] T010 Rebase onto `main` after pull request #3405 merges, and open pull
+  request #3407.
+- [x] T011 The first CI run failed three tests of the performance catalog
+  guard. Remove the 2 inventory rows and the 4 hook rows of the catalog, and
+  count its three summaries again. The guard and
+  `tests/test_performance_monitoring.py` gave 78 passed.
+- [ ] T012 Merge pull request #3407 after every check passes.
 
 ## Phase 4: Finish
 
-- [ ] T011 Move the ignored `starlink-api-reference/` folder from the main
+- [ ] T013 Move the ignored `starlink-api-reference/` folder from the main
   checkout to a backup location. Then fast-forward the main checkout.

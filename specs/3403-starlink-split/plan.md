@@ -36,6 +36,7 @@ that names them.
 | `tools/compliance_analyzer/engine.py` | Remove the folder from `_DEFAULT_EXCLUDES`. |
 | `tests/unit/test_compliance_analyzer.py` | Remove the folder sample from the exclusion test. |
 | `tests/test_issue_433_src_g_no_regress.py` | Remove the file from `TARGET_PATHS`. |
+| `specs/2448-misthelper-performance-monitoring/artifacts/` | Remove 2 inventory rows and 4 hook rows. Count the three summaries again. |
 | `changelog.d/issue-3403-starlink-split.md` | Add the release note. |
 
 ## Order of work
@@ -53,6 +54,9 @@ that names them.
 
 - **A gate names a missing path.** Vulture and interrogate fail on a missing
   path. The change removes the file from both lists in the same commit.
+- **A catalog names a missing file.** The guard
+  `tests/guardrails/test_performance_hook_catalog.py` fails if a catalog row
+  names a deleted file. Research Decision 6 records the repair.
 - **An untracked folder in the main checkout.** After the merge, the main
   checkout still holds the ignored clone. Step 5 moves the folder before the
   fast-forward, so no `git add` can commit it.
