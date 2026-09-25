@@ -709,6 +709,16 @@ The portal reads the child state that the last status poll stored. If a child
 job ends after the last poll, the portal still sends one cancel request for it.
 The cloud then gives the answer for that job.
 
+After a cancel, one child job can complete and another child job can stop. The
+upgrade then reads `cancelled`, not `completed`. The state `completed` means
+that every child job completed. The state `cancelled` means that at least one
+child job stopped before the end. A failed child job still makes the upgrade
+read `failed`. The site table shows the state of each child job. Issue #3371
+records the defect that this rule repairs.
+
+The access point job obeys the same rule for its sites. If the job completed at
+one site and stopped at another site, the access point job reads `cancelled`.
+
 ## Reconcile a stale run
 
 Open a stale run to find the reconciliation control. The control appears only
