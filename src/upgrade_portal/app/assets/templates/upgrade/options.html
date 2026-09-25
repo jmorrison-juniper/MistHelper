@@ -241,7 +241,7 @@
     {#
       Issue #2156 adds the two remaining strategy words of the cloud schema.
       Serial writes one device at a time, which keeps a site on one link
-      reachable. The radio word walks the radio neighbourhood in batches, and
+      reachable. The radio word walks the radio neighborhood in batches, and
       the cloud reads it for an access point alone.
     #}
     <div class="bubble-option">
@@ -572,7 +572,7 @@
               data-requires-device-type="ap"
               data-testid="upgrade-p2p-group"
               aria-describedby="upgrade-p2p-note">
-      <legend class="bubble-group-legend">Let an access point take the firmware from a neighbour</legend>
+      <legend class="bubble-group-legend">Let an access point take the firmware from a neighbor</legend>
 
       <div class="bubble-option">
         <input type="radio"
@@ -596,7 +596,7 @@
                value="yes"
                {{ 'checked' if p2p_chosen else '' }}>
         <label class="bubble-option-label" for="upgrade-enable-p2p-yes">
-          Yes, an access point may take the firmware from a neighbour
+          Yes, an access point may take the firmware from a neighbor
         </label>
       </div>
 
@@ -713,7 +713,7 @@
         {% endfor %}
       </select>
       <p class="portal-card-note" id="upgrade-rrm-node-order-note">
-        The cloud walks the radio neighbourhood in this order.
+        The cloud walks the radio neighborhood in this order.
       </p>
     </div>
 
