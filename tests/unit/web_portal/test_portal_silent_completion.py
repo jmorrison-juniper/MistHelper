@@ -6,7 +6,17 @@ from src.utils.menu_entry import MenuEntry  # WHY: OperationExecutor expects men
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # WHY: test the portal run contract.
 
 ISSUE_3144_MENUS = ("66", "75", "76", "209", "210", "213", "224", "233")  # WHY: exact issue scope.
-SITE_OR_IDENTIFIER_MENUS = ("66", "75", "76", "209", "210", "213", "224")  # WHY: these need portal controls.
+REQUIRED_CONTROL_NAMES = {  # WHY: each site or identifier row must offer these browser controls (issue #3320).
+    "66": ("site_id",),  # WHY: menu 66 prompts for a site only.
+    "75": ("site_id", "client_mac"),  # WHY: menu 75 prompts for a site and a client MAC address.
+    "76": ("site_id", "device_id"),  # WHY: menu 76 prompts for a site and a device.
+    "209": ("site_id", "beacon_id"),  # WHY: menu 209 prompts for a site and a beacon.
+    "210": ("site_id",),  # WHY: menu 210 prompts for a site only.
+    "213": ("site_id",),  # WHY: menu 213 prompts for a site only.
+    "224": ("site_id",),  # WHY: menu 224 prompts for a site only.
+}
+NO_DATA_LINE = "! No data found for this operation"  # WHY: the honest empty-result line that a handler logs.
+NO_DATA_COMPLETION = f"Operation completed with no output file: {NO_DATA_LINE}"  # WHY: the exact operator message.
 
 
 class _EventBus:
@@ -37,11 +47,12 @@ def _build_executor() -> OperationExecutor:
 
 def test_issue_3144_controls_cover_site_and_identifier_prompts() -> None:
     """Every site or identifier scoped silent-completion row must offer controls."""
-    print(f"The issue #3144 parameter guard checked {len(SITE_OR_IDENTIFIER_MENUS)} operations.")  # WHY: guard proof.
-    for menu in SITE_OR_IDENTIFIER_MENUS:  # WHY: check each affected row, not only one example.
-        entry = PARAMETER_REGISTRY.get(menu)  # WHY: parameter metadata drives the browser controls.
-        assert entry is not None, f"Menu {menu} has no portal parameter definition."  # WHY: no controls caused silence.
-        assert entry.get("parameters"), f"Menu {menu} defines no required portal controls."  # WHY: controls must exist.
+    print(f"The issue #3144 parameter guard checked {len(REQUIRED_CONTROL_NAMES)} operations.")  # WHY: guard proof.
+    for menu, required_names in REQUIRED_CONTROL_NAMES.items():  # WHY: check each affected row, not only one example.
+        entry = PARAMETER_REGISTRY.get(menu, {})  # WHY: a missing definition reads as empty, so it fails below.
+        offered = {parameter.get("name") for parameter in entry.get("parameters", [])}  # WHY: one control per name.
+        missing = [name for name in required_names if name not in offered]  # WHY: name each absent control.
+        assert missing == [], f"Menu {menu} lacks the portal controls {missing}."  # WHY: no controls caused silence.
 
 
 def test_completed_issue_3144_runs_explain_no_output() -> None:
@@ -52,11 +63,11 @@ def test_completed_issue_3144_runs_explain_no_output() -> None:
         for menu in ISSUE_3144_MENUS:  # WHY: every issue row gets the same no-output contract.
             run = executor._build_run_record(menu)  # WHY: use the production run record shape.
             run["log_messages"].append(  # WHY: emulate a handler that returned an honest empty result.
-                {"message": "! No data found for this operation", "level": "info"}
+                {"message": NO_DATA_LINE, "level": "info"}  # WHY: the same line that a real handler logs.
             )
             message = executor._completion_message(run)  # WHY: completed no-output runs need a visible reason.
-            assert message is not None, f"Menu {menu} would complete silently."  # WHY: silence is the defect.
-            assert "No data found" in message, f"Menu {menu} did not preserve the no-data reason."  # WHY: be specific.
+            reported = f"Menu {menu} reported {message!r} instead of the no-data reason."  # WHY: name the wrong text.
+            assert message == NO_DATA_COMPLETION, reported  # WHY: silence or a lost reason is the defect.
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
 
