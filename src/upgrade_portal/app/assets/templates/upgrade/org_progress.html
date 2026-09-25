@@ -53,6 +53,16 @@
       The Mist account is <span data-testid="org-upgrade-cloud-account">{{ status.cloud_account | default('Not recorded', true) }}</span>.
     </p>
   {% endif %}
+  {#
+    Issue #3225. A final operation cannot change, so the page renders no
+    cancel form and no caution for it. The single-site stop page disables its
+    stop for a final run in the same way. `cancel_allowed` comes from the
+    server. When a poll reports false, `portal.js` hides the form region,
+    disables its controls, fills the state word, and shows the note below.
+  #}
+  {% set cancel_allowed = status.cancel_allowed | default(true) %}
+  {% if cancel_allowed %}
+  <div data-org-cancel-controls data-testid="org-upgrade-cancel-controls">
   <form method="post" action="/api/org-upgrades/{{ upgrade_id }}/cancel" class="mt-3">
     <input type="hidden"
            name="csrf_token"
@@ -83,6 +93,9 @@
     firmware versions after the cancellation. The cancellation does not
     restore a device that already upgraded.
   </p>
+  </div>
+  {% endif %}
+  <p class="portal-card-note" data-testid="org-upgrade-cancel-closed" data-org-cancel-closed{% if cancel_allowed %} hidden{% endif %}>The operation is final: <span data-org-cancel-state>{{ '' if cancel_allowed else status.status }}</span>. The portal sends no cancel request for it.</p>
 </div>
 
 {#
@@ -139,7 +152,7 @@
     <h2 class="portal-card-title">Cancellation result</h2>
     {% for outcome in status.cancel_outcomes %}
       <div class="status-panel" data-testid="org-cancel-outcome-{{ outcome.child_id }}">
-        <h3 class="status-panel-title">{{ outcome.label }} ({{ outcome.device_family }})</h3>
+        <h3 class="status-panel-title">{{ outcome.label }} ({{ outcome.device_family | default('unknown', true) }})</h3>
         <p><strong>Status:</strong> <span data-testid="org-cancel-outcome-status-{{ outcome.child_id }}">{{ outcome.status }}</span></p>
         <p class="status-message" data-testid="org-cancel-outcome-message-{{ outcome.child_id }}">{{ outcome.message }}</p>
         {% if outcome.note %}
@@ -295,22 +308,14 @@
       {% for site in status.site_upgrades | default([], true) %}
         <tr>
           <th scope="row">{{ site.site_name | default(site.site_id, true) }}</th>
-          <td>{{ site.device_family | default('ap', true) }}</td>
-          <td>{{ site.status | default('unknown', true) }}{% if site.cloud_status and site.cloud_status != site.status %} ({{ site.cloud_status }}){% endif %}</td>
+          <td class="cell-word">{{ site.device_family | default('unknown', true) }}</td>
+          <td class="cell-word">{{ site.status | default('unknown', true) }}{% if site.cloud_status and site.cloud_status != site.status %} ({{ site.cloud_status }}){% endif %}</td>
           <td>{{ site.total | default(0, true) }}</td>
           <td>{{ site.upgraded | default(0, true) }}</td>
           <td>{{ site.failed | default(0, true) }}</td>
           <td class="cell-mono">{{ site.id | default('', true) }}</td>
           <td>{{ site.error | default('', true) }}</td>
-          <td>
-            {% if site.cancellation %}
-              {{ site.cancellation.status | default('', true) }}
-              {{ site.cancellation.message | default('', true) }}
-              {% if site.cancellation.cancelled %} Cancelled: {{ site.cancellation.cancelled | join(', ') }}.{% endif %}
-              {% if site.cancellation.already_writing %} Already writing: {{ site.cancellation.already_writing | join(', ') }}.{% endif %}
-              {% if site.cancellation.no_cancel_available %} No cancellation: {{ site.cancellation.no_cancel_available | join(', ') }}.{% endif %}
-            {% endif %}
-          </td>
+          <td>{{ site.cancellation_text | default('', true) }}</td>
         </tr>
       {% else %}
         <tr><td colspan="9">The cloud has not reported a child state yet.</td></tr>
@@ -368,11 +373,11 @@
             {% set mac = device.mac | default('', true) %}
             {% set outcome = device.version_outcome | default('version_pending', true) %}
             <tr data-testid="org-upgrade-device-row-{{ mac }}">
-              <td>{{ device.site_name | default(device.site_id, true) | default('Unknown', true) }}</td>
+              <td class="cell-word">{{ device.site_name | default(device.site_id, true) | default('Unknown', true) }}</td>
               <th scope="row">{{ device.name | default('Unnamed device', true) }}</th>
               <td class="cell-mono">{{ mac }}</td>
-              <td>{{ device.device_type | default('unknown', true) }}</td>
-              <td data-testid="org-upgrade-device-state-{{ mac }}">{{ device.state | default('pending', true) }}</td>
+              <td class="cell-word">{{ device.device_type | default('unknown', true) }}</td>
+              <td class="cell-word" data-testid="org-upgrade-device-state-{{ mac }}">{{ device.state | default('pending', true) }}</td>
               <td class="cell-mono">{{ device.version_before | default('unknown', true) }}</td>
               <td class="cell-mono">{{ device.version_target | default('none', true) }}</td>
               <td class="cell-mono" data-testid="org-upgrade-device-version-after-{{ mac }}">{{ device.version_after | default('not yet', true) }}</td>

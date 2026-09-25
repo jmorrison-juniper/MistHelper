@@ -298,6 +298,18 @@
     white-space: nowrap;
 }
 
+/*
+ * Issue #3225. A family word or a state word must stay whole. The shared cell
+ * rule above lets a word break at any letter, so a narrow multi-site table
+ * showed "failed" as "faile" and "d" on two lines. This class breaks a cell
+ * only between words. A word that is wider than its column widens the column,
+ * and the scroll box of the table scrolls sideways.
+ */
+.portal-table .cell-word {
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
 /* --------------------------------------------------------------------------
  * 4a. The history table
  *

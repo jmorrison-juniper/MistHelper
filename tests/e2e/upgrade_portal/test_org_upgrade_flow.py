@@ -142,7 +142,8 @@ class TestOrganizationUpgradeBrowserFlow:
                 return
             payload = {
                 "upgrade_id": UPGRADE_ID,
-                "status": "completed",
+                "status": "running",  # Issue #3225: only an operation that can still change keeps the cancel.
+                "cancel_allowed": True,  # The server sends this flag with every status answer.
                 "current_phase": 2,
                 "total": 4,
                 "upgraded_count": 3,
@@ -155,11 +156,7 @@ class TestOrganizationUpgradeBrowserFlow:
                         "total": 2,
                         "upgraded": 2,
                         "failed": 0,
-                        "cancellation": {
-                            "status": "requested",
-                            "message": "The cancel was accepted.",
-                            "cancelled": ["001122334455"],
-                        },
+                        "cancellation_text": "Status: requested. The cancel was accepted. Cancelled: 001122334455.",
                     },
                     {
                         "site_id": SECOND_SITE_ID,
@@ -168,13 +165,10 @@ class TestOrganizationUpgradeBrowserFlow:
                         "total": 2,
                         "upgraded": 1,
                         "failed": 1,
-                        "cancellation": {
-                            "status": "unavailable",
-                            "message": "No cancellation is available.",
-                        },
+                        "cancellation_text": "Status: unavailable. No cancellation is available.",
                     },
                 ],
-            }  # Include per-child cancellation details for the browser renderer.
+            }  # Issue #3225: the server builds each Cancellation text, and the page prints it as sent.
             route.fulfill(
                 status=200,
                 content_type="application/json",
@@ -186,7 +180,7 @@ class TestOrganizationUpgradeBrowserFlow:
         sync_api.expect(cancel_input).to_have_value("CAN")
         sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("completed")
         sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("failed")
-        sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("cancelled: 001122334455")
+        sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("Cancelled: 001122334455.")
         sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text(
             "No cancellation is available."
         )
@@ -203,6 +197,12 @@ class TestOrganizationUpgradeBrowserFlow:
         page.reload(wait_until="domcontentloaded")  # The job page reads every child again.
         status = page.locator("[data-org-upgrade-field='status']")  # The aggregate state.
         sync_api.expect(status).to_have_text("cancelled")  # Every child ended on the cancel.
+        # WHY: Issue #3225. A cancelled operation is final, so the page renders
+        # no cancel form. The note names the final state instead.
+        sync_api.expect(page.get_by_test_id("org-upgrade-cancel-controls")).to_have_count(0)  # No form renders.
+        sync_api.expect(page.get_by_test_id("org-upgrade-cancel-closed")).to_contain_text(
+            "The operation is final: cancelled."
+        )  # The operator reads why the cancel is gone.
         # WHY: Issue #3249. A cancelled child is final, so the table reads the
         # version that each device runs now. The first site runs the new
         # version, and the second site still runs the old version.

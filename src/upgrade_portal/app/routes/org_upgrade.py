@@ -20,7 +20,13 @@ from typing import Any
 from flask import Blueprint, Response, current_app, g, jsonify, request, session
 from requests.exceptions import RequestException  # Name the transport faults that the Mist SDK can raise.
 
-from ....firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
+from ....firmware.aggregate_upgrade_service import (  # Issue #3225: the final states and their cancel refusal.
+    FINAL_CANCEL_TEXT,
+    FINAL_OPERATION_STATES,
+    AggregateBuildInput,
+    AggregateUpgradeService,
+    FinalOperationError,
+)
 from ....firmware.org_upgrade_body import OrgUpgradeBody
 from ....firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
 from ...api.run_controls.views import RunStalePolicy  # Issue #3249: the age rule of the single-site page.
@@ -33,6 +39,7 @@ from ...upgrade.options import (
     build_options_view,
 )
 from ...upgrade.org_cancel_outcomes import OrgCancelOutcomes  # Issue #3246: the three lists of each cancel.
+from ...upgrade.org_cancel_text import OrgCancelText  # Issue #3225: one Cancellation text for the page and the poll.
 from ...upgrade.org_cascade.readers import OrgSettleAnchors  # Issue #3245: the anchors before the first write.
 from ...upgrade.org_cascade.record import WATCH_KEY, OrgPhaseEntries, OrgPhaseWatch  # Issue #3245: the watch.
 from ...upgrade.org_cascade.view import OrgPhaseView  # Issue #3245: the phase card of the page and the poll.
@@ -106,6 +113,7 @@ CONFIRMATION_MESSAGE = "Type CONFIRM before you start the organization upgrade."
 SUBMISSION_FAILED = "org_upgrade_submission_failed"
 STATUS_FAILED = "org_upgrade_status_failed"
 CANCEL_FAILED = "org_upgrade_cancel_failed"
+NOT_CANCELLABLE = "org_upgrade_not_cancellable"  # Issue #3225: a final operation refuses a cancel.
 WRITE_DISABLED = "org_upgrade_write_disabled"
 ALREADY_SUBMITTED = "org_upgrade_already_submitted"
 LEGACY_REPLAY_MESSAGE = "This confirmed request already started an organization upgrade."  # Issue #3242.
@@ -131,7 +139,6 @@ PRECHECK_RECORD_MESSAGE = (  # Issue #3243: the plan could not keep the baseline
 )
 PLANNED_STATE = "planned"  # The one state in which no child job reached the cloud.
 SUBMISSION_CLAIMED_STATE = "submission_claimed"  # Issue #3242: a first start holds the claim of the parent.
-TERMINAL_JOB_STATES = frozenset({"cancelled", "completed", "failed"})
 
 BAD_GATEWAY_STATUS = 502
 CONFLICT_STATUS = 409
@@ -668,21 +675,28 @@ def _target_counts(targets: Mapping[str, object]) -> tuple[int, int, int]:
 
 
 def _site_summary(entry: Mapping[str, object]) -> tuple[dict[str, Any], tuple[int, int, int], bool]:
-    """Normalize one site entry and its target counts."""
-    raw_nested = entry.get("upgrade")
-    nested = raw_nested if isinstance(raw_nested, Mapping) else entry
-    raw_targets = nested.get("targets")
-    targets = raw_targets if isinstance(raw_targets, Mapping) else {}
-    counts = _target_counts(targets)
-    row = {
+    """Normalize one site entry and its target counts.
+
+    Why:
+        Issue #3225. The organization job of an earlier release upgrades
+        access points only, so each row names that family from the server.
+        The page then needs no guess for a row with no family.
+    """
+    raw_nested = entry.get("upgrade")  # A cloud answer can nest the site job under one key.
+    nested = raw_nested if isinstance(raw_nested, Mapping) else entry  # Read the flat entry otherwise.
+    raw_targets = nested.get("targets")  # The device arrays of the site job.
+    targets = raw_targets if isinstance(raw_targets, Mapping) else {}  # A damaged value counts as no target.
+    counts = _target_counts(targets)  # The total, upgraded, and failed counts.
+    row = {  # One public row of the site table.
         "site_id": entry.get("site_id", nested.get("site_id", "")),
         "id": nested.get("id", entry.get("upgrade_id", "")),
+        "device_family": "ap",  # The organization job upgrades access points only.
         "status": nested.get("status", "unknown"),
         "total": counts[0],
         "upgraded": counts[1],
         "failed": counts[2],
     }
-    return row, counts, bool(targets)
+    return row, counts, bool(targets)  # The caller adds the counts to the job totals.
 
 
 def _site_summaries(entries: object) -> tuple[list[dict[str, Any]], tuple[int, int, int], bool]:
@@ -707,20 +721,22 @@ def _mapping_entries(entries: object) -> tuple[Mapping[str, object], ...]:
 
 def status_summary(result: OrgUpgradeResult) -> dict[str, Any]:
     """Build job totals from the target arrays of each site upgrade."""
-    data = dict(result.data)
-    entries = data.get("site_upgrades", data.get("upgrades", []))
-    sites, counts, has_site_targets = _site_summaries(entries)
-    root_targets = data.get("targets")
-    if not has_site_targets and isinstance(root_targets, Mapping):
-        counts = _target_counts(root_targets)
+    data = dict(result.data)  # Detach the cloud answer.
+    entries = data.get("site_upgrades", data.get("upgrades", []))  # The cloud names the list in two ways.
+    sites, counts, has_site_targets = _site_summaries(entries)  # One row for each site job.
+    root_targets = data.get("targets")  # A job answer can carry the device arrays at the root.
+    if not has_site_targets and isinstance(root_targets, Mapping):  # Use the root arrays only as a fallback.
+        counts = _target_counts(root_targets)  # The root arrays count every device of the job.
     root_status = str(data.get("status", "")).lower()  # Prefer the explicit aggregate state.
+    status = root_status or _derived_ap_status(sites)  # Derive from all site entries when root is absent.
     return {
-        "status": root_status or _derived_ap_status(sites),  # Derive from all site entries when root is absent.
+        "status": status,
         "current_phase": data.get("current_phase"),
         "total": counts[0],
         "upgraded_count": counts[1],
         "failed_count": counts[2],
         "site_upgrades": sites,
+        "cancel_allowed": status not in FINAL_OPERATION_STATES,  # Issue #3225: a final job shows no cancel form.
     }
 
 
@@ -964,12 +980,12 @@ def confirmation_value() -> str:
 
 def _submission_is_repeated(request_nonce: object) -> bool:
     """Return true when the current options cannot start another job."""
-    previous = session.get(LAST_JOB_SESSION_KEY)
-    if not isinstance(previous, dict):
+    previous = session.get(LAST_JOB_SESSION_KEY)  # The signed marker of the last job of this browser.
+    if not isinstance(previous, dict):  # No earlier job, so no replay exists.
         return False
-    previous_state = str(previous.get("state", ""))
-    return (
-        previous_state not in TERMINAL_JOB_STATES
+    previous_state = str(previous.get("state", ""))  # The last state that a read stored in the marker.
+    return (  # Issue #3225: the service owns the one set of final states.
+        previous_state not in FINAL_OPERATION_STATES
         or not isinstance(request_nonce, str)
         or previous.get("request_nonce") == request_nonce
     )
@@ -1643,6 +1659,7 @@ def aggregate_summary(record: Mapping[str, Any]) -> dict[str, Any]:
         "children": rows,
         "errors": list(record.get("errors", [])),
         "cancellation": record.get("cancellation"),
+        "cancel_allowed": record.get("state") not in FINAL_OPERATION_STATES,  # Issue #3225: the form rule.
         **_aggregate_record_view(record),  # Issue #3249: the device rows, the operator, and the age.
     }
 
@@ -1695,6 +1712,7 @@ def _aggregate_child_summary(child: Mapping[str, Any]) -> tuple[dict[str, Any], 
         "failed": failed,
         "error": child.get("error"),
         "cancellation": child.get("cancellation"),
+        "cancellation_text": OrgCancelText.text(child.get("cancellation")),  # Issue #3225: one text for both paints.
     }
     return row, (total, upgraded, failed)  # Let the caller add aggregate totals.
 
@@ -1988,6 +2006,9 @@ def _cancel_aggregate(
     logger.info("Cancel durable aggregate upgrade %s", upgrade_id)  # Log before child cancellation.
     try:  # The service persists before and after every destructive action.
         aggregate_service().cancel(cloud_session, operation, upgrade_routes.run_store())
+    except FinalOperationError as error:  # Issue #3225: a final operation sent no cloud request.
+        logger.warning("Refused the cancel of final aggregate upgrade %s", upgrade_id)  # No write followed.
+        return json_error(CONFLICT_STATUS, NOT_CANCELLABLE, str(error))  # The single-site stop uses 409 too.
     except ValueError as error:  # A replay or malformed state is a conflict.
         return json_error(CONFLICT_STATUS, CANCEL_FAILED, str(error))
     except Exception as error:  # Keep broad because aggregate child cancellations can leave mixed outcomes.
@@ -2013,8 +2034,11 @@ def _cancel_org_job(upgrade_id: str) -> tuple[Response, int]:
     context = _cancel_context(upgrade_id)  # Enforce browser ownership and organization scope.
     if not isinstance(context[0], str):  # Return the existing ownership or context error.
         return context  # Stop before the cloud call.
+    final_refusal = _final_job_refusal()  # Issue #3225: a final job gets no cloud cancel call.
+    if final_refusal is not None:  # The last read of this browser stored a final state.
+        return final_refusal  # Stop before the cloud call.
     org_id, cloud_session = context  # Use the validated legacy cancel context.
-    result = _call_cancellation(cloud_session, org_id, upgrade_id)
+    result = _call_cancellation(cloud_session, org_id, upgrade_id)  # Send the one cloud cancel call.
     if not isinstance(result, OrgUpgradeResult):  # Return a mapped validation or unknown failure.
         return result  # Preserve the existing response.
     refusal = result_error(result, CANCEL_FAILED)  # Reject an invalid cloud response.
@@ -2023,6 +2047,26 @@ def _cancel_org_job(upgrade_id: str) -> tuple[Response, int]:
     if _wants_html():  # Keep the browser on the existing progress page.
         return next_page_answer(f"/upgrade/org/jobs/{upgrade_id}")  # Return the existing redirect response.
     return jsonify({"upgrade_id": upgrade_id, "cancel_requested": True}), OK_STATUS  # Preserve the JSON shape.
+
+
+def _final_job_refusal() -> tuple[Response, int] | None:
+    """Refuse a cancel of an organization job that a read already found final.
+
+    Why:
+        Issue #3225. Each page view and each poll store the last state in the
+        signed job marker. A job in a final state cannot change, so a cancel
+        request only misreports it. The single-site stop answers 409 for a
+        final run in the same way.
+
+    Returns:
+        The refusal envelope, or None when the job can still change.
+    """
+    marker = session.get(LAST_JOB_SESSION_KEY)  # The signed marker of the owned job.
+    state = str(marker.get("state", "")) if isinstance(marker, dict) else ""  # The last stored state.
+    if state not in FINAL_OPERATION_STATES:  # A live or unread job keeps the cancel.
+        return None
+    logger.warning("Refused the cancel of an organization job in the final state %s", state)  # No identifier.
+    return json_error(CONFLICT_STATUS, NOT_CANCELLABLE, FINAL_CANCEL_TEXT.format(state=state))  # No cloud call.
 
 
 def _wants_html() -> bool:
