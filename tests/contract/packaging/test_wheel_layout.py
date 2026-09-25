@@ -28,13 +28,13 @@ logger = logging.getLogger(__name__)  # A module logger keeps the record source 
 _PYPROJECT = Path(__file__).resolve().parents[3] / "pyproject.toml"
 
 # The folders that must never reach an installed environment. Each one holds
-# development material that no consumer of the wheel reads.
-_FORBIDDEN_PACKAGES = ("tests", "scripts", "specs", "documentation", "ops-portal", "mist-ops-platform")
+# development material that no consumer of the wheel reads. Issue #3404 added
+# `tools`, because that tree moved to the `misthelper-devtools` repository.
+_FORBIDDEN_PACKAGES = ("tests", "tools", "scripts", "specs", "documentation", "ops-portal", "mist-ops-platform")
 
-# The import roots that the wheel must ship. `src` carries the application,
-# `web_portal` carries the portal on port 8055, and `tools` carries the two
-# console scripts that `[project.scripts]` declares.
-_REQUIRED_PACKAGES = ("src", "tools", "web_portal")
+# The import roots that the wheel must ship. `src` carries the application, and
+# `web_portal` carries the portal on port 8055.
+_REQUIRED_PACKAGES = ("src", "web_portal")
 
 # The modules that sit at the repository root. No package entry can reach them,
 # so the wheel target names each one under `force-include`.

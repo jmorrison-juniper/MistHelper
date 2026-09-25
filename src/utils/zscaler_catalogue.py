@@ -32,11 +32,12 @@ from datetime import UTC, datetime, timedelta  # WHY: TTL math runs in UTC to st
 from pathlib import Path  # WHY: path handling without hardcoded separators.
 from typing import Any  # WHY: the upstream JSON payload is duck-typed.
 
-# Local repo imports. ``attach_city_metadata`` lives in scripts/ so the
-# CLI variant can keep its strict SystemExit. The library form here always
+# Local repo imports. ``attach_city_metadata`` lives under src/ because the
+# auto-refresh path reads it at run time. Issue #3404 moved it out of
+# scripts/, which the container no longer ships. The library form here always
 # returns warnings instead of raising, which is what the auto-refresh path
-# needs to stay non-fatal.
-from scripts.build_zen_city_metadata import attach_city_metadata  # WHY: non-fatal city enrichment.
+# needs to stay non-fatal. The strict CLI keeps its SystemExit in scripts/.
+from src.utils.zen_city_metadata import attach_city_metadata  # WHY: non-fatal city enrichment.
 from src.utils.zscaler_probe import (  # WHY: reachability validation shares the probe defaults.
     DEFAULT_TIMEOUT,
     DEFAULT_WORKERS,
@@ -942,7 +943,7 @@ def _walk_city_map(  # WHY: Keep behavior.
         Split out of ``merge_clouds`` so the parent stays under the CC
         gate. The ``_strip_prefix`` call drops the ``"city : "``
         namespace prefix so ``by_city`` keys match the plain city names
-        used by :func:`scripts.build_zen_city_metadata.attach_city_metadata`.
+        used by :func:`src.utils.zen_city_metadata.attach_city_metadata`.
 
     Args:
         city_map: One continent's dict of city buckets.
@@ -968,7 +969,7 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:  # WHY
         both often empty. Downstream consumers in
         :mod:`src.org.org_synthetic_probes_manager` expect a single flat
         ``proxy_hostnames`` / ``vpn_hostnames`` / ``by_city`` surface, and
-        :func:`scripts.build_zen_city_metadata.attach_city_metadata` looks up
+        :func:`src.utils.zen_city_metadata.attach_city_metadata` looks up
         bare city names (no ``"city : "`` prefix) against a hand-curated
         ``_CITY_META`` table. Merging here (walk + dedup + prefix-strip + sort)
         translates the raw feed into the shape both callers expect while
@@ -985,7 +986,7 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:  # WHY
         Merged CENR document with keys ``schema_version``, ``fetched_utc``,
         ``source_urls``, ``proxy_hostnames``, ``vpn_hostnames``, ``by_city``,
         ``description``, and ``probe_default``. Ready to hand to
-        :func:`scripts.build_zen_city_metadata.attach_city_metadata`.
+        :func:`src.utils.zen_city_metadata.attach_city_metadata`.
     """
     accumulators = _MergeAccumulators()  # One bundle carries the three shared collections.
 
