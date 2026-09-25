@@ -15,6 +15,10 @@ a request returns HTTP 404 or a changed response shape, compare the request with
 Mist UI again. MistHelper confirmed each endpoint against the Mist UI version
 `admin2.21.1765-hotfix` on 2026-09-23.
 
+No documented endpoint can replace a `labs` endpoint. The section
+[Why no documented endpoint can replace the labs endpoints](#why-no-documented-endpoint-can-replace-the-labs-endpoints)
+compares each documented endpoint that looks similar, such as the alarm endpoints.
+
 ## Summary
 
 | Step | Method | Path | Purpose | Modes | Changes Mist data |
@@ -44,9 +48,13 @@ Mode 4 sends the same GET requests as mode 1, and it changes no Mist data.
 No `search` endpoint serves the Marvis Actions list. The alarm search is not a
 replacement, because its rows hold no `row_key` value. Modes 1, 2, and 4 read the
 alarm search only to add eight alarm columns to each exported action. See
-[Step 4](#step-4-read-the-marvis-alarms). The `marvis_configs` search is not a
-replacement either, because it reads a different object. See
+[Step 4](#step-4-read-the-marvis-alarms).
+
+The `marvis_configs` search is not a replacement either, because it reads a
+different object. See
 [Endpoints that menu 270 does not call](#endpoints-that-menu-270-does-not-call).
+For the full comparison, see
+[Why no documented endpoint can replace the labs endpoints](#why-no-documented-endpoint-can-replace-the-labs-endpoints).
 
 ## Common request values
 
@@ -312,7 +320,7 @@ two lists.
 
 | Name | Value that MistHelper sends | Purpose |
 | - | - | - |
-| `group` | `marvis` | Return the Marvis alarms only. The `infrastructure` group and the `security` group hold no Marvis Action. |
+| `group` | `marvis` | Return the Marvis alarms only. The groups `certificate_expiry`, `infrastructure`, and `security` hold no Marvis Action. |
 | `start` | Epoch seconds, as text | The start of the search window. |
 | `end` | Epoch seconds, as text | The end of the search window. MistHelper sends the time of the run. |
 | `limit` | `1000` | The number of alarms on each page. The default of the API is 100. |
@@ -416,7 +424,9 @@ of the API reference holds no `group` value, so a next page can hold other group
 
 The join does not use the topic names, because the alarm types use other names.
 For example, the topic `switch/sw_offline` joins to the alarm type
-`switch_offline`, and the topic `ap/ap_disconnect` joins to `ap_offline`.
+`switch_offline`, and the topic `ap/ap_disconnect` joins to `ap_offline`. See
+[The schema and the alarm definitions](#the-schema-and-the-alarm-definitions) for
+each topic and the alarm types with a similar name.
 
 A live test on 2026-09-24 read 112 actions and 33 Marvis alarms. The alarm `id`
 equaled the action `uuid` for 31 actions. No alarm held an `action_id` value. 81
@@ -466,14 +476,21 @@ review that change before it merges. Read these limits before you plan an
 acknowledge script.
 
 - An acknowledge changes Mist data for every engineer who reads the alarm.
+
 - The research did not test if a resolve changes the alarm, or if an acknowledge
   changes the action.
-- The `ack_all` request has no group filter, so it also acknowledges the
-  `infrastructure` alarms and the `security` alarms.
+
+- The `ack_all` request has no group filter, so it also acknowledges the alarms of
+  the groups `certificate_expiry`, `infrastructure`, and `security`.
+
 - The organization API has no path that removes the acknowledge of one alarm. To
-  undo one acknowledge, send `unack` with a list that holds one alarm ID.
+  undo one acknowledge, send `unack` with a list that holds one alarm ID. The site
+  API has a path for one alarm: `POST /api/v1/sites/{site_id}/alarms/{alarm_id}/unack`,
+  with the SDK function `unackSiteAlarm`.
+
 - The bundled API document limits one `ack` batch or one `unack` batch to 1,000
-  alarm IDs.
+  alarm IDs. The text of the `ack_all` operation and the `unack_all` operation
+  states the limit. The schema of the body states no limit.
 
 Warning: do not send `ack_all` from a script, because it will acknowledge every
 alarm of the organization. No request can restore the acknowledge state that each
@@ -599,9 +616,10 @@ change after Marvis sets AI Validated, Reoccurred, or Marvis Self Driven.
 The API writes `reoccured` with one `r`. Use that exact text in a filter.
 
 Mode 2 and mode 3 keep the rows that show Yes in the Open tab column. Mode 4 keeps
-the rows that show No. If Mist returns a status key that this table does not hold,
-MistHelper counts the action as closed. Mode 4 then exports the action and prints a
-caution line that names the key. Compare those actions with the Mist UI.
+the rows that show No in that column. If Mist returns a status key that this table
+does not hold, MistHelper counts the action as closed. Mode 4 then exports the
+action and prints a caution line that names the key. Compare those actions with the
+Mist UI.
 
 ## Permissions
 
@@ -641,7 +659,14 @@ MistHelper waits between two PUT requests.
 | GET | `/api/v1/labs/orgs/{org_id}/suggestion?query=time_series` | It returns a trend of counts, not the rows. | No |
 | GET | `/api/v1/labs/orgs/{org_id}/suggestion?query=group_by_category_symptom` | It returns counts. Menu 270 counts the rows that it already holds. | No |
 | GET | `/api/v1/labs/orgs/{org_id}/suggestion_detail/{id}/suggestion_id` | It returns one detail record. The list already holds the fields that the export needs. | No |
-| GET | `/api/v1/msps/{msp_id}/suggestion/count` | The public document describes it, but it returns the counts of an MSP only. | No |
+| GET | `/api/v1/msps/{msp_id}/suggestion/count` | The public document describes it, but it returns the counts of an MSP only. See [The MSP count](#the-msp-count). | No |
+| GET | `/api/v1/orgs/{org_id}/alarms/count` | It counts the alarms by one field, and it returns no rows. | No |
+| GET | `/api/v1/const/alarm_defs` | It lists the alarm types. It holds no topic key and no advice. See [The schema and the alarm definitions](#the-schema-and-the-alarm-definitions). | No |
+| POST | `/api/v1/sites/{site_id}/alarms/{alarm_id}/unack` | It removes the acknowledge of one alarm of one site. | Yes |
+| POST | `/api/v1/orgs/{org_id}/alarmtemplates/suppress` | It suppresses every alarm of a scope for up to 180 days. It names no action. See [The resolve and the alarm acknowledge](#the-resolve-and-the-alarm-acknowledge). | Yes |
+| GET | `/api/v1/orgs/{org_id}/troubleshoot` | It returns the results of a Marvis diagnosis, not the actions. See [The troubleshoot endpoint](#the-troubleshoot-endpoint). | No |
+| GET | `/api/v1/orgs/{org_id}/devices/events/search` | It returns device events without a status or a key. See [The device events](#the-device-events). | No |
+| PUT | `/api/v1/orgs/{org_id}/setting` | It changes the automatic operations of Marvis. It cannot close an action. See [The Marvis settings](#the-marvis-settings). | Yes |
 | GET | `/api/v1/sites/{site_id}/marvis_configs/search` | It reads Marvis Config Actions, which are not Marvis Actions. See [The Marvis Config Actions](#the-marvis-config-actions). | No |
 | GET | `/api/v1/sites/{site_id}/marvis_configs/count` | It counts Marvis Config Actions by one field. | No |
 | DELETE | `/api/v1/sites/{site_id}/marvis_configs/{id}` | It deletes one Marvis Config Action. | Yes |
@@ -649,6 +674,10 @@ MistHelper waits between two PUT requests.
 
 Warning: a call to the self-drive endpoint can change the configuration of a live
 device and stop client traffic. Do not call that endpoint from a script.
+
+The section
+[Why no documented endpoint can replace the labs endpoints](#why-no-documented-endpoint-can-replace-the-labs-endpoints)
+compares the documented endpoints of this table with the `labs` endpoints.
 
 ### The Marvis Config Actions
 
@@ -706,15 +735,555 @@ three places, the live answers do not agree with the OpenAPI document.
 | Default `limit` | 100 | 10 |
 | Type of `start` and `end` in the answer | Integer epoch seconds | Decimal epoch seconds |
 
-#### Sources for the Marvis Actions endpoints
+## Why no documented endpoint can replace the labs endpoints
 
-MistHelper checked three sources on 2026-09-24.
+Menu 270 calls three `labs` endpoints. The research compared each one with every
+documented endpoint that looks similar. No documented endpoint can replace a `labs`
+endpoint. Issue #3368 holds the research. Each request of the research was a GET
+request, so no request changed Mist data.
+
+The SDK column of each table names the function under `mistapi.api.v1`. The
+research used `mistapi` 0.64.0, the bundled OpenAPI document of release 2607.1.1,
+and live reads of the lab organization on 2026-09-25. See
+[Sources for the Marvis Actions endpoints](#sources-for-the-marvis-actions-endpoints).
+
+### The three functions that menu 270 needs
+
+| Function | `labs` endpoint | What menu 270 reads or changes |
+| - | - | - |
+| The list | `GET /api/v1/labs/orgs/{org_id}/suggestion` | Every action, open and closed, with `uuid`, `row_key`, `status`, `label`, `comment`, the topic, the details, and the times. |
+| The schema | `GET /api/v1/labs/suggestions_schema` | The display name, the recommended action, and the detection text of each topic. |
+| The resolve | `PUT /api/v1/labs/orgs/{org_id}/suggestions` | The status of one action, with a resolution code and a comment. |
+
+A replacement must meet three conditions.
+
+1. It returns the same objects. The list returns every action, open and closed.
+2. It uses the same key. The resolve names the `row_key` of a list row.
+3. It changes the same status. The Open tab of the Mist UI selects each action by
+   its status.
+
+The alarm endpoints fail each of the three conditions. Every other documented
+endpoint fails one of the conditions or more.
+
+### Summary of the documented endpoints
+
+| Documented endpoint | SDK function | Nearest `labs` function | Why it cannot replace the `labs` function |
+| - | - | - | - |
+| `GET /api/v1/orgs/{org_id}/alarms/search` | `orgs.alarms.searchOrgAlarms` | The list | Only 33 of 114 actions had an alarm. No alarm holds `row_key`. The search has no status filter. See [The list and the alarm search](#the-list-and-the-alarm-search). |
+| `GET /api/v1/orgs/{org_id}/alarms/count` | `orgs.alarms.countOrgAlarms` | The list | It returns counts, not rows. It has no group filter. See [The search cannot select the open alarms](#the-search-cannot-select-the-open-alarms). |
+| `GET /api/v1/sites/{site_id}/alarms/search` and `GET /api/v1/sites/{site_id}/alarms/count` | `sites.alarms.searchSiteAlarms` and `sites.alarms.countSiteAlarms` | The list | The same limits as the organization paths, for one site only. A full export then needs one request for each site. |
+| `GET /api/v1/const/alarm_defs` | `const.alarm_defs.listAlarmDefinitions` | The schema | It holds no advice and no topic key. Eight topics have no Marvis alarm type with a similar name. See [The schema and the alarm definitions](#the-schema-and-the-alarm-definitions). |
+| `POST /api/v1/orgs/{org_id}/alarms/{alarm_id}/ack` | `orgs.alarms.ackOrgAlarm` | The resolve | It records an acknowledge on the alarm, not a new action status. Its body holds a note, not a resolution code. See [The resolve and the alarm acknowledge](#the-resolve-and-the-alarm-acknowledge). |
+| `POST /api/v1/orgs/{org_id}/alarms/ack` | `orgs.alarms.ackOrgMultipleAlarms` | The resolve | The same reason as the row above, for a list of alarm IDs. |
+| `POST /api/v1/orgs/{org_id}/alarms/ack_all` | `orgs.alarms.ackOrgAllAlarms` | The resolve | It acknowledges every alarm of every group. It has no filter. |
+| `POST /api/v1/sites/{site_id}/alarms/{alarm_id}/ack`, `POST /api/v1/sites/{site_id}/alarms/ack`, and `POST /api/v1/sites/{site_id}/alarms/ack_all` | `sites.alarms.ackSiteAlarm`, `sites.alarms.AckSiteMultipleAlarms`, and `sites.alarms.ackSiteAllAlarms` | The resolve | The same reasons as the organization paths, for one site. The name `AckSiteMultipleAlarms` starts with a capital A in the document and in the SDK. |
+| `POST /api/v1/orgs/{org_id}/alarmtemplates/suppress` | `orgs.alarmtemplates.suppressOrgAlarm` | The resolve | It stops new alarms for a scope. Its body names no alarm, no alarm type, and no action. |
+| `GET /api/v1/msps/{msp_id}/suggestion/count` | `msps.suggestion.countMspsMarvisActions` | The list | It returns counts for the organizations of one MSP. It returns no row. See [The MSP count](#the-msp-count). |
+| `GET /api/v1/orgs/{org_id}/troubleshoot` | `orgs.troubleshoot.troubleshootOrg` | The list | It returns a diagnosis of the last 7 days at most. It names no action. See [The troubleshoot endpoint](#the-troubleshoot-endpoint). |
+| `GET /api/v1/orgs/{org_id}/devices/events/search` | `orgs.devices.searchOrgDeviceEvents` | The list | It returns device events. An event holds no status and no action key. See [The device events](#the-device-events). |
+| `GET /api/v1/orgs/{org_id}/insights/{metric}` and the other SLE paths | `orgs.insights.getOrgSle` | The list | It returns SLE values, not actions. See [The other documented Marvis endpoints](#the-other-documented-marvis-endpoints). |
+| `GET /api/v1/orgs/{org_id}/marvisclients/events/search` and the three other operations of the tag "Orgs Clients - Marvis" | `orgs.marvisclients.searchOrgMarvisClientEvents` | The list | It returns the events of the Marvis Client app, not actions. See [The other documented Marvis endpoints](#the-other-documented-marvis-endpoints). |
+| `GET /api/v1/sites/{site_id}/marvis_configs/search` and the three other paths of the family | The four functions of `sites.marvis_configs` | The list and the resolve | It reads Marvis Config Actions, which are a different object. See [The Marvis Config Actions](#the-marvis-config-actions). |
+| `PUT /api/v1/orgs/{org_id}/setting` | `orgs.setting.updateOrgSettings` | The resolve | It changes the automatic operations of Marvis. It cannot close an action. See [The Marvis settings](#the-marvis-settings). |
+| `POST /api/v1/orgs/{org_id}/webhooks` with the topic `alarms` | `orgs.webhooks.createOrgWebhook` | The list | It sends new alarm events only. The documented payload holds no status and no action key. See [The webhooks](#the-webhooks). |
+
+### The list and the alarm search
+
+The alarm search is the documented endpoint that is nearest to the list. Mist
+creates a Marvis alarm for some Marvis Actions. An action and its alarm name the
+same problem at the same site. The five parts below show why the alarm search cannot
+replace the list.
+
+#### Only some actions have an alarm
+
+On 2026-09-25, the list held 114 actions. A search of the Marvis alarms over 400
+days returned 33 alarms. Each alarm joined one action, because the alarm `id`
+equaled the action `uuid`. Of the 114 actions, 81 had no alarm.
+
+| Topic | Actions | Actions with an alarm | Alarm type |
+| - | - | - | - |
+| `ap/ap_disconnect` | 66 | 9 | `ap_offline` |
+| `switch/sw_offline` | 30 | 19 | `switch_offline` |
+| `gateway/bad_wan_link` | 6 | 0 | None |
+| `switch/port_flap` | 3 | 2 | `port_flap` |
+| `ap/site_radar_channel_punishment` | 2 | 0 | None |
+| `application/reachability_failure` | 2 | 2 | `minis_application_reachability_failure` |
+| `connectivity/dhcp_failure` | 2 | 1 | `minis_dhcp_failure` |
+| `gateway/non_compliant` | 2 | 0 | None |
+| `gateway/vpn_path_down` | 1 | 0 | None |
+| Total | 114 | 33 | |
+
+Mist does not document the period that it keeps an alarm. The oldest alarm was 50.2
+days old, and the oldest action was 84.5 days old. Of the 81 actions without an
+alarm, 79 started before the oldest alarm. The other two are one `ap/ap_disconnect`
+action and one `ap/site_radar_channel_punishment` action. A new action can therefore
+have no alarm.
+
+Three more searches read the other alarm groups over the same window. They returned
+656 `infrastructure` alarms, 190 `security` alarms, and 0 `certificate_expiry`
+alarms. No alarm of these groups held an `id` or an `action_id` that equals an
+action `uuid`.
+
+#### No alarm holds the key of the resolve
+
+The Mist UI sends the `row_key` of the action in the resolve body. No live alarm
+holds `row_key`, and no example in the alarm definitions holds it. The alarm `id`
+equals the action `uuid`, but the research did not send a resolve with `uuid`. A
+script must therefore read the list to find the `row_key` of an action.
+
+#### The two status models are different
+
+| Item | Marvis Action | Marvis alarm |
+| - | - | - |
+| Status values | `open`, `inprogress`, `reoccured`, `resolved`, `validated`, `marvis_self_driven`, and `expired action` | `open` and `resolved` |
+| Who closes the object | Marvis, or a user with the resolve | Mist. The document describes no request that sets the alarm `status`. |
+| Record of the operator | `label` (the resolution code) and `comment` | `acked`, `acked_time`, `ack_admin_name`, and `note` |
+| Change request | `PUT /api/v1/labs/orgs/{org_id}/suggestions` | The acknowledge requests. The document does not state that an acknowledge changes `status`. |
+| Close time | `resolve_time` and `validation_time` | `resolved_time` |
+
+On 2026-09-25, each of the 33 pairs held the action status `validated` and the
+alarm status `resolved`. In 30 pairs, both close times existed. In each of these
+pairs, the alarm `resolved_time` and the action `validation_time` differ by one
+second or less. The two close times agree, so Marvis closes the two objects at the
+same time. The research cannot tell if a resolve by a user also closes the alarm.
+The organization held no open action for that test.
+
+#### The alarm fields do not hold the action fields
+
+| Action field in the list | Alarm field | Difference |
+| - | - | - |
+| `uuid` | `id` | The same value when an alarm exists. |
+| `row_key` | None | The resolve needs this key. |
+| `category` and `symptom` | `type` | The alarm types use other names. See [Each topic and the alarm types](#each-topic-and-the-alarm-types). |
+| `status` | `status` | The action has seven values. The alarm has two values. |
+| `label` | None | The alarm holds no resolution code. |
+| `comment` | `note` | The note belongs to an acknowledge, not to a resolve. |
+| `assignee` | None | The alarm holds no owner. |
+| `severity` | `severity` | The action holds a number, for example 60. The alarm holds `critical` or `warn`. |
+| `details.impacted_tuple` | `impacted_entities` | Both name the impacted devices. An alarm entity holds no start time and no end time. |
+| `start_time` and `end_time` | `timestamp` and `last_seen` | The action uses epoch milliseconds. The alarm uses epoch seconds. |
+| `resolve_time` and `validation_time` | `resolved_time` | The alarm holds one close time. |
+| `suggestion` | None | The alarm holds no advice code. |
+| `self_drivable` and `self_driven` | None | The alarm holds no self-drive value. |
+| `zendesk_ticket` and the RMA fields | None | The alarm holds no support case. |
+
+The live alarms and the alarm schema do not agree either.
+
+| Group of fields | Fields |
+| - | - |
+| Live fields that the schema does not describe (7) | `connected_switch_macs`, `entity_ids`, `entity_macs`, `impacted_ap_count`, `impacted_entities`, `impacted_entity_count`, and `port_ids` |
+| Schema fields that no live alarm held (11) | `ack_admin_id`, `ack_admin_name`, `acked`, `acked_time`, `aps`, `bssids`, `gateways`, `hostnames`, `note`, `ssids`, and `switches` |
+
+No live alarm held the field `acked`. The organization held no acknowledged alarm,
+so the research cannot tell if Mist adds the field after an acknowledge.
+
+Caution: a script that reads `acked` without a default value can stop with an error
+at the first live alarm. Read each alarm field with a default value.
+
+#### The search cannot select the open alarms
+
+The alarm search has no `status` filter. The documented filters are `site_id`,
+`group`, `severity`, `type`, `ack_admin_name`, `acked`, `start`, `end`, and
+`duration`. A script must read every alarm and select the open alarms itself.
+
+`GET /api/v1/orgs/{org_id}/alarms/count` counts the alarms for each value of one
+field, which the `distinct` parameter names. It has no group filter and no status
+filter. On 2026-09-25, `distinct=group` returned 656 `infrastructure` alarms, 190
+`security` alarms, and 33 `marvis` alarms. The site count
+`GET /api/v1/sites/{site_id}/alarms/count` accepts the filters `group`, `type`,
+`severity`, `acked`, and `ack_admin_name`, but it counts one site only. A count
+cannot give the rows that an export or a resolve needs.
+
+### The schema and the alarm definitions
+
+`GET /api/v1/const/alarm_defs` lists each alarm type that Mist can create. It is
+the documented endpoint that is nearest to the schema. The SDK function is
+`const.alarm_defs.listAlarmDefinitions`.
+
+| Item | The schema (`labs`) | The alarm definitions (documented) |
+| - | - | - |
+| Entries | 35 topics | 248 alarm types. 35 types belong to the group `marvis`. |
+| Other entries | None | 213 types: `infrastructure` 157, `security` 36, and `certificate_expiry` 20. |
+| Key of one entry | `category` and `symptom` | `key` |
+| Categories | 8: `ap`, `application`, `client`, `connectivity`, `gateway`, `layer_1`, `security`, and `switch` | 5 values of `marvis_suggestion_category`: `ap`, `application`, `connectivity`, `gateway`, and `switch` |
+| Fields of one entry | 18 | 8 live fields. The document describes 7 fields, without `default_enabled`. |
+| Advice | `recommended_action`, `detection_logic`, `detection_scope`, and `ask_marvis_query` | None |
+| Automatic operation | `auto_operation_capable`, `auto_operation_flag`, and `default_auto_operation_permission` | None |
+| Severity | None. The list row holds a number. | 31 types hold `critical`, and 4 types hold `warn`. |
+| Link to the other object | None | No field names a topic. `marvis_suggestion_category` names a category only. The `example` names a topic in a sample payload. |
+
+These are the 18 fields of a schema entry.
+
+- The keys and the names: `action`, `category`, `display_name`, `icon`, and `symptom`.
+- The advice: `ask_marvis_query`, `detection_logic`, `detection_scope`, and `recommended_action`.
+- The automatic operation: `auto_action_permission_modal_disabled`, `auto_operation_capable`, `auto_operation_flag`, and `default_auto_operation_permission`.
+- The display of the Mist UI: `columns`, `org_column_mappings`, `prefixes_for_display_data`, `server_column_mappings`, and `site_column_mappings`.
+
+The 8 fields of an alarm definition are `default_enabled`, `display`, `example`,
+`fields`, `group`, `key`, `marvis_suggestion_category`, and `severity`. The four
+`warn` types are `ap_loop_by_duplicate_tunnels`, `ap_loop_by_duplicate_wlan_paths`,
+`ap_loop_by_switch_port_flap`, and `port_flap`. The type
+`intermittent_wan_connectivity` holds no `default_enabled` value. Each other Marvis
+type holds `true`.
+
+Nine topics hold `auto_operation_capable` with the value `true`. No alarm definition
+holds a field for an automatic operation. See [The Marvis settings](#the-marvis-settings).
+
+#### Each topic and the alarm types
+
+The API gives no map from a topic to an alarm type. This table compares the 35
+topics with the 35 Marvis alarm types in three ways.
+
+- The column "Similar name" compares the names only.
+- The column "Named in an example" lists each alarm type whose `example` names the
+  topic in `details.category` and `details.symptom`. Two examples hold `details` as
+  JSON text, and the column reads that text too. The mark "(text)" shows these two
+  examples. See
+  [The examples in the alarm definitions](#the-examples-in-the-alarm-definitions).
+- The column "Live join" gives the join of 2026-09-25.
+
+The values of the column "Live join" have these meanings.
+
+- Yes: at least one action joined an alarm. The numbers give the actions with an
+  alarm and all the actions of the topic.
+- No alarm: at least one action started after the oldest alarm, but no action had
+  an alarm.
+- Too old: each action of the topic started before the oldest alarm.
+- No data: the organization held no action of the topic.
+
+| Topic | Display name in the schema | Similar name | Named in an example | Live join |
+| - | - | - | - | - |
+| `ap/ap_disconnect` | Offline | `ap_offline` | `ap_offline`, `ap_offline_isp_site_down` | Yes, 9 of 66 |
+| `ap/ap_loop` | AP Loop Detected | `ap_loop_by_duplicate_tunnels`, `ap_loop_by_duplicate_wlan_paths`, `ap_loop_by_switch_port_flap` | `ap_loop_by_duplicate_tunnels`, `ap_loop_by_duplicate_wlan_paths` | No data |
+| `ap/headroom_insufficient` | Dynamic Capacity Optimization | `insufficient_capacity` | None | No data |
+| `ap/health_check` | Health Check Failed | `health_check_failed` | `health_check_failed` | No data |
+| `ap/insufficient_coverage` | Insufficient Coverage | `insufficient_coverage` | `insufficient_coverage` | No data |
+| `ap/mxedge_failure` | Mist Edge Anomaly | None | None | No data |
+| `ap/non_compliant` | Non-compliant | `non_compliant` | `non_compliant` | No data |
+| `ap/site_down_isp_issue` | ISP Offline | `ap_offline_isp_site_down` | None | No data |
+| `ap/site_radar_channel_punishment` | DFS Optimization | None | None | No alarm, 0 of 2 |
+| `application/reachability_failure` | Reachability Failure | `minis_application_reachability_failure` | `minis_application_reachability_failure` (text) | Yes, 2 of 2 |
+| `client/persistently_failing` | Persistently Failing Clients | None | None | No data |
+| `connectivity/arp_failure` | ARP Failure | `arp_failure`, `minis_arp_failure` | `arp_failure`, `minis_arp_failure` | No data |
+| `connectivity/auth_failure` | Authentication Failure | `authentication_failure` | `authentication_failure` | No data |
+| `connectivity/dhcp_failure` | DHCP Failure | `dhcp_failure`, `minis_dhcp_failure` | `dhcp_failure`, `minis_dhcp_failure` | Yes, 1 of 2 |
+| `connectivity/dns_failure` | DNS Failure | `dns_failure`, `minis_dns_failure` | `dns_failure`, `minis_dns_failure` | No data |
+| `gateway/bad_wan_link` | Intermittent WAN Connectivity | `bad_wan_uplink` | `intermittent_wan_connectivity` | Too old, 0 of 6 |
+| `gateway/gw_mtu_mismatch` | MTU Mismatch | `gw_mtu_mismatch` | `gw_mtu_mismatch` | No data |
+| `gateway/gw_negotiation_incomplete` | Negotiation Incomplete | `gw_negotiation_mismatch` | None | No data |
+| `gateway/intermittent_wan_connectivity` | Bad WAN Uplink | `intermittent_wan_connectivity` | `bad_wan_uplink` | No data |
+| `gateway/non_compliant` | Non-compliant | `gw_non_compliant` | `gw_non_compliant` | Too old, 0 of 2 |
+| `gateway/vpn_path_down` | VPN Path Down | `vpn_path_down` | `vpn_path_down` (text) | Too old, 0 of 1 |
+| `layer_1/bad_cable` | Bad Cable | `ap_bad_cable`, `bad_cable`, `gw_bad_cable` | `ap_bad_cable`, `bad_cable`, `gw_bad_cable` | No data |
+| `layer_1/bad_fiber_optics` | Bad Fiber Optics | None | None | No data |
+| `security` with an empty symptom | Empty | None | None | No data |
+| `switch/high_cpu` | High CPU | `sw_high_cpu_usage` | None | No data |
+| `switch/misconfig_port` | Misconfigured Port | None | None | No data |
+| `switch/missing_vlan` | Missing VLAN | `missing_vlan` | `missing_vlan` | No data |
+| `switch/mtu_mismatch` | MTU Mismatch | `sw_mtu_mismatch` | `sw_mtu_mismatch` | No data |
+| `switch/negotiation_incomplete` | Negotiation Incomplete | `sw_negotiation_incomplete` | `sw_negotiation_incomplete` | No data |
+| `switch/port_flap` | Network Port Flap | `port_flap` | `port_flap` | Yes, 2 of 3 |
+| `switch/port_stuck` | Port Stuck | `port_stuck` | `port_stuck` | No data |
+| `switch/rogue_dhcp_server` | Rogue DHCP Server Detected | None | None | No data |
+| `switch/stp_loop` | Loop Detected | `switch_stp_loop` | None | No data |
+| `switch/sw_offline` | Switch Offline | `switch_offline` | `switch_offline` | Yes, 19 of 30 |
+| `switch/traffic_anomaly` | Traffic Anomaly | None | None | No data |
+
+Eight topics have no Marvis alarm type with a similar name. For three of them, the
+group `infrastructure` holds a type with a similar name.
+
+| Topic | Type with a similar name in the group `infrastructure` |
+| - | - |
+| `ap/mxedge_failure` | The 24 `mist_edge_*` types, for example `mist_edge_disconnected` |
+| `layer_1/bad_fiber_optics` | `sw_bad_optics` |
+| `switch/rogue_dhcp_server` | `sw_rogue_dhcp_server_detected` |
+| `ap/site_radar_channel_punishment`, `client/persistently_failing`, `switch/misconfig_port`, `switch/traffic_anomaly`, and the `security` topic | None in any group |
+
+The `infrastructure` types are not Marvis alarms, and menu 270 searches the group
+`marvis` only. In the live organization, no `infrastructure` alarm joined an action.
+
+The table also shows these differences.
+
+- The categories `client`, `layer_1`, and `security` hold no alarm definition. The
+  three alarm types for a bad cable use the categories `ap`, `gateway`, and
+  `switch`. Each of their examples names the topic `layer_1/bad_cable`. So
+  `marvis_suggestion_category` does not always equal the category of the topic.
+
+- One Marvis alarm type has no topic with a similar name. It is
+  `wan_device_problem`, with the display name "Device Problem". Its example names
+  `device_health/device_problem`, and the schema holds no such topic.
+
+- Five topics have two or three alarm types with a similar name. They are
+  `ap/ap_loop`, `connectivity/arp_failure`, `connectivity/dhcp_failure`,
+  `connectivity/dns_failure`, and `layer_1/bad_cable`. The name does not tell which
+  type Mist creates for one action. For `connectivity/dhcp_failure`, the live join
+  found `minis_dhcp_failure`, not `dhcp_failure`.
+
+- The similar name and the example do not agree for `ap/site_down_isp_issue`. The
+  name is similar to `ap_offline_isp_site_down`, but the example of that type names
+  `ap/ap_disconnect`.
+
+- Five pairs occur in the live join. They are `ap/ap_disconnect` with `ap_offline`,
+  `switch/sw_offline` with `switch_offline`, `switch/port_flap` with `port_flap`,
+  `application/reachability_failure` with `minis_application_reachability_failure`,
+  and `connectivity/dhcp_failure` with `minis_dhcp_failure`.
+
+The two WAN topics have no clear answer. The sources do not agree for
+`gateway/bad_wan_link`.
+
+| Source | Alarm type for `gateway/bad_wan_link` |
+| - | - |
+| The symptom key `bad_wan_link`, compared with the keys of the alarm types | `bad_wan_uplink` |
+| The Mist UI name "Bad WAN Uplink", compared with the display names of the alarm types | `bad_wan_uplink` |
+| The schema display name "Intermittent WAN Connectivity", compared with the display names of the alarm types | `intermittent_wan_connectivity` |
+| The `details.symptom` of the examples | `intermittent_wan_connectivity` |
+| The live join | No pair. Each of the 6 actions started before the oldest alarm. |
+
+The example of `intermittent_wan_connectivity` also holds the `type` value
+`bad_wan_uplink`, so the same example holds the two names. Do not map the WAN topics
+to an alarm type by name. Use the join of the alarm `id` and the action `uuid`.
+
+#### The examples in the alarm definitions
+
+The document describes `example` as a "Sample alarm payload returned for this alarm
+type". Each of the 35 Marvis types holds an example. The examples hold fields that
+no live alarm holds.
+
+| Field | Examples that hold it | Live alarms that hold it |
+| - | - | - |
+| `category` | 34 of 35 | 0 of 33 |
+| `details` | 34 of 35 | 0 of 33 |
+| `details.symptom` | 32 of 35 as an object field. Two more examples hold it in JSON text. | 0 of 33 |
+| `suggestion` | 30 of 35 | 0 of 33 |
+| `action_id` | 15 of 35 | 0 of 33 |
+| `row_key` | 0 of 35 | 0 of 33 |
+
+The documented webhook payload `webhook_alarm_event` does not describe these fields
+either. The research found no payload that holds them. The research did not test a
+webhook delivery.
+
+The examples also hold errors. In 13 of the 35 examples, the `type` value differs
+from the `key` of the definition. In 7 of them, only the letter case differs, for
+example `MISSING_VLAN`. The other 6 hold another name. For example, the example of
+`switch_offline` holds `sw_offline`, and the example of `dhcp_failure` holds
+`psk_failure`.
+
+The top-level `category` of 7 examples differs from the `marvis_suggestion_category`
+of the definition. For example, the example of `gw_non_compliant` holds
+`device_health`, but the definition holds `gateway`. The example of
+`switch_stp_loop` holds no `category`.
+
+Five examples name a topic that the schema does not hold. They are
+`switch/ap_loop`, `ap/insufficient_capacity`, `gateway/negotiation_mismatch`,
+`device_health/device_problem`, and `switch/high_cpu_usage`.
+
+Two examples hold `details` as JSON text, not as an object. They are the examples of
+`minis_application_reachability_failure` and `vpn_path_down`. The text of each names
+a schema topic: `application/reachability_failure` and `gateway/vpn_path_down`. A
+script that reads `details` as an object finds no topic in these two examples. The
+example of `switch_stp_loop` holds no `details`, so it names no topic.
+
+In total, 29 examples name a schema topic, 5 name a topic that the schema does not
+hold, and 1 names no topic. The examples name 22 of the 35 topics. The other 13
+topics have no example.
+
+The examples give the best map that Mist publishes from an alarm type to a topic.
+But a sample can hold wrong values, and no live alarm holds these fields. Do not use
+the examples as a map in a script. To find the alarm of an action, join the alarm
+`id` to the action `uuid`. That join needs the list, so it does not remove the need
+for the `labs` list. See
+[How MistHelper joins an alarm to an action](#how-misthelper-joins-an-alarm-to-an-action).
+
+### The resolve and the alarm acknowledge
+
+| Item | The resolve (`labs`) | The alarm acknowledge (documented) |
+| - | - | - |
+| Path | `PUT /api/v1/labs/orgs/{org_id}/suggestions` | `POST /api/v1/orgs/{org_id}/alarms/{alarm_id}/ack`, `POST /api/v1/orgs/{org_id}/alarms/ack`, or `POST /api/v1/orgs/{org_id}/alarms/ack_all` |
+| SDK function | None | `orgs.alarms.ackOrgAlarm`, `orgs.alarms.ackOrgMultipleAlarms`, or `orgs.alarms.ackOrgAllAlarms` |
+| Target | One action, by `row_key` | One alarm by `alarm_id`, a list in `alarm_ids`, or every alarm |
+| Body | `row_key`, `status`, `label`, `comment`, and `resolve_time` | `note`. The list request also requires `alarm_ids`. |
+| Record | The action `status`, `label`, and `comment` | The alarm `acked`, `acked_time`, `ack_admin_name`, and `note` |
+| Resolution code | `label`, with four values. See [Resolution codes](#resolution-codes). | None |
+| Effect on the Open tab | The action leaves the Open tab. | Not known. The research did not test it. |
+| Undo | The same PUT with the `status` value `open`. See [Undo a resolve](#undo-a-resolve). | `POST /api/v1/orgs/{org_id}/alarms/unack` with a list, or the site path for one alarm |
+| Batch limit | One action for each request | Up to 1,000 alarm IDs in one list request. The text of the `ack_all` operation states the limit. |
+| Reach | Every action | Only the actions that have an alarm. 81 of 114 actions had no alarm. |
+
+The document describes no request that sets the alarm `status`. The research did
+not test if an acknowledge changes the action, or if a resolve changes the alarm.
+Issue #3357 tracks that test as phase 2 of issue #3339. See
+[The limits of an acknowledge step](#the-limits-of-an-acknowledge-step).
+
+Four other requests in the document change data near the alarms. None of them can
+resolve an action.
+
+| Request | SDK function | What it changes | Why it cannot resolve an action |
+| - | - | - | - |
+| `POST /api/v1/orgs/{org_id}/alarmtemplates/suppress` | `orgs.alarmtemplates.suppressOrgAlarm` | It stops the alarm service for the organization, for site groups, or for sites. | The body holds `scope`, `applies`, `duration`, and `scheduled_time`. It names no alarm type, no alarm, and no action. |
+| `DELETE /api/v1/orgs/{org_id}/alarmtemplates/suppress` | `orgs.alarmtemplates.unsuppressOrgSuppressedAlarms` | It removes a suppression. | It changes no action. |
+| `POST /api/v1/orgs/{org_id}/alarmtemplates` and `PUT /api/v1/orgs/{org_id}/alarmtemplates/{alarmtemplate_id}` | `orgs.alarmtemplates.createOrgAlarmTemplate` and `orgs.alarmtemplates.updateOrgAlarmTemplate` | The `rules` map sets `enabled` and `delivery` for each alarm type. | A rule controls future alarms. It does not close an action. |
+| `POST /api/v1/sites/{site_id}/marvis_configs/{id}/feedback` | `sites.marvis_configs.submitSiteMarvisConfigFeedback` | It marks one Marvis Config Action as invalid. | It changes a different object. See [The Marvis Config Actions](#the-marvis-config-actions). |
+
+The default `duration` of a suppression is 3,600 seconds, and the maximum is
+15,552,000 seconds (180 days). A `duration` of 0 removes the suppression. The
+`scheduled_time` can start the suppression up to 7 days later.
+
+Warning: a suppression will stop every alarm of its scope, not only the Marvis
+alarms. The operators then get no alarm for a real outage for up to 180 days. Do not
+use a suppression to clear the Marvis Actions.
+
+### The MSP count
+
+`GET /api/v1/msps/{msp_id}/suggestion/count` is the only documented path with
+`suggestion` in its name. Its OpenAPI tag is "MSPs Marvis", and it is the only
+operation of that tag. The SDK function is `msps.suggestion.countMspsMarvisActions`.
+
+| Item | The list (`labs`) | The MSP count (documented) |
+| - | - | - |
+| Scope | One organization | Every organization of one MSP |
+| Parameters | `query`, `resolve_wcid`, `limit`, `page`, and four filters | `distinct` (`org_id` or `status`, default `org_id`) and `limit` (default 100) |
+| Response | One row for each action | `distinct`, `limit`, `results`, and `total`. Each result holds a `count`. |
+| Key for the resolve | `row_key` | None |
+| Topic filter | `category` and `symptom` | None |
+| Status filter | `status` | None |
+
+The research did not call this endpoint. The lab organization belongs to no MSP,
+and the token holds the organization admin role only. The document describes counts
+only, so the endpoint cannot give the rows that an export or a resolve needs. An MSP
+can use it to count the actions of each organization. The MSP must then read the
+list of each organization.
+
+### The troubleshoot endpoint
+
+`GET /api/v1/orgs/{org_id}/troubleshoot` is the only operation of the OpenAPI tag
+"Orgs Marvis". The SDK function is `orgs.troubleshoot.troubleshootOrg`.
+
+| Item | The list (`labs`) | The troubleshoot endpoint (documented) |
+| - | - | - |
+| Content | The Marvis Actions of the organization | A Marvis diagnosis for a site, a device, or a client |
+| Time range | Each action that Mist keeps. The oldest action was 84.5 days old. | The last 7 days at most |
+| Parameters | `query`, `resolve_wcid`, `limit`, `page`, and four filters | `mac`, `site_id`, `start`, `end`, and `type` (`wan`, `wired`, or `wireless`) |
+| Status and key | `status` and `row_key` | None |
+| License | No document states a license. | The document states that the endpoint requires a Marvis subscription. |
+
+On 2026-09-25, the research asked for a diagnosis of the site with the most
+actions. The window covered 6 days. The answer for `wired` held 0 results, the
+answer for `wan` held 0 results, and the answer for `wireless` held 1 result,
+"Weak Signal". In the same window, 3 actions started at that site: 2 `sw_offline`
+actions and 1 `ap_disconnect` action. The diagnosis named none of them.
+
+### The device events
+
+`GET /api/v1/orgs/{org_id}/devices/events/search` returns the raw events of the
+devices. The SDK function is `orgs.devices.searchOrgDeviceEvents`. The default
+`device_type` is `ap`. For a switch or a gateway, send `device_type=switch` or
+`device_type=gateway`.
+
+The research read the events of the switch of the newest `sw_offline` action. The
+window started 10 minutes before the `start_time` of the action, and it ended 10
+minutes after the `end_time`. The search returned 32 events.
+
+| Event type | Count |
+| - | - |
+| `SW_PORT_DOWN` | 9 |
+| `SW_PORT_UP` | 9 |
+| `SW_LACP_MEMBER_DOWN` | 3 |
+| `SW_LACP_MEMBER_UP` | 3 |
+| `SW_STP_TOPO_CHANGED` | 2 |
+| `SW_LACPD_TIMEOUT` | 2 |
+| `SW_LACPD_TIMEOUT_CLEARED` | 2 |
+| `SW_DISCONNECTED` | 1 |
+| `SW_CONNECTED` | 1 |
+
+The 16 fields of an event are `chassis_mac`, `count`, `device_type`, `ext_ip`,
+`first_seen`, `has_pcap`, `mac`, `model`, `org_id`, `pcap_url`, `port_id`,
+`site_id`, `text`, `timestamp`, `type`, and `version`. No field holds a status, a
+topic, or an action key. The events show what the device reported, not the action
+of Marvis. An engineer can quote the events as evidence in a resolve comment. A
+script cannot use them to find or to resolve an action.
+
+### The other documented Marvis endpoints
+
+| Family | Paths | SDK functions | Why it cannot replace a `labs` function |
+| - | - | - | - |
+| SLE | `GET /api/v1/orgs/{org_id}/insights/{metric}`, `GET /api/v1/orgs/{org_id}/insights/sites-sle`, and `GET /api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary` | `orgs.insights.getOrgSle`, `orgs.insights.getOrgSitesSle`, and `sites.sle.getSiteSleClassifierDetails` | It returns the values of each service level and its classifiers, not actions. |
+| Marvis Client | `GET /api/v1/orgs/{org_id}/marvisclients/events/search`, `GET /api/v1/orgs/{org_id}/marvisclients/events/count`, `GET /api/v1/orgs/{org_id}/insights/marvisclient/{marvisclient_id}/marvisclient-metrics`, and `DELETE /api/v1/orgs/{org_id}/stats/marvisclients` | `orgs.marvisclients.searchOrgMarvisClientEvents`, `orgs.marvisclients.countOrgMarvisClientEvents`, `orgs.insights.getOrgMarvisClientInsights`, and `orgs.stats.deleteOrgMarvisClient` | These four operations of the OpenAPI tag "Orgs Clients - Marvis" read the events and the metrics of the Marvis Client app on the client devices. The DELETE removes one Marvis Client. None of them reads or changes an action. |
+| Settings | `GET` and `PUT` on `/api/v1/orgs/{org_id}/setting` and on `/api/v1/sites/{site_id}/setting` | `orgs.setting.getOrgSettings`, `orgs.setting.updateOrgSettings`, `sites.setting.getSiteSetting`, and `sites.setting.updateSiteSettings` | It controls the Marvis features. It holds no action. See [The Marvis settings](#the-marvis-settings). |
+| Webhooks | `POST /api/v1/orgs/{org_id}/webhooks` with the topic `alarms` | `orgs.webhooks.createOrgWebhook` | It sends new alarm events to a receiver. See [The webhooks](#the-webhooks). |
+
+#### The Marvis settings
+
+| Item | The document | The live organization |
+| - | - | - |
+| `org_setting.marvis` | `disable_proactive_monitoring` and `self_driving`, with `wan`, `wired`, and `wireless`. Each domain holds `enabled`. The schema sets `additionalProperties` to false, so it permits no other field. | Only `auto_operations`, with 9 flags. Each flag holds `true`. Neither documented field is present. |
+| `site_setting.marvis` | `auto_operations` with 9 flags | `null` on the site with the most actions |
+
+The 9 live flags equal the 9 `auto_operation_flag` values of the schema. The
+document describes its own 9 flag names for the site setting. Only 3 names occur in
+both lists: `ap_non_compliant`, `gateway_non_compliant`, and `switch_port_stuck`.
+So the document does not describe the setting that the live organization uses.
+
+With a flag, Marvis can act on a topic without an operator. A flag cannot close an
+action, and it holds no action key. [The self-drive fields](#the-self-drive-fields)
+describes the live flags and their history.
+
+Warning: a PUT to the organization setting will change the Marvis behavior for every
+site. A wrong `marvis` object can stop the automatic operations, or start them on
+live devices. Do not send a settings PUT to change the Marvis Actions.
+
+#### The webhooks
+
+The document describes 30 webhook topics. It also holds `webhook_delivery_topic`,
+which lists the 5 topics that report delivery results. On 2026-09-25, the live
+`GET /api/v1/const/webhook_topics` returned 31 topics. The live list adds
+`filtered-asset-rssi` and `vbeacon`, and it does not hold `site-sle`. No topic in
+the two lists holds the word Marvis or the word suggestion.
+
+The nearest topic is `alarms`. The documented payload `webhook_alarm_event` holds
+`aps`, `bssids`, `count`, `event_id`, `for_site`, `id`, `last_seen`, `node`,
+`org_id`, `site_id`, `ssids`, `timestamp`, `type`, and `update`. It holds no
+`status`, no `group`, and no action key. A webhook sends only the new events, so it
+cannot give the actions that exist before the webhook. The research did not create
+a webhook.
+
+### When to check again
+
+A later Mist release can change this answer. Check again when one of these events
+occurs.
+
+- The OpenAPI document of Mist adds a path with `suggestion` or `/labs/` in its
+  name.
+- A `mistapi` release adds a function for a Marvis Actions path.
+- The alarm search adds a `status` filter, or a live alarm holds `row_key`.
+- The Mist UI sends the resolve to a path outside `labs`.
+
+This command prints each path of the bundled document that holds `suggestion` or
+`/labs/`. Run it from the repository root.
+
+```powershell
+python -c "import json; spec = json.load(open('documentation/mist-api-openapi31json.json', encoding='utf-8')); print(sorted(path for path in spec['paths'] if 'suggestion' in path or '/labs/' in path))"
+```
+
+With release 2607.1.1, the command printed one path.
+
+```text
+['/api/v1/msps/{msp_id}/suggestion/count']
+```
+
+If the command prints a new path, compare the path with the three conditions in
+[The three functions that menu 270 needs](#the-three-functions-that-menu-270-needs).
+
+### Sources for the Marvis Actions endpoints
+
+MistHelper checked these sources on 2026-09-24 and on 2026-09-25.
 
 | Source | Version | Result |
 | - | - | - |
-| The bundled `documentation/mist-api-openapi31json.json` | Release 2607.1.1, 756 paths | The four operations of the family. No list path, schema path, or resolve path for Marvis Actions. |
-| The `master` branch of `mistsys/mist_openapi`, commit `0613a22acd` of 2026-09-18 | Release 2609.1.0, 762 paths | The same four operations. No list path, schema path, or resolve path for Marvis Actions. |
-| `mistapi` 0.64.0 on PyPI, the newest release | Uploaded on 2026-09-15 | The same four functions. No function for a `labs` path. |
+| The bundled `documentation/mist-api-openapi31json.json` | Release 2607.1.1, 756 paths | The four operations of the Marvis Config family and the MSP count path. No list path, schema path, or resolve path for Marvis Actions. |
+| The `master` branch of `mistsys/mist_openapi`, commit `0613a22acd` of 2026-09-18 | Release 2609.1.0, 762 paths | The same four operations of the Marvis Config family. No list path, schema path, or resolve path for Marvis Actions. |
+| `mistapi` 0.64.0 on PyPI, the newest release | Uploaded on 2026-09-15 | The four functions of the Marvis Config family and `msps.suggestion.countMspsMarvisActions`. No function for a `labs` path. |
+| The online index `https://www.juniper.net/documentation/us/en/software/mist/api/llms.txt` | Read on 2026-09-25 | 1,266 API pages. No page names `labs`. |
+| Live GET requests to the lab organization | 2026-09-24 and 2026-09-25 | The live facts of this report. No request changed Mist data. |
 
 The only Marvis Actions path in the public document is the MSP count path. Menu 270
 therefore keeps its direct calls to the `labs` paths. The Caution at the top of this
