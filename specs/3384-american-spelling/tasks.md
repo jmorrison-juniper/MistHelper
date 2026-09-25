@@ -20,7 +20,9 @@
 - [x] T005 Add the release note under `changelog.d/`.
 - [x] T006 Run every gate: ruff, black, pydocstyle, interrogate, bandit, radon,
   vulture, the STE lint, and the test quality gate.
-- [ ] T007 Rebase onto main after pull request #3385 merges. Run the portal
-  suites and the browser suite of the upgrade portal.
+- [x] T007 Rebase onto main after pull request #3385 merges. Run the portal
+  suites and the browser suite of the upgrade portal. The rebase onto c6bd4ebe
+  was clean. The portal suites gave 5748 passed. The browser suite gave 262
+  passed and 1 skipped, and issue #3380 covers the skip.
 - [ ] T008 After the merge, deploy the two templates to port 8056 with a class
   B reload, and read the text in the served files.
