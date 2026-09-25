@@ -959,7 +959,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         if seen & CLOUD_RUNNING_WORDS:  # An active site keeps the child nonterminal.
             return "partial" if seen & AP_FAILURE_STATES else "running"  # Show mixed failure.
         if seen <= AP_TERMINAL_STATES | {"success"}:  # Every site reached a terminal nonfailure state.
-            return "cancelled" if seen == {"cancelled"} else "completed"  # Summarize the final words.
+            return AggregateUpgradeService._final_word(seen)  # Issue #3371: one stopped site decides the word.
         if seen & AP_FAILURE_STATES:  # No active site remains, so a failure is now terminal.
             return "failed"  # Report the terminal failure for this child.
         return values[0]  # Preserve an unrecognized cloud word instead of hiding it.
@@ -1191,10 +1191,35 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             if states & words:  # This group decides the aggregate word.
                 return result  # Report the matching aggregate state.
         if states and states <= AP_TERMINAL_STATES:  # Every child reached a nonfailure terminal state.
-            return "cancelled" if states == {"cancelled"} else "completed"  # Preserve an all-cancelled result.
+            return AggregateUpgradeService._final_word(states)  # Issue #3371: one stopped child decides the word.
         if not states or states == {"planned"}:  # No child started a cloud call.
             return "planned"  # Preserve the initial state.
         return "attention_required"  # Keep unrecognized child states visible and non-successful.
+
+    @staticmethod
+    def _final_word(states: set[str]) -> str:
+        """Return the word for a set of final states that holds no failure.
+
+        Why:
+            Issue #3371. The old rule read cancelled only when every state was
+            cancelled. After a cancel, one completed child job and one
+            cancelled child job then read completed. The status card and the
+            history list reported a full upgrade that did not occur. One
+            cancelled state now makes the word cancelled, because the work
+            stopped before the end. The access point job uses the same rule
+            for its sites.
+
+        Args:
+            states: The final child states of an operation, or the final site
+                words of an access point job.
+
+        Returns:
+            cancelled when one state is cancelled, otherwise completed.
+        """
+        word = "cancelled" if "cancelled" in states else "completed"  # A stopped part means an incomplete upgrade.
+        if word == "cancelled" and len(states) > 1:  # A cancel stopped part of the work, and the rest ended well.
+            logger.debug("The final states %s hold a cancel, so the word is cancelled", sorted(states))  # Show why.
+        return word  # The caller stores this word.
 
     def _finish_parent(self, record: MutableMapping[str, Any], store: RunStore) -> None:
         """Store the aggregate state and clear the completed parent claim."""
