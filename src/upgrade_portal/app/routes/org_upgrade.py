@@ -43,7 +43,7 @@ from ...upgrade.org_postcheck_view import OrgPostCheckView  # Issue #3244: the p
 from ...upgrade.org_precheck import PRECHECK_FIELD, OrgPrecheckGate, OrgPrecheckState  # Issue #3243: the gate.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
 from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
-from ..factory import json_error
+from ..factory import build_error_envelope, json_error  # Issue #3242: a replay refusal can carry details.
 from . import select as select_routes
 from . import upgrade as upgrade_routes
 from .org_postcheck import OrgPostCheckBridge  # Issue #3244: the post-check seam of the watch thread.
@@ -108,6 +108,12 @@ STATUS_FAILED = "org_upgrade_status_failed"
 CANCEL_FAILED = "org_upgrade_cancel_failed"
 WRITE_DISABLED = "org_upgrade_write_disabled"
 ALREADY_SUBMITTED = "org_upgrade_already_submitted"
+LEGACY_REPLAY_MESSAGE = "This confirmed request already started an organization upgrade."  # Issue #3242.
+AGGREGATE_REPLAY_MESSAGE = "This confirmed request already started a multi-site upgrade."  # Issue #3242.
+UNKNOWN_REPLAY_MESSAGE = (  # Issue #3242: the first cloud answer named no job, so the refusal links nothing.
+    "The cloud response to the last organization upgrade request is unknown. "
+    "Reconcile the job history before another submission."
+)
 UNREACHABLE_OPERATOR = "unreachable_operator_address"  # A reserved domain cannot answer for firmware writes.
 UNREACHABLE_OPERATOR_MESSAGE = (  # The cure is a reachable address, not a different credential.
     "This operator address uses a reserved domain and cannot answer for a firmware write. "
@@ -124,6 +130,7 @@ PRECHECK_RECORD_MESSAGE = (  # Issue #3243: the plan could not keep the baseline
     "The portal could not record the pre-check captures. Read the operation before another action."
 )
 PLANNED_STATE = "planned"  # The one state in which no child job reached the cloud.
+SUBMISSION_CLAIMED_STATE = "submission_claimed"  # Issue #3242: a first start holds the claim of the parent.
 TERMINAL_JOB_STATES = frozenset({"cancelled", "completed", "failed"})
 
 BAD_GATEWAY_STATUS = 502
@@ -1282,7 +1289,8 @@ def _send_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) -> 
             _refresh_child_locks,
         )
     except ValueError as error:  # A replay or a malformed plan is a conflict.
-        return json_error(CONFLICT_STATUS, ALREADY_SUBMITTED, str(error))  # No child job goes to the cloud again.
+        operation_id = str(operation.get("operation_id", ""))  # Issue #3242: the store decides the link.
+        return OrgReplayRefusal.aggregate(operation_id, error)  # No child job goes to the cloud again.
     except Exception as error:  # Keep broad because aggregate child writes can leave mixed unknown outcomes.
         logger.exception(
             "The aggregate upgrade submission outcome is unknown after %s: %s",
@@ -1427,6 +1435,86 @@ def _record_prechecks(operation: MutableMapping[str, Any], prechecks: OrgPrechec
     return recorded  # A stale record stops the submission before any lock.
 
 
+class OrgReplayRefusal:
+    """Build the refusal of a repeated start, and name the job that the first start began.
+
+    Why:
+        Issue #3242. A second click or a second tab sent the same confirmed
+        plan again. The portal refused the repeated start, but the refusal
+        named no job, so the operator could not find the upgrade that ran. The
+        refusal now links the job when the durable record or the signed
+        session marker proves a start. A refusal that started no job links
+        nothing, so the page never sends the operator to an empty job.
+    """
+
+    @staticmethod
+    def answer(message: str, upgrade_id: str = "") -> tuple[Response, int]:
+        """Return the conflict answer, with the job link when the job is known.
+
+        Args:
+            message: The plain sentence for the operator.
+            upgrade_id: The job that the first start began. An empty value names no job.
+
+        Returns:
+            The JSON error answer and the conflict status.
+        """
+        details = None  # No proven job means no link.
+        if upgrade_id:  # The record or the marker names the job of the first start.
+            details = {"upgrade_id": upgrade_id, "next": f"/upgrade/org/jobs/{upgrade_id}"}  # The page link.
+        return jsonify(build_error_envelope(ALREADY_SUBMITTED, message, details)), CONFLICT_STATUS  # One shape.
+
+    @classmethod
+    def legacy(cls) -> tuple[Response, int]:
+        """Refuse a repeated access point start, and name its cloud job when the marker holds one.
+
+        Returns:
+            The conflict answer of the legacy path.
+        """
+        marker = session.get(LAST_JOB_SESSION_KEY)  # The signed marker of the last access point start.
+        upgrade_id = marker.get("upgrade_id") if isinstance(marker, Mapping) else None  # The cloud job, if known.
+        logger.info("Refuse a repeated organization upgrade start on the access point path")  # Before the answer.
+        if not isinstance(upgrade_id, str) or not upgrade_id:  # The first cloud answer named no job.
+            logger.debug("The repeated start names no job, because the first cloud answer is unknown")  # After.
+            return cls.answer(UNKNOWN_REPLAY_MESSAGE)  # The operator reconciles before another start.
+        logger.debug("The repeated start names the cloud job %s", upgrade_id)  # Log the decision.
+        return cls.answer(LEGACY_REPLAY_MESSAGE, upgrade_id)  # Link the job that the first start began.
+
+    @classmethod
+    def aggregate(cls, operation_id: str, error: ValueError) -> tuple[Response, int]:
+        """Refuse a repeated multi-site start, and link the operation when its record proves a start.
+
+        Args:
+            operation_id: The durable operation of the confirmed plan.
+            error: The refusal of the aggregate service.
+
+        Returns:
+            The conflict answer of the durable path.
+        """
+        logger.info("Read aggregate upgrade %s for the refusal of a repeated start", operation_id)  # Before.
+        record = _read_operation(operation_id) if operation_id else None  # The store holds the proof.
+        if record is None or not cls.started(record):  # No child left the plan, so no link is safe.
+            logger.debug("Aggregate upgrade %s shows no start, so the refusal links nothing", operation_id)  # After.
+            return cls.answer(str(error))  # Keep the sentence of the service.
+        logger.debug("Aggregate upgrade %s shows a start, so the refusal links it", operation_id)  # After.
+        return cls.answer(AGGREGATE_REPLAY_MESSAGE, operation_id)  # Link the operation that runs.
+
+    @staticmethod
+    def started(record: Mapping[str, Any]) -> bool:
+        """Return True when the durable record proves that a start reached the aggregate service.
+
+        Args:
+            record: The durable operation record.
+
+        Returns:
+            True for a parent claim or for a child that left the plan.
+        """
+        if record.get("state") == SUBMISSION_CLAIMED_STATE:  # A first request holds the claim now.
+            return True  # The first request runs, so its operation page exists.
+        children = record.get("children")  # Each child keeps its own status.
+        rows = children if isinstance(children, list) else []  # A damaged list proves nothing.
+        return any(isinstance(row, Mapping) and row.get("status") != PLANNED_STATE for row in rows)  # A start.
+
+
 @org_upgrade_bp.post(SUBMIT_PATH)
 @identity.require_session
 def submit_upgrade() -> Response | tuple[Response, int]:
@@ -1459,9 +1547,7 @@ def _submission_guard(request_nonce: object) -> tuple[Response, int] | None:
             "Organization upgrade writes stay disabled until the multi-site safety gates are complete.",
         )
     if not stored_options().get("operation_id") and _submission_is_repeated(request_nonce):  # Guard legacy only.
-        return json_error(
-            CONFLICT_STATUS, ALREADY_SUBMITTED, "This confirmed request already started an organization upgrade."
-        )
+        return OrgReplayRefusal.legacy()  # Issue #3242: name the job of the first start when it is known.
     if confirmation_value() != "CONFIRM":  # Require the exact typed confirmation.
         return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED, CONFIRMATION_MESSAGE)
     if _operator_cannot_answer():  # A multi-site write reaches many devices, so it needs an accountable name.

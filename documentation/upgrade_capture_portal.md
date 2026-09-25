@@ -304,6 +304,35 @@ The portal refuses the start in three cases.
 | No verified pre-check capture | `Save a verified pre-check capture before you start the upgrade.` |
 | Another operator holds the site | `Another operator holds this site. Ask that operator before you try again.` |
 
+### One click starts one multi-site upgrade
+
+Each multi-site form sends one request for one click. Issue #3242 records the
+defect that this rule repairs. The rule applies to the forms for the options,
+the start, the reschedule, the cancel, the retry, and the reconciliation.
+
+1. When you click the form button, the page disables the form until the portal
+   answers. A second click sends nothing.
+2. If the portal starts the upgrade, the page opens the progress page.
+3. If the request started an upgrade before, the portal refuses with the code
+   `org_upgrade_already_submitted` and the HTTP status 409. The message is
+   `This confirmed request already started a multi-site upgrade.` The page
+   keeps the form disabled, clears the typed word, and puts the focus on a link
+   to the progress page of that upgrade.
+4. If the portal refuses for a cause that started nothing, the page enables the
+   form again. The typed word stays, so you can try again. The code
+   `lock_store_unreachable` is one example of such a cause.
+
+A second browser tab of the same operator gets the same refusal and the same
+link. The refusal protects the site from a second firmware start.
+
+If the browser shows a page again from its cache, the page loads again from
+the portal. A form therefore never stays disabled after you go back and forward
+in the browser.
+
+A normal start costs the server no extra work. A refusal reads the stored
+upgrade one time to find the link. In the browser test, each journey takes 0.75
+to 4 seconds.
+
 ## Read the progress page
 
 The run page shows the state of every device. The browser asks the portal for
