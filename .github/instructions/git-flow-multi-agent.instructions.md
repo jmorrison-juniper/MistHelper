@@ -14,7 +14,9 @@ This file is the single source for three subjects.
 ## Precedence
 
 Simplified Technical English outranks this file. See
-`.github/skills/ste-writing/SKILL.md`.
+`documentation/ASD-STE100_writing-guide.md`. The `ste-writing` skill that
+repairs each linter violation lives at the user level in
+`~/.copilot/skills/ste-writing/`, not in this repository.
 
 This file outranks any older branching text or any older continuous integration
 text in `.github/copilot-instructions.md`, in `agents.md`, and in `CLAUDE.md`.

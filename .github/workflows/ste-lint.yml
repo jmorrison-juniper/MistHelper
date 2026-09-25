@@ -8,7 +8,6 @@ on:
   pull_request:
     paths:
       - "documentation/**/*.md"
-      - ".github/skills/**/*.md"
       - "tools/ste_linter/**"
       - ".github/workflows/ste-lint.yml"
   workflow_dispatch:
@@ -36,16 +35,11 @@ jobs:
         with:
           python-version: "3.13"
 
-      # The Markdown files of the hardening skill are graded here. The index
-      # CSV file is not graded, because the linter returns exit code 2 for a
-      # file that is not Markdown and not Python.
+      # The agent skills moved out of the repository to the user level at
+      # ~/.copilot/skills, so this job grades no skill file. Grade a moved skill
+      # on the workstation with the command in its verification reference.
       - name: Grade documentation with the STE linter
         run: >
           python -m tools.ste_linter --min-score 80
           documentation/ASD-STE100_writing-guide.md
           tools/ste_linter/README.md
-          .github/skills/hardening-junos/SKILL.md
-          .github/skills/hardening-junos/references/baseline-controls.md
-          .github/skills/hardening-junos/references/stig-rules.md
-          .github/skills/hardening-junos/references/corpus-operations.md
-          .github/skills/hardening-junos/references/verification.md
