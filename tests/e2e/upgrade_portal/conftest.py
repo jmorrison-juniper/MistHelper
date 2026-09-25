@@ -225,6 +225,13 @@ TIER3_CAPTURE_ID = "e2e-capture-tier3-0001"  # The complete Tier 3 capture for b
 PRE_CAPTURE_STAMP = "2026-08-19T10:00:00+00:00"  # ISO 8601 in UTC, which is the stored form.
 POST_CAPTURE_STAMP = "2026-08-19T10:30:00+00:00"  # Thirty minutes later, so the window is measurable.
 TIER3_CAPTURE_STAMP = "2026-08-19T11:00:00+00:00"  # The newest history record.
+RUN_OWNED_CAPTURE_IDS = (PRE_CAPTURE_ID, POST_CAPTURE_ID, TIER3_CAPTURE_ID)  # The seeds that the run owns.
+# WHY: Issue #3360. The shipped pre-check adopter adopts only a capture that
+# names no run. This seed is the one standalone pre-check of the first site. It
+# starts after the seeded pre-check and before the seeded post-check, so each
+# capture picker keeps its first choice and its last choice.
+STANDALONE_PRE_CAPTURE_ID = "e2e-capture-standalone-0001"  # The seeded pre-check that names no run.
+STANDALONE_PRE_CAPTURE_STAMP = "2026-08-19T10:15:00+00:00"  # Between the seeded pre-check and post-check.
 # `capture/store.py` names this reason for a key that the database does not hold,
 # and `app/routes/capture.py` turns it into the 404 of the contract.
 CAPTURE_NOT_FOUND_REASON = "capture_not_found"  # The refusal for a key that the stand-in never published.
@@ -1436,6 +1443,25 @@ def stand_in_tier3_capture() -> dict[str, Any]:
     return capture
 
 
+def stand_in_standalone_precheck() -> dict[str, Any]:
+    """Build the one seeded pre-check of the first site that names no run.
+
+    Why:
+        Issue #3360. The shipped pre-check adopter adopts only a verified
+        pre-check that names no run. The run `e2e-run-0001` owns every other
+        seed, so the first site needs this seed for a ready row on the
+        multi-site pre-check card.
+
+    Returns:
+        One verified standalone pre-check of the first stand-in site.
+    """
+    capture = stand_in_capture(  # The same shape as each seeded capture of the first site.
+        STANDALONE_PRE_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], STANDALONE_PRE_CAPTURE_STAMP
+    )
+    capture["run_id"] = ""  # A standalone pre-check names no run, which is the rule of the shipped reader.
+    return capture  # The index stores it before the Tier 3 capture.
+
+
 def stand_in_capture_index() -> dict[str, dict[str, Any]]:
     """Build all stored captures of the stand-in site.
 
@@ -1443,13 +1469,24 @@ def stand_in_capture_index() -> dict[str, dict[str, Any]]:
         Two captures prove comparison behavior. The Tier 3 capture proves the
         browser tables and the two exports with stored section data.
 
+        Issue #3360. The standalone pre-check is the one seed that the
+        pre-check adopter may adopt. The index holds it before the Tier 3
+        capture. A stand-in that ignores the run therefore adopts the Tier 3
+        capture, and the multi-site pre-check journey reports that defect.
+
     Returns:
         One capture document for each identifier that the picker publishes.
     """
     before = stand_in_capture(PRE_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], PRE_CAPTURE_STAMP)
+    standalone = stand_in_standalone_precheck()  # Issue #3360: the one seed that the adopter may adopt.
     after = stand_in_capture(POST_CAPTURE_ID, "post", STAND_IN_VERSIONS[1], POST_CAPTURE_STAMP)
     tier3 = stand_in_tier3_capture()
-    return {PRE_CAPTURE_ID: before, POST_CAPTURE_ID: after, TIER3_CAPTURE_ID: tier3}
+    return {  # The store order follows the start times, and the Tier 3 capture comes last.
+        PRE_CAPTURE_ID: before,
+        STANDALONE_PRE_CAPTURE_ID: standalone,
+        POST_CAPTURE_ID: after,
+        TIER3_CAPTURE_ID: tier3,
+    }
 
 
 def stand_in_capture_lister(site_id: str = "", limit: int = 0, offset: int = 0) -> list[dict[str, Any]]:
@@ -1911,7 +1948,7 @@ def _build_factory_overrides() -> E2EFactoryOverrides:  # Assemble one complete 
     """Build the complete process-owned dependency set for one E2E server."""
     logger.info("Build the E2E factory override set")  # Record construction before any route exists.
     seams = {  # Name each existing stand-in that the support builder must install.
-        "captures": stand_in_capture_index().values(),  # Seed both process-owned comparison captures.
+        "captures": stand_in_capture_index().values(),  # Seed each process-owned capture of the stand-in site.
         "capture_runner": stand_in_capture_runner,  # Complete captures without a cloud call.
         "run_launcher": stand_in_run_launcher,  # Accept a run without firmware work.
         "stop_runner": stand_in_stop_runner,  # Accept a stop without a cloud call.

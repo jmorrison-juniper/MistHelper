@@ -258,20 +258,35 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
         return True  # No external service is necessary.
 
     def newest_precheck(self, site_id: str) -> str:  # Find one reusable owned pre-check.
-        """Return the newest verified pre-check identifier for one site."""
-        logger.info("Find the newest E2E pre-check capture")  # Record the process-owned scan.
+        """Return the newest verified standalone pre-check identifier for one site.
+
+        Why:
+            Issue #3360. The shipped reader `latest_standalone_precheck` adopts
+            only a pre-check that names no run, and it sorts by the start time,
+            newest first. This stand-in obeys the same two rules, so a browser
+            journey can prove that the multi-site gate never adopts the
+            baseline of a finished run.
+        """
+        logger.info("Find the newest E2E standalone pre-check capture")  # Record the process-owned scan.
         matches = [row for row in self._captures.values() if self._is_precheck(row, site_id)]  # Keep safe matches.
-        result = str(matches[-1].get("capture_id", "")) if matches else ""  # Use stable insertion order.
+        newest = max(reversed(matches), key=self._start_moment, default=None)  # The last stored capture wins a tie.
+        result = str(newest.get("capture_id", "")) if newest is not None else ""  # Empty when no capture matches.
         logger.debug("The E2E pre-check search found a capture: %s", bool(result))  # Report no identifier.
         return result  # An empty value means that no reusable pre-check exists.
 
     @staticmethod
+    def _start_moment(record: dict[str, Any]) -> str:  # Read the sort key of the shipped query.
+        """Return the start time text, or an empty text that sorts below every start time."""
+        return str(record.get("started_at") or "")  # The shipped sort puts a missing start time last.
+
+    @staticmethod
     def _is_precheck(record: dict[str, Any], site_id: str) -> bool:  # Check safe pre-check reuse fields.
-        """Report whether one owned capture is a verified pre-check for one site."""
+        """Report whether one owned capture is a verified standalone pre-check for one site."""
         same_site = record.get("site_id") == site_id  # Match the requested site first.
         pre_role = record.get("role") == "pre"  # Accept only the pre-check role.
-        verified = record.get("capture_status") == "verified"  # Accept only complete stored captures.
-        return same_site and pre_role and verified  # Require every safe reuse condition.
+        standalone = record.get("run_id") == ""  # A capture that a run owns is that run's baseline, not a free one.
+        verified = record.get("capture_status") == "verified"  # Issue #3375 owns the choice of this field.
+        return same_site and pre_role and standalone and verified  # Require every safe reuse condition.
 
     def write_capture_edge(self, run_id: str, capture_id: str, role: str) -> None:  # Link owned records.
         """Link one process-owned capture to one process-owned run."""
