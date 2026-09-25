@@ -11,6 +11,11 @@ Why:
     operation. The second stand-in site therefore holds no pre-check when this
     journey opens the confirmation page. The journey ends with a submit and a
     cancel, so both stand-in sites go back for the later browser tests.
+
+    Issue #3360. The shipped adopter adopts only a pre-check that names no
+    run. The first stand-in site holds one seeded pre-check of that kind and
+    three seeds that a run owns. The journey proves that the card adopts no
+    capture that a run owns.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from typing import Any
 
 import pytest
 
+from tests.e2e.upgrade_portal.conftest import RUN_OWNED_CAPTURE_IDS
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import CAPTURE_PREFIX, OrgPrecheckSteps
 
@@ -86,6 +92,11 @@ class TestMultiSitePrecheckGate:
         """The operator takes the missing pre-check, retakes both, and starts the upgrade."""
         page = firmware_operator_page  # This path starts firmware, so it needs a reachable operator address.
         open_confirmation(page)  # Both sites are selected and the plan is saved.
+        first_row = page.get_by_test_id(f"org-upgrade-precheck-row-{SITE_ID}")  # The first site row.
+        sync_api.expect(first_row).to_have_attribute("data-ready", "true")  # Issue #3360: a standalone seed exists.
+        first_capture = capture_of(page, SITE_ID)  # The capture that the card adopted for the first site.
+        owned_message = f"The card adopted a capture that a run owns: {first_capture}"  # Name the wrong capture.
+        assert first_capture not in RUN_OWNED_CAPTURE_IDS, owned_message
         second_row = page.get_by_test_id(f"org-upgrade-precheck-row-{SECOND_SITE_ID}")  # The second site row.
         sync_api.expect(second_row).to_have_attribute("data-ready", "false")  # No seeded capture exists.
         sync_api.expect(page.get_by_test_id(CAPTURE_PREFIX + SECOND_SITE_ID)).to_have_text("None saved")
