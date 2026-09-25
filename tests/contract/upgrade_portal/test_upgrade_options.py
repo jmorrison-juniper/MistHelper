@@ -20,6 +20,7 @@ Fixtures:
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
 
+import re  # Issue #3381: the note tests read one paragraph of the rendered page.
 from collections.abc import Iterator  # The signed-in fixtures yield and then clean up.
 from typing import Any  # A run record and a request body are both free-form.
 
@@ -1616,3 +1617,127 @@ def test_the_radio_strategy_word_names_the_access_point_rule(
     run_id = seed_run(run_store, "pre_capture_done")
     page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
     assert 'data-requires-device-type="ap" data-requires-strategy-option="rrm"' in page
+
+
+# ---------------------------------------------------------------------------
+# Issue #3381: the note under each type control
+# ---------------------------------------------------------------------------
+
+# WHY: `options.html` draws one note under each type control, and the note
+# carries the identifier of its control plus `-note`. The pattern reads the text
+# between the opening tag and the closing tag of that one paragraph.
+TYPE_NOTE_PATTERN = r'id="upgrade-version-select-{device_type}-note">\s*(.*?)\s*</p>'
+
+# WHY: A type with no warning shows the default note, and the note names the
+# type in the plural words of the template loop.
+TYPE_NOTE_DEFAULTS = {
+    "ap": "The portal applies this version only to compatible access points.",
+    "switch": "The portal applies this version only to compatible switches.",
+    "gateway": "The portal applies this version only to compatible gateways.",
+}
+
+
+class TypedStandInOptionsView(StandInOptionsView):
+    """Answer the type selections that the shipped selector builds.
+
+    Why:
+        Issue #3381. The shipped selector writes the key `warning` with the
+        value None for a type with no warning. The plain stand-in answers no
+        selection at all, so no test rendered that value, and the page printed
+        the word None under each type control.
+    """
+
+    def __init__(self, versions_by_model: dict[str, list[str]]) -> None:
+        """Keep the version map that the selector reads.
+
+        Args:
+            versions_by_model: The versions that the cloud names for each model.
+        """
+        super().__init__()  # The parent starts the call list that the other tests read.
+        self.versions_by_model = versions_by_model  # An empty map makes the switch type raise its warning.
+
+    def __call__(self, session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+        """Answer the device row, the version map, and the shipped type selections.
+
+        Args:
+            session: The cloud session. This stand-in reads none of it.
+            org_id: The organization that holds the site.
+            site_id: The site under upgrade.
+
+        Returns:
+            The three fields that `build_options_view` answers.
+        """
+        answer = super().__call__(session, org_id, site_id)  # The parent records the call and adds the row.
+        answer["versions_by_model"] = dict(self.versions_by_model)  # The page and the selector read one map.
+        selector = options_module.TypedVersionSelector()  # The shipped selector, so the shape cannot drift.
+        rows = [dict(PROBE_INVENTORY_ROW)]  # The selector reads the cloud names `type` and `model`.
+        answer["type_selections"] = selector.select(rows, self.versions_by_model, overrides={})  # No override.
+        return answer  # The route passes the selections to the template with no change.
+
+
+def type_notes(page: str) -> dict[str, str]:
+    """Return the note text under each type control of one rendered page.
+
+    Args:
+        page: The rendered options page.
+
+    Returns:
+        The note text of each device type. A missing note answers an empty text.
+    """
+    notes: dict[str, str] = {}  # One text for each type control.
+    for device_type in TYPE_NOTE_DEFAULTS:  # The template draws the three type controls in this order.
+        match = re.search(TYPE_NOTE_PATTERN.format(device_type=device_type), page, re.DOTALL)  # One paragraph.
+        notes[device_type] = match.group(1) if match else ""  # An empty text names a missing note.
+    return notes  # The tests compare the whole mapping in one assertion.
+
+
+def test_a_type_with_no_warning_shows_the_default_note(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """Each type control without a warning shows the default note, never the word None.
+
+    Why:
+        Issue #3381. The selector writes `warning` as None, and the template read
+        the key with a plain default. The key exists, so the page printed None,
+        and the operator could not tell whether the portal found a fault.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    view = TypedStandInOptionsView({PROBE_MODEL: list(PROBE_VERSIONS)})  # The switch shares two versions.
+    upgrade_app.config[OPTIONS_VIEW_KEY] = view  # The seam stands for the site inventory read.
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks options.
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert type_notes(page) == TYPE_NOTE_DEFAULTS  # Each note names its own type, and none reads None.
+
+
+def test_a_type_with_a_warning_shows_the_warning(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A type control with a warning shows that warning in place of the default note.
+
+    Why:
+        Issue #3381. The repair must treat only None as absent. A switch with no
+        shared version must still tell the operator why the control offers no
+        version.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = TypedStandInOptionsView({})  # The cloud names no version at all.
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks options.
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    switch_name = options_module.TYPE_DISPLAY_NAMES["switch"]  # The word that the warning puts in its text.
+    expected = {  # The switch holds a device and no version. The other two types hold no device.
+        **TYPE_NOTE_DEFAULTS,
+        "switch": options_module.WARNING_NO_COMMON_CANDIDATE.format(device_type=switch_name),
+    }
+    assert type_notes(page) == expected  # Only the switch note changes, and it names the missing version.

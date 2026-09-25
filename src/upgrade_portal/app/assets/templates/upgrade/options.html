@@ -191,8 +191,13 @@
           <option value="{{ version }}" {{ 'selected' if version == selected else '' }}>{{ version }}</option>
         {% endfor %}
       </select>
+      {#
+        Issue #3381: the selector writes `warning` as None for a type with no
+        warning. The second argument of `default` treats None as absent, so the
+        note shows the default text and never the word None.
+      #}
       <p class="portal-card-note" id="upgrade-version-select-{{ device_type }}-note">
-        {{ selection.get('warning', 'The portal applies this version only to compatible ' ~ label ~ '.') }}
+        {{ selection.get('warning') | default('The portal applies this version only to compatible ' ~ label ~ '.', true) }}
       </p>
     </div>
   {% endfor %}
