@@ -26,7 +26,7 @@ asserts the SC-002 golden anchors are present in the generated report:
 The CLI is invoked programmatically via ``main(argv)`` (imported from
 ``tools.test_quality_analyzer.__main__``). Outputs are written to a
 ``tmp_path`` subdirectory so the test never touches the committed
-``tools/test_quality_analyzer/output/`` artefacts.
+analyzer output artefacts.
 
 The ``pyproject.toml`` markers list currently has only ``integration`` --
 no ``slow`` marker is registered -- so this test is left unmarked but
@@ -40,8 +40,10 @@ import json  # Parse the CLI-produced report.json for assertion.
 from pathlib import Path  # Path arithmetic for repo-root anchoring.
 
 import pytest  # Fixture primitives (tmp_path, monkeypatch).
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.test_quality_analyzer.__main__ import main  # CLI entrypoint under test.
+
+_ANALYZER_ROOT = Path(test_quality_analyzer.__file__).resolve().parent
 
 # Fixed timestamp keeps the report envelope byte-stable across CI runs.
 _FROZEN_TIMESTAMP = "2026-07-14T00:00:00+00:00"  # ISO-8601 UTC per --fixed-timestamp contract.
@@ -74,7 +76,7 @@ def _run_cli_over_repo(
         "src",
         "tests",  # SC-002 anchors live under both roots.
         "--config",
-        str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),
+        str(_ANALYZER_ROOT / "config.toml"),
         "--report",
         str(report_path),  # Hermetic JSON output path.
         "--summary",

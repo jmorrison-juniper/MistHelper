@@ -26,15 +26,16 @@ from collections import Counter  # Tally rule id occurrences across the whole co
 from pathlib import Path  # File paths for fixture lookup.
 
 import pytest  # Test framework primitives.
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.test_quality_analyzer.__main__ import main  # CLI entrypoint (whole-corpus meta).
 
 # Resolve the fixture directories once at import time (POSIX-normalized paths).
 _HERE = Path(__file__).resolve()  # Absolute path of this test module.
 _REPO_ROOT = _HERE.parents[3]  # tests/tools/test_quality_analyzer -> repo root is parents[3].
-_FIXTURE_BAD = _REPO_ROOT / "tools" / "test_quality_analyzer" / "fixtures" / "bad"  # Bad fixtures.
-_FIXTURE_GOOD = _REPO_ROOT / "tools" / "test_quality_analyzer" / "fixtures" / "good"  # Good.
-_CONFIG_PATH = _REPO_ROOT / "tools" / "test_quality_analyzer" / "config.toml"  # CLI config.
+_ANALYZER_ROOT = Path(test_quality_analyzer.__file__).resolve().parent
+_FIXTURE_BAD = _ANALYZER_ROOT / "fixtures" / "bad"  # Bad fixtures.
+_FIXTURE_GOOD = _ANALYZER_ROOT / "fixtures" / "good"  # Good.
+_CONFIG_PATH = _ANALYZER_ROOT / "config.toml"  # CLI config.
 _FROZEN_TIMESTAMP = "2026-07-14T00:00:00+00:00"  # Deterministic envelope for meta runs.
 _PLATFORM_TESTS = _REPO_ROOT / "mist-ops-platform" / "tests" / "unit" / "mist"  # Nested project test root.
 

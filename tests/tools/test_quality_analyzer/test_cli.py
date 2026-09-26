@@ -17,14 +17,14 @@ import sys  # Control argv so the None-input test stays hermetic.
 from pathlib import Path  # Filesystem primitives for hermetic paths.
 
 import pytest  # Fixture primitives.
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.test_quality_analyzer.__main__ import main  # CLI entrypoint under test.
 
+_ANALYZER_ROOT = Path(test_quality_analyzer.__file__).resolve().parent
 _FROZEN_TIMESTAMP = "2026-07-14T00:00:00+00:00"  # Freeze envelope for deterministic assertions.
 
 
 def _base_argv(
-    repo_root: Path,
     fixtures_root: Path,
     tmp_path: Path,
     baseline: str,
@@ -34,7 +34,7 @@ def _base_argv(
         "--roots",
         str(fixtures_root),  # Scan a specific fixture pool.
         "--config",
-        str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),
+        str(_ANALYZER_ROOT / "config.toml"),
         "--report",
         str(tmp_path / "report.json"),  # Hermetic report path.
         "--summary",
@@ -57,14 +57,14 @@ def test_gate_clean_exits_zero(
 ) -> None:
     """Gate mode against a baseline matching current findings must exit 0."""
     monkeypatch.chdir(repo_root)  # Config paths resolve relative to repo root.
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures" / "bad"
+    fixtures_root = _ANALYZER_ROOT / "fixtures" / "bad"
     baseline_path = tmp_path / "baseline.json"
     # First: seed the baseline with the current findings via --write-baseline.
-    seed_rc = main(_base_argv(repo_root, fixtures_root, tmp_path, str(baseline_path)) + ["--write-baseline"])
+    seed_rc = main(_base_argv(fixtures_root, tmp_path, str(baseline_path)) + ["--write-baseline"])
     assert seed_rc == 0, "--write-baseline seed must exit 0; got %d" % seed_rc
     assert baseline_path.exists(), "Baseline file must be written by --write-baseline."
     # Second: run --gate against that same baseline; should be no delta -> exit 0.
-    gate_rc = main(_base_argv(repo_root, fixtures_root, tmp_path, str(baseline_path)) + ["--gate"])
+    gate_rc = main(_base_argv(fixtures_root, tmp_path, str(baseline_path)) + ["--gate"])
     assert gate_rc == 0, "Gate mode with matching baseline must exit 0; got %d" % gate_rc
     out = capsys.readouterr().out  # Captured stdout for both invocations combined.
     assert "gate: 0 new findings vs baseline" in out
@@ -78,11 +78,11 @@ def test_gate_new_finding_exits_one(
 ) -> None:
     """A current-run finding absent from the baseline must trigger exit 1."""
     monkeypatch.chdir(repo_root)  # Config paths anchored at repo root.
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures" / "bad"
+    fixtures_root = _ANALYZER_ROOT / "fixtures" / "bad"
     baseline_path = tmp_path / "empty_baseline.json"
     # Seed an EMPTY baseline (JSON array). Every current finding is now new.
     baseline_path.write_text("[]\n", encoding="utf-8")
-    rc = main(_base_argv(repo_root, fixtures_root, tmp_path, str(baseline_path)) + ["--gate"])
+    rc = main(_base_argv(fixtures_root, tmp_path, str(baseline_path)) + ["--gate"])
     assert rc == 1, "Gate mode with new findings must exit 1; got %d" % rc
     out = capsys.readouterr().out  # Should contain the "gate: N new findings" line.
     assert "gate: " in out and "new findings vs baseline" in out
@@ -110,7 +110,7 @@ def test_gate_parse_error_exits_two(
         "--roots",
         str(bad_root),
         "--config",
-        str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),
+        str(_ANALYZER_ROOT / "config.toml"),
         "--report",
         str(tmp_path / "report.json"),
         "--summary",
@@ -135,9 +135,9 @@ def test_write_baseline_produces_canonical_json_array(
 ) -> None:
     """--write-baseline writes a JSON array (no envelope) and exits 0."""
     monkeypatch.chdir(repo_root)
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures" / "bad"
+    fixtures_root = _ANALYZER_ROOT / "fixtures" / "bad"
     baseline_path = tmp_path / "baseline.json"
-    rc = main(_base_argv(repo_root, fixtures_root, tmp_path, str(baseline_path)) + ["--write-baseline"])
+    rc = main(_base_argv(fixtures_root, tmp_path, str(baseline_path)) + ["--write-baseline"])
     assert rc == 0, "--write-baseline must exit 0; got %d" % rc
     text = baseline_path.read_text(encoding="utf-8")
     payload = json.loads(text)  # Must parse as JSON.
@@ -158,8 +158,8 @@ def test_empty_baseline_flag_disables_baseline_logic(
 ) -> None:
     """`--baseline ""` must skip baseline load/diff and complete without error."""
     monkeypatch.chdir(repo_root)
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures" / "bad"
-    rc = main(_base_argv(repo_root, fixtures_root, tmp_path, ""))  # No gate/write-baseline flag.
+    fixtures_root = _ANALYZER_ROOT / "fixtures" / "bad"
+    rc = main(_base_argv(fixtures_root, tmp_path, ""))  # No gate/write-baseline flag.
     assert rc == 0, "Non-gate run with disabled baseline must exit 0; got %d" % rc
     report_path = tmp_path / "report.json"
     assert report_path.exists(), "Report must still be produced when baseline disabled."
@@ -190,7 +190,7 @@ def test_none_argv_uses_process_arguments(
     monkeypatch.chdir(repo_root)  # Resolve the config path from the repository root.
     report_path = tmp_path / "none-argv-report.json"  # Keep the generated report outside tracked files.
     summary_path = tmp_path / "none-argv-summary.md"  # Keep the generated summary outside tracked files.
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures" / "bad"  # Use stable fixtures.
+    fixtures_root = _ANALYZER_ROOT / "fixtures" / "bad"  # Use stable fixtures.
     monkeypatch.setattr(  # Replace process arguments so the None path stays deterministic.
         sys,
         "argv",
@@ -199,7 +199,7 @@ def test_none_argv_uses_process_arguments(
             "--roots",
             str(fixtures_root),
             "--config",
-            str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),
+            str(_ANALYZER_ROOT / "config.toml"),
             "--report",
             str(report_path),
             "--summary",
@@ -249,7 +249,7 @@ def test_pytest_helper_root_does_not_emit_untested_public_function(
         encoding="utf-8",  # Use UTF-8 so the report is stable across systems.
     )
     report_path = tmp_path / "report.json"  # Keep analyzer output outside tracked files.
-    rc = main(_base_argv(repo_root, test_root, tmp_path, "") + ["--report", str(report_path)])  # Run the CLI.
+    rc = main(_base_argv(test_root, tmp_path, "") + ["--report", str(report_path)])  # Run the CLI.
     assert rc == 0, "Analyzer must accept a helper-only pytest root; got %d" % rc  # Prove the run succeeded.
     report = json.loads(report_path.read_text(encoding="utf-8"))  # Inspect the emitted findings.
     high_rules = [f["rule_id"] for f in report["findings"] if f["severity"] == "high"]  # Isolate high findings.
@@ -264,10 +264,10 @@ def test_gate_and_write_baseline_are_mutually_exclusive(
 ) -> None:
     """Passing both --gate and --write-baseline must exit 2 (invalid usage)."""
     monkeypatch.chdir(repo_root)
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures" / "bad"
+    fixtures_root = _ANALYZER_ROOT / "fixtures" / "bad"
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text("[]\n", encoding="utf-8")
-    argv = _base_argv(repo_root, fixtures_root, tmp_path, str(baseline_path)) + ["--gate", "--write-baseline"]
+    argv = _base_argv(fixtures_root, tmp_path, str(baseline_path)) + ["--gate", "--write-baseline"]
     rc = main(argv)
     assert rc == 2, "Mutually-exclusive flags must exit 2; got %d" % rc
     err = capsys.readouterr().err  # Error message written to stderr.

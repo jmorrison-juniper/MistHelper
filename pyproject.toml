@@ -106,7 +106,7 @@ ste-linter = [
     # After install, download the model: python -m spacy download en_core_web_sm
     "spacy>=3.7.0,<4.0.0",
     # pdfplumber reads a PDF by word position and by font size. Two tools need it.
-    # tools/ste_linter/dictionary/extract.py reads the licensed ASD-STE100 PDF to
+    # misthelper-devtools reads the licensed ASD-STE100 PDF to
     # build the local dictionary. scripts/pdf_to_markdown.py converts a Juniper
     # reference PDF into Markdown. Neither tool runs the linter itself.
     # requirements-dev.txt pins the version that the test suite uses.
@@ -124,28 +124,6 @@ misthelper = "MistHelper:main"
 # Issue #3404: the `test-quality-analyzer` and `ste-linter` entries moved to the
 # `misthelper-devtools` repository. A customer never runs an in-house analyzer,
 # so the shipped wheel must not expose one.
-
-[tool.ste_linter]
-# Default settings for the STE writing linter. See tools/ste_linter/README.md.
-min_score = 80
-dictionary = "data/ste_dictionary.json"
-prefer_spacy = true
-# Approved technical terms the dictionary rules must not flag. These are correct
-# programming and networking words that are not in the general ASD-STE100
-# vocabulary. The allowlist raises the signal so the linter flags real prose words,
-# not normal software terms. Keep the list sorted and lower case.
-allowlist = [
-    "api", "async", "attribute", "backend", "boolean", "buffer", "build", "cache",
-    "call", "callable", "checksum", "cli", "commit", "config", "csv", "daemon",
-    "debug", "decorator", "dispatch", "dns", "endpoint", "enum", "env", "exception",
-    "file", "firmware", "frontend", "getter", "gui", "hash", "http", "https", "id",
-    "int", "iterable", "json", "kwarg", "lan", "lint", "list", "log", "mac",
-    "metadata", "middleware", "mock", "module", "namespace", "org", "param",
-    "parser", "payload", "pip", "proxy", "query", "regex", "repo", "retry", "return",
-    "run", "schema", "session", "setter", "socket", "sql", "ssh", "stub", "tcp",
-    "thread", "timeout", "timestamp", "token", "trace", "traceback", "tui", "tuple",
-    "udp", "url", "uuid", "venv", "vpn", "wan", "wrapper",
-]
 
 [build-system]
 requires = ["hatchling"]
@@ -170,9 +148,10 @@ build-backend = "hatchling.build"
 #
 # Issue #3404: `tools` left this list. That tree holds the in-house analyzers
 # and linters, and a customer never runs one. The repository
-# `jmorrison-juniper/misthelper-devtools` now owns that code. The local `tools/`
-# tree stays in the working tree, because the quality gates still read it.
+# `jmorrison-juniper/misthelper-devtools` now owns that code. The development
+# requirements install its pinned public Git commit for CI and local gates.
 packages = ["src", "web_portal"]
+exclude = ["src/juniper_skills/**"]
 
 # The three modules below sit at the repository root, so no package entry can
 # reach them. `MistHelper.py` carries the `misthelper` console script, and the
@@ -239,19 +218,15 @@ known-first-party = ["src"]
 # change the prompt content sent to the model. Externalizing the prompt
 # to a .txt fixture is possible but is a behavioral refactor tracked
 # separately -- see #885 discussion.
-"tools/plan_wave_builder.py" = ["E501"]
 # refactor_analyzer/reporting.py emits literal markdown strings for the
 # refactor_candidates.md report; reflowing the lines would break the rendered
 # markdown structure of the generated report.
-"tools/refactor_analyzer/reporting.py" = ["E501"]
 # test_quality_analyzer subtree: internal style uses %-format for diagnostic
 # messages and str-subclass Enums for JSON .value serialization (see
 # detection/types.py docstring). Neither is a correctness issue.
-"tools/test_quality_analyzer/**" = ["UP031", "UP042"]
 "tests/tools/test_quality_analyzer/**" = ["UP031"]
 # Bad fixtures deliberately embody the anti-patterns the analyzer detects;
 # ruff must not "fix" the material under test.
-"tools/test_quality_analyzer/fixtures/bad/**" = ["UP031", "UP042", "B017", "G", "F", "E"]
 # E402 (module-level import not at top): scoped per-file after #886 removed
 # the repo-wide ignore. Each file legitimately needs pre-import statements:
 #   MistHelper.py -- warnings.filterwarnings() must run before the stdlib
@@ -259,7 +234,6 @@ known-first-party = ["src"]
 #     mid-file class-block definitions from the 1015 refactor (144 sites).
 #   tests/unit/*.py -- test-module bootstrapping (sys.path/os.environ
 #     manipulation) before importing the module under test.
-#   tools/test_quality_analyzer/__main__.py -- CLI entrypoint sys.path setup.
 "MistHelper.py" = ["E402"]
 "tests/unit/test_bulk_switch_upgrader.py" = ["E402"]
 "tests/unit/test_csv_comparator.py" = ["E402"]
@@ -269,7 +243,6 @@ known-first-party = ["src"]
 "tests/unit/test_template_config.py" = ["E402"]
 "tests/unit/test_wan2_variable.py" = ["E402"]
 "tests/unit/test_zone_analyzer.py" = ["E402"]
-"tools/test_quality_analyzer/__main__.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -302,9 +275,7 @@ explicit_package_bases = true
 #                            under a future Phase-2 tests-typing issue.
 #   scripts               -- 584 mypy errors at strict; out of scope for #884. Dev tooling
 #                            typing sweep will be tracked separately.
-#   tools                 -- 61 mypy errors; dev tooling with codemod fixtures whose bad/
-#                            files deliberately embody anti-patterns. Track under a future
-#                            tools-typing sweep. Re-measured 2026-08-05 for #888.
+#   tools                 -- moved to jmorrison-juniper/misthelper-devtools under #3404.
 #   MistHelper.py         -- REMOVED from this list on 2026-08-05 for issue #888. The file
 #                            reported 118 strict errors when #884 wrote this note. It
 #                            reports 0 today, because the decomposition waves moved the
@@ -321,7 +292,6 @@ exclude = [
     "src/maps",
     "tests",
     "scripts",
-    "tools",
 ]
 
 [[tool.mypy.overrides]]
@@ -490,14 +460,11 @@ disable_error_code = [
 ]
 
 [tool.bandit]
-targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "wsgi_capture.py", "web_portal", "mist-ops-platform", "ops-portal", "src", "tools"]
-# tools/test_quality_analyzer/fixtures: deliberately-bad code used as test
-# material by the analyzer — mirrors the ruff per-file-ignore for the same tree
-# (see [tool.ruff.lint.per-file-ignores] at "tools/test_quality_analyzer/fixtures/bad/**").
+targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "wsgi_capture.py", "web_portal", "mist-ops-platform", "ops-portal", "src"]
 # WHY both separator forms: bandit compares each entry against the scanned path
 # with a plain substring test and never normalizes the separator. The forward
-# slash matches a Linux path only, so a Windows run reported 42 phantom
-# findings from this tree (issue #1722). Keep both spellings.
+# slash matches a Linux path only. Keep both spellings whenever an exclusion
+# names a nested path.
 # The bandit job in .github/workflows/ci.yml checks this rule. The step "Check
 # the bandit exclude list on both path separators" fails when an entry that
 # holds a separator carries one spelling only.
@@ -507,8 +474,6 @@ exclude_dirs = [
     "node_modules",
     "scripts",
     "specs",
-    "tools/test_quality_analyzer/fixtures",
-    "tools\\test_quality_analyzer\\fixtures",
 ]
 
 [tool.pytest.ini_options]

@@ -57,12 +57,6 @@
       "recorded_count": 301
     },
     {
-      "gate": "mypy",
-      "path": "tools",
-      "scan_path": "tools",
-      "recorded_count": 71
-    },
-    {
       "gate": "bandit",
       "path": "tests",
       "scan_path": "tests",
@@ -91,18 +85,6 @@
       "path": "specs",
       "scan_path": "specs",
       "recorded_count": 7
-    },
-    {
-      "gate": "bandit",
-      "path": "tools/test_quality_analyzer/fixtures",
-      "scan_path": "tools/test_quality_analyzer/fixtures",
-      "recorded_count": 42
-    },
-    {
-      "gate": "bandit",
-      "path": "tools\\test_quality_analyzer\\fixtures",
-      "scan_path": "tools/test_quality_analyzer/fixtures",
-      "recorded_count": 42
     },
     {
       "gate": "pylint",

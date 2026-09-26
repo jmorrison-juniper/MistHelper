@@ -66,7 +66,7 @@ env:
   PYTHON_VERSION: ${{ inputs.python-version || '3.13' }}
   SRC_PATH: ${{ inputs.src-path || 'src/' }}
   # Issue #888: SRC_PATH used to scope every gate to src/, so MistHelper.py, wsgi.py,
-  # web_portal, tools, and starlink_dashboard.py went unscanned. Each gate below now
+  # web_portal and starlink_dashboard.py went unscanned. Each gate below now
   # names the widest scope it passes today. The measurement date is 2026-08-05, and
   # every exclusion states the count that blocks it. Widen a scope when its count
   # reaches zero. SRC_PATH still drives the two gates whose scope changes their
@@ -74,7 +74,7 @@ env:
   #
   # mypy: clean on src/, MistHelper.py, and wsgi.py under the strict settings.
   # MistHelper.py is genuinely checked here, proved by injecting a type error and
-  # watching the gate catch it. Excludes web_portal (168) and tools (61). See
+  # watching the gate catch it. Excludes web_portal (168). See
   # [tool.mypy] exclude in pyproject.toml.
   # The two openai-importing script packages (issue #1948) pass explicitly with a
   # targeted override in pyproject.toml, so a dependency bump cannot merge with no
@@ -84,16 +84,16 @@ env:
   # scripts/analyze_marvis_pcap.py, scripts/probe_zscaler_endpoints.py, or
   # tests/unit/utils/test_zscaler_catalogue.py. Measurement date is 2026-09-11.
   # Excludes remaining scripts (33 blocks), remaining tests (51 blocks),
-  # web_portal (2 blocks), and tools (20 blocks).
+  # and web_portal (2 blocks).
   RADON_PATHS: 'src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py'
-  # vulture: 0 findings at confidence 70 everywhere except tools, which reports 6.
+  # vulture: 0 findings at confidence 70 across the measured product paths.
   VULTURE_PATHS: 'src/ MistHelper.py wsgi.py web_portal'
   # pydocstyle: 0 violations in src/, wsgi.py, and web_portal. Excludes
-  # MistHelper.py (3) and tools (2).
+  # MistHelper.py (3).
   PYDOCSTYLE_PATHS: 'src/ wsgi.py web_portal'
   # interrogate: every target clears the 90 percent floor, so this gate covers the
   # whole project. Lowest measured value is web_portal at 97.5 percent.
-  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py web_portal tools'
+  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py web_portal'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   # Issue #1895: the ops platform suite keeps its own denominator and its own
   # floor, so it can never move the root percentage. Issue #1883 unified the
@@ -425,16 +425,16 @@ jobs:
               for spelling in (posix, windows):  # Both spellings must be present.
                   if spelling not in excludes:
                       failures.append("exclude_dirs misses the spelling %r" % spelling)
-          samples = [  # The fixture tree that issue #1722 named, in both spellings.
-              "./tools/test_quality_analyzer/fixtures/bad/weak.py",
-              ".\\tools\\test_quality_analyzer\\fixtures\\bad\\weak.py",
+          samples = [  # A product source path must remain in the Bandit scope.
+              "./src/utils/zen_city_metadata.py",
+              ".\\src\\utils\\zen_city_metadata.py",
           ]
-          for sample in samples:  # bandit must exclude the sample on either platform.
-              if _is_file_included(sample, ["*.py"], excludes):
-                  failures.append("bandit would scan %s" % sample)
+          for sample in samples:  # Bandit must include the product source on either platform.
+              if not _is_file_included(sample, ["*.py"], excludes):
+                  failures.append("bandit unexpectedly excludes %s" % sample)
           if failures:  # A failure here means a Windows run and CI disagree.
               raise SystemExit("issue #1722 guard failed: " + "; ".join(failures))
-          print("bandit exclude_dirs covers both path separators")
+          print("bandit exclude_dirs pairs both path separator spellings")
           PY
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
@@ -634,7 +634,7 @@ jobs:
           base_ref = os.environ.get("BASE_REF", "")  # Name the branch that the pull request targets.
           full_gate_paths = (  # These paths can change analyzer output outside the changed test files.
               ".github/workflows/ci.yml",  # A workflow change must prove the full gate.
-              "tools/test_quality_analyzer/",  # Analyzer changes must measure the full repository.
+              "requirements-dev.txt",  # A tooling version change must prove the full gate.
           )
 
           def is_test_file(path: str) -> bool:
@@ -643,16 +643,16 @@ jobs:
 
           if event_name != "pull_request":
               raise SystemExit(  # Push and manual runs prove the full repository baseline.
-                  subprocess.call([sys.executable, "-m", "tools.test_quality_analyzer", "--gate"]),
+                  subprocess.call(["test-quality-analyzer", "--gate"]),
               )
 
           changed = subprocess.check_output(  # Read the pull request file set from git.
               ["git", "diff", "--name-only", f"origin/{base_ref}", "HEAD"],
               text=True,
           ).splitlines()
-          if any(path == full_gate_paths[0] or path.startswith(full_gate_paths[1]) for path in changed):
+          if any(path in full_gate_paths for path in changed):
               raise SystemExit(  # Analyzer and workflow changes must prove the full repository baseline.
-                  subprocess.call([sys.executable, "-m", "tools.test_quality_analyzer", "--gate"]),
+                  subprocess.call(["test-quality-analyzer", "--gate"]),
               )
 
           changed_tests = [path for path in changed if Path(path).exists() and is_test_file(path)]  # Scan live tests.
@@ -662,7 +662,7 @@ jobs:
               print("gate: 0 new findings vs baseline")  # Keep the ratchet result visible.
               raise SystemExit(0)  # A pull request without changed tests cannot add a test-quality finding.
 
-          command = [sys.executable, "-m", "tools.test_quality_analyzer", "--gate", "--roots", *changed_tests]  # Scope.
+          command = ["test-quality-analyzer", "--gate", "--roots", *changed_tests]  # Scope.
           raise SystemExit(subprocess.call(command))  # Return the analyzer result to the job.
           PY
 
@@ -716,6 +716,7 @@ jobs:
       # The check reads `src` and `tests` alone, because those two folders hold
       # the text that a maintainer reads while changing code. A dated record
       # under `specs/` keeps its citation on purpose.
+      - run: python -m pip install -r requirements-dev.txt
       - run: python -m tools.check_citations src tests
 
   menu_reference_drift:
@@ -756,10 +757,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install -r requirements-dev.txt
       # Issue #1741: task records can drift after delivery.
       # This advisory report names the open boxes without blocking day one.
       - name: Report unchecked SpecKit tasks
-        run: python tools/speckit_task_audit.py || true
+        run: python -m tools.speckit_task_audit || true
 
   exclusion_drift:
     name: "Quality exclusion drift (advisory)"

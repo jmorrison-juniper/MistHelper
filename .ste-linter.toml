@@ -1,0 +1,16 @@
+[tool.ste_linter]
+min_score = 80
+dictionary = "data/ste_dictionary.json"
+prefer_spacy = true
+allowlist = [
+    "api", "async", "attribute", "backend", "boolean", "buffer", "build", "cache",
+    "call", "callable", "checksum", "cli", "commit", "config", "csv", "daemon",
+    "debug", "decorator", "dispatch", "dns", "endpoint", "enum", "env", "exception",
+    "file", "firmware", "frontend", "getter", "gui", "hash", "http", "https", "id",
+    "int", "iterable", "json", "kwarg", "lan", "lint", "list", "log", "mac",
+    "metadata", "middleware", "mock", "module", "namespace", "org", "param",
+    "parser", "payload", "pip", "proxy", "query", "regex", "repo", "retry", "return",
+    "run", "schema", "session", "setter", "socket", "sql", "ssh", "stub", "tcp",
+    "thread", "timeout", "timestamp", "token", "trace", "traceback", "tui", "tuple",
+    "udp", "url", "uuid", "venv", "vpn", "wan", "wrapper",
+]

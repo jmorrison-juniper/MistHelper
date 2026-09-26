@@ -25,7 +25,7 @@ repos:
     hooks:
       - id: ste-linter
         name: STE writing linter
-        entry: python -m tools.ste_linter --min-score 80
+        entry: ste-linter --config .ste-linter.toml --min-score 80
         language: system
         files: \.(md|py)$
         exclude: ^(tests/fixtures/|abandoned-specs/|specs/)

@@ -14,9 +14,10 @@ import sys  # Control process argv for the None-input CLI path.
 from pathlib import Path  # Filesystem primitives for output paths.
 
 import pytest  # Fixture primitives.
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.test_quality_analyzer.__main__ import main  # CLI entrypoint under test.
 
+_ANALYZER_ROOT = Path(test_quality_analyzer.__file__).resolve().parent
 _FROZEN_TIMESTAMP = "2026-07-14T00:00:00+00:00"  # Freeze envelope for determinism.
 
 
@@ -36,12 +37,12 @@ def test_zero_network_during_full_run(
     monkeypatch.chdir(repo_root)  # Config default path resolves relative to repo root.
     report_path = tmp_path / "report.json"  # Hermetic report output.
     summary_path = tmp_path / "summary.md"  # Hermetic summary output.
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures"
+    fixtures_root = _ANALYZER_ROOT / "fixtures"
     argv = [
         "--roots",
         str(fixtures_root),  # Scan the analyzer's own fixture corpus.
         "--config",
-        str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),
+        str(_ANALYZER_ROOT / "config.toml"),
         "--report",
         str(report_path),  # Hermetic path.
         "--summary",
@@ -69,7 +70,7 @@ def test_zero_network_during_full_run(
             "--roots",
             str(fixtures_root),
             "--config",
-            str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),
+            str(_ANALYZER_ROOT / "config.toml"),
             "--report",
             str(process_report_path),
             "--summary",

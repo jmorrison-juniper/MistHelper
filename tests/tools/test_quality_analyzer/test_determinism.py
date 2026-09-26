@@ -11,9 +11,10 @@ from __future__ import annotations  # Postponed annotations for cleaner typing.
 from pathlib import Path  # Filesystem primitives.
 
 import pytest  # Fixture primitives.
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.test_quality_analyzer.__main__ import main  # CLI entrypoint under test.
 
+_ANALYZER_ROOT = Path(test_quality_analyzer.__file__).resolve().parent
 _FROZEN_TIMESTAMP = "2026-07-14T00:00:00+00:00"  # Anchor the envelope timestamp.
 
 
@@ -22,12 +23,12 @@ def _run_once(repo_root: Path, out_dir: Path) -> bytes:
     out_dir.mkdir(parents=True, exist_ok=True)  # Ensure hermetic dir exists.
     report_path = out_dir / "report.json"  # Report artefact for this run.
     summary_path = out_dir / "summary.md"  # Summary artefact for this run.
-    fixtures_root = repo_root / "tools" / "test_quality_analyzer" / "fixtures"
+    fixtures_root = _ANALYZER_ROOT / "fixtures"
     argv = [
         "--roots",
         str(fixtures_root),  # Fixed corpus for repeatable comparison.
         "--config",
-        str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),
+        str(_ANALYZER_ROOT / "config.toml"),
         "--report",
         str(report_path),  # Hermetic path.
         "--summary",

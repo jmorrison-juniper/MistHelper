@@ -37,11 +37,7 @@ import venv
 from pathlib import Path
 from urllib.parse import urlparse
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]  # Find the root before importing repository packages.
-if str(REPOSITORY_ROOT) not in sys.path:  # A script run adds scripts to sys.path, not always the repository root.
-    sys.path.insert(0, str(REPOSITORY_ROOT))  # Make the tools package importable during a fresh bootstrap.
-
-from tools.venv_health import VirtualEnvironmentHealthCheck  # Check package records after pip installs packages.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 LOGGER = logging.getLogger("bootstrap_worktree")
 
@@ -258,18 +254,16 @@ class WorktreeBootstrapper:
     def check_environment_health(self) -> None:
         """Report corrupt package install records without stopping setup."""
         LOGGER.info("Checking virtual environment package install records.")  # Log before the filesystem health scan.
-        try:  # The bootstrap must continue even if this optional local guard breaks.
-            report = VirtualEnvironmentHealthCheck.inspect_venv(self.venv_dir)  # Scan the environment this script owns.
-        except Exception as error:  # Catch all guard defects because bootstrap must remain available.
+        command = [str(self.interpreter), "-m", "tools.venv_health"]  # Use the installed guard inside the new venv.
+        try:
+            result = subprocess.run(command, check=False)  # Preserve the guard's severity-aware console output.
+        except OSError as error:
             LOGGER.warning("Warning: the virtual environment health check failed: %s", error)  # Name the guard fault.
             LOGGER.warning("The bootstrap continues because this check must not block setup.")  # State safe behavior.
             return  # Keep the bootstrap available for future agents even when the guard has a defect.
-        for message in report.messages():  # Print the measured count and the repair command when needed.
-            if report.corrupt_count:  # Corrupt records need a warning so a developer sees the repair.
-                LOGGER.warning("%s", message)  # Use warning severity so the corrupt package list stands out.
-                continue  # Keep warning severity for each corrupt-environment line.
-            LOGGER.info("%s", message)  # A healthy environment is normal setup output.
-        LOGGER.debug("The health check found %d corrupt record(s).", report.corrupt_count)
+        if result.returncode not in (0, 1):  # Exit 1 reports detected corrupt installs; other failures are errors.
+            LOGGER.warning("The virtual environment health check exited with code %d.", result.returncode)
+            LOGGER.warning("The bootstrap continues because this check must not block setup.")
 
     def _install_environment(self) -> dict[str, str]:
         """Build the environment that the pip subprocess reads."""

@@ -8,7 +8,8 @@ on:
   pull_request:
     paths:
       - "documentation/**/*.md"
-      - "tools/ste_linter/**"
+      - ".ste-linter.toml"
+      - "requirements-dev.txt"
       - ".github/workflows/ste-lint.yml"
   workflow_dispatch:
 
@@ -35,11 +36,13 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install the development tools
+        run: python -m pip install -r requirements-dev.txt
+
       # The agent skills moved out of the repository to the user level at
       # ~/.copilot/skills, so this job grades no skill file. Grade a moved skill
       # on the workstation with the command in its verification reference.
       - name: Grade documentation with the STE linter
         run: >
-          python -m tools.ste_linter --min-score 80
+          ste-linter --config .ste-linter.toml --min-score 80
           documentation/ASD-STE100_writing-guide.md
-          tools/ste_linter/README.md

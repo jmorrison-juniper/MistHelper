@@ -46,10 +46,12 @@ To build the environment by hand instead:
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install uv
-uv pip install -r requirements.txt
+uv pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-UV installs faster than pip. `pip install -r requirements.txt` also works.
+UV installs faster than pip. `pip install -r requirements.txt -r requirements-dev.txt`
+also works. The development requirements install the quality tools from a
+reviewed, immutable commit in `misthelper-devtools`.
 
 ## Step 3: Configure the credentials
 

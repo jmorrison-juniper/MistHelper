@@ -12,7 +12,6 @@ import dataclasses  # For FrozenInstanceError.
 from pathlib import PurePosixPath  # POSIX-path invariant test.
 
 import pytest  # pytest.raises for frozen-ness assertions.
-
 from tools.test_quality_analyzer.detection import (  # Import from public surface.
     Category,
     Finding,

@@ -121,9 +121,9 @@ class TestExclusionDriftReporter:
         """Matching gate and scan path must not launch the tool twice."""
         reporter = ExclusionDriftReporter()
         reporter.load_exclusions()
-        first = Exclusion("bandit", "tools/test_quality_analyzer/fixtures", "tools/test_quality_analyzer/fixtures", 1)
+        first = Exclusion("bandit", "scripts", "scripts", 1)
         second = Exclusion(
-            "bandit", "tools\\test_quality_analyzer\\fixtures", "tools/test_quality_analyzer/fixtures", 1
+            "bandit", "scripts\\", "scripts", 1
         )
         with patch.object(reporter, "_commands_for", return_value=[["tool"]]):
             with patch("scripts.check_exclusion_drift.subprocess.run") as run:
