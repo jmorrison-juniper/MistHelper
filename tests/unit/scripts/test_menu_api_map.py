@@ -449,7 +449,7 @@ def test_generated_diagram_labels_fit_the_wiki_column() -> None:
         for line in label.split("<br/>")
         if " " not in line and len(line) > limit and not LINT_TRIGGERS.search(line)
     ]
-    assert pages, "the generated map pages are missing"
+    assert len(pages) >= 1, "the generated map pages are missing"
     assert too_long == [], f"diagram label lines wider than {limit} characters: {too_long[:5]}"
 
 
@@ -457,7 +457,7 @@ def test_generated_pages_hold_few_enough_diagrams_for_github() -> None:
     """Each map page holds 50 diagrams or fewer, because GitHub fails to render the last diagrams of a long page."""
     pages = sorted((REPO_ROOT / "documentation/menu-api").glob("*.md"))  # The generated map pages.
     counts = {page.name: page.read_text(encoding="utf-8").count("```mermaid") for page in pages}
-    assert pages, "the generated map pages are missing"
+    assert len(pages) >= 1, "the generated map pages are missing"
     assert {name: count for name, count in counts.items() if count > 50} == {}  # No page is over the limit.
 
 
