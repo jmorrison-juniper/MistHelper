@@ -31,8 +31,6 @@ from collections import Counter
 from pathlib import Path
 from urllib.parse import unquote
 
-import pytest
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 # A wiki page links to a bare page name. That name resolves on the published
@@ -154,13 +152,12 @@ def test_markdown_files_are_tracked() -> None:
 def test_no_broken_relative_markdown_links() -> None:
     """Every relative link resolves to a file and, when given, to an anchor."""
     failures = _broken_links()
-    if failures:
-        listing = "\n".join(f"  {item}" for item in sorted(failures))
-        pytest.fail(
-            f"{len(failures)} broken Markdown link(s):\n{listing}\n\n"
-            "Point the link at a file that exists, or remove the link and keep "
-            "the text."
-        )
+    listing = "\n".join(f"  {item}" for item in sorted(failures))
+    assert not failures, (
+        f"{len(failures)} broken Markdown link(s):\n{listing}\n\n"
+        "Point the link at a file that exists, or remove the link and keep "
+        "the text."
+    )
 
 
 def test_no_openapi_crossref_placeholders() -> None:
