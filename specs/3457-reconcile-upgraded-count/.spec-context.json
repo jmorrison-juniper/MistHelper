@@ -1,0 +1,37 @@
+{
+  "workflow": "speckit",
+  "specName": "A child job that the check proves counts its devices as upgraded",
+  "branch": "fix/3457-reconcile-upgraded-count",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T22:24:48.254Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T22:24:48.254Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T22:24:48.254Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T22:45:05.608Z"
+    }
+  ]
+}

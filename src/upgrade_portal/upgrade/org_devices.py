@@ -10,6 +10,10 @@ Why:
     the aggregate service stores in that record. The module keeps no state, and
     it makes no cloud call. `org_versions.py` decides which sites need a
     running version read.
+
+    Issue #3457. The multi-site check can prove a child job whose stored cloud
+    answer names no upgraded device. The class `OrgChildDevices` then gives the
+    counts of that child job, with the same rule as the device table.
 """
 
 from __future__ import annotations  # Keep the annotations independent from the import order.
@@ -148,6 +152,7 @@ class OrgChildDevices:
     ENDED_STATES = frozenset({"completed", "failed", "cancelled"})  # The job ran, so each device wants a reading.
     FINAL_STATES = frozenset({"cancelled", "completed", "failed", "rejected"})  # No later answer changes the child.
     SETTLED_WORDS = frozenset({"failed", "upgraded", "skipped"})  # The device left the job while the child runs.
+    PROVEN_STATE = "completed"  # Issue #3457: the state that the multi-site check sets on a proven child job.
     TARGET_FIELDS = ("mac", "name", "device_type", "model", "version_before", "version_target", "site_id")
 
     def __init__(self, child: Mapping[str, Any]) -> None:
@@ -210,6 +215,46 @@ class OrgChildDevices:
     def is_final(self) -> bool:
         """Report whether no later cloud answer can change the child."""
         return self.state in self.FINAL_STATES  # One read after this state completes the readings.
+
+    @classmethod
+    def is_proven(cls, child: Mapping[str, Any]) -> bool:
+        """Report whether the multi-site check proved one child job.
+
+        Why:
+            Issue #3457. The check marks a child job completed when each of its
+            devices runs the target version. The stored cloud answer of that
+            child job names no upgraded device, so its counts must come from the
+            proof. This method reads two stored keys only, so each status answer
+            builds a device reader for a proven child job only.
+
+        Args:
+            child: One durable child row of the operation record.
+
+        Returns:
+            True when the child job is completed and its stored check result proves it.
+        """
+        verdict = child.get("reconciliation")  # The check stores its result under this key.
+        state = str(child.get("status") or "").strip().lower()  # The same state rule as the reader.
+        return state == cls.PROVEN_STATE and isinstance(verdict, Mapping) and verdict.get("proven") is True
+
+    def proven_counts(self, total: int) -> tuple[int, int]:
+        """Return the upgraded count and the failed count of a proven child job.
+
+        Why:
+            Issue #3457. The device table shows a device that a cloud list names
+            as failed with the word "failed". Each other device of a proven child
+            job runs the target version. The counts follow the same rule, so the
+            child row and the device table agree.
+
+        Args:
+            total: The count of the target devices of the child job.
+
+        Returns:
+            The upgraded count and the failed count.
+        """
+        listed = sum(1 for target in self.targets() if self.state_of(target["mac"]) == "failed")  # The table rule.
+        failed = min(listed, total)  # A damaged record cannot count more failed devices than target devices.
+        return total - failed, failed  # Each other target device runs the target version.
 
     def _stored_target(self, entry: Mapping[str, Any]) -> dict[str, str]:
         """Copy one stored target record into text values."""

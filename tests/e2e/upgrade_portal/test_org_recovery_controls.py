@@ -33,6 +33,7 @@ from tests.e2e.upgrade_portal.org_control_seeds import (
     SECOND_SITE_ID,
     SECOND_SWITCH_MAC,
     SECOND_UNCERTAIN_ID,
+    SITE_NAMES,
 )
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
@@ -45,11 +46,26 @@ SEED_PAUSE_MS = 500  # The pause between two reads of a seeded page.
 FIELD_FORMAT = "%Y-%m-%dT%H:%M"  # The value format of a date and time field.
 START_NOW_TEXT = "The upgrade starts at once after you confirm."  # The start line of a plan with no start time.
 SUMMARY_ROWS = "[data-testid='org-upgrade-device-summary'] tbody tr"  # One row for each planned device.
+CHILD_ROWS = "[data-testid='org-upgrade-site-progress'] tbody tr"  # One row for each child job.
 
 
 def job_path(operation_id: str) -> str:
     """Return the progress page path of one operation."""
     return f"/upgrade/org/jobs/{operation_id}"
+
+
+def child_cells(page: Any, site_name: str) -> Any:
+    """Return the cells of the child row of one site on the progress page.
+
+    Args:
+        page: The browser page that shows the progress page.
+        site_name: The site name that heads the child row.
+
+    Returns:
+        The cells of the row: the family, the status, Targets, Upgraded, and Failed come first.
+    """
+    header = page.get_by_role("rowheader", name=site_name, exact=True)  # The site name heads the row.
+    return page.locator(CHILD_ROWS).filter(has=header).locator("td")  # The cells of that row only.
 
 
 def open_seeded_page(page: Any, path: str, test_id: str) -> None:
@@ -186,6 +202,13 @@ class TestMultiSiteRecoveryControls:
         sync_api.expect(page.get_by_test_id(f"org-upgrade-device-state-{SECOND_SWITCH_MAC}")).to_have_text(
             "submission_unknown"
         )
+        first_cells = child_cells(page, SITE_NAMES[FIRST_SITE_ID])  # The proven child job.
+        second_cells = child_cells(page, SITE_NAMES[SECOND_SITE_ID])  # The child job with no proof.
+        for cells, counts in ((first_cells, ("1", "1", "0")), (second_cells, ("1", "0", "0"))):  # Issue #3457.
+            for index, count in zip((2, 3, 4), counts, strict=True):  # Targets, Upgraded, and Failed.
+                sync_api.expect(cells.nth(index)).to_have_text(count)
+        for field, count in (("total", "2"), ("upgraded_count", "1"), ("failed_count", "0")):  # The block.
+            sync_api.expect(page.locator(f"[data-org-upgrade-field='{field}']")).to_have_text(count)
         assert page.locator("[data-testid^='org-upgrade-reconcile-child-']").count() == 1  # One job keeps no proof.
         assert page.get_by_test_id("org-upgrade-reconcile-confirmation").input_value() == ""  # Type it again.
         page.screenshot(path=str(tmp_path / "reconcile-after.png"), full_page=True)

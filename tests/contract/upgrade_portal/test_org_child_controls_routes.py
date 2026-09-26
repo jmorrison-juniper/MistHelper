@@ -396,6 +396,21 @@ def table_names(page: str) -> list[str]:
     return re.findall(r'<th scope="row">([^<]*)</th>', table)  # One name for each device row.
 
 
+def site_row_counts(page: str, site_name: str) -> list[str]:
+    """Return the Targets, Upgraded, and Failed cells of the child row of one site on the progress page."""
+    start = page.index('data-testid="org-upgrade-site-progress"')  # The child table starts here.
+    table = page[start : page.index("</table>", start)]  # Keep the child table only.
+    row = table[table.index(f'<th scope="row">{site_name}</th>') :]  # The row of the site starts here.
+    cells = re.findall(r"<td[^>]*>([^<]*)</td>", row[: row.index("</tr>")])  # The text of each cell of the row.
+    return cells[2:5]  # The device family and the status come before the three counts.
+
+
+def status_field(page: str, name: str) -> str:
+    """Return the text of one field of the operation block of the progress page."""
+    found = re.search(rf'data-org-upgrade-field="{name}">([^<]*)</span>', page)  # The field of the block.
+    return found.group(1) if found else ""  # An absent field reads as empty text.
+
+
 def box_checked(page: str, family: str) -> bool:
     """Return true when the options page checks the box of one device family."""
     return re.search(rf'data-testid="org-upgrade-type-{family}"\s*checked', page) is not None  # Word after the id.
@@ -710,6 +725,51 @@ def test_a_failed_site_read_proves_nothing_and_keeps_the_site(harness: ControlsH
     assert getattr(held, "run_id", None) == RECONCILE_ID  # The operation still holds the site.
     assert 'data-testid="org-upgrade-reconcile-evidence-child-switch-two"' in page  # The page shows the evidence.
     assert 'data-testid="org-upgrade-reconcile-child-child-switch-one"' not in page  # The proven job leaves.
+
+
+def test_a_proven_check_counts_each_proven_device_as_upgraded(harness: ControlsHarness) -> None:
+    """Issue #3457: each proven child job counts its device, on the page and in the status answer."""
+    harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs of one switch each.
+    harness.reader.answers = {harness.site_one: {SWITCH_ONE: JUNOS_TARGET}, SITE_TWO: {SWITCH_TWO: JUNOS_TARGET}}
+    answer = post_json(harness, f"/api/org-upgrades/{RECONCILE_ID}/reconcile", {"confirmation": RECONCILE_WORD})
+    page = harness.client.get(f"/upgrade/org/jobs/{RECONCILE_ID}").get_data(as_text=True)  # The progress page.
+    poll = harness.client.get(f"/api/org-upgrades/{RECONCILE_ID}").get_json()  # The status answer.
+    assert answer.status_code == 200, answer.get_json()  # The check stored its verdicts.
+    assert site_row_counts(page, "Test Site") == ["1", "1", "0"]  # Targets, Upgraded, and Failed.
+    assert site_row_counts(page, "Site Two") == ["1", "1", "0"]  # The second proven child job.
+    assert [status_field(page, name) for name in ("total", "upgraded_count", "failed_count")] == ["2", "2", "0"]
+    assert (poll["total"], poll["upgraded_count"], poll["failed_count"]) == (2, 2, 0)  # The poll agrees.
+    assert [(row["total"], row["upgraded"], row["failed"]) for row in poll["children"]] == [(1, 1, 0), (1, 1, 0)]
+
+
+def test_a_partial_check_counts_only_the_proven_child_job(harness: ControlsHarness) -> None:
+    """Issue #3457: the proven child job counts its device, and the child job with no proof keeps 0."""
+    harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs of one switch each.
+    harness.reader.answers = {harness.site_one: {SWITCH_ONE: JUNOS_TARGET}}  # Site two answers no device.
+    answer = post_json(harness, f"/api/org-upgrades/{RECONCILE_ID}/reconcile", {"confirmation": RECONCILE_WORD})
+    page = harness.client.get(f"/upgrade/org/jobs/{RECONCILE_ID}").get_data(as_text=True)  # The progress page.
+    poll = harness.client.get(f"/api/org-upgrades/{RECONCILE_ID}").get_json()  # The status answer.
+    assert answer.status_code == 200, answer.get_json()  # The check stored its verdicts.
+    assert site_row_counts(page, "Test Site") == ["1", "1", "0"]  # The proven child job counts its switch.
+    assert site_row_counts(page, "Site Two") == ["1", "0", "0"]  # The child job with no proof keeps 0.
+    assert [status_field(page, name) for name in ("total", "upgraded_count", "failed_count")] == ["2", "1", "0"]
+    assert (poll["total"], poll["upgraded_count"], poll["failed_count"]) == (2, 1, 0)  # The poll agrees.
+    assert [(row["status"], row["upgraded"]) for row in poll["children"]] == [
+        ("completed", 1),
+        ("submission_unknown", 0),
+    ]  # Each child row of the poll matches the page.
+    assert [row["state"] for row in poll["devices"]] == ["completed", "submission_unknown"]  # The device table.
+
+
+def test_a_check_that_proves_nothing_adds_no_upgraded_device(harness: ControlsHarness) -> None:
+    """Issue #3457: a check with no proof leaves each count at 0."""
+    harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs of one switch each.
+    harness.reader.answers = {harness.site_one: {SWITCH_ONE: JUNOS_OLD}, SITE_TWO: {SWITCH_TWO: JUNOS_OLD}}
+    answer = post_json(harness, f"/api/org-upgrades/{RECONCILE_ID}/reconcile", {"confirmation": RECONCILE_WORD})
+    poll = harness.client.get(f"/api/org-upgrades/{RECONCILE_ID}").get_json()  # The status answer.
+    assert answer.status_code == 200, answer.get_json()  # The check stored its evidence.
+    assert [row["status"] for row in poll["children"]] == ["submission_unknown", "submission_unknown"]  # No proof.
+    assert (poll["total"], poll["upgraded_count"], poll["failed_count"]) == (2, 0, 0)  # No count changes.
 
 
 @pytest.mark.parametrize("typed", ["", "RECONCILE", f"reconcile {RECONCILE_ID}", "RECONCILE org-run-other"])
