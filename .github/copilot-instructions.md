@@ -800,7 +800,7 @@ The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR 
 | Static Analysis Register | **CodeQL verdict register** | Dismissed CodeQL alerts must match the checked-in register |
 | Dependency CVEs | **pip-audit** | Known vulnerabilities in `requirements.txt` |
 | Code Quality | **Pylint** | Score >= 9.5 |
-| Complexity | **Radon** | No block above cyclomatic complexity 10 |
+| Complexity | **Radon** and **`complexity-gate`** | No block above cyclomatic complexity 10 |
 | Dead Code | **Vulture** | Zero findings at confidence 70 |
 | Docstring Style | **pydocstyle** | Zero violations |
 | Docstring Coverage | **interrogate** | Coverage >= 90 percent |
@@ -823,10 +823,11 @@ a separate workflow, and Dependabot is not a gate. A caller can override each
 threshold through a `workflow_call` input. The table lists the default.
 
 The `misthelper-devtools` package supplies `test-quality-analyzer`,
-`tools.check_citations`, and `tools.speckit_task_audit`. `requirements-dev.txt`
-pins that package to one commit. The Copilot, linked-issue, container build, and
-release image workflows call the shared reusable workflows of that repository at
-one pinned commit. `documentation/development-tooling-migration.md` lists them.
+`complexity-gate`, `tools.check_citations`, and `tools.speckit_task_audit`.
+`requirements-dev.txt` pins that package to one commit. The Copilot,
+linked-issue, container build, and release image workflows call the shared
+reusable workflows of that repository at one pinned commit.
+`documentation/development-tooling-migration.md` lists them.
 
 Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
 gate that reads the npm dependency tree, so it is the only check that can report

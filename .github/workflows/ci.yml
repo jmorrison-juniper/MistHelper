@@ -532,24 +532,12 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
+      # The devtools package supplies complexity-gate. It prints the same report as the
+      # earlier inline script, and it also names a file that radon cannot parse (issue #3456).
       - name: Check cyclomatic complexity
         run: |
           radon cc ${{ env.RADON_PATHS }} -a -nb
-          radon cc ${{ env.RADON_PATHS }} -j | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          bad = []
-          for path, blocks in data.items():
-              for b in blocks:
-                  if b['complexity'] > 10:
-                      bad.append(f\"{path}:{b['lineno']} {b['name']} CC={b['complexity']}\")
-          if bad:
-              print('Cyclomatic complexity violations (>10):')
-              for item in bad:
-                  print(f'  {item}')
-              sys.exit(1)
-          print('All functions within complexity threshold.')
-          "
+          radon cc ${{ env.RADON_PATHS }} -j | complexity-gate --max 10
 
   vulture:
     name: "Vulture (dead code)"
