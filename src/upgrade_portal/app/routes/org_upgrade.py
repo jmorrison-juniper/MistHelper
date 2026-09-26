@@ -55,7 +55,7 @@ from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for eac
 from ...upgrade.org_postcheck_view import OrgPostCheckView  # Issue #3244: the post-check card of each site.
 from ...upgrade.org_precheck import PRECHECK_FIELD, OrgPrecheckGate, OrgPrecheckState  # Issue #3243: the gate.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
-from ...upgrade.org_site_records import PARTIAL_REASONS_FIELD, OrgSiteRecords  # Issue #3389 and issue #3424.
+from ...upgrade.org_site_records import PARTIAL_REASONS_FIELD, OrgSiteRecords, OrgSiteRefusal  # Issue #3389 and #3462.
 from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
 from ..factory import build_error_envelope, json_error  # Issue #3242: a replay refusal can carry details.
 from . import select as select_routes
@@ -138,9 +138,9 @@ UNREACHABLE_OPERATOR_MESSAGE = (  # The cure is a reachable address, not a diffe
 JOB_NOT_OWNED = "org_upgrade_job_not_owned"
 SITE_LOCK_WRONG_RUN = "site_lock_wrong_run"  # The operator holds the site for another run.
 SITE_LOCK_WRONG_RUN_MESSAGE = "Your existing site lock belongs to another run."  # The cure is the other run.
-PRECHECK_MISSING_MESSAGE = (  # Issue #3243: the refusal names the cure and each site with no capture.
+PRECHECK_MISSING_MESSAGE = (  # Issue #3243 and issue #3462: the cure, then the noun and each site with no capture.
     "Save a verified pre-check capture for each selected site before you start the upgrade. "
-    "These sites hold no pre-check capture: {names}."
+    "The portal found no pre-check capture for {place}: {names}."
 )
 PRECHECK_RECORD_MESSAGE = (  # Issue #3243: the plan could not keep the baseline of each site.
     "The portal could not record the pre-check captures. Read the operation before another action."
@@ -1101,8 +1101,9 @@ def _precheck_refusal(prechecks: OrgPrecheckState) -> tuple[Response, int] | Non
     if prechecks.ready:  # Each selected site holds a verified pre-check capture.
         return None  # The start continues to the site locks.
     names = prechecks.missing_names()  # The sites that close the gate, in the order of the selection.
+    place = OrgSiteRefusal.place_text(len(prechecks.missing))  # Issue #3462: one site takes the singular noun.
     logger.warning("The organization upgrade start stops, because %d sites hold no pre-check", len(prechecks.missing))
-    message = PRECHECK_MISSING_MESSAGE.format(names=names)  # The cure and each site.
+    message = PRECHECK_MISSING_MESSAGE.format(place=place, names=names)  # The cure, the noun, and each site.
     return json_error(CONFLICT_STATUS, upgrade_routes.PRE_CAPTURE_MISSING_CODE, message)  # The single-site code.
 
 

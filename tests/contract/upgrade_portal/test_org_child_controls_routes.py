@@ -529,7 +529,8 @@ def test_a_retry_save_refuses_a_site_whose_view_read_failed(harness: ControlsHar
     }
     saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save the prefilled choices.
     assert saved.status_code == 400, saved.get_json()  # The failed switch stays in the retry.
-    assert saved.get_json()["error"]["message"] == UNREAD_MESSAGE.format(names="Test Site")  # The unread site.
+    unread = UNREAD_MESSAGE.format(place="this site", names="Test Site")  # Issue #3462: one site, one noun.
+    assert saved.get_json()["error"]["message"] == unread  # The refusal names the unread site.
     assert set(harness.store.records) == {RETRY_ID}  # The save wrote no new plan.
     assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
 
@@ -549,7 +550,8 @@ def test_a_retry_save_refuses_a_site_whose_view_read_was_short(harness: Controls
     }
     saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save the prefilled choices.
     assert saved.status_code == 400, saved.get_json()  # A retry device of a lost page cannot drop out.
-    assert saved.get_json()["error"]["message"] == SHORT_MESSAGE.format(names="Test Site")  # The short site.
+    short = SHORT_MESSAGE.format(place="this site", names="Test Site")  # Issue #3462: one site, one noun.
+    assert saved.get_json()["error"]["message"] == short  # The refusal names the short site.
     assert set(harness.store.records) == {RETRY_ID}  # The save wrote no new plan.
     assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
 

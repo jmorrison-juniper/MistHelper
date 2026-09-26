@@ -48,6 +48,9 @@ OPTIONS_SESSION_KEY = "org_upgrade_options"  # The cookie key that holds the sav
 PLAN_CHOICES = {"selected_types": ["ap"], "version_ap": "0.15.1", "strategy": "big_bang"}  # One family.
 HINT = "The portal needs a saved pre-check capture for each site before an upgrade starts."  # FR-004.
 EMPTY_NOTE = "The portal stored no pre-check capture for this operation."  # US4.
+PRECHECK_CURE = "Save a verified pre-check capture for each selected site before you start the upgrade."  # FR-012.
+ONE_MISSING_TEXT = "The portal found no pre-check capture for this site: Site Two."  # Issue #3462: one site.
+TWO_MISSING_TEXT = "The portal found no pre-check capture for these sites: Test Site, Site Two."  # Two sites.
 
 
 class RecordStore:
@@ -302,10 +305,21 @@ def test_the_start_refuses_a_site_without_a_capture_before_any_write(harness: Pr
     operation_id = save_plan(harness)  # The operator saved the plan.
     answer = submit(harness)  # A script sends the start with no pre-check of the second site.
     assert answer.status_code == 409 and error_code(answer) == upgrade_routes.PRE_CAPTURE_MISSING_CODE
-    assert error_message(answer).endswith("These sites hold no pre-check capture: Site Two.")  # Names the site.
+    assert error_message(answer) == f"{PRECHECK_CURE} {ONE_MISSING_TEXT}"  # Issue #3462: the singular noun.
     assert harness.service.submits == 0 and harness.locks.values == {}  # No child job and no site lock.
     record = harness.store.records[operation_id]  # The durable plan after the refusal.
     assert record["state"] == "planned" and "pre_captures" not in record  # The plan stays as it was.
+
+
+def test_the_start_refusal_of_two_sites_names_both_with_the_plural_noun(harness: PrecheckHarness) -> None:
+    """Issue #3462 FR-004: two sites with no capture keep the plural noun, in the order of the selection."""
+    save_plan(harness)  # The operator saved the plan while both sites held a capture.
+    harness.adopter.forget(harness.site_one)  # The first site then lost its pre-check capture.
+    harness.adopter.forget(SITE_TWO)  # The second site then lost its pre-check capture too.
+    answer = submit(harness)  # A start after both captures changed.
+    assert answer.status_code == 409 and error_code(answer) == upgrade_routes.PRE_CAPTURE_MISSING_CODE
+    assert error_message(answer) == f"{PRECHECK_CURE} {TWO_MISSING_TEXT}"  # The whole refusal.
+    assert harness.service.submits == 0 and harness.locks.values == {}  # No child job and no site lock.
 
 
 def test_the_start_stores_the_capture_of_each_site(harness: PrecheckHarness) -> None:

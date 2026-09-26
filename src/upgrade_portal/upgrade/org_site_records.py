@@ -14,6 +14,10 @@ Why:
     devices stay on the old firmware. The mapper marks such a site with the
     partial reasons of its read, and this class names the site in a refusal.
 
+    Issue #3462. Each refusal put the plural noun "these sites" before its
+    list, also for a list of one site. The refusal now reads "this site" for
+    one site, and it keeps "these sites" for two or more sites.
+
     A retry of issue #3247 is different. The retry chooses the sites of its
     failed devices, and the operator can clear a device type. A site can then
     hold no retry device, and the retry must still plan the other devices.
@@ -32,17 +36,19 @@ logger = logging.getLogger(__name__)  # Keep the records of this module under on
 
 NAME_SEPARATOR = ", "  # The separator of the site names in a refusal, as the pre-check refusal uses it.
 NAME_LIMIT = 10  # The most site names that one refusal shows. A long selection then stays readable.
+ONE_SITE_PLACE = "this site"  # Issue #3462: the place words of a text that names one site.
+SITES_PLACE = "these sites"  # Issue #3462: the place words of a text that names two or more sites.
 UNREAD_MESSAGE = (  # The refusal for a site whose inventory read found no device.
-    "The portal read no device at these sites: {names}. Save the options again. "
+    "The portal read no device at {place}: {names}. Save the options again. "
     "If a site holds no device, clear that site on the Sites page."
 )
 UNPLANNED_MESSAGE = (  # The refusal for a site that holds no device of a checked type with a version.
-    "The plan holds no device at these sites: {names}. Check the device types and the target versions. "
+    "The plan holds no device at {place}: {names}. Check the device types and the target versions. "
     "If a site holds no device of the checked types, clear that site on the Sites page."
 )
 PARTIAL_REASONS_FIELD = "partial_reasons"  # Issue #3424: the marker field of a site whose read was short.
 SHORT_MESSAGE = (  # Issue #3424: the refusal for a site whose read lost one or more pages.
-    "The portal did not read the complete device list at these sites: {names}. "
+    "The portal did not read the complete device list at {place}: {names}. "
     "Reload this page. Then save the options again."
 )
 
@@ -65,7 +71,27 @@ class OrgSiteRefusal(ValueError):
             labels: The name of each refused site, or its identifier.
         """
         self.labels = list(labels)  # Keep a detached copy for a caller that reads the sites.
-        super().__init__(template.format(names=OrgSiteRefusal.names_text(self.labels)))  # The text of the page.
+        place = OrgSiteRefusal.place_text(len(self.labels))  # Issue #3462: one site takes the singular noun.
+        names = OrgSiteRefusal.names_text(self.labels)  # The shown labels, and the count of the other sites.
+        super().__init__(template.format(place=place, names=names))  # The text that the page shows.
+
+    @staticmethod
+    def place_text(count: int) -> str:
+        """Return the place words that come before a list of site names.
+
+        Why:
+            Issue #3462. Each text put the plural noun "these sites" before the
+            list, also for a list of one name. The count of all listed sites
+            decides the noun, so a long list that shows ten names keeps the
+            plural noun.
+
+        Args:
+            count: The count of the sites that the text names.
+
+        Returns:
+            "this site" for one site, and "these sites" for each other count.
+        """
+        return ONE_SITE_PLACE if count == 1 else SITES_PLACE  # Only a count of one takes the singular noun.
 
     @staticmethod
     def names_text(labels: list[str]) -> str:

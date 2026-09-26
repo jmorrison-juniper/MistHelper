@@ -28,7 +28,7 @@ TARGET_VERSION = "0.15.1"  # The newer version that the stand-in cloud offers fo
 DEVICE_TYPES = ("ap", "switch", "gateway")  # The three device types of the multi-site form.
 VERSION_FIELD_IDS = ("org-upgrade-version", "org-upgrade-switch-version", "org-upgrade-gateway-version")
 CHOSEN_STRATEGY = "serial"  # Neither the form default nor the service default, so a reset shows on the page.
-UNREAD_TEXT = f"The portal read no device at these sites: {EMPTY_SITE_NAME}."  # The start of the refusal.
+UNREAD_TEXT = f"The portal read no device at this site: {EMPTY_SITE_NAME}."  # Issue #3462: one site, one noun.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
     Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "org-empty-site"
 )

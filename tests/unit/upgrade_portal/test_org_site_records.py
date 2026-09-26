@@ -30,6 +30,8 @@ CANARY_OPTIONS = {"strategy": "canary", "canary_phases": [1, 10, 50, 100]}  # Th
 AP_TARGET = {"mac": "0011223344a1", "version_target": "0.15.1"}  # One planned access point.
 SWITCH_TARGET = {"mac": "0011223344b1", "version_target": "23.4R1.9"}  # One planned switch.
 SHORT_REASON = {"section": "upgrade_inventory", "reason": "page_count_mismatch", "http_status": 200}  # Issue #3424.
+ONE_PLACE = "this site"  # Issue #3462: the place words of a refusal that names one site.
+MANY_PLACE = "these sites"  # Issue #3462: the place words of a refusal that names two or more sites.
 
 
 def answered(*targets: dict[str, str]) -> dict[str, Any]:
@@ -72,7 +74,7 @@ def test_an_empty_record_gives_the_unread_refusal() -> None:
     records.add(SECOND_SITE, answered(AP_TARGET))  # The second site answers.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
     assert isinstance(refusal, OrgSiteRefusal)  # The save stops.
-    assert str(refusal) == UNREAD_MESSAGE.format(names="SITE-ONE")  # The text names the label, not the identifier.
+    assert str(refusal) == UNREAD_MESSAGE.format(place=ONE_PLACE, names="SITE-ONE")  # The label, not the identifier.
     assert refusal.labels == ["SITE-ONE"]  # A caller can read the refused sites.
 
 
@@ -92,7 +94,7 @@ def test_a_site_with_no_target_gives_the_unplanned_refusal() -> None:
     records.add(SECOND_SITE, answered())  # The second site answers with no planned device.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
     assert isinstance(refusal, OrgSiteRefusal)  # The save stops.
-    assert str(refusal) == UNPLANNED_MESSAGE.format(names="SITE-TWO")  # The text names the site with no device.
+    assert str(refusal) == UNPLANNED_MESSAGE.format(place=ONE_PLACE, names="SITE-TWO")  # The site with no device.
 
 
 @pytest.mark.parametrize("every_site_planned", [True, False], ids=["plain-save", "retry-save"])
@@ -114,7 +116,7 @@ def test_the_unread_refusal_comes_before_the_unplanned_refusal() -> None:
     records.add(THIRD_SITE, {})  # The third site answers an empty record.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
     assert isinstance(refusal, OrgSiteRefusal)  # The save stops.
-    assert str(refusal) == UNREAD_MESSAGE.format(names="SITE-THREE")  # The unread site comes first.
+    assert str(refusal) == UNREAD_MESSAGE.format(place=ONE_PLACE, names="SITE-THREE")  # The unread site comes first.
 
 
 def test_every_site_that_answered_gives_no_refusal() -> None:
@@ -142,7 +144,7 @@ def test_a_retry_still_refuses_a_site_with_an_empty_record() -> None:
     records.add(SECOND_SITE, answered(AP_TARGET))  # The second site holds a retry device.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
     assert isinstance(refusal, OrgSiteRefusal)  # The save stops, and no retry device goes missing.
-    assert str(refusal) == UNREAD_MESSAGE.format(names="SITE-ONE")  # The text names the unread site.
+    assert str(refusal) == UNREAD_MESSAGE.format(place=ONE_PLACE, names="SITE-ONE")  # The text names the unread site.
 
 
 def test_the_labels_come_only_for_the_refused_sites() -> None:
@@ -182,7 +184,7 @@ def test_the_message_shows_ten_names_and_the_count_of_the_rest() -> None:
     labels = [f"Site {number}" for number in range(1, NAME_LIMIT + 3)]  # Two names more than the limit.
     refusal = OrgSiteRefusal(UNREAD_MESSAGE, labels)  # Build the refusal text.
     shown = ", ".join(labels[:NAME_LIMIT])  # The names that the message shows.
-    assert str(refusal) == UNREAD_MESSAGE.format(names=f"{shown}, and 2 more")  # The count of the other sites.
+    assert str(refusal) == UNREAD_MESSAGE.format(place=MANY_PLACE, names=f"{shown}, and 2 more")  # The other sites.
     assert refusal.labels == labels  # The refusal keeps each label for a caller.
 
 
@@ -190,13 +192,13 @@ def test_the_message_shows_every_name_up_to_the_limit() -> None:
     """FR-006: a list at the limit shows each name and no count."""
     labels = [f"Site {number}" for number in range(1, NAME_LIMIT + 1)]  # Exactly the limit.
     refusal = OrgSiteRefusal(UNPLANNED_MESSAGE, labels)  # Build the refusal text.
-    assert str(refusal) == UNPLANNED_MESSAGE.format(names=", ".join(labels))  # Each name shows.
+    assert str(refusal) == UNPLANNED_MESSAGE.format(place=MANY_PLACE, names=", ".join(labels))  # Each name shows.
     assert "more" not in str(refusal)  # No count follows a list at the limit.
 
 
 def test_the_route_catches_the_refusal_as_a_value_error() -> None:
     """The save route answers each `ValueError` with status 400 and the message text."""
-    with pytest.raises(ValueError, match=r"these sites: Empty Site\.") as caught:  # The family of the route.
+    with pytest.raises(ValueError, match=r"at this site: Empty Site\.") as caught:  # The family of the route.
         raise OrgSiteRefusal(UNREAD_MESSAGE, ["Empty Site"])  # The refusal that the route raises.
     assert caught.value.labels == ["Empty Site"]  # The caught error keeps the refused sites.
 
@@ -213,7 +215,7 @@ def test_a_short_site_gives_the_short_refusal() -> None:
     records.add(SECOND_SITE, short_marker())  # The read of the second site lost one or more pages.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
     assert isinstance(refusal, OrgSiteRefusal)  # The old save planned the first page of the site only.
-    assert str(refusal) == SHORT_MESSAGE.format(names="SITE-TWO")  # The text names the label of the short site.
+    assert str(refusal) == SHORT_MESSAGE.format(place=ONE_PLACE, names="SITE-TWO")  # The label of the short site.
     assert records.short_sites == [SECOND_SITE]  # A caller can read the short sites.
 
 
@@ -233,7 +235,7 @@ def test_the_unread_refusal_comes_before_the_short_refusal() -> None:
     records.add(FIRST_SITE, short_marker())  # The read of the first site lost one or more pages.
     records.add(SECOND_SITE, {})  # The read of the second site found no device.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
-    assert str(refusal) == UNREAD_MESSAGE.format(names="SITE-TWO")  # The unread site comes first.
+    assert str(refusal) == UNREAD_MESSAGE.format(place=ONE_PLACE, names="SITE-TWO")  # The unread site comes first.
 
 
 def test_the_short_refusal_comes_before_the_unplanned_refusal() -> None:
@@ -243,7 +245,7 @@ def test_the_short_refusal_comes_before_the_unplanned_refusal() -> None:
     records.add(SECOND_SITE, answered())  # The second site holds no planned device.
     records.add(THIRD_SITE, short_marker())  # The read of the third site lost one or more pages.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
-    assert str(refusal) == SHORT_MESSAGE.format(names="SITE-THREE")  # The short site comes before the unplanned.
+    assert str(refusal) == SHORT_MESSAGE.format(place=ONE_PLACE, names="SITE-THREE")  # Short before the unplanned.
 
 
 @pytest.mark.parametrize("every_site_planned", [True, False], ids=["plain-save", "retry-save"])
@@ -253,4 +255,4 @@ def test_a_short_site_stops_each_save(every_site_planned: bool) -> None:
     records.add(FIRST_SITE, short_marker())  # The read of the first site lost one or more pages.
     records.add(SECOND_SITE, answered())  # The second site holds no planned device.
     refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
-    assert str(refusal) == SHORT_MESSAGE.format(names="SITE-ONE")  # Not the old refusal of the route.
+    assert str(refusal) == SHORT_MESSAGE.format(place=ONE_PLACE, names="SITE-ONE")  # Not the old refusal of the route.

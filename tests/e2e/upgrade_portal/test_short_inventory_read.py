@@ -45,7 +45,13 @@ CHOSEN_STRATEGY = "serial"  # Neither the form default nor the service default, 
 ORG_BANNER_ID = "org-upgrade-partial-inventory"  # The Caution banner of the multi-site options page.
 SITE_BANNER_ID = "upgrade-partial-inventory"  # The Caution banner of the single-site options page.
 FLASH_ID = "flash-message"  # The shared message region of the layout.
-ORG_REFUSAL_TEXT = f"The portal did not read the complete device list at these sites: {SHORT_SITE_NAME}."
+ORG_REFUSAL_TEXT = (  # Issue #3462: the refusal of one short site names "this site".
+    f"The portal did not read the complete device list at this site: {SHORT_SITE_NAME}."
+)
+ORG_BANNER_TEXT = (  # Issue #3462: the whole banner of one short site, with the singular nouns.
+    f"The portal did not read the complete device list at this site: {SHORT_SITE_NAME}. "
+    "The device table can leave out devices of that site. Reload this page before you save the options."
+)
 SITE_REFUSAL_TEXT = (  # The text of `options.PARTIAL_INVENTORY_MESSAGE`, which the single-site save answers.
     "The portal did not read the complete device list of this site. Reload this page. Then save the options again."
 )
@@ -214,6 +220,7 @@ def test_the_multi_site_page_names_the_short_site_and_refuses_the_save(short_rea
     sync_api.expect(banner).to_be_visible()  # The operator sees the gap before the plan.
     sync_api.expect(banner).to_contain_text(SHORT_SITE_NAME)  # The banner names the short-read site.
     sync_api.expect(banner).not_to_contain_text(SITE_NAME)  # The complete site stays out of the banner.
+    sync_api.expect(banner).to_have_text(ORG_BANNER_TEXT)  # Issue #3462: one site takes the singular nouns.
     assert save_screenshot(page, "multi-site-banner.png").exists()  # The banner above the form.
     fill_the_plan(page)  # Type the plan of the operator.
     page.get_by_test_id("org-upgrade-review").click()  # Try to save the plan.

@@ -54,12 +54,30 @@ GATEWAY_NAME = "Gateway Site"  # The name of the site with only a gateway.
 OPTIONS_SESSION_KEY = "org_upgrade_options"  # The cookie key that holds the saved options.
 OPTIONS_API = "/api/org-upgrades/options"  # The save of the multi-site options.
 REFUSAL_CODE = "org_upgrade_options_invalid"  # The error code of each refused save.
-UNREAD_START = UNREAD_MESSAGE.split("{names}", maxsplit=1)[0]  # The fixed text before the names.
-UNPLANNED_START = UNPLANNED_MESSAGE.split("{names}", maxsplit=1)[0]  # The fixed text before the names.
+UNREAD_START = UNREAD_MESSAGE.split("{place}", maxsplit=1)[0]  # The fixed text before the place words.
+UNPLANNED_START = UNPLANNED_MESSAGE.split("{place}", maxsplit=1)[0]  # The fixed text before the place words.
+ONE_PLACE = "this site"  # Issue #3462: the place words of a refusal that names one site.
+MANY_PLACE = "these sites"  # Issue #3462: the place words of a refusal that names two or more sites.
 MALFORMED_BODY = '{"selected_types": ["ap"], "strategy": "canary", bad json'  # No JSON reader accepts it.
 OPTIONS_PAGE = "/upgrade/org/options"  # The multi-site options page.
 PARTIAL_BANNER_PATTERN = r'data-testid="org-upgrade-partial-inventory">\s*<span>(.*?)</span>'  # Issue #3424.
 SHORT_REASON = {"section": "upgrade_inventory", "reason": "page_count_mismatch", "http_status": 200}  # Issue #3424.
+BANNER_ADVICE = "Reload this page before you save the options."  # The last sentence of the short-read banner.
+ONE_SHORT_BANNER = (  # Issue #3462: the whole banner for one short site.
+    f"The portal did not read the complete device list at this site: {SITE_TWO_NAME}. "
+    f"The device table can leave out devices of that site. {BANNER_ADVICE}"
+)
+TWO_SHORT_BANNER = (  # Issue #3462: the whole banner for two short sites.
+    f"The portal did not read the complete device list at these sites: {FIRST_NAME}, {SITE_TWO_NAME}. "
+    f"The device table can leave out devices of those sites. {BANNER_ADVICE}"
+)
+SAVE_ADVICE = "Reload this page. Then save the options again."  # The last sentences of the short save refusal.
+ONE_SHORT_REFUSAL = (  # Issue #3462: the whole save refusal for one short site.
+    f"The portal did not read the complete device list at this site: {SITE_TWO_NAME}. {SAVE_ADVICE}"
+)
+TWO_SHORT_REFUSAL = (  # Issue #3462: the whole save refusal for two short sites.
+    f"The portal did not read the complete device list at these sites: {FIRST_NAME}, {SITE_TWO_NAME}. {SAVE_ADVICE}"
+)
 CANARY_PHASES = [1, 10, 50, 100]  # The phases of the canary plan below.
 CANARY_PLAN = {  # A canary plan of the access points and the switches, as the page script posts it.
     "selected_types": ["ap", "switch"],
@@ -207,7 +225,7 @@ def test_an_empty_last_site_stops_the_save_and_names_the_site(site_app: SiteApp)
     """FR-002: the old save replaced the canary plan with the defaults. The new save names the empty site."""
     with signed_client(site_app, (site_app.first_site, EMPTY_SITE)) as client:  # The empty site comes last.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-        assert message == UNREAD_MESSAGE.format(names=EMPTY_NAME)  # The refusal names the site, not its identifier.
+        assert message == UNREAD_MESSAGE.format(place=ONE_PLACE, names=EMPTY_NAME)  # The name, not the identifier.
         assert saved_options(client) is None  # The confirm page has no options to show.
     assert site_app.store.records == {}  # No plan exists, so no child job can start.
 
@@ -216,7 +234,7 @@ def test_an_empty_first_site_stops_the_save_the_same_way(site_app: SiteApp) -> N
     """FR-002: the old save dropped the empty site with no message. The new save names it in each order."""
     with signed_client(site_app, (EMPTY_SITE, site_app.first_site)) as client:  # The empty site comes first.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-        assert message == UNREAD_MESSAGE.format(names=EMPTY_NAME)  # The order of the selection changes nothing.
+        assert message == UNREAD_MESSAGE.format(place=ONE_PLACE, names=EMPTY_NAME)  # The order changes nothing.
         assert saved_options(client) is None  # The confirm page has no options to show.
     assert site_app.store.records == {}  # No plan exists, so no child job can start.
 
@@ -226,7 +244,7 @@ def test_a_failed_inventory_read_stops_the_save(site_app: SiteApp) -> None:
     site_app.failed_reads.add(SITE_TWO)  # The page showed the devices, and the read at the save fails.
     with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-    assert message == UNREAD_MESSAGE.format(names=SITE_TWO_NAME)  # The refusal names the site of the failed read.
+    assert message == UNREAD_MESSAGE.format(place=ONE_PLACE, names=SITE_TWO_NAME)  # The site of the failed read.
     assert site_app.store.records == {}  # No plan exists, so the devices of the site cannot drop out.
 
 
@@ -235,7 +253,7 @@ def test_a_failed_view_read_stops_the_save_as_an_unread_site(site_app: SiteApp) 
     site_app.failed_views.add(SITE_TWO)  # The page showed the devices, and the view read at the save fails.
     with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-    assert message == UNREAD_MESSAGE.format(names=SITE_TWO_NAME)  # Not the refusal for a site of unchecked types.
+    assert message == UNREAD_MESSAGE.format(place=ONE_PLACE, names=SITE_TWO_NAME)  # Not the unchecked-type text.
     assert site_app.store.records == {}  # No plan exists, so the devices of the site cannot drop out.
 
 
@@ -244,14 +262,14 @@ def test_two_unread_sites_share_one_refusal(site_app: SiteApp) -> None:
     site_app.failed_reads.add(SITE_TWO)  # The second unread site has devices, and its read fails.
     with signed_client(site_app, (EMPTY_SITE, site_app.first_site, SITE_TWO)) as client:  # Two unread sites.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-    assert message == UNREAD_MESSAGE.format(names=f"{EMPTY_NAME}, {SITE_TWO_NAME}")  # One message, both names.
+    assert message == UNREAD_MESSAGE.format(place=MANY_PLACE, names=f"{EMPTY_NAME}, {SITE_TWO_NAME}")  # Both names.
 
 
 def test_a_site_with_no_checked_device_type_stops_the_save(site_app: SiteApp) -> None:
     """FR-003: a site with only an unchecked device type must not drop out of the plan with no message."""
     with signed_client(site_app, (site_app.first_site, GATEWAY_SITE)) as client:  # The plan checks no gateway.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-        assert message == UNPLANNED_MESSAGE.format(names=GATEWAY_NAME)  # The refusal names the skipped site.
+        assert message == UNPLANNED_MESSAGE.format(place=ONE_PLACE, names=GATEWAY_NAME)  # The skipped site.
         assert saved_options(client) is None  # The confirm page has no options to show.
     assert site_app.store.records == {}  # No plan exists, so no child job can start.
 
@@ -296,7 +314,8 @@ def test_a_malformed_or_empty_body_with_an_empty_site_saves_no_plan(site_app: Si
         answer = client.post(OPTIONS_API, data=body, content_type="application/json")  # The page never posts it.
         assert answer.status_code == 400  # The save refuses the body before a plan exists.
         error = answer.get_json()["error"]  # The structured refusal.
-        assert error == {"code": REFUSAL_CODE, "message": UNREAD_MESSAGE.format(names=EMPTY_NAME)}  # Site first.
+        unread = UNREAD_MESSAGE.format(place=ONE_PLACE, names=EMPTY_NAME)  # The refusal of the empty site.
+        assert error == {"code": REFUSAL_CODE, "message": unread}  # The site refusal comes first.
         assert saved_options(client) is None  # The confirm page has no options to show.
     assert site_app.store.records == {}  # No plan exists, so no child job can start.
 
@@ -313,7 +332,7 @@ def test_a_failed_name_read_names_each_site_by_its_identifier(site_app: SiteApp,
     site_app.app.config["MIST_READER"] = reader  # Only the site list fails.
     with signed_client(site_app, (site_app.first_site, EMPTY_SITE)) as client:  # The empty site comes last.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-    assert message == UNREAD_MESSAGE.format(names=EMPTY_SITE)  # The identifier replaces the unread name.
+    assert message == UNREAD_MESSAGE.format(place=ONE_PLACE, names=EMPTY_SITE)  # The identifier replaces the name.
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +371,7 @@ def test_a_short_view_stops_the_save_and_names_the_site(site_app: SiteApp) -> No
     site_app.short_views.add(SITE_TWO)  # The view read of the second site stopped after the first page.
     with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-        assert message == SHORT_MESSAGE.format(names=SITE_TWO_NAME)  # The refusal names the short site.
+        assert message == SHORT_MESSAGE.format(place=ONE_PLACE, names=SITE_TWO_NAME)  # The refusal names the site.
         assert saved_options(client) is None  # The confirm page has no options to show.
     assert site_app.store.records == {}  # No plan exists, so no device of a lost page can drop out.
 
@@ -362,7 +381,7 @@ def test_a_short_save_read_stops_the_save_and_names_the_site(site_app: SiteApp) 
     site_app.short_reads.add(SITE_TWO)  # The page read was complete, and the read at the save is short.
     with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-        assert message == SHORT_MESSAGE.format(names=SITE_TWO_NAME)  # Not the single-site text "this site".
+        assert message == SHORT_MESSAGE.format(place=ONE_PLACE, names=SITE_TWO_NAME)  # Not the single-site text.
         assert saved_options(client) is None  # The confirm page has no options to show.
     assert site_app.store.records == {}  # No plan exists, so no device of a lost page can drop out.
 
@@ -372,4 +391,47 @@ def test_an_unread_site_comes_before_a_short_site(site_app: SiteApp) -> None:
     site_app.short_views.add(SITE_TWO)  # The view read of the second site stopped after the first page.
     with signed_client(site_app, (site_app.first_site, SITE_TWO, EMPTY_SITE)) as client:  # One short, one unread.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
-    assert message == UNREAD_MESSAGE.format(names=EMPTY_NAME)  # The unread site comes first.
+    assert message == UNREAD_MESSAGE.format(place=ONE_PLACE, names=EMPTY_NAME)  # The unread site comes first.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3462: a text that names one site takes the singular noun.
+# ---------------------------------------------------------------------------
+
+
+def banner_of(site_app: SiteApp) -> str | None:
+    """Open the options page for the first site and the second site, and return the banner text."""
+    with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
+        answer = client.get(OPTIONS_PAGE)  # Open the options page.
+    assert answer.status_code == 200  # A short read never refuses the page.
+    return partial_banner_text(answer.get_data(as_text=True))  # The banner above the device tables.
+
+
+def refusal_of(site_app: SiteApp) -> str:
+    """Save the canary plan for the first site and the second site, and return the refusal text."""
+    with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
+        return refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
+
+
+def test_the_banner_of_one_short_site_says_this_site(site_app: SiteApp) -> None:
+    """FR-001: the old banner said "at these sites" and "those sites" for one site."""
+    site_app.short_views.add(SITE_TWO)  # The view read of the second site stopped after the first page.
+    assert banner_of(site_app) == ONE_SHORT_BANNER  # The whole banner, with the singular nouns.
+
+
+def test_the_banner_of_two_short_sites_says_these_sites(site_app: SiteApp) -> None:
+    """FR-002: two short sites keep the plural nouns, in the order of the selection."""
+    site_app.short_views.update((site_app.first_site, SITE_TWO))  # The view read of each site stopped early.
+    assert banner_of(site_app) == TWO_SHORT_BANNER  # The whole banner, with the plural nouns.
+
+
+def test_the_short_save_refusal_of_one_site_says_this_site(site_app: SiteApp) -> None:
+    """FR-003: the whole save refusal of one short site, with no template in the check."""
+    site_app.short_reads.add(SITE_TWO)  # The read at the save of the second site is short.
+    assert refusal_of(site_app) == ONE_SHORT_REFUSAL  # The old text said "at these sites: Site Two".
+
+
+def test_the_short_save_refusal_of_two_sites_says_these_sites(site_app: SiteApp) -> None:
+    """FR-003: two short sites keep the plural noun, in the order of the selection."""
+    site_app.short_reads.update((site_app.first_site, SITE_TWO))  # The read at the save of each site is short.
+    assert refusal_of(site_app) == TWO_SHORT_REFUSAL  # The whole refusal, with the plural noun.
