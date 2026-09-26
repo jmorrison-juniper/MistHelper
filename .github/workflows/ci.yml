@@ -632,9 +632,12 @@ jobs:
 
           event_name = os.environ.get("EVENT_NAME", "")  # Tell pull requests from push runs.
           base_ref = os.environ.get("BASE_REF", "")  # Name the branch that the pull request targets.
+          baseline = ".github/test-quality-baseline.json"  # MistHelper owns the record of its findings (issue #3422).
+          gate = ["test-quality-analyzer", "--gate", "--baseline", baseline]  # Each run compares against that file.
           full_gate_paths = (  # These paths can change analyzer output outside the changed test files.
               ".github/workflows/ci.yml",  # A workflow change must prove the full gate.
               "requirements-dev.txt",  # A tooling version change must prove the full gate.
+              baseline,  # A baseline change must prove that each current finding still matches.
           )
 
           def is_test_file(path: str) -> bool:
@@ -643,7 +646,7 @@ jobs:
 
           if event_name != "pull_request":
               raise SystemExit(  # Push and manual runs prove the full repository baseline.
-                  subprocess.call(["test-quality-analyzer", "--gate"]),
+                  subprocess.call(gate),
               )
 
           changed = subprocess.check_output(  # Read the pull request file set from git.
@@ -652,7 +655,7 @@ jobs:
           ).splitlines()
           if any(path in full_gate_paths for path in changed):
               raise SystemExit(  # Analyzer and workflow changes must prove the full repository baseline.
-                  subprocess.call(["test-quality-analyzer", "--gate"]),
+                  subprocess.call(gate),
               )
 
           changed_tests = [path for path in changed if Path(path).exists() and is_test_file(path)]  # Scan live tests.
@@ -662,7 +665,7 @@ jobs:
               print("gate: 0 new findings vs baseline")  # Keep the ratchet result visible.
               raise SystemExit(0)  # A pull request without changed tests cannot add a test-quality finding.
 
-          command = ["test-quality-analyzer", "--gate", "--roots", *changed_tests]  # Scope.
+          command = [*gate, "--roots", *changed_tests]  # Scope.
           raise SystemExit(subprocess.call(command))  # Return the analyzer result to the job.
           PY
 
