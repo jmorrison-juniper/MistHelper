@@ -12,9 +12,11 @@ import subprocess  # Drive the codemod CLI as a subprocess so we test the public
 import sys  # Path to the active python interpreter for the subprocess call.
 from pathlib import Path  # Portable filesystem handling.
 
+import tools.codemod_logging_lazy as codemod_logging_lazy
+
 REPO_ROOT = Path(__file__).resolve().parent.parent  # tests/ -> repo root.
 SYNTHETIC_INPUT = REPO_ROOT / "tests" / "fixtures" / "issue_429_codemod_synthetic_input.py"  # Test target.
-CODEMOD = REPO_ROOT / "tools" / "codemod_logging_lazy.py"  # CLI we are exercising.
+CODEMOD = Path(codemod_logging_lazy.__file__).resolve()  # CLI provided by the installed tooling package.
 
 
 def test_codemod_dry_run_is_idempotent(tmp_path: Path) -> None:

@@ -11,7 +11,6 @@ import pathlib  # Builds paths to the shared fixture files.
 from collections.abc import Callable  # Types the factory fixtures.
 
 import pytest  # The test framework.
-
 from tools.ste_linter.analysis import Backend, GrammarAnalyzer, get_backend  # The analysis parts.
 from tools.ste_linter.config import LinterConfig  # The configuration.
 from tools.ste_linter.dictionary import Dictionary  # The optional dictionary.

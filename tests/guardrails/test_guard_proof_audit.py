@@ -6,7 +6,7 @@ import json  # Parse generated analyzer reports for detector metric coverage che
 from pathlib import Path  # Build repository-relative paths without hardcoded separators.
 
 import pytest  # Type pytest fixtures used by repository guard tests.
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.guard_proof_audit import GuardProofAuditor  # Exercise the same auditor used by the command line.
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Point the audit at the checked out repository.
@@ -105,7 +105,7 @@ class TestRepositoryGuardProofAudit:
 
     def _registered_detector_modules(self) -> set[str]:
         """Return detector modules that register an analyzer detector."""
-        detection_root = REPOSITORY_ROOT / "tools" / "test_quality_analyzer" / "detection"  # Detector package.
+        detection_root = Path(test_quality_analyzer.__file__).resolve().parent / "detection"  # Installed package.
         modules: set[str] = set()  # Accumulate real detector module names only.
         for path in detection_root.glob("*.py"):  # Scan the package so a new detector changes the count.
             source = path.read_text(encoding="utf-8")  # Read without import side effects.

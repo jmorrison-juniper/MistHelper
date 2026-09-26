@@ -19,7 +19,7 @@ from pathlib import Path  # Compose the schema path.
 from types import MappingProxyType  # Freeze mappings before ConfigSnapshot construction.
 
 import pytest  # pytest.raises for validator failure cases.
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.test_quality_analyzer.detection import (  # SUT collaborators (types).
     Category,
     ConfigSnapshot,
@@ -34,13 +34,8 @@ from tools.test_quality_analyzer.reporting import (  # SUTs.
     ReportBuilder,
 )
 
-# Anchor path to the schema file so tests are robust to cwd shifts.
-_SCHEMA_PATH = (  # Repo-relative POSIX path resolved from this test file location.
-    Path(__file__).resolve().parents[3]  # tests/tools/test_quality_analyzer -> repo root.
-    / "tools"
-    / "test_quality_analyzer"
-    / "report.schema.json"
-)
+# Anchor the schema path to the installed package so tests work without a local tools tree.
+_SCHEMA_PATH = Path(test_quality_analyzer.__file__).resolve().parent / "report.schema.json"
 
 
 def _fixed_config() -> ConfigSnapshot:
@@ -182,6 +177,8 @@ def test_json_validates_against_schema() -> None:
     payload = json.loads(text)  # Re-parse so we validate the on-disk shape.
     # Validator raises on failure; no return value on success.
     builder.validate(payload, schema)  # Should not raise.
+    assert payload["findings"], "A validated payload must carry the findings it reported."
+    assert payload["engine_version"], "A validated payload must name the engine version."
 
 
 def test_validator_rejects_missing_required_field() -> None:

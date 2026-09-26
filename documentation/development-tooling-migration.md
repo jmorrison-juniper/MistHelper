@@ -49,25 +49,28 @@ on the old recipe. Edit `Containerfile`, then run
 
 ## Phase 2: delete the local copy
 
-Phase 2 is not started. Do not start it until the devtools repository
-publishes a package that MistHelper CI can install.
+Phase 2 is complete. The devtools repository defines an installable Hatch wheel
+and MistHelper pins its exact public Git commit in `requirements-dev.txt`, so CI
+does not need a package-index credential and a later devtools commit cannot
+change a build unexpectedly.
 
-Complete these steps in order.
+The migration changed the development environment only. Product imports and
+runtime commands remain in MistHelper; CI, pre-commit, and development scripts
+use the installed devtools package.
 
-1. Publish `misthelper-devtools` to a package index that CI can reach.
-2. Add `misthelper-devtools` to the MistHelper development requirements.
-3. Point every workflow step at the installed commands instead of the local
-   paths. Read `.github/workflows/ci.yml` for the current set.
-4. Point `.pre-commit-config.yaml` at the installed commands.
-5. Update `tests/unit/prod_readiness/test_subprocess_timeouts.py`. That test
-   imports `tools.symbol_diff` and `tools.compliance_analyzer`.
-6. Delete `tools/` from this repository.
-7. Decide where `src/juniper_skills/`, `scripts/juniper_skills/`, and
-   `tests/unit/juniper_skills/` belong. Phase 1 left all three in place.
-8. Move the `[tool.ste_linter]` table out of `pyproject.toml`. The linter that
-   reads it now lives in the devtools repository. The table names
-   `data/ste_dictionary.json`, and git does not track that file today.
+1. Make `misthelper-devtools` installable from a pinned commit — complete.
+2. Add `misthelper-devtools` to the MistHelper development requirements — complete.
+3. Point CI workflow steps at the installed package instead of local tool paths — complete.
+4. Point `.pre-commit-config.yaml` at the installed commands — complete.
+5. Update the subprocess-timeout tests to use the installed tool package — complete.
+6. Delete `tools/` from this repository after verifying its consumers — complete.
+7. Move the Juniper skill factory source, scripts, and tests to
+   `misthelper-devtools`. Repository searches found no product imports, and
+   the development-tooling repository contains the factory — complete.
+8. Move the `[tool.ste_linter]` settings out of `pyproject.toml` — complete;
+   `.ste-linter.toml` retains the same table and the workflows name it explicitly.
 
-Caution: step 6 removes the local copy of every tool. If CI still names a
-local path at that point, every gate that reads the path fails at once. Verify
-step 3 and step 4 on a branch before you delete the tree.
+Validation after the move: the focused integration and guard suite passes
+(136 tests), Ruff passes for the changed Python files, the citation linter
+checks 249 citations with no unresolved references, and a rebuilt wheel has no
+`tools/` or `src/juniper_skills/` entries.

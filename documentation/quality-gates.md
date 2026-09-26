@@ -136,7 +136,7 @@ The repository writes every document in Simplified Technical English. The linter
 grades each Markdown file and each Python file at a threshold of 80.
 
 ```powershell
-.venv\Scripts\python.exe -m tools.ste_linter --min-score 80 <file>
+.venv\Scripts\ste-linter.exe --config .ste-linter.toml --min-score 80 <file>
 ```
 
 Read [the writing guide](ASD-STE100_writing-guide.md) for the rules.

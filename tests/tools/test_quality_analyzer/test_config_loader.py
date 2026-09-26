@@ -14,7 +14,6 @@ from __future__ import annotations  # Postponed annotations for consistency.
 from pathlib import Path  # Path type used by ConfigLoader.load().
 
 import pytest  # pytest.raises for ConfigError assertions.
-
 from tools.test_quality_analyzer.config import ConfigError, ConfigLoader  # SUT.
 from tools.test_quality_analyzer.detection import Severity  # For override assertions.
 

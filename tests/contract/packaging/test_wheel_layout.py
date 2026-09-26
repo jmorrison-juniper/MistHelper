@@ -39,6 +39,7 @@ _REQUIRED_PACKAGES = ("src", "web_portal")
 # The modules that sit at the repository root. No package entry can reach them,
 # so the wheel target names each one under `force-include`.
 _REQUIRED_ROOT_MODULES = ("MistHelper.py", "wsgi.py", "wsgi_capture.py")
+_FORBIDDEN_WHEEL_PATHS = ("src/juniper_skills/**",)
 
 
 @pytest.fixture(name="wheel_target", scope="module")
@@ -80,6 +81,14 @@ def test_the_wheel_ships_no_development_folder(wheel_target: dict[str, Any], nam
 
     # WHY: a copied folder in site-packages can shadow a real package of the same name.
     assert name not in wheel_target.get("packages", []), f"{name} must not reach the wheel"
+
+
+@pytest.mark.parametrize("pattern", _FORBIDDEN_WHEEL_PATHS)
+def test_the_wheel_excludes_moved_skill_factory(wheel_target: dict[str, Any], pattern: str) -> None:
+    """The moved skill factory MUST NOT ship inside the product's `src` package."""
+    logger.info("Checking that the wheel excludes %s", pattern)
+
+    assert pattern in wheel_target.get("exclude", []), f"{pattern} must not reach the wheel"
 
 
 @pytest.mark.parametrize("name", _REQUIRED_ROOT_MODULES)

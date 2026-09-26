@@ -13,8 +13,10 @@ import subprocess  # Drive the codemod CLI as a subprocess so we exercise the pu
 import sys  # Path to the active interpreter for the subprocess call.
 from pathlib import Path  # Portable filesystem handling on Windows + POSIX.
 
+import tools.codemod_logging_lazy as codemod_logging_lazy
+
 REPO_ROOT = Path(__file__).resolve().parent.parent  # tests/ -> repo root.
-CODEMOD = REPO_ROOT / "tools" / "codemod_logging_lazy.py"  # The CLI under test.
+CODEMOD = Path(codemod_logging_lazy.__file__).resolve()  # CLI provided by the installed tooling package.
 
 
 def _run_codemod(target: Path) -> None:

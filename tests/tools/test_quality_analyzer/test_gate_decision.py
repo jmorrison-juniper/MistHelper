@@ -5,11 +5,12 @@ from __future__ import annotations  # Keep annotations postponed for Python 3.13
 from pathlib import Path  # Build hermetic baseline paths.
 
 import pytest  # Parametrize the missing and corrupt baseline cases.
-
+import tools.test_quality_analyzer as test_quality_analyzer
 from tools.test_quality_analyzer.__main__ import TestQualityCLI, main  # Exercise CLI gate scope behavior.
 from tools.test_quality_analyzer.baseline import BaselineDiffer, evaluate_gate  # Exercise the direct gate seam.
 from tools.test_quality_analyzer.detection import Category, Finding, Severity  # Build minimal findings.
 
+_ANALYZER_ROOT = Path(test_quality_analyzer.__file__).resolve().parent
 _EMPTY_BODY_MARKER = b""  # Mark empty-body coverage for the analyzer that scans this test file.
 _MALFORMED_JSON_MARKER = "JSONDecodeError"  # Mark malformed-JSON coverage for the analyzer.
 _FROZEN_TIMESTAMP = "2026-07-14T00:00:00+00:00"  # Keep CLI report output deterministic.
@@ -128,7 +129,7 @@ def _scoped_cli_args(repo_root: Path, tmp_path: Path, baseline_path: Path, root:
         "--roots",
         str(root),  # Analyze the single scoped path under test.
         "--config",
-        str(repo_root / "tools" / "test_quality_analyzer" / "config.toml"),  # Use production rule config.
+        str(_ANALYZER_ROOT / "config.toml"),  # Use production rule config.
         "--report",
         str(tmp_path / "report.json"),  # Avoid writing the repository output report.
         "--summary",

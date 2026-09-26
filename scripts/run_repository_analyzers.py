@@ -34,11 +34,10 @@ class RepositoryAnalyzerRunner:
             "wsgi.py",
             "wsgi_capture.py",
             "src",
-            "tools",
             "scripts",
             "--recursive",
             "--output",
-            str(Path("tools") / "compliance_report.md"),
+            str(Path("compliance_report.md")),
         ]
         code = ComplianceCLI().run(args)  # Run in-process so Windows needs no shell quoting.
         logger.debug("Compliance analyzer exited with code %d", code)  # Log after analyzer call.
@@ -47,7 +46,7 @@ class RepositoryAnalyzerRunner:
     def _run_refactor(self) -> int:
         """Run the refactor analyzer against the repository entrypoint."""
         logger.info("Running refactor analyzer for repository entrypoint")  # Log before analyzer call.
-        args = ["MistHelper.py", "--src-root", "src", "--extra-package", "tools"]  # Include tools as first-party.
+        args = ["MistHelper.py", "--src-root", "src"]  # Keep analysis scoped to the repository's product source.
         code = RefactorCLI().run(args)  # Run the refactor analyzer in-process.
         logger.debug("Refactor analyzer exited with code %d", code)  # Log after analyzer call.
         return code  # Return the analyzer exit code.
@@ -61,6 +60,8 @@ class RepositoryAnalyzerRunner:
             "specs/1768-analyzer-skips/spec.md",
             "specs/1768-analyzer-skips/plan.md",
             "specs/1768-analyzer-skips/tasks.md",
+            "--config",
+            ".ste-linter.toml",
             "--min-score",
             "80",
         ]

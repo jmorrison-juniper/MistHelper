@@ -6,7 +6,6 @@ import json  # Reads back written output and builds temporary files.
 import pathlib  # Builds temporary paths.
 
 import pytest  # Provides the monkeypatch and capture fixtures.
-
 from tools.ste_linter.dictionary import extract as extract_module  # The extractor module for the glue tests.
 from tools.ste_linter.dictionary import quality as quality_module  # The harness module for the glue tests.
 from tools.ste_linter.dictionary.extract import (  # The extractor parts under test.
