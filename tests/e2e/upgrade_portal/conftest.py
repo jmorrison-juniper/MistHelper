@@ -66,6 +66,22 @@ from tests.e2e.upgrade_portal.empty_site_seeds import (  # Issue #3389: the site
     EMPTY_SITE_ID,
     EMPTY_SITE_NAME,
 )
+from tests.e2e.upgrade_portal.later_check_seeds import (  # Issue #3439: the reads that lose page two on request.
+    LATER_CHECK_BROWSER_ID,
+    LATER_CHECK_EMAIL,
+    LATER_CHECK_HOST,
+    LATER_CHECK_LIMIT,
+    LATER_CHECK_LOST_BODY,
+    LATER_CHECK_LOST_STATUS,
+    LATER_CHECK_ORG_ID,
+    LATER_CHECK_ORG_NAME,
+    LATER_CHECK_PAGES,
+    LATER_CHECK_SERIES,
+    LATER_CHECK_TOTAL,
+    LOSE_PAGE_HEADER,
+    LOSE_PAGE_VALUE,
+    LaterCheckSeeds,
+)
 from tests.e2e.upgrade_portal.lost_page_seeds import (  # Issue #3438: the organization whose reads lose page two.
     LOST_PAGE_BODY,
     LOST_PAGE_BROWSER_ID,
@@ -261,6 +277,7 @@ SECOND_SITE_AP_MAC = "000000000101"  # The access point of the second site, whic
 SITE_DEVICE_SERIES = {  # The address digit and the name word of each site with its own devices.
     SECOND_SITE_ID: (1, "Site Two"),  # The second site of issue #3249.
     SHORT_SITE_ID: (SHORT_SITE_DIGIT, SHORT_SITE_LABEL),  # The short-read site of issue #3424.
+    **LATER_CHECK_SERIES,  # Issue #3439: the three sites of the later-check organization, digits 3 to 5.
 }
 
 STAND_IN_RUN_ID = "e2e-run-0001"  # The run that owns the comparison captures below.
@@ -954,6 +971,79 @@ class LostPageCloudSession(StandInCloudSession):
         return build_sdk_answer(200, body, headers, address)  # Page one, with a next link to page two.
 
 
+class LaterCheckCloudSession(StandInCloudSession):
+    """The cloud session of the later-check operator of issue #3439.
+
+    Why:
+        The site reads of this operator run the real page walk of
+        `select.default_cloud_read`. This session answers both pages of each
+        site read with a real SDK answer object, so the SDK builds the next
+        link from the page headers. A request that carries the lose-page
+        header loses page two, so a journey chooses the moment of the fault.
+        Every other read keeps the answers of the parent class, so no call
+        reaches the network.
+
+    Attributes:
+        privileges: The one organization that the picker of this operator shows.
+    """
+
+    def __init__(self) -> None:
+        """Store the privilege record of the later-check organization."""
+        super().__init__()  # Keep the retry settings that the destructive write guard reads.
+        self.privileges = [{"scope": "org", "org_id": LATER_CHECK_ORG_ID, "name": LATER_CHECK_ORG_NAME}]  # One org.
+
+    @staticmethod
+    def lose_page_requested() -> bool:
+        """Report whether the current request asks the site reads to lose page two.
+
+        Returns:
+            True when the browser request carries the lose-page header.
+        """
+        if not flask.has_request_context():  # A capture thread reads outside a request, so it keeps page two.
+            return False  # Only a journey request can ask for the fault.
+        return flask.request.headers.get(LOSE_PAGE_HEADER, "") == LOSE_PAGE_VALUE  # The journey set the header.
+
+    @staticmethod
+    def page_answer(rows: list[dict[str, Any]], page_number: int, address: str) -> Any:
+        """Build the SDK answer of one whole page of a site read.
+
+        Args:
+            rows: The rows of the page.
+            page_number: The number of the page, counted from one.
+            address: The full request address. The SDK builds the next link from it.
+
+        Returns:
+            The SDK answer of the page.
+        """
+        page_headers = {"X-Page-Total": str(LATER_CHECK_TOTAL), "X-Page-Limit": str(LATER_CHECK_LIMIT)}  # 2 pages.
+        headers = {**JSON_TYPE, **page_headers, "X-Page-Page": str(page_number)}  # The SDK reads all three.
+        body = json.dumps(rows).encode("utf-8")  # The rows of the page.
+        return build_sdk_answer(200, body, headers, address)  # Page one links to page two. Page two links to none.
+
+    def mist_get(self, uri: str, query: dict[str, str] | None = None) -> Any:
+        """Answer one page of a site read, and lose page two when the journey asks.
+
+        Args:
+            uri: The request path, or the next link that the SDK built.
+            query: The query of page one. A next link carries its own query.
+
+        Returns:
+            The SDK answer of the page, or the answer of the parent class for any other read.
+        """
+        path = uri.split("?", 1)[0]  # The read path without the query of a next link.
+        if path not in LATER_CHECK_PAGES:  # Any other read keeps the fixed answers of the parent class.
+            return super().mist_get(uri, query)
+        logger.info("Answer one page of the later-check read %s", path)  # Log before the answer.
+        page_one, page_two = LATER_CHECK_PAGES[path]  # The rows of both pages of this read.
+        if "page=" not in uri:  # Page one. The SDK adds the page number to this address for page two.
+            return self.page_answer(page_one, 1, f"{LATER_CHECK_HOST}{path}?{urlencode(query or {})}")
+        address = f"{LATER_CHECK_HOST}{uri}"  # The SDK sends the page-two address as a path only.
+        if self.lose_page_requested():  # The journey asks for a gateway fault on page two.
+            logger.debug("The later-check read %s loses page two", path)  # Log the fault before the answer.
+            return build_sdk_answer(LATER_CHECK_LOST_STATUS, LATER_CHECK_LOST_BODY, HTML_TYPE, address)
+        return self.page_answer(page_two, 2, address)  # The whole page two.
+
+
 class E2EOrgUpgradeService:
     """Return deterministic organization job results to the browser server."""
 
@@ -1132,20 +1222,28 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]] | 
         answers page one and loses page two, so the page walk and the two
         notes of the picker run as they do for the live cloud.
 
+        Issue #3439. The later-check organization runs the real read too. Its
+        session loses page two only for a request with the lose-page header.
+        The portal keeps a whole read for one minute, so that request clears
+        the kept reads first. A kept read would hide the lost page.
+
     Args:
         name: The read name that the route asked for.
-        **parameters: The call parameters. Only the lost-page organization changes the result.
+        **parameters: The call parameters. Only the two real-walk organizations change the result.
 
     Returns:
         The records of the named read, or an empty list for any other name.
-        The lost-page organization gets the records and the partial reasons.
+        A real-walk organization gets the records and the partial reasons.
     """
-    if parameters.get("org_id") == LOST_PAGE_ORG_ID:  # Issue #3438: the organization whose reads lose page two.
+    if parameters.get("org_id") in (LOST_PAGE_ORG_ID, LATER_CHECK_ORG_ID):  # Issues #3438 and #3439: real walks.
         from src.upgrade_portal.app.routes import select  # Late, so the module holds the seam of the child server.
 
-        logger.info("Run the real page walk of %s for the lost-page organization", name)  # Log before the read.
-        read = select.default_cloud_read(name, **parameters)  # The real walk over the lost-page session.
-        logger.debug("The lost-page read %s holds %s record(s)", name, len(read.records))  # Log the count only.
+        if LaterCheckCloudSession.lose_page_requested():  # Issue #3439: a kept whole read would hide the lost page.
+            logger.info("Clear the kept cloud reads, so the read of %s loses page two", name)  # Log before the clear.
+            select.CLOUD_READ_CACHE.clear()  # The next read reaches the session, which loses page two.
+        logger.info("Run the real page walk of %s for a real-walk organization", name)  # Log before the read.
+        read = select.default_cloud_read(name, **parameters)  # The real walk over the session of the operator.
+        logger.debug("The real-walk read %s holds %s record(s)", name, len(read.records))  # Log the count only.
         return read  # The records and the partial reasons of the read.
     del parameters  # Every other organization answers the fixed records below.
     if name == "listOrgSites":  # The name and the identifier of each site.
@@ -2133,6 +2231,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
             org_controls_written = OrgControlSeeds.write(upgrade, identity)  # Issue #3247: two operations.
             org_cancel_written = OrgCancelSeeds.write(upgrade, identity)  # Issue #3246: the running operation.
             org_ended_written = OrgEndedSeeds.write(upgrade, identity)  # Issue #3367: one child job ended first.
+            later_check_written = LaterCheckSeeds.write(upgrade, identity)  # Issue #3439: the retry of page two.
     except Exception as failure:
         logger.warning(
             "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
@@ -2143,7 +2242,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
         (
             "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
             "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s org_controls=%s "
-            "org_cancel=%s org_ended=%s"
+            "org_cancel=%s org_ended=%s later_check=%s"
         ),
         failed_written,
         stopped_written,
@@ -2156,6 +2255,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
         org_controls_written,
         org_cancel_written,
         org_ended_written,
+        later_check_written,
     )
 
 
@@ -2282,6 +2382,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     _register_operator(EMPTY_SITE_EMAIL, EMPTY_SITE_BROWSER_ID)  # Issue #3389: the operator of the empty site.
     _register_operator(SHORT_SITE_EMAIL, SHORT_SITE_BROWSER_ID)  # Issue #3424: the operator of the short-read site.
     _register_operator(LOST_PAGE_EMAIL, LOST_PAGE_BROWSER_ID, LostPageCloudSession())  # Issue #3438: lost pages.
+    _register_operator(LATER_CHECK_EMAIL, LATER_CHECK_BROWSER_ID, LaterCheckCloudSession())  # Issue #3439.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
 
@@ -2536,6 +2637,35 @@ def lost_page_operator_page(context: Any, capture_portal_server: str) -> Iterato
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
     yield opened  # The test reads the picker of the lost-page organization.
+    opened.close()  # A page left open would hold a browser target for the whole run.
+
+
+@pytest.fixture
+def later_check_operator_page(context: Any, capture_portal_server: str) -> Iterator[Any]:
+    """Open a browser page of the operator whose site reads lose page two on request.
+
+    Why:
+        Issue #3439. A later site check must refuse with the status 503 when
+        the site read lost a page. The cloud session of this operator loses
+        page two only for a request with the lose-page header. A separate
+        operator and a separate organization keep that switch and the stored
+        site set of this operator away from every other journey.
+
+    Args:
+        context: The browser context that `pytest-playwright` built.
+        capture_portal_server: The address of the running portal.
+
+    Yields:
+        The browser page, with the session cookies of the later-check operator.
+    """
+    del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
+    cookies = operator_session_cookies(LATER_CHECK_EMAIL, LATER_CHECK_BROWSER_ID, LATER_CHECK_ORG_ID)  # A new pair.
+    context.add_cookies(cookies)  # The session selects the later-check organization.
+    opened = context.new_page()  # The page then carries the session on its first request.
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    yield opened  # The test switches the lost page on and off with the request header.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
 

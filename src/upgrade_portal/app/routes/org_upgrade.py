@@ -70,6 +70,7 @@ from .select import (
     ORG_UPGRADE_OPTIONS_NONCE_KEY,
     ORG_UPGRADE_OPTIONS_ORG_KEY,
     ORG_UPGRADE_RETRY_KEY,
+    SiteListIncompleteError,
     build_site_rows,
     next_page_answer,
     org_display_name,
@@ -323,12 +324,34 @@ def active_context() -> tuple[str, list[str]] | None:
 
 
 def selected_rows(org_id: str, site_ids: list[str]) -> list[dict[str, Any]]:
-    """Return the selected site rows and preserve the selection order."""
+    """Return the selected site rows and preserve the selection order.
+
+    Why:
+        Issue #3439. A site read that lost a page can leave out a selected site
+        that exists. The function then raises `SiteListIncompleteError`, and the
+        error handler answers 503. A whole list keeps the empty answer, because
+        it proves that the organization does not hold the site.
+
+    Args:
+        org_id: The organization that holds the sites.
+        site_ids: The selected sites, in the order of the selection.
+
+    Returns:
+        The site rows in the order of the selection, or an empty list when a
+        whole list does not hold a selected site.
+
+    Raises:
+        SiteListIncompleteError: The site read lost a page, and a selected site
+            is not in the list.
+    """
     logger.info("Read the site rows of %s selected site(s)", len(site_ids))  # Log before the site list read.
-    index = {str(row.get("site_id", "")): row for row in build_site_rows(org_id).rows}  # Issue #3438: the rows.
-    if any(site_id not in index for site_id in site_ids):  # A selected site is not in the site list.
+    site_list = build_site_rows(org_id)  # Issue #3438: the rows and the completeness of the site read.
+    missing = site_list.missing_sites(site_ids)  # Issue #3439: each selected site that the list does not hold.
+    SiteListIncompleteError.raise_for_missing(len(missing), site_list.sites_complete)  # A lost page proves nothing.
+    if missing:  # A whole list proves that the organization does not hold a selected site.
         logger.warning("A selected site is not in the site list of the organization")  # Name no site record.
         return []  # The caller refuses the selection.
+    index = {str(row.get("site_id", "")): row for row in site_list.rows}  # One lookup for each selected site.
     logger.debug("Read %s selected site row(s)", len(site_ids))  # Log after the read.
     return [index[site_id] for site_id in site_ids]  # The rows in the order of the selection.
 

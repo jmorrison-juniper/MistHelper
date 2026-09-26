@@ -1,0 +1,37 @@
+{
+  "workflow": "speckit",
+  "specName": "A later site check names an incomplete site list",
+  "branch": "fix/3439-later-site-checks",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T14:20:48.639Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T14:47:19.000Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T14:51:09.000Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T17:19:35.310Z"
+    }
+  ]
+}
