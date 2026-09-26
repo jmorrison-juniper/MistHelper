@@ -6,7 +6,7 @@ MistHelper supports SSH server deployment for remote access with automatic sessi
 
 ```powershell
 # Start the SSH server, the web portal, and the data stores
-.\scripts\compose.ps1 up -d
+podman compose up -d
 
 # Connect from any SSH client
 ssh -p 2200 misthelper@localhost
@@ -111,8 +111,8 @@ ssh -p 2200 misthelper@127.0.0.1
 | Connection refused | Ensure container is running: `podman ps` |
 | Wrong password | Default is `misthelper123!` |
 | Permission denied (SSH) | Check SSH client settings, try `-o StrictHostKeyChecking=no` |
-| Permission denied (data dir) | Run `chmod -R 777 data/` on host before starting container |
-| `script.log` permission error | Data directory not writable -- fix with `chmod -R 777 data/` |
+| Permission denied (data dir) | Linux host: run `podman unshare chown -R 1000:1000 data`. Windows and macOS need no command. |
+| `script.log` permission error | Data directory not writable -- give it to UID 1000 |
 | Session not starting | Check container logs: `podman logs misthelper` |
 | Port conflict | Ensure port 2200 is available |
 | Multiple sessions interfering | Each connection should get unique session ID -- check logs |

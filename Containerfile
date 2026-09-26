@@ -38,8 +38,12 @@ RUN apt-get update && \
     apt-get install -y ca-certificates openssh-server sudo snmpd snmp && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user and configure SSH access
-RUN groupadd -r misthelper && useradd -r -g misthelper -m -s /bin/bash misthelper
+# Create non-root user and configure SSH access.
+# The identifiers stay pinned because the deployment documents tell a Linux
+# operator to give the data folder to this account. An automatic identifier
+# moves when the base image changes, and the documented number then goes stale
+# (issue #3465).
+RUN groupadd -g 1000 misthelper && useradd -u 1000 -g 1000 -m -s /bin/bash misthelper
 
 # Configure SSH server for restricted shell access
 RUN mkdir -p /var/run/sshd && \
