@@ -12,7 +12,7 @@ The new repository is `jmorrison-juniper/misthelper-devtools`.
 
 | Tree | Holds |
 | - | - |
-| `tools/` | The repository linters, the analyzers, the compliance checkers, and the symbol difference tool. |
+| `tools/` | Phase 2 deleted this tree. The `misthelper-devtools` package now supplies the repository linters, the analyzers, the compliance checkers, and the symbol difference tool. |
 | `scripts/` | The maintenance commands, the bootstrap helpers, and the report generators. |
 | `tests/` | The MistHelper test suite. |
 | `specs/` | The SpecKit records. |
@@ -36,6 +36,10 @@ map at run time. The map is product code, so it moved to
 `src/utils/zen_city_metadata.py`. The maintenance command stays in `scripts/`
 and it imports the new module. `src/utils/zscaler_probe.py` was promoted the
 same way in an earlier change.
+
+`pyproject.toml` still holds the optional dependency group named `ste-linter`.
+That group installs helper libraries for local checks. It is not a console
+script entry in the wheel.
 
 Warning: a product module must never import from `scripts/` or from `tools/`.
 The container no longer ships either tree, so such an import breaks the image

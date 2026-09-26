@@ -84,7 +84,7 @@ journey
 
 ## Destructive Operation Safety Requirements
 
-Requirements that MUST be met before any destructive operation executes. The
+Requirements that must be met before any destructive operation executes. The
 destructive set is menus 154-187, 189-191, 194, 206-208, and 239. It is not one
 unbroken block, so do not treat any range boundary as a shortcut. Menus 188 and
 193 sit inside those numbers and are safe, and menu 192 is interactive.
@@ -107,20 +107,22 @@ flowchart TB
     subgraph requirements["Safety Requirements - Menus 154-187, 189-191, 194, 206-208, 239"]
         SAF001["SAF-001: Explicit Confirmation<br/>Type exact word to proceed<br/>Risk: HIGH | Verify: test"]
         SAF002["SAF-002: EOF Handling<br/>All input calls handle EOFError<br/>Risk: HIGH | Verify: inspection"]
-        SAF003["SAF-003: No Blind Automation<br/>--menu flag requires confirmation<br/>Risk: HIGH | Verify: test"]
+        SAF003["SAF-003: Test Skip<br/>--test and --testinteractive skip destructive menus<br/>Risk: HIGH | Verify: test"]
         SAF004["SAF-004: Logging Required<br/>Full context logged before execution<br/>Risk: MEDIUM | Verify: inspection"]
-        SAF005["SAF-005: Rollback Plan<br/>Firmware upgrades document rollback<br/>Risk: MEDIUM | Verify: inspection"]
+        SAF005["SAF-005: Human Review<br/>Menu 239 stays in the destructive set<br/>Risk: MEDIUM | Verify: registry"]
     end
 
     subgraph impl["Implementation"]
-        si["safe_input()<br/>MistHelper.py"]
-        fm["FirmwareManager<br/>MistHelper.py"]
+        si["InputUtils.safe_input()<br/>src/utils/input_utils.py"]
+        registry["OperationRegistry<br/>src/utils/operation_registry.py"]
+        fm["FirmwareManager<br/>src/firmware/firmware_manager.py"]
     end
 
     si -->|satisfies| SAF001
     si -->|satisfies| SAF002
+    registry -->|satisfies| SAF003
+    registry -->|satisfies| SAF005
     fm -->|satisfies| SAF004
-    fm -->|satisfies| SAF005
 ```
 
 ---

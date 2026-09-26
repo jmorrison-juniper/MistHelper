@@ -2,11 +2,11 @@
 
 # Database Strategy
 
-Hybrid primary key system and PK strategy decision flowchart for MistHelper's SQLite and polyglot backends.
+Hybrid primary key system and strategy decision flowchart for MistHelper storage backends.
 
 ## Entity Relationship Diagram
 
-Representative tables showing the three PK strategies used across MistHelper's 229 operations.
+Representative tables show the strategy types used across 270 registered menu entries.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -50,8 +50,8 @@ erDiagram
     }
 
     DEVICE_STATS {
-        uuid device_id PK "Composite PK part 1"
-        timestamp timestamp PK "Composite PK part 2"
+        uuid device_id PK "TimeSeries PK part 1"
+        timestamp timestamp PK "TimeSeries PK part 2"
         uuid org_id FK "Index"
         uuid site_id FK "Index"
         string type "Index"
@@ -100,26 +100,31 @@ How to choose the right primary key strategy when adding a new operation.
 }}}%%
 flowchart TD
     A[New API Endpoint] --> B{Does response include<br/>a stable UUID id field?}
-    
+
     B -->|Yes| C{Is the data<br/>time-series?}
     B -->|No| F{Is the data<br/>aggregated/summary?}
-    
+
     C -->|No| D[natural_pk<br/>PK = id]
-    C -->|Yes| E[composite_pk<br/>PK = id + device_id + timestamp]
-    
+    C -->|Yes| E{Does the row hold<br/>numeric metric fields?}
+
     F -->|Yes| G[auto_increment_with_unique<br/>PK = misthelper_internal_id]
     F -->|No| H{Can you construct<br/>a unique composite key?}
-    
+
+    E -->|Yes| TS[timeseries_pk<br/>PK = entity + timestamp]
+    E -->|No| CP[composite_pk<br/>PK = id + entity + timestamp]
+
     H -->|Yes| I[composite_pk<br/>PK = custom composite fields]
     H -->|No| G
-    
+
     D --> J[INSERT OR REPLACE by UUID]
-    E --> J2[INSERT OR REPLACE by composite]
+    CP --> J2[INSERT OR REPLACE by composite]
+    TS --> J4[Redis TimeSeries write]
     G --> J3[INSERT with unique constraint check]
     I --> J2
 
     style D fill:#00C853,stroke:#00C853,color:#1A1A2E
     style E fill:#FFD600,stroke:#FFD600,color:#1A1A2E
+    style TS fill:#FFD600,stroke:#FFD600,color:#1A1A2E
     style G fill:#E20074,stroke:#99004D,color:#E0E0E0
     style I fill:#FFD600,stroke:#FFD600,color:#1A1A2E
 ```
@@ -130,9 +135,9 @@ flowchart TD
 |-------------|---------|-------------|----------|
 | `listOrgSites` | `natural_pk` | `[id]` | Sites have stable UUIDs |
 | `searchOrgDeviceEvents` | `composite_pk` | `[id, device_id, timestamp]` | Time-series event data |
-| `listOrgDevicesStats` | `composite_pk` | `[device_id, timestamp]` | Periodic device statistics |
+| `listOrgDevicesStats` | `timeseries_pk` | `[device_id, timestamp]` | Periodic device statistics |
 | `searchOrgAlarms` | `composite_pk` | `[id, org_id, timestamp]` | Time-stamped alarm records |
-| `getOrgLicensesSummary` | `auto_increment` | `[misthelper_internal_id]` | Aggregated summary without stable ID |
+| `getOrgLicensesSummary` | `auto_increment_with_unique` | `[misthelper_internal_id]` | Aggregated summary without stable ID |
 
 ---
 
@@ -142,3 +147,10 @@ flowchart TD
 - [Data Persistence Routing](data-persistence-routing.md) - Polyglot routing decision tree (ArangoDB/Redis)
 - [Architecture Overview](architecture-overview.md) - Database backends in system context
 - [Class Hierarchy: Utilities](../class-hierarchy/utilities.md) - DatabaseSchemaUtils and SQLiteDatabaseWriter
+
+## Source of Truth
+
+`src/refactors/endpoint_primary_key_strategies.py` holds the
+`ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary. `src/db/router.py` maps
+`natural_pk` and `auto_increment_with_unique` to ArangoDB, `composite_pk` to
+ArangoDB plus Redis JSON, and `timeseries_pk` to Redis TimeSeries.

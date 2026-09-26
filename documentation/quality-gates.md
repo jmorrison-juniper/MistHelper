@@ -1,24 +1,49 @@
 # Quality Gates
 
-Every pull request runs these 13 checks in parallel through GitHub Actions. The
-workflow is `.github/workflows/ci.yml`. A caller can override each threshold
-through a `workflow_call` input. The table lists the default.
+The workflow is `.github/workflows/ci.yml`. It defines these job IDs on
+2026-09-25.
 
-| Gate | Tool | Threshold |
+`ruff`, `black`, `mypy`, `pytest_coverage_shards`, `pytest`,
+`codeql_register_check`, `bandit`, `pip_audit`, `pylint`, `radon`, `vulture`,
+`pydocstyle`, `interrogate`, `test_quality_gate`, `diagram_lint`,
+`mermaid_lint`, `citation_lint`, `menu_reference_drift`, `speckit_task_audit`,
+`exclusion_drift`, `playwright`, `ops_portal`, `ops_platform_pytest`,
+`ops_platform_ruff`, `create_failure_issues`, and `close_resolved_issues`.
+
+The workflow stages jobs with `needs`. It does not run every job in one
+parallel group. `speckit_task_audit` and `exclusion_drift` are advisory because
+they set `continue-on-error: true`.
+
+The `misthelper-devtools` package supplies `test-quality-analyzer` and
+`tools.check_citations`. `requirements-dev.txt` pins that package to one
+commit.
+
+| Job ID | Tool or command | Current threshold |
 |------|------|-----------|
-| Lint | Ruff | Zero violations |
-| Format | Black | Zero files need reformatting |
-| Type check | mypy | Zero errors under the `pyproject.toml` settings |
-| Tests | pytest with coverage | Coverage >= 80 percent |
-| Security | Bandit | Zero findings at any severity |
-| Dependencies | pip-audit | Zero known vulnerabilities |
-| Code quality | Pylint | Score >= 9.5 |
-| Complexity | Radon | No block above cyclomatic complexity 10 |
-| Dead code | Vulture | Zero findings at confidence 70 |
-| Docstring style | pydocstyle | Zero violations |
-| Docstring coverage | interrogate | Coverage >= 90 percent |
-| Diagram references | `scripts/lint_diagram_refs.py` | Every diagram reference resolves |
-| Browser tests | Playwright | Every end-to-end test passes |
+| `ruff` | `ruff check .` | Zero violations under `pyproject.toml`. |
+| `black` | `black --check --diff .` | Zero files need formatting. |
+| `mypy` | `mypy $MYPY_PATHS --config-file pyproject.toml` | Zero errors under the `pyproject.toml` settings. |
+| `pytest_coverage_shards` | pytest with coverage data | Each shard must pass. Each test has a 120 second timeout. |
+| `pytest` | `coverage report` | Direct events use `COVERAGE_THRESHOLD=80`. A `workflow_call` input can override it. |
+| `codeql_register_check` | `scripts/codeql_verdict_register.py check` | The CodeQL dismissed-alert register must match GitHub. |
+| `bandit` | `bandit -c pyproject.toml -r .` | Zero findings at any severity. |
+| `pip_audit` | `pip-audit -r requirements.txt` | Zero known vulnerabilities. |
+| `pylint` | `pylint $SRC_PATH --fail-under=$PYLINT_THRESHOLD` | Score at least 9.5. |
+| `radon` | `radon cc` | No block above cyclomatic complexity 10. |
+| `vulture` | `vulture $VULTURE_PATHS --min-confidence $VULTURE_CONFIDENCE` | Zero findings at confidence 70. |
+| `pydocstyle` | `pydocstyle $PYDOCSTYLE_PATHS` | Zero docstring style violations. |
+| `interrogate` | `interrogate $INTERROGATE_PATHS --fail-under $INTERROGATE_THRESHOLD` | Coverage at least 90 percent. |
+| `test_quality_gate` | `test-quality-analyzer --gate` | Zero new test-quality findings against the baseline. |
+| `diagram_lint` | `python scripts/lint_diagram_refs.py` | Every diagram reference resolves. |
+| `mermaid_lint` | `node scripts/mermaid/lint_mermaid.mjs` | Every Mermaid block parses. |
+| `citation_lint` | `python -m tools.check_citations src tests` | Every code citation resolves. |
+| `menu_reference_drift` | `python scripts/generate_menu_wiki.py` plus `git diff`, then `python -m scripts.menu_api_map --check` | The menu reference and the menu API endpoint map must match the source. |
+| `playwright` | pytest under `tests/e2e/` | Every end-to-end test must pass with `UPGRADE_PORTAL_E2E_STRICT=1`. |
+| `ops_portal` | npm type check, lint, tests, and audit | The npm audit fails at the high level or above. |
+| `ops_platform_pytest` | pytest with coverage in `mist-ops-platform` | Coverage at least 56 percent and at least 390 collected tests. |
+| `ops_platform_ruff` | Ruff in `mist-ops-platform` | The correctness ratchet must report zero findings. |
+| `create_failure_issues` | `gh issue create` | Creates or reuses quality-gate issues for failed tracked gates. |
+| `close_resolved_issues` | `gh issue close` | Closes resolved quality-gate issues without closing open pull request issues. |
 
 Warning: the browser gate can report a false pass. Each browser test module
 calls `pytest.importorskip`, so a missing Playwright package turns the whole
@@ -96,8 +121,8 @@ needs a suppression.
 
 ## Branch protection on main
 
-Branch protection names 14 required checks. They are the 13 gates above plus
-CodeQL.
+Read the required check list from GitHub before you depend on it. The workflow
+now defines more jobs than the old 13-gate summary named.
 
 Branch protection also sets `strict` to true, which GitHub calls "Require
 branches to be up to date before merging". Rebase your branch onto `main` before

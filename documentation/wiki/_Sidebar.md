@@ -7,11 +7,12 @@
 ## Getting Started
 
 - [Menu Reference](Menu-Reference)
+- [Menu API Endpoints](Menu-API-Endpoints)
 - [Data Model](Data-Model)
 - [Testing](Testing)
 - [Troubleshooting](Troubleshooting)
 
-## Operations & Features
+## Operations and Features
 
 - [SSH Command Runner](SSH-Runner)
 - [MSP Support](MSP-Support)

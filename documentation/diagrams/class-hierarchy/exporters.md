@@ -2,9 +2,11 @@
 
 # Exporter Classes
 
-Org-level, site-level, and gateway exporter families plus shared export utilities.
+These diagrams show the current exporter classes.
+Most exporter classes are static facades and do not inherit from `DataExporter`.
+`SiteExportUtils` is the only class here with a verified base class.
 
-## Org-Level Exporters
+## Shared Export and Org Exporters
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -21,64 +23,71 @@ classDiagram
 
     class DataExporter {
         +write_with_format_selection()
-        +write_csv()
-        +write_sqlite()
+        +write_to_csv()
+        +export_with_processing()
     }
 
     class OrgExportUtils {
-        +get_org_context()
-        +validate_org_id()
+        +export_data()
+        +sites_sle_summary()
+        +insight_metrics()
+        +mist_edge_events()
     }
-
     class OrgSiteExporter {
-        +export_sites()
+        +sites()
+        +sites_list_api()
+        +sites_with_location()
     }
     class OrgInventoryExporter {
-        +export_inventory()
-        +export_combined_weekly()
+        +inventory()
+        +devices()
+        +combined_inventory_with_site_info()
+        +gateways_with_site_info()
     }
     class OrgDeviceStatsExporter {
-        +export_device_stats()
+        +device_stats()
+        +device_port_stats()
+        +vpn_peer_stats()
     }
     class OrgTemplateExporter {
-        +export_ap_templates()
-        +export_rf_templates()
-        +export_network_templates()
+        +all_templates()
+        +network_templates()
+        +rf_templates()
+        +ap_templates()
     }
     class OrgAlarmEventExporter {
-        +export_alarms()
-        +export_device_events()
+        +alarms()
+        +events()
+        +device_events()
     }
     class OrgClientSecurityExporter {
-        +export_client_events()
-        +export_psks()
+        +wireless_clients()
+        +wired_clients()
+        +security_events()
     }
     class OrgAdminExporter {
-        +export_admins()
-        +export_api_tokens()
+        +api_tokens()
+        +admins()
+        +licenses()
     }
     class OrgConfigExporter {
-        +export_wlans()
-        +export_vlans()
-    }
-    class OfflineDeviceReporter {
-        +find_offline_devices()
-        +generate_report()
+        +psks()
+        +webhooks()
+        +wlans()
     }
 
-    DataExporter <|-- OrgExportUtils
-    OrgExportUtils <|-- OrgSiteExporter
-    OrgExportUtils <|-- OrgInventoryExporter
-    OrgExportUtils <|-- OrgDeviceStatsExporter
-    OrgExportUtils <|-- OrgTemplateExporter
-    OrgExportUtils <|-- OrgAlarmEventExporter
-    OrgExportUtils <|-- OrgClientSecurityExporter
-    OrgExportUtils <|-- OrgAdminExporter
-    OrgExportUtils <|-- OrgConfigExporter
-    OrgExportUtils <|-- OfflineDeviceReporter
+    OrgExportUtils ..> DataExporter : writes rows
+    OrgSiteExporter ..> DataExporter : writes rows
+    OrgInventoryExporter ..> DataExporter : writes rows
+    OrgDeviceStatsExporter ..> DataExporter : writes rows
+    OrgTemplateExporter ..> DataExporter : writes rows
+    OrgAlarmEventExporter ..> DataExporter : writes rows
+    OrgClientSecurityExporter ..> DataExporter : writes rows
+    OrgAdminExporter ..> DataExporter : writes rows
+    OrgConfigExporter ..> DataExporter : writes rows
 ```
 
-## Site & Gateway Exporters
+## Site and Gateway Exporters
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -93,66 +102,144 @@ classDiagram
 classDiagram
     direction TB
 
-    class DataExporter {
-        +write_with_format_selection()
-    }
-
+    class SiteInsightsExporter
     class SiteExportUtils {
-        +get_site_context()
+        +insights()
+        +ospf_stats()
+        +site_stats()
+        +gateway_metrics()
     }
     class SiteDeviceExporter {
-        +export_site_devices()
+        +device_inventory()
+        +device_stats()
+        +port_stats()
     }
     class SiteClientExporter {
-        +export_wireless_clients()
-        +export_wired_clients()
+        +clients()
+        +client_insights()
+        +wifi_clients()
+        +get_site_beacon()
     }
     class SiteConfigExporter {
-        +export_site_wlans()
+        +wlans()
+        +maps()
+        +zones()
+        +settings()
     }
     class SiteAnomalyExporter {
-        +export_anomalies()
+        +anomaly_events()
+        +device_anomaly_events()
+        +client_anomaly_events()
+    }
+    class SiteSearchExporter {
+        +alarms()
+        +assets()
+        +devices()
+        +rogue_events()
     }
 
     class GatewayExportUtils {
-        +get_gateway_context()
+        +management_ips()
+        +device_configs()
+        +templates()
+        +wan2_variable_migration()
     }
     class GatewayTestExporter {
-        +export_speed_tests()
+        +synthetic_tests()
+        +fetch_synthetic_test_stats_with_retry()
+        +test_results_by_site()
     }
     class GatewayStatsExporter {
-        +export_gateway_stats()
+        +device_stats()
+        +device_stats_with_freshness()
+        +wan_port_conflicts()
     }
-    class MSPInventoryExporter {
-        +export_msp_inventory()
+    class GatewayHaExporter {
+        +ha_cluster_info()
     }
 
-    class SFPTransceiverDataProcessor {
-        +process_sfp_data()
-        +normalize_transceiver_fields()
-    }
+    SiteInsightsExporter <|-- SiteExportUtils
+    SiteExportUtils ..> DataExporter : injected writer
+    SiteDeviceExporter ..> DataExporter : writes rows
+    SiteClientExporter ..> DataExporter : writes rows
+    SiteConfigExporter ..> DataExporter : writes rows
+    SiteAnomalyExporter ..> DataExporter : writes rows
+    SiteSearchExporter ..> DataExporter : writes rows
+    GatewayExportUtils ..> OrgInventoryExporter : forwards inventory
+    GatewayTestExporter ..> DataExporter : writes rows
+    GatewayStatsExporter ..> DataExporter : writes rows
+    GatewayHaExporter ..> DataExporter : writes rows
+```
+
+## Other Exporters and Report Exporters
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {
+  'primaryColor': '#E20074',
+  'primaryTextColor': '#E0E0E0',
+  'primaryBorderColor': '#99004D',
+  'lineColor': '#FF4DA6',
+  'secondaryColor': '#16213E',
+  'tertiaryColor': '#1A1A2E',
+  'fontFamily': 'ui-monospace, monospace'
+}}}%%
+classDiagram
+    direction TB
 
     class ConstDefinitionsExporter {
-        +export_const_definitions()
+        +export_all()
+    }
+    class CountExporter {
+        +org_counts()
+        +site_counts()
+        +msp_counts()
+    }
+    class SimpleEndpointExporter {
+        +global_endpoints()
+        +org_endpoints()
+        +site_endpoints()
+        +msp_endpoints()
+    }
+    class EndpointFamilyExporter {
+        +site_sle_endpoints()
+        +site_map_endpoints()
+        +org_detail_endpoints()
+    }
+    class MSPInventoryExporter {
+        +execute()
+    }
+    class MSPLicenseExporter {
+        +licenses()
+    }
+    class OfflineDeviceReporter {
+        +execute()
+    }
+    class SFPTransceiverDataProcessor {
+        +merge_transceiver_data()
     }
 
-    DataExporter <|-- SiteExportUtils
-    SiteExportUtils <|-- SiteDeviceExporter
-    SiteExportUtils <|-- SiteClientExporter
-    SiteExportUtils <|-- SiteConfigExporter
-    SiteExportUtils <|-- SiteAnomalyExporter
-
-    DataExporter <|-- GatewayExportUtils
-    GatewayExportUtils <|-- GatewayTestExporter
-    GatewayExportUtils <|-- GatewayStatsExporter
-    GatewayExportUtils <|-- MSPInventoryExporter
-
-    DataExporter <|-- SFPTransceiverDataProcessor
-    DataExporter <|-- ConstDefinitionsExporter
+    ConstDefinitionsExporter ..> DataExporter : writes rows
+    CountExporter ..> DataExporter : writes rows
+    SimpleEndpointExporter ..> DataExporter : writes rows
+    EndpointFamilyExporter ..> DataExporter : writes rows
+    MSPInventoryExporter ..> DataExporter : writes rows
+    MSPLicenseExporter ..> DataExporter : writes rows
+    OfflineDeviceReporter ..> DataExporter : writes report
+    SFPTransceiverDataProcessor ..> DataExporter : prepares report rows
 ```
+
+## Module Paths
+
+| Class | Module path |
+|-------|-------------|
+| `DataExporter` | `src/export/data_exporter.py` |
+| `OrgExportUtils` | `src/export/org_export_utils.py` |
+| `SiteExportUtils` | `src/export/site_export_utils.py` |
+| `GatewayExportUtils` | `src/gateway/gateway_export_utils.py` |
+| `SFPTransceiverDataProcessor` | `src/reports/sfp_transceiver_data_processor.py` |
 
 ## Siblings
 
 - [Infrastructure](infrastructure.md) - Core and API fetching classes
-- [Managers](managers.md) - Manager classes (firmware, SSH, WebSocket)
+- [Managers](managers.md) - Manager classes
 - [Utilities](utilities.md) - Utility and data processing classes

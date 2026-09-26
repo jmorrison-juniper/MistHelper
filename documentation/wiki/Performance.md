@@ -1,4 +1,4 @@
-# Rate Limiting & Performance
+# Rate Limiting and Performance
 
 - Adaptive delays stored in `delay_metrics.json`
 - Safe concurrency mediated by semaphores + environment-driven thread limits (`FAST_MODE_MAX_CONCURRENT_CONNECTIONS`)

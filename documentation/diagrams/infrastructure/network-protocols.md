@@ -2,11 +2,12 @@
 
 # Network Protocols
 
-Packet structure documentation for MistHelper's packet capture feature (Menu 9-10).
+Packet structure notes for the MistHelper packet capture feature. Menus 134 and
+135 start the capture workflows.
 
 ## Captured Packet Structure
 
-Typical 802.11 frame structure captured by MistHelper's PacketCaptureManager.
+Typical 802.11 frame structure captured through `PacketCaptureManager`.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -57,12 +58,11 @@ flowchart LR
 
 | Capture Type | Menu | Target | Method |
 |-------------|------|--------|--------|
-| Wireless Client | 9, 10 | AP radio interface | Mist Cloud API |
-| Wired Client | 9, 10 | Switch port | tcpdump filtering |
-| Gateway | 9, 10 | Gateway interface | Mist Cloud API |
-| Switch | 9, 10 | Switch port | Port-specific tcpdump |
-| New Association | 9 | AP during client join | Mist Cloud API |
-| Scan Radio | 9 | AP scanning radio | Mist Cloud API |
+| Site Capture | 134 | AP, switch, or gateway target | Mist Cloud API workflow |
+| MxEdge Capture | 135 | MxEdge target | Mist Cloud API workflow |
+| Wireless Client | 134 | AP radio interface | Mist Cloud API workflow |
+| Wired Client | 134 | Switch port | Mist Cloud API workflow |
+| Gateway | 134 | Gateway interface | Mist Cloud API workflow |
 
 ---
 

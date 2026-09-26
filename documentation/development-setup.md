@@ -10,8 +10,8 @@ the tool and not to change it.
 
 | Item | Minimum |
 |------|---------|
-| Python | 3.13 |
-| mistapi | 0.63.1 |
+| Python | 3.13 or newer |
+| mistapi | 0.64.0, less than 0.65 |
 | Container runtime | Podman (primary) or Docker |
 
 `requirements.txt` and `pyproject.toml` hold the full dependency list.
@@ -56,7 +56,7 @@ reviewed, immutable commit in `misthelper-devtools`.
 ## Step 3: Configure the credentials
 
 ```powershell
-cp documentation\sample.env .env
+Copy-Item documentation\sample.env .env
 ```
 
 Set these values in `.env`:
@@ -99,7 +99,6 @@ Remove the worktree after the merge.
 ```powershell
 cd ../MistHelper
 git worktree remove ../MistHelper-<slug>
-git checkout main
 git pull origin main
 ```
 

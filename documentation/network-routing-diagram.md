@@ -1,5 +1,9 @@
 # Network Routing Diagram
 
+Status note, 2026-09-25: This page records a reference network topology. It does
+not describe the MistHelper runtime architecture. The current tree does not
+verify the site names, VLAN names, or hardware inventory in this diagram.
+
 Vertical 8-level topology: two datacenters (Dallas, Chicago) with Juniper SSR1300 hub pairs,
 a branch site with Juniper SSR130 router pair, EX4400/EX4100 switching, and full-mesh WAN tunnels.
 

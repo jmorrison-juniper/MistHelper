@@ -40,11 +40,12 @@ flowchart LR
         i3["Code Changes"]
     end
 
-    subgraph review["CI + Review"]
+    subgraph review["CI and Review"]
         r1["Ruff + mypy"]
         r2["pytest + Coverage"]
         r3["Bandit + pip-audit"]
-        r4["Playwright E2E"]
+        r4["Docs + diagrams"]
+        r5["Playwright + portal gates"]
     end
 
     subgraph deploy["Deploy"]
@@ -65,8 +66,9 @@ flowchart LR
 | Tasks | `/speckit.tasks` + `/speckit.checklist` | `tasks.md` with dependency-ordered implementation plan |
 | Analyze | `/speckit.analyze` | Cross-artifact consistency report |
 | Implement | `/speckit.implement` | Code changes following task order |
-| CI | GitHub Actions | Quality gate matrix (7 parallel checks) |
-| Deploy | Auto-merge + container build | GHCR image + GitHub Release |
+| CI | GitHub Actions | Quality gates for lint, types, tests, security, docs, diagrams, and portals |
+| Deploy | Auto-merge + container build | GHCR image after main merge |
+| Release | Tag workflow | Wheel, source archive, standalone zip, container image, and GitHub Release |
 
 ---
 

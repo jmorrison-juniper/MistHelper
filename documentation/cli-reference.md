@@ -28,7 +28,13 @@ With `-M` it runs one operation and exits, which suits a scheduled job.
 | `--capture-portal` | Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var). Same as menu 239. |
 | `--metrics-gateway` | Serve Mist Cloud health to a monitoring system on port 8057 (or METRICS_PORT env var). Same as menu 241. |
 | `--metrics-snmp` | Answer Net-SNMP `pass_persist` requests on standard input. Start this from `snmpd.conf`, not by hand. |
+| `--mib-generate` | Generate `documentation/mibs/MISTHELPER-MIB.mib` from the Mist OpenAPI file and the metric catalog. Same as menu 243. |
+| `--mib-dry-run` | Print the generated MIB to standard output and write nothing to disk. |
+| `--mib-output <path>` | Write the generated MIB to this path instead of `documentation/mibs/MISTHELPER-MIB.mib`. |
+| `--mib-report` | List the Mist fields that the metric catalog does not yet serve. |
+| `--mib-check` | Exit with status 1 when the stored MIB differs from the Mist file or the metric catalog. |
 | `--testinteractive` | Run systematic test of read-only interactive menu options |
+| `--standalone` | Force CSV-only mode and disable ArangoDB and Redis connections. |
 
 Warning: `--skip-ssl-verify` turns off certificate checking. An attacker on the
 network path can then read your Mist API token. Use the flag on a laboratory
@@ -42,6 +48,7 @@ python .\MistHelper.py -M 13 --output-format sqlite --fast
 python .\MistHelper.py --test --output-format sqlite --debug
 python .\MistHelper.py -M 11 --debug
 python .\MistHelper.py -M 16 --fast
+python .\MistHelper.py --mib-check
 ```
 
 ## The two test modes

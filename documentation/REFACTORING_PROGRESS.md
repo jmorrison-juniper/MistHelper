@@ -1,5 +1,10 @@
 # Menu 115-120 Refactoring Progress
 
+Status note, 2026-09-25: this file is a historical work log from an older menu
+layout. The current menu entries 115 through 120 are WebSocket operations in
+[`documentation/menu_reference.md`](menu_reference.md). Verify any method name
+against the current source before you use this list for planning.
+
 **Goal**: Refactor all functions/methods to comply with 25-line limit per agents.md
 
 **Status Key**: [ ] Not Started | [~] In Progress | [X] Complete | [-] Skipped

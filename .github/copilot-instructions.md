@@ -7,7 +7,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
 ---
 
 ## Project Overview
-MistHelper is a production-grade Python tool for Juniper Mist Cloud network operations. It provides 209 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
+MistHelper is a production-grade Python tool for Juniper Mist Cloud network operations. It provides 269 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
 
 **Target Audience**: Junior NOC engineers. Use clear, professional language without jargon. Think Fred Rogers meets NASA/JPL safety standards.
 
@@ -41,7 +41,7 @@ Python hierarchy levels:
 
 ### Critical Dependencies
 - **Python**: 3.13 or newer required
-- **mistapi**: 0.59+ (Primary Mist API SDK by Thomas Munzer - tmunzer/mistapi_python)
+- **mistapi**: >=0.64.0,<0.65 (Primary Mist API SDK by Thomas Munzer - tmunzer/mistapi_python)
 - **UV Package Manager**: Preferred over pip for speed (auto-fallback configured). Note: `requirements.txt` maintained for pip compatibility
 - **Container Runtime**: Podman (primary), Docker (compatible but not documented - all examples use Podman)
 
@@ -56,7 +56,7 @@ Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV / SQLite 
 ## Database Strategy (CRITICAL)
 
 ### Hybrid Primary Key System
-MistHelper uses **natural business keys** from the Mist API, not artificial IDs. Configuration is centralized in `ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary (line ~1672).
+MistHelper uses **natural business keys** from the Mist API, not artificial IDs. Configuration is centralized in the `ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary in `src/refactors/endpoint_primary_key_strategies.py`.
 
 **Three Primary Key Types**:
 
@@ -99,8 +99,9 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
 4. **Multi-Backend Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
-6. **Release Note**: Add one new fragment file under `changelog.d/`. Never edit `CHANGELOG.md` on a feature branch. See [Release notes](#release-notes-each-change-owns-one-fragment)
-7. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
+6. **Generated References**: Run `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`. Commit the changed pages. The `menu_reference_drift` CI job fails when either set is stale.
+7. **Release Note**: Add one new fragment file under `changelog.d/`. Never edit `CHANGELOG.md` on a feature branch. See [Release notes](#release-notes-each-change-owns-one-fragment)
+8. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 
 ### Validate locally, then push once
 
@@ -533,13 +534,13 @@ See [coding-standards.instructions.md](instructions/coding-standards.instruction
 ## Key Files & Documentation
 | File | Purpose |
 |------|---------|
-| `MistHelper.py` | Entrypoint and menu registry (6,054 lines; `src/` holds 123,785 across 360 files) |
+| `MistHelper.py` | Entrypoint and menu registry. Measured on 2026-09-25, it has 8,071 lines, and `src/` holds 621 Python files with 223,491 lines. |
 | `documentation/CONTRIBUTING-MistHelper.md` | Contributor map for stable `MistHelper.py` symbols and `src/` packages. |
 | `CHANGELOG.md` | Released version history (Keep a Changelog format). The release coordinator owns it. |
 | `changelog.d/` | One release-note fragment for each change. Add your file here. |
 | `agents.md` | VS Code Chat agent supplement (points here) |
 | `README.md` | User-facing operations guide |
-| `SSH_GUIDE.md` | SSH runner detailed usage |
+| `documentation/SSH_GUIDE.md` | SSH runner detailed usage |
 | `requirements.txt` | Python dependencies (pip compatibility) |
 | `uv.lock` | UV package lock file (if using UV) |
 | `.env` (git-ignored) | Credentials & config |
@@ -786,7 +787,7 @@ Every new feature begins as a **Feature Spec** (using SpecKit / Specifying). The
 
 ### Quality Gates (CI Must Pass Before Merge)
 
-All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot auto-merge unless every gate is green.
+The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR cannot auto-merge unless every required gate is green.
 
 | Gate | Tool | What It Checks |
 |------|------|----------------|
@@ -794,8 +795,9 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 | Format | **Black** | Formatting. Zero files may need reformatting. |
 | Type Safety | **mypy** | PEP 484 type annotations under the `pyproject.toml` settings |
 | Tests + Coverage | **pytest + pytest-cov** | Unit and integration tests, coverage >= 80 percent |
-| Property Tests | **Hypothesis** | Invariants hold for all generated inputs |
+| Test Quality | **`test-quality-analyzer`** | New or changed tests must not add quality findings |
 | Security Lint | **Bandit** | AST-based Python security issues at every severity |
+| Static Analysis Register | **CodeQL verdict register** | Dismissed CodeQL alerts must match the checked-in register |
 | Dependency CVEs | **pip-audit** | Known vulnerabilities in `requirements.txt` |
 | Code Quality | **Pylint** | Score >= 9.5 |
 | Complexity | **Radon** | No block above cyclomatic complexity 10 |
@@ -803,15 +805,26 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 | Docstring Style | **pydocstyle** | Zero violations |
 | Docstring Coverage | **interrogate** | Coverage >= 90 percent |
 | Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
+| Mermaid Syntax | **`scripts/mermaid/lint_mermaid.mjs`** | Mermaid blocks parse successfully |
+| Citation References | **`tools.check_citations`** | Citations in `src/` and `tests/` resolve |
+| Menu Reference | **`scripts/generate_menu_wiki.py`** and **`scripts.menu_api_map`** | The generated menu reference and the menu API endpoint map match the source |
+| SpecKit Tasks | **`tools.speckit_task_audit`** | Open SpecKit task records are reported as advisory output |
+| Exclusion Drift | **`scripts/check_exclusion_drift.py`** | Quality exclusion drift is reported as advisory output |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
 | Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high`, `typecheck`, `lint`, and `test` for `ops-portal/`. All four block a merge. |
+| Ops Platform Tests | **pytest** (CI `ops_platform_pytest` job) | The ops platform tests collect at least 390 tests and meet 56 percent coverage |
+| Ops Platform Lint | **Ruff** (CI `ops_platform_ruff` job) | The ops platform Ruff correctness gate must pass |
 | Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code and workflow vulnerability scanning |
 | Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
 
-The workflow defines 15 gate jobs and two issue-management jobs. Read the job
+The workflow defines 24 quality jobs and two issue-management jobs. Read the job
 list from `.github/workflows/ci.yml` before you trust this count. CodeQL runs in
 a separate workflow, and Dependabot is not a gate. A caller can override each
 threshold through a `workflow_call` input. The table lists the default.
+
+The `misthelper-devtools` package supplies `test-quality-analyzer`,
+`tools.check_citations`, and `tools.speckit_task_audit`. `requirements-dev.txt`
+pins that package to one commit.
 
 Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
 gate that reads the npm dependency tree, so it is the only check that can report
@@ -900,7 +913,7 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 7. **Update `deploy/.env.example`** if introducing new environment variables.
 8. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
 9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, add the `changelog.d/` fragment for a user-visible change, and complete all checklist items.
-10. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
+10. **Ensure CI is green**: Ruff, mypy, pytest+cov, Bandit, pip-audit, CodeQL, Playwright E2E, ops portal, and ops platform.
 11. **Add the `auto-merge` label** once all checks pass.
 12. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
 

@@ -1,19 +1,17 @@
 # Development Notes
 
-Recommended incremental refactor targets (mirrors Agents Guide Section 18):
+Recommended maintenance targets:
 
-- Extract API domain modules: `api_ops/`, `output/`, `ssh/`
+- Keep API access in `src/api/`, export code in `src/export/`, and SSH code in `src/ssh/`
 - Add unit tests for validators (hostname, port, command sanitation)
-- Migrate SSH command CSV to structured JSON + schema validation
 - Introduce optional structured JSON logging mode (feature flag)
-- Implement `--list-operations` CLI flag (enumerate menu descriptors machine-readably)
 
 ## Coding Style Essentials
 
 - Explicit naming, early validation + early return
 - All network calls wrapped with logging context and coarse-grained exception handling
 - Restrict broad except clauses; log with context
-- No abbreviations: `for device in devices` NOT `for d in devices`
+- Use full names: write `for device in devices`, not `for d in devices`
 - Class-based architecture: All features organized under semantic class names
 
 ## Key Classes
@@ -34,9 +32,8 @@ Recommended incremental refactor targets (mirrors Agents Guide Section 18):
 ## Decomposition Wave 2
 
 All 9 phases are complete. The decomposition moved feature-domain packages out
-of `MistHelper.py` into `src/`. The entrypoint fell from roughly 28,000 lines to
-6,169, and `src/` now holds 124,675 lines across 363 files. Measured on
-2026-08-05.
+of `MistHelper.py` into `src/`. `MistHelper.py` now has 8,071 lines, and
+`src/` holds 223,491 lines across 621 Python files. Measured on 2026-09-25.
 
 The phase-by-phase table of packages, key classes, and owned menu operations
 lives in the repository README, under **Wave 2 Module Ownership**:
@@ -48,4 +45,4 @@ This page does not repeat that table. One copy cannot drift from itself.
 
 - **[agents.md](https://github.com/jmorrison-juniper/MistHelper/blob/main/agents.md)**: Internal agent guide with safety patterns, refactor guidance
 - **[documentation/](https://github.com/jmorrison-juniper/MistHelper/tree/main/documentation)**: Sample files, API specs, diagrams
-- **[documentation/diagrams/](https://github.com/jmorrison-juniper/MistHelper/tree/main/documentation/diagrams)**: 20+ Mermaid diagrams covering architecture, operations, infrastructure
+- **[documentation/diagrams/](https://github.com/jmorrison-juniper/MistHelper/tree/main/documentation/diagrams)**: Mermaid diagrams covering architecture, operations, and infrastructure

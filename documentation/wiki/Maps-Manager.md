@@ -35,8 +35,8 @@ python src/maps/maps_manager.py --debug
 
 The standalone module reads from `.env` or environment variables:
 
-- `MIST_API_TOKEN` or `MISTAPI_API_TOKEN` - API token (required)
-- `MIST_ORG_ID` or `MISTAPI_ORG_ID` - Default organization ID
+- Mist API credentials from `.env`, through `mistapi.APISession(env_file=".env")`
+- `org_id`, `ORG_ID`, or `MIST_ORG_ID` - Default organization ID
 
 ## Architecture
 

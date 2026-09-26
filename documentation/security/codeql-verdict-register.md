@@ -37,10 +37,11 @@ This check is a live audit, not a reproducible build. An unchanged commit
 can fail after live alert metadata changes. CI never generates the register.
 Refresh it only after you review the current metadata.
 
-The check compares all eleven row fields, including the reason and author.
-It removes surrounding cell spaces and restores escaped pipes. The writer
-converts comment whitespace to spaces. The generation date does not cause
-drift. A complete, successful API response must confirm an empty alert set.
+The check compares every decision field, including the reason and author.
+It ignores a change that only moves the line or anchor. The writer removes
+surrounding cell spaces, restores escaped pipes, and converts comment
+whitespace to spaces. The generation date does not cause drift. A complete,
+successful API response must confirm an empty alert set.
 
 The `Anchor` column holds the file path and the line of the reported expression.
 It is not a stable finding identity. This register covers only the rule above.

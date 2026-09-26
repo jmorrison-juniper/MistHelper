@@ -1,0 +1,222 @@
+{
+  "workflow": "speckit",
+  "specName": "Correct the documents and map each menu option to its Mist API endpoints",
+  "branch": "feat/3411-docs-audit",
+  "currentStep": "implement",
+  "status": "completed",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "copilot",
+      "at": "2026-09-26T02:43:57.215Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:43:58.910Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:00.571Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T018",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T019",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T020",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T021",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T022",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T023",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-26T02:44:02.769Z"
+    }
+  ],
+  "currentTask": "T023"
+}

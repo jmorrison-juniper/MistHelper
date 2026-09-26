@@ -5,8 +5,8 @@
 ### Automated Safe-Operation Test (`--test`)
 
 Behavior:
-- Dynamically enumerates safe menu items (GET, non-interactive, non-destructive)
-- Skips heavy, WIP, interactive, WebSocket, continuous, destructive operations (documented inline in code)
+- Dynamically enumerates the 73 `safe` menu items from `src/utils/operation_registry.py`
+- Skips resource-intensive, interactive, WebSocket, continuous-loop, and destructive operations
 - Executes in optimized order (fastest endpoints first) to minimize cumulative runtime
 - Saves partial results even on rate limiting or exceptions
 
@@ -17,13 +17,13 @@ python MistHelper.py --test --output-format sqlite --fast
 
 ### Unit Tests (Offline, No Credentials Required)
 
-Run the offline unit test suite -- no API token or network access needed:
+Run the offline unit test suite. It needs no API token or network access.
 
 ```bash
 python -m pytest tests/unit/ -v
 ```
 
-Tests cover data processing utilities, telemetry event schemas, primary key strategy validation, and configuration helpers. All tests complete in under 30 seconds.
+Tests cover data processing utilities, telemetry event schemas, primary key strategy validation, and configuration helpers.
 
 ## NDJSON Test Event Output
 
@@ -47,11 +47,12 @@ The report flags new failures, resolved failures, and timing regressions (>2x sl
 
 ## CI Pipeline
 
-Unit tests run automatically in GitHub Actions on every push. The pipeline has three sequential jobs: `validate` (syntax check) -> `test` (pytest) -> `build-and-push` (container image). Test failures block container deployment.
+GitHub Actions runs the quality gates on pull requests and on pushes to `main`.
+The container build uses a separate workflow.
 
 ### Quality Gates
 
-Every PR runs these checks in parallel via GitHub Actions:
+Every pull request runs these checks through GitHub Actions:
 
 | Gate | Tool | Threshold |
 |------|------|-----------|
@@ -60,3 +61,9 @@ Every PR runs these checks in parallel via GitHub Actions:
 | Tests | pytest + coverage | >= 80% |
 | Security | Bandit | Zero findings |
 | Dependencies | pip-audit | Zero vulnerabilities |
+| Format | Black | Zero files need formatting |
+| Complexity | Radon | No block above the configured limit |
+| Dead code | Vulture | Zero findings above the configured confidence |
+| Documentation | pydocstyle and interrogate | Style passes and docstring coverage meets the threshold |
+| Diagram references | Diagram and Mermaid linters | Every reference resolves and every Mermaid block parses |
+| Ops portal | npm | Audit, type check, lint, and tests pass |

@@ -2,11 +2,11 @@
 
 # Deployment Pipeline
 
-CI/CD quality gates, pipeline timing, and branching strategy for MistHelper.
+Quality gates, container publishing, and release artifacts for MistHelper.
 
-## CI/CD Flow
+## Quality Gate Flow
 
-From code change through quality gates to container deployment.
+From code change through quality gates to a merge.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -20,29 +20,33 @@ From code change through quality gates to container deployment.
 }}}%%
 flowchart LR
     A[Code Push] --> B[GitHub Actions CI]
-    
-    B --> C1[Ruff Lint]
-    B --> C2[mypy Types]
-    B --> C3[pytest + Coverage]
-    B --> C4[Bandit Security]
-    B --> C5[pip-audit CVEs]
-    
+
+    B --> C1[Ruff lint]
+    B --> C2[Black format]
+    B --> C3[mypy types]
+    B --> C4[pytest + coverage]
+    B --> C5[Security gates]
+    B --> C6[Doc and diagram gates]
+    B --> C7[Browser and portal gates]
+
     C1 --> D{All Gates Pass?}
     C2 --> D
     C3 --> D
     C4 --> D
     C5 --> D
-    
+    C6 --> D
+    C7 --> D
+
     D -->|Yes| E[Auto-Merge PR]
     D -->|No| F[Block + Fix]
     F --> A
-    
-    E --> G[Container Build]
-    G --> H[Python Syntax Check]
-    H --> I[Multi-arch Build]
-    I --> J[Push to GHCR]
+
+    E --> G[Main branch push]
+    G --> H[container-build.yml]
+    H --> I[Validate, test, build]
+    I --> J[Push amd64 and arm64 images to GHCR]
     J --> K[Operator Pulls Image]
-    
+
     K --> L1[Host: systemd restart]
     K --> L2[Container: Quadlet restart]
 
@@ -53,9 +57,10 @@ flowchart LR
     style J fill:#E20074,stroke:#99004D,color:#E0E0E0
 ```
 
-## Pipeline Timing
+## Container and Release Jobs
 
-Approximate duration of each CI stage.
+The container workflow runs after a main push or a manual request. The release
+workflow runs only for tags that match `v*.*.*`.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -64,27 +69,18 @@ Approximate duration of each CI stage.
   'gridColor': '#16213E',
   'todayLineColor': '#FF1744'
 }}}%%
-gantt
-    title CI/CD Pipeline Timing
-    dateFormat X
-    axisFormat %s sec
+flowchart TD
+    A["Main push or workflow_dispatch"] --> B["Validate MistHelper.py syntax"]
+    B --> C["Run tests/unit/"]
+    C --> D["Build linux/amd64 and linux/arm64"]
+    D --> E["Push version tag and latest to GHCR"]
 
-    section Quality Gates
-        Ruff Lint           :a1, 0, 15
-        mypy Type Check     :a2, 0, 30
-        pytest + Coverage   :a3, 0, 60
-        Bandit Security     :a4, 0, 20
-        pip-audit CVEs      :a5, 0, 15
-        Playwright E2E      :a6, 0, 90
-
-    section Build
-        Syntax Validation   :b1, after a3, 5
-        Container Build     :b2, after b1, 120
-        GHCR Push           :b3, after b2, 30
-
-    section Deploy
-        Operator Pull       :c1, after b3, 15
-        Service Restart     :c2, after c1, 10
+    T["Tag v*.*.*"] --> R1["Build wheel and sdist"]
+    T --> R2["Build standalone zip"]
+    T --> R3["Build container image"]
+    R1 --> R4["Create GitHub Release"]
+    R2 --> R4
+    R3 --> R4
 ```
 
 ## Branching Strategy
@@ -103,21 +99,21 @@ How feature branches flow through the auto-merge pipeline.
 }}}%%
 gitGraph
     commit id: "main"
-    branch feature/new-operation
-    checkout feature/new-operation
+    branch feat/3411-docs-audit
+    checkout feat/3411-docs-audit
     commit id: "implement feature"
     commit id: "add tests"
     commit id: "update docs"
     checkout main
-    merge feature/new-operation id: "auto-merge (CI green)" type: HIGHLIGHT
+    merge feat/3411-docs-audit id: "squash merge docs" type: HIGHLIGHT
     commit id: "container build triggers"
-    branch feature/firmware-fix
-    checkout feature/firmware-fix
+    branch fix/3412-firmware-fix
+    checkout fix/3412-firmware-fix
     commit id: "fix firmware logic"
     commit id: "add safety tests"
     checkout main
-    merge feature/firmware-fix id: "auto-merge (CI green) " type: HIGHLIGHT
-    commit id: "v25.06.15 tag" tag: "v25.06.15"
+    merge fix/3412-firmware-fix id: "squash merge fix" type: HIGHLIGHT
+    commit id: "v26.09.25 tag" tag: "v26.09.25"
 ```
 
 ---

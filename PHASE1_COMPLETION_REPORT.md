@@ -1,5 +1,10 @@
 # Phase 1 Implementation Report - Issue #1823
 
+> **Status note, 2026-09-25**: This report is historical. The current capture
+> portal implementation lives in `src/upgrade_portal/`, and the current feature
+> record lives in `specs/1823-upgrade-capture-portal/`. Menu 239 and the
+> `--capture-portal` flag start the portal on port 8056.
+
 ## Executive Summary
 
 **Status**: ✓ COMPLETE  

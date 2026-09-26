@@ -2,7 +2,7 @@
 
 [<- Back to Repository](../../README.md)
 
-Comprehensive Mermaid diagram suite documenting MistHelper's architecture, class hierarchy, operations, and infrastructure. All diagrams use T-Mobile dark-mode theming.
+Mermaid diagram suite for MistHelper architecture, operations, and infrastructure. The diagrams use a shared dark theme.
 
 ---
 
@@ -18,7 +18,7 @@ Architecture, data pipeline, and database design.
 
 ## Class Hierarchy
 
-All 99+ classes organized into 12 families with inheritance and composition relationships.
+Class diagrams group the current Python classes by responsibility and dependency.
 
 | Diagram | Types | Description |
 |---------|-------|-------------|
@@ -26,7 +26,7 @@ All 99+ classes organized into 12 families with inheritance and composition rela
 | [Infrastructure](class-hierarchy/infrastructure.md) | `classDiagram` | Core, configuration, and API fetching classes |
 | [Exporters](class-hierarchy/exporters.md) | `classDiagram` | Org, site, and gateway exporter families |
 | [Managers](class-hierarchy/managers.md) | `classDiagram` | Manager classes (firmware, SSH, WebSocket, etc.) |
-| [Utilities](class-hierarchy/utilities.md) | `classDiagram` | 23+ utility classes and data processing |
+| [Utilities](class-hierarchy/utilities.md) | `classDiagram` | Utility classes and data processing |
 
 ## Operations
 
@@ -48,11 +48,19 @@ Deployment, container architecture, and network protocols.
 | [Container Architecture](infrastructure/container-architecture.md) | `block-beta` `architecture-beta` | Container layers, session isolation, port mappings |
 | [Network Protocols](infrastructure/network-protocols.md) | `packet-beta` | Packet structure for pcap feature documentation |
 
+## Menu API Endpoint Map
+
+A generator writes these pages from the code. Each menu option gets one flowchart of the Mist API endpoints that it calls.
+
+| Page | Types | Description |
+|---------|-------|-------------|
+| [Menu API endpoint map](../menu-api/README.md) | `flowchart` `pie` | The request path, the method mix, and one endpoint breakdown for each menu option |
+
 ---
 
 ## Diagram Type Coverage
 
-This suite uses all 20 Mermaid diagram types:
+This suite uses these Mermaid diagram types:
 
 | Type | File(s) |
 |------|---------|
@@ -81,7 +89,7 @@ This suite uses all 20 Mermaid diagram types:
 
 ## Theme
 
-All diagrams apply the T-Mobile dark-mode palette defined in [theme-contract.md](../../specs/016-mermaid-documentation-suite/contracts/theme-contract.md). Primary accent: `#E20074` (T-Mobile Magenta) on `#1A1A2E` backgrounds.
+Most diagrams use the shared dark palette that sets `#E20074` as the primary accent.
 
 ## PNG Fallbacks
 

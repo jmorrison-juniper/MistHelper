@@ -1,10 +1,12 @@
 [<- Back to Diagram Index](../README.md) | [<- Back to Overview](overview.md)
 
-# Utility & Data Processing Classes
+# Utility and Data Processing Classes
 
-23+ utility classes organized by responsibility, plus the data processing chain that transforms raw API responses into exportable records.
+The current tree has 31 classes with names that end in `Utils`.
+Several large utility classes use helper clusters and `__getattr__`.
+That pattern keeps the public surface stable without wrapper methods.
 
-## Utility Classes by Responsibility
+## Core Utility Classes
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -20,50 +22,50 @@ classDiagram
     direction TB
 
     class TimeUtils {
-        +format_timestamp()
-        +parse_epoch()
-        +duration_human()
+        +get_dynamic_lookback_hours()
+        +log_dynamic_lookback()
     }
     class InputUtils {
+        +ensure_tqdm_available()
         +safe_input()
-        +validate_selection()
+        +prompt_msp_id()
     }
     class CacheUtils {
-        +get_cached()
-        +set_cached()
-        +invalidate()
+        +check_and_generate_csv()
+        +load_csv_grouped_by_key()
+        +clear_cache()
+        +fast_cache_hit()
     }
     class DisplayUtils {
-        +print_table()
-        +progress_bar()
-        +color_output()
+        +dict_list_as_pretty_table()
+        +create_progress_bar()
     }
     class FilePathUtils {
-        +ensure_data_dir()
-        +sanitize_filename()
+        +get_csv_path()
+        +create_csv_template()
     }
     class EnvironmentUtils {
-        +load_env()
-        +get_config()
-        +is_container()
+        +is_running_in_container()
     }
     class ValidationUtils {
-        +validate_hostname()
-        +validate_mac()
-        +validate_uuid()
+        +validate_site_id()
+        +validate_device_id()
+        +validate_ping_target()
     }
     class ConfigUtils {
-        +load_config()
-        +merge_defaults()
+        +set_apisession()
+        +get_cached_org_id()
+        +get_cached_or_prompted_org_id()
+        +check_stop_signal()
     }
 
-    InputUtils --> ValidationUtils : validates input
-    FilePathUtils --> EnvironmentUtils : checks env
-    DisplayUtils --> TimeUtils : formats times
-    ConfigUtils --> EnvironmentUtils : reads env
+    ConfigUtils ..> InputUtils : prompts for org
+    FilePathUtils ..> EnvironmentUtils : checks runtime
+    DisplayUtils ..> TimeUtils : formats progress
+    ValidationUtils ..> InputUtils : validates input
 ```
 
-## Prompt & Interactive Utilities
+## Prompt, Device, and Cluster-Forwarding Utilities
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -79,42 +81,48 @@ classDiagram
     direction TB
 
     class PromptUtils {
-        +prompt_for_site()
-        +prompt_for_device()
+        +select_device_id_from_inventory()
+        +select_site_id_from_csv()
+        +select_site()
+        +select_site_with_logging()
     }
     class PromptNetworkDeviceUtils {
-        +prompt_switch_selection()
-        +prompt_ap_selection()
+        +select_ap_mac()
+        +select_gateway_mac()
+        +select_switch_mac()
+        +select_ports_from_device()
     }
     class PromptClientUtils {
-        +prompt_client_selection()
+        +select_client_mac()
+        +select_client()
+        +select_site_and_device_ids()
     }
     class InteractiveDisplayUtils {
-        +display_menu()
-        +display_results()
+        +site_inventory()
+        +device_stats()
+        +device_tests()
+        +device_config()
     }
     class DeviceUtilityCommands {
-        +get_device_info()
+        +__getattr__()
     }
-    class DeviceUtils {
-        +filter_by_type()
-        +enrich_device_data()
-    }
-    class TroubleshootUtils {
-        +diagnose_connectivity()
-    }
-    class InsightMetricsUtils {
-        +fetch_insights()
-        +format_metrics()
-    }
+    class _UtilityCommandsSelection
+    class _UtilityCommandsWebsocket
+    class _UtilityCommandsShow
+    class _UtilityCommandsAction
+    class _UtilityCommandsClear
 
-    PromptUtils <|-- PromptNetworkDeviceUtils
-    PromptUtils <|-- PromptClientUtils
-    InteractiveDisplayUtils --> PromptUtils : uses
-    DeviceUtilityCommands --> DeviceUtils : delegates
+    PromptNetworkDeviceUtils ..> PromptUtils : selects devices
+    PromptClientUtils ..> PromptUtils : selects sites
+    InteractiveDisplayUtils ..> PromptUtils : displays selections
+    DeviceUtilityCommands *-- _UtilityCommandsSelection : forwards missing methods
+    DeviceUtilityCommands *-- _UtilityCommandsWebsocket : forwards missing methods
+    DeviceUtilityCommands *-- _UtilityCommandsShow : forwards missing methods
+    DeviceUtilityCommands *-- _UtilityCommandsAction : forwards missing methods
+    DeviceUtilityCommands *-- _UtilityCommandsClear : forwards missing methods
 ```
 
-## Data Processing Chain
+## Data Processing and Routing Utilities
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -127,59 +135,102 @@ classDiagram
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 classDiagram
-    direction LR
+    direction TB
 
     class DataProcessingUtils {
         +flatten_dict()
-        +sanitize_for_csv()
-        +normalize_keys()
+        +flatten_nested_fields()
+        +convert_list_values_to_strings()
+        +get_unique_keys()
     }
-
     class MarvisDataUtils {
-        +process_marvis_actions()
-        +parse_marvis_response()
+        +format_for_csv()
     }
-
     class DatabaseSchemaUtils {
-        +infer_schema()
-        +create_table()
-        +alter_table()
+        +determine_api_function_name_from_context()
+        +get_endpoint_strategy()
+        +build_create_table_sql()
+        +build_indexes_sql()
     }
-
     class SQLiteDatabaseWriter {
-        +upsert_records()
-        +execute_query()
-        +get_connection()
+        +write()
     }
-
-    class RateLimitingUtils {
-        +check_rate_limit()
-        +adaptive_delay()
-        +update_metrics()
-    }
-
     class RoutingUtils {
-        +parse_route_table()
+        +execute_show_forwarding_table()
+        +execute_show_ssr_routes()
+        +__getattr__()
     }
-
     class AddressUtils {
-        +normalize_address()
-        +fuzzy_match()
+        +normalize_zip()
+        +enhanced_parse()
+        +compare_with_threshold()
     }
-
     class NameNormalizationUtils {
-        +normalize_site_name()
-        +clean_device_name()
+        +normalize_business_name()
+        +normalize_generic()
+        +extract_tokens()
+    }
+    class InsightMetricsUtils {
+        +export_const_insight_metrics()
+        +get_by_scope()
+        +parse_to_normalized_data()
+    }
+    class TroubleshootUtils {
+        +client_connectivity()
+        +device_performance()
+        +network_connectivity()
+        +launch_interactive()
     }
 
-    DataProcessingUtils --> DatabaseSchemaUtils : schema inference
-    DatabaseSchemaUtils --> SQLiteDatabaseWriter : creates tables
-    DataProcessingUtils --> NameNormalizationUtils : normalizes
-    DataProcessingUtils --> AddressUtils : normalizes addresses
+    DataProcessingUtils ..> DatabaseSchemaUtils : infers schema
+    SQLiteDatabaseWriter ..> DatabaseSchemaUtils : writes tables
+    MarvisDataUtils ..> DataProcessingUtils : formats rows
+    AddressUtils ..> NameNormalizationUtils : compares names
+    TroubleshootUtils ..> InsightMetricsUtils : reads insights
+    RoutingUtils ..> WebSocketManager : sends route commands
+```
+
+## SSID Consolidation Cluster Pattern
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {
+  'primaryColor': '#E20074',
+  'primaryTextColor': '#E0E0E0',
+  'primaryBorderColor': '#99004D',
+  'lineColor': '#FF4DA6',
+  'secondaryColor': '#16213E',
+  'tertiaryColor': '#1A1A2E',
+  'fontFamily': 'ui-monospace, monospace'
+}}}%%
+classDiagram
+    direction TB
+
+    class SSIDTemplateConsolidationManager {
+        +execute()
+        +run_phase_menu()
+        +__getattr__()
+    }
+    class _ClusterBase
+    class _SsidTemplateCacheCluster
+    class _SsidTemplatePhase1Cluster
+    class _SsidTemplatePhase2Cluster
+    class _SsidTemplatePhase3Cluster
+    class _SsidTemplatePhase45Cluster
+
+    _ClusterBase <|-- _SsidTemplateCacheCluster
+    _ClusterBase <|-- _SsidTemplatePhase1Cluster
+    _ClusterBase <|-- _SsidTemplatePhase2Cluster
+    _ClusterBase <|-- _SsidTemplatePhase3Cluster
+    _ClusterBase <|-- _SsidTemplatePhase45Cluster
+    SSIDTemplateConsolidationManager *-- _SsidTemplateCacheCluster : forwards missing methods
+    SSIDTemplateConsolidationManager *-- _SsidTemplatePhase1Cluster : forwards missing methods
+    SSIDTemplateConsolidationManager *-- _SsidTemplatePhase2Cluster : forwards missing methods
+    SSIDTemplateConsolidationManager *-- _SsidTemplatePhase3Cluster : forwards missing methods
+    SSIDTemplateConsolidationManager *-- _SsidTemplatePhase45Cluster : forwards missing methods
 ```
 
 ## Siblings
 
 - [Infrastructure](infrastructure.md) - Core and API fetching classes
 - [Exporters](exporters.md) - Data export class families
-- [Managers](managers.md) - Manager classes (firmware, SSH, WebSocket)
+- [Managers](managers.md) - Manager classes

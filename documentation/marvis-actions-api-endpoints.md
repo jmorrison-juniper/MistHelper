@@ -1281,7 +1281,7 @@ MistHelper checked these sources on 2026-09-24 and on 2026-09-25.
 | - | - | - |
 | The bundled `documentation/mist-api-openapi31json.json` | Release 2607.1.1, 756 paths | The four operations of the Marvis Config family and the MSP count path. No list path, schema path, or resolve path for Marvis Actions. |
 | The `master` branch of `mistsys/mist_openapi`, commit `0613a22acd` of 2026-09-18 | Release 2609.1.0, 762 paths | The same four operations of the Marvis Config family. No list path, schema path, or resolve path for Marvis Actions. |
-| `mistapi` 0.64.0 on PyPI, the newest release | Uploaded on 2026-09-15 | The four functions of the Marvis Config family and `msps.suggestion.countMspsMarvisActions`. No function for a `labs` path. |
+| `mistapi` 0.64.0 installed in this worktree | Uploaded on 2026-09-15 | The four functions of the Marvis Config family and `msps.suggestion.countMspsMarvisActions`. No function for a `labs` path. |
 | The online index `https://www.juniper.net/documentation/us/en/software/mist/api/llms.txt` | Read on 2026-09-25 | 1,266 API pages. No page names `labs`. |
 | Live GET requests to the lab organization | 2026-09-24 and 2026-09-25 | The live facts of this report. No request changed Mist data. |
 

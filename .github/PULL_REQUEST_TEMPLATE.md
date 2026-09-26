@@ -11,12 +11,12 @@
 - [ ] Coverage meets or exceeds 80% threshold
 - [ ] New or changed guards state the measured count and prove one failing path
 - [ ] No new Ruff lint violations (`ruff check .`)
-- [ ] Code formatted with Ruff (`ruff format --check .`)
-- [ ] mypy passes (`mypy MistHelper.py`)
+- [ ] Code formatted with Black (`black --check --diff .`)
+- [ ] mypy passes (`mypy $MYPY_PATHS --config-file pyproject.toml`)
 
 ## Security
 - [ ] No hardcoded secrets, tokens, or passwords
-- [ ] Bandit passes with no new findings (`bandit -r MistHelper.py -c pyproject.toml`)
+- [ ] Bandit passes with no new findings (`bandit -c pyproject.toml -r .`)
 - [ ] pip-audit clean (`pip-audit -r requirements.txt`)
 - [ ] Sensitive data handled via `.env` / environment variables only
 

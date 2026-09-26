@@ -2,9 +2,11 @@
 
 # Manager Classes
 
-The 28+ manager classes handle advanced operations: firmware upgrades, SSH execution, packet captures, WebSocket commands, maps, virtual chassis, and WAN migration.
+The current tree has 40 classes with names that end in `Manager`.
+The diagrams below show the main manager families.
+They also show the cluster-forwarding pattern where it matters.
 
-## WebSocket & Network Managers
+## WebSocket and Packet Capture Managers
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -21,44 +23,53 @@ classDiagram
 
     class WebSocketManager {
         +connect()
-        +send_command()
-        +receive_response()
-        +close()
+        +connect_and_subscribe()
+        +subscribe_to_channel()
+        +wait_for_command_result()
+        +disconnect()
     }
-
+    class ServicePingDiscoveryMixin
+    class ServicePingManager {
+        +execute()
+    }
     class ArpDeviceExecutor {
         +execute()
     }
-
     class PingDeviceExecutor {
         +execute()
     }
-
     class MacTableCommand {
-        +show_mac_table()
+        +execute()
     }
-
-    class ServicePingManager {
-        +ping_service()
-        +check_connectivity()
-    }
-
     class PacketCaptureManager {
-        +start_capture()
-        +stop_capture()
-        +download_pcap()
-        +site_level_capture()
-        +org_level_capture()
+        +validate_mac_address()
+        +normalize_mac_address()
+        +start_site_packet_capture()
+        +start_org_packet_capture()
     }
+    class PacketCaptureDownloadManager {
+        +fetch_completed_pcaps()
+        +download_pending_pcaps()
+        +poll_and_download_pcap()
+    }
+    class PacketCaptureExec
+    class PacketCaptureOrg
+    class PacketCapturePrompts
+    class PacketCaptureTcpdump
 
-    WebSocketManager <|-- ArpDeviceExecutor
-    WebSocketManager <|-- PingDeviceExecutor
-    WebSocketManager <|-- MacTableCommand
-    WebSocketManager --> ServicePingManager : delegates
-    WebSocketManager --> PacketCaptureManager : triggers
+    ServicePingDiscoveryMixin <|-- ServicePingManager
+    ArpDeviceExecutor ..> WebSocketManager : sends commands
+    PingDeviceExecutor ..> WebSocketManager : sends commands
+    MacTableCommand ..> WebSocketManager : sends commands
+    PacketCaptureManager *-- WebSocketManager : owns one manager
+    PacketCaptureManager *-- PacketCaptureDownloadManager : owns one downloader
+    PacketCaptureManager *-- PacketCaptureExec : owns executor helpers
+    PacketCaptureManager *-- PacketCaptureOrg : owns org helpers
+    PacketCaptureManager *-- PacketCapturePrompts : owns prompt helpers
+    PacketCaptureManager *-- PacketCaptureTcpdump : owns tcpdump helpers
 ```
 
-## SSH & Device Managers
+## SSH, Device, and Firmware Managers
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -74,60 +85,62 @@ classDiagram
     direction TB
 
     class EnhancedSSHRunner {
-        +connect()
-        +execute_command()
-        +execute_batch()
-        +close()
+        +sanitize_filename()
     }
-
     class SSHRunnerManager {
-        +run_commands_on_devices()
-        +load_commands_csv()
-        +save_per_host_logs()
+        +interactive()
+        +by_gateway_template()
     }
-
     class CLIShellManager {
-        +open_shell()
-        +send_command()
-        +read_output()
+        +launch()
     }
-
+    class BatchExecutor {
+        +run()
+    }
+    class HostRunner {
+        +run()
+    }
+    class MultiHostRunner {
+        +run()
+    }
     class ARPCommandManager {
-        +collect_arp_tables()
-        +parse_arp_output()
+        +execute()
     }
-
-    class FirmwareManager {
-        +check_available_versions()
-        +schedule_upgrade()
-        +monitor_progress()
+    class DeviceRebootManager {
+        +by_gateway_template_list()
     }
-
-    class BulkAPFirmwareUpgrader {
-        +upgrade_site_aps()
-        +upgrade_template_aps()
-    }
-
-    class BulkSwitchFirmwareUpgrader {
-        +upgrade_site_switches()
-        +validate_vc_status()
-    }
-
     class VirtualChassisManager {
-        +convert_to_vc()
-        +validate_members()
-        +monitor_conversion()
+        +launch_convert_single()
+        +convert_single()
+        +check_status()
+    }
+    class FirmwareManager {
+        +check_firmware_upgrade_status()
+        +execute_firmware_upgrade_with_mode_selection()
+        +execute_switch_firmware_upgrade_with_mode_selection()
+    }
+    class BulkAPFirmwareUpgrader {
+        +execute()
+    }
+    class BulkSwitchFirmwareUpgrader {
+        +execute()
+    }
+    class OrgLevelAPFirmwareUpgrader {
+        +run()
+        +execute()
     }
 
-    SSHRunnerManager --> EnhancedSSHRunner : creates
-    EnhancedSSHRunner --> CLIShellManager : uses
-    SSHRunnerManager --> ARPCommandManager : delegates
-    FirmwareManager <|-- BulkAPFirmwareUpgrader
-    FirmwareManager <|-- BulkSwitchFirmwareUpgrader
-    FirmwareManager --> VirtualChassisManager : coordinates
+    SSHRunnerManager ..> EnhancedSSHRunner : starts SSH flows
+    CLIShellManager ..> EnhancedSSHRunner : launches shell
+    BatchExecutor ..> HostRunner : runs one host
+    MultiHostRunner ..> HostRunner : runs many hosts
+    FirmwareManager ..> BulkAPFirmwareUpgrader : starts AP upgrades
+    FirmwareManager ..> BulkSwitchFirmwareUpgrader : starts switch upgrades
+    FirmwareManager ..> OrgLevelAPFirmwareUpgrader : starts org AP upgrades
+    VirtualChassisManager ..> EnhancedSSHRunner : uses SSH utilities
 ```
 
-## Maps & WAN Managers
+## Map, Gateway, Site, and Org Managers
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -143,29 +156,60 @@ classDiagram
     direction TB
 
     class MapsManager {
-        +launch_viewer()
-        +load_site_maps()
-        +render_floor_plan()
+        +select_site()
+        +get_current_site()
+        +run_interactive_menu()
+        +export_site_maps()
+        +export_all_site_maps()
     }
-
+    class PlotlyMapCallbackManager {
+        +apply_layer_toggles()
+        +build_click_details()
+    }
+    class DashTemplateManager {
+        +get_custom_css()
+        +get_html_template()
+        +validate_template()
+    }
     class WAN2MigrationManager {
-        +migrate_site()
-        +validate_config()
-        +rollback()
+        +set_site_variable()
     }
-
     class WANProbeConfigManager {
-        +configure_probes()
-        +validate_targets()
+        +configure()
+    }
+    class WANProbeDeviceOverrideManager {
+        +configure()
+    }
+    class DeviceConfigTemplateClonerManager {
+        +clone()
+    }
+    class APProfileMigrationManager {
+        +migrate_aps_between_device_profiles()
+        +revert_ap_profile_migration()
+    }
+    class SiteConfigManager {
+        +create_test_sites_from_csv()
+        +create_country_rf_templates_and_assign()
+        +create_ap_model_device_profiles()
+    }
+    class OrgConfigMigrationManager {
+        +export_config()
+        +import_config()
+    }
+    class OrgTicketManager {
+        +list_tickets()
+        +create_ticket()
+        +update_ticket()
+        +view_ticket()
     }
 
-    class DataCollectionManager {
-        +collect_all_data()
-        +schedule_collection()
-    }
-
-    MapsManager --> DataCollectionManager : uses
-    WAN2MigrationManager --> WANProbeConfigManager : configures
+    MapsManager ..> PlotlyMapCallbackManager : supports viewer callbacks
+    MapsManager ..> DashTemplateManager : uses Dash templates
+    WAN2MigrationManager ..> WANProbeConfigManager : applies probe settings
+    WANProbeDeviceOverrideManager ..> GatewayExportUtils : reads gateway data
+    DeviceConfigTemplateClonerManager ..> GatewayExportUtils : reads templates
+    APProfileMigrationManager ..> SiteConfigManager : changes site profiles
+    OrgConfigMigrationManager ..> OrgTicketManager : shares org context
 ```
 
 ## Siblings
