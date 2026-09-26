@@ -56,7 +56,7 @@ typed confirmation from a person. An automated test pass never runs one.
 A container that you start for a test, for a debug session, or for an
 end-to-end run follows four rules.
 
-1. Start it inside the compose group with `.\scripts\compose.ps1`. Never start
+1. Start it inside the compose group with `podman compose`. Never start
    a one-off container with a bare `podman run`.
 2. Name it for the issue or the pull request that it serves. Use the format
    `misthelper-tmp-<issue|pr><number>-<slug>`.
@@ -96,7 +96,7 @@ path and to `data\GlobalWiredClientReport_summary.json`.
 
 Deployment verification for issue #993 ran on 2026-09-14 UTC. The operator
 pulled `ghcr.io/jmorrison-juniper/misthelper:latest`, restarted
-`misthelper-app` with `.\scripts\compose.ps1 up -d --no-deps misthelper`, and
+`misthelper-app` with `podman compose up -d --no-deps misthelper`, and
 checked the web readiness endpoint. `podman ps` reported `misthelper-app` as
 running from the latest image. `http://127.0.0.1:8055/ready` returned 200.
 
@@ -161,7 +161,7 @@ set `SNMP_COMMUNITY` in `.env`. Choose a base OID under an enterprise number
 that you own.
 
 ```powershell
-.\scripts\compose.ps1 up -d
+podman compose up -d
 snmpwalk -v2c -c <community> -On 127.0.0.1:1161 .1.3.6.1.4.1.8072.9999.9999
 ```
 
@@ -220,7 +220,7 @@ Observium is an SNMP monitoring system. The compose file carries it behind a
 profile, so it starts only when you ask for it.
 
 ```powershell
-.\scripts\compose.ps1 --profile monitoring up -d
+podman compose --profile monitoring up -d
 ```
 
 The command starts Observium on <http://127.0.0.1:8668>. Sign in with the user

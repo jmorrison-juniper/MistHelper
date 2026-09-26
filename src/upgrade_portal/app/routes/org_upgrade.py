@@ -51,7 +51,10 @@ from ...upgrade.org_cascade.record import WATCH_KEY, OrgPhaseEntries, OrgPhaseWa
 from ...upgrade.org_cascade.view import OrgPhaseView  # Issue #3245: the phase card of the page and the poll.
 from ...upgrade.org_cascade.walk import OrgCascadeDeps, OrgCascadeRegistry  # Issue #3245: one watch thread.
 from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
-from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for each device of the operation.
+from ...upgrade.org_devices import (  # Issue #3249: one row for each device of the operation.
+    OrgChildDevices,  # Issue #3457: the counts of a child job that the check proved.
+    OrgDeviceRows,
+)
 from ...upgrade.org_postcheck_view import OrgPostCheckView  # Issue #3244: the post-check card of each site.
 from ...upgrade.org_precheck import PRECHECK_FIELD, OrgPrecheckGate, OrgPrecheckState  # Issue #3243: the gate.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
@@ -1881,14 +1884,25 @@ def _aggregate_child_summary(child: Mapping[str, Any]) -> tuple[dict[str, Any], 
 
 
 def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
-    """Return explicit, upgraded, and failed counts for one child."""
+    """Return explicit, upgraded, and failed counts for one child.
+
+    Why:
+        Issue #3457. A child job that the multi-site check proved holds an empty
+        cloud answer, so the cloud lists count no upgraded device. The counts of
+        that child job come from the proof, with the rule of the device table.
+    """
     data = child.get("status_data") if isinstance(child.get("status_data"), Mapping) else {}  # Read status.
     targets = data.get("targets") if isinstance(data.get("targets"), Mapping) else {}  # Read root targets.
-    counts = (
-        len(child.get("target_ids", [])),
-        _array_count(targets.get("upgraded")),
-        _array_count(targets.get("failed")),
+    counts = (  # The target count and the two counts of the stored cloud lists.
+        len(child.get("target_ids", [])),  # Each target device of the child job.
+        _array_count(targets.get("upgraded")),  # The devices that the cloud lists as upgraded.
+        _array_count(targets.get("failed")),  # The devices that the cloud lists as failed.
     )
+    if OrgChildDevices.is_proven(child):  # The check proved each device of this child job.
+        upgraded, failed = OrgChildDevices(child).proven_counts(counts[0])  # The rule of the device table.
+        child_id = child.get("child_id", "")  # Name the child job in the log line.
+        logger.debug("Child job %s is proven: %s upgraded, %s failed", child_id, upgraded, failed)  # Log the counts.
+        return counts[0], upgraded, failed  # The proof replaces the empty cloud lists.
     entries = data.get("site_upgrades", data.get("upgrades", []))  # Read organization site results.
     _, nested_counts, has_nested_targets = _site_summaries(entries)  # Count nested AP target arrays.
     return (counts[0], nested_counts[1], nested_counts[2]) if has_nested_targets else counts  # Prefer nested counts.

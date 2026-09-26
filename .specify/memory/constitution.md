@@ -306,9 +306,10 @@ The following technology choices are binding for all MistHelper code:
 - **Data Directory**: All outputs MUST go to the `data/` directory,
   enforced at runtime. SSH logs go to `data/per-host-logs/`.
   Database file is `data/mist_data.db`.
-- **Container Security**: The container runs as non-root user
-  (`misthelper`). The mounted `data/` directory MUST be writable
-  (`chmod -R 777 data/` before first run).
+- **Container Security**: The container runs as the non-root user
+  `misthelper` with UID 1000. The mounted `data/` directory MUST accept a
+  write from that identifier. On Linux, use
+  `podman unshare chown -R 1000:1000 data`. Never use `chmod -R 777 data`.
 - **Zscaler/Proxy**: Local `podman push` behind corporate Zscaler is
   blocked. All container builds and pushes MUST use GitHub Actions CI.
 
