@@ -33,7 +33,8 @@ DESTRUCTIVE_WARNING = (
     " Make a change plan before you run one. The change can stop client traffic at a site."
 )
 OVERVIEW_TEXT = [  # The text that explains the two kinds of diagram on a category page.
-    "Each overview diagram links a menu option to the SDK families that it uses.",
+    "The overview diagram shows the SDK families that the menu options of this category use.",
+    "Each family node shows the number of menu options that use that family.",
     "The section of each menu option has a second diagram.",
     "That diagram links the menu option to the classes that send the requests, and each class to its endpoints.",
 ]
@@ -104,8 +105,8 @@ class CategoryPage:
         lines = [GENERATED_NOTICE, "", f"# Menu API endpoints: {self.category}", ""]  # The page header.
         lines.extend(self.introduction(len(menus)))  # The purpose of the page.
         lines.extend(["## Overview", "", *OVERVIEW_TEXT, ""])  # The purpose of the two kinds of diagram.
-        for block in MermaidDiagram.groups(menus):  # One diagram for each group of menu options.
-            lines.extend([block, ""])
+        if menus:  # One overview diagram for the category.
+            lines.extend([MermaidDiagram.overview(self.category, menus), ""])
         for result in menus:  # One section for each menu option.
             lines.extend(self.menu_section(result))
         return "\n".join(lines).rstrip("\n") + "\n"  # One line end at the end of the file.

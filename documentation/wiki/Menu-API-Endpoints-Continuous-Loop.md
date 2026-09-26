@@ -9,21 +9,18 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 ## Overview
 
-Each overview diagram links a menu option to the SDK families that it uses.
+The overview diagram shows the SDK families that the menu options of this category use.
+Each family node shows the number of menu options that use that family.
 The section of each menu option has a second diagram.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
 flowchart LR
-    m151["Menu 151: Loop refresh of core datasets site li..."]
-    m151 --> f_orgs_stats
-    m151 --> f_orgs_inventory
-    m151 --> f_orgs_sites
-    m151 --> f_sites_stats
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_stats["orgs/stats"]
-    f_sites_stats["sites/stats"]
+    root["continuous_loop: 1<br/>menu option"]
+    root --> f_orgs_inventory["orgs/inventory<br/>1 menu option"]
+    root --> f_orgs_sites["orgs/sites<br/>1 menu option"]
+    root --> f_orgs_stats["orgs/stats<br/>1 menu option"]
+    root --> f_sites_stats["sites/stats<br/>1 menu option"]
 ```
 
 ## Menu 151
@@ -35,15 +32,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 151: Loop refresh of core datasets site li..."]
+    menu["Menu 151: Loop<br/>refresh of core<br/>datasets site li..."]
     menu --> c1["OrgDeviceStatsExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/stats/devices"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/stats/ports/search"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/stats/vpn_peers/search"]
-    c1 --> e5["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/ports/search"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/vpn_peers/search"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["OrgInventoryExporter"]
-    c2 --> e6["GET /api/v1/orgs/{org_id}/inventory"]
+    c2 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |

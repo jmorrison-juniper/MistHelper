@@ -29,7 +29,7 @@ If a change adds or removes an API call, the job fails until you write the pages
 ## How a menu option reaches the Mist cloud
 
 ```mermaid
-flowchart LR
+flowchart TB
     operator["Operator"] --> menu["Menu option in MistHelper.py"]
     menu --> handler["Handler class below src/"]
     handler --> helpers["Shared helpers: input, cache, and export"]
@@ -45,7 +45,7 @@ flowchart LR
 ## How the tool builds the map
 
 ```mermaid
-flowchart LR
+flowchart TB
     table["menu_actions table in MistHelper.py"] --> handler["Handler expression"]
     handler --> walk["Breadth-first walk of the call graph"]
     walk --> stop["Stop at a shared helper"]

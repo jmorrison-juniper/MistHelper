@@ -9,175 +9,27 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 ## Overview
 
-Each overview diagram links a menu option to the SDK families that it uses.
+The overview diagram shows the SDK families that the menu options of this category use.
+Each family node shows the number of menu options that use that family.
 The section of each menu option has a second diagram.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
 flowchart LR
-    m0["Menu 0: Exit MistHelper"]
-    m124["Menu 124: Monitor Traffic on Switch/SRX Port st..."]
-    m124 --> f_sites_devices
-    m124 --> f_sites_stats
-    m124 --> f_websocket_channels
-    m125["Menu 125: Run Top Command on Switch/SRX streami..."]
-    m125 --> f_sites_devices
-    m125 --> f_sites_stats
-    m125 --> f_websocket_channels
-    m126["Menu 126: Poll Fresh Statistics from Switch"]
-    m126 --> f_sites_devices
-    m126 --> f_sites_stats
-    m127["Menu 127: Create Device Snapshot on Switch"]
-    m127 --> f_sites_devices
-    m127 --> f_sites_stats
-    m128["Menu 128: Locate Device - Blink LED on AP or Sw..."]
-    m128 --> f_sites_devices
-    m128 --> f_sites_stats
-    m129["Menu 129: Unlocate Device - Stop LED Blinking o..."]
-    m129 --> f_sites_devices
-    m129 --> f_sites_stats
-    m130["Menu 130: Re-adopt Switch Device"]
-    m130 --> f_sites_devices
-    m130 --> f_sites_stats
-    m131["Menu 131: Get ZTP Password for Switch/Gateway c..."]
-    m131 --> f_sites_devices
-    m131 --> f_sites_stats
-    m132["Menu 132: Get Config CLI Commands for Switch Ad..."]
-    m132 --> f_sites_devices
-    m132 --> f_sites_stats
-    m133["Menu 133: Upload Support File from Switch/Gateway"]
-    m133 --> f_sites_devices
-    m133 --> f_sites_stats
-    m134["Menu 134: Start Site Packet Capture - Wireless/..."]
-    m134 --> f_sites_devices
-    m134 --> f_sites_pcaps
-    m134 --> f_sites_stats
-    m134 --> f_orgs_pcaps
-    m134 --> f_sites_clients
-    m134 --> f_sites_wired_clients
-    m134 --> more134["1 more family"]
-    m135["Menu 135: Start Organization Packet Capture - M..."]
-    m135 --> f_orgs_pcaps
-    m135 --> f_orgs_stats
-    m135 --> f_orgs_mxedges
-    m135 --> f_sites_pcaps
-    m135 --> f_websocket_channels
-    m136["Menu 136: MSP Managed Service Provider info - D..."]
-    m136 --> f_msps_orgs
-    m137["Menu 137: Check current firmware upgrade status..."]
-    m137 --> f_orgs_devices
-    m137 --> f_sites_devices
-    m137 --> f_orgs_gatewaytemplates
-    m137 --> f_orgs_logs
-    m137 --> f_orgs_sites
-    m137 --> f_orgs_ssr
-    m137 --> more137["2 more families"]
-    f_msps_orgs["msps/orgs"]
-    f_orgs_devices["orgs/devices"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_logs["orgs/logs"]
-    f_orgs_mxedges["orgs/mxedges"]
-    f_orgs_pcaps["orgs/pcaps"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_ssr["orgs/ssr"]
-    f_orgs_stats["orgs/stats"]
-    f_sites_clients["sites/clients"]
-    f_sites_devices["sites/devices"]
-    f_sites_pcaps["sites/pcaps"]
-    f_sites_stats["sites/stats"]
-    f_sites_wired_clients["sites/wired_clients"]
-    f_websocket_channels["websocket channels"]
-```
-
-```mermaid
-flowchart LR
-    m138["Menu 138: Compare inventory data with external..."]
-    m138 --> f_orgs_inventory
-    m138 --> f_orgs_orgs
-    m138 --> f_orgs_sites
-    m139["Menu 139: Interactive Marvis VNA AI troubleshoo..."]
-    m139 --> f_orgs_insights
-    m139 --> f_orgs_orgs
-    m139 --> f_orgs_troubleshoot
-    m139 --> f_sites_devices
-    m140["Menu 140: Interactively execute a CLI command o..."]
-    m140 --> f_sites_devices
-    m141["Menu 141: Launch Terminal User Interface TUI mo..."]
-    m142["Menu 142: Maps Manager - Interactive site floor..."]
-    m142 --> f_sites_maps
-    m142 --> f_sites_zones
-    m142 --> f_raw_requests
-    m142 --> f_sites_beacons
-    m142 --> f_sites_devices
-    m142 --> f_sites_stats
-    m142 --> more142["2 more families"]
-    m143["Menu 143: Switch to interactive login email/pas..."]
-    m143 --> f_msps_msps
-    m143 --> f_msps_orgs
-    m143 --> f_self_self
-    m144["Menu 144: MSP Inventory Export - Export device..."]
-    m144 --> f_msps_msps
-    m144 --> f_msps_orgs
-    m144 --> f_orgs_inventory
-    m144 --> f_orgs_sites
-    m144 --> f_self_self
-    m145["Menu 145: SSID Template Consolidation 5-Phase G..."]
-    m145 --> f_orgs_templates
-    m145 --> f_orgs_sitegroups
-    m145 --> f_orgs_mxtunnels
-    m145 --> f_orgs_sites
-    m145 --> f_orgs_wlans
-    m145 --> f_sites_sites
-    m146["Menu 146: WAN Hub Group Number Manager"]
-    m146 --> f_orgs_vpns
-    m146 --> f_orgs_deviceprofiles
-    m147["Menu 147: WAN Hub-Spoke VPN Builder"]
-    m147 --> f_orgs_deviceprofiles
-    m147 --> f_orgs_vpns
-    m148["Menu 148: Manage WLAN RADIUS Authentication Tim..."]
-    m148 --> f_orgs_sitetemplates
-    m148 --> f_orgs_wlans
-    m148 --> f_sites_wlans
-    m148 --> f_orgs_templates
-    m148 --> f_sites_sites
-    m149["Menu 149: Set WAN2 Interface Site Variable - Co..."]
-    m149 --> f_sites_devices
-    m149 --> f_sites_setting
-    m149 --> f_orgs_gatewaytemplates
-    m149 --> f_orgs_inventory
-    m149 --> f_orgs_sites
-    m149 --> f_sites_stats
-    m150["Menu 150: Extract Gateway Template Configuratio..."]
-    m150 --> f_orgs_gatewaytemplates
-    m150 --> f_orgs_sites
-    m192["Menu 192: View a support ticket with full comme..."]
-    m192 --> f_orgs_tickets
-    f_msps_msps["msps/msps"]
-    f_msps_orgs["msps/orgs"]
-    f_orgs_deviceprofiles["orgs/deviceprofiles"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_insights["orgs/insights"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_mxtunnels["orgs/mxtunnels"]
-    f_orgs_orgs["orgs/orgs"]
-    f_orgs_sitegroups["orgs/sitegroups"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_sitetemplates["orgs/sitetemplates"]
-    f_orgs_templates["orgs/templates"]
-    f_orgs_tickets["orgs/tickets"]
-    f_orgs_troubleshoot["orgs/troubleshoot"]
-    f_orgs_vpns["orgs/vpns"]
-    f_orgs_wlans["orgs/wlans"]
-    f_raw_requests["raw requests"]
-    f_self_self["self/self"]
-    f_sites_beacons["sites/beacons"]
-    f_sites_devices["sites/devices"]
-    f_sites_maps["sites/maps"]
-    f_sites_setting["sites/setting"]
-    f_sites_sites["sites/sites"]
-    f_sites_stats["sites/stats"]
-    f_sites_wlans["sites/wlans"]
-    f_sites_zones["sites/zones"]
+    root["interactive: 29 menu<br/>options"]
+    root --> f_sites_devices["sites/devices<br/>16 menu options"]
+    root --> f_sites_stats["sites/stats<br/>14 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>7 menu options"]
+    root --> f_websocket_channels["websocket channels<br/>4 menu options"]
+    root --> f_msps_orgs["msps/orgs<br/>3 menu options"]
+    root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>3 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>3 menu options"]
+    root --> f_msps_msps["msps/msps<br/>2 menu options"]
+    root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>2 menu options"]
+    root --> f_orgs_orgs["orgs/orgs<br/>2 menu options"]
+    root --> f_orgs_pcaps["orgs/pcaps<br/>2 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>2 menu options"]
+    root --> more["25 more families"]
 ```
 
 ## Menu 0
@@ -197,13 +49,13 @@ Menu 0 closes MistHelper. It sends no API request.
 
 ```mermaid
 flowchart LR
-    menu["Menu 124: Monitor Traffic on Switch/SRX Port st..."]
-    menu --> c1["_UtilityCommandsSelection"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 124: Monitor<br/>Traffic on<br/>Switch/SRX Port<br/>st..."]
+    menu --> c1["_UtilityCommands<br/>Selection"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
     menu --> c2["_UtilityCommandsShow"]
-    c2 --> e2["POST /api/v1/sites/{site_id}/devices/{device_id}/monitor_traffic"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c2 --> e2["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/monitor_traffic"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -221,13 +73,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 125: Run Top Command on Switch/SRX streami..."]
-    menu --> c1["_UtilityCommandsSelection"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 125: Run Top<br/>Command on<br/>Switch/SRX<br/>streami..."]
+    menu --> c1["_UtilityCommands<br/>Selection"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
     menu --> c2["_UtilityCommandsShow"]
-    c2 --> e2["POST /api/v1/sites/{site_id}/devices/{device_id}/run_top"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c2 --> e2["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/run_top"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -245,11 +97,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 126: Poll Fresh Statistics from Switch"]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/poll_stats"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 126: Poll Fresh<br/>Statistics from<br/>Switch"]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/poll_stats"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -266,11 +118,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 127: Create Device Snapshot on Switch"]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/snapshot"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 127: Create<br/>Device Snapshot on<br/>Switch"]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/snapshot"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -287,11 +139,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 128: Locate Device - Blink LED on AP or Sw..."]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/locate"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 128: Locate<br/>Device - Blink LED<br/>on AP or Sw..."]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/locate"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -308,11 +160,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 129: Unlocate Device - Stop LED Blinking o..."]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/unlocate"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 129: Unlocate<br/>Device - Stop LED<br/>Blinking o..."]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/unlocate"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -329,12 +181,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 130: Re-adopt Switch Device"]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/readopt"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices/{device_id}/vc"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e3["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 130: Re-adopt<br/>Switch Device"]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/readopt"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/vc"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -352,11 +204,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 131: Get ZTP Password for Switch/Gateway c..."]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/request_ztp_password"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 131: Get ZTP<br/>Password for<br/>Switch/Gateway c..."]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/request_ztp_password"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -373,11 +225,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 132: Get Config CLI Commands for Switch Ad..."]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices/{device_id}/config_cmd"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 132: Get Config<br/>CLI Commands for<br/>Switch Ad..."]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/config_cmd"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -394,11 +246,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 133: Upload Support File from Switch/Gateway"]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/support"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 133: Upload<br/>Support File from<br/>Switch/Gateway"]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/support"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -415,22 +267,22 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 134: Start Site Packet Capture - Wireless/..."]
+    menu["Menu 134: Start Site<br/>Packet Capture -<br/>Wireless/..."]
     menu --> c1["PromptNetworkDeviceUtils"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices/{device_id}"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["PacketCaptureExec"]
-    c2 --> e5["POST /api/v1/sites/{site_id}/pcaps/capture"]
-    c2 --> e6["WS /sites/{site_id}/pcaps"]
+    c2 --> e5["POST<br/>/api/v1/sites<br/>/{site_id}/pcaps<br/>/capture"]
+    c2 --> e6["WS<br/>/sites/{site_id}<br/>/pcaps"]
     menu --> c3["PromptClientUtils"]
-    c3 --> e7["GET /api/v1/sites/{site_id}/clients/search"]
-    c3 --> e8["GET /api/v1/sites/{site_id}/wired_clients/search"]
+    c3 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/clients<br/>/search"]
+    c3 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/wired_clients<br/>/search"]
     menu --> c4["PacketCaptureManager"]
-    c4 --> e9["POST /api/v1/orgs/{org_id}/pcaps/capture"]
+    c4 --> e9["POST<br/>/api/v1/orgs<br/>/{org_id}/pcaps<br/>/capture"]
     menu --> c5["PacketCapturePrompts"]
-    c5 --> e10["GET /api/v1/sites/{site_id}/pcaps"]
+    c5 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/pcaps"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -455,17 +307,17 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 135: Start Organization Packet Capture - M..."]
+    menu["Menu 135: Start<br/>Organization Packet<br/>Capture - M..."]
     menu --> c1["PacketCaptureOrg"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/mxedges"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/pcaps/capture"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/stats/mxedges"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/stats/mxedges/{mxedge_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/mxedges"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/pcaps<br/>/capture"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/mxedges"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/mxedges/{mxedge_id}"]
     menu --> c2["PacketCaptureExec"]
-    c2 --> e5["GET /api/v1/orgs/{org_id}/pcaps"]
-    c2 --> e6["WS /orgs/{org_id}/pcaps"]
+    c2 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/pcaps"]
+    c2 --> e6["WS<br/>/orgs/{org_id}/pcaps"]
     menu --> c3["PacketCaptureManager"]
-    c3 --> e7["POST /api/v1/sites/{site_id}/pcaps/capture"]
+    c3 --> e7["POST<br/>/api/v1/sites<br/>/{site_id}/pcaps<br/>/capture"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -487,9 +339,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 136: MSP Managed Service Provider info - D..."]
+    menu["Menu 136: MSP<br/>Managed Service<br/>Provider info - D..."]
     menu --> c1["OrgConfigExporter"]
-    c1 --> e1["GET /api/v1/msps/{msp_id}/orgs"]
+    c1 --> e1["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -505,22 +357,22 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 137: Check current firmware upgrade status..."]
+    menu["Menu 137: Check<br/>current firmware<br/>upgrade status..."]
     menu --> c1["FirmwareUpgradeStatusChecker"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/devices/events/search"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/logs/search"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/ssr/upgrade"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/devices/upgrade"]
-    c1 --> e5["GET /api/v1/sites/{site_id}/devices/upgrade/{upgrade_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/events/search"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/logs<br/>/search"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade<br/>/{upgrade_id}"]
     menu --> c2["FirmwareManager"]
-    c2 --> e6["GET /api/v1/orgs/{org_id}/devices/upgrade"]
-    c2 --> e7["GET /api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id}"]
-    c2 --> e8["GET /api/v1/orgs/{org_id}/stats/devices"]
-    c2 --> e9["GET /api/v1/sites/{site_id}/stats/devices"]
+    c2 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade"]
+    c2 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade<br/>/{upgrade_id}"]
+    c2 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+    c2 --> e9["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
     menu --> c3["APICoreFetchUtils"]
-    c3 --> e10["GET /api/v1/orgs/{org_id}/sites"]
+    c3 --> e10["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c4["GatewayExportUtils"]
-    c4 --> e11["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
+    c4 --> e11["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -546,12 +398,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 138: Compare inventory data with external..."]
+    menu["Menu 138: Compare<br/>inventory data with<br/>external..."]
     menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/sites"]
-    menu --> c2["InventoryCSVComparator"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    menu --> c2["InventoryCSV<br/>Comparator"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -569,12 +421,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 139: Interactive Marvis VNA AI troubleshoo..."]
+    menu["Menu 139:<br/>Interactive Marvis<br/>VNA AI<br/>troubleshoo..."]
     menu --> c1["MarvisTroubleshootUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/insights/sites-sle"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/troubleshoot"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/devices/{device_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/insights<br/>/sites-sle"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/troubleshoot"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -593,9 +445,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 140: Interactively execute a CLI command o..."]
+    menu["Menu 140:<br/>Interactively<br/>execute a CLI<br/>command o..."]
     menu --> c1["CLIShellManager"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/shell"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/shell"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -620,21 +472,21 @@ Menu 141 opens a browser for the mistapi library. The operator selects the SDK f
 
 ```mermaid
 flowchart LR
-    menu["Menu 142: Maps Manager - Interactive site floor..."]
+    menu["Menu 142: Maps<br/>Manager -<br/>Interactive site<br/>floor..."]
     menu --> c1["MapsManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/location/coverage"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/maps"]
-    c1 --> e5["POST /api/v1/sites/{site_id}/maps"]
-    c1 --> e6["DELETE /api/v1/sites/{site_id}/maps/{map_id}"]
-    c1 --> e7["GET /api/v1/sites/{site_id}/maps/{map_id}"]
-    c1 --> e8["PUT /api/v1/sites/{site_id}/maps/{map_id}"]
-    c1 --> e9["POST /api/v1/sites/{site_id}/maps/{map_id}/image"]
-    c1 --> e10["GET /api/v1/sites/{site_id}/stats/clients"]
-    c1 --> e11["GET /api/v1/sites/{site_id}/stats/devices"]
-    c1 --> e12["GET /api/v1/sites/{site_id}/zones"]
-    menu --> more["9 more endpoints in the table"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/location<br/>/coverage"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/maps"]
+    c1 --> e5["POST<br/>/api/v1/sites<br/>/{site_id}/maps"]
+    c1 --> e6["DELETE<br/>/api/v1/sites<br/>/{site_id}/maps<br/>/{map_id}"]
+    c1 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/maps<br/>/{map_id}"]
+    c1 --> e8["PUT<br/>/api/v1/sites<br/>/{site_id}/maps<br/>/{map_id}"]
+    c1 --> e9["POST<br/>/api/v1/sites<br/>/{site_id}/maps<br/>/{map_id}/image"]
+    c1 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/clients"]
+    c1 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
+    c1 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}/zones"]
+    menu --> more["9 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -670,13 +522,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 143: Switch to interactive login email/pas..."]
+    menu["Menu 143: Switch to<br/>interactive login<br/>email/pas..."]
     menu --> c1["MspOrgSelector"]
-    c1 --> e1["GET /api/v1/msps/{msp_id}/orgs"]
+    c1 --> e1["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
     menu --> c2["_fetch_msp_name"]
-    c2 --> e2["GET /api/v1/msps/{msp_id}"]
+    c2 --> e2["GET<br/>/api/v1/msps<br/>/{msp_id}"]
     menu --> c3["_msp_fetch_user_data"]
-    c3 --> e3["GET /api/v1/self"]
+    c3 --> e3["GET<br/>/api/v1/self"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -694,16 +546,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 144: MSP Inventory Export - Export device..."]
+    menu["Menu 144: MSP<br/>Inventory Export -<br/>Export device..."]
     menu --> c1["MSPInventoryExporter"]
-    c1 --> e1["GET /api/v1/msps/{msp_id}/orgs"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c3["_fetch_msp_name"]
-    c3 --> e4["GET /api/v1/msps/{msp_id}"]
+    c3 --> e4["GET<br/>/api/v1/msps<br/>/{msp_id}"]
     menu --> c4["_msp_fetch_user_data"]
-    c4 --> e5["GET /api/v1/self"]
+    c4 --> e5["GET<br/>/api/v1/self"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -723,24 +575,24 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 145: SSID Template Consolidation 5-Phase G..."]
-    menu --> c1["_SsidTemplatePhase1Cluster"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/mxtunnels"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/sitegroups"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/templates"]
-    c1 --> e5["GET /api/v1/orgs/{org_id}/wlans"]
+    menu["Menu 145: SSID<br/>Template<br/>Consolidation<br/>5-Phase G..."]
+    menu --> c1["_SsidTemplatePhase1<br/>Cluster"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/mxtunnels"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sitegroups"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/templates"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/wlans"]
     menu --> c2["_apply_ssid_disable"]
-    c2 --> e6["GET /api/v1/orgs/{org_id}/templates/{template_id}"]
-    c2 --> e7["PUT /api/v1/orgs/{org_id}/templates/{template_id}"]
+    c2 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/templates<br/>/{template_id}"]
+    c2 --> e7["PUT<br/>/api/v1/orgs<br/>/{org_id}/templates<br/>/{template_id}"]
     menu --> c3["_create_new_template"]
-    c3 --> e8["POST /api/v1/orgs/{org_id}/templates"]
+    c3 --> e8["POST<br/>/api/v1/orgs<br/>/{org_id}/templates"]
     menu --> c4["_create_site_group"]
-    c4 --> e9["POST /api/v1/orgs/{org_id}/sitegroups"]
+    c4 --> e9["POST<br/>/api/v1/orgs<br/>/{org_id}/sitegroups"]
     menu --> c5["_push_group_site_ids"]
-    c5 --> e10["PUT /api/v1/orgs/{org_id}/sitegroups/{sitegroup_id}"]
-    menu --> c6["_write_single_site_vars"]
-    c6 --> e11["PUT /api/v1/sites/{site_id}"]
+    c5 --> e10["PUT<br/>/api/v1/orgs<br/>/{org_id}/sitegroups<br/>/{sitegroup_id}"]
+    menu --> c6["_write_single_site<br/>_vars"]
+    c6 --> e11["PUT<br/>/api/v1/sites<br/>/{site_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -766,12 +618,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 146: WAN Hub Group Number Manager"]
+    menu["Menu 146: WAN Hub<br/>Group Number Manager"]
     menu --> c1["WanHubGroupNumberManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/vpns"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/vpns/{vpn_id}"]
-    c1 --> e4["PUT /api/v1/orgs/{org_id}/vpns/{vpn_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/vpns"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/vpns<br/>/{vpn_id}"]
+    c1 --> e4["PUT<br/>/api/v1/orgs<br/>/{org_id}/vpns<br/>/{vpn_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -790,13 +642,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 147: WAN Hub-Spoke VPN Builder"]
+    menu["Menu 147: WAN<br/>Hub-Spoke VPN<br/>Builder"]
     menu --> c1["WanVpnBuilder"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/deviceprofiles/{deviceprofile_id}"]
-    c1 --> e3["PUT /api/v1/orgs/{org_id}/deviceprofiles/{deviceprofile_id}"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/vpns"]
-    c1 --> e5["POST /api/v1/orgs/{org_id}/vpns"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles<br/>/{deviceprofile_id}"]
+    c1 --> e3["PUT<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles<br/>/{deviceprofile_id}"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/vpns"]
+    c1 --> e5["POST<br/>/api/v1/orgs<br/>/{org_id}/vpns"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -816,16 +668,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 148: Manage WLAN RADIUS Authentication Tim..."]
+    menu["Menu 148: Manage<br/>WLAN RADIUS<br/>Authentication<br/>Tim..."]
     menu --> c1["WLANRadiusTimerManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sitetemplates/{sitetemplate_id}"]
-    c1 --> e2["PUT /api/v1/orgs/{org_id}/sitetemplates/{sitetemplate_id}"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/templates"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/wlans"]
-    c1 --> e5["PUT /api/v1/orgs/{org_id}/wlans/{wlan_id}"]
-    c1 --> e6["GET /api/v1/sites/{site_id}"]
-    c1 --> e7["GET /api/v1/sites/{site_id}/wlans"]
-    c1 --> e8["PUT /api/v1/sites/{site_id}/wlans/{wlan_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/sitetemplates<br/>/{sitetemplate_id}"]
+    c1 --> e2["PUT<br/>/api/v1/orgs<br/>/{org_id}<br/>/sitetemplates<br/>/{sitetemplate_id}"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/templates"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/wlans"]
+    c1 --> e5["PUT<br/>/api/v1/orgs<br/>/{org_id}/wlans<br/>/{wlan_id}"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}"]
+    c1 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/wlans"]
+    c1 --> e8["PUT<br/>/api/v1/sites<br/>/{site_id}/wlans<br/>/{wlan_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -848,19 +700,19 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 149: Set WAN2 Interface Site Variable - Co..."]
+    menu["Menu 149: Set WAN2<br/>Interface Site<br/>Variable - Co..."]
     menu --> c1["GatewayExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["APIFetchUtils"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/inventory"]
-    c2 --> e5["GET /api/v1/sites/{site_id}/devices/{device_id}"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c2 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
     menu --> c3["WAN2MigrationManager"]
-    c3 --> e6["GET /api/v1/sites/{site_id}/setting"]
-    c3 --> e7["PUT /api/v1/sites/{site_id}/setting"]
+    c3 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    c3 --> e7["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
     menu --> c4["OrgSiteExporter"]
-    c4 --> e8["GET /api/v1/orgs/{org_id}/sites"]
+    c4 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -883,12 +735,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 150: Extract Gateway Template Configuratio..."]
+    menu["Menu 150: Extract<br/>Gateway Template<br/>Configuratio..."]
     menu --> c1["GatewayTemplateConfigManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
     menu --> c2["OrgSiteExporter"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -906,10 +758,10 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 192: View a support ticket with full comme..."]
+    menu["Menu 192: View a<br/>support ticket with<br/>full comme..."]
     menu --> c1["OrgTicketManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/tickets"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/tickets/{ticket_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/tickets"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/tickets<br/>/{ticket_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |

@@ -9,69 +9,27 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 ## Overview
 
-Each overview diagram links a menu option to the SDK families that it uses.
+The overview diagram shows the SDK families that the menu options of this category use.
+Each family node shows the number of menu options that use that family.
 The section of each menu option has a second diagram.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
 flowchart LR
-    m14["Menu 14: Check virtual chassis to virtual MAC..."]
-    m14 --> f_orgs_inventory
-    m14 --> f_orgs_sites
-    m18["Menu 18: Export detailed device statistics for..."]
-    m18 --> f_orgs_inventory
-    m18 --> f_orgs_sites
-    m18 --> f_sites_stats
-    m19["Menu 19: Export port-level statistics for swit..."]
-    m19 --> f_orgs_sites
-    m19 --> f_orgs_stats
-    m19 --> f_sites_stats
-    m59["Menu 59: Export configuration settings for all..."]
-    m59 --> f_orgs_sites
-    m59 --> f_sites_setting
-    m97["Menu 97: Export all org device events from the..."]
-    m97 --> f_orgs_devices
-    m98["Menu 98: Export ALL audit logs for the organiz..."]
-    m98 --> f_orgs_logs
-    m99["Menu 99: Export configuration details for all..."]
-    m99 --> f_sites_devices
-    m99 --> f_orgs_inventory
-    m99 --> f_sites_stats
-    m100["Menu 100: Process and merge CSV files of SFP Mo..."]
-    m100 --> f_orgs_inventory
-    m100 --> f_orgs_sites
-    m100 --> f_orgs_stats
-    m100 --> f_sites_devices
-    m100 --> f_sites_stats
-    m101["Menu 101: Generate support package for each site"]
-    m101 --> f_orgs_devices
-    m101 --> f_orgs_stats
-    m101 --> f_orgs_alarms
-    m101 --> f_orgs_inventory
-    m101 --> f_orgs_sites
-    m101 --> f_sites_stats
-    m101 --> more101["1 more family"]
-    m153["Menu 153: Bulk Org Data Collection populate Ara..."]
-    m153 --> f_orgs_stats
-    m153 --> f_orgs_devices
-    m153 --> f_orgs_jsi
-    m153 --> f_orgs_setting
-    m153 --> f_orgs_mxedges
-    m153 --> f_orgs_clients
-    m153 --> more153["65 more families"]
-    f_orgs_alarms["orgs/alarms"]
-    f_orgs_clients["orgs/clients"]
-    f_orgs_devices["orgs/devices"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_jsi["orgs/jsi"]
-    f_orgs_logs["orgs/logs"]
-    f_orgs_mxedges["orgs/mxedges"]
-    f_orgs_setting["orgs/setting"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_stats["orgs/stats"]
-    f_sites_devices["sites/devices"]
-    f_sites_setting["sites/setting"]
-    f_sites_stats["sites/stats"]
+    root["resource_intensive:<br/>10 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>7 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>6 menu options"]
+    root --> f_sites_stats["sites/stats<br/>5 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>4 menu options"]
+    root --> f_orgs_devices["orgs/devices<br/>3 menu options"]
+    root --> f_orgs_alarms["orgs/alarms<br/>2 menu options"]
+    root --> f_orgs_logs["orgs/logs<br/>2 menu options"]
+    root --> f_sites_devices["sites/devices<br/>2 menu options"]
+    root --> f_orgs_aamwprofiles["orgs/aamwprofiles<br/>1 menu option"]
+    root --> f_orgs_admins["orgs/admins<br/>1 menu option"]
+    root --> f_orgs_alarmtemplates["orgs/alarmtemplates<br/>1 menu option"]
+    root --> f_orgs_aoscx["orgs/aoscx<br/>1 menu option"]
+    root --> more["63 more families"]
 ```
 
 ## Menu 14
@@ -83,11 +41,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 14: Check virtual chassis to virtual MAC..."]
+    menu["Menu 14: Check<br/>virtual chassis to<br/>virtual MAC..."]
     menu --> c1["OrgInventoryExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c2["OrgSiteExporter"]
-    c2 --> e2["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -104,13 +62,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 18: Export detailed device statistics for..."]
+    menu["Menu 18: Export<br/>detailed device<br/>statistics for..."]
     menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    menu --> c2["_call_get_site_device_stats"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_fetch_site_name_lookup_from_api"]
-    c3 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    menu --> c2["_call_get_site<br/>_device_stats"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_fetch_site_name<br/>_lookup_from_api"]
+    c3 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -128,11 +86,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 19: Export port-level statistics for swit..."]
+    menu["Menu 19: Export<br/>port-level<br/>statistics for<br/>swit..."]
     menu --> c1["OrgDeviceStatsExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/stats/ports/search"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/ports/search"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -150,11 +108,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 59: Export configuration settings for all..."]
+    menu["Menu 59: Export<br/>configuration<br/>settings for all..."]
     menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c2["APIFetchUtils"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/setting"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -171,9 +129,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 97: Export all org device events from the..."]
-    menu --> c1["DeviceEvents52wExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/devices/events/search"]
+    menu["Menu 97: Export all<br/>org device events<br/>from the..."]
+    menu --> c1["DeviceEvents52w<br/>Exporter"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/events/search"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -189,9 +147,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 98: Export ALL audit logs for the organiz..."]
+    menu["Menu 98: Export ALL<br/>audit logs for the<br/>organiz..."]
     menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/logs/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/logs<br/>/search"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -207,13 +165,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 99: Export configuration details for all..."]
+    menu["Menu 99: Export<br/>configuration<br/>details for all..."]
     menu --> c1["APIFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices/{device_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
     menu --> c2["GatewayExportUtils"]
-    c2 --> e3["GET /api/v1/sites/{site_id}/devices"]
-    c2 --> e4["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c2 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c2 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -232,15 +190,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 100: Process and merge CSV files of SFP Mo..."]
+    menu["Menu 100: Process<br/>and merge CSV files<br/>of SFP Mo..."]
     menu --> c1["OrgDeviceStatsExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/stats/ports/search"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/ports/search"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/inventory"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c3["SFPTransceiverDataProcessor"]
-    c3 --> e5["GET /api/v1/sites/{site_id}/devices"]
+    c3 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -260,21 +218,21 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 101: Generate support package for each site"]
+    menu["Menu 101: Generate<br/>support package for<br/>each site"]
     menu --> c1["OrgDeviceStatsExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/stats/devices"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/stats/ports/search"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/ports/search"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["OrgAlarmEventExporter"]
-    c2 --> e5["GET /api/v1/orgs/{org_id}/alarms/search"]
-    c2 --> e6["GET /api/v1/orgs/{org_id}/devices/events/search"]
+    c2 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/alarms<br/>/search"]
+    c2 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/events/search"]
     menu --> c3["APICoreFetchUtils"]
-    c3 --> e7["GET /api/v1/orgs/{org_id}/inventory"]
-    menu --> c4["GatewayTestResultsService"]
-    c4 --> e8["GET /api/v1/sites/{site_id}/synthetic_test/search"]
+    c3 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    menu --> c4["GatewayTestResults<br/>Service"]
+    c4 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/synthetic_test<br/>/search"]
     menu --> c5["OrgInventoryExporter"]
-    c5 --> e9["GET /api/v1/orgs/{org_id}/devices"]
+    c5 --> e9["GET<br/>/api/v1/orgs<br/>/{org_id}/devices"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -298,21 +256,21 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 153: Bulk Org Data Collection populate Ara..."]
+    menu["Menu 153: Bulk Org<br/>Data Collection<br/>populate Ara..."]
     menu --> c1["_LIST_OPERATIONS"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/aamwprofiles"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/admins"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/alarmtemplates"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/alarmtemplates/suppress"]
-    c1 --> e5["GET /api/v1/orgs/{org_id}/apitokens"]
-    c1 --> e6["GET /api/v1/orgs/{org_id}/aptemplates"]
-    c1 --> e7["GET /api/v1/orgs/{org_id}/assetfilters"]
-    c1 --> e8["GET /api/v1/orgs/{org_id}/assets"]
-    c1 --> e9["GET /api/v1/orgs/{org_id}/avprofiles"]
-    c1 --> e10["GET /api/v1/orgs/{org_id}/cert"]
-    c1 --> e11["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e12["GET /api/v1/orgs/{org_id}/devices"]
-    menu --> more["139 more endpoints in the table"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/aamwprofiles"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/admins"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/alarmtemplates"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/alarmtemplates<br/>/suppress"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/apitokens"]
+    c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/aptemplates"]
+    c1 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/assetfilters"]
+    c1 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/assets"]
+    c1 --> e9["GET<br/>/api/v1/orgs<br/>/{org_id}/avprofiles"]
+    c1 --> e10["GET<br/>/api/v1/orgs<br/>/{org_id}/cert"]
+    c1 --> e11["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e12["GET<br/>/api/v1/orgs<br/>/{org_id}/devices"]
+    menu --> more["139 more endpoints<br/>in the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |

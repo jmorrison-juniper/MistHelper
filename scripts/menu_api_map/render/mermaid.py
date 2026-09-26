@@ -12,10 +12,17 @@ from collections import Counter  # Counts the endpoints of each SDK family.
 
 from ..analysis.walker import EndpointUse, MenuResult  # The walk results.
 
-MAX_GROUP = 15  # The largest number of menu options in one diagram.
-MAX_FAMILIES = 6  # The largest number of SDK families that one menu node links to.
+MAX_OVERVIEW_FAMILIES = 12  # The largest number of SDK family nodes in the overview diagram of a category.
 MAX_BREAKDOWN = 12  # The largest number of endpoint nodes in the diagram of one menu option.
 MAX_TITLE = 40  # The longest menu title in a diagram label.
+# The longest line of a request path in an endpoint node. Mermaid wraps a label
+# only at a space, and a path holds no space. A long path therefore made each
+# diagram wider than the wiki column, and GitHub then cut off the bottom row.
+MAX_PATH_LINE = 20
+# The longest line of a menu or caller label. The generator breaks the label at
+# its spaces, so that the three columns of a breakdown fit the wiki column.
+MAX_LABEL_LINE = 20
+LINE_BREAK = "<br/>"  # The line break inside a Mermaid label.
 LABEL_UNSAFE = re.compile(r"[^A-Za-z0-9 ,.:/_-]")  # The characters that a label cannot hold.
 PATH_UNSAFE = re.compile(r"[^A-Za-z0-9 ,.:/_{}?=&-]")  # The characters that an endpoint label cannot hold.
 ROOT_CALLER = "Handler expression in MistHelper.py"  # The caller label when the handler itself sends the request.
@@ -43,7 +50,54 @@ class MermaidDiagram:
         title = MermaidDiagram.label(result.option.title)  # The title with plain characters.
         short = title if len(title) <= MAX_TITLE else title[: MAX_TITLE - 3].rstrip() + "..."  # A short title.
         text = f"Menu {result.option.menu_id}: {short}"  # The number first.
-        return f"Menu {result.option.menu_id}" if LINT_TRIGGERS.search(text) else text  # Keep the lint clean.
+        if LINT_TRIGGERS.search(text):  # Keep the lint clean.
+            return f"Menu {result.option.menu_id}"
+        return MermaidDiagram.wrap(text)  # Short lines keep the diagram narrow.
+
+    @staticmethod
+    def wrap(text: str, width: int = MAX_LABEL_LINE) -> str:
+        """Break a label at its spaces into lines of ``width`` characters or fewer.
+
+        A word that is longer than the limit breaks at its underscores.
+        """
+        lines: list[str] = []
+        for word in text.split():  # Add each word to the current line, or start a new line.
+            if lines and len(lines[-1]) + 1 + len(word) <= width:
+                lines[-1] += " " + word
+            elif len(word) > width:  # A long name, such as _fetch_site_name_lookup_from_api.
+                lines.extend(MermaidDiagram.split_word(word, width))
+            else:
+                lines.append(word)
+        return LINE_BREAK.join(lines)
+
+    @staticmethod
+    def split_word(word: str, width: int) -> list[str]:
+        """Break a long name at its underscores and before its capitals.
+
+        The name stays on one line if a break changes the names that the
+        diagram reference lint reads, such as a break that makes ExportManager.
+        """
+        parts = MermaidDiagram.split_parts(word, r"_?[^_A-Z]+|[A-Z][^_A-Z]*|_", width)  # The lines of the name.
+        found = [match for line in parts for match in LINT_TRIGGERS.findall(line)]  # The names in the lines.
+        return parts if found == LINT_TRIGGERS.findall(word) else [word]
+
+    @staticmethod
+    def split_parts(text: str, pattern: str, width: int) -> list[str]:
+        """Join the parts of ``text`` that ``pattern`` finds into lines of ``width`` characters or fewer.
+
+        A single part that is longer than the limit stays on one line.
+        """
+        lines: list[str] = []
+        current = ""
+        for part in re.findall(pattern, text):
+            if current and len(current) + len(part) > width:  # The part does not fit.
+                lines.append(current)
+                current = part
+            else:
+                current += part
+        if current:
+            lines.append(current)
+        return lines or [text]
 
     @staticmethod
     def family(use: EndpointUse) -> str:
@@ -67,28 +121,35 @@ class MermaidDiagram:
         return "f_" + re.sub(r"[^a-z0-9]+", "_", family.lower()).strip("_")  # For example f_orgs_sites.
 
     @staticmethod
-    def group(results: list[MenuResult]) -> str:
-        """Return one fenced flowchart that links each menu to its SDK families."""
-        lines = [f"{FENCE}mermaid", "flowchart LR"]  # The diagram header.
-        families: dict[str, str] = {}  # Node identifier to its family label.
-        for result in results:  # One node for each menu, and one edge for each family.
-            menu_node = f"m{result.option.menu_id}"  # For example m154.
-            lines.append(f'    {menu_node}["{MermaidDiagram.menu_label(result)}"]')
-            names = MermaidDiagram.families(result)  # The families, largest first.
-            for name in names[:MAX_FAMILIES]:  # Link the largest families.
-                families[MermaidDiagram.node_id(name)] = name
-                lines.append(f"    {menu_node} --> {MermaidDiagram.node_id(name)}")
-            if len(names) > MAX_FAMILIES:  # Summarize the other families in one node.
-                more = MermaidDiagram.count_text(len(names) - MAX_FAMILIES, "family", "families")  # Such as 2 more.
-                lines.append(f'    {menu_node} --> more{result.option.menu_id}["{more}"]')
-        lines.extend(f'    {node}["{name}"]' for node, name in sorted(families.items()))  # The family nodes.
+    def overview(category: str, results: list[MenuResult]) -> str:
+        """Return the flowchart that links a category to the SDK families that its menu options use.
+
+        Each family node shows the number of menu options that use the family.
+        The diagram is a star with one root, so no two edges cross. An earlier
+        form linked each menu option to each of its families, and it grew to
+        thousands of pixels of crossing edges that a person could not read.
+        """
+        usage = Counter(name for result in results for name in MermaidDiagram.families(result))  # Menus per family.
+        ranked = sorted(usage.items(), key=lambda item: (-item[1], item[0]))  # The most used family first.
+        root = f"{MermaidDiagram.label(category)}: {MermaidDiagram.count_text_plain(len(results), 'menu option')}"
+        lines = [
+            f"{FENCE}mermaid",
+            "flowchart LR",
+            f'    root["{MermaidDiagram.wrap(root)}"]',
+        ]  # The header and the root.
+        for name, count in ranked[:MAX_OVERVIEW_FAMILIES]:  # One node for each of the most used families.
+            used_by = MermaidDiagram.count_text_plain(count, "menu option")  # Such as 3 menu options.
+            lines.append(f'    root --> {MermaidDiagram.node_id(name)}["{name}{LINE_BREAK}{used_by}"]')
+        if len(ranked) > MAX_OVERVIEW_FAMILIES:  # Summarize the other families in one node.
+            more = MermaidDiagram.count_text(len(ranked) - MAX_OVERVIEW_FAMILIES, "family", "families")
+            lines.append(f'    root --> more["{more}"]')
         lines.append(FENCE)  # Close the fence.
         return "\n".join(lines)
 
     @staticmethod
-    def groups(results: list[MenuResult]) -> list[str]:
-        """Return the flowcharts of one category, with no more than MAX_GROUP menu options in each one."""
-        return [MermaidDiagram.group(results[start : start + MAX_GROUP]) for start in range(0, len(results), MAX_GROUP)]
+    def count_text_plain(count: int, singular: str) -> str:
+        """Return a count with its noun, such as 1 menu option or 3 menu options."""
+        return f"{count} {singular if count == 1 else singular + 's'}"  # One noun form for each count.
 
     @staticmethod
     def count_text(count: int, singular: str, plural: str) -> str:
@@ -115,8 +176,16 @@ class MermaidDiagram:
     def endpoint_label(use: EndpointUse) -> str:
         """Return the label of one endpoint node: the HTTP method and the request path."""
         method = "Unknown" if use.method == "?" else use.method  # The code does not state the method.
-        cleaned = PATH_UNSAFE.sub(" ", f"{method} {use.path}")  # Keep the path braces, and drop other marks.
-        return " ".join(cleaned.split())  # Collapse the spaces.
+        cleaned = " ".join(PATH_UNSAFE.sub(" ", use.path).split())  # Keep the path braces, and drop other marks.
+        return LINE_BREAK.join([method, *MermaidDiagram.path_lines(cleaned)])  # The method on its own line.
+
+    @staticmethod
+    def path_lines(path: str) -> list[str]:
+        """Split a request path at its slashes into lines of MAX_PATH_LINE characters or fewer.
+
+        A single segment that is longer than the limit stays on one line.
+        """
+        return MermaidDiagram.split_parts(path, r"/?[^/]+|/", MAX_PATH_LINE)  # Each segment keeps its slash.
 
     @staticmethod
     def breakdown(result: MenuResult) -> str:
@@ -126,14 +195,14 @@ class MermaidDiagram:
         for number, (name, uses) in enumerate(MermaidDiagram.callers(result), start=1):  # One node for each caller.
             if shown >= MAX_BREAKDOWN:  # The diagram is full. The table lists the rest.
                 break
-            lines.append(f'    menu --> c{number}["{MermaidDiagram.label(name)}"]')
+            lines.append(f'    menu --> c{number}["{MermaidDiagram.wrap(MermaidDiagram.label(name))}"]')
             for use in uses[: MAX_BREAKDOWN - shown]:  # One node for each endpoint of this caller.
                 shown += 1
                 lines.append(f'    c{number} --> e{shown}["{MermaidDiagram.endpoint_label(use)}"]')
         hidden = len(result.endpoints) - shown  # The endpoints that only the table lists.
         if hidden:  # Summarize the rest in one node.
             lines.append(
-                f'    menu --> more["{MermaidDiagram.count_text(hidden, "endpoint", "endpoints")} in the table"]'
+                f'    menu --> more["{MermaidDiagram.wrap(MermaidDiagram.count_text(hidden, "endpoint", "endpoints") + " in the table")}"]'
             )
         lines.append(FENCE)  # Close the fence.
         return "\n".join(lines)
@@ -144,7 +213,7 @@ class MermaidDiagram:
         return "\n".join(
             [
                 f"{FENCE}mermaid",
-                "flowchart LR",
+                "flowchart TB",
                 '    operator["Operator"] --> menu["Menu option in MistHelper.py"]',
                 '    menu --> handler["Handler class below src/"]',
                 '    handler --> helpers["Shared helpers: input, cache, and export"]',
@@ -165,7 +234,7 @@ class MermaidDiagram:
         return "\n".join(
             [
                 f"{FENCE}mermaid",
-                "flowchart LR",
+                "flowchart TB",
                 '    table["menu_actions table in MistHelper.py"] --> handler["Handler expression"]',
                 '    handler --> walk["Breadth-first walk of the call graph"]',
                 '    walk --> stop["Stop at a shared helper"]',
