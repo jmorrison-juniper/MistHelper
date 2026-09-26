@@ -193,24 +193,25 @@ Start here, then follow the group that matches your task.
 
 ### Wiki
 
-The wiki holds the same subjects in a browsable form. Read
-[the wiki home page](https://github.com/jmorrison-juniper/MistHelper/wiki), or
-read [the source pages](documentation/wiki/Home.md) in this repository.
+The wiki holds the same subjects in a browsable form. Start at
+[the wiki home page](https://github.com/jmorrison-juniper/MistHelper/wiki).
+The wiki source is in `documentation/wiki/`. Edit it there, but read it on
+the wiki: its page-to-page links work only on the published wiki.
 
 | Wiki page | What it holds |
 |-----------|---------------|
-| [Menu Reference](documentation/wiki/Menu-Reference.md) | Every actionable menu operation |
-| [Menu API Endpoints](documentation/wiki/Menu-API-Endpoints.md) | The endpoints behind each menu option |
-| [Container Setup](documentation/wiki/Container-Setup.md) | Build strategies and local usage |
-| [Web Portal](documentation/wiki/Web-Portal.md) | Browser-based operations and the map viewer |
-| [SSH Remote Access](documentation/wiki/SSH-Remote-Access.md) | SSH server deployment and session management |
-| [Data Model](documentation/wiki/Data-Model.md) | CSV, SQLite, and polyglot output details |
-| [MSP Support](documentation/wiki/MSP-Support.md) | Multi-org operations for a managed service provider |
-| [Maps Manager](documentation/wiki/Maps-Manager.md) | The standalone interactive map viewer |
-| [Performance](documentation/wiki/Performance.md) | Rate limiting and fast mode |
-| [Troubleshooting](documentation/wiki/Troubleshooting.md) | Common issues and solutions |
-| [Testing](documentation/wiki/Testing.md) | Systematic test mode and the CI pipeline |
-| [Support](documentation/wiki/Support.md) | How to get help and report an issue |
+| [Menu Reference](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference) | Every actionable menu operation |
+| [Menu API Endpoints](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-API-Endpoints) | The endpoints behind each menu option |
+| [Container Setup](https://github.com/jmorrison-juniper/MistHelper/wiki/Container-Setup) | Build strategies and local usage |
+| [Web Portal](https://github.com/jmorrison-juniper/MistHelper/wiki/Web-Portal) | Browser-based operations and the map viewer |
+| [SSH Remote Access](https://github.com/jmorrison-juniper/MistHelper/wiki/SSH-Remote-Access) | SSH server deployment and session management |
+| [Data Model](https://github.com/jmorrison-juniper/MistHelper/wiki/Data-Model) | CSV, SQLite, and polyglot output details |
+| [MSP Support](https://github.com/jmorrison-juniper/MistHelper/wiki/MSP-Support) | Multi-org operations for a managed service provider |
+| [Maps Manager](https://github.com/jmorrison-juniper/MistHelper/wiki/Maps-Manager) | The standalone interactive map viewer |
+| [Performance](https://github.com/jmorrison-juniper/MistHelper/wiki/Performance) | Rate limiting and fast mode |
+| [Troubleshooting](https://github.com/jmorrison-juniper/MistHelper/wiki/Troubleshooting) | Common issues and solutions |
+| [Testing](https://github.com/jmorrison-juniper/MistHelper/wiki/Testing) | Systematic test mode and the CI pipeline |
+| [Support](https://github.com/jmorrison-juniper/MistHelper/wiki/Support) | How to get help and report an issue |
 
 ## License
 
