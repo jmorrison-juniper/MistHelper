@@ -5,8 +5,6 @@ on:
     tags: ['v*.*.*']
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -61,44 +59,35 @@ jobs:
           name: standalone-bundle
           path: misthelper-*.zip
 
-  build-container:
+  version:
+    name: Read the version from the tag
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Remove the v from the tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+  # The shared workflow in misthelper-devtools builds linux/amd64 and
+  # linux/arm64, the same platforms as container-build.yml. The old local job
+  # built linux/amd64 only and then moved the latest tag to that image, so a
+  # release left no arm64 image under latest. Issue #3450 records the defect.
+  build-container:
+    needs: [version]
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
-      - name: Lowercase image name
-        id: lower
-        run: echo "image_name=${IMAGE_NAME,,}" >> $GITHUB_OUTPUT
-
-      - name: Build and push container image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Containerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.lower.outputs.image_name }}:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ steps.lower.outputs.image_name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-container-image.yml@e0bcb680817721a41d3add1dfb7498afeadb6503 # v0.3.0
+    with:
+      file: ./Containerfile
+      version: ${{ needs.version.outputs.version }}
+      version-tag: true
+      tags: type=raw,value=latest
 
   publish:
     needs: [build-python, build-standalone, build-container]
