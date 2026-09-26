@@ -22,7 +22,7 @@
   "inclusion_roots": {
     "MistHelper.py": 1,
     "__init__.py": 1,
-    "diag_rbo.py": 1,
+    "junk": 1,
     "mist-ops-platform": 130,
     "scripts": 43,
     "specs": 2,
