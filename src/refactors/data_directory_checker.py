@@ -117,20 +117,22 @@ class DataDirectoryChecker:
         logger.info("\n[CONTAINER DETECTED]")  # Indicate container environment detected
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
-            "The container runs as non-root user 'misthelper' for security."
+            "The container runs as non-root user 'misthelper' with UID 1000 for security."
         )  # Explain why permissions are restricted
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.info("The mounted data/ directory must have write permissions.")  # State the requirement
+        logger.info("The mounted data/ directory must accept a write from UID 1000.")  # State the requirement
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nTo fix this, run the following on your HOST machine:")  # Provide context for the fix
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.info("\n    chmod -R 777 data/")  # Show command to grant write permissions
+        logger.info("\n    podman unshare chown -R 1000:1000 data")  # Rootless Podman remediation
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
+        logger.info("    # Rootful Podman or Docker: sudo chown -R 1000:1000 data")  # Rootful remediation
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nThen restart the container:")  # Explain next step
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("    podman rm -f misthelper-app")  # Remove only the application container before restart
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.info("    .\\scripts\\compose.ps1 up -d --no-deps misthelper")  # Restart the app through compose
+        logger.info("    podman compose up -d --no-deps misthelper")  # Restart the app through compose
 
     def _print_local_guidance(self) -> None:  # Display local environment remediation
         """Print guidance for local (non-container) environments."""

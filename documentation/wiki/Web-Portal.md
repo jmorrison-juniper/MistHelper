@@ -9,7 +9,7 @@ MistHelper includes a Flask-based web portal for browser access to data, operati
 python MistHelper.py --web-portal
 
 # Container (runs automatically alongside SSH)
-.\scripts\compose.ps1 up -d
+podman compose up -d
 ```
 
 Open http://localhost:8055 in your browser.

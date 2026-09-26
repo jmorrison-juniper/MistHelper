@@ -1,11 +1,41 @@
 # Container Setup
 
-## Build Strategies
+## Build files
 
-Two build strategies are available:
+`Containerfile` and `Dockerfile` hold the same bytes. The repository keeps both
+names so that a Podman reader and a Docker reader each find the file they
+expect. `tests/unit/container/test_build_files_match.py` fails when the two
+files differ, so edit one file and copy it over the other.
 
-1. **`Containerfile`** (simple, pip only, TLS verification on, optional corporate root certificate)
-2. **`Dockerfile`** (multi-path UV attempt + HEALTHCHECK)
+Both files install with pip, keep TLS verification on, accept an optional
+corporate root certificate, and declare a `HEALTHCHECK`.
+
+## Compose provider
+
+`podman compose` calls an external provider. On Windows the default provider
+sends the bind mount as a Windows path with a drive letter, and the volume
+parser then refuses the application service. Name `podman-compose` as the
+provider one time, and the standard command works:
+
+```powershell
+.venv\Scripts\python.exe -m pip install podman-compose
+$env:PODMAN_COMPOSE_PROVIDER = "podman-compose.exe"
+```
+
+To keep the setting for every shell, add the provider to `containers.conf`
+instead. Read `containers.conf(5)` for the file location on your host.
+
+```toml
+[engine]
+compose_providers = ["podman-compose.exe"]
+```
+
+Issue #2184 holds the report of the default-provider failure, and issue #3465
+holds the measurement that the provider setting corrects it.
+
+`scripts\compose.ps1` is an optional in-house convenience. It selects the
+provider for you and it merges the build and corporate-certificate overlays.
+It is development tooling, so a deployment must not depend on it.
 
 ## Local Container Usage
 
@@ -16,7 +46,7 @@ obey the "Test and debug containers" section below instead.
 ### Start the supported stack
 
 ```powershell
-.\scripts\compose.ps1 up -d
+podman compose up -d
 ```
 
 The command starts the application, the document store, and the site lock store on `misthelper-network`. The application resolves `misthelper-arangodb` and `misthelper-redis` by name.
@@ -24,8 +54,8 @@ The command starts the application, the document store, and the site lock store 
 ### Build from the working tree
 
 ```powershell
-.\scripts\compose.ps1 build
-.\scripts\compose.ps1 up -d --no-deps misthelper
+podman compose -f compose.yml -f compose.build.yml build
+podman compose up -d --no-deps misthelper
 ```
 
 Caution: use a local build only when you need the code in your checkout. A checkout that is behind `main` can start old code.
@@ -33,7 +63,7 @@ Caution: use a local build only when you need the code in your checkout. A check
 ## Container with SSH + Web Portal
 
 ```powershell
-.\scripts\compose.ps1 up -d
+podman compose up -d
 ```
 
 The application container starts the SSH server on port 2200, the web portal on port 8055, and the upgrade capture portal on port 8056.
@@ -46,7 +76,7 @@ session, or for an end-to-end run. The section "Test and debug containers" in
 holds the full cleanup commands.
 
 **Rule 1. Start the container inside the compose group.** Use
-`.\scripts\compose.ps1 run --rm`, or add the service to `compose.yml` under a
+`podman compose run --rm`, or add the service to `compose.yml` under a
 profile. Never start a one-off container with a bare `podman run`. A container
 outside the group joins no `misthelper-network`, so it cannot reach
 `misthelper-arangodb` or `misthelper-redis` by name.
@@ -66,7 +96,7 @@ container running. A stopped container still holds its image layers, its volume,
 and its log file.
 
 ```powershell
-.\scripts\compose.ps1 rm -s -f <the test service>
+podman compose rm -s -f <the test service>
 podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
 podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
 podman network rm misthelper-tmp-<issue|pr><number>-<slug>
@@ -101,7 +131,7 @@ container entrypoint adds the certificate to the system trust store at start
 time, and it writes the result to `data/ssh.log`.
 
 ```powershell
-.\scripts\compose.ps1 up-corporate-ca -d
+podman compose -f compose.yml -f deploy\compose.corporate-ca.yml up -d
 ```
 
 Confirm the result:
@@ -134,22 +164,43 @@ Pre-built images are available from GitHub Container Registry:
 ```powershell
 podman pull ghcr.io/jmorrison-juniper/misthelper:latest
 podman rm -f misthelper-app
-.\scripts\compose.ps1 up -d --no-deps misthelper
+podman compose up -d --no-deps misthelper
 ```
 
 ## Data Directory Permissions
 
-The container runs MistHelper as a non-root user (`misthelper`) for security. When mounting the `data/` directory as a volume, ensure proper permissions:
+The container runs MistHelper as the non-root user `misthelper`, and that
+account holds UID 1000 and GID 1000. The stack mounts the `data` folder of this
+repository at `/app/data`, so that folder must accept a write from UID 1000.
+
+Confirm the identifiers from the image at any time:
+
+```powershell
+podman run --rm --entrypoint "" ghcr.io/jmorrison-juniper/misthelper:latest id misthelper
+```
+
+**Windows and macOS: no step is needed.** The container runtime runs in a
+virtual machine, and the file share presents the folder as writable for every
+identifier. Issue #3465 holds the measurement.
+
+**Linux, rootless Podman:** give the folder to the container account. The
+`podman unshare` prefix maps UID 1000 of the container to the matching host
+identifier in your user namespace.
 
 ```bash
-# Option 1: Open permissions (simplest, suitable for development)
-chmod -R 777 data/
-
-# Option 2: Match container user UID/GID (more secure for production)
-# The misthelper user in the container typically has UID 999
-chown -R 999:999 data/
-chmod -R 755 data/
+podman unshare chown -R 1000:1000 data
 ```
+
+**Linux, rootful Podman or Docker:** the container identifier is the host
+identifier, so the plain command is correct.
+
+```bash
+sudo chown -R 1000:1000 data
+```
+
+Warning: do not run `chmod -R 777 data`. That command gives every account on the
+host the right to read your captures and to change your logs, and no supported
+host needs it.
 
 **Symptom of permission issues:** `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` -- fix data directory permissions.
 

@@ -32,33 +32,53 @@ anything.
 
 ## Start the stack
 
-Use the helper script. It picks the native compose provider that works on Windows. It also keeps the services on `misthelper-network`, so the application resolves `misthelper-arangodb` and `misthelper-redis` by name.
+Use the standard compose command. It keeps the services on
+`misthelper-network`, so the application resolves `misthelper-arangodb` and
+`misthelper-redis` by name.
 
 ```powershell
-.\scripts\compose.ps1 up -d     # Start the application, ArangoDB, and Redis
-.\scripts\compose.ps1 down      # Stop the stack without removing volumes
+podman compose up -d     # Start the application, ArangoDB, and Redis
+podman compose down      # Stop the stack without removing volumes
 ```
 
 To start Observium, add its profile.
 
 ```powershell
-.\scripts\compose.ps1 --profile monitoring up -d
+podman compose --profile monitoring up -d
 ```
 
 Warning: do not pass `-v` to the `down` command. That option removes the production store volumes, and the upgrade records are not recoverable.
 
-Warning: do not run `podman compose` on Windows, because that command can stop
-the whole portal. It starts the stack without its application service, so the
-portal never answers. The command delegates to an external provider, which sends
-the bind mount as a Windows path with a drive letter. The volume parser then
-refuses the application service, and the two database services start without it.
-Issue #2184 holds that report.
+### Name the compose provider on Windows
 
-The script needs the native provider. Install it one time with this command:
+`podman compose` calls an external provider. The default provider on Windows
+sends the bind mount as a Windows path with a drive letter. The volume parser
+then refuses the application service, and the two database services start
+without it. The portal never answers. Issue #2184 holds that report.
+
+Name `podman-compose` as the provider, and the standard command works. Issue
+#3465 holds the measurement.
 
 ```powershell
 .venv\Scripts\python.exe -m pip install podman-compose
+$env:PODMAN_COMPOSE_PROVIDER = "podman-compose.exe"
 ```
+
+The environment variable holds for one shell. To keep the provider for every
+shell, add it to `containers.conf` instead. Read `containers.conf(5)` for the
+file location on your host.
+
+```toml
+[engine]
+compose_providers = ["podman-compose.exe"]
+```
+
+### The optional helper script
+
+`scripts\compose.ps1` selects the provider for you, merges the build overlay,
+merges the corporate-certificate overlay, and reads the image revision label.
+It is in-house development tooling, so a deployment must not depend on it. Every
+command in this document runs without it.
 
 ## Docker deployment parity status
 
@@ -67,18 +87,18 @@ Docker a verified deployment method. Issue #2721 checked the repository files
 on a Windows host where `docker` was not installed. No local Docker start, DNS
 test, health test, or data folder write test ran on that host.
 
-Use Podman and `scripts\compose.ps1` for production until a Docker host passes
-the verification list below.
+Use Podman for production until a Docker host passes the verification list
+below.
 
 | Area | Status | Parity statement |
 | - | - | - |
 | Compose services | Analysis only | `compose.yml` defines the same application, ArangoDB, Redis, and optional Observium services for any Compose provider. |
 | Service DNS | Analysis only | The application uses `misthelper-arangodb` and `misthelper-redis` on `misthelper-network`. A Docker host must still prove those names resolve. |
 | Published ports | Analysis only | `compose.yml` publishes the same host ports for Docker and Podman. A Docker host must still prove no local process holds them. |
-| Data folder ownership | Analysis only | The image runs as `misthelper`, so a Docker host must still prove that `data` accepts writes from that user. |
+| Data folder ownership | Analysis only | The image runs as `misthelper` with UID 1000, so a Docker host must still prove that `data` accepts writes from that identifier. |
 | Health checks | Analysis only | Compose health checks exist for the three required services. A Docker image build should also keep the Containerfile `HEALTHCHECK`. |
 | Image health check in OCI format | Verified Podman difference | A Podman OCI image build can drop the Containerfile `HEALTHCHECK`, so the Quadlet unit states the probe again. Docker image health-check behavior was not tested here. |
-| Helper script | Verified Podman-only path | `scripts\compose.ps1` calls `podman_compose` and uses `podman inspect` for `check-revision`. It is not a Docker helper. |
+| Compose provider | Verified Windows difference | `podman compose` needs `podman-compose` as its provider on Windows. Issue #3465 holds that measurement. Docker Compose was not tested here. |
 | Systemd Quadlet | Verified Podman-only path | `deploy\misthelper.container` is a Podman Quadlet unit. This repository provides no Docker systemd unit. |
 | Host systemd service | Verified separate path | `deploy\misthelper.service` runs Python on the host without a container runtime. It is not Docker or Podman parity. |
 | `--no-deps` update | Analysis only | The documented Podman update leaves ArangoDB and Redis running. A Docker host must still prove the same behavior. |
@@ -87,10 +107,10 @@ The analysis above comes from these files.
 
 - `compose.yml` defines service names, ports, volumes, health checks,
   `depends_on`, and `misthelper-network`.
-- `Containerfile` and `Dockerfile` define the non-root user, `/app/data`, the
-  exposed ports, and the image health check.
-- `scripts\compose.ps1` selects `podman_compose`, merges build overlays, and
-  runs `podman inspect` for the revision check.
+- `Containerfile` and `Dockerfile` define the non-root user with UID 1000,
+  `/app/data`, the exposed ports, and the image health check.
+- `compose.build.yml` holds the build overlay, and
+  `deploy\compose.corporate-ca.yml` holds the corporate-certificate overlay.
 - `deploy\misthelper.container` defines Podman Quadlet health and restart
   settings.
 - `deploy\misthelper.service` defines the host Python service.
@@ -128,8 +148,8 @@ group joins no `misthelper-network`, so it cannot reach `misthelper-arangodb`
 or `misthelper-redis` by name.
 
 ```powershell
-.\scripts\compose.ps1 run --rm misthelper python -m pytest tests/<file>
-.\scripts\compose.ps1 --profile test up -d
+podman compose run --rm misthelper python -m pytest tests/<file>
+podman compose --profile test up -d
 ```
 
 If the test needs a new service, add the service to `compose.yml` under a
@@ -178,7 +198,7 @@ Never leave a test container running. A stopped container still holds its image
 layers, its volume, and its log file.
 
 ```powershell
-.\scripts\compose.ps1 rm -s -f <the test service>
+podman compose rm -s -f <the test service>
 podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
 podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
 podman network rm misthelper-tmp-<issue|pr><number>-<slug>
@@ -212,15 +232,16 @@ Update the checkout first, then pull, then name the service.
 git pull                                        # The build source, if one runs
 podman pull ghcr.io/jmorrison-juniper/misthelper:latest
 podman rm -f misthelper-app
-.\scripts\compose.ps1 up -d --no-deps misthelper
+podman compose up -d --no-deps misthelper
 ```
 
 ## Build the image from your working tree
 
-The helper script merges `compose.build.yml` only for an explicit build request.
+`compose.build.yml` holds the build overlay. Name it only for an explicit build
+request, so a normal `up` never rebuilds.
 
 ```powershell
-.\scripts\compose.ps1 build
+podman compose -f compose.yml -f compose.build.yml build
 ```
 
 Warning: a build from a checkout that is behind `main` overwrites the published
@@ -229,10 +250,12 @@ tag with a stale build and clears the labels that name the commit. Run
 
 ## Check the revision of the running container
 
-The script reads the commit label and compares it against `origin/main`.
+Read the commit label from the running image, then compare it against
+`origin/main`.
 
 ```powershell
-.\scripts\compose.ps1 check-revision
+podman inspect misthelper-app --format "{{ index .Config.Labels \"org.opencontainers.image.revision\" }}"
+git rev-parse origin/main
 ```
 
 An empty label names a local build, because only the CI build writes the label.
@@ -261,7 +284,7 @@ running. Remove the container first, then name the service.
 ```powershell
 podman pull ghcr.io/jmorrison-juniper/misthelper:latest
 podman rm -f misthelper-app
-.\scripts\compose.ps1 up -d --no-deps misthelper
+podman compose up -d --no-deps misthelper
 ```
 
 Caution: pass `--no-deps` and name the service. Without both, compose tries to
@@ -276,12 +299,39 @@ container of the stack runs yet.
 ## The data folder
 
 The container writes to `/app/data`, and the stack mounts the `data` folder of
-this repository at that place. The container runs as the user `misthelper` and
-not as root, so that folder must accept a write.
+this repository at that place. The container runs as the user `misthelper`, and
+that account holds UID 1000 and GID 1000. `Containerfile` pins both numbers, and
+`tests/guardrails/test_container_account_identifiers.py` holds this document to
+the pinned value.
+
+Confirm the identifiers from the image at any time:
+
+```powershell
+podman run --rm --entrypoint "" ghcr.io/jmorrison-juniper/misthelper:latest id misthelper
+```
+
+On Windows and on macOS, no step is needed. The container runtime runs in a
+virtual machine, and the file share presents the folder as writable for every
+identifier. Issue #3465 holds that measurement.
+
+On Linux with rootless Podman, give the folder to the container account. The
+`podman unshare` prefix maps UID 1000 of the container to the matching host
+identifier in your user namespace.
 
 ```bash
-chmod -R 777 data/
+podman unshare chown -R 1000:1000 data
 ```
+
+On Linux with rootful Podman or with Docker, the container identifier is the
+host identifier, so the plain command is correct.
+
+```bash
+sudo chown -R 1000:1000 data
+```
+
+Warning: do not run `chmod -R 777 data`. That command gives every account on the
+host the right to read your captures and to change your logs, and no supported
+host needs it.
 
 A message that reads `PermissionError: [Errno 13] Permission denied:
 '/app/data/script.log'` means the folder refused the write.
@@ -297,7 +347,7 @@ Mist API token.
 If you sit behind a TLS-inspecting proxy such as Zscaler, save the proxy root certificate as `zscaler-root-ca.crt` in the repository root. Then start the stack with the compose overlay. The container adds the certificate to the system trust store at start time.
 
 ```powershell
-.\scripts\compose.ps1 up-corporate-ca -d
+podman compose -f compose.yml -f deploy\compose.corporate-ca.yml up -d
 ```
 
 To build behind the same proxy, add the root certificate at build time:
