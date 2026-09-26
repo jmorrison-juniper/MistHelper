@@ -142,3 +142,24 @@ now reports a finding that comes back at one of those places.
 
 A copy of `baseline.json` stays in the devtools package. MistHelper no longer
 reads that copy, so a later devtools release can remove it.
+
+## Phase 5: keep the product benchmarks and the analyzer settings here
+
+Four modules in the devtools package imported MistHelper product code, so they
+could not run in the devtools repository. Issue #3466 moved them back to this
+repository. It also gave MistHelper its own copy of the test quality analyzer
+settings.
+
+| Change | File |
+| - | - |
+| The memory harness of the performance package. `tests/test_performance_memory.py` imports it. | `scripts/benchmarks/performance_memory.py` |
+| The overhead benchmark of the performance package. | `scripts/benchmarks/bench_performance_overhead.py` |
+| The overhead benchmark of the end-to-end hooks. | `scripts/benchmarks/bench_e2e_hook_overhead.py` |
+| The command that resets the end-to-end store. | `scripts/e2e_store_reset.py` |
+| The analyzer settings started as a copy of the devtools `config.toml` at release v0.3.0. Only the header comment is different. | `.github/test-quality-config.toml` |
+| Each analyzer run in the ratchet job gives `--config` with that file. A change to the file makes the job check the whole suite. | `.github/workflows/ci.yml` |
+| The whole-repository analyzer command gives the same settings file. | `scripts/run_repository_analyzers.py` |
+| The ratchet guard checks each `--config` option and the tables of the settings file. | `tests/guardrails/test_quality_ratchet_files.py` |
+
+The container image does not copy `scripts/`, so the product never ships these
+modules. A later devtools release can remove its copy of the four modules.

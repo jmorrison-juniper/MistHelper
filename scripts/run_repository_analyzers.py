@@ -72,7 +72,12 @@ class RepositoryAnalyzerRunner:
     def _run_test_quality(self) -> int:
         """Run the test quality analyzer across every repository test root."""
         logger.info("Running test quality analyzer for repository test roots")  # Log before analyzer call.
-        args = ["--baseline", ""]  # Empty baseline keeps this command read-only for first use.
+        args = [  # Read the repository rule settings (issue #3466) with an empty, read-only baseline.
+            "--config",
+            str(Path(".github") / "test-quality-config.toml"),
+            "--baseline",
+            "",
+        ]
         code = TestQualityCLI().run(args)  # Run with automatic repository test-root discovery.
         logger.debug("Test quality analyzer exited with code %d", code)  # Log after analyzer call.
         return code  # Return the analyzer exit code.
