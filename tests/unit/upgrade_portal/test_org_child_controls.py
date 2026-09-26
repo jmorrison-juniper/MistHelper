@@ -305,9 +305,9 @@ def test_the_controls_name_the_retry_devices_and_the_uncertain_children() -> Non
 def test_the_controls_show_the_last_reconciliation_evidence() -> None:
     """A child that the portal checked before shows the stored summary of that check."""
     checked = uncertain_record()
-    checked["children"][0]["reconciliation"] = {"summary": "0 of 1 devices run the target version."}
+    checked["children"][0]["reconciliation"] = {"summary": "The target version runs on 0 of 1 device."}
     controls = OrgControlsView.build(checked, None)
-    assert controls["reconcile"]["children"][0]["evidence"] == "0 of 1 devices run the target version."
+    assert controls["reconcile"]["children"][0]["evidence"] == "The target version runs on 0 of 1 device."
     assert controls["reconcile"]["children"][1]["evidence"] == ""
     assert controls["retry"] == {"available": False, "count": 0, "devices": []}
 

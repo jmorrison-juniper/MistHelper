@@ -161,16 +161,22 @@ class OrgReconcileCheck:
         return version_matches(target["version_target"], version)  # The rule of the version check column.
 
     @staticmethod
-    def _summary(proven: bool, counts: tuple[int, int, int, int]) -> str:
+    def _device_noun(total: int) -> str:
+        """Return the device noun that agrees with the device count after the word "of"."""
+        return "device" if total == 1 else "devices"  # Issue #3453: one device takes the singular noun.
+
+    @classmethod
+    def _summary(cls, proven: bool, counts: tuple[int, int, int, int]) -> str:
         """Return the sentences that explain one verdict to the operator."""
         matched, total, unread, reinstall = counts  # The four counts of the verdict.
         if total == 0:  # A child job with no device proves nothing.
             return "The child job names no device. The portal cannot prove its outcome."
-        found = f"{matched} of {total} devices run the target version."  # The first sentence of each summary.
+        noun = cls._device_noun(total)  # The singular subject "the target version" leaves only the noun to agree.
+        found = f"The target version runs on {matched} of {total} {noun}."  # The first sentence of each summary.
         if proven:  # Every device moved to the target version.
             return f"{found} The portal marks this child job completed."
         if reinstall:  # A device ran the target version before the write, so the reading proves nothing.
             return f"{found} {REINSTALL_NOTE} {CHECK_ADVICE}"
         if unread:  # A device gave no reading.
-            return f"{found} The portal could not read {unread} of the {total} devices. {CHECK_ADVICE}"
+            return f"{found} The portal could not read {unread} of {total} {noun}. {CHECK_ADVICE}"
         return f"{found} {CHECK_ADVICE}"  # A device runs another version.

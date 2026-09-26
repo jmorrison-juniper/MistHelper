@@ -176,7 +176,7 @@ def verdict(child: dict[str, Any], proven: bool) -> dict[str, Any]:
         "matched": matched,
         "total": 1,
         "unread": 0,
-        "summary": f"{matched} of 1 devices run the target version.",
+        "summary": f"The target version runs on {matched} of 1 device.",  # The form of issue #3453.
     }
 
 
@@ -196,7 +196,7 @@ def test_a_proven_child_reads_completed_with_its_evidence() -> None:
     assert stored_switch["reconciliation"]["checked_by"] == ACTOR
     assert stored_switch["reconciliation"]["checked_at"]
     assert stored_gateway["status"] == "unknown"
-    assert stored_gateway["reconciliation"]["summary"] == "0 of 1 devices run the target version."
+    assert stored_gateway["reconciliation"]["summary"] == "The target version runs on 0 of 1 device."
     assert store.record["device_versions"][SWITCH_MAC]["version"] == "23.4R1.9"
     assert store.record["state"] == "attention_required"
     assert store.writes == 1
