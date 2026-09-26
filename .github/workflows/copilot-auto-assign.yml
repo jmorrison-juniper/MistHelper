@@ -1,15 +1,22 @@
-# Copilot Coding Agent -- Auto-Assign on Label
-# When an issue receives the 'copilot' label, this workflow automatically assigns
-# the Copilot Coding Agent to implement it. The agent reads .github/copilot-instructions.md
-# for project conventions, creates a branch, implements the solution, and opens a PR.
+# Copilot Coding Agent -- Auto-Assign by Hand
+# A maintainer starts this workflow by hand and names an issue. The shared
+# workflow in misthelper-devtools assigns the Copilot Coding Agent to the
+# issue. The agent reads .github/copilot-instructions.md for project
+# conventions, creates a branch, implements the solution, and opens a PR.
 #
 # Prerequisites:
-#   - Copilot Business/Enterprise seat on the repository owner account
-#   - Copilot Coding Agent policy enabled in org/account settings
-#   - 'copilot' label exists in the repository
+#   - The token user has a Copilot plan that includes the Copilot cloud agent,
+#     and the agent is enabled for this repository
+#   - The COPILOT_ASSIGN_TOKEN repository secret holds a user token for that
+#     user. GitHub assigns the agent only for a user token; GITHUB_TOKEN
+#     cannot do it. A fine-grained token needs read access to metadata, and
+#     read and write access to actions, contents, issues, and pull requests.
 #
-# If the Copilot seat is not yet configured, the workflow posts a comment instead
-# of failing silently.
+# When the agent is not assigned, the shared workflow writes one comment on
+# the issue with the cause and does not add the in-progress label. The old
+# local copy assigned with GITHUB_TOKEN, so GitHub assigned nobody and
+# reported no error. Issue #2295 kept the in-progress label with no assignee.
+# Issue #3450 moved this workflow to the shared copy.
 
 name: Copilot Auto-Assign
 
@@ -30,57 +37,14 @@ on:
         required: true
         type: string
 
-permissions:
-  issues: write
-  contents: read
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+permissions: {}
 
 jobs:
   assign-copilot:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Assign Copilot to issue
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const issueNumber = Number(context.payload.inputs.issue_number);
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-
-            try {
-              await github.rest.issues.addAssignees({
-                owner,
-                repo,
-                issue_number: issueNumber,
-                assignees: ['copilot']
-              });
-              console.log(`Assigned Copilot to issue #${issueNumber}`);
-
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number: issueNumber,
-                labels: ['in-progress']
-              });
-            } catch (error) {
-              console.log(`Could not assign Copilot: ${error.message}`);
-
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: issueNumber,
-                body: [
-                  '**Copilot Coding Agent could not be assigned.**',
-                  '',
-                  'This usually means one of:',
-                  '- The repository owner account does not have a Copilot Business/Enterprise seat',
-                  '- The Copilot Coding Agent policy is not enabled in org/account settings',
-                  '',
-                  'To implement manually: open VS Code and ask Copilot Chat to work this issue.',
-                  '',
-                  `Error: \`${error.message}\``
-                ].join('\n')
-              });
-            }
+    permissions:
+      issues: write
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-copilot-assign.yml@e0bcb680817721a41d3add1dfb7498afeadb6503 # v0.3.0
+    with:
+      issue-number: ${{ inputs.issue_number }}
+    secrets:
+      assign-token: ${{ secrets.COPILOT_ASSIGN_TOKEN }}

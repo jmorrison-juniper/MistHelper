@@ -78,3 +78,38 @@ Validation after the move: the focused integration and guard suite passes
 (136 tests), Ruff passes for the changed Python files, the citation linter
 checks 249 citations with no unresolved references, and a rebuilt wheel has no
 `tools/` or `src/juniper_skills/` entries.
+
+## Phase 3: call the shared workflows
+
+The devtools repository also publishes reusable GitHub Actions workflows. They
+started from the MistHelper workflows. Issue #3450 moved these MistHelper
+workflows and jobs to the shared copies.
+
+| MistHelper workflow | Shared workflow |
+| - | - |
+| `copilot-auto-assign.yml` | `reusable-copilot-assign.yml` |
+| `copilot-label-checkbox.yml` | `reusable-copilot-assign.yml` |
+| `close-linked-issues.yml` | `reusable-close-linked-issues.yml` |
+| `container-build.yml`, job `build-and-push` | `reusable-container-image.yml` |
+| `release.yml`, job `build-container` | `reusable-container-image.yml` |
+
+Each caller pins the full commit of a devtools release and names the release in
+a comment. Dependabot reads that comment and proposes a new pin after a devtools
+release. It does not update the `requirements-dev.txt` pin, so change that pin
+by hand to the same release.
+
+The Copilot assignment needs the `COPILOT_ASSIGN_TOKEN` repository secret.
+GitHub assigns the Copilot cloud agent only for a user token. Without the
+secret, the shared workflow writes one comment on the issue that tells how to
+set it up, and it adds no `in-progress` label.
+
+Two sets of jobs stay local.
+
+- `auto-merge.yml` keeps its own jobs. The orphaned-push report and the
+  `closingIssuesReferences` close job have no shared copy, and
+  `tests/guardrails/test_auto_merge_issue_close.py` reads the job text.
+- The `create_failure_issues` and `close_resolved_issues` jobs in `ci.yml` stay
+  local. `tests/guardrails/test_codeql_register_gate.py` and
+  `tests/guardrails/test_quality_gate_close_scope.py` read the job text. The
+  shared `reusable-quality-gate-issues.yml` with `scope: all` does the same
+  work. A move needs new guardrail tests, and issue #3422 must land first.

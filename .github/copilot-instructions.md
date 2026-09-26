@@ -824,7 +824,9 @@ threshold through a `workflow_call` input. The table lists the default.
 
 The `misthelper-devtools` package supplies `test-quality-analyzer`,
 `tools.check_citations`, and `tools.speckit_task_audit`. `requirements-dev.txt`
-pins that package to one commit.
+pins that package to one commit. The Copilot, linked-issue, container build, and
+release image workflows call the shared reusable workflows of that repository at
+one pinned commit. `documentation/development-tooling-migration.md` lists them.
 
 Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
 gate that reads the npm dependency tree, so it is the only check that can report
