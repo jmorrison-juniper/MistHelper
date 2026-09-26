@@ -11,7 +11,7 @@ The index page explains how to read the map: [Menu API endpoint map](README.md).
 
 The overview diagram shows the SDK families that the menu options of this category use.
 Each family node shows the number of menu options that use that family.
-The section of each menu option has a second diagram.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid

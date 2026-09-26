@@ -11,7 +11,7 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 The overview diagram shows the SDK families that the menu options of this category use.
 Each family node shows the number of menu options that use that family.
-The section of each menu option has a second diagram.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
@@ -38,15 +38,6 @@ flowchart LR
 - Handler: `lambda: _configure_virtual_chassis_manager().launch_check_status()`
 - Shared helpers: [`CacheUtils`](Menu-API-Endpoints#cacheutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 14: Check<br/>virtual chassis to<br/>virtual MAC..."]
-    menu --> c1["OrgInventoryExporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
-    menu --> c2["OrgSiteExporter"]
-    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -106,15 +97,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 59: Export<br/>configuration<br/>settings for all..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["APIFetchUtils"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -127,13 +109,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 97: Export all<br/>org device events<br/>from the..."]
-    menu --> c1["DeviceEvents52w<br/>Exporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/events/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) | [`DeviceEvents52wExporter._fetch_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/device_events_52w_exporter.py) | Call |
@@ -144,13 +119,6 @@ flowchart LR
 - Handler: `lambda: OrgExportUtils.audit_logs(full_history=True, duration='52w')`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 98: Export ALL<br/>audit logs for the<br/>organiz..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/logs<br/>/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |

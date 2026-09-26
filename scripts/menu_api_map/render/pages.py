@@ -12,7 +12,7 @@ from dataclasses import dataclass  # Holds the page input as one value.
 
 from ..analysis.walker import MAX_VISITED, ROOT_HOLDER, EndpointUse, HelperResult, MenuResult  # The walk results.
 from .markdown import CATEGORY_ORDER, DOCS_STYLE, EVIDENCE_LABELS, WIKI_STYLE, LinkStyle, MarkdownText
-from .mermaid import MAX_BREAKDOWN, MermaidDiagram  # The diagram text and its node limit.
+from .mermaid import MAX_BREAKDOWN, MIN_BREAKDOWN, MermaidDiagram  # The diagram text and its node limits.
 
 DOCS_FOLDER = "documentation/menu-api"  # The folder of the documentation page set.
 WIKI_FOLDER = "documentation/wiki"  # The folder of the wiki page set.
@@ -35,7 +35,7 @@ DESTRUCTIVE_WARNING = (
 OVERVIEW_TEXT = [  # The text that explains the two kinds of diagram on a category page.
     "The overview diagram shows the SDK families that the menu options of this category use.",
     "Each family node shows the number of menu options that use that family.",
-    "The section of each menu option has a second diagram.",
+    "A menu option with three endpoints or more has a second diagram in its section.",
     "That diagram links the menu option to the classes that send the requests, and each class to its endpoints.",
 ]
 
@@ -144,7 +144,8 @@ class CategoryPage:
         if not result.endpoints:  # No endpoint to list.
             lines.extend([result.reason or "The map finds no Mist API request for this menu option.", ""])
             return lines
-        lines.extend([MermaidDiagram.breakdown(result), ""])  # The callers and their endpoints.
+        if len(result.endpoints) >= MIN_BREAKDOWN:  # A small menu option needs only its table.
+            lines.extend([MermaidDiagram.breakdown(result), ""])  # The callers and their endpoints.
         return [*lines, *self.table.render(result.endpoints), ""]
 
 
@@ -214,6 +215,7 @@ class IndexSections:
             "- The walk stops at a shared helper. The shared helper section lists the endpoints of each helper.",
             "- The HTTP method is Unknown when the code holds the path in a string and does not state the method.",
             f"- The diagram of a menu option shows {MAX_BREAKDOWN} endpoints or fewer. The table lists each endpoint.",
+            f"- A menu option with fewer than {MIN_BREAKDOWN} endpoints has no diagram. Its table lists the endpoints.",
             "",
         ]
 

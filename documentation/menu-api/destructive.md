@@ -13,7 +13,7 @@ Warning: a menu option in this category changes the live Mist cloud configuratio
 
 The overview diagram shows the SDK families that the menu options of this category use.
 Each family node shows the number of menu options that use that family.
-The section of each menu option has a second diagram.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
@@ -244,15 +244,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().reprovision_device()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 160:<br/>Reprovision<br/>Switch/Gateway y/N<br/>confir..."]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/reprovision"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -529,13 +520,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`RateLimitingUtils`](README.md#ratelimitingutils)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 171:<br/>DESTRUCTIVE: Create<br/>137 test sites fr..."]
-    menu --> c1["SiteConfigManager"]
-    c1 --> e1["POST<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.createOrgSite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/create-org-site) | [`SiteConfigManager._create_single_site`](../../src/site/site_config_manager.py) | Call |
@@ -658,15 +642,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 177:<br/>DESTRUCTIVE: Clear<br/>ARP Cache type CLEAR"]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/clear_arp"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_arp` | [`sites.devices.clearSiteSsrArpCache`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/clear-site-ssr-arp-cache) | [`_UtilityCommandsClear._invoke_arp_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -678,15 +653,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().clear_bgp_routes()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 178:<br/>DESTRUCTIVE: Clear<br/>BGP Routes type<br/>CLEAR"]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/clear_bgp"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -700,15 +666,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 179:<br/>DESTRUCTIVE: Clear<br/>Session on<br/>SSR/SRX..."]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/clear_session"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_session` | [`sites.devices.clearSiteDeviceSession`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/clear-site-device-session) | [`_UtilityCommandsClear._invoke_session_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -720,15 +677,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().clear_mac_table()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 180:<br/>DESTRUCTIVE: Clear<br/>MAC Table type CLEAR"]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/clear_mac_table"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -742,15 +690,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 181:<br/>DESTRUCTIVE: Clear<br/>BPDU Errors on<br/>Swi..."]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/clear_bpdu_error"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_bpdu_error` | [`sites.devices.clearBpduErrorsFromPortsOnSwitch`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/clear-bpdu-errors-from-ports-on-switch) | [`_UtilityCommandsClear._invoke_bpdu_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -762,15 +701,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().clear_learned_macs()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 182:<br/>DESTRUCTIVE: Clear<br/>Learned MACs from..."]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/clear_macs"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -784,15 +714,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 183:<br/>DESTRUCTIVE: Clear<br/>Policy Hit Count<br/>o..."]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/clear_policy_hit_count"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_policy_hit_count` | [`sites.devices.clearSiteDevicePolicyHitCount`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/clear-site-device-policy-hit-count) | [`_UtilityCommandsClear._invoke_policy_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -805,15 +726,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 184: Release<br/>DHCP Lease on<br/>Switch/Gateway y/N"]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/release_dhcp_leases"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/release_dhcp_leases` | [`sites.devices.releaseSiteDeviceDhcpLease`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/release-site-device-dhcp-lease) | [`_UtilityCommandsClear._invoke_dhcp_release`](../../src/device/_utility_commands_clear.py) | Call |
@@ -825,15 +737,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().release_dhcp_ssr()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 185: Release<br/>DHCP Lease on<br/>SSR/SRX y/N"]
-    menu --> c1["_UtilityCommands<br/>Clear"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/release_dhcp"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -895,13 +798,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 189: Create a<br/>new organization<br/>support ticket"]
-    menu --> c1["OrgTicketManager"]
-    c1 --> e1["POST<br/>/api/v1/orgs<br/>/{org_id}/tickets"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.createOrgTicket`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/create-org-ticket) | [`OrgTicketManager._submit_create_ticket`](../../src/org/org_ticket_manager.py) | Call |
@@ -934,14 +830,6 @@ flowchart LR
 - Handler: `OrgTicketManager.update_ticket`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 191: Update<br/>fields on an<br/>existing support..."]
-    menu --> c1["OrgTicketManager"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/tickets"]
-    c1 --> e2["PUT<br/>/api/v1/orgs<br/>/{org_id}/tickets<br/>/{ticket_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1034,14 +922,6 @@ flowchart LR
 - Handler: `lambda: APProfileMigrationManager.revert_ap_profile_migration(MainEntrypoint.context.apisession)`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`RateLimitingUtils`](README.md#ratelimitingutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 208:<br/>DESTRUCTIVE: Revert<br/>an AP profile mig..."]
-    menu --> c1["APProfileMigrationManager"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles<br/>/{deviceprofile_id}"]
-    c1 --> e2["PUT<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |

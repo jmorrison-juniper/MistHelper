@@ -11,7 +11,7 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 The overview diagram shows the SDK families that the menu options of this category use.
 Each family node shows the number of menu options that use that family.
-The section of each menu option has a second diagram.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
@@ -39,15 +39,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 60: Export<br/>device list for a<br/>selected site"]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteDeviceExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -59,15 +50,6 @@ flowchart LR
 - Handler: `SiteDeviceExporter.device_stats`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 61: Export<br/>device statistics<br/>for a select..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteDeviceExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -81,15 +63,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 62: Export port<br/>statistics for a<br/>selected..."]
-    menu --> c1["SiteDeviceExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
-    menu --> c2["SiteExportUtils"]
-    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`SiteExportUtils._fetch_org_site_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Call |
@@ -101,14 +74,6 @@ flowchart LR
 - Handler: `SiteDeviceExporter.device_virtual_chassis`
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 63: Export<br/>virtual chassis<br/>information fo..."]
-    menu --> c1["SiteDeviceExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/vc"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -147,15 +112,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 65: Export<br/>client statistics<br/>for a select..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteClientExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/clients"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -167,15 +123,6 @@ flowchart LR
 - Handler: `SiteClientExporter.beacons`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 66: Export<br/>beacon information<br/>for a selec..."]
-    menu --> c1["SiteClientExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/beacons"]
-    menu --> c2["SiteExportUtils"]
-    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -189,15 +136,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 67: Export map<br/>information for a<br/>selected..."]
-    menu --> c1["SiteConfigExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/maps"]
-    menu --> c2["SiteExportUtils"]
-    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`SiteExportUtils._fetch_org_site_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Call |
@@ -209,15 +147,6 @@ flowchart LR
 - Handler: `SiteConfigExporter.zones`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 68: Export zone<br/>information for a<br/>selecte..."]
-    menu --> c1["SiteConfigExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/zones"]
-    menu --> c2["SiteExportUtils"]
-    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -253,14 +182,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 70: Export OSPF<br/>adjacency statistics<br/>for..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ospf_peers/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`SiteExportUtils._fetch_org_site_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Call |
@@ -272,14 +193,6 @@ flowchart LR
 - Handler: `lambda: GlobalImportManager.SiteExportUtilsFactory().build().mxedge_upgrade_status()`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 71: Export<br/>MxEdge upgrade<br/>status for a se..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/mxedges<br/>/upgrade"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -293,14 +206,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 72: Export<br/>auto-map assignment<br/>status for..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/auto_map_assignment"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`SiteExportUtils._fetch_org_site_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Call |
@@ -312,14 +217,6 @@ flowchart LR
 - Handler: `lambda: GlobalImportManager.SiteExportUtilsFactory().build().insights()`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 73: Export SLE<br/>Service Level<br/>Experience m..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metrics"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -511,14 +408,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 77: Export Site<br/>Anomaly Events<br/>dynamic di..."]
-    menu --> c1["SiteAnomalyExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/anomaly<br/>/{metric}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}` | [`sites.sites.getSiteInfo`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/get-site-info) | [`SiteAnomalyExporter._anomaly_resolve_site_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_anomaly_exporter.py) | Call |
@@ -575,13 +464,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 80: Export site<br/>aggregate health<br/>capacity..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/stats` | [`sites.stats.getSiteStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/get-site-stats) | [`SiteExportUtils.site_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Reference |
@@ -592,13 +474,6 @@ flowchart LR
 - Handler: `lambda: GlobalImportManager.SiteExportUtilsFactory().build().gateway_metrics()`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 81: Export site<br/>gateway performance<br/>metri..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/gateways/metrics"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -611,13 +486,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 82: Export site<br/>switch performance<br/>metric..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/switches/metrics"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/stats/switches/metrics` | [`sites.stats.getSiteSwitchesMetrics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-switches-metrics) | [`SiteExportUtils.switches_metrics`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Reference |
@@ -628,14 +496,6 @@ flowchart LR
 - Handler: `lambda: GlobalImportManager.SiteExportUtilsFactory().build().beacons_stats()`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 83: Export site<br/>BLE beacon<br/>statistics"]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/beacons"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -649,13 +509,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 84: Export site<br/>WxLAN rule usage<br/>statistics"]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/wxrules"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/stats/wxrules` | [`sites.stats.getSiteWxRulesUsage`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/wxrules/get-site-wx-rules-usage) | [`SiteExportUtils.wxrules_usage`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Reference |
@@ -666,14 +519,6 @@ flowchart LR
 - Handler: `lambda: GlobalImportManager.SiteExportUtilsFactory().build().assets_stats()`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 85: Export site<br/>asset statistics"]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/assets"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -687,13 +532,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 86: Export<br/>current RRM channel<br/>power plan..."]
-    menu --> c1["SiteExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/rrm<br/>/current"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/rrm/current` | [`sites.rrm.getSiteCurrentChannelPlanning`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rrm/get-site-current-channel-planning) | [`SiteExportUtils.current_channel_planning`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_export_utils.py) | Call |
@@ -704,14 +542,6 @@ flowchart LR
 - Handler: `GatewayHaExporter.ha_cluster_info`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 87: Export HA<br/>gateway cluster<br/>info, stats..."]
-    menu --> c1["GatewayHaExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/ha"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -724,14 +554,6 @@ flowchart LR
 - Handler: `SitesByAPModelExporter.export_sites_by_ap_model`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 88: Export<br/>sites by AP model<br/>with site ad..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
-    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -777,13 +599,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 90: Global<br/>Wired Client Report<br/>operator-b..."]
-    menu --> c1["GlobalWiredClient<br/>ReportGenerator"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/wired_clients<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/wired_clients/search` | [`orgs.wired_clients.searchOrgWiredClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wired/search-org-wired-clients) | [`GlobalWiredClientReportGenerator._fetch_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/global_wired_client_report_generator.py) | Call |
@@ -794,13 +609,6 @@ flowchart LR
 - Handler: `WiredClientManufacturerReportGenerator.execute`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 91: Wired<br/>Client Manufacturer<br/>Report brow..."]
-    menu --> c1["WiredClient<br/>ManufacturerReport<br/>Generator"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/wired_clients<br/>/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -813,13 +621,6 @@ flowchart LR
 - Shared helpers: [`CacheUtils`](Menu-API-Endpoints#cacheutils), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 92: Select a<br/>site used by other<br/>functions"]
-    menu --> c1["OrgSiteExporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_site_exporter.py) | Reference |
@@ -830,14 +631,6 @@ flowchart LR
 - Handler: `InteractiveDisplayUtils.site_inventory`
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 93: View device<br/>inventory for a<br/>selected..."]
-    menu --> c1["SiteDeviceExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -851,13 +644,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 94: View<br/>statistics for a<br/>selected device..."]
-    menu --> c1["InteractiveDisplayUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`InteractiveDisplayUtils.device_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/ui/interactive_display_utils.py) | Reference |
@@ -869,13 +655,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 95: View<br/>synthetic test stats<br/>for a selec..."]
-    menu --> c1["InteractiveDisplayUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/synthetic_test"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices/{device_id}/synthetic_test` | [`sites.devices.getSiteDeviceSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/get-site-device-synthetic-test) | [`InteractiveDisplayUtils.device_tests`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/ui/interactive_display_utils.py) | Reference |
@@ -886,13 +665,6 @@ flowchart LR
 - Handler: `InteractiveDisplayUtils.device_config`
 - Shared helpers: [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 96: View<br/>configuration<br/>details for a<br/>sele..."]
-    menu --> c1["InteractiveDisplayUtils"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -932,13 +704,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 196: Export<br/>async organization<br/>license-cla..."]
-    menu --> c1["LicenseExportUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/claim<br/>/status"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/claim/status` | [`orgs.claim.GetOrgLicenseAsyncClaimStatus`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-license-async-claim-status) | [`LicenseExportUtils._call_async_claim_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/license_export_utils.py) | Call |
@@ -949,14 +714,6 @@ flowchart LR
 - Handler: `lambda: ClientPacketCaptureDownloader(MainEntrypoint.context.apisession).run()`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 197: Download<br/>client packet<br/>captures group..."]
-    menu --> c1["ClientPacketCapture<br/>Downloader"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/clients<br/>/search"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/pcaps"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -969,15 +726,6 @@ flowchart LR
 - Handler: `SiteWanUsageExporter.wan_usages`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 198: Search<br/>Site WAN Usages<br/>searchSiteWanU..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteWanUsageExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/wan_usages/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1014,15 +762,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 200: Search<br/>Site Guest<br/>Authorization<br/>searc..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteGuestAuthorizationExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/guests<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1034,15 +773,6 @@ flowchart LR
 - Handler: `SiteMistEdgeEventsExporter.mist_edge_events`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 201: Search<br/>Site Mist Edge<br/>Events searchSi..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteMistEdgeEventsExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/mxedges<br/>/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1056,15 +786,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 202: Search<br/>Site NAC Client<br/>Events searchS..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteNacClientEventsExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/nac_clients/events<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1076,15 +797,6 @@ flowchart LR
 - Handler: `SiteClientExporter.wan_client_events`
 - Shared helpers: [`CacheUtils`](Menu-API-Endpoints#cacheutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 203: Search WAN<br/>client events for a<br/>select..."]
-    menu --> c1["OrgSiteExporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["WanClientEventsExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/wan_clients/events<br/>/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1098,13 +810,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`RateLimitingUtils`](Menu-API-Endpoints#ratelimitingutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 209: Get site<br/>beacon detail by<br/>site_id bea..."]
-    menu --> c1["SiteClientExporter"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/beacons<br/>/{beacon_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/beacons/{beacon_id}` | [`sites.beacons.getSiteBeacon`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/beacons/get-site-beacon) | [`SiteClientExporter._fetch_site_beacon_with_retry`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/site_client_exporter.py) | Call |
@@ -1115,15 +820,6 @@ flowchart LR
 - Handler: `SiteAssetExporter.assets_of_interest`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 210: Export BLE<br/>beacons matching an<br/>Asset..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteAssetExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/filtered_assets"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1137,15 +833,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 211: Get site<br/>asset filter detail<br/>by site_..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteAssetExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/assetfilters<br/>/{assetfilter_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1157,15 +844,6 @@ flowchart LR
 - Handler: `SiteAssetExporter.asset`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 212: Get site<br/>asset detail by<br/>site_id asse..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteAssetExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/assets<br/>/{asset_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1179,15 +857,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 213: Export the<br/>application list for<br/>a sel..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteApplicationListExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/wxtags<br/>/apps"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1199,15 +868,6 @@ flowchart LR
 - Handler: `SiteSystemEventsExporter.system_events`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 214: Search<br/>system events for a<br/>selected s..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSystemEventsExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/events<br/>/system/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1221,15 +881,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 215: Search<br/>alarms for a<br/>selected site sea..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/alarms<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1241,15 +892,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.assets`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 216: Search<br/>tracked assets for a<br/>selected..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/assets/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1263,15 +905,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 217: Search BGP<br/>peer statistics for<br/>a sele..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/bgp_peers/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1283,15 +916,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.calls`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 218: Search<br/>call quality records<br/>for a sel..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/calls/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1305,15 +929,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 219: Search Sky<br/>ATP security events<br/>for a..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/skyatp<br/>/events/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1325,15 +940,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.wireless_client_events`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 220: Search<br/>wireless client<br/>events for a s..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/clients<br/>/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1347,15 +953,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 221: Search WAN<br/>clients for a<br/>selected sit..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/wan_clients/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1367,15 +964,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.device_events`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 222: Search<br/>device events for a<br/>selected s..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1389,15 +977,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 223: Search<br/>devices for a<br/>selected site se..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1409,15 +988,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.rogue_events`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 224: Search<br/>rogue access point<br/>events for..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/rogues<br/>/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1431,15 +1001,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 225: Search<br/>OSPF neighbor<br/>statistics for a..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ospf_peers/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1451,15 +1012,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.device_last_configs`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 226: Search the<br/>last device<br/>configurations..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/last_config/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1473,15 +1025,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 227: Search<br/>device configuration<br/>history f..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/config_history<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1494,15 +1037,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 228: Search<br/>discovered switches<br/>for a sele..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/discovered_switches<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1514,15 +1048,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.zone_sessions`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 229: Search<br/>zone sessions for a<br/>selected s..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/{zone_type}/visits<br/>/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1685,13 +1210,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 238: Export the<br/>license entitlement,<br/>usage..."]
-    menu --> c1["MSPLicenseExporter"]
-    c1 --> e1["GET<br/>/api/v1/msps<br/>/{msp_id}/licenses"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/msps/{msp_id}/licenses` | [`msps.licenses.listMspLicenses`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/licenses/list-msp-licenses) | [`MSPLicenseExporter._fetch`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/msp_license_exporter.py) | Call |
@@ -1702,14 +1220,6 @@ flowchart LR
 - Handler: `OrgSecIntelProfileExporter.profile`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 240: Export one<br/>organization<br/>security inte..."]
-    menu --> c1["OrgSecIntelProfileExporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/secintelprofiles"]
-    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/secintelprofiles<br/>/{secintelprofile_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1750,15 +1260,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 242: Find sites<br/>where an SSID is not<br/>broad..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SSIDBroadcastGap<br/>Report"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/wlans<br/>/derived"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1770,15 +1271,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.service_path_events`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 244: Search<br/>service path events<br/>for a sele..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/services<br/>/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1792,13 +1284,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 245: Export the<br/>Cradlepoint<br/>connection sta..."]
-    menu --> c1["OrgCradlepointConnectionExporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/setting<br/>/cradlepoint/setup"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/setting/cradlepoint/setup` | [`orgs.setting.testOrgCradlepointConnection`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/integration-cradlepoint/test-org-cradlepoint-connection) | [`OrgCradlepointConnectionExporter._fetch`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_cradlepoint_connection_exporter.py) | Call |
@@ -1809,15 +1294,6 @@ flowchart LR
 - Handler: `SiteSearchExporter.troubleshoot_call`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 246:<br/>Troubleshoot a call<br/>for a site, clien..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/calls/client<br/>/{client_mac}<br/>/troubleshoot"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1831,13 +1307,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 247: Verify an<br/>email change token<br/>from the..."]
-    menu --> c1["SelfAccountExporter"]
-    c1 --> e1["GET<br/>/api/v1/self/update<br/>/verify/{token}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/self/update/verify/{token}` | [`self.update.verifySelfEmail`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/verify-self-email) | [`SelfAccountExporter._verify`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/self_account_exporter.py) | Call |
@@ -1849,13 +1318,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 254: Search<br/>organization<br/>inventory with op..."]
-    menu --> c1["OrgInventorySearchExporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory<br/>/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/inventory/search` | [`orgs.inventory.searchOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/search-org-inventory) | [`OrgInventorySearchExporter.inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_inventory_search_exporter.py) | Call |
@@ -1866,14 +1328,6 @@ flowchart LR
 - Handler: `OrgWebhookDeliveriesExporter.deliveries`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 256: Search<br/>organization webhook<br/>deliverie..."]
-    menu --> c1["OrgWebhookDeliveriesExporter"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/webhooks"]
-    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/webhooks<br/>/{webhook_id}/events<br/>/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1887,15 +1341,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 257: Search NAC<br/>clients for a<br/>selected sit..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteSearchExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/nac_clients/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
@@ -1907,15 +1352,6 @@ flowchart LR
 - Handler: `SiteOtherDeviceEventsExporter.other_device_events`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 258: Search<br/>other-device events<br/>for a sele..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    menu --> c2["SiteOtherDeviceEventsExporter"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/otherdevices/events<br/>/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |

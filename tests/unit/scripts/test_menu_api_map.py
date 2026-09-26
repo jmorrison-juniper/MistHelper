@@ -453,6 +453,14 @@ def test_generated_diagram_labels_fit_the_wiki_column() -> None:
     assert too_long == [], f"diagram label lines wider than {limit} characters: {too_long[:5]}"
 
 
+def test_generated_pages_hold_few_enough_diagrams_for_github() -> None:
+    """Each map page holds 50 diagrams or fewer, because GitHub fails to render the last diagrams of a long page."""
+    pages = sorted((REPO_ROOT / "documentation/menu-api").glob("*.md"))  # The generated map pages.
+    counts = {page.name: page.read_text(encoding="utf-8").count("```mermaid") for page in pages}
+    assert pages, "the generated map pages are missing"
+    assert {name: count for name, count in counts.items() if count > 50} == {}  # No page is over the limit.
+
+
 def test_menu_label_hides_a_title_that_the_reference_lint_reads_as_a_class() -> None:
     """A title with a class-like word becomes Menu N, so the diagram reference lint stays clean."""
     assert MermaidDiagram.menu_label(synthetic_menu("Open the SSHRunner console", 0)) == "Menu 7"  # Hidden title.

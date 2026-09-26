@@ -11,7 +11,7 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 The overview diagram shows the SDK families that the menu options of this category use.
 Each family node shows the number of menu options that use that family.
-The section of each menu option has a second diagram.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
@@ -95,15 +95,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 126: Poll Fresh<br/>Statistics from<br/>Switch"]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/poll_stats"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/poll_stats` | [`sites.devices.pollSiteSwitchStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/poll-site-switch-stats) | [`_UtilityCommandsAction.poll_switch_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/device/_utility_commands_action.py) | Call |
@@ -115,15 +106,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().create_device_snapshot()`
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 127: Create<br/>Device Snapshot on<br/>Switch"]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/snapshot"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -137,15 +119,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 128: Locate<br/>Device - Blink LED<br/>on AP or Sw..."]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/locate"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/locate` | [`sites.devices.startSiteLocateDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/start-site-locate-device) | [`_UtilityCommandsAction._invoke_locate`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/device/_utility_commands_action.py) | Call |
@@ -157,15 +130,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().unlocate_device()`
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 129: Unlocate<br/>Device - Stop LED<br/>Blinking o..."]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/unlocate"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -202,15 +166,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 131: Get ZTP<br/>Password for<br/>Switch/Gateway c..."]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/request_ztp_password"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/request_ztp_password` | [`sites.devices.getSiteDeviceZtpPassword`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/get-site-device-ztp-password) | [`_UtilityCommandsAction.get_ztp_password`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/device/_utility_commands_action.py) | Call |
@@ -223,15 +178,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 132: Get Config<br/>CLI Commands for<br/>Switch Ad..."]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/config_cmd"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices/{device_id}/config_cmd` | [`sites.devices.getSiteDeviceConfigCmd`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/get-site-device-config-cmd) | [`_UtilityCommandsAction.get_config_commands`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/device/_utility_commands_action.py) | Call |
@@ -243,15 +189,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().upload_support_file()`
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 133: Upload<br/>Support File from<br/>Switch/Gateway"]
-    menu --> c1["_UtilityCommands<br/>Action"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/support"]
-    menu --> c2["_UtilityCommands<br/>Selection"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -336,13 +273,6 @@ flowchart LR
 - Handler: `OrgConfigExporter.msp`
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 136: MSP<br/>Managed Service<br/>Provider info - D..."]
-    menu --> c1["OrgConfigExporter"]
-    c1 --> e1["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -442,13 +372,6 @@ flowchart LR
 - Handler: `CLIShellManager.launch`
 - Shared helpers: [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 140:<br/>Interactively<br/>execute a CLI<br/>command o..."]
-    menu --> c1["CLIShellManager"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/shell"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -755,14 +678,6 @@ flowchart LR
 - Handler: `OrgTicketManager.view_ticket`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`InputUtils`](Menu-API-Endpoints#inpututils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 192: View a<br/>support ticket with<br/>full comme..."]
-    menu --> c1["OrgTicketManager"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/tickets"]
-    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/tickets<br/>/{ticket_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |

@@ -25,6 +25,7 @@ If a change adds or removes an API call, the job fails until you write the pages
 - The walk stops at a shared helper. The shared helper section lists the endpoints of each helper.
 - The HTTP method is Unknown when the code holds the path in a string and does not state the method.
 - The diagram of a menu option shows 12 endpoints or fewer. The table lists each endpoint.
+- A menu option with fewer than 3 endpoints has no diagram. Its table lists the endpoints.
 
 ## How a menu option reaches the Mist cloud
 

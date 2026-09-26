@@ -11,7 +11,7 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 The overview diagram shows the SDK families that the menu options of this category use.
 Each family node shows the number of menu options that use that family.
-The section of each menu option has a second diagram.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
@@ -420,15 +420,6 @@ flowchart LR
 - Shared helpers: [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 118: WebSocket<br/>Device Ping -<br/>Execute ping..."]
-    menu --> c1["WebSocketManager"]
-    c1 --> e1["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
-    menu --> c2["_ws_cmd_deps"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`_ws_cmd_deps`](https://github.com/jmorrison-juniper/MistHelper/blob/main/MistHelper.py) | Reference |
@@ -440,15 +431,6 @@ flowchart LR
 - Handler: `lambda: ArpDeviceExecutor().execute(_ws_cmd_deps())`
 - Shared helpers: [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 119: WebSocket<br/>Device ARP - Execute<br/>ARP co..."]
-    menu --> c1["WebSocketManager"]
-    c1 --> e1["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
-    menu --> c2["_ws_cmd_deps"]
-    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -504,14 +486,6 @@ flowchart LR
 - Handler: `ARPCommandManager.execute`
 - Shared helpers: [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 121: Run ARP<br/>command on an AP and<br/>receive..."]
-    menu --> c1["ARPCommandManager"]
-    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/arp"]
-    c1 --> e2["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |

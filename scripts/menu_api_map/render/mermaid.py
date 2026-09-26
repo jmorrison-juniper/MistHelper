@@ -14,6 +14,10 @@ from ..analysis.walker import EndpointUse, MenuResult  # The walk results.
 
 MAX_OVERVIEW_FAMILIES = 12  # The largest number of SDK family nodes in the overview diagram of a category.
 MAX_BREAKDOWN = 12  # The largest number of endpoint nodes in the diagram of one menu option.
+# The smallest number of endpoints that gives a menu option its own diagram. The
+# table already shows a smaller menu option. GitHub fails to render the last
+# diagrams of a page that holds more than about 60 diagrams.
+MIN_BREAKDOWN = 3
 MAX_TITLE = 40  # The longest menu title in a diagram label.
 # The longest line of a request path in an endpoint node. Mermaid wraps a label
 # only at a space, and a path holds no space. A long path therefore made each
