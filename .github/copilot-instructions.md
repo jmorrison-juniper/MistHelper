@@ -209,10 +209,14 @@ Obey these four rules for a sweep.
    as safe.
 
 ### Data Directory Permissions (CRITICAL)
-The container runs MistHelper as a non-root user (`misthelper`) for security. The mounted `data/` directory must be writable:
+The container runs MistHelper as the non-root user `misthelper`, which holds UID 1000. The mounted `data/` directory must accept a write from that identifier.
+
+On Windows and on macOS no step is needed, because the runtime virtual machine shares the folder as writable. On Linux with rootless Podman, give the folder to the container account:
 ```bash
-chmod -R 777 data/   # Required before first container run
+podman unshare chown -R 1000:1000 data
 ```
+Never run `chmod -R 777 data`. That command gives every account on the host the right to read the captures.
+
 **Symptom**: `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` indicates the data directory needs permissions fixed.
 
 ### Running Tests

@@ -99,33 +99,36 @@ commit it, and never paste its contents into an issue.
 
 ### Step 3: Let the data folder accept a write
 
-```bash
-chmod -R 777 data/
-```
+On Windows and on macOS, no step is needed. The container runtime runs in a
+virtual machine, and the file share already accepts the write.
 
-The container runs as the user `misthelper` and not as root, so it cannot write
-to a folder that refuses it.
+On Linux with rootless Podman, give the folder to the container account. The
+container runs as the user `misthelper`, which holds UID 1000.
+
+```bash
+podman unshare chown -R 1000:1000 data
+```
 
 ### Step 4: Start the stack
 
 ```powershell
-.\scripts\compose.ps1 up -d
+podman compose up -d
 ```
 
 The command starts the default profile. It includes the application, the
 document store, and the site lock store.
 
-The script needs the native provider one time:
+`podman compose` calls an external provider. On Windows, name `podman-compose`
+as the provider one time, because the default provider sends the bind mount as
+a Windows path and the application service then refuses to start:
 
 ```powershell
 .venv\Scripts\python.exe -m pip install podman-compose
+$env:PODMAN_COMPOSE_PROVIDER = "podman-compose.exe"
 ```
 
-Warning: on Windows, do not run `podman compose up -d`. That command starts the
-stack without its application service, so nothing answers. The helper script
-above picks a provider that works. Read [the container deployment
-page](documentation/container-deployment.md) for the cause and for the other
-deployment methods.
+Read [the container deployment page](documentation/container-deployment.md) to
+keep that setting for every shell and for the other deployment methods.
 
 ### Step 5: Check it
 

@@ -15,7 +15,7 @@ you connect to the running `misthelper-app` container on port 2200.
 
 ### 1. Start the application container
 ```powershell
-.\scripts\compose.ps1 up -d --no-deps misthelper
+podman compose up -d --no-deps misthelper
 ```
 
 This will:
@@ -181,8 +181,9 @@ the two log paths. Read that message first.
 The same two lines go to `/app/data/ssh.log`, so the message stays after the
 terminal closes. Read `/app/data/script.log` for the MistHelper error. A missing
 dependency, a bad `.env` file, and a data directory without write permission are
-the common causes. To fix a permission error, run `chmod -R 777 data/` on the
-host.
+the common causes. To fix a permission error on a Linux host, run
+`podman unshare chown -R 1000:1000 data`. On Windows and on macOS the share is
+already writable, so no command is needed.
 
 ## Advanced Usage
 
@@ -190,7 +191,7 @@ host.
 To change SSH server settings, edit `Containerfile` and rebuild:
 1. Modify the SSH configuration in `Containerfile`.
 2. Rebuild: `podman build -t misthelper .`
-3. Restart the application service with `.\scripts\compose.ps1 up -d --no-deps misthelper`.
+3. Restart the application service with `podman compose up -d --no-deps misthelper`.
 
 ### Port Forwarding
 `compose.yml` publishes the SSH port as `2200:2200`. To use a different host

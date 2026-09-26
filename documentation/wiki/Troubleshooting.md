@@ -14,7 +14,7 @@
 | SSH session won't start | ForceCommand or session issues | Check container logs, verify SSH server is running |
 | SSH port conflict | Port 2200 already in use | Stop other services on port 2200 or modify container config. A test container must never publish 2200. See [Container Setup](Container-Setup#test-and-debug-containers). |
 | Multiple SSH sessions interfere | Session isolation problem | Each connection should get a unique session ID. Check the logs |
-| `script.log` permission error | Data directory not writable | Run `chmod -R 777 data/` on host before starting container |
+| `script.log` permission error | Data directory not writable | Linux host: run `podman unshare chown -R 1000:1000 data`. Windows and macOS need no command. |
 
 ## Debug Mode
 
