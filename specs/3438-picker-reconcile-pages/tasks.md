@@ -19,32 +19,36 @@ task therefore comes before its code task.
 
 These tasks block User Stories 1, 2, and 3.
 
-- [ ] T004 Write the red tests of the page walk in
+- [x] T004 Write the red tests of the page walk in
   `tests/unit/upgrade_portal/test_issue_3438_picker_pages.py`. Cover a whole
   read of two pages, a lost second page in HTML and in JSON, and a second page
   with no status. Also cover a failed first page and the log record.
-- [ ] T005 Write the red tests of the cache rule in
+- [x] T005 Write the red tests of the cache rule in
   `tests/unit/upgrade_portal/test_issue_3438_picker_pages.py`. The cache never
   keeps a read that lost a page. The cache keeps a whole read, so a second view
   makes no cloud call. A read that cannot run gives the reason `read_not_run`.
-- [ ] T006 [P] Change the `collect_pages` stand-in in
+- [x] T006 [P] Change the `collect_pages` stand-in in
   `tests/unit/upgrade_portal/test_cloud_cache.py`, so that it returns a
   `DeviceRead`. Compare the `records` field in each assert.
-- [ ] T007 [P] Remove the two floor tests and the `_page` helper from
+- [x] T007 [P] Remove the two floor tests and the `_page` helper from
   `tests/unit/upgrade_portal/test_org_picker.py`.
-- [ ] T008 Run T004 through T007 on the old code. Record the red result in
+- [x] T008 Run T004 through T007 on the old code. Record the red result in
   `specs/3438-picker-reconcile-pages/tasks.md`.
-- [ ] T009 Change `collect_pages` and `default_cloud_read` in
+  Red result on `d2f2b64d`: 25 of 75 tests failed. The 21 new tests and the 4
+  changed cache tests failed. 20 failures read a plain list where a picker read
+  must answer its reasons. 4 failures found no `DeviceRead` name. 1 failure
+  found no warning for a lost page.
+- [x] T009 Change `collect_pages` and `default_cloud_read` in
   `src/upgrade_portal/app/routes/select.py`. Walk each page, and name a fault
   of the first page. Return a `DeviceRead`, and keep a whole read only.
-- [ ] T010 Add `SiteList` to `src/upgrade_portal/app/routes/select.py`. Change
+- [x] T010 Add `SiteList` to `src/upgrade_portal/app/routes/select.py`. Change
   `build_site_rows` to return it. Move `site_choice_refusal` to
   `SiteList.rows`.
-- [ ] T011 Move `selected_rows` and `_site_labels` to `SiteList.rows` in
+- [x] T011 Move `selected_rows` and `_site_labels` to `SiteList.rows` in
   `src/upgrade_portal/app/routes/org_upgrade.py`.
-- [ ] T012 Add the lost-page organization and its operator in
+- [x] T012 Add the lost-page organization and its operator in
   `tests/e2e/upgrade_portal/lost_page_seeds.py`.
-- [ ] T013 Add the lost-page cloud session and the real read for that
+- [x] T013 Add the lost-page cloud session and the real read for that
   organization in `tests/e2e/upgrade_portal/conftest.py`. Also add the operator
   record and the `lost_page_operator_page` fixture.
 
@@ -56,15 +60,18 @@ a page.
 **Independent test**: Open the picker as the lost-page operator in the
 single-site mode. Read the two notes above the table.
 
-- [ ] T014 [US1] Write the red route tests in
+- [x] T014 [US1] Write the red route tests in
   `tests/contract/upgrade_portal/test_issue_3438_site_list_notes.py`. Cover
   each note, and no note after two whole reads. Also cover the site list note
   above an empty table after a failed first page.
-- [ ] T015 [US1] Pass `site_list_partial` and `site_count_partial` from
+  Red result on `d2f2b64d` for T014, T018, and T020: 12 of 12 tests failed.
+  5 failures found no note. 1 failure found no flag in the values of the
+  template. 6 failures found no completeness field in the site list answer.
+- [x] T015 [US1] Pass `site_list_partial` and `site_count_partial` from
   `sites_page` in `src/upgrade_portal/app/routes/select.py`.
-- [ ] T016 [US1] Add the two Caution notes to
+- [x] T016 [US1] Add the two Caution notes to
   `src/upgrade_portal/app/assets/templates/select/sites.html`.
-- [ ] T017 [US1] Add the single-site journey to
+- [x] T017 [US1] Add the single-site journey to
   `tests/e2e/upgrade_portal/test_lost_site_page.py`. Save a screenshot, and
   read it.
 
@@ -77,10 +84,10 @@ still works.
 multi-site mode. Read the notes above the check boxes. Select a site of the
 first page, and push the forward control.
 
-- [ ] T018 [US2] Write the multi-site route tests in
+- [x] T018 [US2] Write the multi-site route tests in
   `tests/contract/upgrade_portal/test_issue_3438_site_list_notes.py`. Cover
   both notes above the form, and a forward post of a site of the first page.
-- [ ] T019 [US2] Add the multi-site journey to
+- [x] T019 [US2] Add the multi-site journey to
   `tests/e2e/upgrade_portal/test_lost_site_page.py`. Save a screenshot, and
   read it.
 
@@ -90,15 +97,15 @@ first page, and push the forward control.
 
 **Independent test**: Read `GET /api/sites` as the lost-page operator.
 
-- [ ] T020 [US3] Write the red route tests in
+- [x] T020 [US3] Write the red route tests in
   `tests/contract/upgrade_portal/test_issue_3438_site_list_notes.py`. Cover
   `site_list_complete` and `device_counts_complete` on both paths. Also cover
   the rows, which must not change.
-- [ ] T021 [US3] Add the two fields in `list_sites` in
+- [x] T021 [US3] Add the two fields in `list_sites` in
   `src/upgrade_portal/app/routes/select.py`.
-- [ ] T022 [P] [US3] Name the two fields in
+- [x] T022 [P] [US3] Name the two fields in
   `specs/1823-upgrade-capture-portal/contracts/http-api.md`.
-- [ ] T023 [US3] Read the site list answer in the browser in
+- [x] T023 [US3] Read the site list answer in the browser in
   `tests/e2e/upgrade_portal/test_lost_site_page.py`.
 
 ## Phase 6: User Story 4 (P1), the reconciliation read
@@ -108,24 +115,31 @@ first page, and push the forward control.
 **Independent test**: Reconcile a stale stopping run with two targets. The
 statistics read loses its second page.
 
-- [ ] T024 [US4] Write the red tests in
+- [x] T024 [US4] Write the red tests in
   `tests/unit/upgrade_portal/test_issue_3438_reconcile_pages.py`. Cover a whole
   walk, a lost second page, and a fresh target that keeps its evidence. Also
   cover a failed first page and one full-path service test.
-- [ ] T025 [P] [US4] Replace the `get_all` stand-in with a real SDK answer in
+- [x] T025 [P] [US4] Replace the `get_all` stand-in with a real SDK answer in
   `tests/unit/upgrade_portal/test_site_stats_evidence_reader.py`.
-- [ ] T026 [US4] Run T024 and T025 on the old code. Record the red result in
+- [x] T026 [US4] Run T024 and T025 on the old code. Record the red result in
   `specs/3438-picker-reconcile-pages/tasks.md`.
-- [ ] T027 [US4] Change `SiteStatsFirmwareEvidenceReader.read` in
+  Red result on `d2f2b64d`: 9 of 12 tests failed. Each of the 9 new tests
+  failed. 4 lost-page failures showed the stored version and the state
+  `unknown` for the unread target. 1 failed first page raised
+  `AttributeError`, and 2 showed the stored fallback. The log test found no
+  warning. The service test found `cloud_evidence_incomplete`. The 3 changed
+  T025 tests passed, because a whole single page reads the same on both code
+  versions.
+- [x] T027 [US4] Change `SiteStatsFirmwareEvidenceReader.read` in
   `src/upgrade_portal/api/run_controls/routes.py`. Add `_read_pages`,
   `_unread_evidence`, and `_target_id`.
 
 ## Phase 7: Polish
 
-- [ ] T028 Add `changelog.d/issue-3438-picker-reconcile-pages.md`.
-- [ ] T029 Run the gates of `specs/3438-picker-reconcile-pages/plan.md` on each
+- [x] T028 Add `changelog.d/issue-3438-picker-reconcile-pages.md`.
+- [x] T029 Run the gates of `specs/3438-picker-reconcile-pages/plan.md` on each
   changed file.
-- [ ] T030 Run the upgrade-portal unit, contract, integration, and browser
+- [x] T030 Run the upgrade-portal unit, contract, integration, and browser
   suites.
 - [ ] T031 Open the pull request, wait for each check, and merge it by hand.
 - [ ] T032 Do the class B deploy to port 8056, and close #3438.

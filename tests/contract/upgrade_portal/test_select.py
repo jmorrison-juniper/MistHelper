@@ -585,8 +585,8 @@ def test_changed_site_tuple_clears_saved_upgrade_options(
     monkeypatch.setattr(
         select,
         "build_site_rows",
-        lambda org_id: [{"site_id": fake_site_id}, {"site_id": other_site_id}],
-    )  # Keep the selection test offline.
+        lambda org_id: select.SiteList([{"site_id": fake_site_id}, {"site_id": other_site_id}]),
+    )  # Keep the selection test offline. Issue #3438: the rows travel in one site list record.
     wired_app.config["WTF_CSRF_ENABLED"] = False  # Permit the two JSON posts.
     with signed_in_client.session_transaction() as browser_session:  # Prepare the multi-site workflow.
         browser_session[SELECTED_MODE_SESSION_KEY] = "multi_site"  # Select the required mode.
@@ -1004,16 +1004,22 @@ def test_the_refusal_of_a_read_names_no_operator(select_client: FlaskClient) -> 
 
 
 def test_the_site_list_answers_the_documented_shape(signed_in_client: FlaskClient, fake_org_id: str) -> None:
-    """The site list answers one ``sites`` list of five-field rows.
+    """The site list answers one ``sites`` list of five-field rows and two completeness fields.
+
+    Why:
+        Issue #3438 adds ``site_list_complete`` and ``device_counts_complete``.
+        A whole read of the canned payloads sets both fields true.
 
     Args:
         signed_in_client: The signed-in test client.
         fake_org_id: The organization every canned payload uses.
     """
-    response = fetch_sites(signed_in_client, fake_org_id)
-    assert response.status_code == 200
-    assert set(response.get_json()) == {"sites"}
-    assert [set(row) for row in read_rows(response)] == [SITE_ROW_FIELDS]
+    response = fetch_sites(signed_in_client, fake_org_id)  # Read the site list through the public path.
+    assert response.status_code == 200  # The read succeeds.
+    assert set(response.get_json()) == {"sites", "site_list_complete", "device_counts_complete"}  # The contract.
+    assert response.get_json()["site_list_complete"] is True  # The canned site read is whole.
+    assert response.get_json()["device_counts_complete"] is True  # The canned device count read is whole.
+    assert [set(row) for row in read_rows(response)] == [SITE_ROW_FIELDS]  # Each row keeps the five fields.
 
 
 def test_the_site_list_carries_the_identifier_and_the_name(

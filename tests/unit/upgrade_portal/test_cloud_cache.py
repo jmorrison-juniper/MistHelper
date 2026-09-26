@@ -86,7 +86,9 @@ def cloud(monkeypatch: pytest.MonkeyPatch) -> CloudStandIn:
     stand_in = CloudStandIn(SITES)  # The cloud answers two sites.
     monkeypatch.setattr(select, "CLOUD_READ_CACHE", CloudReadCache(60, 8, Clock()))  # No state from another test.
     monkeypatch.setattr(select, "import_module", lambda name: stand_in)  # The call resolves to the stand-in.
-    monkeypatch.setattr(select, "collect_pages", lambda session, page, name: list(page.data))  # One page only.
+    monkeypatch.setattr(  # One whole page only. Issue #3438: the page walk answers the rows and the reasons.
+        select, "collect_pages", lambda session, page, name: select.DeviceRead(name, list(page.data), [])
+    )
     operator = SimpleNamespace(owner=SimpleNamespace(key="owner-a"), cloud_session=object())  # One operator.
     monkeypatch.setattr(select.identity, "current_session", lambda: operator)  # The signed-in record.
     return stand_in
@@ -96,7 +98,8 @@ def test_a_repeated_view_reads_the_cloud_once(cloud: CloudStandIn) -> None:
     """Issue #3210: the second view of the same list inside one minute makes no cloud read."""
     first = select.default_cloud_read("listOrgSites", org_id="org-1")  # The first view reads the cloud.
     second = select.default_cloud_read("listOrgSites", org_id="org-1")  # The second view reuses the answer.
-    assert first == second == SITES  # Both views show the same sites.
+    assert first.records == second.records == SITES  # Both views show the same sites.
+    assert second.partial_reasons == []  # The kept answer is a whole read.
     assert cloud.reads == 1  # Only the first view reached the cloud.
 
 

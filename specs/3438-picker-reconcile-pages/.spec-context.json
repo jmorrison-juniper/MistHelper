@@ -2,8 +2,8 @@
   "workflow": "speckit",
   "specName": "The site picker and the reconciliation read name a lost page",
   "branch": "fix/3438-picker-reconcile-pages",
-  "currentStep": "tasks",
-  "status": "ready-to-implement",
+  "currentStep": "implement",
+  "status": "implemented",
   "history": [
     {
       "step": "specify",
@@ -25,6 +25,13 @@
       "kind": "complete",
       "by": "agent",
       "at": "2026-09-26T11:35:29.546Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T13:25:59.180Z"
     }
   ]
 }

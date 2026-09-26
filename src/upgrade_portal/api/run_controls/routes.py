@@ -21,6 +21,7 @@ from src.upgrade_portal.api.run_controls.services import (
 )
 from src.upgrade_portal.app.factory import json_error
 from src.upgrade_portal.app.routes.select import SELECTED_ORG_KEY, session_lock_record
+from src.upgrade_portal.capture.devices import guard_page_count, read_every_page
 from src.upgrade_portal.persistence.actions import (
     ActionRequestConflict,
     ActionStateConflict,
@@ -47,6 +48,7 @@ AUTHORIZATION_READER_KEY = "AUTHORIZATION_READER"
 LOCK_CLIENT_KEY = "LOCK_STORE_CLIENT"
 CLOUD_EVIDENCE_KEY = "CLOUD_EVIDENCE"
 IDEMPOTENCY_HEADER = "Idempotency-Key"
+STATISTICS_SECTION = "listSiteDevicesStats"  # Issue #3438: the section name that the page walk logs.
 
 BulkActionFields = tuple[str, list[Any], str, str, str]  # Keep the parsed request shape in one local term.
 
@@ -59,18 +61,69 @@ class SiteStatsFirmwareEvidenceReader:
         self._cloud_session = cloud_session  # The identity registry owns the token-bearing object.
 
     def read(self, record: Mapping[str, Any], observed_at: str) -> list[Mapping[str, Any]]:
-        """Return one safe evidence row for each stored target."""
+        """Return one safe evidence row for each stored target.
+
+        Why:
+            Issue #3438. The read walks every page of the site statistics. A
+            lost page leaves a target with no fresh row. That target then holds
+            unavailable evidence, so its stored version never shows as the
+            running version.
+        """
         logger.info("Read site statistics for reconciliation evidence")  # Record the read before the cloud call.
         site_id = str(record.get("site_id") or "")  # Limit the approved endpoint to the run site.
         response = self._read_site_statistics(site_id)  # WHY: isolate the SDK call so signature faults stay visible.
-        raw_rows = mistapi.get_all(mist_session=self._cloud_session, response=response)  # WHY: read all pages.
-        logger.debug("Read %s raw site statistics row(s)", len(raw_rows or ()))  # WHY: measure the cloud result.
-        rows = self._project_statistics_rows(raw_rows or ())  # WHY: keep the approved reconciliation fields only.
+        raw_rows, page_lost = self._read_pages(response)  # Issue #3438: walk every page and name a lost page.
+        rows = self._project_statistics_rows(raw_rows)  # WHY: keep the approved reconciliation fields only.
         running = RunningFirmwareVersionResolver.index_stats_rows(rows)  # Use the shared running-version rule.
         indexed = self._index_readings(rows, running)  # Preserve firmware status beside the running version.
-        result = [_target_evidence_row(target, indexed, observed_at) for target in self._targets(record)]
+        targets = self._targets(record)  # The stored targets of the run, in the stored order.
+        if page_lost:  # A target with no fresh row must not show its stored version as running.
+            self._mark_unread(site_id, targets, indexed)  # One warning names the site and the unread count.
+        result = [_target_evidence_row(target, indexed, observed_at) for target in targets]  # One row each.
         logger.debug("Read reconciliation evidence for %s target(s)", len(result))  # Report a safe count.
         return result  # Give the reconciliation service only safe rows.
+
+    def _read_pages(self, response: Any) -> tuple[list[Any], bool]:
+        """Walk every page of the statistics read.
+
+        Why:
+            Issue #3438. ``mistapi.get_all`` adds a later page with no status
+            check, so a lost page looked like a whole read. The shared walk
+            stops at the first lost page and names it.
+
+        Args:
+            response: The first page, or None when the first call failed.
+
+        Returns:
+            The rows of each page that arrived, and true when a page is lost.
+        """
+        if response is None:  # The first call failed, so no page arrived.
+            logger.debug("The statistics read holds no first page")  # The error log above names the status.
+            return [], True  # Every target then holds unavailable evidence.
+        logger.info("Walk every page of the statistics read")  # Log before the page walk.
+        walk = read_every_page(self._cloud_session, STATISTICS_SECTION, response)  # Stop at the first lost page.
+        first_page = guard_page_count(STATISTICS_SECTION, len(walk.records), response)  # A fault of page one.
+        logger.debug("Read %s raw site statistics row(s)", len(walk.records))  # WHY: measure the cloud result.
+        return list(walk.records), bool(first_page or walk.partial_reasons)  # A reason names a lost page.
+
+    @staticmethod
+    def _mark_unread(site_id: str, targets: Sequence[Mapping[str, Any]], indexed: dict[str, Mapping[str, Any]]) -> None:
+        """Give each target with no fresh row the unavailable evidence.
+
+        Args:
+            site_id: The run site, for the one warning.
+            targets: The stored targets of the run.
+            indexed: The fresh evidence rows by target. This method adds one row for each unread target.
+        """
+        target_ids = [_target_id(target) for target in targets]  # The identifier of each stored target.
+        unread = [target_id for target_id in target_ids if target_id not in indexed]  # No fresh row arrived.
+        for target_id in unread:  # Each unread target gets its own row, so no list is shared.
+            indexed[target_id] = _unread_evidence()  # Unavailable evidence, never the stored version.
+        logger.warning(  # One warning for one lost read. The warning names no device address.
+            "The site statistics read at site %s lost a page. %s target(s) hold unavailable evidence.",
+            site_id,
+            len(unread),
+        )
 
     def _read_site_statistics(self, site_id: str) -> Any:
         """Read device statistics with the installed SDK signature."""
@@ -532,6 +585,43 @@ def _indexed_evidence(raw: Any) -> dict[str, Mapping[str, Any]]:
     }
 
 
+def _target_id(target: Mapping[str, Any]) -> str:
+    """Return the identifier that keys the evidence of one stored target.
+
+    Args:
+        target: The stored target from the run record.
+
+    Returns:
+        The device identifier, the address, or the target identifier, in that order.
+    """
+    return str(target.get("device_id") or target.get("mac") or target.get("id") or "")  # Preserve the priority.
+
+
+def _unread_evidence() -> dict[str, Any]:
+    """Return the evidence of one target that the reader did not read.
+
+    Why:
+        Issue #3438. A lost page leaves a target with no fresh row. The stored
+        fallbacks of ``_target_evidence_row`` then showed the stored version as
+        the running version. These values name the evidence unavailable, so
+        the reconciliation service reports ``cloud_evidence_unavailable``.
+
+    Returns:
+        A new row. The stored fallbacks add the stored target fields.
+    """
+    return {
+        "running_version": "",  # No fresh row names the running version.
+        "fwupdate_status": "",  # No fresh row names the firmware status.
+        "task_state": "unavailable",  # The service reads this value as unavailable evidence.
+        "write_state": "unavailable",  # The service reads this value as unavailable evidence.
+        "sources": ["stored"],  # Only the stored target speaks for this device.
+        "observed_at": None,  # No observation took place.
+        "firmware_success": False,  # No fresh row proves a success.
+        "is_complete": False,  # Unavailable evidence is never complete.
+        "has_conflict": False,  # No fresh row disagrees with the stored target.
+    }
+
+
 def _target_evidence_row(
     target: Mapping[str, Any],
     indexed: Mapping[str, Mapping[str, Any]],
@@ -547,7 +637,7 @@ def _target_evidence_row(
     Returns:
         One evidence row with the same fallback fields as before.
     """
-    target_id = str(target.get("device_id") or target.get("mac") or target.get("id") or "")  # Preserve priority.
+    target_id = _target_id(target)  # Preserve the identifier priority of the stored target.
     current = dict(indexed.get(target_id, {}))  # Copy supplied evidence before defaults are applied.
     current["target_id"] = target_id  # Preserve the stored target identifier in the output.
     current.setdefault("stored_stop_result", str(target.get("stop_result") or "unknown"))  # Keep the stored default.
