@@ -78,7 +78,8 @@ flowchart TB
     app --> redis
 ```
 
-> **PNG fallback**: If this diagram does not render, see [container-architecture.png](container-architecture.png).
+> **Beta diagram type**: this diagram uses `block-beta`. A viewer without beta
+> support does not render it. Open this page on GitHub.
 
 ## External Access Architecture
 

@@ -1,6 +1,6 @@
 # Implementation Plan: Device Utility Commands — Complete Mist API Coverage
 
-**Branch**: `014-device-utility-commands` | **Date**: 2026-03-20 | **Spec**: [spec.md](specs/014-device-utility-commands/spec.md)
+**Branch**: `014-device-utility-commands` | **Date**: 2026-03-20 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `/specs/014-device-utility-commands/spec.md`
 
 ## Summary

@@ -1,7 +1,7 @@
 # Phase 1 Quickstart: countOrgAlarms
 
 **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
-**Data model**: [data-model.md](./data-model.md) | **Contract**: [contracts/count_org_alarms.md](./contracts/count_org_alarms.md)
+**Data model**: [data-model.md](./data-model.md) | **Contract**: `contracts/count_org_alarms.md` (planned; never created)
 
 This quickstart shows a junior NOC engineer how to run the new menu item
 locally on Windows, what `.env` variables it needs, what files appear in

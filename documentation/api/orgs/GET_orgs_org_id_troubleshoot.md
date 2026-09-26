@@ -9,10 +9,10 @@
 ## Description
 
 Troubleshoot sites, devices, clients, and wired clients for maximum of last 7 days from current time. See search APIs for device information:
-- [search Device]($e/Orgs%20Devices/searchOrgDevices)
-- [search Wireless Client]($e/Orgs%20Clients%20-%20Wireless/searchOrgWirelessClients)
-- [search Wired Client]($e/Orgs%20Clients%20-%20Wired/searchOrgWiredClients)
-- [search Wan Client]($e/Orgs%20Clients%20-%20Wan/searchOrgWanClients)
+- [search Device](GET_orgs_org_id_devices_search.md)
+- [search Wireless Client](GET_orgs_org_id_clients_search.md)
+- [search Wired Client](GET_orgs_org_id_wired_clients_search.md)
+- [search Wan Client](GET_orgs_org_id_wan_clients_search.md)
 
 **NOTE**: requires Marvis subscription license
 

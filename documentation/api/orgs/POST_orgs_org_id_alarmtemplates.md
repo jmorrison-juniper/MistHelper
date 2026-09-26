@@ -8,7 +8,7 @@
 
 ## Description
 
-Available rules can be found in [List Alarm Definitions#]($e/Events%20Definitions/listAlarmDefinitions)
+Available rules can be found in [List Alarm Definitions#](../constants/GET_const_alarm_defs.md)
 
 The delivery dict is only required if different from the template delivery settings.
 

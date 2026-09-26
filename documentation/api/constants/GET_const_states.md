@@ -20,7 +20,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 
 | Name | Type | Required | Default | Enum | Description |
 |------|------|----------|---------|------|-------------|
-| country_code | string | Yes |  |  | Country code, in [two-character]($e/Constants%20Definitions/listCountryCodes) |
+| country_code | string | Yes |  |  | Country code, in [two-character](GET_const_countries.md) |
 
 ## Request Body
 

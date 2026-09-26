@@ -1,7 +1,7 @@
 # Phase 1 Quickstart: CountOrgDeviceEvents Menu Item
 
 **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
-**Contract**: [contracts/count_org_device_events.md](./contracts/count_org_device_events.md)
+**Contract**: `contracts/count_org_device_events.md` (planned; never created)
 **Data model**: [data-model.md](./data-model.md)
 
 This quickstart shows a developer how to run the new menu item locally, what `.env`

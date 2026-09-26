@@ -13,7 +13,7 @@
 Get the summary for the SLE metric
 
 
-This API Endpoint is deprecated and replaced by [Get Site SLE Summary Trend]($e/Sites%20SLEs/getSiteSleSummaryTrend)
+This API Endpoint is deprecated and replaced by [Get Site SLE Summary Trend](GET_sites_site_id_sle_scope_scope_id_metric_metric_summary-trend.md)
 
 ## Authentication
 

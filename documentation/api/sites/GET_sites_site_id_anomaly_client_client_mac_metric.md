@@ -22,7 +22,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 |------|------|----------|-------------|
 | site_id | string | Yes |  |
 | client_mac | string | Yes |  |
-| metric | string | Yes | See [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics) for available metrics |
+| metric | string | Yes | See [List Insight Metrics](../constants/GET_const_insight_metrics.md) for available metrics |
 
 ## Request Body
 

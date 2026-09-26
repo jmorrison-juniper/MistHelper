@@ -2,7 +2,7 @@
 
 **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
 **Data model**: [data-model.md](./data-model.md)
-**Contract**: [contracts/count_org_wired_clients.md](./contracts/count_org_wired_clients.md)
+**Contract**: `contracts/count_org_wired_clients.md` (planned; never created)
 
 ## What This Menu Item Does
 

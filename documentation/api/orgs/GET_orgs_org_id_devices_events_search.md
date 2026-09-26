@@ -31,7 +31,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 | device_type | string | No | ap |  |  |
 | text | string | No |  |  | Event message |
 | timestamp | string | No |  |  | Event time |
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listDeviceEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_device_events.md) |
 | last_by | string | No |  |  | Return last/recent event for passed in field |
 | includes | string | No |  |  | Keyword to include events from additional indices (e.g. ext_tunnel for prisma events) |
 | limit | integer | No | 100 |  |  |

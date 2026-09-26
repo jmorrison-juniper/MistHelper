@@ -13,7 +13,7 @@
 Get SLE classifier details
 
 
-This API Endpoint is deprecated and replaced by [Get Site SLE Classifier Summary Trend]($e/Sites%20SLEs/getSiteSleClassifierSummaryTrend)
+This API Endpoint is deprecated and replaced by [Get Site SLE Classifier Summary Trend](GET_sites_site_id_sle_scope_scope_id_metric_metric_classifier_classifier_summary-trend.md)
 
 ## Authentication
 

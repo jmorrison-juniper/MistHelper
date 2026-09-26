@@ -28,7 +28,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 |------|------|----------|---------|------|-------------|
 | mxedge_id | string | No |  |  | Mist edge id |
 | mxcluster_id | string | No |  |  | Mist edge cluster id |
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listDeviceEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_device_events.md) |
 | service | string | No |  |  | Service running on mist edge(mxagent, tunterm etc) |
 | component | string | No |  |  | Component like PS1, PS2 |
 | limit | integer | No | 10 |  |  |

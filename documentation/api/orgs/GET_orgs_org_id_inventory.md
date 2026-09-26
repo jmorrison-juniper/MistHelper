@@ -27,7 +27,7 @@ MAC address of the FPC0 member.
     The `device_id` and `site_id` will be available in the device information.
 
     - If `vc_mac` differs from the `mac` field, the device is part of a Virtual Chassis
-    but is not the device used to generate the Virtual Chassis ID. Use the `vc_mac` value with the [Get Org Inventory]($e/Orgs%20Inventory/getOrgInventory)
+    but is not the device used to generate the Virtual Chassis ID. Use the `vc_mac` value with the [Get Org Inventory](GET_orgs_org_id_inventory.md)
     API call to retrieve the `device_id` and `site_id`.
 
     - If `vc_mac` matches the `mac` field, the device is the device used to generate the Virtual Chassis ID and he `device_id` and `site_id` will be available

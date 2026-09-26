@@ -26,7 +26,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 
 | Name | Type | Required | Default | Enum | Description |
 |------|------|----------|---------|------|-------------|
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listNacEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_nac_events.md) |
 | nacrule_id | string | No |  |  | NAC Policy Rule ID, if matched |
 | nacrule_matched | boolean | No |  |  | NAC Policy Rule Matched |
 | dryrun_nacrule_id | string | No |  |  | NAC Policy Dry Run Rule ID, if present and matched |

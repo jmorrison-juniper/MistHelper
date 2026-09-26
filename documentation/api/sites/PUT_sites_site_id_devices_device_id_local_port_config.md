@@ -19,7 +19,7 @@ The local overrides configured for the switchports with `no_local_overwrite`==`t
 >
 > When using the API Call, it is required to put send all overrides in the PUT request Payload, even the existing once. 
 >
-> The current overrides can be retrieved with the API Call [Get Site Device]($e/Sites%20Devices/getSiteDevice). The local overrides will show up separately from the `port_config` in the `local_port_config` so it can be easily identified (and cleared)
+> The current overrides can be retrieved with the API Call [Get Site Device](GET_sites_site_id_devices_device_id.md). The local overrides will show up separately from the `port_config` in the `local_port_config` so it can be easily identified (and cleared)
 
 ## Authentication
 

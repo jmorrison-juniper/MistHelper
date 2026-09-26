@@ -33,7 +33,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 | model | string | No |  |  | Device model |
 | text | string | No |  |  | Event message |
 | timestamp | string | No |  |  | Event time |
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listDeviceEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_device_events.md) |
 | start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |
 | end | string | No |  |  | End time (epoch timestamp in seconds, or relative string like "-1d", "-2h", "now") |
 | duration | string | No | 1d |  | Duration like 7d, 2w |

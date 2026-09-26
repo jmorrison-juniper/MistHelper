@@ -26,7 +26,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 
 | Name | Type | Required | Default | Enum | Description |
 |------|------|----------|---------|------|-------------|
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listDeviceEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_device_events.md) |
 | reason_code | integer | No |  |  | For assoc/disassoc events |
 | ssid | string | No |  |  | SSID Name |
 | ap | string | No |  |  | AP MAC |
