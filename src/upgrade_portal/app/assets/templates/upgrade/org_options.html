@@ -15,6 +15,7 @@
 {% set stable_chosen = options.stable_version | default(false, true) %}
 {% set shows_p2p_sizes = has_ap and p2p_chosen %}
 {% set shows_radio_batches = has_ap and uses_rrm %}
+{% set partial_site_names = partial_sites | default([], true) %}
 
 {% block title %}Configure the upgrade{% endblock %}
 {% block heading %}<h1>Configure the upgrade</h1>{% endblock %}
@@ -26,6 +27,19 @@
     One operation targets {{ rows | length }} selected sites. The portal selects the safe route for each device family.
   </p>
 
+  {#
+    Issue #3424. A short site read keeps the devices of the first page and
+    loses the rest, and the device table of that site then looks complete. The
+    banner names each such site, so the operator reads the sites again before
+    the save. portal.css prepends "Caution:" to a flash-warning. A reload
+    recovers the read, so the signal word is Caution and not Warning. The save
+    names the same sites when a read is still short.
+  #}
+  {% if partial_site_names %}
+    <div class="flash-item flash-warning" role="status" data-testid="org-upgrade-partial-inventory">
+      <span>The portal did not read the complete device list at these sites: {{ partial_site_names | join(', ') }}. The device table can leave out devices of those sites. Reload this page before you save the options.</span>
+    </div>
+  {% endif %}
   {#
     Issue #3247. A retry keeps only the devices of a settled operation that did
     not reach the target version. The banner names each device, so the

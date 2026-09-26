@@ -21,14 +21,18 @@ Why:
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any
 
 import mistapi
 import pytest
+from mistapi.__api_response import APIResponse
 
 from src.firmware.upgrade_service import SCOPE_ORG, SCOPE_SITE, STRATEGY_DEFAULT, UpgradeOptions
-from src.upgrade_portal.capture.devices import REASON_READ_FAILED, REASON_UNKNOWN_SHAPE
+from src.upgrade_portal.capture.devices import REASON_READ_FAILED, REASON_SHORT_READ, REASON_UNKNOWN_SHAPE
 from src.upgrade_portal.upgrade import options as module
+from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 PAGE_LIMIT = 100
 
@@ -89,6 +93,30 @@ VERSION_MAP: dict[str, tuple[str, ...]] = {
     "AP45": ("0.14.29216",),
 }
 THIN_BODY: dict[str, Any] = {"targets": [{"mac": "5c5b350e0001", "version_target": "24.2R1.17"}]}
+SHORT_REASON: dict[str, Any] = {  # Issue #3424: the reason of a read that stops after the first page.
+    "section": module.SECTION_UPGRADE_INVENTORY,  # The upgrade inventory read owns the reason.
+    "reason": REASON_SHORT_READ,  # The row count is less than the reported total.
+    "http_status": 200,  # The cloud answered the first page.
+}
+READ_FAILED_REASON: dict[str, Any] = {  # Issue #3424: the reason of a read that raised.
+    "section": module.SECTION_UPGRADE_INVENTORY,  # The upgrade inventory read owns the reason.
+    "reason": REASON_READ_FAILED,  # The read raised before a page answered.
+    "http_status": 0,  # No answer, so no status.
+}
+
+# Issue #3424 review. The real endpoint answers a JSON list and sends the total
+# in the X-Page-Total header. The SDK builds the link to page two from the three
+# page headers. These values give a read of three rows with two rows on page one.
+SMALL_PAGE_LIMIT = 2  # Two rows for each page, so three rows need two pages.
+FIRST_PAGE_URL = "https://api.mist.com/api/v1/orgs/org-1/inventory?site_id=site-1&limit=2"  # Page one.
+SECOND_PAGE_LINK = "/api/v1/orgs/org-1/inventory?site_id=site-1&limit=2&page=2"  # The link that the SDK builds.
+SECOND_PAGE_URL = f"https://api.mist.com{SECOND_PAGE_LINK}"  # The full address of page two.
+PAGE_ONE_HEADERS = {**JSON_TYPE, "X-Page-Total": "3", "X-Page-Limit": "2", "X-Page-Page": "1"}  # Three rows in all.
+PAGE_TWO_HEADERS = {**JSON_TYPE, "X-Page-Total": "3", "X-Page-Limit": "2", "X-Page-Page": "2"}  # The last page.
+LOST_PAGES = [  # Two ways that page two never arrives. The SDK catches each fault and builds an answer.
+    pytest.param(502, b"<html><body>502 Bad Gateway</body></html>", HTML_TYPE, id="html-502"),
+    pytest.param(429, b'{"detail": "Too Many Requests"}', JSON_TYPE, id="json-429"),
+]
 
 
 class FakeResponse:
@@ -97,7 +125,8 @@ class FakeResponse:
     Why:
         ``guard_page_count`` reads the body shape, the reported total, and the
         status. A namespace with those three members is enough, and it keeps the
-        test away from the real transport.
+        test away from the real transport. The page walk reads ``next`` with a
+        default of None, so this stand-in names no later page.
 
     Attributes:
         data: The parsed body.
@@ -115,31 +144,41 @@ class FakeResponse:
         self.status_code = status_code
 
 
-def record_inventory_call(monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Replace the inventory endpoint and the page helper, and record the call.
+def record_inventory_call(
+    monkeypatch: pytest.MonkeyPatch,
+    rows: list[dict[str, Any]],
+    total: int | None = None,
+) -> dict[str, Any]:
+    """Replace the inventory endpoint and the version read, and record the call.
 
     Why:
         The test needs the exact keyword set that the module sends, because the
-        rule under test is the absence of one keyword.
+        rule under test is the absence of one keyword. The stand-in page holds
+        its rows under ``results`` and names no next page, so the page walk
+        reads the rows from the body. ``plan_paged_read`` covers the list
+        answer and the page headers of the real endpoint (issue #3424).
 
     Args:
         monkeypatch: The pytest patcher.
-        rows: The records that the page helper returns.
+        rows: The records that the first page holds.
+        total: The count that the first page reports. None reports the row
+            count, so the read is complete. A larger count gives a short read
+            (issue #3424).
 
     Returns:
         A map that holds ``args`` and ``kwargs`` after the call.
     """
-    seen: dict[str, Any] = {}
+    seen: dict[str, Any] = {}  # The arguments of the one endpoint call.
+    reported = len(rows) if total is None else total  # A total above the row count makes a short read.
 
     def fake_endpoint(*args: Any, **kwargs: Any) -> FakeResponse:
-        seen["args"] = args
-        seen["kwargs"] = kwargs
-        return FakeResponse({"results": rows, "total": len(rows)})
+        seen["args"] = args  # The session and the organization, by position.
+        seen["kwargs"] = kwargs  # The site and the page size, by keyword.
+        return FakeResponse({"results": rows, "total": reported})  # The first page and its reported total.
 
-    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", fake_endpoint)
-    monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: rows)
-    monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)
-    return seen
+    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", fake_endpoint)  # No cloud call.
+    monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)  # No version read.
+    return seen  # The test reads the recorded call.
 
 
 class TestReadUpgradeInventory:
@@ -182,13 +221,12 @@ class TestReadUpgradeInventory:
         monkeypatch: pytest.MonkeyPatch,
         fake_mist_session: Any,
     ) -> None:
-        """``mistapi.get_all`` answers an unknown shape with an empty list and no error."""
+        """A body with no readable list gives no row and no error, so the guard names the shape."""
         monkeypatch.setattr(
             mistapi.api.v1.orgs.inventory,
             "getOrgInventory",
             lambda *args, **kwargs: FakeResponse({"devices": []}),
         )
-        monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: [])
         result = module.read_upgrade_inventory(fake_mist_session, "org-1", "site-1", page_limit=PAGE_LIMIT)
         assert result.records == []
         assert result.partial_reasons[0]["reason"] == REASON_UNKNOWN_SHAPE
@@ -721,7 +759,7 @@ class TestBuildOptionsView:
 
         monkeypatch.setattr(module, "list_available_versions", fake_list)
         answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
-        assert answer == {"targets": [], "versions_by_model": {}}
+        assert answer == {"targets": [], "versions_by_model": {}, "partial_reasons": []}  # Issue #3424: no reason.
         assert calls == []
 
 
@@ -816,6 +854,249 @@ class TestBuildOptionsRecord:
         answer = module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, {"reboot": False})
         assert answer["targets"] == []
         assert answer["options"]["reboot"] is False
+
+
+def raise_cloud_fault(*args: Any, **kwargs: Any) -> FakeResponse:
+    """Fail the inventory read the way a cloud fault does.
+
+    Raises:
+        RuntimeError: Always. ``_read_paged`` turns the fault into a reason.
+    """
+    raise RuntimeError("the cloud refused the read")  # The read holds no row after this fault.
+
+
+class TestShortReadView:
+    """Issue #3424: the options view reports each partial reason of its read."""
+
+    @pytest.mark.parametrize(
+        ("records", "reasons", "short"),
+        [
+            ([SWITCH_ROW], [SHORT_REASON], True),
+            ([SWITCH_ROW], [], False),
+            ([], [READ_FAILED_REASON], False),
+            ([], [], False),
+        ],
+        ids=["short-read", "whole-read", "failed-read", "empty-site"],
+    )
+    def test_a_read_is_short_only_with_rows_and_a_reason(
+        self,
+        records: list[dict[str, Any]],
+        reasons: list[dict[str, Any]],
+        short: bool,
+    ) -> None:
+        """A failed read and an empty site keep the empty-record rule of issue #3389."""
+        read = module.InventoryRead([dict(row) for row in records], list(reasons))  # One read of one site.
+        assert read.is_short is short  # Only rows with a reason make a short read.
+
+    def test_a_short_read_keeps_its_rows_and_reports_its_reason(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """FR-001: the page shows each device that the read found, beside the reason."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW, AP_ROW], total=5)  # The read stops after the first page.
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)  # The view of the options page.
+        assert [row["mac"] for row in answer["targets"]] == ["5c5b350e0001", "5c5b350e0004"]  # The rows stay.
+        assert answer["partial_reasons"] == [SHORT_REASON]  # The old view dropped this reason.
+
+    def test_a_whole_read_reports_an_empty_reason_list(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """FR-001: a complete read reports no reason, so the page shows no banner."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])  # The reported total equals the row count.
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)  # The view of the options page.
+        assert answer["partial_reasons"] == []  # No banner.
+
+    def test_a_failed_read_reports_its_reason(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """US1 scenario 3: a failed read shows the same banner as a short read."""
+        monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", raise_cloud_fault)  # The read fails.
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)  # The view of the options page.
+        assert answer == {"targets": [], "versions_by_model": {}, "partial_reasons": [READ_FAILED_REASON]}
+
+
+class TestShortReadSave:
+    """Issue #3424: the save refuses a short read before a version read."""
+
+    def test_a_short_read_refuses_the_save(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """FR-003: the save must not store a plan that leaves out the devices of a lost page."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW], total=2)  # The read stops after the first page.
+        with pytest.raises(module.PartialInventoryError) as caught:  # The save stops.
+            module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
+        assert caught.value.code == module.ERROR_PARTIAL_INVENTORY  # A machine code for a caller.
+        assert caught.value.site_id == SITE_ID  # The multi-site route names this site.
+        assert caught.value.reasons == [SHORT_REASON]  # The reason of the read.
+        assert str(caught.value) == module.PARTIAL_INVENTORY_MESSAGE  # The text that the flash region shows.
+
+    def test_a_short_read_spends_no_version_read(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """FR-011: a refused save must not spend the version call for no gain."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW], total=2)  # The read stops after the first page.
+        calls: list[Any] = []  # Each version read.
+
+        def fake_list(*args: Any) -> dict[str, tuple[str, ...]]:
+            """Record the version read."""
+            calls.append(args)  # The test reads this list.
+            return VERSION_MAP  # The versions of each model.
+
+        monkeypatch.setattr(module, "list_available_versions", fake_list)  # Count the version reads.
+        with pytest.raises(module.PartialInventoryError):  # The save stops.
+            module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
+        assert calls == []  # The refusal came before the version read.
+
+    def test_a_failed_read_keeps_the_empty_record_rule(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """FR-005: a read with no row and a reason keeps the empty record of issue #3389."""
+        monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", raise_cloud_fault)  # The read fails.
+        assert module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY) == {}  # No refusal.
+
+    def test_the_log_names_the_site_and_the_reason_and_no_device(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """FR-012: the log records the site and the reason codes, and no device address."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW], total=2)  # The read stops after the first page.
+        with caplog.at_level(logging.DEBUG), pytest.raises(module.PartialInventoryError):  # Keep each record.
+            module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
+        lines = [record.getMessage() for record in caplog.records]  # Each log line of the save.
+        refusal_lines = [line for line in lines if REASON_SHORT_READ in line]  # The lines that name the reason.
+        assert refusal_lines, lines  # The save logs the reason code of the short read.
+        assert all(SITE_ID in line for line in refusal_lines)  # The same line names the site.
+        assert not any("5c5b350e0001" in line for line in lines)  # The log holds no device address.
+        assert not any(str(SWITCH_ROW["mac"]) in line for line in lines)  # Not in the form of the cloud either.
+
+
+class TestPartialInventoryError:
+    """Issue #3424: the refusal of a single-site save after a short read."""
+
+    def test_the_refusal_is_a_value_error_and_not_a_bad_option(self) -> None:
+        """D3: the single-site route answers each `ValueError` with `bad_option`, and no control is at fault."""
+        error = module.PartialInventoryError(SITE_ID, [SHORT_REASON])  # One refusal.
+        assert isinstance(error, ValueError)  # The single-site route catches this family.
+        assert not isinstance(error, module.BadOptionError)  # The multi-site route must not name a control.
+
+    def test_the_refusal_holds_a_detached_copy_of_the_reasons(self) -> None:
+        """A later change of the read must not change the refusal."""
+        reasons = [dict(SHORT_REASON)]  # The reasons of one read.
+        error = module.PartialInventoryError(SITE_ID, reasons)  # One refusal.
+        reasons[0]["reason"] = "changed"  # Change the entry of the read.
+        reasons.append(dict(SHORT_REASON))  # Add an entry to the read.
+        assert error.reasons == [SHORT_REASON]  # The refusal keeps its own copy.
+
+
+def lost_page_reason(http_status: int) -> dict[str, Any]:
+    """Return the reason of an upgrade inventory read that lost page two.
+
+    Args:
+        http_status: The HTTP status of the lost page.
+
+    Returns:
+        One partial reason entry.
+    """
+    return {"section": module.SECTION_UPGRADE_INVENTORY, "reason": REASON_SHORT_READ, "http_status": http_status}
+
+
+def plan_paged_read(monkeypatch: pytest.MonkeyPatch, later_page: APIResponse) -> PagedSession:
+    """Answer page one with two rows of three, and plan the answer for page two.
+
+    Why:
+        Issue #3424 review. The stand-in answer of ``record_inventory_call``
+        carries a ``total`` field that this endpoint never sends. This plan
+        uses the real SDK answer, so the SDK builds the link to page two from
+        the page headers, as it does for the live cloud.
+
+    Args:
+        monkeypatch: The pytest patcher.
+        later_page: The SDK answer for page two.
+
+    Returns:
+        The session that answers page two and records the link.
+    """
+    body = json.dumps([SWITCH_ROW, AP_ROW]).encode("utf-8")  # Two rows of three.
+    first = build_sdk_answer(200, body, PAGE_ONE_HEADERS, FIRST_PAGE_URL)  # Page one, as the SDK builds it.
+    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", lambda *args, **kwargs: first)  # No cloud.
+    monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)  # No version read.
+    return PagedSession([later_page])  # The session answers page two.
+
+
+class TestLostLaterPage:
+    """Issue #3424 review: a lost later page of a list answer is a short read."""
+
+    @pytest.mark.parametrize(("status", "body", "headers"), LOST_PAGES)
+    def test_a_lost_later_page_is_a_short_read(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        status: int,
+        body: bytes,
+        headers: dict[str, str],
+    ) -> None:
+        """Page one holds two rows of three, and page two never arrives."""
+        session = plan_paged_read(monkeypatch, build_sdk_answer(status, body, headers, SECOND_PAGE_URL))
+        read = module.read_upgrade_inventory(session, ORG_ID, SITE_ID, page_limit=SMALL_PAGE_LIMIT)
+        assert session.links == [SECOND_PAGE_LINK]  # The read asked for page two one time.
+        assert [row["mac"] for row in read.records] == [SWITCH_ROW["mac"], AP_ROW["mac"]]  # Page one stays.
+        assert read.partial_reasons == [lost_page_reason(status)]  # The old read named no reason.
+        assert read.is_short is True  # The options page shows the banner.
+
+    def test_a_whole_paged_read_reports_no_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Every page arrives, so the read names no loss."""
+        body = json.dumps([JUNOS_ROW]).encode("utf-8")  # The third row.
+        session = plan_paged_read(monkeypatch, build_sdk_answer(200, body, PAGE_TWO_HEADERS, SECOND_PAGE_URL))
+        read = module.read_upgrade_inventory(session, ORG_ID, SITE_ID, page_limit=SMALL_PAGE_LIMIT)
+        assert [row["mac"] for row in read.records] == [SWITCH_ROW["mac"], AP_ROW["mac"], JUNOS_ROW["mac"]]
+        assert read.partial_reasons == []  # No banner and no refusal.
+
+    @pytest.mark.parametrize(("status", "body", "headers"), LOST_PAGES)
+    def test_the_view_reports_a_lost_later_page(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        status: int,
+        body: bytes,
+        headers: dict[str, str],
+    ) -> None:
+        """FR-001: the options page names the loss. It must not answer HTTP 500."""
+        session = plan_paged_read(monkeypatch, build_sdk_answer(status, body, headers, SECOND_PAGE_URL))
+        answer = module.build_options_view(session, ORG_ID, SITE_ID)  # The view of the options page.
+        assert answer["partial_reasons"] == [lost_page_reason(status)]  # The banner names the loss.
+
+    @pytest.mark.parametrize(("status", "body", "headers"), LOST_PAGES)
+    def test_the_save_refuses_a_read_that_lost_a_later_page(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        status: int,
+        body: bytes,
+        headers: dict[str, str],
+    ) -> None:
+        """FR-003: the save must not store a plan that holds the rows of page one only."""
+        session = plan_paged_read(monkeypatch, build_sdk_answer(status, body, headers, SECOND_PAGE_URL))
+        with pytest.raises(module.PartialInventoryError) as caught:  # The save stops.
+            module.build_options_record(session, ORG_ID, SITE_ID, THIN_BODY)
+        assert caught.value.reasons == [lost_page_reason(status)]  # The refusal names the lost page.
+
+    def test_a_record_that_is_not_a_map_fails_the_read_without_a_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A malformed row marks the read failed, so the page does not answer HTTP 500."""
+        body = json.dumps([SWITCH_ROW, "not a map"]).encode("utf-8")  # One row is text, not a map.
+        first = build_sdk_answer(200, body, JSON_TYPE, FIRST_PAGE_URL)  # No page headers, so no page two.
+        monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", lambda *args, **kwargs: first)
+        read = module.read_upgrade_inventory(PagedSession([]), ORG_ID, SITE_ID, page_limit=SMALL_PAGE_LIMIT)
+        assert (read.records, read.partial_reasons) == ([], [READ_FAILED_REASON])  # The read failed as one unit.
 
 
 class TestModuleProhibitions:

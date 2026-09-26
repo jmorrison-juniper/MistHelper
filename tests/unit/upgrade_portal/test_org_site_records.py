@@ -15,6 +15,8 @@ import pytest
 
 from src.upgrade_portal.upgrade.org_site_records import (
     NAME_LIMIT,
+    PARTIAL_REASONS_FIELD,
+    SHORT_MESSAGE,
     UNPLANNED_MESSAGE,
     UNREAD_MESSAGE,
     OrgSiteRecords,
@@ -27,11 +29,17 @@ THIRD_SITE = "site-three"  # The third selected site of each test.
 CANARY_OPTIONS = {"strategy": "canary", "canary_phases": [1, 10, 50, 100]}  # The choices of the operator.
 AP_TARGET = {"mac": "0011223344a1", "version_target": "0.15.1"}  # One planned access point.
 SWITCH_TARGET = {"mac": "0011223344b1", "version_target": "23.4R1.9"}  # One planned switch.
+SHORT_REASON = {"section": "upgrade_inventory", "reason": "page_count_mismatch", "http_status": 200}  # Issue #3424.
 
 
 def answered(*targets: dict[str, str]) -> dict[str, Any]:
     """Return the record of a site that answered, with the named targets."""
     return {"targets": list(targets), "options": dict(CANARY_OPTIONS), "warnings": []}  # The mapper shape.
+
+
+def short_marker() -> dict[str, Any]:
+    """Return the marker of a site whose inventory read stopped after the first page (issue #3424)."""
+    return {PARTIAL_REASONS_FIELD: [dict(SHORT_REASON)]}  # The route builds this marker for a short site.
 
 
 def upper_labels(site_ids: list[str]) -> list[str]:
@@ -191,3 +199,58 @@ def test_the_route_catches_the_refusal_as_a_value_error() -> None:
     with pytest.raises(ValueError, match=r"these sites: Empty Site\.") as caught:  # The family of the route.
         raise OrgSiteRefusal(UNREAD_MESSAGE, ["Empty Site"])  # The refusal that the route raises.
     assert caught.value.labels == ["Empty Site"]  # The caught error keeps the refused sites.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3424: a site whose inventory read stopped after the first page.
+# ---------------------------------------------------------------------------
+
+
+def test_a_short_site_gives_the_short_refusal() -> None:
+    """FR-007: a short site stops the save, and the refusal names the site."""
+    records = OrgSiteRecords()  # One save.
+    records.add(FIRST_SITE, answered(AP_TARGET))  # The first site answers with the choices of the operator.
+    records.add(SECOND_SITE, short_marker())  # The read of the second site lost one or more pages.
+    refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
+    assert isinstance(refusal, OrgSiteRefusal)  # The old save planned the first page of the site only.
+    assert str(refusal) == SHORT_MESSAGE.format(names="SITE-TWO")  # The text names the label of the short site.
+    assert records.short_sites == [SECOND_SITE]  # A caller can read the short sites.
+
+
+def test_a_short_site_adds_no_target_and_no_options() -> None:
+    """A short site is not an unread site, and it never gives the options of the plan."""
+    records = OrgSiteRecords()  # One save.
+    records.add(FIRST_SITE, short_marker())  # The read of the first site lost one or more pages.
+    assert records.unread_sites == []  # The unread message would tell the operator that the site holds no device.
+    assert records.short_sites == [FIRST_SITE]  # The short refusal names the site.
+    assert records.targets == []  # The first page of a short read never reaches the plan.
+    assert records.options is None  # The marker holds no options.
+
+
+def test_the_unread_refusal_comes_before_the_short_refusal() -> None:
+    """FR-008: an unread site hides each device of the site, so its refusal comes first."""
+    records = OrgSiteRecords()  # One save.
+    records.add(FIRST_SITE, short_marker())  # The read of the first site lost one or more pages.
+    records.add(SECOND_SITE, {})  # The read of the second site found no device.
+    refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
+    assert str(refusal) == UNREAD_MESSAGE.format(names="SITE-TWO")  # The unread site comes first.
+
+
+def test_the_short_refusal_comes_before_the_unplanned_refusal() -> None:
+    """FR-008: a short site comes before a site with no planned device, because a lost page can hold one."""
+    records = OrgSiteRecords()  # One save.
+    records.add(FIRST_SITE, answered(AP_TARGET))  # The first site holds a planned device.
+    records.add(SECOND_SITE, answered())  # The second site holds no planned device.
+    records.add(THIRD_SITE, short_marker())  # The read of the third site lost one or more pages.
+    refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
+    assert str(refusal) == SHORT_MESSAGE.format(names="SITE-THREE")  # The short site comes before the unplanned.
+
+
+@pytest.mark.parametrize("every_site_planned", [True, False], ids=["plain-save", "retry-save"])
+def test_a_short_site_stops_each_save(every_site_planned: bool) -> None:
+    """FR-009: a retry device can sit on a lost page, so a short site stops a retry too."""
+    records = OrgSiteRecords(every_site_planned)  # One save, or one retry save.
+    records.add(FIRST_SITE, short_marker())  # The read of the first site lost one or more pages.
+    records.add(SECOND_SITE, answered())  # The second site holds no planned device.
+    refusal = records.refusal(upper_labels)  # Build the refusal with a label for each site.
+    assert str(refusal) == SHORT_MESSAGE.format(names="SITE-ONE")  # Not the old refusal of the route.

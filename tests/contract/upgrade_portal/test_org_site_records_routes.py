@@ -12,6 +12,7 @@ Why:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from copy import deepcopy
@@ -27,7 +28,7 @@ from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.runtime import identity
 from src.upgrade_portal.upgrade import options as option_rules
-from src.upgrade_portal.upgrade.org_site_records import UNPLANNED_MESSAGE, UNREAD_MESSAGE
+from src.upgrade_portal.upgrade.org_site_records import SHORT_MESSAGE, UNPLANNED_MESSAGE, UNREAD_MESSAGE
 from tests.contract.upgrade_portal.test_org_advanced_options import (
     AP_ONE,
     AP_TARGET,
@@ -56,6 +57,9 @@ REFUSAL_CODE = "org_upgrade_options_invalid"  # The error code of each refused s
 UNREAD_START = UNREAD_MESSAGE.split("{names}", maxsplit=1)[0]  # The fixed text before the names.
 UNPLANNED_START = UNPLANNED_MESSAGE.split("{names}", maxsplit=1)[0]  # The fixed text before the names.
 MALFORMED_BODY = '{"selected_types": ["ap"], "strategy": "canary", bad json'  # No JSON reader accepts it.
+OPTIONS_PAGE = "/upgrade/org/options"  # The multi-site options page.
+PARTIAL_BANNER_PATTERN = r'data-testid="org-upgrade-partial-inventory">\s*<span>(.*?)</span>'  # Issue #3424.
+SHORT_REASON = {"section": "upgrade_inventory", "reason": "page_count_mismatch", "http_status": 200}  # Issue #3424.
 CANARY_PHASES = [1, 10, 50, 100]  # The phases of the canary plan below.
 CANARY_PLAN = {  # A canary plan of the access points and the switches, as the page script posts it.
     "selected_types": ["ap", "switch"],
@@ -77,20 +81,30 @@ class SiteApp:
     store: RecordStore  # The durable store of every operation.
     failed_reads: set[str] = field(default_factory=set)  # The sites whose inventory read fails at the save.
     failed_views: set[str] = field(default_factory=set)  # The sites whose view read fails at the save.
+    short_views: set[str] = field(default_factory=set)  # Issue #3424: the sites whose view read is short.
+    short_reads: set[str] = field(default_factory=set)  # Issue #3424: the sites whose save read is short.
 
 
-def empty_aware_builder(devices: Mapping[str, list[dict[str, str]]], failed_reads: set[str]) -> Any:
+def empty_aware_builder(
+    devices: Mapping[str, list[dict[str, str]]],
+    failed_reads: set[str],
+    short_reads: set[str],
+) -> Any:
     """Return the stand-in of the site option mapper, with the empty-record rule of the shipped mapper.
 
     Why:
         `build_options_record` returns an empty record when the inventory
         read finds no device. A site with no device and a failed read give
-        the same answer, so the stand-in gives that answer for both.
+        the same answer, so the stand-in gives that answer for both. Issue
+        #3424: the shipped mapper refuses a short read, so the stand-in
+        raises the same refusal for a short site.
     """
 
     def build(cloud_session: Any, org_id: str, site_id: str, body: Mapping[str, Any]) -> dict[str, Any]:
         """Build the targets and the options of one site without a cloud read."""
         del cloud_session, org_id  # The stand-in reads no inventory from the cloud.
+        if site_id in short_reads:  # Issue #3424: the save read of this site stopped after the first page.
+            raise option_rules.PartialInventoryError(site_id, [dict(SHORT_REASON)])  # The shipped refusal.
         if site_id in failed_reads or not devices[site_id]:  # The shipped mapper found no device.
             return {}  # The shipped empty record, which holds no targets and no options.
         entries = option_rules.build_targets(devices[site_id], list(body["targets"]))  # One entry for each choice.
@@ -122,7 +136,9 @@ def site_app(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, fake_site_
         del cloud_session, org_id  # The stand-in reads no inventory from the cloud.
         if site_id in built.failed_views:  # The view read of this site fails.
             return {"targets": [], "versions_by_model": {}}  # The shape of `build_options_view` after a failed read.
-        return {"targets": deepcopy(devices[site_id])}  # A copy, so a page read never changes the inventory.
+        if site_id in built.short_views:  # Issue #3424: the view read of this site stopped after the first page.
+            return {"targets": deepcopy(devices[site_id]), "partial_reasons": [dict(SHORT_REASON)]}  # A short view.
+        return {"targets": deepcopy(devices[site_id]), "partial_reasons": []}  # A copy, and a complete read.
 
     portal_app.config.update(  # Replace each cloud edge with a stand-in.
         {
@@ -133,7 +149,9 @@ def site_app(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, fake_site_
             "RUN_STORE": store,  # Every operation stays in memory.
             "AGGREGATE_UPGRADE_SERVICE": AggregateUpgradeService(),  # The production build, which calls no cloud.
             org_upgrade.OPTIONS_VIEW_CONFIG_KEY: options_view,  # The inventory of the options page.
-            org_upgrade.OPTIONS_BUILDER_CONFIG_KEY: empty_aware_builder(devices, built.failed_reads),  # The save.
+            org_upgrade.OPTIONS_BUILDER_CONFIG_KEY: empty_aware_builder(  # The save.
+                devices, built.failed_reads, built.short_reads
+            ),
             "MIST_SELF_READER": lambda cloud_session: {"email": CLOUD_ACCOUNT},  # No self read.
         }
     )
@@ -296,3 +314,62 @@ def test_a_failed_name_read_names_each_site_by_its_identifier(site_app: SiteApp,
     with signed_client(site_app, (site_app.first_site, EMPTY_SITE)) as client:  # The empty site comes last.
         message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
     assert message == UNREAD_MESSAGE.format(names=EMPTY_SITE)  # The identifier replaces the unread name.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3424: a site whose inventory read stopped after the first page.
+# ---------------------------------------------------------------------------
+
+
+def partial_banner_text(page: str) -> str | None:
+    """Return the text of the partial inventory banner, or None when the page shows no banner."""
+    match = re.search(PARTIAL_BANNER_PATTERN, page, flags=re.DOTALL)  # The one banner of the page.
+    return " ".join(match.group(1).split()) if match else None  # Join the wrapped template lines.
+
+
+def test_the_options_page_names_each_short_site(site_app: SiteApp) -> None:
+    """FR-006: the page warns the operator before the save, and names only the short site."""
+    site_app.short_views.add(SITE_TWO)  # The view read of the second site stopped after the first page.
+    with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
+        answer = client.get(OPTIONS_PAGE)  # Open the options page.
+    assert answer.status_code == 200  # A short read never refuses the page.
+    text = partial_banner_text(answer.get_data(as_text=True))  # The banner above the device tables.
+    assert text is not None and SITE_TWO_NAME in text  # The old page showed no warning.
+    assert FIRST_NAME not in text  # A site with a complete read stays out of the banner.
+    assert "Reload this page before you save the options." in text  # The banner states the next step.
+
+
+def test_the_options_page_shows_no_banner_after_complete_reads(site_app: SiteApp) -> None:
+    """FR-006: complete reads give no warning."""
+    with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites with complete reads.
+        answer = client.get(OPTIONS_PAGE)  # Open the options page.
+    assert answer.status_code == 200  # The page opens.
+    assert partial_banner_text(answer.get_data(as_text=True)) is None  # No banner.
+
+
+def test_a_short_view_stops_the_save_and_names_the_site(site_app: SiteApp) -> None:
+    """FR-007 and FR-010: the old save planned the first page of the site only. The new save names the site."""
+    site_app.short_views.add(SITE_TWO)  # The view read of the second site stopped after the first page.
+    with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
+        message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
+        assert message == SHORT_MESSAGE.format(names=SITE_TWO_NAME)  # The refusal names the short site.
+        assert saved_options(client) is None  # The confirm page has no options to show.
+    assert site_app.store.records == {}  # No plan exists, so no device of a lost page can drop out.
+
+
+def test_a_short_save_read_stops_the_save_and_names_the_site(site_app: SiteApp) -> None:
+    """FR-007: a complete view read and a short save read also stop the save, because the save read decides."""
+    site_app.short_reads.add(SITE_TWO)  # The page read was complete, and the read at the save is short.
+    with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites that hold devices.
+        message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
+        assert message == SHORT_MESSAGE.format(names=SITE_TWO_NAME)  # Not the single-site text "this site".
+        assert saved_options(client) is None  # The confirm page has no options to show.
+    assert site_app.store.records == {}  # No plan exists, so no device of a lost page can drop out.
+
+
+def test_an_unread_site_comes_before_a_short_site(site_app: SiteApp) -> None:
+    """FR-008: the unread refusal of issue #3389 comes first, because an unread site hides each device."""
+    site_app.short_views.add(SITE_TWO)  # The view read of the second site stopped after the first page.
+    with signed_client(site_app, (site_app.first_site, SITE_TWO, EMPTY_SITE)) as client:  # One short, one unread.
+        message = refused_message(client, CANARY_PLAN)  # The save must stop before the confirm page.
+    assert message == UNREAD_MESSAGE.format(names=EMPTY_NAME)  # The unread site comes first.

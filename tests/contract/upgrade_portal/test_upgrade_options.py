@@ -1741,3 +1741,150 @@ def test_a_type_with_a_warning_shows_the_warning(
         "switch": options_module.WARNING_NO_COMMON_CANDIDATE.format(device_type=switch_name),
     }
     assert type_notes(page) == expected  # Only the switch note changes, and it names the missing version.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3424: a short inventory read never looks complete
+# ---------------------------------------------------------------------------
+
+PARTIAL_BANNER = 'data-testid="upgrade-partial-inventory"'  # The Caution banner above the device table.
+SHORT_REASON: dict[str, Any] = {  # The reason of a read that stops after the first page.
+    "section": "upgrade_inventory",  # The upgrade inventory read owns the reason.
+    "reason": "page_count_mismatch",  # The row count is less than the reported total.
+    "http_status": 200,  # The cloud answered the first page.
+}
+READ_FAILED_REASON: dict[str, Any] = {  # The reason of a read that raised before a page answered.
+    "section": "upgrade_inventory",  # The upgrade inventory read owns the reason.
+    "reason": "read_failed",  # The read raised.
+    "http_status": 0,  # No answer, so no status.
+}
+
+
+class PartialOptionsView(StandInOptionsView):
+    """Answer the view of a read that lost data, with the reasons of that read.
+
+    Why:
+        Issue #3424. `build_options_view` dropped the partial reasons, so the
+        page showed an incomplete device table with no warning. This stand-in
+        answers the reasons beside the rows, as the repaired builder does.
+    """
+
+    def __init__(self, rows: list[dict[str, Any]], reasons: list[dict[str, Any]]) -> None:
+        """Build the stand-in with its rows and its reasons.
+
+        Args:
+            rows: The device rows that the read found.
+            reasons: The partial reasons of the read.
+        """
+        super().__init__()  # Start with no recorded call.
+        self.rows = rows  # The rows of the first page.
+        self.reasons = reasons  # The reasons that the page must show.
+
+    def __call__(self, session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+        """Answer the rows, the version list, and the reasons of one read.
+
+        Args:
+            session: The cloud session. This stand-in reads none of it.
+            org_id: The organization that holds the site.
+            site_id: The site under upgrade.
+
+        Returns:
+            The view shape of `build_options_view` after a read that lost data.
+        """
+        self.calls.append((org_id, site_id))  # The test can prove the site scoped the read.
+        return {
+            "targets": [dict(row) for row in self.rows],  # A copy, so a page read never changes the stand-in.
+            "versions_by_model": {PROBE_MODEL: list(PROBE_VERSIONS)},  # The versions of the probe model.
+            "partial_reasons": [dict(reason) for reason in self.reasons],  # The reasons of the read.
+        }
+
+
+@pytest.mark.parametrize(
+    ("rows", "reason"),
+    [([PROBE_DEVICE_ROW], SHORT_REASON), ([], READ_FAILED_REASON)],
+    ids=["short-read", "failed-read"],
+)
+def test_a_view_with_a_partial_reason_shows_the_banner(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    rows: list[dict[str, Any]],
+    reason: dict[str, Any],
+) -> None:
+    """FR-002: the page warns the operator that the device table can leave out devices.
+
+    Why:
+        Issue #3424. The page showed the rows of the first page as a complete
+        table. The operator saved a plan that left out the devices of the lost
+        pages, and no message named those devices.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = PartialOptionsView(rows, [reason])  # The read lost data.
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks options.
+    answer = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id))  # Open the options page.
+    page = answer.get_data(as_text=True)  # The page that the browser receives.
+    assert answer.status_code == OK_STATUS  # A short read never refuses the page.
+    assert PARTIAL_BANNER in page  # The old page showed no warning.
+    assert "Reload this page before you save the options." in page  # The banner states the next step.
+
+
+def test_a_short_view_keeps_each_row_of_the_read(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """D4: the banner never hides a device that the read found."""
+    upgrade_app.config[OPTIONS_VIEW_KEY] = PartialOptionsView([PROBE_DEVICE_ROW], [SHORT_REASON])  # A short read.
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks options.
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)  # The page.
+    assert f'data-version-for="{PROBE_MAC}"' in page  # The device of the first page keeps its control.
+
+
+def test_a_whole_view_shows_no_banner(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """FR-002: a view with no reason shows no banner, and an older view with no reason field shows none."""
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()  # The view holds no reason field.
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks options.
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)  # The page.
+    assert PARTIAL_BANNER not in page  # A complete read gives no warning.
+
+
+def test_a_saved_choice_keeps_the_banner_of_the_fresh_read(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A saved choice outranks the fresh rows, and the banner still follows the fresh read."""
+    upgrade_app.config[OPTIONS_VIEW_KEY] = PartialOptionsView([PROBE_DEVICE_ROW], [SHORT_REASON])  # A short read.
+    saved = [dict(PROBE_DEVICE_ROW, version_target=PROBE_VERSION_TARGET)]  # The choice of an earlier save.
+    run_id = seed_run(run_store, "pre_capture_done", targets=saved)  # The run holds its own rows.
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)  # The page.
+    assert PARTIAL_BANNER in page  # The next save reads the site again, so the warning applies.
+
+
+def test_a_short_read_at_the_save_answers_bad_option_and_keeps_the_record(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FR-003, FR-004, and FR-011: the save stops, the run keeps its targets, and no version read runs.
+
+    Why:
+        Issue #3424. The old save stored the devices of the first page only.
+        The devices of the lost pages then stayed on the old firmware, and no
+        record named them.
+    """
+    short_read = options_module.InventoryRead([dict(PROBE_INVENTORY_ROW)], [dict(SHORT_REASON)])  # A short read.
+    version_reads: list[Any] = []  # Each version read of the save.
+    monkeypatch.setattr(options_module, "read_upgrade_inventory", lambda *args, **kwargs: short_read)  # No cloud.
+    monkeypatch.setattr(options_module, "read_model_versions", lambda *args: version_reads.append(args) or {})
+    old_targets = [{"mac": PROBE_MAC, "version_target": PROBE_VERSION_TARGET}]  # The choice of an earlier save.
+    run_id = seed_run(run_store, "pre_capture_done", targets=old_targets)  # The run holds its own rows.
+    answer = save_options(upgrade_client, run_id, THIN_BODY)  # The operator saves the options.
+    assert answer.status_code == BAD_REQUEST_STATUS  # The save stops.
+    assert read_error_code(answer) == BAD_OPTION_CODE  # The documented code, so the contract needs no change.
+    assert answer.get_json()["error"]["message"] == options_module.PARTIAL_INVENTORY_MESSAGE  # The next step.
+    assert run_store.runs[run_id]["targets"] == old_targets  # The refused save kept the saved choice.
+    assert version_reads == []  # The refusal came before the version read.

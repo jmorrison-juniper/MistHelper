@@ -34,6 +34,7 @@ from ...runtime import identity, lock
 from ...upgrade.options import (
     ORG_OPTION_HELP,
     BadOptionError,
+    PartialInventoryError,
     build_options,
     build_options_record,
     build_options_view,
@@ -54,7 +55,7 @@ from ...upgrade.org_devices import OrgDeviceRows  # Issue #3249: one row for eac
 from ...upgrade.org_postcheck_view import OrgPostCheckView  # Issue #3244: the post-check card of each site.
 from ...upgrade.org_precheck import PRECHECK_FIELD, OrgPrecheckGate, OrgPrecheckState  # Issue #3243: the gate.
 from ...upgrade.org_retry import OrgRetryPlan, OrgRetrySelection  # Issue #3247: the devices of one retry.
-from ...upgrade.org_site_records import OrgSiteRecords  # Issue #3389: the record of each selected site.
+from ...upgrade.org_site_records import PARTIAL_REASONS_FIELD, OrgSiteRecords  # Issue #3389 and issue #3424.
 from ...upgrade.org_versions import OrgVersionRefresh  # Issue #3249: the bounded running version reads.
 from ..factory import build_error_envelope, json_error  # Issue #3242: a replay refusal can carry details.
 from . import select as select_routes
@@ -488,6 +489,37 @@ def _complete_aggregate_options(
     return {"targets": targets, "options": options, "selected_types": list(selected)}  # Return detached values.
 
 
+def _site_view_gap(site_id: str, full_view: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return the record of a site view that lost data, or None for a complete view.
+
+    Why:
+        Issue #3389. A failed view read gives a view with no device. The
+        narrow step of a retry then hides the loss, because a retry skips a
+        site with no planned device. An empty view therefore gives the empty
+        record of a failed read, and the save names the site.
+
+        Issue #3424. A view that holds devices and a partial reason stopped
+        after the first page. Those devices look like a complete list, so the
+        view gives a marker that `OrgSiteRecords` names in the short refusal.
+        The mapper then reads no inventory a second time.
+
+    Args:
+        site_id: The site of the view.
+        full_view: The device view of the site, before a retry narrows it.
+
+    Returns:
+        An empty record, a marker that holds the partial reasons, or None.
+    """
+    if not full_view.get("targets"):  # The inventory read found no device, or the read failed.
+        logger.warning("The option view of site %s holds no device", site_id)  # The save names this site.
+        return {}  # The empty record of a failed read, which `OrgSiteRecords` refuses in a retry too.
+    reasons = upgrade_routes.view_partial_reasons(full_view)  # Issue #3424: the gaps of the view read.
+    if not reasons:  # A complete read, or an older builder that answers no reason field.
+        return None  # The caller builds the record of the site.
+    logger.warning("The option view of site %s holds a short device list", site_id)  # The save names this site.
+    return {PARTIAL_REASONS_FIELD: reasons}  # The marker of a short read, which a retry refuses too.
+
+
 def _site_option_record(
     cloud_session: Any,
     org_id: str,
@@ -498,23 +530,26 @@ def _site_option_record(
     """Build one site's options through the existing option mapper.
 
     Why:
-        Issue #3389. A failed view read gives a view with no device. The
-        narrow step of a retry then hides the loss, because a retry skips a
-        site with no planned device. An empty view therefore returns the empty
-        record of a failed read, and the save names the site. The mapper then
-        reads no inventory a second time.
+        Issue #3389 and issue #3424. A view that lost data gives the record of
+        `_site_view_gap`. The save read can also stop after the first page.
+        The mapper then raises `PartialInventoryError`, and this function
+        gives the same marker. Without the marker, the generic refusal of
+        `save_options` would show the single-site text "this site".
     """
     logger.info("Read aggregate upgrade options for site %s", site_id)  # Log before the inventory read.
     full_view = aggregate_options_view(cloud_session, org_id, site_id)  # Every device of the site.
-    if not full_view.get("targets"):  # The inventory read found no device, or the read failed.
-        logger.warning("The option view of site %s holds no device", site_id)  # The save names this site.
-        return {}  # The empty record of a failed read, which `OrgSiteRecords` refuses in a retry too.
+    gap = _site_view_gap(site_id, full_view)  # An empty record, a short marker, or None for a complete view.
+    if gap is not None:  # The view read lost data, so the save names this site.
+        return gap  # `OrgSiteRecords` refuses an empty record and a short marker in a retry too.
     view = narrowed_view(full_view)  # Issue #3247: a retry keeps only its failed devices.
     rows = _selected_target_rows(view, options, selected)  # Select explicit targets with a chosen version.
     logger.debug("The site option view selected %s target(s)", len(rows))  # Log after the transformation.
     logger.info("Validate aggregate upgrade options for site %s", site_id)  # Log before validation.
     try:  # The shared mapper names the controls of the single-site page.
         built = aggregate_options_record(cloud_session, org_id, site_id, _site_option_body(options, rows))
+    except PartialInventoryError as error:  # Issue #3424: the save read stopped after the first page.
+        logger.warning("The save read of site %s holds a short device list", site_id)  # The save names this site.
+        return {PARTIAL_REASONS_FIELD: list(error.reasons)}  # The same marker as a short view read.
     except BadOptionError as error:  # Issue #3273: name the control that the multi-site page paints.
         logger.warning("The option mapper refused the options of site %s", site_id)  # Log the refusal.
         raise OrgOptionRefusal.translate(error, view.get("targets", [])) from error  # The rows map a model to a type.
@@ -849,7 +884,32 @@ def options_page() -> str | tuple[Response, int]:
         options=options_view(stored_options() or prefill),
         retry=retry,
         ssr_present=OrgAdvancedRules.holds_router(device_views),  # Issue #3383: the release train control.
+        partial_sites=_partial_site_names(device_views),  # Issue #3424: the sites that the Caution banner names.
     )
+
+
+def _partial_site_names(device_views: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Return the name of each site whose device view holds a partial reason.
+
+    Why:
+        Issue #3424. A short read shows the devices of the first page as a
+        complete table. The page names each such site in a Caution banner, so
+        the operator reloads the page before the save.
+
+    Args:
+        device_views: The device view of each selected site.
+
+    Returns:
+        The name of each site with a partial read, or its identifier, in the order of the selection.
+    """
+    logger.info("Find the sites with a partial read among %s device view(s)", len(device_views))  # Log before.
+    names = [
+        str(view["site"].get("name") or view["site"].get("site_id", ""))  # A site with no name shows its identifier.
+        for view in device_views  # One view for each selected site, in the order of the selection.
+        if view.get(PARTIAL_REASONS_FIELD)  # Only a read that lost data.
+    ]
+    logger.debug("The options page names %s site(s) with a partial read", len(names))  # Log after the scan.
+    return names  # The template joins the names in one banner.
 
 
 def _option_device_views(org_id: str, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
