@@ -175,7 +175,6 @@ def test_no_openapi_crossref_placeholders() -> None:
             continue
         if placeholder.search(body):
             failures.append(path.relative_to(REPOSITORY_ROOT).as_posix())
-    assert not failures, (
-        "Unresolved OpenAPI cross-reference placeholder in:\n"
-        + "\n".join(f"  {item}" for item in sorted(failures))
+    assert not failures, "Unresolved OpenAPI cross-reference placeholder in:\n" + "\n".join(
+        f"  {item}" for item in sorted(failures)
     )
