@@ -124,13 +124,17 @@ into this repository.
 
 | Change | File |
 | - | - |
-| The baseline starts as an exact copy of the devtools file at the pinned release. | `.github/test-quality-baseline.json` |
+| The baseline started as a byte-identical copy of the devtools file at the pinned release. A `--write-baseline` run then removed 335 entries that matched no current finding. It added no entry. | `.github/test-quality-baseline.json` |
 | Each analyzer run in the ratchet job gives `--baseline` with that file. A change to the file makes the job check the whole suite. | `.github/workflows/ci.yml` |
 | Git ignores the report folder of the analyzer. | `.gitignore` |
 | A guard runs the ratchet script with a fake `subprocess` module and asks git which report paths it ignores. | `tests/guardrails/test_quality_ratchet_files.py` |
 
 `.pre-commit-config.yaml` runs no ratchet hook, so it did not change.
 `documentation/quality-gates.md` tells how to prune or rewrite the baseline.
+
+Of the 335 removed entries, 7 named two test files that moved to the devtools
+repository. The other 328 named findings that later changes repaired. The gate
+now reports a finding that comes back at one of those places.
 
 A copy of `baseline.json` stays in the devtools package. MistHelper no longer
 reads that copy, so a later devtools release can remove it.

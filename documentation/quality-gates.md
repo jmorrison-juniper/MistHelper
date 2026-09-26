@@ -31,9 +31,10 @@ the repository root.
 test-quality-analyzer --prune-baseline --baseline .github/test-quality-baseline.json
 ```
 
-To accept each current finding, use `--write-baseline` instead of
-`--prune-baseline`. Examine each new entry in the pull request, because the gate
-stops reporting that finding.
+To make the baseline hold the current findings and nothing else, use
+`--write-baseline` instead of `--prune-baseline`. That command also removes each
+entry that matches no current finding. Examine each new entry in the pull
+request, because the gate stops reporting that finding.
 
 Warning: do not add `--roots` to either command, because that can delete most
 of the baseline. Each command keeps only the entries for the files that it
