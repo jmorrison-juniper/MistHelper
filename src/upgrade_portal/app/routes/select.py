@@ -49,7 +49,13 @@ from urllib.parse import quote, urlencode  # Escapes values inside links and pag
 from flask import Blueprint, Response, current_app, flash, jsonify, render_template, request, session  # The framework.
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
 
-from ...capture.devices import normalize_device_mac  # Match inventory rows to the upgrade target records.
+from ...capture.devices import (  # Issue #3438: the page walk and the page guard of issue #3424.
+    HTTP_STATUS_NONE,
+    DeviceRead,
+    guard_page_count,
+    normalize_device_mac,
+    read_every_page,
+)
 from ...runtime import identity, lock  # The session guard, and the site lock that FR-072 to FR-083 fix.
 from ...runtime.cloud_cache import CloudReadCache  # Issue #3210: reuse one organization list read briefly.
 from ...upgrade.options import (  # Reuse the upgrade target rules.
@@ -158,6 +164,10 @@ CLOUD_READS: dict[str, tuple[str, str]] = {
     "listOrgSites": ("mistapi.api.v1.orgs.sites", "listOrgSites"),  # The site records of one organization.
     "listOrgSiteStats": ("mistapi.api.v1.orgs.stats", "listOrgSiteStats"),  # The device count of each site.
 }
+
+# Issue #3438. A read with no cloud call or no session names this reason, so a
+# page can tell a read that did not run from an organization with no site.
+READ_NOT_RUN = "read_not_run"  # The reason word of a read that cannot start.
 
 # WHY: Issue #3210. The picker, the site post, and the multi-site options steps
 # each read both lists again. One minute of reuse for the same operator saves a
@@ -317,7 +327,7 @@ def cloud_reader() -> Callable[..., Any]:
     return injected_seam(MIST_READER_KEY) or default_cloud_read  # The injection wins over the cloud.
 
 
-def default_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
+def default_cloud_read(name: str, **parameters: Any) -> DeviceRead:
     """Read one paged cloud list through the Mist software development kit.
 
     Why:
@@ -325,42 +335,56 @@ def default_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
         can answer any read by name. This function turns that name into the one
         call that owns it, and it collects every page before it answers.
 
+        Issue #3438. The answer carries the partial reasons beside the records,
+        so the page can name a read that lost a page. The cache keeps a whole
+        read only. A kept short read would show the same short list for one
+        minute, and a reload could not recover the missing sites.
+
     Args:
         name: The name of the cloud read.
         **parameters: The call parameters, such as the organization identifier.
 
     Returns:
-        Every record of the read, or an empty list when the read cannot run.
+        The records and the partial reasons of the read. A read that cannot run
+        holds no record and the reason `read_not_run`.
     """
     target = CLOUD_READS.get(name)  # An unknown name reads as None.
     record = identity.current_session()  # The cloud session of this operator.
     if target is None or record is None:  # A caller defect, or a request with no session.
         logger.warning("select: no cloud read is bound to the name %s", name)  # Name the read, never a token.
-        return []  # An empty list keeps the page working and shows no site.
+        not_run = {"section": name, "reason": READ_NOT_RUN, "http_status": HTTP_STATUS_NONE}  # No call, no status.
+        return DeviceRead(name, [], [not_run])  # No row, and a reason that names the read that did not run.
     org_id = str(parameters.get(ORG_FIELD, ""))  # Every read of this module is organization-scoped.
     key = (record.owner.key, name, org_id, id(record.cloud_session))  # One operator and one credential.
     kept = CLOUD_READ_CACHE.get(key)  # Issue #3210: a fresh answer saves one paged cloud read.
     if kept is not None:  # The same operator read this list less than a minute ago.
-        return kept  # A copy of the kept records.
+        logger.debug("select: reuse %s kept record(s) of %s", len(kept), name)  # Log the count of the kept read.
+        return DeviceRead(name, kept, [])  # The cache holds whole reads only, so a kept read names no fault.
     call: Any = getattr(import_module(target[0]), target[1])  # The software development kit owns the call.
     logger.info("select: read %s of organization %s from the cloud", name, org_id)  # Log before the read.
     page = call(record.cloud_session, org_id=org_id, limit=SITE_LIST_LIMIT)  # The first page of the read.
-    records = collect_pages(record.cloud_session, page, name)  # Every later page travels through the same helper.
-    CLOUD_READ_CACHE.put(key, records)  # Keep a non-empty answer for the next view.
-    logger.debug("select: read %s record(s) of %s", len(records), name)  # Log the count after the read.
-    return records  # Every record of every page.
+    read = collect_pages(record.cloud_session, page, name)  # Every later page travels through the same walk.
+    if not read.partial_reasons:  # Issue #3438: a read that lost a page must not stay for one minute.
+        CLOUD_READ_CACHE.put(key, read.records)  # Keep a whole, non-empty answer for the next view.
+    logger.debug("select: read %s record(s) of %s", len(read.records), name)  # Log the count after the read.
+    return read  # The records and the reasons of the read.
 
 
-def collect_pages(cloud_session: Any, response: Any, name: str) -> list[dict[str, Any]]:
+def collect_pages(cloud_session: Any, response: Any, name: str) -> DeviceRead:
     """Gather every page of one cloud list response.
 
     Why:
-        A large organization holds more sites than one page carries. The
-        pagination helper of the software development kit returns an empty list
-        when the answer holds an unexpected shape. This function therefore keeps
-        the first page whenever the helper returns less than the first page did.
-        A silent fall back would show a short site list that reads as whole.
-        The fall back writes a log record that names the read and both counts.
+        A large organization holds more sites than one page carries. Issue
+        #3438: `mistapi.get_all` adds a later page with no status check, so a
+        refused page added nothing. The picker then showed a short site list
+        that read as whole. This function uses the page walk of issue #3424.
+        The walk stops at the first lost page, keeps the rows of the pages
+        before it, and names the loss.
+
+        The page guard names each fault of the first page: an error status, no
+        status, a body that the portal cannot read, and a count below the total
+        in the body. A fault of the first page wins, because it explains the
+        missing rows first.
 
     Args:
         cloud_session: The Mist session that made the call.
@@ -368,22 +392,17 @@ def collect_pages(cloud_session: Any, response: Any, name: str) -> list[dict[str
         name: The name of the cloud read. The log record names it.
 
     Returns:
-        Every record of every page.
+        The records of each page that arrived, and the partial reasons.
     """
-    first = as_records(getattr(response, "data", None))  # The first page, whatever the helper does next.
-    pagination: Any = getattr(import_module("mistapi"), "get_all", None)  # The helper walks the later pages.
-    if pagination is None:  # An older software development kit holds no helper.
-        return first  # One page is still a correct answer for a small organization.
-    gathered = as_records(pagination(mist_session=cloud_session, response=response))  # Every page, in one call.
-    if len(gathered) < len(first):  # A shrunken answer means the helper gave up.
-        logger.warning(
-            "select: the page walk of %s returned %s record(s) against a first page of %s",
-            name,
-            len(gathered),
-            len(first),
-        )
-        return first  # The first page holds every record that this call can report.
-    return gathered
+    logger.info("select: walk each page of %s", name)  # Log before the page walk.
+    walk = read_every_page(cloud_session, name, response)  # Each later page, with a status check for each one.
+    records = as_records(walk.records)  # Drop an entry that is not a record.
+    reasons = guard_page_count(name, len(records), response) or walk.partial_reasons  # A first-page fault wins.
+    if reasons:  # The read lost a page, so the list is short.
+        codes = ", ".join(str(entry.get("reason", "")) for entry in reasons)  # The reason codes only, no record.
+        logger.warning("select: the read %s is not whole: %s", name, codes)  # Name the read and the reason codes.
+    logger.debug("select: the page walk of %s holds %s record(s)", name, len(records))  # Log the count only.
+    return DeviceRead(name, records, reasons)  # The rows that arrived, and each fault.
 
 
 def as_records(payload: Any) -> list[dict[str, Any]]:
@@ -885,7 +904,44 @@ def build_site_row(site: dict[str, Any], counts: dict[str, int], locks: dict[str
     }
 
 
-def build_site_rows(org_id: str) -> list[dict[str, Any]]:
+@dataclass(frozen=True, slots=True)
+class SiteList:
+    """The rows of the site picker, and the completeness of each cloud read.
+
+    Why:
+        Issue #3438. A lost page of the site read or of the device count read
+        left a short list that read as whole. The rows therefore travel with
+        one flag for each read. The page shows a Caution note for each read
+        that lost a page, and the site list answer names both flags.
+
+    Attributes:
+        rows: One row for each site, in cloud order.
+        sites_complete: True when the site read is whole.
+        counts_complete: True when the device count read is whole.
+    """
+
+    rows: list[dict[str, Any]]  # The rows that the picker shows. The row shape does not change.
+    sites_complete: bool = True  # False when the site read lost a page.
+    counts_complete: bool = True  # False when the device count read lost a page.
+
+    @staticmethod
+    def read_is_whole(answer: Any) -> bool:
+        """Report whether one read answer names no fault.
+
+        Why:
+            A test stand-in can answer a plain list, which holds no partial
+            reason. A plain list therefore reads as a whole read.
+
+        Args:
+            answer: The value that one cloud read returned.
+
+        Returns:
+            True when the answer holds no partial reason.
+        """
+        return not getattr(answer, "partial_reasons", None)  # No reasons, or no reason field, reads as whole.
+
+
+def build_site_rows(org_id: str) -> SiteList:
     """Build one row for each site of one organization.
 
     Why:
@@ -897,13 +953,24 @@ def build_site_rows(org_id: str) -> list[dict[str, Any]]:
         org_id: The organization to read.
 
     Returns:
-        One row for each site.
+        One row for each site, and one completeness flag for each cloud read.
     """
+    logger.info("select: build the site rows of organization %s", org_id)  # Log before the three reads.
     read = cloud_reader()  # One seam for both cloud reads.
-    sites = as_records(read("listOrgSites", org_id=org_id))  # The name and the identifier of each site.
-    counts = build_count_index(as_records(read("listOrgSiteStats", org_id=org_id)))  # The device count of each site.
+    site_answer = read("listOrgSites", org_id=org_id)  # The name and the identifier of each site.
+    count_answer = read("listOrgSiteStats", org_id=org_id)  # The device count of each site.
+    sites = as_records(site_answer)  # The site records, whatever shape the reader answered.
+    counts = build_count_index(as_records(count_answer))  # The device count of each site.
     locks = read_site_locks(org_id, [str(site.get("id", "")) for site in sites])  # An absent entry reads unknown.
-    return [build_site_row(site, counts, locks) for site in sites]  # One row for each site, in cloud order.
+    rows = [build_site_row(site, counts, locks) for site in sites]  # One row for each site, in cloud order.
+    built = SiteList(rows, SiteList.read_is_whole(site_answer), SiteList.read_is_whole(count_answer))  # Issue #3438.
+    logger.debug(  # Log the count and the two flags, never a site record.
+        "select: built %s site row(s). Site list whole: %s. Device counts whole: %s",
+        len(rows),
+        built.sites_complete,
+        built.counts_complete,
+    )
+    return built  # The rows and the completeness of each read.
 
 
 def apply_text_filter(rows: list[dict[str, Any]], needle: str) -> list[dict[str, Any]]:
@@ -1626,15 +1693,20 @@ def sites_page() -> str:
     chosen = resolve_org(None)  # None means the operator has picked no organization yet.
     if chosen is None:  # The picker cannot list a site without an organization.
         return render_page(SITE_TEMPLATE, sites=[], org_id="", org_name="")  # An empty table, and no fault.
-    rows = apply_text_filter(build_site_rows(chosen), request.args.get(FILTER_FIELD, ""))  # The optional filter.
+    logger.info("select: show the site picker of organization %s", chosen)  # Log before the three reads.
+    site_list = build_site_rows(chosen)  # The rows and the completeness of each cloud read.
+    rows = apply_text_filter(site_list.rows, request.args.get(FILTER_FIELD, ""))  # The optional filter.
     name = org_display_name(chosen)  # The heading names the organization, not only its identifier.
+    logger.debug("select: the site picker shows %s row(s)", len(rows))  # Log the count after the filter.
     return render_page(
         SITE_TEMPLATE,
-        sites=rows,
-        org_id=chosen,
-        org_name=name,
-        selected_mode=selected_mode() or SINGLE_SITE_MODE,
-        selected_site_ids=selected_site_ids(),
+        sites=rows,  # The rows after the optional filter.
+        org_id=chosen,  # The chosen organization.
+        org_name=name,  # The heading text.
+        selected_mode=selected_mode() or SINGLE_SITE_MODE,  # The mode picks the table or the check boxes.
+        selected_site_ids=selected_site_ids(),  # The multi-site choice that the operator saved before.
+        site_list_partial=not site_list.sites_complete,  # Issue #3438: the site read lost a page.
+        site_count_partial=not site_list.counts_complete,  # Issue #3438: the device count read lost a page.
     )
 
 
@@ -1687,7 +1759,7 @@ def site_choice_refusal(org_id: str | None, chosen: list[str]) -> tuple[tuple[Re
     if not chosen:  # The operator selected no site.
         refusal = json_error(BAD_REQUEST_STATUS, SITES_NOT_CHOSEN, SITES_NOT_CHOSEN_MESSAGE)  # The contract code.
         return refusal, SITE_PAGE_PATH  # The site picker corrects this cause.
-    permitted = {str(row.get("site_id", "")) for row in build_site_rows(org_id)}  # The sites of the organization.
+    permitted = {str(row.get("site_id", "")) for row in build_site_rows(org_id).rows}  # The organization sites.
     if any(site_id not in permitted for site_id in chosen):  # A stale page or a changed value names a site.
         refusal = json_error(NOT_FOUND_STATUS, SITE_NOT_FOUND, SITE_NOT_FOUND_MESSAGE)  # The contract code.
         return refusal, SITE_PAGE_PATH  # The site picker corrects this cause.
@@ -1747,19 +1819,32 @@ def list_sites(org_id: str | None = None) -> tuple[Response, int]:
         Reading this list never needs the site lock. The lock state travels as a
         plain field, so the page shows a busy site without taking it.
 
+        Issue #3438. Two fields name the completeness of the two cloud reads.
+        A lost page leaves the rows of the pages before it, so a script must
+        read `site_list_complete` and `device_counts_complete` before it trusts
+        the list as whole.
+
     Args:
         org_id: The organization from the path. The session supplies the value
             when the path carries none.
 
     Returns:
-        The site rows, or the refusal envelope.
+        The site rows and the two completeness fields, or the refusal envelope.
     """
     chosen = resolve_org(org_id) or ""  # An empty value means neither source named an organization.
     refusal = org_refusal(chosen)  # None means the organization passed both checks.
     if refusal is not None:  # One check refused, so the contract fixes the answer.
         return refusal  # The refusal envelope, already shaped.
-    rows = apply_text_filter(build_site_rows(chosen), request.args.get(FILTER_FIELD, ""))  # The optional filter.
-    return jsonify({"sites": rows}), OK_STATUS  # The one shape the contract names.
+    logger.info("select: list the sites of organization %s", chosen)  # Log before the three reads.
+    site_list = build_site_rows(chosen)  # The rows and the completeness of each cloud read.
+    rows = apply_text_filter(site_list.rows, request.args.get(FILTER_FIELD, ""))  # The optional filter.
+    logger.debug("select: the site list holds %s row(s)", len(rows))  # Log the count after the filter.
+    body = {
+        "sites": rows,  # The row shape does not change.
+        "site_list_complete": site_list.sites_complete,  # False when the site read lost a page.
+        "device_counts_complete": site_list.counts_complete,  # False when the device count read lost a page.
+    }
+    return jsonify(body), OK_STATUS  # The shape that `contracts/http-api.md` names.
 
 
 @select_bp.get(INVENTORY_API_PATH)

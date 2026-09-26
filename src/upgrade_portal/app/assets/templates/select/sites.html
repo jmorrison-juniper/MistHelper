@@ -30,6 +30,10 @@
                   free site and an unreadable site both hold a null locked_by.
                   A record may also hold open_url. See below.
     org_name    - the name of the chosen organization, for the card note.
+    site_list_partial  - true when the site read did not read every page.
+                         Issue #3438. The page then shows one Caution note.
+    site_count_partial - true when the device count read did not read every
+                         page. The page then shows one Caution note.
     page_title  - the heading text and the tab text.
     theme       - the name of the current theme. See layout.html.
     themes      - the theme names the operator may pick.
@@ -56,6 +60,8 @@
 {% set org_label = org_name | default('', true) %}
 {% set operation_mode = selected_mode | default('single_site', true) %}
 {% set chosen_site_ids = selected_site_ids | default([], true) %}
+{% set list_partial = site_list_partial | default(false, true) %}
+{% set count_partial = site_count_partial | default(false, true) %}
 
 <div class="portal-card">
   <h2 class="portal-card-title">{{ 'Select sites' if operation_mode == 'multi_site' else 'Find a site' }}</h2>
@@ -91,6 +97,25 @@
     {% endif %}
   </p>
 </div>
+
+{#
+  Issue #3438. The site read and the device count read each walk every page. A
+  lost page keeps the rows of the pages before it, and the list then looks
+  complete. Each note names one short read above the table and above the check
+  boxes, so the operator reads the list again before a choice. portal.css
+  prepends "Caution:" to a flash-warning. A reload recovers the read, so the
+  signal word is Caution and not Warning.
+#}
+{% if list_partial %}
+<div class="flash-item flash-warning" role="status" data-testid="site-list-partial">
+  <span>The portal did not read the complete site list. The list can leave out sites. Reload this page to read the list again.</span>
+</div>
+{% endif %}
+{% if count_partial %}
+<div class="flash-item flash-warning" role="status" data-testid="site-count-partial">
+  <span>The portal did not read every device count. A site can show 0 devices when it holds devices. Reload this page to read the counts again.</span>
+</div>
+{% endif %}
 
 {% if operation_mode == 'multi_site' %}
 <form method="post" action="/select/site" data-testid="multi-site-form">

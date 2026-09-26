@@ -47,6 +47,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar
+from urllib.parse import urlencode  # Issue #3438: the query of page one of a lost-page read.
 
 import flask
 import pytest
@@ -56,6 +57,7 @@ from src.firmware.org_upgrade_service import OrgUpgradeResult
 from src.firmware.upgrade_service import CancelOutcome, UpgradeSubmission  # Build stand-in site child results.
 from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the complete isolated dependency set.
 from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
+from src.upgrade_portal.capture.devices import DeviceRead  # Issue #3438: the answer of a real picker read.
 from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
 from src.upgrade_portal.runtime.server import build_server_command  # Start the platform server safely.
 from tests.e2e.upgrade_portal.empty_site_seeds import (  # Issue #3389: the site with no device.
@@ -63,6 +65,18 @@ from tests.e2e.upgrade_portal.empty_site_seeds import (  # Issue #3389: the site
     EMPTY_SITE_EMAIL,
     EMPTY_SITE_ID,
     EMPTY_SITE_NAME,
+)
+from tests.e2e.upgrade_portal.lost_page_seeds import (  # Issue #3438: the organization whose reads lose page two.
+    LOST_PAGE_BODY,
+    LOST_PAGE_BROWSER_ID,
+    LOST_PAGE_EMAIL,
+    LOST_PAGE_HOST,
+    LOST_PAGE_LIMIT,
+    LOST_PAGE_ORG_ID,
+    LOST_PAGE_ORG_NAME,
+    LOST_PAGE_ROWS,
+    LOST_PAGE_STATUS,
+    LOST_PAGE_TOTAL,
 )
 from tests.e2e.upgrade_portal.org_cancel_seeds import CANCEL_AP_JOB_ID, OrgCancelSeeds  # Issue #3246: the cancel.
 from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the seeds of the recovery journeys.
@@ -81,6 +95,7 @@ from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site
     SHORT_SITE_NAME,
     SHORT_SITE_REASON,
 )
+from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, build_sdk_answer  # Issue #3438: real SDK answers.
 from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, stores, and traps.
     allocate_resources,
     build_child_environment,
@@ -896,6 +911,49 @@ def stand_in_token_identity(session: Any) -> dict[str, str]:
     return {"name": BROWSER_TOKEN_NAME}  # `identity.build_token_owner` accepts this token-name shape.
 
 
+class LostPageCloudSession(StandInCloudSession):
+    """The cloud session of the lost-page operator of issue #3438.
+
+    Why:
+        The picker reads of this operator run the real page walk of
+        `select.default_cloud_read`. This session answers page one of each
+        picker read with a real SDK answer object, so the SDK builds the next
+        link from the page headers. Page two answers the HTML error page of a
+        gateway, so the walk loses that page. Every other read keeps the
+        answers of the parent class, so no call reaches the network.
+
+    Attributes:
+        privileges: The one organization that the picker of this operator shows.
+    """
+
+    def __init__(self) -> None:
+        """Store the privilege record of the lost-page organization."""
+        super().__init__()  # Keep the retry settings that the destructive write guard reads.
+        self.privileges = [{"scope": "org", "org_id": LOST_PAGE_ORG_ID, "name": LOST_PAGE_ORG_NAME}]  # One org.
+
+    def mist_get(self, uri: str, query: dict[str, str] | None = None) -> Any:
+        """Answer page one of a picker read, or lose page two.
+
+        Args:
+            uri: The request path, or the next link that the SDK built.
+            query: The query of page one. A next link carries its own query.
+
+        Returns:
+            The SDK answer of the page, or the answer of the parent class for any other read.
+        """
+        path = uri.split("?", 1)[0]  # The read path without the query of a next link.
+        if path not in LOST_PAGE_ROWS:  # Any other read keeps the fixed answers of the parent class.
+            return super().mist_get(uri, query)
+        logger.info("Answer one page of the lost-page read %s", path)  # Log before the answer.
+        if "page=" in uri:  # The SDK asks for page two, and a gateway fault loses it.
+            return build_sdk_answer(LOST_PAGE_STATUS, LOST_PAGE_BODY, HTML_TYPE, f"{LOST_PAGE_HOST}{uri}")
+        page_headers = {"X-Page-Total": str(LOST_PAGE_TOTAL), "X-Page-Limit": str(LOST_PAGE_LIMIT)}  # 2 pages.
+        headers = {**JSON_TYPE, **page_headers, "X-Page-Page": "1"}  # The SDK reads all three page headers.
+        body = json.dumps(LOST_PAGE_ROWS[path]).encode("utf-8")  # The rows of page one.
+        address = f"{LOST_PAGE_HOST}{path}?{urlencode(query or {})}"  # The SDK adds the page to this address.
+        return build_sdk_answer(200, body, headers, address)  # Page one, with a next link to page two.
+
+
 class E2EOrgUpgradeService:
     """Return deterministic organization job results to the browser server."""
 
@@ -1060,7 +1118,7 @@ class E2EDeviceUpgradeService:
         )
 
 
-def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
+def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]] | DeviceRead:
     """Answer a site read of the portal without a network call.
 
     Why:
@@ -1069,14 +1127,27 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
         reader answers the two read names of `select.CLOUD_READS` from fixed
         records, and the page then shows real rows with no socket at all.
 
+        Issue #3438. The lost-page organization runs the real read of
+        `select.default_cloud_read` instead. The cloud session of its operator
+        answers page one and loses page two, so the page walk and the two
+        notes of the picker run as they do for the live cloud.
+
     Args:
         name: The read name that the route asked for.
-        **parameters: The call parameters. One organization answers every call.
+        **parameters: The call parameters. Only the lost-page organization changes the result.
 
     Returns:
         The records of the named read, or an empty list for any other name.
+        The lost-page organization gets the records and the partial reasons.
     """
-    del parameters  # One organization answers every call, so no parameter changes the result.
+    if parameters.get("org_id") == LOST_PAGE_ORG_ID:  # Issue #3438: the organization whose reads lose page two.
+        from src.upgrade_portal.app.routes import select  # Late, so the module holds the seam of the child server.
+
+        logger.info("Run the real page walk of %s for the lost-page organization", name)  # Log before the read.
+        read = select.default_cloud_read(name, **parameters)  # The real walk over the lost-page session.
+        logger.debug("The lost-page read %s holds %s record(s)", name, len(read.records))  # Log the count only.
+        return read  # The records and the partial reasons of the read.
+    del parameters  # Every other organization answers the fixed records below.
     if name == "listOrgSites":  # The name and the identifier of each site.
         return [
             {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The first row, which most journeys read.
@@ -1736,7 +1807,7 @@ def signed_session_cookie(payload: dict[str, str]) -> str:
     return serializer.dumps(payload)  # The value that the browser then carries on every request.
 
 
-def operator_session_cookies(email: str, browser_id: str) -> list[dict[str, str]]:
+def operator_session_cookies(email: str, browser_id: str, org_id: str = STAND_IN_ORG_ID) -> list[dict[str, str]]:
     """Build the two cookies that one signed-in browser carries.
 
     Why:
@@ -1753,15 +1824,19 @@ def operator_session_cookies(email: str, browser_id: str) -> list[dict[str, str]
     Args:
         email: The work address of the operator, already normalized.
         browser_id: The browser identifier of that operator.
+        org_id: The organization that the signed session selects. Issue #3438:
+            the lost-page operator selects the lost-page organization.
 
     Returns:
         One record for each cookie, in the shape that `add_cookies` takes.
     """
+    logger.info("Build the session cookies of one stand-in operator")  # Log before the build, with no identity.
     owner = identity.build_owner(email, browser_id)  # The pair the server registered.
-    payload = {identity.SESSION_OWNER_KEY: owner.key, SELECTED_ORG_KEY: STAND_IN_ORG_ID}  # No personal data.
+    payload = {identity.SESSION_OWNER_KEY: owner.key, SELECTED_ORG_KEY: org_id}  # No personal data.
     signed = signed_session_cookie(payload)  # The value that the portal reads back and trusts.
     session_cookie = {"name": SESSION_COOKIE_NAME, "value": signed, "url": BASE_URL}  # The signed half.
-    browser_cookie = {"name": identity.BROWSER_ID_COOKIE, "value": browser_id, "url": BASE_URL}
+    browser_cookie = {"name": identity.BROWSER_ID_COOKIE, "value": browser_id, "url": BASE_URL}  # The other half.
+    logger.debug("Built two session cookies for organization %s", org_id)  # Log the count and the organization.
     return [session_cookie, browser_cookie]  # Playwright installs both against the portal address.
 
 
@@ -1865,7 +1940,7 @@ def browser_token_server_log_path() -> Path:
     return SERVER_LOG_PATH  # The child writes its log to this file.
 
 
-def _register_operator(email: str, browser_id: str) -> None:
+def _register_operator(email: str, browser_id: str, cloud_session: StandInCloudSession | None = None) -> None:
     """Place one signed-in operator record into the process registry.
 
     Why:
@@ -1876,10 +1951,16 @@ def _register_operator(email: str, browser_id: str) -> None:
     Args:
         email: The work address of the operator, already normalized.
         browser_id: The browser identifier of that operator.
+        cloud_session: The cloud session of the operator. No value gives the
+            stand-in session of the first organization. Issue #3438: the
+            lost-page operator carries its own session.
     """
+    logger.info("Register one stand-in operator in the process registry")  # Log before the write, no identity.
     owner = identity.build_owner(email, browser_id)  # The pair a cookie also names.
     mode = identity.CredentialMode.ENVIRONMENT_TOKEN  # The mode a token sign-in would have recorded.
-    identity.SESSION_REGISTRY.register(identity.OperatorSession(owner, StandInCloudSession(), mode))
+    session = cloud_session or StandInCloudSession()  # The first organization, unless the caller names a session.
+    identity.SESSION_REGISTRY.register(identity.OperatorSession(owner, session, mode))  # One record per pair.
+    logger.debug("Registered one operator with a %s", type(session).__name__)  # Log the session class only.
 
 
 FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
@@ -2200,6 +2281,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     _register_operator(CONTROLS_EMAIL, CONTROLS_BROWSER_ID)  # Issue #3247: the owner of the recovery seeds.
     _register_operator(EMPTY_SITE_EMAIL, EMPTY_SITE_BROWSER_ID)  # Issue #3389: the operator of the empty site.
     _register_operator(SHORT_SITE_EMAIL, SHORT_SITE_BROWSER_ID)  # Issue #3424: the operator of the short-read site.
+    _register_operator(LOST_PAGE_EMAIL, LOST_PAGE_BROWSER_ID, LostPageCloudSession())  # Issue #3438: lost pages.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
 
@@ -2426,6 +2508,34 @@ def short_read_operator_page(context: Any, capture_portal_server: str) -> Iterat
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
     yield opened  # The test selects the short-read site and then clears it.
+    opened.close()  # A page left open would hold a browser target for the whole run.
+
+
+@pytest.fixture
+def lost_page_operator_page(context: Any, capture_portal_server: str) -> Iterator[Any]:
+    """Open a browser page of the operator whose picker reads lose page two.
+
+    Why:
+        Issue #3438. The cloud session of this operator answers page one of
+        each picker read and loses page two. A separate operator and a separate
+        organization keep the lost pages and the stored site set of this
+        operator away from every other journey, also when the journey fails.
+
+    Args:
+        context: The browser context that `pytest-playwright` built.
+        capture_portal_server: The address of the running portal.
+
+    Yields:
+        The browser page, with the session cookies of the lost-page operator.
+    """
+    del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
+    cookies = operator_session_cookies(LOST_PAGE_EMAIL, LOST_PAGE_BROWSER_ID, LOST_PAGE_ORG_ID)  # A separate pair.
+    context.add_cookies(cookies)  # The session selects the lost-page organization.
+    opened = context.new_page()  # The page then carries the session on its first request.
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    yield opened  # The test reads the picker of the lost-page organization.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
 

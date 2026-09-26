@@ -324,10 +324,13 @@ def active_context() -> tuple[str, list[str]] | None:
 
 def selected_rows(org_id: str, site_ids: list[str]) -> list[dict[str, Any]]:
     """Return the selected site rows and preserve the selection order."""
-    index = {str(row.get("site_id", "")): row for row in build_site_rows(org_id)}
-    if any(site_id not in index for site_id in site_ids):
-        return []
-    return [index[site_id] for site_id in site_ids]
+    logger.info("Read the site rows of %s selected site(s)", len(site_ids))  # Log before the site list read.
+    index = {str(row.get("site_id", "")): row for row in build_site_rows(org_id).rows}  # Issue #3438: the rows.
+    if any(site_id not in index for site_id in site_ids):  # A selected site is not in the site list.
+        logger.warning("A selected site is not in the site list of the organization")  # Name no site record.
+        return []  # The caller refuses the selection.
+    logger.debug("Read %s selected site row(s)", len(site_ids))  # Log after the read.
+    return [index[site_id] for site_id in site_ids]  # The rows in the order of the selection.
 
 
 def read_options() -> dict[str, Any]:
@@ -462,7 +465,7 @@ def _site_labels(org_id: str, site_ids: list[str]) -> list[str]:
     """
     logger.info("Read the site names of %s refused site(s)", len(site_ids))  # Log before the site list read.
     try:  # The site list read reaches the Mist cloud.
-        rows = build_site_rows(org_id)  # The site list of the organization.
+        rows = build_site_rows(org_id).rows  # Issue #3438: the site rows of the organization.
         names = {str(row.get("site_id", "")): str(row.get("name") or "") for row in rows}  # One name per site.
     except RequestException:  # A transport fault leaves the identifiers as the labels.
         logger.warning("The site list read failed. The refusal names each site by its identifier.")  # No name.

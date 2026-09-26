@@ -2,14 +2,18 @@
 
 from __future__ import annotations  # WHY: keep annotations from importing runtime objects.
 
-from types import SimpleNamespace  # WHY: build a small stand-in for the mistapi response.
+import json  # WHY: encode the statistics rows as the cloud sends them.
 from typing import Any  # WHY: the SDK test seam accepts a token-bearing session object.
 
 import pytest  # WHY: patch the SDK boundary without network access.
+from mistapi.__api_response import APIResponse  # WHY: the reader receives the real SDK answer type.
 
 from src.firmware.running_version import DEFAULT_STATS_PAGE_LIMIT  # WHY: verify the bounded page size.
 from src.upgrade_portal.api.run_controls import routes  # WHY: patch the exact module used by production.
 from src.upgrade_portal.api.run_controls.routes import SiteStatsFirmwareEvidenceReader  # WHY: exercise the reader.
+from tests.support.sdk_pages import JSON_TYPE, build_sdk_answer  # WHY: build the real SDK answer (issue #3438).
+
+STATS_URL = "https://api.mist.com/api/v1/sites/site-one/stats/devices?type=all"  # WHY: the SDK keeps the address.
 
 
 class TestSiteStatsFirmwareEvidenceReader:
@@ -29,12 +33,11 @@ class TestSiteStatsFirmwareEvidenceReader:
             status: str | None = None,
             limit: int | None = None,
             page: int | None = None,
-        ) -> SimpleNamespace:
+        ) -> APIResponse:
             seen.update(self._call_record(session, site_id, type, status, limit, page))  # WHY: prove no fields kwarg.
-            return SimpleNamespace(status_code=200, data=rows)  # WHY: mimic the SDK response shape.
+            return build_sdk_answer(200, json.dumps(rows).encode("utf-8"), JSON_TYPE, STATS_URL)  # WHY: one real page.
 
         monkeypatch.setattr(routes.mistapi.api.v1.sites.stats, "listSiteDevicesStats", fake_call)  # WHY: no network.
-        monkeypatch.setattr(routes.mistapi, "get_all", self._all_rows)  # WHY: keep pagination deterministic.
         reader = SiteStatsFirmwareEvidenceReader("signed-session")  # WHY: pass an opaque cloud session.
         result = reader.read(self._run_record(), "2026-09-16T18:20:21+00:00")  # WHY: run the repaired path.
 
@@ -58,8 +61,8 @@ class TestSiteStatsFirmwareEvidenceReader:
     ) -> None:
         """The evidence reader must not reconcile a failed statistics response."""
 
-        def fake_call(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
-            return SimpleNamespace(status_code=status_code, data=[])  # WHY: model a real failed SDK response.
+        def fake_call(*_args: Any, **_kwargs: Any) -> APIResponse:
+            return build_sdk_answer(status_code, b"[]", JSON_TYPE, STATS_URL)  # WHY: model a real failed SDK response.
 
         monkeypatch.setattr(routes.mistapi.api.v1.sites.stats, "listSiteDevicesStats", fake_call)  # WHY: no network.
         reader = SiteStatsFirmwareEvidenceReader("signed-session")  # WHY: use the real reader with fake session.
@@ -106,9 +109,3 @@ class TestSiteStatsFirmwareEvidenceReader:
             "limit": limit,
             "page": page,
         }
-
-    @staticmethod
-    def _all_rows(mist_session: Any, response: SimpleNamespace) -> list[dict[str, Any]]:
-        """Return paged rows from the fake SDK response."""
-        assert mist_session == "signed-session"  # WHY: prove pagination uses the same session object.
-        return list(response.data)  # WHY: mimic ``mistapi.get_all`` without a network call.

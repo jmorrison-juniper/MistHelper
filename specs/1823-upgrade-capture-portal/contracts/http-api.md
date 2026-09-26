@@ -91,7 +91,7 @@ when the chosen organization holds no such site.
 | Item | Value |
 | --- | --- |
 | Query | `q` optional text filter |
-| 200 | `{ "sites": [ { "site_id", "name", "device_count", "locked_by", "lock_state" } ] }` |
+| 200 | `{ "sites": [ { "site_id", "name", "device_count", "locked_by", "lock_state" } ], "site_list_complete": true, "device_counts_complete": true }` |
 | 400 | `org_not_chosen` when neither the path nor the session names an organization |
 | 403 | `org_not_permitted` |
 
@@ -105,6 +105,19 @@ exists. It holds an email address when a lock exists. The field `lock_state` hol
 `free`, `locked`, or `unknown`. The word `unknown` means the lock store did not
 answer, which `contracts/site-lock.md` asks a read to survive. Reading this
 endpoint never needs the lock.
+
+Issue #3438 adds two fields beside the rows. The portal reads every page of the
+site list and every page of the device counts.
+
+| Field | Value |
+| --- | --- |
+| `site_list_complete` | `true` when the site read got every page. `false` when a page is lost. |
+| `device_counts_complete` | `true` when the device count read got every page. `false` when a page is lost. |
+
+A lost page keeps the rows of the pages before it. If a field is `false`, the
+list can leave out a site, or a site can show 0 devices. Read the list again
+before you trust it as whole. The site picker page shows one Caution note for
+each field that is `false`.
 
 ### `GET /api/sites/<site_id>/inventory` — inventory for the capture view
 
