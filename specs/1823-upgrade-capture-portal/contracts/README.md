@@ -77,3 +77,9 @@ returns `text/html`.
 | 409 | Another operator holds the site lock |
 | 429 | The cloud rate limit stopped the portal |
 | 500 | An unexpected fault. The message stays plain. |
+| 503 | A store read or a cloud read did not complete. The route names the cause in its own code, and a later request can pass. |
+
+Issue #3439 adds the `503` code `site_list_incomplete`. The site read lost a
+page, and the kept rows do not hold the named site. A whole site list without
+the site still answers `404`. The file `http-api.md` names each step of the
+rule.

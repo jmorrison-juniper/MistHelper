@@ -84,7 +84,9 @@ the device count, and the lock state.
 ### `GET /select/site/<site_id>` — site inventory page
 
 Returns the device list of one site as a page. Answers `404` and an empty picker
-when the chosen organization holds no such site.
+when the chosen organization holds no such site. Answers `503` and the shared
+error page when the site read lost a page and the kept rows do not hold the
+site. The section "Later site checks after a lost page" below holds the rule.
 
 ### `GET /api/sites` — site list as JSON
 
@@ -125,10 +127,50 @@ each field that is `false`.
 | --- | --- |
 | 200 | `{ "devices": [ ... ], "counts": { ... } }` |
 | 404 | `site_not_found` |
+| 503 | `site_list_incomplete` when the site read lost a page and the kept rows do not hold the site |
 
 This call reads the physical view with `vc=True`, so every chassis member appears.
 The device statistics call passes `type="all"`, because the default returns access
 points only.
+
+### Later site checks after a lost page
+
+Issue #3439. Nine later steps read the site list again before they act. If that
+read loses a page, the kept rows can leave out a site of the organization. A
+step that names such a site answers `503` with the code `site_list_incomplete`.
+The message is "The portal did not read the complete site list, so it cannot
+check your site choice. Try again."
+
+| Step | Route | Whole list without the site | Lost page without the site |
+| --- | --- | --- | --- |
+| Site choice | `POST /select/site` | `404` `site_not_found` | `503` `site_list_incomplete` |
+| Inventory page | `GET /select/site/<site_id>` | `404` and an empty picker | `503` and the error page |
+| Inventory answer | `GET /api/sites/<site_id>/inventory` | `404` `site_not_found` | `503` `site_list_incomplete` |
+| Capture start | `POST /api/sites/<site_id>/captures` | `404` `site_not_found` | `503` `site_list_incomplete` |
+| Options page | `GET /upgrade/org/options` | `404` `sites_not_chosen` | `503` `site_list_incomplete` |
+| Options save | `POST /api/org-upgrades/options` | `200` today. Issue #3441 tracks this fault. | `503` `site_list_incomplete` |
+| Confirm page | `GET /upgrade/org/confirm` | `404` `sites_not_chosen` | `503` `site_list_incomplete` |
+| Pre-check start | `POST /api/org-upgrades/prechecks/<site_id>` | `404` `site_not_found` | `503` `site_list_incomplete` |
+| Retry | `POST /api/org-upgrades/<upgrade_id>/retry` | `404` `sites_not_chosen` | `503` `site_list_incomplete` |
+
+A refused step changes no stored state. It stores no site choice, no plan, and
+no saved options. It starts no capture, takes no lock, and selects no retry
+site.
+
+The answer depends on the caller.
+
+- A person who opens a page reads the shared error page. The page shows the
+  status, the code, and the message, and it links to the site list.
+- A refused form post from a browser also links back to the form.
+- A refused site choice from a browser returns to the site picker. The picker
+  shows the message as one Caution message.
+- A script receives the error envelope.
+
+A site of a kept page still passes each step. A failed first page keeps no row,
+so each step refuses each site with `503`. An options save with no
+`selected_types` field makes no site check, so a lost page does not change its
+answer. The check adds no cloud read. Each step reads the site list one time,
+as before.
 
 ---
 
@@ -196,6 +238,7 @@ from these two routes.
 | 404 | `site_not_found` when the chosen organization holds no such site |
 | 409 | `site_locked` when a different operator holds the site lock |
 | 409 | `pre_check_locked` when the named run already sent firmware |
+| 503 | `site_list_incomplete` when the site read lost a page and the kept rows do not hold the site |
 
 The portal starts the work in the background and answers at once. `tier` defaults
 to 2. The 202 answer adds a `lock` grant, shaped as the take answer of section 3, only when the start took the lock on this call (FR-109). A start that names no owner takes no lock and reports no hold (FR-111).

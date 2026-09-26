@@ -67,8 +67,11 @@ LEAK_MARKERS = (
     FAULT_SECRET,  # The text of the fault itself.
 )
 
-# Every error status in the status table of the contract. The table also lists
-# 200 and 202, which report success and therefore carry no envelope.
+# Every error status in the status table of the contract that a route can raise
+# with a bare abort. The table also lists 200 and 202, which report success and
+# therefore carry no envelope. The table lists 503 too, but no route raises a
+# bare 503. Each 503 answer names its cause in the code of its own route, such as
+# `site_list_incomplete` of issue #3439.
 DOCUMENTED_ERROR_STATUSES = (400, 401, 403, 404, 409, 429, 500)
 
 # The contract names a code word for these two statuses. It names a code word
@@ -346,9 +349,11 @@ def test_each_documented_status_answers_the_envelope(scaffold_client: FlaskClien
     """Every error status of the contract answers the one documented shape.
 
     Why:
-        The status table of the contract lists seven error statuses. A handler
-        that answered an HTML page for one of them would break every browser
-        script that reads the code word.
+        The status table of the contract lists eight error statuses. A route
+        raises seven of them with a bare abort, and this test covers those
+        seven. A handler that answered an HTML page for one of them would break
+        every browser script that reads the code word. The status 503 always
+        carries the code of its own route, so its route tests cover it.
 
     Args:
         scaffold_client: The portal test client.

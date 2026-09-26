@@ -63,7 +63,13 @@ from ...upgrade.options import (  # Reuse the upgrade target rules.
     build_version_options,
     read_model_versions,
 )
-from ..factory import build_error_envelope, json_error, wants_browser_page  # The error envelope and the one page rule.
+from ..factory import (  # The error envelope, the error page, and the one page rule.
+    build_error_envelope,
+    error_page,
+    form_return_path,
+    json_error,
+    wants_browser_page,
+)
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -233,12 +239,22 @@ MODE_NOT_CHOSEN_MESSAGE = "Choose a single-site or a multi-site operation."  # T
 SITES_NOT_CHOSEN_MESSAGE = "Choose one or more sites for the multi-site operation."  # The operator reads this.
 SITE_NOT_FOUND_MESSAGE = "The portal found no such site in this organization."  # The same text for both paths.
 
+# Issue #3439. A later site check that meets a site read with a lost page
+# cannot prove that a named site is absent. These three values name that
+# cause, so the operator tries again instead of choosing the sites again.
+SITE_LIST_INCOMPLETE = "site_list_incomplete"  # The error code of FR-001. A support request quotes it.
+SITE_LIST_INCOMPLETE_MESSAGE = (  # FR-002. The refusal sentence of each later site check.
+    "The portal did not read the complete site list, so it cannot check your site choice. Try again."
+)
+SITE_LIST_INCOMPLETE_TITLE = "The portal did not read the complete site list"  # FR-002. The error page heading.
+
 OK_STATUS = 200  # The answer for a read that succeeded.
 BAD_REQUEST_STATUS = 400  # The portal could not read the request.
 NOT_FOUND_STATUS = 404  # No such site inside the chosen organization.
 CONFLICT_STATUS = 409  # Another operator holds the site, or the caller lost the lock it named.
 SERVER_ERROR_STATUS = 500  # A part of the portal is missing, so the read cannot run.
-UNAVAILABLE_STATUS = 503  # The lock store did not answer a write, and no fallback is allowed.
+# A lock store fault allows no fallback. Issue #3439 adds a second cause: a site read that lost a page.
+UNAVAILABLE_STATUS = 503  # The lock store did not answer a write, or the site read lost a page.
 REDIRECT_STATUS = 303  # See Other, so the browser reads the next page with GET and never repeats the post.
 
 LOCATION_HEADER = "Location"  # The header that carries the next page of a redirect.
@@ -940,6 +956,75 @@ class SiteList:
         """
         return not getattr(answer, "partial_reasons", None)  # No reasons, or no reason field, reads as whole.
 
+    def missing_sites(self, site_ids: list[str]) -> list[str]:
+        """Return each named site that the rows do not hold.
+
+        Why:
+            Issue #3439. A later site check must tell a site that left the
+            organization from a site of a lost page. The check reads this list
+            together with `sites_complete`.
+
+        Args:
+            site_ids: The site identifiers that the request named.
+
+        Returns:
+            Each missing site identifier, in the order of the request.
+        """
+        listed = {str(row.get("site_id", "")) for row in self.rows}  # One set, so each lookup is one step.
+        return [site_id for site_id in site_ids if site_id not in listed]  # Keep the order of the request.
+
+
+class SiteListIncompleteError(Exception):
+    """A later site check met a site read that lost a page.
+
+    Why:
+        Issue #3439. A check that read a short list refused a real site as
+        unknown. This error names the incomplete list instead, so the operator
+        tries again and does not choose the sites again. One application error
+        handler answers it for each route.
+
+        The class subclasses `Exception` only. The options save answers a
+        `TypeError`, a `ValueError`, an `OverflowError`, or a `RuntimeError` as
+        a bad option with the status 400, and that answer names the wrong cause.
+
+    Attributes:
+        missing_count: The count of named sites that the list does not hold.
+    """
+
+    def __init__(self, missing_count: int) -> None:
+        """Keep the count of missing sites for the log and the handler.
+
+        Args:
+            missing_count: The count of named sites that the list does not hold.
+        """
+        super().__init__(SITE_LIST_INCOMPLETE_MESSAGE)  # The plain sentence, never a site record.
+        self.missing_count = missing_count  # The handler logs the count.
+
+    @classmethod
+    def raise_for_missing(cls, missing_count: int, list_is_whole: bool) -> None:
+        """Raise the error when a partial list does not hold a named site.
+
+        Why:
+            A whole list proves that the organization does not hold the site,
+            so the caller keeps the answer of today. A partial list proves
+            nothing about a missing site.
+
+        Args:
+            missing_count: The count of named sites that the list does not hold.
+            list_is_whole: True when the site read lost no page.
+
+        Raises:
+            SiteListIncompleteError: The count is above zero, and the list is
+                not whole.
+        """
+        if missing_count <= 0 or list_is_whole:  # Each site is listed, or the list proves the absence.
+            return  # The caller keeps the answer of today.
+        logger.warning(  # Log the count only, never a site record.
+            "select: the site read lost a page, and %s named site(s) are not in the list",
+            missing_count,
+        )
+        raise cls(missing_count)  # The error handler answers 503 with the code site_list_incomplete.
+
 
 def build_site_rows(org_id: str) -> SiteList:
     """Build one row for each site of one organization.
@@ -1356,11 +1441,19 @@ def find_site(site_id: str, org_id: str) -> dict[str, Any] | None:
 
     Returns:
         The site record, or None when the organization holds no such site.
+
+    Raises:
+        SiteListIncompleteError: The site read lost a page, and the kept pages
+            do not hold the site (issue #3439).
     """
-    sites = as_records(cloud_reader()("listOrgSites", org_id=org_id))  # The site records of this organization.
-    for site in sites:  # One pass, because the first match ends the search.
+    logger.info("select: find site %s in organization %s", site_id, org_id)  # Log before the site read.
+    answer = cloud_reader()("listOrgSites", org_id=org_id)  # The site records and the completeness of the read.
+    for site in as_records(answer):  # One pass, because the first match ends the search.
         if str(site.get("id", "")) == site_id:  # The one site the request named.
+            logger.debug("select: found site %s", site_id)  # Log the match, never the record.
             return site  # The caller reads the name out of this record.
+    SiteListIncompleteError.raise_for_missing(1, SiteList.read_is_whole(answer))  # Issue #3439: a lost page.
+    logger.debug("select: organization %s holds no site %s", org_id, site_id)  # A whole list proves the absence.
     return None  # The organization holds no such site.
 
 
@@ -1378,8 +1471,46 @@ def site_belongs_to_org(site_id: str, org_id: str) -> bool:
 
     Returns:
         True when the organization holds that site.
+
+    Raises:
+        SiteListIncompleteError: The site read lost a page, and the kept pages
+            do not hold the site (issue #3439).
     """
     return find_site(site_id, org_id) is not None  # The record itself is the proof.
+
+
+@select_bp.app_errorhandler(SiteListIncompleteError)
+def answer_incomplete_site_list(error: SiteListIncompleteError) -> tuple[Response, int] | tuple[str, int]:
+    """Answer a later site check that met a site read that lost a page.
+
+    Why:
+        Issue #3439. One handler answers the error for each route, so no route
+        needs its own branch. A script and a JSON client read the error
+        envelope. A browser reads the shared error page. A refused form post
+        also gets the link back to the form. A page request gets no link back,
+        because a reload of the page repeats the check.
+
+    Args:
+        error: The error that the site check raised.
+
+    Returns:
+        The error page or the error envelope, and the status code 503.
+    """
+    logger.info("select: answer the incomplete site list for %s missing site(s)", error.missing_count)  # Before.
+    if not wants_browser_page():  # The portal script and a JSON client read the envelope (FR-004).
+        answer = json_error(UNAVAILABLE_STATUS, SITE_LIST_INCOMPLETE, SITE_LIST_INCOMPLETE_MESSAGE)  # One shape.
+        logger.debug("select: the incomplete site list answer is the error envelope")  # After the build.
+        return answer  # The status 503 and the code site_list_incomplete.
+    back_path = None if request.method in ("GET", "HEAD") else form_return_path()  # D7: a form post links back.
+    page = error_page(  # FR-003: the heading, the sentence, the status, the code, and the site list link.
+        UNAVAILABLE_STATUS,
+        SITE_LIST_INCOMPLETE,
+        SITE_LIST_INCOMPLETE_MESSAGE,
+        SITE_LIST_INCOMPLETE_TITLE,
+        back_path,
+    )
+    logger.debug("select: the incomplete site list answer is the error page")  # After the build.
+    return page  # The status 503 and the shared error page.
 
 
 def render_page(name: str, **context: Any) -> str:
@@ -1759,11 +1890,41 @@ def site_choice_refusal(org_id: str | None, chosen: list[str]) -> tuple[tuple[Re
     if not chosen:  # The operator selected no site.
         refusal = json_error(BAD_REQUEST_STATUS, SITES_NOT_CHOSEN, SITES_NOT_CHOSEN_MESSAGE)  # The contract code.
         return refusal, SITE_PAGE_PATH  # The site picker corrects this cause.
-    permitted = {str(row.get("site_id", "")) for row in build_site_rows(org_id).rows}  # The organization sites.
-    if any(site_id not in permitted for site_id in chosen):  # A stale page or a changed value names a site.
-        refusal = json_error(NOT_FOUND_STATUS, SITE_NOT_FOUND, SITE_NOT_FOUND_MESSAGE)  # The contract code.
-        return refusal, SITE_PAGE_PATH  # The site picker corrects this cause.
-    return None  # Every check passed.
+    return site_set_refusal(org_id, chosen)  # Issue #3439: the site check reads the completeness of the list.
+
+
+def site_set_refusal(org_id: str, chosen: list[str]) -> tuple[tuple[Response, int], str] | None:
+    """Return the refusal of a site choice that names a site outside the site list.
+
+    Why:
+        Issue #3439. A site read that lost a page can leave out a chosen site
+        that exists. The refusal then names the incomplete list with the status
+        503, and the operator tries again. A whole list keeps the 404 answer,
+        because it proves that the organization does not hold the site.
+
+        This check does not raise. `PickerRefusal` must send a browser back to
+        the site picker, because the error page holds no site check boxes.
+
+    Args:
+        org_id: The chosen organization.
+        chosen: The unique site identifiers of the post.
+
+    Returns:
+        The envelope pair and the site picker path, or None when the list holds
+        each chosen site.
+    """
+    logger.info("select: check %s chosen site(s) against the site list", len(chosen))  # Log before the read.
+    site_list = build_site_rows(org_id)  # The rows and the completeness of the site read.
+    missing = site_list.missing_sites(chosen)  # Each chosen site that the list does not hold.
+    logger.debug("select: the site list does not hold %s chosen site(s)", len(missing))  # Log after the check.
+    if not missing:  # The list holds each chosen site, also after a lost page (FR-006).
+        return None  # Every check passed.
+    if not site_list.sites_complete:  # A partial list cannot prove that a site is absent (FR-001).
+        logger.warning("select: the site read lost a page, so the portal cannot check %s site(s)", len(missing))
+        refusal = json_error(UNAVAILABLE_STATUS, SITE_LIST_INCOMPLETE, SITE_LIST_INCOMPLETE_MESSAGE)  # 503.
+        return refusal, SITE_PAGE_PATH  # The site picker, where a retry repeats the choice (FR-005).
+    refusal = json_error(NOT_FOUND_STATUS, SITE_NOT_FOUND, SITE_NOT_FOUND_MESSAGE)  # FR-007: the contract code.
+    return refusal, SITE_PAGE_PATH  # The site picker corrects this cause.
 
 
 @select_bp.get(SITE_INVENTORY_PAGE_PATH)
