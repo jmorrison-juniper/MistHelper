@@ -1,0 +1,37 @@
+{
+  "workflow": "speckit",
+  "specName": "The multi-site texts name one site with a singular noun",
+  "branch": "fix/3462-site-list-noun",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T20:44:47.397Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T20:44:47.397Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T20:44:47.397Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-26T21:39:58.496Z"
+    }
+  ]
+}
