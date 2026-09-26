@@ -14,6 +14,10 @@ The workflow stages jobs with `needs`. It does not run every job in one
 parallel group. `speckit_task_audit` and `exclusion_drift` are advisory because
 they set `continue-on-error: true`.
 
+The `misthelper-devtools` package supplies `test-quality-analyzer` and
+`tools.check_citations`. `requirements-dev.txt` pins that package to one
+commit.
+
 | Job ID | Tool or command | Current threshold |
 |------|------|-----------|
 | `ruff` | `ruff check .` | Zero violations under `pyproject.toml`. |
@@ -29,11 +33,11 @@ they set `continue-on-error: true`.
 | `vulture` | `vulture $VULTURE_PATHS --min-confidence $VULTURE_CONFIDENCE` | Zero findings at confidence 70. |
 | `pydocstyle` | `pydocstyle $PYDOCSTYLE_PATHS` | Zero docstring style violations. |
 | `interrogate` | `interrogate $INTERROGATE_PATHS --fail-under $INTERROGATE_THRESHOLD` | Coverage at least 90 percent. |
-| `test_quality_gate` | `python -m tools.test_quality_analyzer --gate` | Zero new test-quality findings against the baseline. |
+| `test_quality_gate` | `test-quality-analyzer --gate` | Zero new test-quality findings against the baseline. |
 | `diagram_lint` | `python scripts/lint_diagram_refs.py` | Every diagram reference resolves. |
 | `mermaid_lint` | `node scripts/mermaid/lint_mermaid.mjs` | Every Mermaid block parses. |
 | `citation_lint` | `python -m tools.check_citations src tests` | Every code citation resolves. |
-| `menu_reference_drift` | `python scripts/generate_menu_wiki.py` plus `git diff`, then `python -m tools.menu_api_map --check` | The menu reference and the menu API endpoint map must match the source. |
+| `menu_reference_drift` | `python scripts/generate_menu_wiki.py` plus `git diff`, then `python -m scripts.menu_api_map --check` | The menu reference and the menu API endpoint map must match the source. |
 | `playwright` | pytest under `tests/e2e/` | Every end-to-end test must pass with `UPGRADE_PORTAL_E2E_STRICT=1`. |
 | `ops_portal` | npm type check, lint, tests, and audit | The npm audit fails at the high level or above. |
 | `ops_platform_pytest` | pytest with coverage in `mist-ops-platform` | Coverage at least 56 percent and at least 390 collected tests. |

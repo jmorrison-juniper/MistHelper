@@ -1,4 +1,4 @@
-"""Write the menu API endpoint map: ``python -m tools.menu_api_map``.
+"""Write the menu API endpoint map: ``python -m scripts.menu_api_map``.
 
 The command reads the source tree, walks each menu handler, and writes the map
 pages. The ``--check`` flag writes nothing. It compares the pages on disk with
@@ -20,12 +20,12 @@ from .analysis.source_index import SourceIndex  # The source tree index.
 from .analysis.walker import MenuRegistryReader, MenuWalker  # Walks each menu handler.
 from .render.pages import DOCS_FOLDER, WIKI_FOLDER, PageInput, PageSet  # Builds the pages.
 
-LOGGER = logging.getLogger("tools.menu_api_map")  # The logger of the command.
+LOGGER = logging.getLogger("scripts.menu_api_map")  # The logger of the command.
 REPO_ROOT = Path(__file__).resolve().parents[2]  # The folder that holds MistHelper.py.
 WIKI_PAGE_PREFIX = (
     "Menu-API-Endpoints"  # The wiki folder holds other pages too, so only this prefix belongs to the map.
 )
-FIX_COMMAND = "python -m tools.menu_api_map"  # The command that writes the pages again.
+FIX_COMMAND = "python -m scripts.menu_api_map"  # The command that writes the pages again.
 
 
 class MapBuilder:
@@ -118,7 +118,7 @@ class MenuApiMapCli:
     @staticmethod
     def parser() -> argparse.ArgumentParser:
         """Return the command line parser."""
-        parser = argparse.ArgumentParser(prog="python -m tools.menu_api_map", description=__doc__.splitlines()[0])
+        parser = argparse.ArgumentParser(prog="python -m scripts.menu_api_map", description=__doc__.splitlines()[0])
         parser.add_argument("--check", action="store_true", help="Compare the pages and write nothing.")
         parser.add_argument("--refresh-sdk-index", action="store_true", help="Read the installed mistapi again.")
         parser.add_argument("--explain", type=int, metavar="MENU", help="Print the call path of each endpoint.")

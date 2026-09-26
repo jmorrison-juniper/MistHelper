@@ -5,9 +5,9 @@
   gives the HTTP method, the path, the mistapi function, its document link, and
   the code that sends the request. Read `documentation/menu-api/README.md` or
   the `Menu-API-Endpoints` wiki page. See issue #3411.
-- `tools/menu_api_map` writes the map from the source code and from a vendored
+- `scripts/menu_api_map` writes the map from the source code and from a vendored
   index of the mistapi functions. The `menu_reference_drift` CI job runs
-  `python -m tools.menu_api_map --check`, and the job fails when a map page is
+  `python -m scripts.menu_api_map --check`, and the job fails when a map page is
   stale. See issue #3411.
 
 ### Changed

@@ -1,4 +1,4 @@
-<!-- The tool python -m tools.menu_api_map writes this page. Do not edit it by hand. -->
+<!-- The tool python -m scripts.menu_api_map writes this page. Do not edit it by hand. -->
 
 # Menu API endpoint map
 
@@ -11,10 +11,10 @@ A tool writes each page of the map from the source code and from mistapi 0.64.0.
 Do not edit a page by hand. To write the pages again, run this command from the repository root:
 
 ```powershell
-python -m tools.menu_api_map
+python -m scripts.menu_api_map
 ```
 
-The `menu_reference_drift` job runs `python -m tools.menu_api_map --check` on each pull request.
+The `menu_reference_drift` job runs `python -m scripts.menu_api_map --check` on each pull request.
 If a change adds or removes an API call, the job fails until you write the pages again.
 
 ## How to read the map

@@ -163,7 +163,8 @@ mindmap
 |------|---------|
 | `MistHelper.py` | Runtime entrypoint and menu registry. The decomposition moved most logic into `src/`. |
 | `src/` | Extracted modules that mirror the Mist API and mistapi hierarchy |
-| `tools/ste_linter/` | Simplified Technical English compliance linter and dictionary extractor |
+| `scripts/` | Maintenance commands and generators. `scripts/menu_api_map/` writes the menu API endpoint map. |
+| `requirements-dev.txt` | Development tools. It pins `misthelper-devtools`, which supplies the STE linter and the repository analyzers. |
 | `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts; polyglot backends run in containers |
 | `CombinedInventory_ByWeek/` | Time-series weekly inventory snapshots |
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |

@@ -6,7 +6,7 @@
 
 Two streams of work run at the same time.
 
-1. A new tool, `tools/menu_api_map`, reads the menu registry and the source tree
+1. A new tool, `scripts/menu_api_map`, reads the menu registry and the source tree
    with the `ast` module. It writes the endpoint map pages and their Mermaid
    diagrams. A check mode guards the pages in CI.
 2. A fleet of audit agents corrects the documents. Each agent owns one slice of
@@ -19,7 +19,7 @@ Two streams of work run at the same time.
 - **SDK data**: `mistapi` 0.64.0. Each SDK function holds its path in a
   `uri = f"/api/v1/..."` line and its HTTP method in a `mist_session.mist_*`
   call. The refresh command reads these lines with `ast` and writes
-  `tools/menu_api_map/reference/sdk_index.json`.
+  `scripts/menu_api_map/reference/sdk_index.json`.
 - **Scale**: 622 modules, 11,412 functions, 1,185 classes, and 1,063 SDK
   functions. One run of the prototype takes about 13 seconds.
 - **Gates**: ruff, black, bandit, and interrogate read `tools/`. mypy, radon,
@@ -31,10 +31,16 @@ Two streams of work run at the same time.
 
 | Path | Purpose |
 | - | - |
-| `tools/menu_api_map/__main__.py` | The command line: write, `--check`, and `--refresh-sdk-index`. |
-| `tools/menu_api_map/analysis/` | The source index, the type resolver, the body scanner, the menu walker, and the SDK index reader. |
-| `tools/menu_api_map/render/` | The Markdown tables, the Mermaid diagrams, and the page writer. |
-| `tools/menu_api_map/reference/` | `sdk_index.json` and `curated.json`. |
+| `scripts/menu_api_map/__main__.py` | The command line: write, `--check`, and `--refresh-sdk-index`. |
+| `scripts/menu_api_map/analysis/` | The source index, the type resolver, the body scanner, the menu walker, and the SDK index reader. |
+| `scripts/menu_api_map/render/` | The Markdown tables, the Mermaid diagrams, and the page writer. |
+| `scripts/menu_api_map/reference/` | `sdk_index.json` and `curated.json`. |
+
+The first version of the tool was in `tools/menu_api_map/`. Pull request #3412
+then deleted `tools/`, and the `misthelper-devtools` package now supplies the
+`tools` namespace. Thus the tool moved to `scripts/menu_api_map/`, next to
+`scripts/generate_menu_wiki.py`. A folder named `data` cannot hold the data
+files, because `.gitignore` excludes every `data/` folder.
 
 ### Analysis rules
 
@@ -71,7 +77,7 @@ bytes on Windows and on Linux.
 
 ### CI
 
-The `menu_reference_drift` job runs `python -m tools.menu_api_map --check`
+The `menu_reference_drift` job runs `python -m scripts.menu_api_map --check`
 after the existing menu reference check. A unit test compares the SDK index
 with the installed `mistapi` package, because the unit test job installs the
 requirements.
@@ -98,7 +104,7 @@ old claim, the new claim, and the evidence.
 
 - The Mermaid lint and the diagram reference lint.
 - `python scripts/generate_menu_wiki.py --check` and
-  `python -m tools.menu_api_map --check`.
+  `python -m scripts.menu_api_map --check`.
 - The STE linter at 80 on every changed Markdown file.
 - ruff, black, bandit, interrogate, and pytest on the new tool and its tests.
 - The test quality ratchet.

@@ -12,11 +12,11 @@ Run each command from the repository root.
 
 | Command | Result |
 | - | - |
-| `python -m tools.menu_api_map` | Writes the map pages again. |
-| `python -m tools.menu_api_map --check` | Compares the pages with the source and writes nothing. |
-| `python -m tools.menu_api_map --explain 11` | Prints the call path of each endpoint of menu 11. |
-| `python -m tools.menu_api_map --refresh-sdk-index` | Reads the installed mistapi source and writes `reference/sdk_index.json` again. |
-| `python -m tools.menu_api_map --verbose` | Prints the debug log records. |
+| `python -m scripts.menu_api_map` | Writes the map pages again. |
+| `python -m scripts.menu_api_map --check` | Compares the pages with the source and writes nothing. |
+| `python -m scripts.menu_api_map --explain 11` | Prints the call path of each endpoint of menu 11. |
+| `python -m scripts.menu_api_map --refresh-sdk-index` | Reads the installed mistapi source and writes `reference/sdk_index.json` again. |
+| `python -m scripts.menu_api_map --verbose` | Prints the debug log records. |
 
 If a page is stale, missing, or not expected, `--check` names the page and
 exits with code 1. The `menu_reference_drift` CI job runs `--check`.
@@ -75,8 +75,8 @@ If you change the mistapi requirement range, do these steps in the same pull
 request.
 
 1. Install the new mistapi release.
-2. Run `python -m tools.menu_api_map --refresh-sdk-index`.
-3. Run `python -m tools.menu_api_map`.
+2. Run `python -m scripts.menu_api_map --refresh-sdk-index`.
+3. Run `python -m scripts.menu_api_map`.
 4. Commit the index and the changed pages.
 
 ## Limits

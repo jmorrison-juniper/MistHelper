@@ -17,7 +17,7 @@ from .mermaid import MAX_BREAKDOWN, MermaidDiagram  # The diagram text and its n
 DOCS_FOLDER = "documentation/menu-api"  # The folder of the documentation page set.
 WIKI_FOLDER = "documentation/wiki"  # The folder of the wiki page set.
 TOP_ENDPOINTS = 25  # The number of rows in the table of the most used endpoints.
-GENERATED_NOTICE = "<!-- The tool python -m tools.menu_api_map writes this page. Do not edit it by hand. -->"
+GENERATED_NOTICE = "<!-- The tool python -m scripts.menu_api_map writes this page. Do not edit it by hand. -->"
 CATEGORY_TEXT = {  # One sentence that describes each category.
     "safe": "A menu option in this category reads data and exports it. The --test run executes this category.",
     "interactive_safe": "A menu option in this category asks the operator for input, and it reads data only.",
@@ -192,10 +192,10 @@ class IndexSections:
             "Do not edit a page by hand. To write the pages again, run this command from the repository root:",
             "",
             "```powershell",
-            "python -m tools.menu_api_map",
+            "python -m scripts.menu_api_map",
             "```",
             "",
-            "The `menu_reference_drift` job runs `python -m tools.menu_api_map --check` on each pull request.",
+            "The `menu_reference_drift` job runs `python -m scripts.menu_api_map --check` on each pull request.",
             "If a change adds or removes an API call, the job fails until you write the pages again.",
             "",
         ]

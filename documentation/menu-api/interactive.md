@@ -1,4 +1,4 @@
-<!-- The tool python -m tools.menu_api_map writes this page. Do not edit it by hand. -->
+<!-- The tool python -m scripts.menu_api_map writes this page. Do not edit it by hand. -->
 
 # Menu API endpoints: interactive
 

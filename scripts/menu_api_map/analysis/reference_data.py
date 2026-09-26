@@ -25,8 +25,10 @@ SDK_INDEX_PATH = REFERENCE_DIR / "sdk_index.json"  # The vendored SDK index.
 CURATED_PATH = REFERENCE_DIR / "curated.json"  # The curated rules.
 DOC_BASE = "https://www.juniper.net/documentation/us/en/software/mist/api/http/api/"  # The shared link prefix.
 SDK_NAME_PATTERN = re.compile(r"^[a-z]+[A-Z][A-Za-z0-9]*$")  # An SDK function name, such as listOrgSites.
-SDK_INDEX_FIX = "Run python -m tools.menu_api_map --refresh-sdk-index to write the file again."  # The repair.
-CURATED_FIX = "Restore tools/menu_api_map/reference/curated.json from git, then apply your change again."  # The repair.
+SDK_INDEX_FIX = "Run python -m scripts.menu_api_map --refresh-sdk-index to write the file again."  # The repair.
+CURATED_FIX = (  # The repair text for a damaged curated file.
+    "Restore scripts/menu_api_map/reference/curated.json from git, then apply your change again."
+)
 
 
 class JsonDataFile:

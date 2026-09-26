@@ -13,12 +13,12 @@
 
 ## Phase 2: The endpoint map tool (US2, US5)
 
-- [x] T004 Write `tools/menu_api_map/analysis/` from the prototype.
+- [x] T004 Write `scripts/menu_api_map/analysis/` from the prototype.
 - [x] T005 Write the SDK index reader, the refresh command, and
   `reference/sdk_index.json`.
 - [x] T006 Write `reference/curated.json` with the shared helpers and the dynamic
   dispatch cases.
-- [x] T007 Write `tools/menu_api_map/render/` and the command line.
+- [x] T007 Write `scripts/menu_api_map/render/` and the command line.
 - [x] T008 Write the unit tests. One test proves that `--check` fails on a
   stale page.
 - [x] T009 Generate `documentation/menu-api/` and the wiki pages.

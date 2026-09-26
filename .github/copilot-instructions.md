@@ -99,7 +99,7 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
 4. **Multi-Backend Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
-6. **Generated References**: Run `python scripts/generate_menu_wiki.py` and `python -m tools.menu_api_map`. Commit the changed pages. The `menu_reference_drift` CI job fails when either set is stale.
+6. **Generated References**: Run `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`. Commit the changed pages. The `menu_reference_drift` CI job fails when either set is stale.
 7. **Release Note**: Add one new fragment file under `changelog.d/`. Never edit `CHANGELOG.md` on a feature branch. See [Release notes](#release-notes-each-change-owns-one-fragment)
 8. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 
@@ -795,7 +795,7 @@ The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR 
 | Format | **Black** | Formatting. Zero files may need reformatting. |
 | Type Safety | **mypy** | PEP 484 type annotations under the `pyproject.toml` settings |
 | Tests + Coverage | **pytest + pytest-cov** | Unit and integration tests, coverage >= 80 percent |
-| Test Quality | **tools.test_quality_analyzer** | New or changed tests must not add quality findings |
+| Test Quality | **`test-quality-analyzer`** | New or changed tests must not add quality findings |
 | Security Lint | **Bandit** | AST-based Python security issues at every severity |
 | Static Analysis Register | **CodeQL verdict register** | Dismissed CodeQL alerts must match the checked-in register |
 | Dependency CVEs | **pip-audit** | Known vulnerabilities in `requirements.txt` |
@@ -807,8 +807,8 @@ The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR 
 | Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
 | Mermaid Syntax | **`scripts/mermaid/lint_mermaid.mjs`** | Mermaid blocks parse successfully |
 | Citation References | **`tools.check_citations`** | Citations in `src/` and `tests/` resolve |
-| Menu Reference | **`scripts/generate_menu_wiki.py`** and **`tools.menu_api_map`** | The generated menu reference and the menu API endpoint map match the source |
-| SpecKit Tasks | **`tools/speckit_task_audit.py`** | Open SpecKit task records are reported as advisory output |
+| Menu Reference | **`scripts/generate_menu_wiki.py`** and **`scripts.menu_api_map`** | The generated menu reference and the menu API endpoint map match the source |
+| SpecKit Tasks | **`tools.speckit_task_audit`** | Open SpecKit task records are reported as advisory output |
 | Exclusion Drift | **`scripts/check_exclusion_drift.py`** | Quality exclusion drift is reported as advisory output |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
 | Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high`, `typecheck`, `lint`, and `test` for `ops-portal/`. All four block a merge. |
@@ -821,6 +821,10 @@ The workflow defines 24 quality jobs and two issue-management jobs. Read the job
 list from `.github/workflows/ci.yml` before you trust this count. CodeQL runs in
 a separate workflow, and Dependabot is not a gate. A caller can override each
 threshold through a `workflow_call` input. The table lists the default.
+
+The `misthelper-devtools` package supplies `test-quality-analyzer`,
+`tools.check_citations`, and `tools.speckit_task_audit`. `requirements-dev.txt`
+pins that package to one commit.
 
 Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
 gate that reads the npm dependency tree, so it is the only check that can report

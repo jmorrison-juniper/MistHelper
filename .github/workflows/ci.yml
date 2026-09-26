@@ -747,7 +747,7 @@ jobs:
       # Issue #3411: the endpoint map pages come from the source code. The tool
       # reads the vendored SDK index, so this job needs no pip install.
       - name: Fail when the menu API endpoint map is stale
-        run: python -m tools.menu_api_map --check
+        run: python -m scripts.menu_api_map --check
 
   speckit_task_audit:
     name: "SpecKit task audit (advisory)"

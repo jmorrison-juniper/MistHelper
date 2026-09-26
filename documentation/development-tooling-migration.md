@@ -12,7 +12,7 @@ The new repository is `jmorrison-juniper/misthelper-devtools`.
 
 | Tree | Holds |
 | - | - |
-| `tools/` | The repository linters, the analyzers, the compliance checkers, and the symbol difference tool. |
+| `tools/` | Phase 2 deleted this tree. The `misthelper-devtools` package now supplies the repository linters, the analyzers, the compliance checkers, and the symbol difference tool. |
 | `scripts/` | The maintenance commands, the bootstrap helpers, and the report generators. |
 | `tests/` | The MistHelper test suite. |
 | `specs/` | The SpecKit records. |

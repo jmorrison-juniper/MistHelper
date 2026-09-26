@@ -1,6 +1,6 @@
 """Tests for the menu API endpoint map tool.
 
-Issue #3411 adds ``tools/menu_api_map``. The tool walks each menu handler
+Issue #3411 adds ``scripts/menu_api_map``. The tool walks each menu handler
 through the call graph, and it writes the endpoint map pages. Most tests build a
 small source tree in ``tmp_path``, so they need no network and no Mist token.
 
@@ -20,18 +20,18 @@ from pathlib import Path  # Builds the fixture file paths.
 
 import pytest  # Supplies the fixtures and the raises helper.
 
-from tools.menu_api_map.__main__ import REPO_ROOT, MapBuilder, MenuApiMapCli, PageFiles  # The command.
-from tools.menu_api_map.analysis.reference_data import (  # The data files and their readers.
+from scripts.menu_api_map.__main__ import REPO_ROOT, MapBuilder, MenuApiMapCli, PageFiles  # The command.
+from scripts.menu_api_map.analysis.reference_data import (  # The data files and their readers.
     SDK_INDEX_PATH,
     CuratedRules,
     SdkEndpoint,
     SdkIndex,
     SdkSourceReader,
 )
-from tools.menu_api_map.analysis.resolver import TypeResolver  # Finds the class of a receiver.
-from tools.menu_api_map.analysis.scanner import ScanCache, ScanTools  # Scans each function one time.
-from tools.menu_api_map.analysis.source_index import SourceIndex  # Parses the fixture tree.
-from tools.menu_api_map.analysis.walker import (  # The code under test.
+from scripts.menu_api_map.analysis.resolver import TypeResolver  # Finds the class of a receiver.
+from scripts.menu_api_map.analysis.scanner import ScanCache, ScanTools  # Scans each function one time.
+from scripts.menu_api_map.analysis.source_index import SourceIndex  # Parses the fixture tree.
+from scripts.menu_api_map.analysis.walker import (  # The code under test.
     EndpointUse,
     HelperResult,
     MenuOption,
@@ -39,8 +39,8 @@ from tools.menu_api_map.analysis.walker import (  # The code under test.
     MenuResult,
     MenuWalker,
 )
-from tools.menu_api_map.render.mermaid import MAX_BREAKDOWN, MermaidDiagram  # The diagram builder.
-from tools.menu_api_map.render.pages import PageInput, PageSet  # The page builder.
+from scripts.menu_api_map.render.mermaid import MAX_BREAKDOWN, MermaidDiagram  # The diagram builder.
+from scripts.menu_api_map.render.pages import PageInput, PageSet  # The page builder.
 
 SDK_VERSION = "0.0.test"  # The version that the fixture SDK index reports.
 SDK_ROWS = [  # A small SDK index: two org and site functions, and two const functions.
@@ -331,7 +331,7 @@ class TestCheckGuard:
         output = capsys.readouterr().out  # The report.
         assert code == 1  # The guard fails.
         assert "stale: documentation/menu-api/README.md" in output  # The report names the page.
-        assert "python -m tools.menu_api_map" in output  # The report names the fix command.
+        assert "python -m scripts.menu_api_map" in output  # The report names the fix command.
 
     def test_check_fails_on_a_missing_page(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """A page that does not exist gives exit code 1."""
@@ -490,7 +490,7 @@ def test_vendored_sdk_index_matches_the_installed_mistapi() -> None:
     """The vendored SDK index must describe the installed mistapi, or the map shows old endpoints."""
     vendored = SdkIndex.load()  # The index that the map reads.
     installed = SdkSourceReader.installed_version()  # The mistapi release in this environment.
-    fix = "Run python -m tools.menu_api_map --refresh-sdk-index, then python -m tools.menu_api_map."  # The fix.
+    fix = "Run python -m scripts.menu_api_map --refresh-sdk-index, then python -m scripts.menu_api_map."  # The fix.
     decision = SdkReleaseCheck.decide(installed, vendored.version)  # Compare the two releases.
     found = f"The vendored SDK index describes mistapi {vendored.version}, and mistapi {installed} is installed."
     assert decision != SdkReleaseCheck.LINE, f"{found} {fix}"  # A new release line must refresh the index.
