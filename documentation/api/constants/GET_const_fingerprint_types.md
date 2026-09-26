@@ -14,7 +14,7 @@ Get List of supported fingerprint attribute values
 * mfg
 * os_type
 
-This information can be used in the [Mist NAC Rules]($h/Orgs%20NAC%20Rules/_overview) `matching` attribute.
+This information can be used in the Mist NAC Rules `matching` attribute.
 
 ## Authentication
 

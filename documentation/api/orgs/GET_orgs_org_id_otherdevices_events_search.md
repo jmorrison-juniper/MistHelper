@@ -31,7 +31,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 | device_mac | string | No |  |  | MAC of attached device |
 | model | string | No |  |  | Device model |
 | vendor | string | No |  |  | Vendor name |
-| type | string | No |  |  | See  [List Device Events Definitions]($e/Constants%20Events/listOtherDeviceEventsDefinitions) |
+| type | string | No |  |  | See  [List Device Events Definitions](../constants/GET_const_otherdevice_events.md) |
 | limit | integer | No | 100 |  |  |
 | start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |
 | end | string | No |  |  | End time (epoch timestamp in seconds, or relative string like "-1d", "-2h", "now") |

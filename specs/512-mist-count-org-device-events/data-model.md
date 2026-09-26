@@ -1,6 +1,6 @@
 # Phase 1 Data Model: CountOrgDeviceEvents
 
-**Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Contract**: [contracts/count_org_device_events.md](./contracts/count_org_device_events.md)
+**Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Contract**: `contracts/count_org_device_events.md` (planned; never created)
 
 This document captures the entities, primary keys, foreign keys, state model, SQLite
 DDL, and the `ENDPOINT_PRIMARY_KEY_STRATEGIES` entry for the new menu operation.

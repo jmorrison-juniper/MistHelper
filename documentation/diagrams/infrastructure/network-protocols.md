@@ -29,7 +29,8 @@ flowchart LR
     BODY --> FCS["FCS<br/>Bytes 32-35 (4B)"]
 ```
 
-> **PNG fallback**: If this diagram does not render, see [network-protocols.png](network-protocols.png).
+> **Beta diagram type**: this diagram uses `packet-beta`. A viewer without beta
+> support does not render it. Open this page on GitHub.
 
 ## Ethernet Frame (Switch Captures)
 

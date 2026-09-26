@@ -9,7 +9,7 @@
 ## Description
 
 Get AP Insight Metrics
-See metrics possibilities at [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics)
+See metrics possibilities at [List Insight Metrics](../constants/GET_const_insight_metrics.md)
 
 ## Authentication
 
@@ -22,7 +22,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | site_id | string | Yes |  |
-| metric | string | Yes | See [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics) for available metrics |
+| metric | string | Yes | See [List Insight Metrics](../constants/GET_const_insight_metrics.md) for available metrics |
 | device_mac | string | Yes |  |
 
 ### Query Parameters
@@ -135,8 +135,8 @@ Retrieves detailed insight metrics for a specific device by MAC address (e.g., A
 
 ## Related Endpoints
 
-- [GET_sites_site_id_insights_client_client_mac_metric.md](GET_sites_site_id_insights_client_client_mac_metric.md) — Client insights
-- [GET_sites_site_id_insights_metric.md](GET_sites_site_id_insights_metric.md) — Site-level metrics
+- [GET_sites_site_id_insights_client_client_mac.md](GET_sites_site_id_insights_client_client_mac.md) — Client insights
+- [GET_sites_site_id_insights.md](GET_sites_site_id_insights.md) — Site-level metrics
 
 ## MistHelper Notes
 

@@ -31,6 +31,7 @@ import pkgutil
 import re
 import time
 from pathlib import Path
+from urllib.parse import unquote
 
 logging.basicConfig(
     level=logging.INFO,
@@ -739,6 +740,7 @@ def main() -> None:
     renderer = MarkdownRenderer(resolver)  # construct markdown renderer
 
     operations = spec_parser.operations  # flat list of all spec operations
+    crossref_index = _build_crossref_index(operations)  # operationId -> generated page
     category_counts: dict[str, int] = {}  # track per-category file count for logging
 
     logger.info("Writing spec-derived operation files ...")  # log before bulk file write
@@ -746,6 +748,7 @@ def main() -> None:
         category = operation["category"]
         filename = operation["filename"]
         content = renderer.render_operation(operation)  # render markdown for this operation
+        content = _resolve_crossrefs(content, category, crossref_index)  # fix vendor placeholders
         output_path = OUTPUT_DIR / category / filename
         _safe_write(output_path, content)  # preserve enriched files; only write if placeholder or new
         category_counts[category] = category_counts.get(category, 0) + 1  # increment count
@@ -812,6 +815,41 @@ def _run_library_gap_analysis(operations: list[dict]) -> list[LibraryFunction]:
 
 
 _ENRICHMENT_PLACEHOLDER = "*To be enriched by AI agent.*"  # sentinel text written into fresh stub files
+_CROSSREF_LINK = re.compile(r"\[([^\]]*)\]\(\$[a-z]/([^)]+)\)")  # upstream $e/$h placeholder link
+
+
+def _build_crossref_index(operations: list[dict]) -> dict[str, tuple[str, str]]:
+    """Map each operationId to its generated category and filename."""
+    index: dict[str, tuple[str, str]] = {}
+    for operation in operations:
+        operation_id = operation.get("operation_id")
+        if operation_id:
+            index.setdefault(operation_id, (operation["category"], operation["filename"]))
+    return index
+
+
+def _resolve_crossrefs(content: str, category: str, index: dict[str, tuple[str, str]]) -> str:
+    """Replace upstream ``$e``/``$h`` placeholder links with local page links.
+
+    The Mist specification writes cross-references as ``$e/<Tag>/<operationId>``.
+    That placeholder is meaningless outside the vendor documentation portal, so
+    it renders as a dead link here. Point it at the page this generator writes
+    for the same operation. Drop the link but keep the text when no page exists,
+    such as for a ``_overview`` tag reference.
+    """
+
+    def replace(match: "re.Match[str]") -> str:
+        label = match.group(1)
+        operation_id = unquote(match.group(2)).rsplit("/", 1)[-1]
+        target = index.get(operation_id)
+        if target is None:
+            return label
+        target_category, filename = target
+        if target_category == category:
+            return f"[{label}]({filename})"
+        return f"[{label}](../{target_category}/{filename})"
+
+    return _CROSSREF_LINK.sub(replace, content)
 
 
 def _safe_write(output_path: "Path", content: str) -> None:  # noqa: F821

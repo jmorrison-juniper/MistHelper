@@ -21,13 +21,13 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | org_id | string | Yes |  |
-| metric | string | Yes | See [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics) for available metrics |
+| metric | string | Yes | See [List Insight Metrics](../constants/GET_const_insight_metrics.md) for available metrics |
 
 ### Query Parameters
 
 | Name | Type | Required | Default | Enum | Description |
 |------|------|----------|---------|------|-------------|
-| sle | string | No |  |  | See [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics) for more details |
+| sle | string | No |  |  | See [List Insight Metrics](../constants/GET_const_insight_metrics.md) for more details |
 | duration | string | No | 1d |  | Duration like 7d, 2w |
 | interval | string | No |  |  | Aggregation works by giving a time range plus interval (e.g. 1d, 1h, 10m) where aggregation function would be applied to. |
 | start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |

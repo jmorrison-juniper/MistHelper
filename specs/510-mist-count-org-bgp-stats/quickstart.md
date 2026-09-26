@@ -2,7 +2,7 @@
 
 **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) |
 **Data Model**: [data-model.md](./data-model.md) |
-**Contract**: [contracts/count_org_bgp_stats.md](./contracts/count_org_bgp_stats.md)
+**Contract**: `contracts/count_org_bgp_stats.md` (planned; never created)
 
 ## Prerequisites
 

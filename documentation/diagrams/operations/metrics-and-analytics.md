@@ -109,7 +109,8 @@ flowchart LR
     R1 --> R2 --> R3 -->|"RateLimitingUtils<br/>backs off"| R4 -->|"Delay decreases<br/>after recovery"| R5
 ```
 
-> **PNG fallback**: If this diagram does not render, see [metrics-xychart.png](metrics-xychart.png).
+> **Beta diagram type**: this diagram uses `xychart-beta`. A viewer without beta
+> support does not render it. Open this page on GitHub.
 
 ## Data Flow Volumes
 
@@ -140,7 +141,8 @@ flowchart LR
     POLY --> ARANGO["ArangoDB / Redis JSON / Redis TimeSeries"]
 ```
 
-> **PNG fallback**: If this diagram does not render, see [data-flow-sankey.png](data-flow-sankey.png).
+> **Beta diagram type**: this diagram uses `sankey-beta`. A viewer without beta
+> support does not render it. Open this page on GitHub.
 
 ## Version History Milestones
 

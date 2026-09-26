@@ -28,7 +28,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 |------|------|----------|---------|------|-------------|
 | distinct | string | No |  |  |  |
 | model | string | No |  |  |  |
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listDeviceEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_device_events.md) |
 | type_code | string | No |  |  |  |
 | start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |
 | end | string | No |  |  | End time (epoch timestamp in seconds, or relative string like "-1d", "-2h", "now") |

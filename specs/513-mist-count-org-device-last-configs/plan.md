@@ -124,9 +124,9 @@ Outputs:
 
 - [data-model.md](./data-model.md) -- entities, SQLite DDL, and
   `ENDPOINT_PRIMARY_KEY_STRATEGIES` entry.
-- [quickstart.md](./quickstart.md) -- how a developer runs and verifies the
+- `quickstart.md` (planned; never created) -- how a developer runs and verifies the
   new menu item locally.
-- [contracts/count_org_device_last_configs.md](./contracts/count_org_device_last_configs.md)
+- `contracts/count_org_device_last_configs.md` (planned; never created)
   -- full HTTP + SDK contract, response schema, error handling.
 
 ### Post-Phase 1 Re-Check

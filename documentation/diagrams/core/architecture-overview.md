@@ -96,7 +96,8 @@ flowchart LR
     container --> web_portal
 ```
 
-> **PNG fallback**: If this diagram does not render, see [architecture-overview.png](architecture-overview.png).
+> **Beta diagram type**: this diagram uses `architecture-beta`. A viewer without beta
+> support does not render it. Open this page on GitHub.
 
 ## Module Decomposition (`src/`)
 

@@ -27,7 +27,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 | Name | Type | Required | Default | Enum | Description |
 |------|------|----------|---------|------|-------------|
 | distinct | string | No |  |  |  |
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listNacEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_nac_events.md) |
 | start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |
 | end | string | No |  |  | End time (epoch timestamp in seconds, or relative string like "-1d", "-2h", "now") |
 | duration | string | No | 1d |  | Duration like 7d, 2w |

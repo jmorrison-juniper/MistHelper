@@ -29,7 +29,7 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 | distinct | string | No |  |  |  |
 | mxedge_id | string | No |  |  | Mist edge id |
 | mxcluster_id | string | No |  |  | Mist edge cluster id |
-| type | string | No |  |  | See [List Device Events Definitions]($e/Constants%20Events/listDeviceEventsDefinitions) |
+| type | string | No |  |  | See [List Device Events Definitions](../constants/GET_const_device_events.md) |
 | service | string | No |  |  | Service running on mist edge(mxagent, tunterm etc) |
 | start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |
 | end | string | No |  |  | End time (epoch timestamp in seconds, or relative string like "-1d", "-2h", "now") |

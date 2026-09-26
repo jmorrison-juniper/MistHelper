@@ -10,7 +10,7 @@
 
 Search for Wired Clients in org
 
-Note: For list of available `type` values, please refer to [List Client Events Definitions]($e/Constants%20Events/listClientEventsDefinitions)
+Note: For list of available `type` values, please refer to [List Client Events Definitions](../constants/GET_const_client_events.md)
 
 ## Authentication
 

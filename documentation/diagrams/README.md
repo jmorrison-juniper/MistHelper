@@ -91,12 +91,12 @@ This suite uses these Mermaid diagram types:
 
 Most diagrams use the shared dark palette that sets `#E20074` as the primary accent.
 
-## PNG Fallbacks
+## Beta diagram types
 
-Beta diagram types include PNG fallback images for environments where beta rendering is unavailable:
+These diagrams use a beta Mermaid type. A viewer without beta support does not
+render them. Open them on GitHub:
 
-- [architecture-overview.png](core/architecture-overview.png) (architecture-beta)
-- [container-architecture.png](infrastructure/container-architecture.png) (block-beta)
-- [network-protocols.png](infrastructure/network-protocols.png) (packet-beta)
-- [data-flow-sankey.png](operations/data-flow-sankey.png) (sankey-beta)
-- [metrics-xychart.png](operations/metrics-xychart.png) (xychart-beta)
+- [Architecture Overview](core/architecture-overview.md) (architecture-beta)
+- [Container Architecture](infrastructure/container-architecture.md) (block-beta)
+- [Network Protocols](infrastructure/network-protocols.md) (packet-beta)
+- [Metrics and Analytics](operations/metrics-and-analytics.md) (sankey-beta, xychart-beta)
