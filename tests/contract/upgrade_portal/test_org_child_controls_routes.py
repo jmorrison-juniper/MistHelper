@@ -56,6 +56,10 @@ CONFIRM_PAGE = "/upgrade/org/confirm"  # The typed confirmation page.
 SUBMIT_API = "/api/org-upgrades"  # The confirmed submission.
 SITE_SELECTION = "/select/site"  # The site selection of the multi-site mode.
 RETRY_CLEAR_API = "/api/org-upgrades/options/retry/clear"  # The end of a retry.
+UNREAD_SUMMARY = (  # Issue #3453: the check result of one switch whose site answered nothing.
+    "The target version runs on 0 of 1 device. The portal could not read 1 of 1 device. "
+    "Check the Mist dashboard before you act on this child job."
+)
 FIELD_FORMAT = "%Y-%m-%dT%H:%M"  # The value format of a date and time field.
 START_NOW_TEXT = "The upgrade starts at once after you confirm."  # The start line of a plan with no start time.
 PLAN_CHOICES = {  # The choices of a plan of the access points and the switches.
@@ -697,7 +701,8 @@ def test_a_failed_site_read_proves_nothing_and_keeps_the_site(harness: ControlsH
     assert answer.status_code == 200, answer.get_json()  # The check stored its verdicts.
     assert first["status"] == "completed"  # The proven child job completes.
     assert second["status"] == "submission_unknown"  # An empty read proves nothing.
-    assert second["reconciliation"]["summary"].startswith("0 of 1 devices run the target version.")  # Evidence.
+    assert second["reconciliation"]["summary"] == UNREAD_SUMMARY  # Issue #3453: the evidence of one device.
+    assert f"Last check: {UNREAD_SUMMARY}" in page  # Issue #3453: the page shows the same text.
     assert set(stored["site_locks"]) == {harness.site_one, SITE_TWO}  # A live child job keeps each site.
     held = lock.read_lock(harness.org_id, SITE_TWO, harness.locks)  # The lock of the site that answered nothing.
     assert getattr(held, "run_id", None) == RECONCILE_ID  # The operation still holds the site.

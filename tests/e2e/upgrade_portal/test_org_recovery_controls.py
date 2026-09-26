@@ -180,7 +180,8 @@ class TestMultiSiteRecoveryControls:
         page.wait_for_url(re.compile(rf".*{re.escape(job_path(RECONCILE_OPERATION_ID))}$"))
         sync_api.expect(page.get_by_test_id(f"org-upgrade-reconcile-child-{FIRST_UNCERTAIN_ID}")).to_have_count(0)
         evidence = page.get_by_test_id(f"org-upgrade-reconcile-evidence-{SECOND_UNCERTAIN_ID}")
-        sync_api.expect(evidence).to_contain_text("0 of 1 devices run the target version.")
+        sync_api.expect(evidence).to_contain_text("The target version runs on 0 of 1 device.")  # Issue #3453.
+        sync_api.expect(evidence).not_to_contain_text("devices")  # Issue #3453: one device takes the singular noun.
         sync_api.expect(page.get_by_test_id(f"org-upgrade-device-state-{FIRST_SWITCH_MAC}")).to_have_text("completed")
         sync_api.expect(page.get_by_test_id(f"org-upgrade-device-state-{SECOND_SWITCH_MAC}")).to_have_text(
             "submission_unknown"
