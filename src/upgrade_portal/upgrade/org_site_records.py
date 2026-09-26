@@ -9,6 +9,11 @@ Why:
     message. This class keeps the options of each site that answers, and it
     names each selected site that the plan cannot cover.
 
+    Issue #3424. A short read keeps the rows of the first page and loses the
+    devices of the other pages. The plan then looks complete, and the lost
+    devices stay on the old firmware. The mapper marks such a site with the
+    partial reasons of its read, and this class names the site in a refusal.
+
     A retry of issue #3247 is different. The retry chooses the sites of its
     failed devices, and the operator can clear a device type. A site can then
     hold no retry device, and the retry must still plan the other devices.
@@ -35,6 +40,11 @@ UNPLANNED_MESSAGE = (  # The refusal for a site that holds no device of a checke
     "The plan holds no device at these sites: {names}. Check the device types and the target versions. "
     "If a site holds no device of the checked types, clear that site on the Sites page."
 )
+PARTIAL_REASONS_FIELD = "partial_reasons"  # Issue #3424: the marker field of a site whose read was short.
+SHORT_MESSAGE = (  # Issue #3424: the refusal for a site whose read lost one or more pages.
+    "The portal did not read the complete device list at these sites: {names}. "
+    "Reload this page. Then save the options again."
+)
 
 SiteLabels = Callable[[list[str]], list[str]]  # Return one label for each site identifier, in the same order.
 
@@ -51,7 +61,7 @@ class OrgSiteRefusal(ValueError):
         """Build the refusal text from one message and the label of each site.
 
         Args:
-            template: `UNREAD_MESSAGE` or `UNPLANNED_MESSAGE`.
+            template: `UNREAD_MESSAGE`, `SHORT_MESSAGE`, or `UNPLANNED_MESSAGE`.
             labels: The name of each refused site, or its identifier.
         """
         self.labels = list(labels)  # Keep a detached copy for a caller that reads the sites.
@@ -89,6 +99,7 @@ class OrgSiteRecords:
         self.targets: list[dict[str, Any]] = []  # Each planned device, with the site that holds it.
         self.options: dict[str, Any] | None = None  # The options of a site that answered, or None.
         self.unread_sites: list[str] = []  # Each site whose record is empty.
+        self.short_sites: list[str] = []  # Issue #3424: each site whose inventory read lost one or more pages.
         self.unplanned_sites: list[str] = []  # Each site that answered with no planned device.
 
     def add(self, site_id: str, built: Mapping[str, Any]) -> None:
@@ -97,12 +108,18 @@ class OrgSiteRecords:
         Why:
             The shipped mapper returns an empty record when the inventory read
             finds no device. That record holds no options, so it must never
-            replace the options of a site that answered.
+            replace the options of a site that answered. Issue #3424: a record
+            that holds partial reasons marks a short read. That site adds no
+            target and no options, because its device list is not complete.
 
         Args:
             site_id: The site of the record.
             built: The record that the option mapper returned for the site.
         """
+        if built.get(PARTIAL_REASONS_FIELD):  # Issue #3424: the read kept the first page only.
+            self.short_sites.append(site_id)  # The refusal names this site.
+            logger.debug("The inventory read of site %s was short", site_id)  # Log the short record.
+            return  # A plan of the first page would leave out the devices of the lost pages.
         options = built.get("options")  # The options of the site, or None for an empty record.
         if not isinstance(options, Mapping):  # An empty record, or a value that no mapper writes.
             self.unread_sites.append(site_id)  # The refusal names this site.
@@ -120,7 +137,10 @@ class OrgSiteRecords:
 
         Why:
             An empty record comes first, because a new read can change the
-            plan. A site with no planned device stops the save only when
+            plan. A short read of issue #3424 comes next, in a retry too, and
+            also when no site holds a planned device. A plan of the first page
+            leaves out the devices of the lost pages, and a reload is a cheap
+            recovery. A site with no planned device stops the save only when
             another site holds one. If no site holds one, the route keeps its
             old refusal, which names the device type control. A retry never
             stops for a site with no planned device. The Sites page ends the
@@ -137,6 +157,9 @@ class OrgSiteRecords:
         if self.unread_sites:  # One or more sites answered an empty record, in a retry too.
             logger.warning("The save stops, because %s site(s) answered no record", len(self.unread_sites))
             return OrgSiteRefusal(UNREAD_MESSAGE, labels(self.unread_sites))  # Name each unread site.
+        if self.short_sites:  # Issue #3424: one or more reads lost pages, in a retry too.
+            logger.warning("The save stops, because %s site(s) answered a short read", len(self.short_sites))
+            return OrgSiteRefusal(SHORT_MESSAGE, labels(self.short_sites))  # Name each short site.
         if not self.targets or not self.unplanned_sites:  # Each site holds a planned device, or no site holds one.
             return None  # The plan covers each selected site, or the route keeps its old refusal.
         if not self.every_site_planned:  # Issue #3247: a retry plans the failed devices of its own sites.

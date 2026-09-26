@@ -64,6 +64,7 @@
 {% set site_label = site_name | default('', true) %}
 {% set site_key = site_id | default('', true) %}
 {% set next_url = confirm_url | default('/runs/' ~ run_key ~ '/confirm', true) %}
+{% set partial_lines = partial_reasons | default([], true) %}
 
 {#
   The two strategy values come from src/firmware/upgrade_service.py:43-44. The
@@ -121,6 +122,19 @@
   supplies the six values.
 #}
 {% include 'partials/lock_banner.html' %}
+
+{#
+  Issue #3424. A short site read keeps the devices of the first page and loses
+  the rest, and the table then looks complete. The banner tells the operator to
+  read the site again before the save. portal.css prepends "Caution:" to a
+  flash-warning. A reload recovers the read, so the signal word is Caution and
+  not Warning. The save of a short read stops with the same next step.
+#}
+{% if partial_lines %}
+<div class="flash-item flash-warning" role="status" data-testid="upgrade-partial-inventory">
+  <span>The portal did not read the complete device list of this site. The table can leave out devices. Reload this page before you save the options.</span>
+</div>
+{% endif %}
 
 <div class="portal-card">
   <h2 class="portal-card-title">Choose the upgrade options</h2>

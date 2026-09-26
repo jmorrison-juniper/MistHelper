@@ -71,6 +71,16 @@ from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the see
     OrgControlSeeds,
 )
 from tests.e2e.upgrade_portal.org_ended_seeds import OrgEndedSeeds  # Issue #3367: a child job that ended first.
+from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site whose read stops early.
+    SHORT_SITE_BROWSER_ID,
+    SHORT_SITE_DEVICE_COUNT,
+    SHORT_SITE_DIGIT,
+    SHORT_SITE_EMAIL,
+    SHORT_SITE_ID,
+    SHORT_SITE_LABEL,
+    SHORT_SITE_NAME,
+    SHORT_SITE_REASON,
+)
 from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, stores, and traps.
     allocate_resources,
     build_child_environment,
@@ -229,6 +239,14 @@ STANDALONE_ROLE_VERSIONS = {"pre": STAND_IN_VERSIONS[0], "post": STAND_IN_VERSIO
 # failed, so the table shows one version match and one version mismatch.
 FIRST_SITE_AP_MAC = "000000000001"  # The access point of the first site, which is device one.
 SECOND_SITE_AP_MAC = "000000000101"  # The access point of the second site, which is device one.
+# WHY: Issue #3424. The short-read site shows its devices in the same table as
+# the second site, so it needs its own addresses too. Each entry gives a site
+# one address digit and one name word. The second site keeps digit 1, so its
+# addresses stay the same as before this map.
+SITE_DEVICE_SERIES = {  # The address digit and the name word of each site with its own devices.
+    SECOND_SITE_ID: (1, "Site Two"),  # The second site of issue #3249.
+    SHORT_SITE_ID: (SHORT_SITE_DIGIT, SHORT_SITE_LABEL),  # The short-read site of issue #3424.
+}
 
 STAND_IN_RUN_ID = "e2e-run-0001"  # The run that owns the comparison captures below.
 PRE_CAPTURE_ID = "e2e-capture-pre-0001"  # The pre-check that the picker offers first.
@@ -1065,6 +1083,7 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
             {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},  # The second row, which the multi-site journeys add.
             {"id": JOURNEY_SITE_ID, "name": JOURNEY_SITE_NAME},  # Issue #3377: the last row, so no first row moves.
             {"id": EMPTY_SITE_ID, "name": EMPTY_SITE_NAME},  # Issue #3389: a site with no device, after every row.
+            {"id": SHORT_SITE_ID, "name": SHORT_SITE_NAME},  # Issue #3424: a site whose read stops, the last row.
         ]
     if name == "listOrgSiteStats":  # The device count of each site, read from `num_devices`.
         return [
@@ -1072,6 +1091,7 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
             {"id": SECOND_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
             {"id": JOURNEY_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},  # One device of each type.
             {"id": EMPTY_SITE_ID, "num_devices": 0},  # Issue #3389: the picker shows zero devices.
+            {"id": SHORT_SITE_ID, "num_devices": SHORT_SITE_DEVICE_COUNT},  # Issue #3424: more than the read finds.
         ]
     return []  # An unknown read name shows an empty list, and never a fault.
 
@@ -1126,6 +1146,7 @@ def stand_in_site_devices(site_id: str) -> list[dict[str, Any]]:
         and each row keys its test identifier by the MAC address. Two sites
         with the same addresses would give two rows the same identifier. The
         second site therefore holds its own addresses and its own identifiers.
+        Issue #3424: the short-read site holds its own addresses too.
 
     Args:
         site_id: The site whose inventory the caller reads.
@@ -1137,17 +1158,19 @@ def stand_in_site_devices(site_id: str) -> list[dict[str, Any]]:
     if site_id == EMPTY_SITE_ID:  # Issue #3389: the site that the picker shows with zero devices.
         return []  # The inventory read of the site finds no device.
     devices = stand_in_device_read()  # The first site keeps the inventory of every single-site test.
-    if site_id != SECOND_SITE_ID:  # Only the second site needs other addresses.
+    series = SITE_DEVICE_SERIES.get(site_id)  # The address digit and the name word of a site with its own devices.
+    if series is None:  # Only the second site and the short-read site need other addresses.
         return devices  # Keep the first site unchanged.
+    digit, label = series  # One digit for the addresses, and one word for the names.
     return [
         {
             **device,  # Keep the type, the model, the version, and the state of the first-site device.
-            "id": f"e2e-device-010{number}",  # A row key that no first-site device holds.
-            "name": f"E2E Site Two {device['type']} {number}",  # A name that no first-site device holds.
-            "mac": f"00000000010{number}",  # An address that no first-site device holds.
-            "serial": f"E2ESERIAL010{number}",  # A serial number that no first-site device holds.
-            "ip": f"192.0.2.10{number}",  # A documentation-range address that no first-site device holds.
-            "site_id": SECOND_SITE_ID,  # The site that owns this device.
+            "id": f"e2e-device-0{digit}0{number}",  # A row key that no other site holds.
+            "name": f"E2E {label} {device['type']} {number}",  # A name that no other site holds.
+            "mac": f"000000000{digit}0{number}",  # An address that no other site holds.
+            "serial": f"E2ESERIAL0{digit}0{number}",  # A serial number that no other site holds.
+            "ip": f"192.0.2.{digit}0{number}",  # A documentation-range address that no other site holds.
+            "site_id": site_id,  # The site that owns this device.
         }
         for number, device in enumerate(devices, start=1)
     ]
@@ -1193,18 +1216,19 @@ def stand_in_view_of(devices: list[dict[str, Any]]) -> dict[str, Any]:
     """Build the options view of one stand-in inventory with the shipped helpers.
 
     Why:
-        Issue #3377. The shipped `build_options_view` answers three fields. Each
-        type control of the options page draws its versions from the
-        `type_selections` field, so a view without it gives each control the
-        empty prompt only. This helper calls the two shipped helpers in the
-        shipped order, so the browser reads the view shape that ships.
+        Issue #3377. Each type control of the options page draws its versions
+        from the `type_selections` field, so a view without it gives each
+        control the empty prompt only. This helper calls the two shipped
+        helpers in the shipped order, so the browser reads the view shape that
+        ships. Issue #3424: the shipped view also answers `partial_reasons`,
+        and a complete read answers an empty list there.
 
     Args:
         devices: The inventory of one stand-in site.
 
     Returns:
-        The device rows, the version list of each model, and the version
-        selection of each device type.
+        The device rows, the version list of each model, the version selection
+        of each device type, and no partial reason.
     """
     from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
 
@@ -1217,7 +1241,32 @@ def stand_in_view_of(devices: list[dict[str, Any]]) -> dict[str, Any]:
         "targets": rows,  # One row for each device.
         "versions_by_model": {name: list(items) for name, items in by_model.items()},  # The shipped list shape.
         "type_selections": type_selections,  # The candidates of each type control.
+        "partial_reasons": [],  # Issue #3424: a complete read, so the page shows no Caution banner.
     }
+
+
+def stand_in_site_view(site_id: str, devices: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build the options view of one named site, with the gap of a short read.
+
+    Why:
+        Issue #3424. The shipped read of the short-read site keeps the rows of
+        the first page and one partial reason. This view gives the same shape,
+        so each options page shows the Caution banner for that site only.
+
+    Args:
+        site_id: The site under upgrade.
+        devices: The inventory rows that the read of the site kept.
+
+    Returns:
+        The view of `stand_in_view_of`. The short-read site also holds one
+        partial reason.
+    """
+    view = stand_in_view_of(devices)  # The shipped rows of the devices that the read kept.
+    if site_id == SHORT_SITE_ID:  # Only the short-read site lost the rows of a later page.
+        logger.info("The stand-in view of site %s reports a short read", site_id)  # Record the gap before it ships.
+        view["partial_reasons"] = [dict(SHORT_SITE_REASON)]  # A detached copy, so no page changes the seed.
+    logger.debug("The stand-in view of site %s holds %s reason(s)", site_id, len(view["partial_reasons"]))
+    return view  # The options page draws the rows and reads the reasons.
 
 
 def stand_in_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
@@ -1228,6 +1277,8 @@ def stand_in_options_view(session: Any, org_id: str, site_id: str) -> dict[str, 
         answers the stand-in inventory through `stand_in_view_of`, which calls
         the shipped helpers. The browser therefore reads the rows that ship and
         the test never proves a shape that only this file builds.
+        Issue #3424: a run of the short-read site reads that site, so its page
+        shows the Caution banner. Every other run reads the first site.
 
     Args:
         session: The cloud session. This stand-in reads none of it.
@@ -1235,20 +1286,22 @@ def stand_in_options_view(session: Any, org_id: str, site_id: str) -> dict[str, 
         site_id: The site under upgrade.
 
     Returns:
-        The device rows, the version list of each model, and the version
-        selection of each device type.
+        The device rows, the version list of each model, the version selection
+        of each device type, and the partial reasons of the read.
     """
-    del session, org_id, site_id  # One site answers every call, so no argument changes the result.
-    return stand_in_view_of(stand_in_device_read())  # The first-site inventory serves every single-site run.
+    del session, org_id  # One organization answers every call.
+    short = site_id == SHORT_SITE_ID  # Only the short-read site holds its own inventory in a single-site run.
+    devices = stand_in_site_devices(site_id) if short else stand_in_device_read()  # The first site serves the rest.
+    return stand_in_site_view(site_id, devices)  # The short-read site also reports its gap.
 
 
 def stand_in_org_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
     """Answer the device rows of one named site for the multi-site options page.
 
     Why:
-        Issue #3249. `stand_in_options_view` answers one site for every call,
+        Issue #3249. `stand_in_options_view` answers one site for most calls,
         so each selected site showed the same MAC addresses. This view reads the
-        inventory of the named site through `stand_in_view_of`.
+        inventory of the named site through `stand_in_site_view`.
 
     Args:
         session: The cloud session. This stand-in reads none of it.
@@ -1256,11 +1309,11 @@ def stand_in_org_options_view(session: Any, org_id: str, site_id: str) -> dict[s
         site_id: The site under upgrade.
 
     Returns:
-        The device rows of the named site, the version list of each model, and
-        the version selection of each device type.
+        The device rows of the named site, the version list of each model, the
+        version selection of each device type, and the partial reasons.
     """
     del session, org_id  # One organization answers every call.
-    return stand_in_view_of(stand_in_site_devices(site_id))  # The inventory of the named site.
+    return stand_in_site_view(site_id, stand_in_site_devices(site_id))  # The inventory and the gap of the site.
 
 
 def stand_in_options_builder(
@@ -1277,7 +1330,7 @@ def stand_in_options_builder(
         read from the stand-in inventory and then calls the shipped builders.
 
     Args:
-        record: The run record. The site of every stand-in run is the same one.
+        record: The run record. Issue #3424: the builder reads its site only.
         body: The request body of the options call.
         devices: The inventory of the named site, or None for the first site.
             Issue #3249: a multi-site call names the inventory of its site.
@@ -1286,10 +1339,17 @@ def stand_in_options_builder(
         The target list, the chosen options, and the warning sentences. An
         empty mapping when the named site holds no device, as the shipped
         `build_options_record` answers.
+
+    Raises:
+        PartialInventoryError: Issue #3424. The read of the short-read site
+            stops after the first page, as the shipped builder refuses it.
     """
-    del record  # One site answers every call, so the run record changes nothing.
     from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
 
+    site_id = str(record.get("site_id") or "")  # Issue #3424: only the site of the record changes the result.
+    if site_id == SHORT_SITE_ID:  # The shipped builder refuses a read that stopped after the first page.
+        logger.info("The stand-in builder refuses the short read of site %s", site_id)  # Record the refusal.
+        raise options.PartialInventoryError(site_id, [dict(SHORT_SITE_REASON)])  # The shipped refusal and reason.
     if devices is not None and not devices:  # Issue #3389: the shipped rule for a site with no device.
         return {}  # The route then names the site in its refusal.
     choices = body.get("targets")
@@ -2109,7 +2169,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService
     built.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = stand_in_org_options_view  # Issue #3249: one inventory each.
     built.config[org_upgrade.OPTIONS_BUILDER_CONFIG_KEY] = lambda cloud_session, org_id, site_id, body: (
-        stand_in_options_builder({}, body, stand_in_site_devices(site_id))  # Issue #3249: the named site only.
+        stand_in_options_builder({"site_id": site_id}, body, stand_in_site_devices(site_id))  # The named site only.
     )
     # WHY: Issue #3249. The device table reads the running version of each
     # device. This seam answers fixed versions, so the browser suite opens no
@@ -2139,6 +2199,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     _register_operator(FIRMWARE_EMAIL, FIRMWARE_BROWSER_ID)  # The operator that may start firmware writes.
     _register_operator(CONTROLS_EMAIL, CONTROLS_BROWSER_ID)  # Issue #3247: the owner of the recovery seeds.
     _register_operator(EMPTY_SITE_EMAIL, EMPTY_SITE_BROWSER_ID)  # Issue #3389: the operator of the empty site.
+    _register_operator(SHORT_SITE_EMAIL, SHORT_SITE_BROWSER_ID)  # Issue #3424: the operator of the short-read site.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
 
@@ -2339,6 +2400,32 @@ def empty_site_operator_page(context: Any, capture_portal_server: str) -> Iterat
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
     yield opened  # The test selects the empty site and then clears it.
+    opened.close()  # A page left open would hold a browser target for the whole run.
+
+
+@pytest.fixture
+def short_read_operator_page(context: Any, capture_portal_server: str) -> Iterator[Any]:
+    """Open a browser page of the operator that selects the short-read site.
+
+    Why:
+        Issue #3424. The stored site set lasts across journeys. A separate
+        operator keeps the short-read site out of the site set of every other
+        journey, also when the journey fails.
+
+    Args:
+        context: The browser context that `pytest-playwright` built.
+        capture_portal_server: The address of the running portal.
+
+    Yields:
+        The browser page, with the session cookies of the short-read operator.
+    """
+    del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
+    context.add_cookies(operator_session_cookies(SHORT_SITE_EMAIL, SHORT_SITE_BROWSER_ID))  # The separate pair.
+    opened = context.new_page()  # The page then carries the session on its first request.
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    yield opened  # The test selects the short-read site and then clears it.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
 

@@ -302,6 +302,66 @@ def guard_page_count(section: str, collected: int, response: Any) -> list[dict[s
     return [_partial_reason(section, REASON_SHORT_READ, status)]
 
 
+def _page_records(response: Any) -> list[Any] | None:
+    """Return the records that one page holds, or None for a lost page.
+
+    Why:
+        ``mistapi.get_all`` adds each later page with no status check
+        (``.venv/Lib/site-packages/mistapi/__pagination.py:56-62``). A refused
+        page holds an error body. The helper then adds nothing for an HTML
+        body, or it adds the key names of a JSON error body. This helper names
+        the page lost instead.
+
+    Args:
+        response: The answer that the SDK built for one page.
+
+    Returns:
+        The records of the page, or None when the page holds no readable list.
+    """
+    if _status_reason(_status_code(response)) is not None:  # A refused page or a lost connection holds no record.
+        return None
+    payload = _payload(response)  # The parsed body of the page.
+    if isinstance(payload, dict):  # A search answer holds its records under "results".
+        payload = payload.get("results")
+    return list(payload) if isinstance(payload, list) else None  # Every other body is a lost page.
+
+
+def read_every_page(session: Any, section: str, response: Any) -> DeviceRead:
+    """Follow every page of one read and stop at the first lost page.
+
+    Why:
+        Issue #3424. ``getOrgInventory`` answers a JSON list, and the cloud
+        sends the page total in the ``X-Page-Total`` header only. The guard
+        above reads a total from the body, so a lost later page left no
+        partial reason. This walk checks the status and the shape of each
+        later page. A lost page becomes a short read with the status of that
+        page. The walk does not compare the header total, because a read
+        without ``vc`` folds the members of a stack into one row.
+
+    Args:
+        session: The cloud session. The caller owns it.
+        section: The section name for a partial reason entry.
+        response: The first page that the SDK built. ``guard_page_count``
+            names a fault of this page.
+
+    Returns:
+        The records of each page that arrived, and one reason for a lost page.
+    """
+    records = _page_records(response) or []  # A lost first page holds no record, and the guard names it.
+    current = response  # The page that holds the link to the next page.
+    while getattr(current, "next", None):  # The SDK sets "next" while the cloud holds more pages.
+        logger.info("Upgrade portal reads the next page of section %s", section)  # Log before the page call.
+        current = mistapi.get_next(mist_session=session, response=current)  # Read one page through the SDK.
+        page = _page_records(current)  # The records of that page, or None for a lost page.
+        if page is None:  # The cloud refused the page, or the page holds no list.
+            status = _status_code(current)  # The status of the lost page, or zero.
+            logger.warning("Upgrade portal lost a later page of section %s. The cloud answered %s", section, status)
+            return DeviceRead(section, records, [_partial_reason(section, REASON_SHORT_READ, status)])
+        records.extend(page)  # Keep the rows of a whole page.
+        logger.debug("Upgrade portal holds %s records for section %s", len(records), section)  # Log the count only.
+    return DeviceRead(section, records, [])  # Every page arrived.
+
+
 def _read_group(session: Any, section: str, response_factory: Any) -> DeviceRead:
     """Run one cloud read and turn a fault into a partial reason.
 
@@ -642,6 +702,7 @@ __all__ = [
     "guard_statistics_coverage",
     "normalize_device_mac",
     "read_device_statistics",
+    "read_every_page",
     "read_inventory",
     "resolve_page_limit",
 ]

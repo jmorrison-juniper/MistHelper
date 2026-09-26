@@ -141,6 +141,7 @@ PLAN_ATTRIBUTES = ("build_plans",)  # The builder of every cloud call of one run
 OPTION_RECORD_ATTRIBUTES = ("build_option_record",)  # The mapper of one request body onto a stored record.
 SELECTED_TYPES_ATTRIBUTES = ("selected_device_types",)  # The validator of selected upgrade types.
 VIEW_VERSIONS_FIELD = "versions_by_model"  # The render keyword that `options.html` reads.
+VIEW_PARTIAL_FIELD = "partial_reasons"  # Issue #3424: the render keyword of the Caution banner of `options.html`.
 BY_MODEL_FIELD = "by_model"  # `contracts/http-api.md` section 5 fixes this answer field.
 
 STORE_READ = "read_run"  # The reader that `runtime/signals.RunRecordStore` asks for.
@@ -1506,6 +1507,50 @@ def _add_schedule_preview(shown: dict[str, str], options: Mapping[str, Any]) -> 
         shown[f"{field}_preview"] = f"about {moment.strftime('%Y-%m-%d %H:%M UTC')} if you start now"
 
 
+def kept_options_view(record: dict[str, Any], stored: list[Any], ready: dict[str, Any]) -> dict[str, Any]:
+    """Return the options view that keeps the earlier answer, with no fresh read.
+
+    Why:
+        A ready map, a missing module, a signed-out session, and a failed read
+        each keep the earlier answer. Issue #3424: no fresh read ran, so the
+        view reports no partial reason and the page shows no Caution banner.
+
+    Args:
+        record: The stored run record.
+        stored: The rows that the run record already holds.
+        ready: The version map that a test injected, or an empty map.
+
+    Returns:
+        The five fields that `options_page` reads.
+    """
+    return {
+        TARGETS_FIELD: stored,  # A second view holds the choice of the first one.
+        VIEW_VERSIONS_FIELD: ready,  # The injected map, or an empty map.
+        "type_selections": {},  # No fresh read, so no typed selection.
+        "selected_types": list(record.get("selected_types", ["ap", "switch", "gateway"])),  # The saved types.
+        VIEW_PARTIAL_FIELD: [],  # Issue #3424: no fresh read, so no partial reason.
+    }
+
+
+def view_partial_reasons(answer: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return a detached copy of each partial reason of one view answer.
+
+    Why:
+        Issue #3424. The page warns the operator when the site read lost data.
+        An older builder answers no reason field, so its page shows no banner.
+
+    Args:
+        answer: The answer of the view builder.
+
+    Returns:
+        One copy of each reason entry, or an empty list.
+    """
+    reasons = answer.get(VIEW_PARTIAL_FIELD)  # An older builder answers no reason field.
+    if not isinstance(reasons, list):  # No list means no reason that the page can show.
+        return []  # The page shows no banner.
+    return [dict(reason) for reason in reasons if isinstance(reason, Mapping)]  # Copies, so the page changes none.
+
+
 def options_view(record: dict[str, Any]) -> dict[str, Any]:
     """Build the device rows and the version map that the options page draws.
 
@@ -1522,38 +1567,34 @@ def options_view(record: dict[str, Any]) -> dict[str, Any]:
         record: The stored run record.
 
     Returns:
-        The `targets` rows and the `versions_by_model` map that the page reads.
+        The `targets` rows, the `versions_by_model` map, and the
+        `partial_reasons` list that the page reads. Issue #3424: the list holds
+        the reasons of a fresh read that lost data, and it is empty otherwise.
     """
     stored = list(record.get(TARGETS_FIELD) or [])  # A second view holds the choice of the first one.
     ready = version_index(injected_object(VERSIONS_KEY))  # A test injects the map, so no cloud read runs.
     session = cloud_session()  # The sign-in built this session, and the record never carries one.
     builder = injected_object(OPTIONS_VIEW_KEY) or module_attribute(VIEW_ATTRIBUTES)  # The seam, then the module.
     if ready or session is None or not callable(builder):  # Any one of the three already answers the page.
-        return {
-            TARGETS_FIELD: stored,
-            VIEW_VERSIONS_FIELD: ready,
-            "type_selections": {},
-            "selected_types": list(record.get("selected_types", ["ap", "switch", "gateway"])),
-        }
+        return kept_options_view(record, stored, ready)  # No fresh read, so no partial reason.
     site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site, so one site scopes the read.
+    logger.info("upgrade: read the options view of the site %s", site_id)  # Log before the cloud read.
     try:  # The builder reaches the cloud, and the cloud refuses and times out.
-        answer = dict(builder(session, str(record.get("org_id", "")), site_id))
+        answer = dict(builder(session, str(record.get("org_id", "")), site_id))  # The fresh view of the site.
     except Exception:  # A page with no row beats a page that shows a fault to the operator.
         logger.warning("upgrade: the inventory read of the site %s did not answer", site_id)  # No stack trace.
-        return {
-            TARGETS_FIELD: stored,
-            VIEW_VERSIONS_FIELD: ready,
-            "type_selections": {},
-            "selected_types": list(record.get("selected_types", ["ap", "switch", "gateway"])),
-        }
-    selected_types = record.get("selected_types")
-    if not isinstance(selected_types, list):
-        selected_types = answer.get("selected_types")
+        return kept_options_view(record, stored, ready)  # The earlier answer, with no partial reason.
+    reasons = view_partial_reasons(answer)  # Issue #3424: the gaps of the fresh read.
+    logger.debug("upgrade: the options view of the site %s holds %s partial reason(s)", site_id, len(reasons))
+    selected_types = record.get("selected_types")  # A saved choice of device types outranks the fresh read.
+    if not isinstance(selected_types, list):  # A new run holds no saved choice.
+        selected_types = answer.get("selected_types")  # The builder can name the types of the site.
     return {
         TARGETS_FIELD: stored or list(answer.get(TARGETS_FIELD, [])),  # A saved choice outranks a fresh read.
         VIEW_VERSIONS_FIELD: version_index(answer.get(VIEW_VERSIONS_FIELD)),  # One version list for each model.
-        "type_selections": dict(answer.get("type_selections", {})),
+        "type_selections": dict(answer.get("type_selections", {})),  # The safe common target of each type.
         "selected_types": list(selected_types) if isinstance(selected_types, list) else ["ap", "switch", "gateway"],
+        VIEW_PARTIAL_FIELD: reasons,  # Issue #3424: the banner follows the fresh read, also after a saved choice.
     }
 
 
@@ -1974,7 +2015,13 @@ def options_page(run_id: str) -> str | tuple[str, int]:
     if record is None:  # Issue #3276: an unknown run has no device to pick a version for.
         return run_page_not_found(run_id)  # The 404 page names the ID and links to the site list.
     view = options_view(record)  # The site inventory fills a new run, and a saved choice outranks it.
-    logger.info("upgrade: show the options page of %s with %s device(s)", run_id, len(view[TARGETS_FIELD]))
+    partial_reasons = view.get(VIEW_PARTIAL_FIELD, [])  # Issue #3424: the gaps of the fresh site read.
+    logger.info(
+        "upgrade: show the options page of %s with %s device(s) and %s partial reason(s)",
+        run_id,
+        len(view[TARGETS_FIELD]),
+        len(partial_reasons),
+    )  # Log before the render, with counts only.
     context = {
         **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
         **run_lock_banner(record),  # The six values that the included lock banner reads.
@@ -1985,6 +2032,7 @@ def options_page(run_id: str) -> str | tuple[str, int]:
         targets=view[TARGETS_FIELD],  # One row for each device of the site.
         versions_by_model=view[VIEW_VERSIONS_FIELD],  # One version list for each model of those rows.
         type_selections=view.get("type_selections", {}),  # The safe common targets of each device type.
+        partial_reasons=partial_reasons,  # Issue #3424: a list with a reason shows the Caution banner.
         options=record.get("options", {}),  # The three controls show the saved choice.
         advanced=advanced_values(record),  # Issue #2156 reopens every advanced control with its saved value.
         defaults=option_defaults(),  # Issue #2186 names the value that an empty control keeps.

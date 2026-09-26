@@ -28,7 +28,7 @@ from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.runtime import identity, lock
 from src.upgrade_portal.upgrade import options as option_rules
-from src.upgrade_portal.upgrade.org_site_records import UNREAD_MESSAGE
+from src.upgrade_portal.upgrade.org_site_records import SHORT_MESSAGE, UNREAD_MESSAGE
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
 from tests.support.org_precheck_seams import PrecheckAdopterStandIn
@@ -526,6 +526,26 @@ def test_a_retry_save_refuses_a_site_whose_view_read_failed(harness: ControlsHar
     saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save the prefilled choices.
     assert saved.status_code == 400, saved.get_json()  # The failed switch stays in the retry.
     assert saved.get_json()["error"]["message"] == UNREAD_MESSAGE.format(names="Test Site")  # The unread site.
+    assert set(harness.store.records) == {RETRY_ID}  # The save wrote no new plan.
+    assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
+
+
+def test_a_retry_save_refuses_a_site_whose_view_read_was_short(harness: ControlsHarness) -> None:
+    """Issue #3424: a short view read at a retry site stops the save, because a retry device can sit on a lost page."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both sites.
+    views = {  # Each site still holds its devices. The read of the first site stopped after the first page.
+        harness.site_one: [inventory_row(AP_ONE), inventory_row(SWITCH_ONE)],
+        SITE_TWO: [inventory_row(AP_TWO), inventory_row(SWITCH_TWO)],
+    }
+    short_reason = {"section": "upgrade_inventory", "reason": "page_count_mismatch", "http_status": 200}
+    harness.client.application.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = lambda session, org, site: {
+        "targets": deepcopy(views[site]),  # Each read returns a detached copy of the site view.
+        "partial_reasons": [dict(short_reason)] if site == harness.site_one else [],  # Only the first site is short.
+    }
+    saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save the prefilled choices.
+    assert saved.status_code == 400, saved.get_json()  # A retry device of a lost page cannot drop out.
+    assert saved.get_json()["error"]["message"] == SHORT_MESSAGE.format(names="Test Site")  # The short site.
     assert set(harness.store.records) == {RETRY_ID}  # The save wrote no new plan.
     assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
 

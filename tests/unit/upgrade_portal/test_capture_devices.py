@@ -14,15 +14,19 @@ Why:
 
 from __future__ import annotations
 
+import json
+import logging
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import mistapi
 import pytest
+from mistapi.__api_response import APIResponse
 
 from src.config import runtime_settings
 from src.upgrade_portal.capture import devices
+from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches a
 #      real organization or a real site.
@@ -78,6 +82,22 @@ INDEX_KEYS = frozenset(
 #      capture. The token "time" is absent from this list, because "uptime" is
 #      a real field and the cloud reports it.
 TIMESTAMP_TOKENS = ("timestamp", "_at", "date", "captured", "collected", "epoch", "seen")
+
+# WHY: Issue #3424 review. A read of two rows with one row on each page. The
+#      SDK builds the link to page two from the three page headers, as it does
+#      for the live cloud. The page walk must follow that link and must name a
+#      lost page.
+HTTP_BAD_GATEWAY = 502
+STATS_FIRST_URL = f"https://api.mist.com/api/v1/sites/{SITE_ID}/stats/devices?type=all&limit=1"
+STATS_SECOND_LINK = f"/api/v1/sites/{SITE_ID}/stats/devices?type=all&limit=1&page=2"
+STATS_SECOND_URL = f"https://api.mist.com{STATS_SECOND_LINK}"
+SEARCH_FIRST_URL = f"https://api.mist.com/api/v1/orgs/{ORG_ID}/devices/search?limit=1"
+SEARCH_NEXT_LINK = f"/api/v1/orgs/{ORG_ID}/devices/search?limit=1&page=2"
+PAGE_ONE_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"}
+PAGE_TWO_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "2"}
+FIRST_PAGE_ROW = {"mac": MASTER_MAC, "type": "switch"}
+SECOND_PAGE_ROW = {"mac": STANDALONE_MAC, "type": "ap"}
+GATEWAY_FAULT_BODY = b"<html><body>502 Bad Gateway</body></html>"
 
 
 def _response(payload: Any, status_code: int = HTTP_OK) -> SimpleNamespace:
@@ -567,6 +587,106 @@ class TestGuardPageCount:
         result = devices.read_inventory(fake_mist_session, ORG_ID, SITE_ID, page_limit=PAGE_LIMIT)
         assert result.records == []
         assert result.partial_reasons[0]["reason"] == devices.REASON_SHORT_READ
+
+
+def _json_body(value: Any) -> bytes:
+    """Return one value as the bytes of a JSON answer body.
+
+    Args:
+        value: The value that the answer carries.
+
+    Returns:
+        The UTF-8 bytes of the JSON text.
+    """
+    return json.dumps(value).encode("utf-8")
+
+
+def _first_stats_page() -> APIResponse:
+    """Return page one of a statistics read of two rows.
+
+    Returns:
+        The SDK answer for page one. Its ``next`` link names page two.
+    """
+    return build_sdk_answer(HTTP_OK, _json_body([FIRST_PAGE_ROW]), PAGE_ONE_HEADERS, STATS_FIRST_URL)
+
+
+def _lost_page_reason(http_status: int) -> dict[str, Any]:
+    """Return the reason of a statistics read that lost page two.
+
+    Args:
+        http_status: The HTTP status of the lost page, or zero.
+
+    Returns:
+        One partial reason entry.
+    """
+    return {"section": devices.SECTION_STATISTICS, "reason": devices.REASON_SHORT_READ, "http_status": http_status}
+
+
+class TestReadEveryPage:
+    """The page walk names a lost later page.
+
+    Why:
+        Issue #3424 review. ``mistapi.get_all`` adds each later page with no
+        status check. A lost page added nothing for an HTML body, and the read
+        looked whole. The cloud sends the total of a list answer in a header,
+        so ``guard_page_count`` saw no total to compare.
+    """
+
+    def test_a_whole_read_follows_the_link_of_each_page(self) -> None:
+        """Every page arrives, so the walk keeps each row and names no loss."""
+        second = build_sdk_answer(HTTP_OK, _json_body([SECOND_PAGE_ROW]), PAGE_TWO_HEADERS, STATS_SECOND_URL)
+        session = PagedSession([second])  # The session answers page two.
+        walk = devices.read_every_page(session, devices.SECTION_STATISTICS, _first_stats_page())
+        assert session.links == [STATS_SECOND_LINK]  # The walk followed the link that the SDK built.
+        assert (walk.records, walk.partial_reasons) == ([FIRST_PAGE_ROW, SECOND_PAGE_ROW], [])
+
+    def test_a_refused_later_page_is_a_short_read_with_its_status(self) -> None:
+        """A gateway fault on page two keeps page one and names the status of page two."""
+        lost = build_sdk_answer(HTTP_BAD_GATEWAY, GATEWAY_FAULT_BODY, HTML_TYPE, STATS_SECOND_URL)
+        walk = devices.read_every_page(PagedSession([lost]), devices.SECTION_STATISTICS, _first_stats_page())
+        assert (walk.records, walk.partial_reasons) == ([FIRST_PAGE_ROW], [_lost_page_reason(HTTP_BAD_GATEWAY)])
+
+    def test_a_lost_connection_on_a_later_page_reports_status_zero(self) -> None:
+        """The SDK builds an answer with no status when the connection drops."""
+        lost = APIResponse(response=None, url=STATS_SECOND_URL)  # The SDK answer after a lost connection.
+        walk = devices.read_every_page(PagedSession([lost]), devices.SECTION_STATISTICS, _first_stats_page())
+        assert walk.partial_reasons == [_lost_page_reason(devices.HTTP_STATUS_NONE)]
+
+    def test_a_later_page_with_a_body_that_holds_no_list_is_lost(self) -> None:
+        """A page that answers 200 with an error body holds no record."""
+        lost = build_sdk_answer(HTTP_OK, _json_body({"error": "internal"}), JSON_TYPE, STATS_SECOND_URL)
+        walk = devices.read_every_page(PagedSession([lost]), devices.SECTION_STATISTICS, _first_stats_page())
+        assert (walk.records, walk.partial_reasons) == ([FIRST_PAGE_ROW], [_lost_page_reason(HTTP_OK)])
+
+    def test_a_search_answer_follows_the_link_in_the_body(self) -> None:
+        """A body with ``results`` and ``next`` keeps the behavior of ``mistapi.get_all``."""
+        first_body = _json_body({"results": [FIRST_PAGE_ROW], "next": SEARCH_NEXT_LINK})  # Page one names page two.
+        first = build_sdk_answer(HTTP_OK, first_body, JSON_TYPE, SEARCH_FIRST_URL)
+        second = build_sdk_answer(HTTP_OK, _json_body({"results": [SECOND_PAGE_ROW]}), JSON_TYPE, SEARCH_FIRST_URL)
+        session = PagedSession([second])  # The session answers page two.
+        walk = devices.read_every_page(session, devices.SECTION_INVENTORY, first)
+        assert session.links == [SEARCH_NEXT_LINK]  # The walk followed the link in the body.
+        assert (walk.records, walk.partial_reasons) == ([FIRST_PAGE_ROW, SECOND_PAGE_ROW], [])
+
+    def test_a_refused_first_page_adds_no_walk_reason(self) -> None:
+        """``guard_page_count`` names a refused first page, so the walk adds no second reason."""
+        first = build_sdk_answer(HTTP_FORBIDDEN, _json_body({"detail": "forbidden"}), JSON_TYPE, STATS_FIRST_URL)
+        session = PagedSession([])  # A refused first page names no later page.
+        walk = devices.read_every_page(session, devices.SECTION_STATISTICS, first)
+        assert (walk.records, walk.partial_reasons, session.links) == ([], [], [])
+
+    def test_the_log_names_the_section_and_the_status_and_no_record(self, caplog: pytest.LogCaptureFixture) -> None:
+        """An operator reads the lost section and its status, and never a device address.
+
+        Args:
+            caplog: The pytest log capture.
+        """
+        lost = build_sdk_answer(HTTP_BAD_GATEWAY, GATEWAY_FAULT_BODY, HTML_TYPE, STATS_SECOND_URL)
+        with caplog.at_level(logging.DEBUG):  # Keep each record of the walk.
+            devices.read_every_page(PagedSession([lost]), devices.SECTION_STATISTICS, _first_stats_page())
+        warnings = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+        assert any(devices.SECTION_STATISTICS in line and str(HTTP_BAD_GATEWAY) in line for line in warnings)
+        assert not any(MASTER_MAC in record.getMessage() for record in caplog.records)  # No device address.
 
 
 class TestGuardStatisticsCoverage:

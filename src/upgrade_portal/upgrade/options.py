@@ -56,6 +56,7 @@ from src.upgrade_portal.capture.devices import (
     REASON_READ_FAILED,
     guard_page_count,
     normalize_device_mac,
+    read_every_page,
     resolve_page_limit,
 )
 from src.upgrade_portal.runtime.lock import (  # The schedule guard must stay below the site lock bound.
@@ -69,6 +70,10 @@ SECTION_UPGRADE_INVENTORY = "upgrade_inventory"
 
 ERROR_BAD_OPTION = "bad_option"
 
+ERROR_PARTIAL_INVENTORY = "partial_inventory"  # Issue #3424: the code of a save that a short read refused.
+PARTIAL_INVENTORY_MESSAGE = (  # Issue #3424: the refusal text that the single-site flash region shows.
+    "The portal did not read the complete device list of this site. Reload this page. Then save the options again."
+)
 DEVICE_TYPE_AP = "ap"
 DEVICE_TYPE_SWITCH = "switch"
 DEVICE_TYPE_GATEWAY = "gateway"
@@ -452,6 +457,73 @@ class InventoryRead:
     records: list[dict[str, Any]]
     partial_reasons: list[dict[str, Any]]
 
+    @property
+    def is_short(self) -> bool:
+        """Report a read that kept the rows of its first pages and lost a later page.
+
+        Why:
+            Issue #3424. ``guard_page_count`` gives a refusal status and an
+            unknown answer shape with no row. ``read_every_page`` keeps the
+            rows of each page before a lost page, and it names that page. A
+            read that holds rows and a reason therefore lost a later page.
+            Those rows look like a complete table, so the page and the save
+            must name the gap.
+
+        Returns:
+            True when the read holds one or more rows and one or more reasons.
+        """
+        return bool(self.records) and bool(self.partial_reasons)  # A failed read and an empty site hold no row.
+
+
+class PartialInventoryError(ValueError):
+    """Refuse a save whose inventory read lost one or more pages.
+
+    Why:
+        Issue #3424. The save stored the devices of the first page only. The
+        devices of the lost pages then stayed on the old firmware, and no
+        record named them. A reload of the page is a cheap recovery, so the
+        save stops and tells the operator to read the site again.
+
+        The class is a ``ValueError`` and not a ``BadOptionError``. The
+        single-site route answers each ``ValueError`` with ``bad_option``. The
+        multi-site route translates a ``BadOptionError`` into the name of a
+        control, and a short read names no control.
+
+    Attributes:
+        code: ``ERROR_PARTIAL_INVENTORY``.
+        site_id: The site of the short read.
+        reasons: A detached copy of each partial reason of the read.
+    """
+
+    def __init__(self, site_id: str, reasons: Sequence[Mapping[str, Any]]) -> None:
+        """Build the refusal of one short read.
+
+        Args:
+            site_id: The site of the short read.
+            reasons: The partial reasons of the read.
+        """
+        self.code = ERROR_PARTIAL_INVENTORY  # A machine code for a caller that reads no text.
+        self.site_id = site_id  # The multi-site route names this site in its own refusal.
+        self.reasons = [dict(reason) for reason in reasons]  # A detached copy, so a later change stays out.
+        super().__init__(PARTIAL_INVENTORY_MESSAGE)  # The text that the single-site flash region shows.
+
+    @staticmethod
+    def reason_codes(reasons: Sequence[Mapping[str, Any]]) -> str:
+        """Return the reason codes of one read for a log line.
+
+        Why:
+            FR-012 of issue #3424. The log names the site and the reason codes
+            of each short read. A reason entry holds no device address and no
+            secret, so the codes are safe to log.
+
+        Args:
+            reasons: The partial reasons of the read.
+
+        Returns:
+            The distinct reason codes in alphabetical order, joined by commas.
+        """
+        return ", ".join(sorted({str(reason.get("reason", "")) for reason in reasons}))  # One code, one time.
+
 
 def _normalized_version(value: object) -> str:
     """Return the exact version form used for compatibility comparisons."""
@@ -609,11 +681,17 @@ def _read_paged(session: Any, call: Any) -> InventoryRead:
     """Run one paged cloud read and turn a fault into a partial reason.
 
     Why:
-        ``mistapi.get_all`` answers an unknown body shape with an empty list and
-        raises nothing (``.venv/Lib/site-packages/mistapi/__pagination.py:55``).
-        The upgrade view would then show no device and look complete. This
-        wrapper repeats the guard that ``src/upgrade_portal/capture/devices.py``
-        uses, so a short read becomes a named reason.
+        A page with an unknown body shape holds no readable record, and the
+        read raises nothing. The upgrade view would then show no device and
+        look complete. This wrapper runs the guard that
+        ``src/upgrade_portal/capture/devices.py`` uses, so a short read becomes
+        a named reason.
+
+        Issue #3424. ``getOrgInventory`` answers a JSON list. ``mistapi.get_all``
+        then lost a later page with no reason, and a JSON error page made the
+        row copy raise. ``read_every_page`` replaces that helper here and names
+        a lost later page. The row copy runs inside the guarded block, so a
+        record that is not a map fails the read and never raises.
 
     Args:
         session: The cloud session. The caller owns it.
@@ -623,14 +701,15 @@ def _read_paged(session: Any, call: Any) -> InventoryRead:
         The records and the reasons of the read.
     """
     try:
-        response = call()
-        records = mistapi.get_all(mist_session=session, response=response)
+        response = call()  # Read the first page.
+        walk = read_every_page(session, SECTION_UPGRADE_INVENTORY, response)  # Follow each later page.
+        rows = [dict(record) for record in walk.records]  # Copy each record. A record that is not a map raises here.
     except Exception as error:  # A cloud fault marks the read partial and never stops the run.
         logger.warning("Upgrade portal failed the upgrade inventory read: %s", type(error).__name__)
         return InventoryRead([], [_partial_reason(REASON_READ_FAILED, HTTP_STATUS_NONE)])
-    rows = [dict(record) for record in records]
     logger.debug("Upgrade portal read %s logical device(s) for the upgrade view", len(rows))
-    return InventoryRead(rows, guard_page_count(SECTION_UPGRADE_INVENTORY, len(rows), response))
+    first_page = guard_page_count(SECTION_UPGRADE_INVENTORY, len(rows), response)  # A refused or unknown first page.
+    return InventoryRead(rows, first_page or walk.partial_reasons)  # A first page fault outranks a lost later page.
 
 
 def read_upgrade_inventory(session: Any, org_id: str, site_id: str, page_limit: int | None = None) -> InventoryRead:
@@ -1835,21 +1914,29 @@ def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any
         site_id: The site under upgrade.
 
     Returns:
-        A mapping with a ``targets`` list of device rows and a
-        ``versions_by_model`` map of the versions of each model.
+        A mapping with a ``targets`` list of device rows, a
+        ``versions_by_model`` map of the versions of each model, and a
+        ``partial_reasons`` list. Issue #3424: the page shows a Caution banner
+        when the list holds a reason, and the list is empty after a whole read.
     """
-    inventory = read_upgrade_inventory(session, org_id, site_id)
+    logger.info("Upgrade portal builds the options view of site %s", site_id)  # Log before the inventory read.
+    inventory = read_upgrade_inventory(session, org_id, site_id)  # One read of every logical device of the site.
+    reasons = [dict(reason) for reason in inventory.partial_reasons]  # Issue #3424: detached copies for the page.
     if not inventory.records:  # A failed read must never spend a second call for no gain.
-        logger.warning("Upgrade portal read no device of site %s for the options page", site_id)
-        return {"targets": [], "versions_by_model": {}}
-    by_model = read_model_versions(session, site_id, inventory.records, org_id)
-    type_selections = TypedVersionSelector().select(inventory.records, by_model)
-    rows = build_version_options(inventory.records, by_model, type_selections)
-    logger.info("Upgrade portal offers %s device(s) on the options page of site %s", len(rows), site_id)
+        logger.warning("Upgrade portal read no device of site %s for the options page", site_id)  # The gap.
+        return {"targets": [], "versions_by_model": {}, "partial_reasons": reasons}  # The banner reads the reasons.
+    if inventory.is_short:  # Issue #3424: the rows of the first page look like a complete table.
+        codes = PartialInventoryError.reason_codes(reasons)  # FR-012: the codes hold no device address.
+        logger.warning("Upgrade portal read a short device list of site %s for the options page: %s", site_id, codes)
+    by_model = read_model_versions(session, site_id, inventory.records, org_id)  # The versions of each model.
+    type_selections = TypedVersionSelector().select(inventory.records, by_model)  # The safe target of each type.
+    rows = build_version_options(inventory.records, by_model, type_selections)  # One row for each device.
+    logger.info("Upgrade portal offers %s device(s) on the options page of site %s", len(rows), site_id)  # After.
     return {
-        "targets": rows,
-        "versions_by_model": {name: list(items) for name, items in by_model.items()},
-        "type_selections": type_selections,
+        "targets": rows,  # One row for each device that the read found.
+        "versions_by_model": {name: list(items) for name, items in by_model.items()},  # Plain lists for the page.
+        "type_selections": type_selections,  # The typed version controls read these values.
+        "partial_reasons": reasons,  # Issue #3424: an empty list after a whole read.
     }
 
 
@@ -1877,21 +1964,29 @@ def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[
     Raises:
         BadOptionError: If one choice names an unknown device, an empty version,
             or an option value that no rule maps.
+        PartialInventoryError: Issue #3424. The site read kept the rows of the
+            first page and lost the rest, so a plan would leave out devices.
     """
-    inventory = read_upgrade_inventory(session, org_id, site_id)
+    logger.info("Upgrade portal builds the option record of site %s", site_id)  # Log before the inventory read.
+    inventory = read_upgrade_inventory(session, org_id, site_id)  # The save reads the site again.
     if not inventory.records:  # A failed read must never look like a bad choice by the operator.
         logger.warning("Upgrade portal read no device of site %s, so the body carries the targets", site_id)
-        return {}
-    choices = body.get("targets")
-    rows = [one for one in choices if isinstance(one, Mapping)] if isinstance(choices, list) else []
-    selected_types = selected_device_types(body)
-    by_model = read_model_versions(session, site_id, inventory.records, org_id) if rows else {}
-    entries = build_targets(inventory.records, rows, by_model if rows else None, selected_types)
+        return {}  # Issue #3389 keeps this rule, and issue #3435 records its defect.
+    if inventory.is_short:  # Issue #3424: a plan of the first page leaves out the devices of the lost pages.
+        codes = PartialInventoryError.reason_codes(inventory.partial_reasons)  # FR-012: no device address.
+        logger.warning("Upgrade portal refused the options save of site %s after a short read: %s", site_id, codes)
+        raise PartialInventoryError(site_id, inventory.partial_reasons)  # FR-011: the refusal spends no version read.
+    choices = body.get("targets")  # The thin rows that the browser sends.
+    rows = [one for one in choices if isinstance(one, Mapping)] if isinstance(choices, list) else []  # Only mappings.
+    selected_types = selected_device_types(body)  # The device types that the operator checked.
+    by_model = read_model_versions(session, site_id, inventory.records, org_id) if rows else {}  # Only for a choice.
+    entries = build_targets(inventory.records, rows, by_model if rows else None, selected_types)  # The full rows.
+    logger.debug("Upgrade portal built %s target(s) for site %s", len(entries), site_id)  # Log after the build.
     return {
-        "targets": entries,
-        "options": asdict(build_options(body)),
-        "selected_types": list(selected_types),
-        "warnings": list(target_warnings(entries)),
+        "targets": entries,  # One full row for each chosen device.
+        "options": asdict(build_options(body)),  # The option record that the run driver reads.
+        "selected_types": list(selected_types),  # The device types of the plan.
+        "warnings": list(target_warnings(entries)),  # One sentence for each device that the operator must check.
     }
 
 
@@ -1901,6 +1996,8 @@ __all__ = [
     "DEVICE_TYPE_GATEWAY",
     "DEVICE_TYPE_SWITCH",
     "ERROR_BAD_OPTION",
+    "ERROR_PARTIAL_INVENTORY",
+    "PARTIAL_INVENTORY_MESSAGE",
     "SECTION_UPGRADE_INVENTORY",
     "STATE_PENDING",
     "STRATEGY_CHOICES",
@@ -1909,6 +2006,7 @@ __all__ = [
     "WARNING_SAME_VERSION",
     "BadOptionError",
     "InventoryRead",
+    "PartialInventoryError",
     "TypedVersionSelector",
     "advanced_option_values",
     "build_option_record",
