@@ -1,5 +1,8 @@
 # The stranded branch review of issue #1980
 
+Status note, 2026-09-25: this file is a historical review. It explains the rule
+in [contributing.md](./contributing.md). Do not use it as a current branch list.
+
 Issue #1980 found five branches that held commits above `main`. Each branch had
 one copy. This page records the verdict for each one, and it records the loss
 that followed.

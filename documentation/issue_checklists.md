@@ -1,5 +1,10 @@
 # Issue Checklists and Acceptance Criteria
 
+Status note, 2026-09-25: this document is a historical checklist from an old
+TODO scan. It is not a current menu map. The current registry is
+[`src/utils/operation_registry.py`](../src/utils/operation_registry.py), which
+holds 270 entries from 0 through 270 with no entry 152.
+
 This document contains detailed checklists for each of the issues created from the TODO/WIP scan, and acceptance criteria to mark the work done.
 
 ---

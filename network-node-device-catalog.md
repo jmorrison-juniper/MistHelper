@@ -1,5 +1,9 @@
 # Network node device catalog
 
+This Markdown file is a planning reference. No MistHelper Python file reads this
+file at run time. The machine-readable planning file is
+`network-node-device-catalog.json`.
+
 This catalog gives the planner the optic host constraints for common network
 nodes. It is a planning index, not a release-specific hardware support list.
 The exact switch SKU, port profile, firmware release, and vendor part number
@@ -50,4 +54,3 @@ compatible.
   https://www.arubanetworks.com/techdocs/hardware/
 * Mist switch documentation:
   https://www.mist.com/documentation/
-

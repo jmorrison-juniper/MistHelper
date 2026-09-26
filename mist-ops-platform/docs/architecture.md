@@ -13,8 +13,10 @@ Juniper Mist Cloud networks.
 - **Framework**: FastAPI 0.115+ on Uvicorn (4 workers)
 - **Purpose**: REST API serving all client operations
 - **Prefix**: All routes under `/api/v1/`
-- **Middleware**: Structured logging, rate limiting, authentication
-- **Routers**: health, sync, inventory, config, deploy, audit, drift, policies, webhooks
+- **Middleware and dependencies**: Structured logging middleware, bearer or
+  session authentication, and per-org rate limiting after authorization
+- **Routers**: health, sync, inventory, config, deploy, audit, drift, policies,
+  webhooks, and auth
 
 ### 2. Worker Layer (Celery)
 
@@ -100,7 +102,7 @@ mist-ops-platform/
       deploy/               # Executor, rollback, rollout, firmware
       checks/               # Pre/post checks, drift, correlation
       tasks/                # Task definitions
-  deploy/                   # Container/compose/Helm
+  deploy/                   # Container, Compose, and Helm files
   migrations/               # Alembic migrations
   tests/                    # Unit, integration, contract, e2e
   docs/                     # Architecture, operations guides

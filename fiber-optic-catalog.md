@@ -1,5 +1,8 @@
 # Fiber optic transceiver catalog
 
+This Markdown file is a planning reference. No MistHelper Python file reads this
+file at run time. The machine-readable planning file is `fiber-optic-catalog.json`.
+
 This catalog covers pluggable Ethernet optics used by Juniper, Mist, and Aruba
 network devices. It records the fields that a planner needs to select an optic.
 
@@ -104,4 +107,3 @@ The planner should accept a path only when all values match:
   https://www.fs.com/products/36735.html
 * Fiber Optic Association, `documentation/foa/01-fiber-basics.md` and
   `documentation/foa/04-loss-budget.md`.
-

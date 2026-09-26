@@ -70,7 +70,7 @@ run the tests again. See issue #1866.
 ## Key Conventions (Quick Reminders)
 
 - **Target audience**: Junior NOC engineers. Clear language, no jargon.
-- **Python 3.13+**, **mistapi 0.59+**, **UV** preferred over pip
+- **Python 3.13+**, **mistapi>=0.64.0,<0.65**, **UV** preferred over pip
 - **5-Item Rule**: Max 5 children per hierarchy level, max 5 params, max 25 lines per function
 - **safe_input()**: Wrap all `input()` calls for EOF handling in SSH/container contexts
 - **Natural business keys**: Define PK strategy in `ENDPOINT_PRIMARY_KEY_STRATEGIES` for new operations

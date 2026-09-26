@@ -11,19 +11,20 @@ Read the README first for the plain start.
 
 | Method | File | Description |
 |--------|------|-------------|
-| Compose | `compose.yml`, `compose.build.yml` | The stack of three containers. The supported method. |
+| Compose | `compose.yml`, `compose.build.yml` | The stack of three required services and one monitoring profile. The supported method. |
 | Podman Quadlet | `deploy/misthelper.container` | One container under systemd, with auto-restart |
 | Systemd | `deploy/misthelper.service` | A host that runs the code with no container |
 
 `deploy/.env.example` documents every environment variable.
 
-## The three containers
+## The compose services
 
-| Container | Purpose |
+| Service | Purpose |
 |-----------|---------|
 | `misthelper-app` | The application, the SSH server on port 2200, the web portal on port 8055, and the upgrade capture portal on port 8056 |
 | `misthelper-arangodb` | The document store. It holds every capture and every upgrade run. |
 | `misthelper-redis` | The site lock store, and the time-series cache |
+| `misthelper-observium` | Optional SNMP monitoring service. The `monitoring` profile starts it. |
 
 Warning: the two stores hold your captures and your upgrade runs. A command that
 removes them loses that data. Read the next section before you recreate
@@ -31,11 +32,17 @@ anything.
 
 ## Start the stack
 
-Use the helper script. It picks the native compose provider that works on Windows. It also keeps all services on `misthelper-network`, so the application resolves `misthelper-arangodb` and `misthelper-redis` by name.
+Use the helper script. It picks the native compose provider that works on Windows. It also keeps the services on `misthelper-network`, so the application resolves `misthelper-arangodb` and `misthelper-redis` by name.
 
 ```powershell
 .\scripts\compose.ps1 up -d     # Start the application, ArangoDB, and Redis
 .\scripts\compose.ps1 down      # Stop the stack without removing volumes
+```
+
+To start Observium, add its profile.
+
+```powershell
+.\scripts\compose.ps1 --profile monitoring up -d
 ```
 
 Warning: do not pass `-v` to the `down` command. That option removes the production store volumes, and the upgrade records are not recoverable.

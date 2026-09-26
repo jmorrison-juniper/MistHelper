@@ -1,10 +1,12 @@
 [<- Back to Diagram Index](../README.md) | [<- Back to Overview](overview.md)
 
-# Infrastructure, Configuration & API Fetching
+# Infrastructure, Configuration, and API Fetching
 
-Core infrastructure classes, configuration dataclass objects, and the API fetching inheritance chain.
+These diagrams show the core, the configuration objects, and the utilities for API fetches.
+The utility classes for API fetches are separate facades.
+They do not form an inheritance chain in the current tree.
 
-## Infrastructure & Core
+## Infrastructure and Configuration
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -20,44 +22,25 @@ classDiagram
     direction TB
 
     class DataDirectoryChecker {
-        +ensure_data_directory()
-        +validate_permissions()
+        +check()
     }
 
-    class SSHConnectionConfig {
-        +hostname: str
-        +username: str
-        +password: str
-        +port: int
-        +timeout: int
-    }
+    class EndpointConfig
+    class ExportBackendOptions
+    class SSHConnectionConfig
+    class SSHExecutionConfig
+    class AddressValidationConfig
+    class DeviceFetchConfig
+    class UtilityCommandsDeps
+    class SsidTemplateDeps
 
-    class SSHExecutionConfig {
-        +commands: list
-        +sudo: bool
-        +output_dir: str
-    }
-
-    class AddressValidationConfig {
-        +normalize: bool
-        +fuzzy_threshold: float
-    }
-
-    class DeviceFetchConfig {
-        +device_type: str
-        +include_stats: bool
-    }
-
-    class EndpointConfig {
-        +base_url: str
-        +page_limit: int
-        +timeout: int
-    }
+    DataDirectoryChecker ..> EndpointConfig : reads configured paths
+    SSHExecutionConfig ..> SSHConnectionConfig : uses connection values
+    DeviceUtilityCommands ..> UtilityCommandsDeps : receives dependencies
+    SSIDTemplateConsolidationManager ..> SsidTemplateDeps : receives dependencies
 ```
 
-## API Fetching Chain
-
-The API fetching classes form an inheritance chain, each layer adding specificity.
+## API Fetch Utilities
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -73,44 +56,51 @@ classDiagram
     direction TB
 
     class APICoreFetchUtils {
-        +fetch_single_page()
-        +handle_response()
-        +parse_pagination()
+        +all_sites_with_limit()
+        +all_inventory_with_limit()
+        +get_api_response_data()
     }
 
     class APITenantFetchUtils {
-        +fetch_org_data()
-        +fetch_site_data()
-        +resolve_tenant_context()
+        +organization_tenants()
+        +site_tenants()
+        +service_policy_tenants()
+        +gateway_template_tenants()
     }
 
     class APIFetchUtils {
-        +fetch_with_pagination()
-        +fetch_all_pages()
-        +build_endpoint_url()
+        +organization_services()
+        +all_site_settings()
+        +gateway_device_configs()
     }
 
-    class DeviceDataFetcher {
-        +fetch_devices_by_type()
-        +fetch_device_stats()
-        +enrich_with_site_names()
-    }
-
-    APICoreFetchUtils <|-- APITenantFetchUtils : extends
-    APITenantFetchUtils <|-- APIFetchUtils : extends
-    APIFetchUtils <|-- DeviceDataFetcher : extends
+    class DeviceDataFetcher
 
     class RateLimitingUtils {
-        +check_rate_limit()
-        +adaptive_delay()
-        +update_metrics()
+        +get_rate_limited_delay()
     }
 
-    APIFetchUtils --> RateLimitingUtils : uses
+    APICoreFetchUtils ..> RateLimitingUtils : delays API calls
+    APITenantFetchUtils ..> APICoreFetchUtils : reuses paged fetches
+    APIFetchUtils ..> APITenantFetchUtils : resolves tenant context
+    DeviceDataFetcher ..> APICoreFetchUtils : fetches device rows
 ```
+
+## Verified Module Paths
+
+| Class | Module path |
+|-------|-------------|
+| `DataDirectoryChecker` | `src/refactors/data_directory_checker.py` |
+| `EndpointConfig` | `src/dataclasses/endpoint_config.py` |
+| `SSHConnectionConfig` | `src/ssh/ssh_runner.py` |
+| `SSHExecutionConfig` | `src/ssh/ssh_runner.py` |
+| `APICoreFetchUtils` | `src/api/api_core_fetch_utils.py` |
+| `APITenantFetchUtils` | `src/api/tenant_fetch.py` |
+| `APIFetchUtils` | `src/api/api_fetch_utils.py` |
+| `DeviceDataFetcher` | `src/refactors/device_data_fetcher.py` and `src/gateway/overrides/device_data_fetcher.py` |
 
 ## Siblings
 
-- [Exporters](exporters.md) - Data export class families
-- [Managers](managers.md) - Manager classes (firmware, SSH, WebSocket)
-- [Utilities](utilities.md) - Utility and data processing classes
+- [Exporters](exporters.md) - Class families for data export
+- [Managers](managers.md) - Manager classes
+- [Utilities](utilities.md) - Utility classes and data processing classes

@@ -2,7 +2,7 @@
 
 # Data Pipeline
 
-Traces the complete data flow from menu selection through API calls, pagination, rate limiting, data transformation, to multi-format output (CSV/SQLite/ArangoDB/Redis).
+Traces data flow from menu selection through API calls, rate limiting, data transformation, and multi-format output.
 
 ## Happy-Path Sequence
 
@@ -20,16 +20,16 @@ How a typical data extraction operation flows through MistHelper's class chain.
 }}}%%
 sequenceDiagram
     participant User
-    participant Menu as OperationRegistry
+    participant Menu as menu_actions
     participant Fetch as APIFetchUtils
     participant Rate as RateLimitingUtils
     participant API as Mist Cloud API
     participant Process as DataProcessingUtils
     participant Export as DataExporter
 
-    User->>Menu: Select operation (e.g., --menu 11)
+    User->>Menu: Select operation, such as --menu 11
     Menu->>Fetch: fetch_with_pagination(endpoint)
-    
+
     loop Each Page (up to 1000 items/page)
         Fetch->>Rate: _apply_rate_limiting()
         Rate-->>Fetch: delay_ms (adaptive)
@@ -43,16 +43,16 @@ sequenceDiagram
     Process->>Process: flatten_dict() for nested JSON
     Process->>Process: sanitize_filename()
     Process-->>Menu: Flat records (list[dict])
-    Menu->>Export: write_with_format_selection(data, filename)
-    
+    Menu->>Export: write_with_format_selection(data, filename, api_function_name)
+
     alt CSV Output
         Export->>Export: Write to data/{filename}.csv
     else SQLite Output
         Export->>Export: Upsert to data/mist_data.db
-    else Polyglot Output
-        Export->>Export: Route via DatabaseRouter to ArangoDB/Redis
+    else Polyglot Mirror
+        Export->>Export: Route via DatabaseRouter
     end
-    
+
     Export-->>User: Operation complete
 ```
 
@@ -72,44 +72,50 @@ Decision flowchart showing how MistHelper handles API errors, rate limits, and o
 }}}%%
 flowchart TD
     A[API Request] --> B{Response Status?}
-    
+
     B -->|200 OK| C[Parse JSON Response]
     B -->|429 Rate Limited| D[Rate Limit Handler]
     B -->|401/403 Auth Error| E[Log Auth Failure]
     B -->|5xx Server Error| F{Retry Count < Max?}
     B -->|Network Error| F
-    
+
     D --> G[Read Retry-After Header]
     G --> H[Adaptive Delay Calculation]
     H --> I[Update delay_metrics.json]
     I --> J[Wait and Retry]
     J --> A
-    
+
     F -->|Yes| K[Exponential Backoff]
     K --> A
     F -->|No| L[Log Error + Return Partial Data]
-    
+
     E --> L
-    
+
     C --> M{More Pages?}
     M -->|Yes - Has next cursor| N[Update Pagination Cursor]
     N --> A
     M -->|No| O[Flatten and Normalize]
-    
+
     O --> P{Output Format?}
     P -->|CSV| Q[Write CSV to data/ directory]
     P -->|SQLite| R{PK Strategy?}
     P -->|Polyglot| W[DatabaseRouter]
-    W --> X[ArangoDB / Redis]
-    
+    W --> X{Strategy Type?}
+    X -->|natural_pk / auto_increment_with_unique| Y[ArangoDB]
+    X -->|composite_pk| Z[ArangoDB + Redis JSON]
+    X -->|timeseries_pk| TS[Redis TimeSeries]
+
     R -->|natural_pk| S[INSERT OR REPLACE by UUID]
     R -->|composite_pk| T[INSERT OR REPLACE by composite key]
-    R -->|auto_increment| U[INSERT with unique constraint]
-    
+    R -->|auto_increment_with_unique| U[INSERT with unique constraint]
+
     S --> V[Operation Complete]
     T --> V
     U --> V
     Q --> V
+    Y --> V
+    Z --> V
+    TS --> V
     L --> V
 
     style A fill:#E20074,stroke:#99004D,color:#E0E0E0
@@ -123,13 +129,14 @@ flowchart TD
 
 | Stage | Class | Key Method |
 |-------|-------|------------|
-| Entry Point | `OperationRegistry` | Dispatches menu selection to handler |
+| Entry Point | `menu_actions` | Maps menu numbers to handlers |
+| Safety Class | `OperationRegistry` | Classifies menu handlers for test and skip logic |
 | API Calls | `APIFetchUtils` | `fetch_with_pagination()` |
 | Rate Limiting | `RateLimitingUtils` | `_apply_rate_limiting()` with PID-like control |
 | Data Transform | `DataProcessingUtils` | `flatten_dict()`, `sanitize_filename()` |
 | CSV Output | `DataExporter` | `write_with_format_selection()` |
-| SQLite Output | `SQLiteDatabaseWriter` | `upsert_records()` with PK strategies |
-| Polyglot Output | `DatabaseRouter` | Routes to ArangoDB (documents) or Redis (time-series) |
+| SQLite Output | `SQLiteDatabaseWriter` | `write()` with PK strategies |
+| Polyglot Output | `DatabaseRouter` | Routes to ArangoDB, Redis JSON, or Redis TimeSeries |
 
 ---
 

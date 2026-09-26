@@ -11,13 +11,13 @@
 ```bash
 # 1. Copy environment config
 cp .env.example .env
-# Edit .env with actual Mist API tokens
+# Edit .env with the actual Mist API token.
 
 # 2. Start all services
-docker compose --profile full up -d
+docker compose -f deploy/compose.yml up -d
 
 # 3. Run database migrations
-docker compose exec api alembic upgrade head
+docker compose -f deploy/compose.yml exec api alembic upgrade head
 
 # The API does not create a table on startup. Alembic owns the schema.
 # Run step 3 before the first request, or every route fails. See issue #1883.
@@ -29,6 +29,7 @@ curl http://localhost:8000/api/v1/healthz
 
 # 5. Trigger first inventory sync
 curl -X POST http://localhost:8000/api/v1/sync/trigger \
+  -H "Authorization: Bearer $MIST_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"org_id": "YOUR_ORG_UUID"}'
 ```
@@ -39,6 +40,7 @@ curl -X POST http://localhost:8000/api/v1/sync/trigger \
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/sync/trigger \
+  -H "Authorization: Bearer $MIST_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"org_id": "abc-123"}'
 ```
@@ -55,6 +57,7 @@ timestamp=2026-03-01T10:00:00Z&include_status=true"
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/deploy/jobs \
+  -H "Authorization: Bearer $MIST_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "org_id": "abc-123",
@@ -68,6 +71,7 @@ curl -X POST http://localhost:8000/api/v1/deploy/jobs \
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/audit/export \
+  -H "Authorization: Bearer $MIST_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"org_id": "abc-123", "format": "csv"}'
 ```
@@ -80,28 +84,30 @@ curl -X POST http://localhost:8000/api/v1/audit/export \
 |----------|---------|
 | `GET /api/v1/healthz` | Liveness probe |
 | `GET /api/v1/readyz` | Readiness (DB + Redis) |
-| `GET /api/v1/metrics` | Prometheus metrics |
+| `GET /api/v1/metrics` | Reserved endpoint. It returns 501 until real series exist. |
 
-### Key Metrics
+### Planned Metrics
 
 - `sync_duration_seconds` — Time per sync cycle
 - `deploy_job_total` — Jobs created/completed/failed
 - `drift_alerts_open` — Current open drift alerts
 - `celery_queue_depth` — Queue backlog (KEDA trigger)
 
+The API does not export these series yet.
+
 ## Troubleshooting
 
 ### Sync Not Running
 
-1. Check Beat scheduler: `docker compose logs beat`
-2. Verify Redis connectivity: `docker compose exec redis redis-cli PING`
+1. Check Beat scheduler: `docker compose -f deploy/compose.yml logs beat`
+2. Verify Redis connectivity: `docker compose -f deploy/compose.yml exec redis redis-cli PING`
 3. Check sync queue: `celery -A src.worker.celeryconfig inspect active`
 
 ### Drift Alerts Not Generating
 
 1. Verify baselines exist: `GET /api/v1/config/baselines?org_id=...`
 2. Check config sync ran: `GET /api/v1/sync/status?org_id=...`
-3. Review worker logs: `docker compose logs worker`
+3. Review worker logs: `docker compose -f deploy/compose.yml logs worker`
 
 ### Sessions Lost Between Requests (Intermittent 401)
 
@@ -110,7 +116,7 @@ store falls back to a process-local map. That map is invisible to every other
 worker, so a multi-worker deployment loses a session on every request that
 lands on another worker (issue #2051).
 
-1. Verify Redis connectivity: `docker compose exec redis redis-cli PING`
+1. Verify Redis connectivity: `docker compose -f deploy/compose.yml exec redis redis-cli PING`
 2. If Redis is down, expect the warning `Session store fallback is active` in
    the API log. The fallback is safe with one worker only.
 3. A build with `WEB_WORKERS` greater than 1 and no Redis raises
@@ -123,13 +129,13 @@ lands on another worker (issue #2051).
 
 ```bash
 # Check current revision
-docker compose exec api alembic current
+docker compose -f deploy/compose.yml exec api alembic current
 
 # Rollback one revision
-docker compose exec api alembic downgrade -1
+docker compose -f deploy/compose.yml exec api alembic downgrade -1
 
 # Inspect migration history
-docker compose exec api alembic history
+docker compose -f deploy/compose.yml exec api alembic history
 ```
 
 ## Retention Policy

@@ -7,14 +7,14 @@ the primary key strategy defined in `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
 
 ```mermaid
 flowchart TD
-    A["Menu Operation<br/>(e.g. Menu 11, 13, 45)"] --> B["API Call<br/>mistapi SDK"]
+    A["Menu Operation<br/>(Menu 0-270, no 152)"] --> B["API Call<br/>mistapi SDK"]
     B --> C["Flatten / Normalize<br/>JSON Response"]
-    C --> D["save_data_to_output()"]
+    C --> D["DataExporter.write_with_format_selection()"]
 
-    D --> E["CSV / SQLite / ArangoDB+Redis<br/>write_with_format_selection()"]
+    D --> E["Primary output<br/>CSV or SQLite"]
     D --> F{"api_function_name<br/>provided?"}
 
-    F -->|No| G["Skip polyglot<br/>(CSV only)"]
+    F -->|No| G["Skip polyglot<br/>file or SQLite only"]
     F -->|Yes| H["_route_to_polyglot()"]
 
     H --> I["DatabaseRouter.write()"]
@@ -24,11 +24,12 @@ flowchart TD
 
     J -->|No| L{"Look up<br/>ENDPOINT_PRIMARY_KEY_STRATEGIES"}
 
-    L --> M{"Strategy Type?"}
+    L --> M{"Strategy type?"}
 
     M -->|natural_pk| N["ArangoDB Writer"]
     M -->|auto_increment_with_unique| N
-    M -->|composite_pk| O["Redis TimeSeries Writer"]
+    M -->|composite_pk| O["Dual write"]
+    M -->|timeseries_pk| TS["Redis TimeSeries Writer"]
 
     N --> P{"ArangoDB<br/>available?"}
     P -->|No| Q["Fallback: csv_only"]
@@ -39,17 +40,21 @@ flowchart TD
     S -->|No| U["Done"]
     T --> U
 
-    O --> V{"Redis<br/>available?"}
+    O --> V{"ArangoDB and<br/>Redis JSON available?"}
     V -->|No| W["Fallback: csv_only"]
-    V -->|Yes| X["Extract numeric fields<br/>ThreadPoolExecutor<br/>(8 workers)"]
+    V -->|Yes| X["Write document rows<br/>to Redis JSON and ArangoDB"]
+    X --> U
 
-    X --> Y["Pipeline TS.CREATE<br/>batches of 500<br/>DUPLICATE_POLICY LAST"]
+    TS --> TV{"Redis<br/>available?"}
+    TV -->|No| W
+    TV -->|Yes| Y["Pipeline TS.CREATE<br/>DUPLICATE_POLICY LAST"]
     Y --> Z["Pipeline TS.ADD<br/>batches of 10,000"]
-    Z --> AA["Auto-compaction rules<br/>hourly + daily rollups"]
+    Z --> AA["Time-series rows written"]
     AA --> U
 
     style N fill:#4a9,stroke:#333,color:#fff
     style O fill:#e74,stroke:#333,color:#fff
+    style TS fill:#e74,stroke:#333,color:#fff
     style Q fill:#888,stroke:#333,color:#fff
     style W fill:#888,stroke:#333,color:#fff
     style K fill:#888,stroke:#333,color:#fff
@@ -62,14 +67,16 @@ flowchart TD
 | - | - | - | - |
 | `natural_pk` | ArangoDB | Entities with stable UUIDs | Sites, Inventory, Templates |
 | `auto_increment_with_unique` | ArangoDB | Aggregated data without stable keys | Licenses summary |
-| `composite_pk` | Redis TimeSeries | Time-series metrics | Device stats, Alarms, Events |
+| `composite_pk` | ArangoDB and Redis JSON | Event and log rows | Device events, alarms |
+| `timeseries_pk` | Redis TimeSeries | Numeric metric rows | Device stats, client stats |
 
 ## Key Files
 
 | File | Role |
 | - | - |
-| `MistHelper.py` | `ENDPOINT_PRIMARY_KEY_STRATEGIES` dict, `_route_to_polyglot()` |
+| `src/refactors/endpoint_primary_key_strategies.py` | `ENDPOINT_PRIMARY_KEY_STRATEGIES` dict |
+| `src/export/data_exporter.py` | `DataExporter.write_with_format_selection()`, `_route_to_polyglot()` |
 | `src/db/router.py` | `DatabaseRouter` — strategy lookup and backend dispatch |
 | `src/db/arango_writer.py` | `ArangoDBWriter` — batch `import_bulk()`, snapshots, graph edges |
-| `src/db/redis_writer.py` | `RedisTimeSeriesWriter` — pipelined TS.CREATE/TS.ADD, compaction |
+| `src/db/redis_writer.py` | `RedisTimeSeriesWriter` and `RedisJSONWriter` |
 | `src/db/__init__.py` | `DatabaseConfig`, `WriteResult`, shared logger |

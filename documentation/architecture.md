@@ -2,13 +2,12 @@
 
 This page holds the structure of the code and the diagrams that describe it.
 
-Read [the diagram suite](diagrams/README.md) for all 20 diagram types.
+Read [the diagram suite](diagrams/README.md) for the Mermaid diagram index.
 
 ## The diagrams
 
-MistHelper carries a full diagram suite with 20 Mermaid diagram types. The suite
-covers the architecture, the class hierarchy, the operations, and the
-infrastructure. Every diagram uses the same dark theme.
+MistHelper carries a Mermaid diagram suite. The suite covers architecture,
+operations, and infrastructure. Most diagrams use the same dark theme.
 
 <!-- INLINE DIAGRAM: Architecture Overview (flowchart) -->
 
@@ -33,9 +32,11 @@ flowchart LR
         redis[("Redis Stack")]
 
         subgraph realtime["Real-Time Services"]
-            websocket["WebSocket Manager"]
-            ssh_runner["SSH Runner"]
-            pcap["Packet Capture"]
+            websocket["WebSocketManager"]
+            ssh_runner["EnhancedSSHRunner"]
+            pcap["PacketCaptureManager"]
+            capture_portal["Upgrade Portal 8056"]
+            metrics_gateway["Metrics Gateway 8057"]
         end
 
         subgraph infra["Infrastructure"]
@@ -55,6 +56,8 @@ flowchart LR
     websocket --> mist_api
     ssh_runner --> devices
     pcap --> mist_api
+    capture_portal --> mist_api
+    metrics_gateway --> mist_api
     ssh_server --> menu
     web_portal --> menu
     container --> ssh_server
@@ -76,8 +79,8 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>241 Operations))
-    Safe Org Exports (64)
+   root((MistHelper<br/>270 Registered Entries))
+    Safe (73)
       Sites and Analysis 1-7
       Device Inventory 8-13
       Device Stats 15-17
@@ -90,8 +93,10 @@ mindmap
       Misc Exports 56-58
       Support and Assets 188, 193
       JSI and Mist Edge 204-205
-      Org Searches 230-234
-    Interactive Safe (72)
+      Org Searches 230-234, 248-253, 255
+      MIB Generator 243
+      Rogue DHCP Scan 269
+    Interactive Safe (93)
       Site Devices 60-72
       Site Insights 73-79
       Site Stats 80-91
@@ -103,6 +108,12 @@ mindmap
       Site Stats and Zones 225-229
       Counts and MSP Licenses 235-238
       Org SecIntel Profile 240
+      Metrics Gateway 241
+      SSID Broadcast Gaps 242
+      Site and Org Lookups 244-247
+      Inventory and Event Searches 254, 256-258
+      Endpoint Families 259-268
+      Marvis Actions 270
     Resource Intensive (10)
       Heavy Inventory 14, 18-19
       Bulk Exports 59
@@ -121,6 +132,8 @@ mindmap
       Ticket Viewer 192
     Continuous (1)
       Loops 151
+    Missing
+      No registered menu 152
     Destructive (42)
       ::icon(fa fa-warning)
       Firmware 154-157
@@ -156,8 +169,8 @@ mindmap
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
 | `delay_metrics.json` / `tuning_data.json` | Adaptive rate / tuning persistence |
 | `data/script.log` | Unified runtime log |
-| `Dockerfile` / `Containerfile` | Two container strategies (UV hybrid vs simplified pip build). Both verify TLS certificates. |
-| `compose.yml` | Orchestrated service definition (uses `Containerfile` by default) |
+| `Dockerfile` / `Containerfile` | Byte-identical container build files. Both verify TLS certificates. |
+| `compose.yml` | Orchestrated service definition with no build section in the default file |
 | `agents.md` | Internal "Agents Guide" (style, safety, refactor guidance) |
 
 All export CSVs are now written inside `data/` (the code enforces a data directory even if a legacy doc claims root CSV placement).
@@ -174,16 +187,15 @@ organization matches the APIs that the tool consumes.
 
 ### Size Facts
 
-Measured on 2026-08-05.
+Measured on 2026-09-25.
 
 | Area | Python lines | Files |
 |------|--------------|-------|
-| `MistHelper.py` | 6,169 | 1 |
-| `src/` | 124,675 | 363 |
-| `tests/` | 129,893 | -- |
+| `MistHelper.py` | 8,071 | 1 |
+| `src/` | 223,491 | 621 |
 
 The entrypoint held roughly 28,000 lines before the decomposition. It now holds
-6,169. The test suite is now larger than the source it covers.
+8,071 lines.
 
 ### Current `src/` Layout
 
@@ -206,8 +218,12 @@ src/
 ├── gateway/                # Gateway exports, stats, overrides, WAN migration
 ├── input/                  # Input handling utilities
 ├── inventory/              # Device inventory summary, MSP orchestration, CSV comparison
+├── juniper_docs/           # Juniper document corpus tools
+├── juniper_skills/         # Juniper skill support code
 ├── maps/                   # Maps manager operations
 ├── marvis/                 # Marvis AI integration
+├── metrics_gateway/        # Prometheus and SNMP metrics gateway
+├── mib_generator/          # MistHelper SNMP MIB generation
 ├── menu/                   # Menu system and option dispatch
 ├── network/                # Network configuration operations
 ├── org/                    # Organization operations and synthetic probes
@@ -215,12 +231,14 @@ src/
 ├── output/                 # Output formatting (writer)
 ├── refactors/              # Extraction targets from the decomposition waves
 ├── reports/                # Report generation
+├── security/               # Security helper modules
 ├── site/                   # Site configuration management (test sites, RF, profiles)
 ├── ssh/                    # SSH runner and execution management
 ├── ssid_consolidation/     # SSID consolidation operations
 ├── time/                   # Time and lookback window utilities
 ├── troubleshooting/        # Marvis troubleshooting workflows
 ├── ui/                     # Web portal components
+├── upgrade_portal/         # Upgrade capture portal on port 8056
 ├── utils/                  # Shared utilities and the operation registry
 ├── validation/             # Input validation
 ├── wan_hub_group_manager.py  # WAN hub/group operations

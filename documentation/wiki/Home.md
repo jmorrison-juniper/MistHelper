@@ -1,15 +1,16 @@
 # MistHelper Wiki
 
-Welcome to the MistHelper documentation wiki. MistHelper is a production-focused Python application for Juniper Mist Cloud network operations, providing 209 menu-driven operations for data extraction, device management, and firmware upgrades.
+Welcome to the MistHelper documentation wiki. MistHelper is a production-focused Python application for Juniper Mist Cloud network operations. It provides 269 actionable menu operations for data extraction, device management, and firmware upgrades.
 
 ## Quick Links
 
-- [Menu Reference](Menu-Reference) - Complete list of all 209 menu operations
+- [Menu Reference](Menu-Reference) - Complete list of all 269 actionable menu operations
+- [Menu API Endpoints](Menu-API-Endpoints) - Mist API endpoints that each menu option calls
 - [Data Model](Data-Model) - CSV, SQLite, and polyglot output details
 - [Testing](Testing) - Systematic test mode and CI pipeline
 - [Troubleshooting](Troubleshooting) - Common issues and solutions
 
-## Operations & Features
+## Operations and Features
 
 - [SSH Command Runner](SSH-Runner) - Enhanced SSH execution framework
 - [MSP Support](MSP-Support) - Multi-org operations for Managed Service Providers
@@ -17,7 +18,7 @@ Welcome to the MistHelper documentation wiki. MistHelper is a production-focused
 - [Performance](Performance) - Rate limiting and fast mode
 - [Address Normalization](Address-Normalization) - Fuzzy address matching for inventory reconciliation
 
-## Deployment & Infrastructure
+## Deployment and Infrastructure
 
 - [Container Setup](Container-Setup) - Build strategies and local usage
 - [SSH Remote Access](SSH-Remote-Access) - SSH server deployment and session management

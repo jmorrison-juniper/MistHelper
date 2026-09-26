@@ -3,9 +3,9 @@
 Auto-generated from all feature plans. Last updated: 2026-07-14
 
 ## Active Technologies
-- Python 3.13+ (per constitution and `pyproject.toml` py313 target). + mistapi 0.63.1+, requests, pytest/pytest-cov, ruff/black/mypy (no new dependency added). (1020-safe-test-clean-run)
+- Python 3.13+ (per constitution and `pyproject.toml` py313 target). + mistapi>=0.64.0,<0.65, requests, pytest/pytest-cov, ruff/black/mypy (no new dependency added). (1020-safe-test-clean-run)
 - N/A (no schema changes; existing JSONL telemetry under `data/` via `TelemetryEmitter`, unchanged shape — see `data-model.md` §3). (1020-safe-test-clean-run)
-- Python 3.13+ (`pyproject.toml` requires `>=3.13`) + Standard-library `argparse`, `logging`, and `inspect`; `mistapi>=0.63.1` (the verified installed surface is `0.63.3`) (1021-testinteractive-reliability-defects)
+- Python 3.13+ (`pyproject.toml` requires `>=3.13`) + Standard-library `argparse`, `logging`, and `inspect`; `mistapi>=0.64.0,<0.65` (1021-testinteractive-reliability-defects)
 - Local append-only JSONL telemetry only; future interactive-test artifacts must remain under an explicitly controlled `data/` subdirectory. No remote persistence or mutations. (1021-testinteractive-reliability-defects)
 - Python 3.13+ (per constitution binding minimum and + stdlib only. `socket` (existing), `struct` (new use (1023-probe-tailored-synthetic-tests)
 - Local append-only JSON files under `data/`: (1023-probe-tailored-synthetic-tests)
@@ -13,14 +13,14 @@ Auto-generated from all feature plans. Last updated: 2026-07-14
 - Local append-only JSONL under `data/` for US3 (1024-vpn-icmp-reachability)
 - Python 3.13+ (constitution binding minimum; per `pyproject.toml` py313 target) + Standard library only (`logging`, `pathlib`, `re`, `json`); no new dependencies (1025-probe-emission-log-fixes)
 - No persistent state beyond the existing JSONL telemetry pattern; load-time dedup state is per-invocation `set[str]` in memory only (FR-012) (1025-probe-emission-log-fixes)
-- Python 3.13+ (per constitution binding minimum + `mistapi >= 0.63.1` (verified installed (1029-ap-profile-migration)
+- Python 3.13+ (per constitution binding minimum + `mistapi>=0.64.0,<0.65` (1029-ap-profile-migration)
 - Local files under `data/` only. (1029-ap-profile-migration)
-- Python 3.13+ + `mistapi>=0.63.1`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`) (671-mist-get-site-beacon)
+- Python 3.13+ + `mistapi>=0.64.0,<0.65`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`) (671-mist-get-site-beacon)
 - CSV files under `data/`, SQLite (`data/mist_data.db`), optional ArangoDB + Redis through `DatabaseRouter` (671-mist-get-site-beacon)
-- Python 3.13+ + `mistapi` 0.63.3, Flask 3.x, `flask-wtf`, `redis`, `python-arango` through `DatabaseRouter` (1823-upgrade-capture-portal)
+- Python 3.13+ + `mistapi>=0.64.0,<0.65`, Flask 3.x, `flask-wtf`, `redis`, `python-arango` through `DatabaseRouter` (1823-upgrade-capture-portal)
 - ArangoDB primary (collections `upgrade_captures`, `upgrade_runs`, edge `capture_for_run`, all `natural_pk`); Redis for the site lock only; CSV under `data/` as fallback (1823-upgrade-capture-portal)
 - New package `src/upgrade_portal/` on port 8056 (`CAPTURE_PORT`). Menu 239 and the `--capture-portal` flag both start it (1823-upgrade-capture-portal)
-- Python 3.13. + pytest, `mistapi` 0.63.3, and the shipped package (1992-upgrade-rehearsal)
+- Python 3.13. + pytest, `mistapi>=0.64.0,<0.65`, and the shipped package (1992-upgrade-rehearsal)
 - None. The harness holds the run record in memory. (1992-upgrade-rehearsal)
 
 - Python 3.13 (matches project constitution binding minimum). (1019-test-quality-analyzer)
@@ -41,9 +41,9 @@ cd src; pytest; ruff check .
 Python 3.13 (matches project constitution binding minimum).: Follow standard conventions
 
 ## Recent Changes
-- 1992-upgrade-rehearsal: Added Python 3.13. + pytest, `mistapi` 0.63.3, and the shipped package
+- 1992-upgrade-rehearsal: Added Python 3.13. + pytest, `mistapi>=0.64.0,<0.65`, and the shipped package
 - 1823-upgrade-capture-portal: New package `src/upgrade_portal/` (outside `web_portal/`, which ruff and mypy exclude) on port 8056; new upgrade seam `src/firmware/upgrade_service.py`; menu 239; 30-second JSON poll instead of server-sent events; Redis site lock.
-- 671-mist-get-site-beacon: Added Python 3.13+ + `mistapi>=0.63.1`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`)
+- 671-mist-get-site-beacon: Added Python 3.13+ + `mistapi>=0.64.0,<0.65`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`)
 
 <!-- MANUAL ADDITIONS START -->
 

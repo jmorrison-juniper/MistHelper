@@ -1,7 +1,8 @@
 # MistHelper SSH Remote Access Guide
 
 ## Overview
-MistHelper now supports remote SSH access when running in container mode. This enables you to connect to a running MistHelper container over SSH and interact with it remotely.
+MistHelper supports remote SSH access in the application container. This lets
+you connect to the running `misthelper-app` container on port 2200.
 
 ## SSH Server Features
 - Custom SSH port: 2200 (avoids conflicts with host SSH)
@@ -12,16 +13,18 @@ MistHelper now supports remote SSH access when running in container mode. This e
 
 ## Quick Start
 
-### 1. Start SSH Container
-```bash
-python run-misthelper.py --ssh
+### 1. Start the application container
+```powershell
+.\scripts\compose.ps1 up -d --no-deps misthelper
 ```
 
 This will:
-- Build the MistHelper container with SSH server
-- Start the container in detached mode
-- Expose SSH on port 2200
-- Display connection instructions
+- Start `misthelper-app` in detached mode.
+- Publish SSH on port 2200.
+- Keep ArangoDB and Redis running when they already exist.
+
+The SSH session needs `MIST_APITOKEN` or `MIST_API_TOKEN` in the container
+environment. Set one value in `.env` before you start the container.
 
 ### 2. Connect via SSH
 ```bash
@@ -44,34 +47,34 @@ Once connected via SSH, MistHelper starts automatically:
 
 ### Check Container Status
 ```bash
-podman ps
+podman ps --filter "name=misthelper-app"
 ```
 
 ### View Container Logs
 ```bash
-podman logs misthelper-ssh
+podman logs misthelper-app
 ```
 
 ### Find Container IP Address
 ```bash
 # Get container IP
-podman inspect misthelper-ssh --format "{{.NetworkSettings.IPAddress}}"
+podman inspect misthelper-app --format "{{.NetworkSettings.IPAddress}}"
 
 # Get detailed network info
-podman inspect misthelper-ssh | grep -A 10 "NetworkSettings"
+podman inspect misthelper-app --format "{{json .NetworkSettings}}"
 
 # Alternative: check from inside container
-podman exec misthelper-ssh hostname -I
+podman exec misthelper-app hostname -I
 ```
 
 ### Stop SSH Container
 ```bash
-podman stop misthelper-ssh
+podman stop misthelper-app
 ```
 
 ### Remove SSH Container
 ```bash
-podman rm misthelper-ssh
+podman rm misthelper-app
 ```
 
 ## Session Restart Behavior
@@ -121,7 +124,7 @@ value.
 - **Port:** 2200
 - **Authentication:** Password-based
 - **Forced Command:** Automatic MistHelper session launcher
-- **User:** misthelper (restricted to MistHelper only)
+- **User:** `misthelper` by default. `MISTHELPER_SSH_USERNAME` can name a different user.
 - **Session Management:** Each connection gets an isolated session with a bounded auto-restart
 
 ### Security Notes
@@ -137,8 +140,9 @@ value.
 
 The SSH container maintains access to:
 - `/app/data/` - Mounted from host `./data/` directory
-- `/app/script.log` - Mounted from host `./script.log`
-- `/app/.env` - Mounted from host `./.env` (if exists)
+- `/app/data/script.log` - Runtime log in the mounted `data` directory
+- `/app/data/ssh.log` - SSH session log in the mounted `data` directory
+- `.env` - Loaded by `compose.yml` as the container environment
 
 All MistHelper data files and logs persist on the host system.
 
@@ -147,7 +151,7 @@ All MistHelper data files and logs persist on the host system.
 ### Connection Refused
 - Verify container is running: `podman ps`
 - Check port mapping: should show `0.0.0.0:2200->2200/tcp`
-- View container logs: `podman logs misthelper-ssh`
+- View container logs: `podman logs misthelper-app`
 
 ### Authentication Failed
 - Verify username: `misthelper`
@@ -156,8 +160,13 @@ All MistHelper data files and logs persist on the host system.
 
 ### Container Won't Start
 - Check Podman/Docker installation
-- Verify Containerfile syntax
+- Verify `Containerfile` syntax
 - Review build logs for errors
+
+### The SSH Session Reports No Mist API Token
+The session script refuses to start MistHelper without `MIST_APITOKEN` or
+`MIST_API_TOKEN`. Set one of those variables in `.env`, then recreate the
+application container.
 
 ### The SSH Session Closes Right After the Connection
 MistHelper failed to start five times in a row. The session prints a message
@@ -178,10 +187,10 @@ host.
 ## Advanced Usage
 
 ### Custom SSH Configuration
-To modify SSH settings, edit the Containerfile and rebuild:
-1. Modify SSH configuration in Containerfile
+To change SSH server settings, edit `Containerfile` and rebuild:
+1. Modify the SSH configuration in `Containerfile`.
 2. Rebuild: `podman build -t misthelper .`
-3. Restart with SSH: `python run-misthelper.py --ssh`
+3. Restart the application service with `.\scripts\compose.ps1 up -d --no-deps misthelper`.
 
 ### Port Forwarding
 `compose.yml` publishes the SSH port as `2200:2200`. To use a different host
@@ -213,7 +222,7 @@ For remote access from other machines, ensure:
 **Finding Container IP for Remote Access:**
 ```bash
 # Get container IP for direct access
-podman inspect misthelper-ssh --format "{{.NetworkSettings.IPAddress}}"
+podman inspect misthelper-app --format "{{.NetworkSettings.IPAddress}}"
 
 # Connect directly to container IP (if needed)
 ssh -p 2200 misthelper@<container-ip>

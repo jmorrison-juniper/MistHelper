@@ -19,6 +19,9 @@ An operation that the registry names `destructive` changes the Mist cloud
 configuration. Read [the menu reference](menu_reference.md) for the current
 list.
 
+The current destructive menu numbers are 154 through 187, 189 through 191, 194,
+206 through 208, and 239.
+
 Warning: never script a destructive operation unattended. Each one asks for a
 typed confirmation from a person, and that gate exists because the change
 reaches production hardware.

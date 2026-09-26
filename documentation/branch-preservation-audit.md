@@ -1,5 +1,9 @@
 # Branch preservation audit
 
+Status note, 2026-09-25: this file is a historical audit report. The final
+result is the tag archive described below. The branch table records the audit
+evidence that existed before the archive tags replaced the branches.
+
 Date: 2026-09-17.
 
 This audit reviewed the remote branches under `preservation/*` and `recovery/*`.
@@ -104,9 +108,9 @@ git diff origin/<branch>:<file> origin/main:<file>
 ```
 
 The audit used the repeat commands above.
-The audit also started a full file comparison script.
-That script did not complete before the report deadline.
-Because the comparison did not complete, the audit made no delete decision.
+The first audit pass also started a full file comparison script.
+That first script did not complete before the first report deadline.
+The second pass above replaced that incomplete pass.
 
 ## Branch table
 

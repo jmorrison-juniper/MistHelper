@@ -2,11 +2,11 @@
 
 # Metrics and Analytics
 
-Operation distribution, rate limiting behavior, data flow volumes, and version history.
+Operation distribution, rate limiting behavior, data flow paths, and version history.
 
 ## Operation Category Distribution
 
-How MistHelper's 229 operations break down by safety classification.
+How MistHelper's 270 registered menu entries break down by safety classification.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -27,14 +27,14 @@ How MistHelper's 229 operations break down by safety classification.
   'pieTitleTextColor': '#E0E0E0',
   'pieSectionTextColor': '#E0E0E0'
 }, 'pie': {'textPosition': 0.75}}}%%
-pie title Operation Safety Classification (229 actionable, menu 0 excluded)
-    "Interactive Safe (65)" : 65
-    "Safe (61)" : 61
-    "Destructive (41)" : 41
-    "Interactive (28)" : 28
+pie title Operation Safety Classification (270 entries, no menu 152)
+    "Interactive Safe (93)" : 93
+    "Safe (73)" : 73
+    "Destructive (42)" : 42
+    "Interactive (29)" : 29
     "WebSocket (22)" : 22
     "Resource Intensive (10)" : 10
-    "Continuous (2)" : 2
+    "Continuous Loop (1)" : 1
 ```
 
 ## Operation Complexity vs Frequency
@@ -59,9 +59,9 @@ flowchart TB
     end
 
     subgraph q2["Complex and Rare"]
-        fw["AP Firmware"]
+        fw["Firmware Upgrade"]
         vc["VC Conversion"]
-        fsc["Full Site Config"]
+        fsc["Upgrade Capture Portal"]
     end
 
     subgraph q3["Simple and Frequent"]
@@ -79,7 +79,7 @@ flowchart TB
 
 ## Rate Limiting Adaptive Delay
 
-How MistHelper's PID-like controller adjusts API request delay over time.
+How the rate limiter adjusts API request delay when the Mist API returns 429.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -93,20 +93,20 @@ How MistHelper's PID-like controller adjusts API request delay over time.
 }}}%%
 flowchart LR
     subgraph input["Request Phase"]
-        R1["Requests 1-10<br/>Delay: 100ms"]
-        R2["Requests 11-15<br/>Delay: 100ms"]
+        R1["Normal requests"]
+        R2["Delay metrics update"]
     end
 
     subgraph spike["429 Rate Limit Hit"]
-        R3["Requests 15-20<br/>Delay: 2000-4500ms"]
+        R3["429 response"]
     end
 
     subgraph recovery["Recovery Phase"]
-        R4["Requests 25-35<br/>Delay: 4000-1500ms"]
-        R5["Requests 40-50<br/>Delay: 500-200ms"]
+        R4["Backoff delay"]
+        R5["Lower delay after recovery"]
     end
 
-    R1 --> R2 --> R3 -->|"PID controller<br/>backs off"| R4 -->|"Delay decreases<br/>as 429s stop"| R5
+    R1 --> R2 --> R3 -->|"RateLimitingUtils<br/>backs off"| R4 -->|"Delay decreases<br/>after recovery"| R5
 ```
 
 > **PNG fallback**: If this diagram does not render, see [metrics-xychart.png](metrics-xychart.png).
@@ -126,18 +126,18 @@ How API data flows through processing stages to output formats.
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 flowchart LR
-    API["API Calls<br/>1000 requests"] --> PH["Pagination Handler"]
+    API["API Calls"] --> PH["Pagination Handler"]
     PH --> RL["Rate Limiter"]
-    RL -->|"950 OK"| JP["JSON Parser"]
-    RL -->|"50 retried"| R429["Rate Limited 429"]
+    RL -->|"OK"| JP["JSON Parser"]
+    RL -->|"429 retry"| R429["Rate Limited"]
     R429 --> RL
-    JP --> FL["Flattener<br/>950 records"]
-    FL -->|"570 records"| CSV["CSV Writer"]
-    FL -->|"380 records"| SQL["SQLite Writer"]
-    FL -->|"380 records"| POLY["DatabaseRouter"]
+    JP --> FL["Flattener"]
+    FL --> CSV["CSV Writer"]
+    FL --> SQL["SQLite Writer"]
+    FL --> POLY["DatabaseRouter"]
     CSV --> DIR["data/ Directory"]
     SQL --> DB["mist_data.db"]
-    POLY --> ARANGO["ArangoDB / Redis"]
+    POLY --> ARANGO["ArangoDB / Redis JSON / Redis TimeSeries"]
 ```
 
 > **PNG fallback**: If this diagram does not render, see [data-flow-sankey.png](data-flow-sankey.png).
@@ -177,11 +177,12 @@ timeline
                 : Auto-merge workflow
                 : Web portal (Gunicorn)
     section Current
-        2026 : 229 operations
-             : 30-group menu reorg (issue #368)
+        2026 : 270 registered menu entries
+             : No registered menu 152
              : SpecKit integration
              : Mermaid documentation suite
              : Polyglot backends (ArangoDB/Redis)
+             : Metrics gateway on menu 241
 ```
 
 ---

@@ -37,6 +37,10 @@ map at run time. The map is product code, so it moved to
 and it imports the new module. `src/utils/zscaler_probe.py` was promoted the
 same way in an earlier change.
 
+`pyproject.toml` still holds the optional dependency group named `ste-linter`.
+That group installs helper libraries for local checks. It is not a console
+script entry in the wheel.
+
 Warning: a product module must never import from `scripts/` or from `tools/`.
 The container no longer ships either tree, so such an import breaks the image
 at start time. The guard test reports that class of defect.

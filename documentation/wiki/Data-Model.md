@@ -1,4 +1,4 @@
-# Output & Data Model
+# Output and Data Model
 
 ## CSV
 
@@ -13,10 +13,10 @@ Set `--output-format sqlite` or `OUTPUT_FORMAT=sqlite` environment variable.
 Adaptive strategy (see `ENDPOINT_PRIMARY_KEY_STRATEGIES` mapping):
 
 1. **Natural Primary Key**: Entities with stable `id` (sites, devices, templates)
-2. **Composite Primary Key**: Event/time-series metrics (e.g., `device_id + timestamp`)
-3. **Auto-Increment w/ Unique Constraint**: Aggregated license or summary endpoints lacking stable identity
+2. **Composite Primary Key**: Event and time-series metrics, such as `device_id + timestamp`
+3. **Auto-Increment with Unique Constraint**: Aggregated license or summary endpoints without stable identity
 
-Upserts use `INSERT OR REPLACE` when natural/composite keys are in effect. Index selection is dynamic per endpoint (org/site/device/time fields prioritized). Metadata fields `misthelper_created_time` & `misthelper_updated_time` are appended for auditing.
+Upserts use `INSERT OR REPLACE` when natural or composite keys are in effect. Index selection is dynamic per endpoint. Organization, site, device, and time fields take priority. Metadata fields `misthelper_created_time` and `misthelper_updated_time` are appended for auditing.
 
 ### Inspecting the Database
 

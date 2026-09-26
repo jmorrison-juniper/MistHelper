@@ -1,5 +1,9 @@
 # Issue #293 Autonomous Execution Report: Phase 1 Status
 
+> **Status note, 2026-09-25**: This report is historical. The current tree has
+> `src/maps/plotly_map_templates.py` and `tests/maps/test_plotly_map_templates.py`.
+> Read current refactor work from the issue or pull request that owns that work.
+
 **Report Date**: 2026-05-13  
 **Branch**: `chore/293-phase-1`  
 **Execution Mode**: Autonomous - Structured Phase-Based Refactoring  

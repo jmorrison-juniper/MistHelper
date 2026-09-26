@@ -52,11 +52,14 @@ This page names the operations that arrived most recently.
 | 233 | Search organization WAN client events (`searchOrgWanClientEvents`) | `safe` |
 | 234 | Search organization system events (`searchOrgSystemEvents`) | `safe` |
 | 235 | Run any org-scoped Mist count endpoint (35 operations) | `interactive_safe` |
-| 236 | Run any site-scoped Mist count endpoint (32 operations) | `interactive_safe` |
+| 236 | Run any site-scoped Mist count endpoint (33 operations) | `interactive_safe` |
 | 237 | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` |
 | 238 | Export the MSP license entitlement, usage, and subscriptions (`listMspLicenses`) | `interactive_safe` |
 | 239 | Start the upgrade capture portal on port 8056 | `destructive` |
 | 240 | Export one organization security intelligence profile (`getOrgSecIntelProfile`) | `interactive_safe` |
+| 241 | Serve Mist Cloud health to a monitoring system on port 8057 | `interactive_safe` |
+| 242 | Find sites where an SSID is not broadcast by any AP | `interactive_safe` |
+| 243 | Generate the SNMP MIB from the Mist OpenAPI file and the metric catalog | `safe` |
 | 244 | Search site service path events (`searchSiteServicePathEvents`) | `interactive_safe` |
 | 245 | Export the Cradlepoint connection status for an organization (`testOrgCradlepointConnection`) | `interactive_safe` |
 | 246 | Troubleshoot a call for a site, client MAC, and meeting ID (`troubleshootSiteCall`) | `interactive_safe` |
@@ -72,16 +75,18 @@ This page names the operations that arrived most recently.
 | 256 | Search organization webhook deliveries (`searchOrgWebhooksDeliveries`) | `interactive_safe` |
 | 257 | Search NAC clients for a selected site (`searchSiteNacClients`) | `interactive_safe` |
 | 258 | Search other-device events for a selected site (`searchSiteOtherDeviceEvents`) | `interactive_safe` |
-| 259 | Run a no-identifier Mist get or list endpoint from a prompt | `interactive_safe` |
-| 260 | Run an org-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
-| 261 | Run a site-scoped simple Mist read endpoint from a prompt | `interactive_safe` |
-| 262 | Run an MSP-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
-| 263 | Run a site SLE endpoint from a prompt | `interactive_safe` |
-| 264 | Run a site map endpoint from a prompt | `interactive_safe` |
-| 265 | Run a site detail endpoint from a prompt | `interactive_safe` |
-| 266 | Run an org detail endpoint from a prompt | `interactive_safe` |
-| 267 | Run an MSP detail endpoint from a prompt | `interactive_safe` |
-| 268 | Run a remaining endpoint from a prompt | `interactive_safe` |
+| 259 | Run any no-identifier Mist get or list endpoint (29 operations) | `interactive_safe` |
+| 260 | Run any org-scoped Mist get or list endpoint (55 operations) | `interactive_safe` |
+| 261 | Run any site-scoped simple Mist read endpoint (58 operations) | `interactive_safe` |
+| 262 | Run any MSP-scoped Mist get or list endpoint (10 operations) | `interactive_safe` |
+| 263 | Run any site SLE endpoint with scope prompts (17 operations) | `interactive_safe` |
+| 264 | Run any site map endpoint with map prompts (7 operations) | `interactive_safe` |
+| 265 | Run any site detail endpoint with identifier prompts (33 operations) | `interactive_safe` |
+| 266 | Run any org detail endpoint with identifier prompts (61 operations) | `interactive_safe` |
+| 267 | Run any MSP detail endpoint with identifier prompts (10 operations) | `interactive_safe` |
+| 268 | Run any remaining endpoint with identifier prompts (6 operations) | `interactive_safe` |
+| 269 | Scan the organization for rogue DHCP servers on switches (30 days) | `safe` |
+| 270 | Export or resolve Marvis Actions by category and subcategory | `interactive_safe` |
 
 Menus 259 through 262 use one prompt to select a simple endpoint.
 They write through `DataExporter`, so they honor all output backends.
@@ -89,6 +94,7 @@ They write through `DataExporter`, so they honor all output backends.
 Menus 263 through 268 use one prompt flow for each identifier tuple.
 They keep the main menu small while they close the read-only endpoint backlog.
 
-Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
+Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Menus 239 and 241
+start services. Menu 243 generates the MIB. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,
 SQLite, and ArangoDB backends.

@@ -7,7 +7,7 @@ Category: `destructive`. The operation runs commands on live network devices.
 Features:
 - Auto-detects hostname, username, password from `.env` (if supplied)
 - Falls back to a CSV command list when no explicit `--command` passed (preferred path: `data/SSH_COMMANDS.CSV`, legacy root file still supported)
-- Shell mode with adaptive reading & timeout safeguards
+- Shell mode with adaptive reading and timeout safeguards
 - Structured logging (per-host log concept; ensure directory creation if extending)
 
 > **Note:** Legacy root `SSH_COMMANDS.CSV` is auto-detected if the `data/` copy is absent; you will see an informational message. Migrate to `data/` to suppress it.

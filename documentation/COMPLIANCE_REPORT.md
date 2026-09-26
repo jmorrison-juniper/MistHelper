@@ -1,5 +1,9 @@
 # Coding Guideline Compliance Report
 
+Status note, 2026-09-25: this file is a historical analyzer report. It measured
+an older tree. The current tree has 8,071 lines in `MistHelper.py`, 621 Python
+files under `src/`, and 223,491 Python lines under `src/`.
+
 - **Generated**: 2026-08-05 21:45:14 UTC
 - **Tool**: compliance-analyzer (tools/compliance_analyzer)
 - **Files analyzed**: 1
@@ -196,4 +200,3 @@ Plan at the end to drive fixes.
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_establish_mist_session` in `MistHelper.py`.
-

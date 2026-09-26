@@ -26,7 +26,7 @@ answering.
 ## Features
 
 - **Data Browser**: Browse, preview, search, and download CSV/SQLite output files
-- **Operations**: Run non-destructive data extraction operations (menus 1-89) with real-time SSE progress
+- **Operations**: Run operations whose registry category is `safe` or `interactive_safe`
 - **Map Viewer**: Interactive Plotly.js floor plan viewer with device markers
 - **Themes**: Brand Magenta, Dark, Light, and High Contrast themes with instant switching (persisted in localStorage). Brand Magenta is the default and matches the upgrade capture portal.
 - **Branding**: Customize title, logo, and accent color via ENV variables

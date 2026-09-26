@@ -23,14 +23,14 @@ flowchart TB
     ci_system(["CI/CD System<br/>GitHub Actions"])
 
     subgraph misthelper["MistHelper"]
-        mh["Python CLI tool<br/>229 operations"]
+        mh["Python CLI tool<br/>270 registered menu entries"]
     end
 
     mist_cloud["Juniper Mist Cloud<br/>REST API + WebSocket"]
     ghcr["GitHub Container Registry<br/>ghcr.io"]
     network_devices["Network Devices<br/>APs, switches, gateways"]
 
-    noc_engineer -->|"SSH 2200 / HTTP 8055"| mh
+    noc_engineer -->|"SSH 2200 / HTTP 8055, 8056, 8057"| mh
     ci_system -->|"Builds & Tests"| mh
     mh -->|"HTTPS REST + WebSocket"| mist_cloud
     mh -->|"OCI push"| ghcr
@@ -61,10 +61,12 @@ flowchart LR
         arango[("ArangoDB")]
         redis[("Redis Stack")]
 
-        subgraph realtime["Real-Time Services"]
-            websocket["WebSocket Manager"]
-            ssh_runner["SSH Runner"]
-            pcap["Packet Capture"]
+        subgraph services["Long-Running Services"]
+            websocket["WebSocketManager"]
+            ssh_runner["EnhancedSSHRunner"]
+            pcap["PacketCaptureManager"]
+            capture_portal["Upgrade portal 8056"]
+            metrics_gateway["Metrics gateway 8057"]
         end
 
         subgraph infra["Infrastructure"]
@@ -86,6 +88,8 @@ flowchart LR
     websocket --> mist_api
     ssh_runner --> devices
     pcap --> mist_api
+    capture_portal --> mist_api
+    metrics_gateway --> mist_api
     ssh_server --> menu
     web_portal --> menu
     container --> ssh_server
@@ -96,9 +100,8 @@ flowchart LR
 
 ## Module Decomposition (`src/`)
 
-Feature-domain packages extracted from `MistHelper.py` during Wave 1 and Wave 2
-decomposition. Each package owns its classes and delegates back to the entrypoint
-only for shared state (session, config, output routing).
+Feature-domain packages now hold most runtime code. `MistHelper.py` remains the
+entrypoint and menu dispatch surface.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -113,67 +116,72 @@ only for shared state (session, config, output routing).
 flowchart TD
     entrypoint["MistHelper.py<br/>Entrypoint + Menu Dispatch"]
 
-    subgraph wave1["Wave 1 Packages"]
-        clients["src/clients/"]
-        device_mgmt["src/device_mgmt/"]
-        events["src/events/"]
-        firmware["src/firmware/"]
-        maps["src/maps/"]
-        monitoring["src/monitoring/"]
-        nac["src/nac/"]
-        org_config["src/org_config/"]
-        sle["src/sle/"]
-        tickets["src/tickets/"]
-        utilities["src/utilities/"]
+    subgraph core["Core Packages"]
+        api["src/api/"]
+        db_pkg["src/db/"]
+        export_pkg["src/export/"]
+        utils["src/utils/"]
+        refactors["src/refactors/"]
     end
 
-    subgraph wave2["Wave 2 Packages"]
+    subgraph features["Feature Packages"]
         analytics["src/analytics/"]
         capture["src/capture/"]
-        export_pkg["src/export/"]
+        device["src/device/"]
+        firmware["src/firmware/"]
         gateway["src/gateway/"]
         inventory["src/inventory/"]
+        org_pkg["src/org/"]
         site["src/site/"]
         ssh_pkg["src/ssh/"]
         troubleshooting["src/troubleshooting/"]
         websocket["src/websocket/"]
     end
 
-    entrypoint --> wave1
-    entrypoint --> wave2
+    subgraph portals["Portal Packages"]
+        ui["src/ui/"]
+        upgrade_portal["src/upgrade_portal/"]
+        metrics_gateway["src/metrics_gateway/"]
+    end
+
+    entrypoint --> core
+    entrypoint --> features
+    entrypoint --> portals
 ```
 
 | Package | Primary Classes | Menu Ops |
 |---------|----------------|----------|
 | `src/analytics/` | `ZoneConfigurationAnalyzer`, `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 77-79, 169 |
 | `src/capture/` | `PacketCaptureManager`, `PacketCaptureDownloadManager` | 134-135 |
-| `src/clients/` | `WirelessClientExporter`, `WiredClientExporter`, `WANClientExporter` | 27-30 |
-| `src/device_mgmt/` | `DeviceManagementUtils`, `DeviceConfigManager` | 128-133, 148 |
-| `src/events/` | `EventExporter`, `AlarmExporter` | 20-26 |
+| `src/db/` | `DatabaseRouter`, `ArangoDBWriter`, `RedisTimeSeriesWriter`, `RedisJSONWriter` | Output backends |
+| `src/device/` | Device utility modules | 128-133, 148, 207-208 |
 | `src/export/` | `SiteExportUtils`, `SiteInsightsExporter` | 60-96 |
-| `src/firmware/` | `FirmwareManager` | 154-157 |
+| `src/firmware/` | `FirmwareManager` | 153-157, 239 |
 | `src/gateway/` | `GatewayExportUtils`, `GatewayStatsExporter`, `WAN2MigrationManager` | 31-50, 104-111, 149, 167 |
 | `src/inventory/` | `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator` | 8-9, 13-14 |
-| `src/monitoring/` | `ContinuousMonitor` | 151 |
 | `src/site/` | `SiteConfigManager` | 171-174 |
 | `src/sle/` | `SLEExporter` | 51-55 |
 | `src/ssh/` | `EnhancedSSHRunner`, `SSHRunnerManager` | 175-176 |
-| `src/tickets/` | `OrgTicketManager` | 188-193 |
+| `src/org/` | `OrgTicketManager` | 188-193 |
 | `src/troubleshooting/` | `MarvisTroubleshootUtils` | 124-127, 139 |
 | `src/websocket/` | `WebSocketManager`, `ServicePingManager` | 102-123 |
+| `src/metrics_gateway/` | `MistMetricsCollector`, `PrometheusRenderer`, `SnmpPassPersistResponder` | 241 |
+| `src/upgrade_portal/` | Upgrade portal modules | 239 |
 
 ## Key Subsystems
 
 | Subsystem | Primary Classes | Purpose |
 |-----------|----------------|---------|
-| Menu System | `OperationRegistry`, `MistHelperTUI` | 229-operation interactive/CLI menu |
+| Menu System | `OperationRegistry`, `MistHelperTUI` | 270 registered entries, with no menu 152 |
 | API Layer | `APIFetchUtils`, `RateLimitingUtils` | Paginated API calls with adaptive rate limiting |
-| Data Exporters | `DataExporter`, `SQLiteDatabaseWriter`, `DatabaseRouter` | Multi-backend output (CSV/SQLite/ArangoDB/Redis) with business keys |
+| Data Exporters | `DataExporter`, `SQLiteDatabaseWriter`, `DatabaseRouter` | CSV, SQLite, ArangoDB, Redis JSON, and Redis TimeSeries output |
 | WebSocket | `WebSocketManager`, `WebSocketCommands`, `ServicePingManager` | Real-time device commands plus extracted service-ping orchestration |
 | SSH Runner | `EnhancedSSHRunner`, `SSHRunnerManager` | Paramiko-based device command execution |
 | Packet Capture | `PacketCaptureManager`, `PacketCaptureDownloadManager` | Site/org packet captures with extracted poll/download handling |
 | Container | Non-root user, ForceCommand SSH | Isolated session management |
-| Web Portal | Gunicorn on port 8055 | Browser-based UI for operations |
+| Web Portal | Gunicorn on port 8055 | Browser UI for operations |
+| Upgrade Portal | `src/upgrade_portal/` on port 8056 | Pre-check, upgrade, and post-check capture workflow |
+| Metrics Gateway | `src/metrics_gateway/` on port 8057 | Prometheus and SNMP monitoring output |
 
 ---
 
@@ -182,4 +190,4 @@ flowchart TD
 - [Data Pipeline](data-pipeline.md) - How data flows from menu selection to output
 - [Database Strategy](database-strategy.md) - Hybrid PK system for data persistence
 - [Container Architecture](../infrastructure/container-architecture.md) - Container internals and SSH isolation
-- [Class Hierarchy Overview](../class-hierarchy/overview.md) - All 99+ classes organized by family
+- [Class Hierarchy Overview](../class-hierarchy/overview.md) - Class families and dependencies

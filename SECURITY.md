@@ -24,6 +24,13 @@ Include:
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
+## Supported Versions
+
+Security fixes apply to the current `main` branch and to the latest tagged
+release. The current package version in `pyproject.toml` is `2.1.0`.
+Older release tags do not receive security fixes unless the maintainer states
+that support in a release note or in a private security reply.
+
 ## Response
 
 This is a single-maintainer project. There is no SLA or guaranteed

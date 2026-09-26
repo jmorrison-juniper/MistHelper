@@ -19,12 +19,13 @@ list, which is generated from the code.
 
 Menu 259 runs no-identifier Mist get and list endpoints from a prompt. Menu
 260 runs org-scoped endpoints. Menu 261 runs site-scoped endpoints. Menu 262
-runs MSP-scoped endpoints. Together they cover 151 unique simple endpoint
+runs MSP-scoped endpoints. Together they cover 152 unique simple endpoint
 operations from issue #1807.
 
 Menus 263 through 268 run the remaining read-only endpoint families. They group
 SLE, map, site detail, org detail, MSP detail, and other endpoints by prompt
-flow.
+flow. Menus 259 through 268 each map to the Mist API endpoint families named in
+[the menu API endpoint map](documentation/menu-api/README.md).
 
 Menu 270 exports the Marvis Actions of an organization to a CSV file and to the
 database. You can filter the actions by category and by subcategory. Mode 1
@@ -99,8 +100,8 @@ to a folder that refuses it.
 .\scripts\compose.ps1 up -d
 ```
 
-The command starts three containers: the application, the document store, and
-the site lock store.
+The command starts the default profile. It includes the application, the
+document store, and the site lock store.
 
 The script needs the native provider one time:
 
@@ -234,7 +235,7 @@ that you own.
 
 ```powershell
 .\scripts\compose.ps1 up -d
-snmpwalk -v2c -c <community> -On 127.0.0.1:1161 .1.3.6.1.4.1.11.2147483646
+snmpwalk -v2c -c <community> -On 127.0.0.1:1161 .1.3.6.1.4.1.8072.9999.9999
 ```
 
 | Setting | Default | Meaning |
@@ -244,8 +245,8 @@ snmpwalk -v2c -c <community> -On 127.0.0.1:1161 .1.3.6.1.4.1.11.2147483646
 | `METRICS_HOST` | `127.0.0.1` | The bind address. A container takes every address |
 | `METRICS_REFRESH_SECONDS` | `900` | The age at which a reading becomes stale. The floor is 60 |
 | `METRICS_SITE_IDS` | unset | A comma list of sites. Unset reports every site |
-| `METRICS_SNMP_BASE_OID` | `.1.3.6.1.4.1.11.2147483646` | The base OID that the responder serves |
-| `SNMP_BASE_OID` | `.1.3.6.1.4.1.11.2147483646` | The base OID that `snmpd.conf` names |
+| `METRICS_SNMP_BASE_OID` | `.1.3.6.1.4.1.8072.9999.9999` | The base OID that the responder serves |
+| `SNMP_BASE_OID` | `.1.3.6.1.4.1.8072.9999.9999` | The base OID that `snmpd.conf` names |
 | `SNMP_PORT` | `1161` | The UDP listen port |
 | `SNMP_COMMUNITY` | `misthelper` | The read-only SNMP community |
 
@@ -264,7 +265,7 @@ how you tell a stale reading from a real outage.
 
 The file `documentation/mibs/MISTHELPER-MIB.mib` gives every number a name. Load
 it into your monitoring system to see `mistOrgSites` in place of
-`.1.3.6.1.4.1.11.2147483646.1.2.0`.
+`.1.3.6.1.4.1.8072.9999.9999.1.2.0`.
 
 The MIB describes four groups.
 
@@ -282,9 +283,9 @@ Warning: a row number is a position, not a permanent key. The gateway sorts the
 rows on every read of Mist Cloud. An alarm that names a row number can move to
 another device. Match on column 99 instead.
 
-Caution: the branch `.1.3.6.1.4.1.11.2147483646` sits below the Hewlett Packard
-Enterprise number 11, but the child number is not a registered assignment.
-Request a branch before you use this MIB outside your own network.
+Caution: the default branch `.1.3.6.1.4.1.8072.9999.9999` sits below the
+Net-SNMP experimental number. Request a registered branch before you use this
+MIB outside your own network.
 
 #### Add the gateway to Observium
 
@@ -314,7 +315,7 @@ Turn on **Skip ICMP**, because the container answers no ping.
 Confirm the reading first, if the device does not add:
 
 ```powershell
-podman exec misthelper-observium snmpget -v2c -c misthelper -t 20 misthelper-app:1161 .1.3.6.1.4.1.11.2147483646.1.2.0
+podman exec misthelper-observium snmpget -v2c -c misthelper -t 20 misthelper-app:1161 .1.3.6.1.4.1.8072.9999.9999.1.2.0
 ```
 
 The first read returns `No Such Instance`. `snmpd` starts the responder when it
@@ -341,6 +342,7 @@ machine.
 | Page | What it holds |
 |------|---------------|
 | [Menu reference](documentation/menu_reference.md) | Every operation, its safety level, and an example. Generated from the code. |
+| [Menu API endpoint map](documentation/menu-api/README.md) | The Mist API endpoints that each menu option calls |
 | [Menu highlights](documentation/menu-highlights.md) | The operations that arrived most recently |
 | [Command line reference](documentation/cli-reference.md) | Every flag, the two test modes, and the output paths |
 | [Container deployment](documentation/container-deployment.md) | The other deployment methods, the proxy certificate, and the rules that keep your data safe |
@@ -349,7 +351,7 @@ machine.
 | [Architecture](documentation/architecture.md) | The package layout, the diagrams, and the decomposition record |
 | [Diagram suite](documentation/diagrams/README.md) | All 20 Mermaid diagram types |
 | [Security and safety](documentation/security.md) | The credential rules and the destructive operation rules |
-| [Quality gates](documentation/quality-gates.md) | The 14 checks that every pull request runs |
+| [Quality gates](documentation/quality-gates.md) | The quality gates that every pull request runs |
 | [Development setup](documentation/development-setup.md) | Run the code from a source checkout |
 | [Contributing](documentation/contributing.md) | The branch workflow, the labels, and the review rules |
 | [Contributor map for `MistHelper.py`](documentation/CONTRIBUTING-MistHelper.md) | The stable symbols and the packages that guide entry-point changes |

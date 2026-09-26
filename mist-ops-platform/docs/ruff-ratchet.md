@@ -68,33 +68,32 @@ work stays visible. It does not block.
 
 ## The deferred rules
 
-The full configuration reports 393 findings. Measured with ruff 0.16.3 against
-commit `4e1b69e6`.
+The full configuration reports 394 findings. Measured with the repository
+virtual environment against commit `16e5d560` on 2026-09-25.
 
 These three rules sit inside the blocking families, so the job names each one in
 its `--ignore` list.
 
 | Rule | Count | Why it waits |
 | - | - | - |
-| `B008` function-call-in-default-argument | 122 | Every hit is the FastAPI `Depends` and `Query` idiom. The repair is the `flake8-bugbear` `extend-immutable-calls` setting, not a source edit. |
-| `F401` unused-import | 69 | Mechanical. `ruff check --select F401 --fix` clears it. |
-| `B905` zip-without-explicit-strict | 1 | One call site. Add `strict=`. |
+| `B008` function-call-in-default-argument | 127 | Every hit is the FastAPI `Depends` and `Query` idiom. The repair is the `flake8-bugbear` `extend-immutable-calls` setting, not a source edit. |
+| `F401` unused-import | 66 | Mechanical. `ruff check --select F401 --fix` clears it. |
+| `B905` zip-without-explicit-strict | 3 | Add `strict=` at each call site. |
 
 These rules sit outside the blocking families. The advisory step reports them.
 
 | Rule | Count |
 | - | - |
-| `E501` line-too-long | 33 |
+| `E501` line-too-long | 41 |
 | `TC003` typing-only-standard-library-import | 32 |
-| `PLR2004` magic-value-comparison | 27 |
-| `TC002` typing-only-third-party-import | 23 |
+| `PLR2004` magic-value-comparison | 23 |
+| `TC002` typing-only-third-party-import | 22 |
 | `N815` mixed-case-variable-in-class-scope | 17 |
-| `I001` unsorted-imports | 14 |
-| `TC001` typing-only-first-party-import | 14 |
-| `RUF100` unused-noqa | 13 |
-| `PLR0915` too-many-statements | 8 |
+| `I001` unsorted-imports | 15 |
+| `RUF100` unused-noqa | 12 |
+| `PLR0915` too-many-statements | 10 |
+| `TC001` typing-only-first-party-import | 10 |
 | `PLR0917` too-many-positional-arguments | 8 |
-| `SIM117` multiple-with-statements | 4 |
 | `PLR0402` manual-from-import | 3 |
 | `RUF023` unsorted-dunder-slots | 2 |
 | `RUF022` unsorted-dunder-all | 1 |

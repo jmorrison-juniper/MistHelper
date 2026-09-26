@@ -1,10 +1,12 @@
 # Refactor candidates: MistHelper.py
 
-- Entrypoint: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`
-- Module graph size: 275 first-party files
+- Entrypoint: `MistHelper.py`
+- Module graph size: 621 Python files under `src/`
 - Definitions analyzed: 2
 - LOC saveable (unused + single-use): 0
 - Category counts: unused=0, single-use=0, low-use=0, hot=1, skipped=1
+- Measurement date: 2026-09-25
+- Measurement command: `.venv\Scripts\python.exe` with `ast` and `pathlib`
 
 ## How to read this report
 
@@ -32,15 +34,15 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 | Name | Kind | Lines | Refs | Category | Suggested class | Flags |
 |---|---|---:|---:|---|---|---|
-| `GlobalImportManager` | class | 1063 | 1 | skipped |  | oversize_25_lines |
-| `menu_actions` | assignment | 1023 | 17 | hot |  | oversize_25_lines,missing_inline_comments,missing_action_logging |
+| `GlobalImportManager` | class | 1224 | 292 textual matches | skipped |  | oversize_25_lines |
+| `menu_actions` | assignment | 2476 | 46 textual matches | hot |  | oversize_25_lines,missing_inline_comments,missing_action_logging |
 
 ## Hot (1)
 
-### `menu_actions` (assignment, 1023 lines)
+### `menu_actions` (assignment, 2476 lines)
 
-- Def site: line 3838-4860
-- References: 17
+- Def site: line 3690-6165
+- Textual matches: 46
 - Suggested class: _n/a_
 - Suggested module: _n/a_
 - Rationale: Widely used; leave in place until dependencies decouple
@@ -49,22 +51,28 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 3838, 4895, 4896, 4908, 5029, 5029, 5073, 5129, 5174, 5749, 5753, 5798, 5798, 5823, 5823, 5826
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\troubleshooting\interactive_test_runner.py`: lines 80
+  - `MistHelper.py`
+  - `src/export/count_exporter.py`
+  - `src/refactors/run_interactive_test.py`
+  - `src/refactors/run_systematic_test.py`
+  - `src/troubleshooting/interactive_test_runner.py`
+  - `src/utils/operation_registry.py`
+  - `src/wan_hub_group_manager.py`
+  - `src/wan_vpn_builder.py`
 
 ## Skipped (1)
 
-### `GlobalImportManager` (class, 1063 lines)
+### `GlobalImportManager` (class, 1224 lines)
 
-- Def site: line 1183-2245
-- References: 1
+- Def site: line 1083-2306
+- Textual matches: 292
 - Suggested class: _n/a_
 - Suggested module: _n/a_
 - Rationale: PINNED: `GlobalImportManager` must remain in the entrypoint because of module-load / bootstrap ordering; static analysis cannot detect this but moving it would break import wiring. Do NOT extract.
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2290
+  - `MistHelper.py`
 
 ## Limitations
 

@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "helper_classes": {
+    "APIDataFetcher": "Calls one Mist API list endpoint, retries after a rate limit, and writes the rows to the selected output.",
+    "CacheUtils": "Keeps the local CSV cache files fresh, and runs the export again when a cache file is old.",
+    "ConfigUtils": "Reads the organization ID and the API session for the current run.",
+    "DataExporter": "Writes the rows of an export to CSV, to SQLite, or to ArangoDB and Redis.",
+    "InputUtils": "Reads the operator input, and stops the session when the input stream closes.",
+    "MainEntrypoint": "Starts the MistHelper command line interface and runs the selected menu option.",
+    "PromptUtils": "Asks the operator to select a site, a device, or a client, and reads the lists that the selection needs.",
+    "RateLimitingUtils": "Calculates the delay between two API calls, so that a long run stays below the API rate limit.",
+    "SourceDependencyResolver": "The shared instance of SourceDependencyResolverService.",
+    "SourceDependencyResolverService": "Finds the source package that owns a legacy dependency name, and opens the Mist API session."
+  },
+  "generic_names": [
+    "acquire", "add", "append", "apply", "as_dict", "ask", "build", "cancel", "cancelled", "check", "clear",
+    "close", "compile", "confirm", "connect", "content", "copy", "count", "create", "debug", "decode", "delete",
+    "deserialize", "disconnect", "display", "done", "dump", "dumps", "emit", "empty", "encode", "error",
+    "exception", "execute", "exists", "export", "extend", "fetch", "filter", "find", "flush", "format",
+    "from_dict", "full", "get", "glob", "handle", "headers", "index", "info", "input", "is_dir", "is_file",
+    "is_set", "items", "iter", "iterdir", "join", "json", "keys", "len", "load", "loads", "log", "lower", "main",
+    "map", "match", "mkdir", "mount", "next", "notify", "now", "open", "parse", "partial", "pop", "post", "print",
+    "process", "prompt", "put", "qsize", "raise_for_status", "read", "read_text", "record", "recv", "reduce",
+    "release", "remove", "rename", "render", "replace", "report", "request", "reset", "resolve", "result",
+    "rglob", "run", "running", "save", "search", "select", "send", "serialize", "session", "set", "setdefault",
+    "show", "shutdown", "sleep", "sort", "split", "start", "stat", "status_code", "stop", "strip", "sub",
+    "submit", "summarize", "summary", "task_done", "text", "time", "to_dict", "today", "transform", "unlink",
+    "update", "upper", "usage", "validate", "values", "wait", "warning", "wrap", "write", "write_text"
+  ],
+  "dynamic_calls": [
+    {
+      "function": "src.export.const_definitions_exporter:ConstDefinitionsExporter._discover_endpoints",
+      "reason": "The exporter walks the mistapi const package with pkgutil and calls each function that it finds.",
+      "sdk_prefix": "api.v1.const."
+    },
+    {
+      "function": "src.upgrade_portal.app.factory:register_one_blueprint",
+      "reason": "The factory imports each route module by name, so static analysis cannot follow the import.",
+      "route_handlers_under": "src.upgrade_portal."
+    }
+  ],
+  "no_endpoint_reasons": {
+    "0": "Menu 0 closes MistHelper. It sends no API request.",
+    "141": "Menu 141 opens a browser for the mistapi library. The operator selects the SDK function at run time, so the map cannot name one endpoint.",
+    "175": "Menu 175 connects over SSH to the devices that the operator names. It sends no Mist API request.",
+    "186": "Menu 186 deletes the local CSV cache files. It sends no API request.",
+    "243": "Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric catalog. It sends no API request."
+  }
+}

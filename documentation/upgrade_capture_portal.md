@@ -24,9 +24,9 @@ The two portals are different programs.
 9. Wait. The portal takes the post-check capture without a command.
 10. Read the comparison of the two captures.
 
-## The five views
+## The views
 
-The portal offers five views. The table names each view, its address, and its
+The portal offers these browser views and API route groups. The table names each view, its address, and its
 purpose.
 
 | View | Address | Purpose |
@@ -36,6 +36,9 @@ purpose.
 | Capture | `/captures/<capture_id>` | Run a capture and read its tables. |
 | Progress | `/runs/<run_id>` | Read the upgrade state of every device. |
 | Comparison | `/compare` | Read the two captures side by side, with the statistics. |
+| Organization upgrade | `/upgrade/org` and `/api/org-upgrades` routes | Run and recover a multi-site upgrade. |
+| Review | `/compare`, `/history`, and `/api/comparisons` routes | Review comparison results before approval. |
+| Run controls | `/api/runs` routes | Preview bulk actions, cancel runs, retry runs, and reconcile one run. |
 
 The confirmation page at `/runs/<run_id>/confirm` sits between the selection
 view and the progress view. That page holds the start control.
@@ -90,7 +93,7 @@ reads no store.
 
 The portal has two start paths. Both paths reach the same program.
 
-**From the menu.** Start MistHelper, then choose menu entry **238**. The entry
+**From the menu.** Start MistHelper, then choose menu entry **239**. The entry
 text is `Launch the upgrade capture portal on port 8056 (pre-check, upgrade,
 post-check)`.
 
@@ -116,20 +119,25 @@ offers the browser token mode.
 | `CAPTURE_HOST` | loopback, or every address in a container | The listen address of the launcher. |
 | `CAPTURE_SECRET_KEY` | none | The key that signs the session cookie. |
 | `CAPTURE_POLL_SECONDS` | `30` | The wait between two browser status calls. The range is 5 to 3600. |
-| `CAPTURE_THEMES` | `default,magenta` | The stylesheet names that the portal offers. |
+| `CAPTURE_THEMES` | `magenta,default` | The stylesheet names that the portal offers. The first name is the default. |
 | `CAPTURE_ALLOWED_IPS` | none | A comma list of networks that may reach the portal. |
 | `CAPTURE_PROXY_HOPS` | `0` | The count of trusted reverse proxies in front of the portal. |
+| `CAPTURE_POST_CHECK_MODE` | `automatic` | Choose whether the portal starts the post-check capture automatically. |
+| `CAPTURE_AUTOSTART` | `1` | Start a stopped dependency container when the portal can reach the container runtime. |
+| `CAPTURE_DEFAULT_AP_VERSION` | none | Optional default AP firmware version for compatible devices. |
+| `CAPTURE_DEFAULT_SWITCH_VERSION` | none | Optional default switch firmware version for compatible devices. |
+| `CAPTURE_DEFAULT_GATEWAY_VERSION` | none | Optional default gateway firmware version for compatible devices. |
 | `ARANGO_HOST` | `http://misthelper-arangodb:9529` | The URL of the primary store. |
 | `ARANGO_DATABASE` | `misthelper` | The database name inside that store. |
 | `ARANGO_USERNAME` | `root` | The account name for the store. |
 | `ARANGO_ROOT_PASSWORD` | none | The store password. |
-| `REDIS_HOST` | `redis-stack` | The host that holds the site lock. |
-| `REDIS_PORT` | `6379` | The port of that host. |
+| `REDIS_HOST` | `misthelper-redis` | The host that holds the site lock. |
+| `REDIS_PORT` | `9379` | The port of that host. |
 | `REDIS_PASSWORD` | none | The Redis password. |
 | `MIST_APITOKEN` or `MIST_API_TOKEN` | none | The cloud API token. |
 
 The two store defaults are container service names. No desktop host uses the
-name `arangodb` or the name `redis-stack`. If you start the portal on a
+name `misthelper-arangodb` or the name `misthelper-redis`. If you start the portal on a
 desktop, set `ARANGO_HOST` and `REDIS_HOST` to your own addresses.
 
 On a desktop, the launcher binds loopback only. The portal then accepts a
