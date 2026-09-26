@@ -14,9 +14,9 @@ The workflow stages jobs with `needs`. It does not run every job in one
 parallel group. `speckit_task_audit` and `exclusion_drift` are advisory because
 they set `continue-on-error: true`.
 
-The `misthelper-devtools` package supplies `test-quality-analyzer` and
-`tools.check_citations`. `requirements-dev.txt` pins that package to one
-commit.
+The `misthelper-devtools` package supplies `test-quality-analyzer`,
+`complexity-gate`, and `tools.check_citations`. `requirements-dev.txt` pins
+that package to one commit.
 
 The test quality baseline is `.github/test-quality-baseline.json`. The
 `test_quality_gate` job gives that file to each analyzer run. Without the
@@ -54,7 +54,7 @@ The analyzer writes `report.json` and `summary.md` into
 | `bandit` | `bandit -c pyproject.toml -r .` | Zero findings at any severity. |
 | `pip_audit` | `pip-audit -r requirements.txt` | Zero known vulnerabilities. |
 | `pylint` | `pylint $SRC_PATH --fail-under=$PYLINT_THRESHOLD` | Score at least 9.5. |
-| `radon` | `radon cc` | No block above cyclomatic complexity 10. |
+| `radon` | `radon cc -j` into `complexity-gate --max 10` | No block above cyclomatic complexity 10. |
 | `vulture` | `vulture $VULTURE_PATHS --min-confidence $VULTURE_CONFIDENCE` | Zero findings at confidence 70. |
 | `pydocstyle` | `pydocstyle $PYDOCSTYLE_PATHS` | Zero docstring style violations. |
 | `interrogate` | `interrogate $INTERROGATE_PATHS --fail-under $INTERROGATE_THRESHOLD` | Coverage at least 90 percent. |

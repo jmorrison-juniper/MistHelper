@@ -93,6 +93,10 @@ workflows and jobs to the shared copies.
 | `container-build.yml`, job `build-and-push` | `reusable-container-image.yml` |
 | `release.yml`, job `build-container` | `reusable-container-image.yml` |
 
+The `radon` job in `ci.yml` also runs a devtools command. It pipes the report of
+`radon cc -j` into `complexity-gate --max 10` instead of an inline script
+(issue #3456).
+
 Each caller pins the full commit of a devtools release and names the release in
 a comment. Dependabot reads that comment and proposes a new pin after a devtools
 release. It does not update the `requirements-dev.txt` pin, so change that pin
