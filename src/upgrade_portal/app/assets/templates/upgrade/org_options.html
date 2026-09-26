@@ -16,6 +16,14 @@
 {% set shows_p2p_sizes = has_ap and p2p_chosen %}
 {% set shows_radio_batches = has_ap and uses_rrm %}
 {% set partial_site_names = partial_sites | default([], true) %}
+{#
+  Issue #3447. The note printed the fixed word "sites", so a plan of one site
+  read "1 selected sites". The noun follows the count, with the rule of the
+  retry banner below. A retry keeps only the sites of its devices, so the
+  count and the noun follow the retry sites too.
+#}
+{% set site_count = rows | length %}
+{% set site_noun = 'site' if site_count == 1 else 'sites' %}
 
 {% block title %}Configure the upgrade{% endblock %}
 {% block heading %}<h1>Configure the upgrade</h1>{% endblock %}
@@ -23,8 +31,8 @@
 {% block content %}
 <div class="portal-card" data-testid="org-upgrade-options">
   <h2 class="portal-card-title">Upgrade options</h2>
-  <p class="portal-card-note">
-    One operation targets {{ rows | length }} selected sites. The portal selects the safe route for each device family.
+  <p class="portal-card-note" data-testid="org-upgrade-site-count">
+    One operation targets {{ site_count }} selected {{ site_noun }}. The portal selects the safe route for each device family.
   </p>
 
   {#
