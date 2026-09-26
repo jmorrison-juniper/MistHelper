@@ -101,6 +101,8 @@ compliance_report.md
 output/
 Output/
 OUTPUT/
+# The test-quality-analyzer command writes its report here (issue #3421).
+test_quality_analyzer_output/
 exports/
 Exports/
 EXPORTS/
