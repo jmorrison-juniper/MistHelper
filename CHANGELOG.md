@@ -12,6 +12,1412 @@ the merged fragments into this file at release time.
 
 ## [Unreleased]
 
+## [26.09.26.06.19] - 2026-09-26
+
+This release collects 312 release-note fragments from `changelog.d/`. It also
+holds each entry of the old Unreleased section. The previous GitHub release is
+`v26.05.21.19.37`.
+
+### Added
+
+- `tests/guardrails/test_shipped_artifacts.py` keeps the development tooling
+  out of the wheel and out of the container image. The guard reads the wheel
+  package list, the console script list, every Dockerfile `COPY` source, and
+  the container exclude list. Each check reports the count it measured. See
+  issue #3404.
+
+- The menu API endpoint map shows the Mist API endpoints that each menu option
+  can call. Each menu option has a Mermaid flowchart and a table. The table
+  gives the HTTP method, the path, the mistapi function, its document link, and
+  the code that sends the request. Read `documentation/menu-api/README.md` or
+  the `Menu-API-Endpoints` wiki page. See issue #3411.
+- `scripts/menu_api_map` writes the map from the source code and from a vendored
+  index of the mistapi functions. The `menu_reference_drift` CI job runs
+  `python -m scripts.menu_api_map --check`, and the job fails when a map page is
+  stale. See issue #3411.
+
+- `.ste-linter.toml` holds the Simplified Technical English linter settings.
+  The settings left `pyproject.toml`, because the linter now reads them from
+  an installed package instead of the project file. See issue #3404.
+
+- The options page of a multi-site upgrade offers the eleven advanced
+  controls of the single-site page. The controls set the failure count of
+  each canary phase, the peer download, and the radio batches. They also set
+  the vendor stable build and the release train of a session smart router.
+  Each control shows only when the plan reads it, and the typed
+  confirmation page lists each sent value. If the plan holds an access
+  point, the save refuses the vendor stable build, because the organization
+  upgrade of access points names no stable build. Issue #3383.
+
+- The multi-site upgrade now takes a post-check capture of each site after the last phase ends, and also after a cancel. The progress page shows one row for each site, with a link to the capture and a link to the comparison of the two captures of that site. The status poll carries the same rows in the field `postchecks`. Issue #3244.
+
+- Issue #3243: the multi-site confirm page of the upgrade capture portal now shows the card "Pre-check captures". The card shows one row for each selected site, with the capture link, the tier, and the state. The operator takes each missing pre-check capture, or a new capture for each site, from the same page, in tier 2 or tier 3.
+- Issue #3243: the multi-site progress page lists the pre-check capture of each site, with a link to the capture page.
+
+- The Marvis Actions API report now lists the four Marvis Config Actions endpoints, and it tells if each endpoint changes Mist data. The report explains why menu 270 does not call them, because they read a different object. The report also holds a live read of the family and the three sources that MistHelper checked (issue #3336).
+
+- The multi-site upgrade page of the capture portal now follows each cascade phase until its devices settle, as the single-site page does (issue #3245). The page shows a "Cascade phases" card with the gateways, the switches, the access points, and the wireless clients. The poll continues while a phase still waits for its devices, so the page no longer reads "completed" while the devices reboot.
+- The submission reads the uptime of each device before the first firmware write. If the read fails, the page names the count of devices with no uptime, and the upgrade continues.
+- A cancel stops the phase watch, and the page shows "Stopped". A portal restart resumes the watch from the first phase that did not end.
+
+- The multi-site upgrade portal can retry the devices that did not reach the target version. The retry opens a new plan with only those devices and the earlier choices, and it never writes firmware before the typed confirmation. Issue #3247.
+- The multi-site progress page can check each child job with an uncertain outcome against the running versions. A child job completes only with complete proof, and the page shows the evidence of each check. Issue #3247.
+- The multi-site confirmation page can move the start time of a plan before the typed confirmation. The move uses the start time window of the single-site page, and it refuses a request that holds no start time field. Issue #3247.
+
+- The capture history page shows a "Multi-site upgrades" section. Each row names the sites, the device types, the typed operator, the Mist account, the state, and the moments of the upgrade. The browser session that started the upgrade gets a link to the progress page. Issue #3248.
+
+- The multi-site progress page of the upgrade capture portal now shows one row for each device of each site (issue #3249). Each row shows the site, the name, the MAC address, the type, and the state. Each row also shows the version before, the target version, the version after, the version check, and the failure reason. The page also shows the typed operator address, the Mist account, and the age of the last update. The version after is the running version from `listSiteDevicesStats`, and the portal reads a site only when a device of that site needs a reading.
+
+- The multi-site progress page shows a cancellation result for each child job after a cancel. Each child job lists the devices that the cloud canceled, the devices that still write firmware, and the devices with no cancel path. A reload shows the same lists, because the page reads them from the stored operation. Issue #3246.
+- The multi-site progress page shows a caution beside the cancel button. The caution states that a device that already writes firmware finishes the write, and that each site can hold two firmware versions after the cancellation. Issue #3246.
+
+- `tests/unit/web_portal/test_portal_sdk_calls.py` resolves every Mist SDK
+  call in `web_portal/` against the installed SDK. It found one more missing
+  function, in the Maps page, which #3236 tracks (#3233).
+
+- `tests/unit/web_portal/test_portal_label_accuracy.py` compares each promised
+  operation count against the table that its chooser prints, and it rejects an
+  internal tracking number in any label (#3219).
+
+- A guard in `tests/unit/web_portal/test_output_scan_runtime_files.py` now
+  fails when a test module names a test output folder under `data/` that the
+  output scan does not prune. The scanner also publishes the count of folders
+  that its last walk listed, so a test can prove that a pruned tree was never
+  entered (#3201).
+
+- `tests/unit/web_portal/test_portal_required_controls.py` now fails when a row
+  declares a control that no prompt reads. An extra control makes the operator
+  answer a question the run discards, and an empty pick list then blocks a run
+  for a value the operation never wanted (#3198).
+
+- `tools/prompt_audit.py` reports the interactive prompts that each portal
+  operation reaches. It reads the menu table, walks the call graph of each
+  handler, and names the prompts in order. A guard test reads the same report,
+  so a new operation that needs a control cannot ship without one.
+
+- The operations portal now ships the magenta brand theme, and it is the
+  default. The palette comes from the upgrade capture portal, so the two
+  portals on one host carry one brand identity. The three existing themes stay
+  selectable and unchanged. Issue #3136.
+
+- The operations portal now fits a phone, a tablet, and a wide desktop. A new
+  stylesheet holds the breakpoints, the touch target sizes, and the stacked
+  layout rules. Issue #3132.
+- A stacked layout now offers a "Back to the list" control, and it holds the
+  run controls against the bottom edge, so the primary action stays reachable.
+  Issue #3132.
+
+- Added the CI gate for the test quality ratchet for issue #2954.
+
+- Added `--pages-per-part` and `--split-above-mb` to `scripts/pdf_to_markdown.py` for issue #2911.
+  The defaults are 250 pages for each part and 40 megabytes for the split threshold.
+
+- Added four platform agent skills for issue #2902. They answer a question about the Junos Space
+  management platform, the SRX firewall and its policy tools, the Juniper Secure Analytics
+  platform, and the data center fabric. Each skill names its source document and its release.
+- Each skill holds a router `SKILL.md`, a reference set of five children or fewer, and a corpus
+  index. Every index row resolves to a document in the staged Juniper corpus.
+- The four skills read 678 source documents and 197,860 pages. The staged corpus stays outside
+  the repository, because the Juniper documents are copyrighted.
+
+- Added six Junos agent skills for issue #2900. They answer a question about routing, MPLS and
+  VPN services, layer 2 switching, interfaces and class of service, day to day operation, and
+  high availability. Each skill names its source document and its Junos train.
+- Each skill holds a router `SKILL.md`, a reference set of five children or fewer, and a corpus
+  index. Every index row resolves to a document in the staged Juniper corpus.
+- The six skills read 135 source documents and 45,435 pages. The staged corpus stays outside the
+  repository, because the Juniper documents are copyrighted.
+
+- A guard now imports every module under `src/` and fails when a module cannot
+  import. The guard states the count it checked. Issue #2682 showed the cost of
+  the gap, because one renamed upstream name turned every pull request red. The
+  guard holds a register for the two modules that issue #2885 tracks.
+
+- Added the `hardening-junos` skill for issue #2754. It answers Junos hardening questions from a staged Juniper corpus and names its source. It has five files at 124 KB of a 400 KB limit. It includes 67 controls in eight sections, 181 DISA STIG rules, verification guidance, and corpus procedures.
+
+- Added issue #2726 guard coverage for installed `mistapi` SDK signature drift.
+
+- Added a source-grounded Junos hardening skill for MistHelper contact points for issue #2754.
+
+- Added durable SpecKit planning artifacts and verification evidence for issue #2339.
+
+- Added the measured Python optimization agent skill for issue #2394.
+
+- Added a source-grounded Mist API skill for issue #2393.
+
+- Added the performance monitoring modules and privacy storage tests for issue #2533.
+
+- Added an enforced guard proof audit for issue #2654.
+
+- The portal now links to the capture comparison. The navigation holds a
+  `Compare` link, the run page links the comparison of its own two captures, and
+  each history row links the comparison of that run. No page named the
+  comparison before, so an operator reached the one view that proves an upgrade
+  worked only by typing the address. Issue #2649.
+
+- Added the contributor map for `MistHelper.py` for issue #1713.
+
+- Add opt-in STE grading for logging and user-facing Python strings for issue #1684.
+
+### Changed
+
+- Rewrote `README.md` as a five-W entry point with the container setup and a
+  documentation map for issue #3428. The operator content moved to
+  `documentation/operator-guide.md`.
+
+- The in-house development tooling now lives in the separate repository
+  `jmorrison-juniper/misthelper-devtools`. MistHelper keeps a local copy for
+  now, and phase 2 deletes that copy. See issue #3404.
+- The Zscaler city metadata moved from `scripts/build_zen_city_metadata.py`
+  into `src/utils/zen_city_metadata.py`. The synthetic probe scheduler reads
+  that map at run time, so it is product code. The maintenance command stays
+  in `scripts/` and it imports the new module. See issue #3404.
+
+- An audit corrected the README, the wiki, the Mermaid diagram suite, the
+  operator guides, and the agent instruction files. The pages now state the
+  current menu count, the current CI jobs, the current SNMP base OID, and the
+  current compose services. See issue #3411.
+
+- `requirements-dev.txt` installs the development tooling from the
+  `misthelper-devtools` repository at an immutable commit. A contributor gets
+  the analyzers, the Simplified Technical English linter, and the citation
+  checker from that package. See issue #3404.
+- The continuous integration workflows, the pre-commit configuration, and
+  `scripts/run_repository_analyzers.py` call the installed `ste-linter` and
+  `test-quality-analyzer` commands. They no longer run a local copy. See
+  issue #3404.
+
+- Issue #3243: a multi-site upgrade now needs a verified pre-check capture for each selected site, as a single-site upgrade does. The confirmation field stays disabled until each site holds a capture. The start route refuses with 409 `pre_capture_missing` and names each site that holds no capture.
+- Issue #3243: the store reads only seven fields of the newest pre-check capture, and not the whole document. For a site with 35 pre-check captures, one read moves 221 bytes instead of 49,141 bytes.
+
+- Refs #3210: The site picker, the site post, and the multi-site options steps now reuse the site list and the site statistics of an organization for one minute for the same operator, so a repeated view makes no cloud read. The site lock state stays live.
+
+- Refactored the issue #2645 compliance targets so each measured file reaches grade C or better.
+
+- The skipped-database-write message now sends the reader to the warning that
+  names the failed setting. It used to name `ARANGO_HOST` and `REDIS_HOST`,
+  and both values were correct. Issue #3113.
+
+- The results table now leads with the column that names each row. The table
+  took its order from the file, and an exporter writes the keys alphabetically,
+  so the site export opened with `address`, `alarmtemplate_id`, and
+  `aptemplate_id` while `name` sat far to the right. A reader had to scroll
+  sideways to learn which site each row described. The table now moves a known
+  identity column to the front, in the order `name`, `hostname`, `site_name`,
+  `mac`, `serial`, `id`. A record that holds none of those names keeps the
+  order the file supplies, and the CSV download keeps the file order. Issue
+  #3125.
+
+- Fixed part of issue #2750 by logging each blind handler for a broad exception in the operations platform.
+
+- Fixed part of issue #2750 by logging each blind handler for a broad exception in scripts.
+
+- Fixed part of issue #2750 by logging each blind handler for a broad exception in WAN and export code.
+
+- Fixed part of issue #2750 by logging each blind handler for a broad exception in capture and refactor code.
+
+- Fixed issue #2750 by binding broad web portal route handlers and logging the exception type and message.
+- Fixed issue #3058 by declaring optional return types for map and data browser helpers.
+
+- Fixed issue #2750 by logging each blind handler for a broad exception in the upgrade portal.
+
+- Strengthened a third slice of weak `is not None` assertions in tests for issue #2708.
+
+- Narrowed four upgrade portal authentication handlers for issue #2926.
+
+- Strengthened a second slice of weak `is not None` assertions in tests for issue #2708.
+
+- Narrowed six upgrade portal Mist API client exception handlers for issue #2926.
+
+- Strengthened weak `is not None` assertions in tests for issue #2708.
+
+- Added HTTP 503 failure-mode coverage for issue #2746.
+
+- Strengthened the packet capture tests for issue #2711.
+
+- Restored nine export failure-mode test files that a force-push dropped from
+  pull request #3011 before it merged. The files cover HTTP 4xx and HTTP 5xx
+  paths for issue #2746 and issue #2747.
+
+- Reduced issue #1766 warning noise by moving three success summaries from WARNING to INFO.
+- Finished issue #1766 by moving progress and success messages from WARNING to INFO. INFO keeps the terminal output.
+
+- Strengthened the `weak_is_not_none` test assertions for issue #2708.
+
+- Added HTTP 4xx and HTTP 5xx failure-mode coverage for export tests from issue #2746.
+
+- Strengthened the device utility command tests for issue #2711.
+
+- Refreshed the CodeQL verdict register after the triage in issue #3000. The
+  register now holds a row for alert 207 and a row for alert 208, and the row
+  count moves from 86 to 88.
+
+- The `tests/unit` directory now uses a module logger for every record. The
+  directory held 309 root-logger calls before this wave and holds none now. Two
+  calls survived the first pass, because a rebase carried in new tests after the
+  measurement ran. This completes that part of issue #2769.
+
+- Replaced root logger calls in `tests/unit` with module logger calls for issue #2769.
+
+- Strengthened low-severity test quality checks for issues #2707 and #2709.
+
+- Refs #2925. Made the Juniper skill factory require a complete SpecKit artifact set before install.
+- Refs #2925. Added living-spec drift and sync support for converted Juniper documents.
+
+- Documented the local commands and timing budget for the test shards of the upgrade portal for issue #2756.
+
+- Replaced the remaining test root logger calls with module loggers. Closes #2769.
+
+- Narrowed tested persistence exception handlers for issue #2835.
+
+- Refined issue #2833 firmware cache exception handling. File errors still use the safe fallback path. Programming defects now raise.
+
+- Replaced calls to the root logger in tests with module logger calls for issue #2769.
+
+- Narrowed selected display path exception handlers for issue #2836.
+
+- Narrowed seven blind exception handlers in API and credential paths for issue #2834.
+
+- Reclassified progress records for audit analysis and WAN probe logging from `WARNING` to `INFO` for issue #1766.
+
+- Changed issue #2812 logging calls in `src/upgrade_portal` to use module loggers.
+
+- Changed firmware logging calls that are outside exception handlers to use module loggers for issue #2789.
+
+- The branch cleanup moved 119 `preservation/*` and `recovery/*` branches to
+  `archive/*` tags, then deleted the branches. A tag holds a commit exactly as a
+  branch does, so no commit was lost. The remote branch count fell from 179 to
+  10. `documentation/branch-preservation-audit.md` holds the measurement, the
+  verification, and the command that restores a branch from its tag.
+
+- Added a branch preservation audit report for the 2026-09-17 safe no-delete batch.
+
+- Reworded two logs about prepared WAN probe payloads for issue #2751 so they no longer report a completed update before the Mist API answers.
+
+- Changed the web portal logging sweep for #2829 to use module loggers.
+
+- Replaced `logging.*` calls outside `except` blocks with module loggers for #2815, #2810, #2807, #2832, and #2820. Also checked `wsgi_capture.py`, which has no issue.
+
+- Use module loggers in reports, analytics, and utilities for #2803, #2804, and #2805.
+
+- Changed logging in `src/config`, `src/cache`, `src/input`, `src/network`, and `src/marvis` to use module loggers for #2806, #2808, #2809, #2813, and #2814.
+
+- Refactored tools and scripts to use module loggers for #2831 and #2830.
+
+- Seven small packages now use a module logger instead of the root logger. The
+  log record for each of these packages now carries the module name, so an
+  operator can tell which module wrote it. This change covers `audit`, `db`,
+  `validation`, `security`, `time`, `data`, and `bootstrap`. It closes issues
+  #2816, #2817, #2818, #2819, #2821, #2822, and #2823.
+
+- Use module loggers for non-exception SSID consolidation and WebSocket logs. Closes #2800 and #2802.
+
+- Changed export modules to use module loggers for issue #2785.
+
+- Changed refactor modules for issue #2786 to use module loggers when no exception handler owns the call.
+
+- Changed the src/api root logger calls to module loggers for issue #2801.
+
+- Refactored issue #2785 by moving more `src/export` calls to module loggers.
+
+- Renamed non-exception root logger calls in src/ssh to module loggers for issue #2799.
+
+- Changed issue #2797 to use module loggers in the `src/ui` package.
+
+- Changed issue #2798 to use module loggers for non-exception inventory log calls.
+
+- Changed issue #2796 logging calls in `src/auth` to use module loggers outside exception handlers.
+
+- Changed issue #2795 logging calls in `src/site` to use module loggers outside exception handlers.
+
+- Changed issue #2794 logging calls in `src/troubleshooting` to use module loggers.
+
+- Changed issue #2787 logging calls in `MistHelper.py` to use a module logger outside exception handlers.
+
+- Changed logging calls in `src/device` to use loggers for modules when no exception handler contains the call.
+
+- Changed issue #2791 logging calls in `src/capture` to use module loggers.
+
+- Changed issue #2792 logging calls in `src/org` to use module loggers outside exception handlers.
+
+- Changed issue #2790 calls in `src/gateway` to use loggers for each module outside handlers for exceptions.
+
+- Changed the non-exception src/maps logging calls to use module loggers for issue #2788.
+
+- Continued the compliance cleanup for org synthetic probes and AP profile migration for issues #2827 and #2828.
+
+- Changed issue #2786 logging calls in `src/refactors` to use module loggers outside exception handlers.
+
+- Refactored the issue #2645 compliance target modules without new suppressions.
+
+- Refactored issue #2785 by moving the site insights and utility export logging calls to module loggers.
+
+- Refactored 204 firmware manager root logging calls for issue #1793 so they use a
+  module logger.
+
+- Issue #1785: `--testinteractive` now has an unattended prompt provider, safety refusal, and measured summary output.
+
+- Added the issue #1924 failure-evidence audit, follow-up inventory, and dependency bound guard.
+
+- Changed `scripts/pdf_to_markdown.py` for issue #2754. It uses `pdfplumber` to read PDF files. It detects headings from font size and writes front matter in YAML. It removes a running header. It changes each bullet glyph to a Markdown list item. It runs a worker pool.
+
+- Enriched the Mist OpenAPI 2607.1.1 endpoint files added for issue #2695.
+
+- Issue #2145 updates the container deployment workflow and adds guardrails that protect the production store volumes.
+
+- Refresh the bundled Mist OpenAPI specification to version 2607.1.1, regenerate the checked-in MIB, and keep MIB catalog fields mapped through response references for issue #2685.
+
+- **Changed**: `MistHelper.py` logs tracebacks for broad exception safety nets and narrows known handler surfaces. Issue #1709.
+
+- Refactored the source packages for issue #1703 so they no longer import the root `MistHelper` module.
+
+- Issue #1009 finishes the final 1015 extraction record for `MIST_SITE_EXCLUDE_PREFIX`.
+
+- Refactored the MistHelper menu table for issue #1704 and issue #1705 so rows use named fields and repeated dependency blocks use factories.
+
+- Refactored the MistHelper session path for issue #1702 and issue #1712 so an application context owns the live session and the session setup runs once.
+
+- **Changed**: The README now records the wired client report deployment check. Issue #993.
+
+- Refactored the MistHelper entry point for issue #1701 and issue #1706, so import stays passive and CLI parsing runs once.
+
+- Reconciled the delivered SpecKit task records and added an advisory drift guard for issue #1741.
+
+- Reconciled the compliance backlog for issue #1000 and issue #1003.
+
+- Reconciled issue #996 tasks and completed the Mist Ops Platform scheduled job pre-checks.
+
+- Issue #2570 reduces capture JSON export row building memory while keeping export bytes unchanged.
+
+### Fixed
+
+- The multi-site save no longer replaces the options of the operator with the defaults when the last selected site holds no device. The save now stops and names each site that it cannot read, or each site that holds no planned device. A retry of the failed devices still saves when a site holds no retry device. A retry still stops when the portal cannot read a site. Issue #3389.
+
+- The options page and the confirm page of a single-site upgrade now use the
+  American spelling "neighbor" and "neighborhood". A new contract test reads
+  every portal template and the portal script, and it fails on a British
+  spelling from its list. Issue #3384.
+
+- The options page of a single-site upgrade no longer shows the word `None`
+  under each version control of a device type. A type with no warning now
+  shows its default note, and a type with a warning still shows the warning.
+  Issue #3381.
+
+- The page of a stored capture now stops its status poll after the first answer. The status of a stored capture held the content word `complete` or `partial`, which the page does not treat as an end state. Therefore, an idle tab read the whole capture from the store every 3 seconds with no end. The status now sends `verified` when the stored capture passed its read-back check and this release can compare it. It sends `failed` in every other case (issue #3378).
+
+- The precheck card of the multi-site mode reads the same status. If the portal restarted during a precheck, the card waited at that site with no end. The card now accepts the stored capture (issue #3378).
+
+- The upgrade capture portal no longer reports `completed` for a multi-site upgrade after a cancel that stopped part of the work. If one child job completed and the cancel stopped another child job, the upgrade now reads `cancelled`. The status card, the final note, and the history list show that word. An access point job that completed at one site and stopped at another site also reads `cancelled`. A failed child job still makes the upgrade read `failed` (issue #3371).
+
+- Issue #3367: A cancel of a running multi-site upgrade no longer sends a cancel request to a child job that already ended. The cancel result panel now shows the status `already_ended` for that child job, with a note and no device list. Before this repair, the panel listed each upgraded access point as a cancelled device.
+
+- The progress page of a final multi-site upgrade shows no cancel form. The portal refuses a cancel request for it with the code `org_upgrade_not_cancellable` and the HTTP status 409, and it sends no request to Mist. A poll that reports a final state closes the form. Issue #3225.
+- The Cancellation column of the multi-site site table shows one text in the first render and in each poll. The family, site, type, and state cells no longer break a word inside its letters at a narrow width. Issue #3225.
+
+- The Maps page now shows the floor plan image of each map (#3236). The portal downloads the image and serves it from its own origin. If a map has no image, or if the image does not load, the page shows a note. A late answer for an older map choice no longer replaces the newer map. The logs hide the secret values of each download link.
+
+- The upgrade capture portal no longer opens a raw JSON page when a picker page sends a choice that the portal refuses. The portal opens the correct picker page again and shows one sentence that starts with `Caution:`. A script still gets the JSON refusal (issue #3240).
+
+- Each multi-site form now sends one request for one click. The page disables the form until the portal answers, so a double click on Start cannot send a second firmware request. If a request started an upgrade before, the refusal links to the progress page of that upgrade and puts the focus on the link. A refusal that started nothing enables the form again, and the typed word stays. A page that the browser shows again from its cache loads again, so no form stays disabled. Issue #3242.
+
+- The SQLite writer now adds a column for each new field before it writes to an existing table. Before this change, every insert into that table failed, and the writer still reported success. If no row of a batch inserts, the writer now keeps the old rows and reports the failure. If some rows fail, the writer logs one summary line with the count (issue #3350).
+
+- The ops platform installs `greenlet` through `sqlalchemy[asyncio]` (issue #3346). SQLAlchemy 2.1.0 does not install `greenlet` by default. Without `greenlet`, the async engine of the database does not start, and the ops platform tests stop at collection.
+
+- The hint under a typed-word field no longer asks for capital letters when the word holds small letters. The hint now tells the operator to copy the capital and small letters of the page. Issue #3247.
+
+- The "Runs" table of the capture history page no longer shows the record of a multi-site upgrade as a single-site run. Issue #3248.
+- A new multi-site upgrade record holds one moment for its start and for its last update, so the two moments agree. Issue #3248.
+
+- The access point child job of a multi-site cancel now uses the sort rule of the single-site stop. An access point that the last status marks as rebooting stays in the list of devices that still write firmware. Before this change, the portal stored no device list for that child job. Issue #3246.
+
+- The WLAN export of menu 69 and the SLE metric insight export of menu 73 now name the output file with the separator of the platform. In the Linux container, the notice read `! 0 records exported to data\SiteWlans_HQ.csv`, and now reads `! 0 records exported to data/SiteWlans_HQ.csv`. On Windows, each notice stays the same (#3251).
+
+- Menu 74 now exports the site insight metrics. The Mist cloud answers the SDK request with HTTP 404 and an empty body, so menu 74 always reported that no data was available. Menu 74 now requests each metric from the path form that the cloud serves. If the Mist API refuses a metric, menu 74 names the metric, the HTTP status, and the reason. A refused metric no longer becomes a record in the export. Issue #3266 records the live probe.
+
+- Menu 75 now exports the client insight metrics. The Mist cloud answers the SDK request with HTTP 404 and an empty body, so menu 75 always reported that no data was available. Menu 75 now requests each metric from the path form that the cloud serves. If the Mist API refuses a metric, menu 75 names the metric, the HTTP status, and the reason. Issue #3297 records the live probe.
+
+- Menu 76 no longer exports an HTTP 400 error body as a device insight metric row. The summary now counts only the metrics that returned data. After the export, the operator reads each refused metric with its HTTP status and its reason. Issue #3267.
+
+- Fixed issue #3154 so the Operations portal clears stale result tables and output files when an operator selects another operation.
+
+- Fixed issue #3198 by removing stale Operations portal controls and by matching menus 87 and 88 to their real prompt order.
+
+- Fixed issue #3193 so a device selector cache file does not appear as the menu 78 operation result.
+
+- The upgrade capture portal now answers a browser page view of a wrong address with status 404 and an error page. The browser showed the raw JSON text `{"error":{"code":"not_found",...}}` with no portal layout. The page states that the portal holds no page at the address, and it links to the site list. A refused method and an unexpected fault also show the error page to a browser. The portal script, a JSON client, and a request from outside the address allow list still receive the JSON envelope (#3274).
+
+- The upgrade capture portal now answers a refused browser form post with status 400 and an error page. The browser showed the raw JSON text `{"error":{"code":"csrf_missing",...}}` when a session ended while a form was open. The page states the cause, shows the error code `csrf_missing`, and links back to the form page. The portal script and a JSON client still receive the JSON envelope (#3275).
+- The shared error page of the upgrade capture portal now shows the header links and the sign-out control only to a live session (#3275).
+
+- The upgrade capture portal now answers an unknown run identifier with status 404 and an error page. The run page, the options page, and the confirm page showed an empty page with status 200 and write controls. The error page names the identifier, shows the error code `run_not_found`, and links to the site list (#3276).
+
+- The upgrade capture portal now prints a space after the signal word of each alert. The sign-in alert for a refused browser token read `Warning:The portal could not sign you in`, and now reads `Warning: The portal could not sign you in` (#3277).
+
+- Closes #3278: On a screen 390 pixels wide, the Choose button of the organization table, the Open button of the site table, and the Select box of the multi-site site table now keep each label on one line. Before, the labels broke into groups of letters.
+
+- Closes #3220: A running multi-site upgrade now stays running. The portal maps every Mist upgrade status word, keeps reading each running child, keeps every site lock until each child is past the write, and keeps the progress poll for a job that needs attention.
+
+- #3221: Restored saved multi-site family, reboot, Junos action, and force choices after Back from confirmation.
+- #3207: Hid and disabled option controls when the selected device families do not use them.
+- #3208: Changed the reboot delay placeholder so guidance does not look like a saved value.
+- #3206: Moved refused Review messages into view and replaced internal field names with page labels.
+- #3273: Gave the multi-site options page a label table of its own. A refusal now names the multi-site control, such as the switch version control or "Start time (UTC)", and does not repeat the typed value.
+
+- Closes #3223: Both upgrade modes now refuse a canary phase list that does not rise from 1 to 100, so a falling list, a phase above 100, or a list that stops before 100 never reaches the upgrade request.
+
+- Closes #3214: A browser page with no session now opens the sign-in form instead of a raw JSON error. Script requests keep the 401 JSON answer.
+
+- Client pick lists in the portal now hold the wired clients of a site. The
+  route called a function from the wrong SDK module, so every wired query
+  failed, and a site with only wired clients offered an empty list (#3233).
+
+- A site-scoped run no longer prints the 143-line command-line site menu into
+  the Execution Log, because the pick list already answered it. The database
+  lines of the site cache refresh also move to the Debug Log panel. A site that
+  cannot be found, and any database warning, still appear in the Execution Log
+  (#3232).
+
+- Fixed the Operations portal controls for required prompts in menus 235, 237, 238, 242, 247, 259, 260, and 262. Closes #3230.
+- Marked endpoint family explorers 263 through 268 as command-line only until the portal can model per-choice prompts. Closes #3230.
+
+- Fixed Operations portal output lists so they omit files that do not exist at run end. Closes #3228.
+- Fixed site-scoped output ordering so the site cache does not preview before the operation result. Closes #3255.
+
+- Fixed issue #3226 by removing stale WebSocket controls from menus 6 through 10 in the Operations portal.
+
+- Fixed issue #3184 by adding the missing Operations portal controls for seven site-scoped rows.
+
+- The Execution Log no longer shows internal dependency lines such as
+  `Resolving source dependency DataExporter`. In a small operation those lines
+  filled most of the panel. The Debug Log panel still shows them, and
+  `script.log` still records them (#3229).
+
+- The operation labels no longer show internal tracking numbers such as
+  `issue #1802` and `spec 899 / issue #1407`. Fifteen labels changed in the
+  portal, on the command line, and in the menu reference (#3219).
+- Menu 236 now promises 33 site count operations, which is the number its
+  chooser offers. The label said 32 (#3219).
+
+- The web portal no longer walks the test output folders after each operation.
+  The upgrade portal test suites write `data/test-artifacts/`, which grew to
+  1,522 folders, and the output scan listed every one of them. Each operation
+  waited about one minute for that walk. Measured in the container, the scan
+  fell from 56 seconds to 8 seconds, and menu 229 fell from 104 seconds to 21
+  seconds (#3201).
+
+- The web portal now offers one input control for each prompt an operation
+  reaches, in the order the operation reads them. Menus 229, 236, and 261 ask
+  for their first answer before the site, so each one now shows that choice
+  first and the site second (#3196). Menus 211, 212, and 246 reach an
+  identifier prompt that rejects an empty answer, so each one now shows a
+  control for that identifier instead of reporting a complete run that wrote
+  nothing (#3181, #3184).
+- Menus 69 and 86 no longer ask for a client. Both export data for a whole
+  site and never read a client value. The control they carried could not fill
+  for most sites, so the Run control stayed unusable (#3191).
+- Menu 241 starts a metrics server that serves until an operator stops it, so
+  the portal now names it command-line only instead of starting a run that
+  fails after two minutes with a misleading reason (#3182).
+
+- The operations page now offers a site control for every operation that needs
+  one. Thirty-three operations reached a site prompt with no control on the
+  page. Each one printed all 143 sites to the log, read a closed input stream,
+  and failed with "No site selected". A full sweep proved that every one of the
+  thirty-three failed every time. Issues #3179, #3151, and #3152.
+
+- Fixed silent portal completions for #3144. The portal now asks for the required controls and reports a no-output reason.
+
+- An empty selector in the portal now names the reason it holds no row. The
+  site, device, and client selectors answered with an empty list and no
+  explanation, so an operator read a blank control as a stalled portal. Each
+  answer now names the cause. The causes are a missing API session, a missing
+  organization identifier, an unchosen site, a failed Mist API call, or a true
+  zero count. Issue #3163.
+- The portal now reports a failed client lookup at the error level. The old
+  code reported it at the debug level through the root logger, so an operator
+  never saw the cause. Issue #3163.
+
+- The operations page now files each row under a category that describes it.
+  Eight rows sat under a name that did not match the work they ran. Three
+  category names described no operation they held. An operator who opened
+  "Packet Captures" found two device inventory exports and no packet capture.
+  The page now shows 15 categories instead of 18, and each name is accurate.
+  Issue #3153.
+
+- The web portal no longer deadlocks when the event bus reports a dropped
+  event. The bus held its own lock while it wrote that report through the
+  logging framework. The portal installs a log handler that publishes into the
+  bus, so the report re-entered the bus on the same thread and waited for a
+  lock that thread already held. Every request thread then blocked behind the
+  logging lock, and the portal answered nothing until a restart. Issue #3177.
+
+- The portal result panel no longer loses a report that an operation wrote. The
+  run-start mark came from the wall clock, and a file carries a time from the
+  filesystem clock. The two clocks disagree, so a report written right after the
+  mark could carry a time before it. The mark now comes from a probe file, so
+  one clock dates the mark and every report. Measured over 1500 runs, the loss
+  rate fell from 0.80 percent to zero. Issue #3172.
+
+- The portal now lists the operations of each category in numeric order.
+  Thirteen of the eighteen categories showed their operations in the order the
+  menu dictionary held them, so an operator read "1, 2, 4, 3" under Core
+  Organization. The page offers no search box, so a shuffled list made an
+  operator hunt for a number. Issue #3139.
+
+- The portal event stream now closes itself after a fixed time, and it refuses
+  an unknown run identifier. One open stream held one Gunicorn worker thread
+  for the whole life of a browser tab. Four open tabs took every thread, and
+  the portal stopped answering. The thread pool also grew from 4 to 24, and
+  `PORTAL_THREADS` and `PORTAL_STREAM_MAX_SECONDS` now tune both limits.
+  Issue #3164.
+
+- Cut the portal operation overhead from about 26 minutes to 35 seconds. The
+  output scanner walked every entry under the data directory and did so twice
+  for each operation. On a 19.9 GB data directory that cost about 17 minutes of
+  pure directory reading per run, and the status stayed at `running` with zero
+  progress for the whole time. The scanner now skips the large read-only trees
+  and reads the directory once. See issue #3140.
+- Stopped one operation from claiming the output files of another. The scanner
+  reported every file that changed while a run was open, so two runs at the same
+  time each listed the other's reports. A file now reaches the panel only when
+  its modification time falls after the run started. See issue #3140.
+
+- Cut the container start from about seven minutes to a few seconds. Startup set
+  the session owner with one recursive walk of the whole data mount, which held
+  14521 files across 19.9 GB on the reporting workstation. The container
+  reported `unhealthy` for the whole walk, so an operator could not tell a slow
+  start from a failed one. Startup now sets the owner on the paths a session
+  writes. See issue #3138.
+
+- The open category heading is now readable in every theme. The heading took
+  its color from the accent, and an accent is a fill color that needs 3:1 while
+  text needs 4.5:1. Measured on the rendered page, the former accent gave
+  4.27:1 on the light theme, 2.58:1 on the dark theme, and 2.60:1 on the high
+  contrast theme. Each theme now names its own accent ink, and all four pass.
+  Issue #3136.
+
+- A container build no longer ignores a change silently. The repository holds
+  `Dockerfile` and `Containerfile`, and the two had drifted by 33 lines. Podman
+  prefers `Containerfile` and Docker prefers `Dockerfile`, so a change that
+  landed in one file repaired one build only. A `podman build` reported success
+  while it ignored an edit made to `Dockerfile`. The two files are now
+  byte-identical, and a guard test fails when they drift. Issue #3130.
+
+- Selecting an operation on a phone now shows that operation. The list and the
+  run panel stack below 768 pixels, so the Run button sat 609 pixels below the
+  fold of a 390 by 844 screen and the page appeared to do nothing. The whole
+  panel now fits on one screen after a selection. Issue #3132.
+- A control that an operator presses now measures at least 44 pixels on a touch
+  screen. The Run button rendered 38 pixels tall. Issue #3132.
+
+- Every operation now writes its records to the database again. `compose.yml`
+  never passed `ARANGO_USERNAME` or `ARANGO_ROOT_PASSWORD` to the application
+  service, and `src/db` requires both whenever MistHelper is not standalone.
+  The database router refused to build, the exporter caught the error, and each
+  run kept the CSV file as its only copy. Both stores reported healthy the whole
+  time, so the log gave no reason to look. Issue #3113.
+
+- The adaptive rate limiter no longer fails on its first call. The shared quota
+  cache starts empty, and the delay pipeline read one key from it directly. That
+  read raised `KeyError: 'last_updated'`, the safety net caught the error, and
+  every call fell back to a fixed 500ms delay. The pipeline now seeds each quota
+  key before it reads one, so the adaptive control runs from the first call.
+  Issue #3091.
+
+- Menu 243 now works inside the container. The operation generates the SNMP MIB
+  from the Mist OpenAPI document, and the image carried no such file, so the
+  operation failed on every container run. The registry calls menu 243 safe, so
+  the portal listed it and an operator could start it. The image now carries the
+  one file that has a runtime reader, which costs 5.3 MB of the 130 MB
+  documentation directory. Issue #3104.
+- An absent OpenAPI file now names an action. The operator used to read
+  `[Errno 2] No such file or directory`, which gives no action to take. The
+  message now names the path and the step that restores the file. Issue #3104.
+
+- An expired session now states its cause and its action. An operator who
+  clicked Run after the session expired read
+  `Unexpected token '<', "<!doctype "... is not valid JSON`, which named
+  neither. The portal now answers an API caller with JSON, and every portal
+  script reads an answer through one safe reader, so an HTML page from a proxy
+  or from a server error also produces a sentence. A dropdown that cannot load
+  now names its reason instead of reading as an empty list. Issue #3087.
+
+- The results panel no longer lists runtime bookkeeping files beside the
+  report. A run that wrote one report listed `script.log`, `portal_access.log`,
+  `delay_metrics.json`, and `tuning_data.json` as well, so the engineer had to
+  pick the report out of a list that changed on every run. The scanner now
+  skips the files the runtime writes, including a rotated log. A file that a
+  log line names explicitly still reaches the panel. Issue #3126.
+
+- Menu 34 no longer fails when it reaches its progress bar. The source
+  dependency resolver returned the `tqdm` module instead of the `tqdm`
+  callable, so every progress-bar call raised
+  `TypeError: 'module' object is not callable`. Menu 17 and menu 24 held the
+  same latent fault, and an empty data set hid it. The resolver now returns the
+  named attribute for each such package. Issue #3111.
+
+- The operations portal now reports every file an operation wrote. The portal
+  used to read the file name out of the log prose, and it accepted three
+  sentences and four extensions. An operation that wrote a Markdown report and
+  logged `Mermaid report: data/OrgAuditAnalysis.md` therefore listed no file at
+  all, and the engineer read an empty result panel. The portal now compares the
+  data directory before and after the run, so a report reaches the panel even
+  when no log line names it. Issue #3089.
+
+- Strengthened upgrade portal unit tests so non-null checks prove the expected value or shape.
+
+- Strengthened the second group of unit test assertions for issue #2708. The assertions now check the expected shape instead of only a non-None result.
+- Added assertions to delegated and no-raise unit tests that previously passed without a test assertion.
+
+- Strengthened upgrade portal unit tests so zero-result checks also prove that the tested path ran.
+
+- Strengthened unit test assertions for issue #2708. The assertions now check the expected value shape instead of only a non-None result.
+
+- Covered 20 HTTP status failure-mode gaps, including async license claim Mist 5xx handling, for issues #2746 and #2747.
+
+- Made the CodeQL verdict register check ignore line-only and anchor-only drift while it still fails changed decisions.
+
+- Replaced the last four silent exception handlers in the standalone scripts,
+  which caught every error and discarded it with a bare `pass`. A malformed DNS
+  answer, a malformed TLS extension, a failed packet layer lookup, and a failed
+  login probe now each report the exception type at debug level. Each handler
+  still returns its safe fallback, so the behavior does not change. See
+  issue #3057.
+
+- Fixed silent broad exception handlers in the non-zscaler `src/utils` scope and `src/export` so optional fallback paths record the exception type.
+
+- Logged broad exception handlers in the device, map, network, and SSH packages for issue #2750.
+- Logged the silent SSH tracer handler for issue #3057.
+
+- Repaired the CodeQL verdict register, which pointed at a stale line number and
+  failed the required `CodeQL verdict register check` gate on `main`. Alert 211
+  moved from line 323 to line 348 of `src/device/_utility_commands_action.py`
+  after the handler repair in pull request #3065 added lines above it. The
+  flagged statement did not change, so the recorded decision stays valid. This
+  failure blocked every open pull request, including pull requests that do not
+  touch `src/device`. See issue #3066.
+
+- Required missing failure-mode coverage to call the source under test. Closes #2963.
+
+- Replaced naive UTC timestamps in the upgrade portal with aware UTC timestamps for issue #3038.
+
+- Added a guard that rejects hidden control bytes in tracked Markdown files for issue #2986.
+
+- Refs #2862. Refuse site auto-upgrade version rows that omit the `version` field, so an empty firmware target cannot reach a site settings payload.
+
+- Refs #2752. Preserve the first retry failure in more retry paths.
+
+- Closes #3037. Replace shipped-code assertions with runtime guards that remain active under `python -O`.
+
+- Added HTTP 4xx and 5xx failure-mode coverage for 18 more test-quality findings in issues #2746 and #2747.
+
+- Refs #2861. Stop polyglot database setup when required credential variables are missing.
+- Part of #2861: stop AVA analyzer setup when `AVA_API_KEY` is missing.
+- Part of #2861: stop map image proxy calls when the Mist API session token is missing.
+
+- Refs #2863. Reject missing site identifiers before virtual chassis conversion and gateway reboot API calls.
+- Part of #2863: stop the primary-key probe before it calls Mist with a missing organization or site identifier.
+
+- The PDF converter now turns a control byte at the start of a line into a
+  Markdown list item. A subset font can map its bullet glyph to a byte such as
+  0x19. The byte then reached the Markdown file, and the list lost its mark. The
+  converter removes the byte and writes the list item. Three tests prove that no
+  control byte survives a line. See issue #2988.
+
+- Refined issue #2926 upgrade portal store handlers so expected ArangoDB faults stay visible and unexpected faults propagate.
+
+- Preserved evidence of the first failure in selected retry loops for issue #2752.
+
+- Fixed HTTP failure-mode detection for issue #2998 so comments and unrelated strings do not satisfy coverage.
+
+- Fixed issue #2862 by rejecting missing firmware target inputs before an upgrade request can reach Mist Cloud.
+
+- Fixed issue #2865 by preventing the AP firmware tracking log from claiming completion after a failed write.
+
+- Fixed issue #2867 by changing success reports so they do not claim completion on failed or empty-output paths.
+
+- A malformed reply from the Mist cloud no longer reads as an empty result. The
+  `mistapi` SDK catches every parse error inside `APIResponse`, so the caller saw
+  HTTP 200 with an empty payload and could not tell a broken reply from an empty
+  site. MistHelper now reads the pair of fields the SDK leaves behind and reports
+  a failure at four read boundaries. A firmware decision can no longer read a
+  broken reply as a site that needs no work. See issue #2934.
+
+- The Zscaler probe now accepts only `google.com` and its subdomains when it
+  applies the Google captive-portal label. The old check used
+  `fqdn.endswith("google.com")`, which also accepted `notgoogle.com` and
+  `evilgoogle.com`. The new check also accepts an absolute name that carries a
+  trailing dot, which the old check rejected. See issue #2978.
+
+- Closes #2971: Site-level exporters now log the HTTP status before they skip an outage result.
+
+- Closes #2971: Mist SDK fetch helpers now log the HTTP status before they skip an outage result.
+
+- Refs #2971: More Mist SDK fetch helpers now log the HTTP status before they skip an outage result.
+
+- Fixed the ops platform sign-in path so an unreadable privilege cache entry falls back to a Mist lookup instead of blocking the operator.
+
+- Refs #2971: More Mist SDK fetch helpers now log the HTTP status before they skip an outage result.
+
+- Refs #2971: More Mist SDK fetch helpers now log the HTTP status before they skip an outage result.
+
+- Refs #2971: Export helpers now log the exact HTTP status before they skip an empty outage result.
+
+- Refs #2971: Eight Mist SDK fetch helpers now log the exact HTTP status before they return an empty result.
+
+- Strengthened 27 weak assertion findings in the test suite for issues #2711, #2707, #2709, and #2708.
+
+- Fixed HTTP 200 responses with empty or malformed bodies so direct request paths return their documented failure values instead of a traceback. Closes #2967.
+
+- Disabled the Hypothesis duration limit on property tests that do not measure speed. This fixes issue #2918.
+
+- Fixed the failure-mode analyzer so `mistapi` callers do not require unreachable connection exception tests. This change supports issues #2743 and #2744.
+
+- Fixed issue #2936. The analyzer scope guard now reads one metric for each registered detector.
+
+- Fixed the edge-case analyzer triage for issues #2696, #2697, #2698, and #2699.
+
+- Replaced tautological test assertions for issue #2706 with observable checks.
+- Refined malformed JSON failure-mode detection for issue #2705.
+
+- Strengthened one slice of weak assertions for issues #2707, #2708, #2709, #2710, and #2711.
+
+- The PDF converter now keeps the space between two words. The pdfplumber
+  default tolerance of 3 points joined adjacent words in a Juniper PDF, so
+  `set class` became `setclass`. The converter now passes a tolerance of 1
+  point. A joined command reads as correct, and an engineer cannot paste it.
+  Two regression tests draw each word at its own position and prove that
+  every space survives. See issue #2946.
+
+- Fixed two glyph defects in `scripts/pdf_to_markdown.py` for issue #2911. An audit of 1,382
+  converted documents found both.
+- The reader writes the replacement mark when a glyph carries no mapping. The rule set did not
+  remove that mark, so 7 documents carried it into the body text. One carried it 545 times. The
+  rule now removes it.
+- The front matter wrote each metadata value without the glyph rules, so 107 documents held a
+  curly quotation mark in a title or a subject. The front matter now applies the same rules as
+  the body.
+
+- Fixed the memory cost of converting a very large PDF for issue #2911.
+  `scripts/pdf_to_markdown.py` read a whole document in one pass and held every page until the
+  end. An 81 MB guide then reached 22 GB of memory and never finished.
+- A PDF above 40 MB now writes one Markdown file for each page range, into a folder named for the
+  document. A prototype of the same method converted the same file with 0.43 GB of memory, which
+  is about 50 times less.
+- The body font size still comes from every page. The first pass reads each page, keeps only a
+  size counter, and releases the page. A test proves that a two page sample fails.
+
+- Removed two unregistered upgrade portal route modules that could not import, and closed issue #2885.
+
+- Narrowed 17 high-risk blind exception handlers on firmware, reboot, service-ping, and Mist SDK export paths for issue #1794.
+
+- Issue #2753 now makes the upgrade start route fail visibly when a required destructive input is absent.
+
+- Added tests for edge cases in the analyzer command line for #2696 and #2698.
+
+- Corrected four Junos commands in the `hardening-junos` skill for issue #2897. Controls
+  NET-08, NET-09, and NET-10 told the reader to build a firewall filter. The Juniper hardening
+  book uses one system statement for each case. They now use
+  `set system internet-options tcp-drop-synfin-set`, `set system no-ping-record-route` with
+  `set system no-ping-time-stamp`, and `set system internet-options no-source-quench`.
+- Corrected STIG rule JUEX-L2-000180 for issue #2897. It merged the link fault management
+  command and the aggregated link command into one line. The XCCDF file gives them as two
+  alternatives, and the rule now states both.
+
+- Continued the HTTP failure-mode test repair for issues #2746 and #2747.
+
+- The test isolation fixture now fails loudly when it loses its target. The
+  fixture clears two `ConfigUtils` attributes so no test inherits a session from
+  a neighbor. Python creates a new attribute on any assignment, so a rename
+  would have left the fixture clearing two dead names and returned the defect
+  from issue #2892 without a signal.
+
+- Fixed the exporter helper tests from issue #2892 so they pass without inherited Mist API session state.
+
+- The agent instruction files now name menu 239 in every destructive operation
+  list. The operation registry marks 42 menus destructive, and the files named
+  41. Menu 239 starts the upgrade capture portal and drives a firmware upgrade,
+  so a reader could treat it as safe to automate. The category counts and the
+  menu range are correct again, and a new guard compares each documented range
+  against the registry. This closes issue #2825.
+
+- Fixed issue #2853 by keeping sign-in page tests off live store probes during local shard validation.
+
+- Narrowed the first high-risk blind exception handler on a firmware evidence path for issue #1794.
+
+- Fixed issue #2644 by keeping scheduled reboot waits inside the site lock and stopping unlocked runs.
+
+- Triaged and repaired the highest-risk missing failure-mode analyzer findings for issues #2700, #2701, #2702, #2703, #2704, and #2705.
+
+- Fixed the heading rule for issue #2754. It now selects the tallest font size that holds at least one tenth of all characters. This reduces false headings in one measured guide from 46.4 percent to 1.7 percent.
+
+- Fixed issue #2741 by matching the `mistapi` 0.64.0 signatures for CLI shell sessions and upgrade portal reconciliation reads.
+
+- Closed issue #1992 with the validated upgrade portal rehearsal. The proof covers the upgrade start, stop, and comparison scenarios against the seeded stand-in site.
+
+- Fixed issue #2736 by inferring missing edge-case applicability instead of requiring a manual opt-in marker.
+
+- Fixed issue #2632 by adding browser coverage that reaches the upgrade start route with a test-only reachable operator.
+
+- Fixed the test quality analyzer so issues #2696, #2697, #2698, and #2699 report only explicitly marked missing edge-case domains.
+
+- Fixed issue #2717 by replacing five phantom Mist SDK site lookups with `getSiteInfo`.
+
+- Fixed issue #2689 by replacing the skipped `mistapi` SDK compatibility guard with a measured call-site guard.
+
+- Fixed issue #2614 so a reconciled gateway upgrade uses current firmware success evidence instead of a stored false failure.
+
+- Fixed issue #1772 by triaging the current test-quality analyzer findings and removing the high-severity pytest helper false positive.
+
+- Fixed issue #2575 by adding the multi-site reboot delay control and carrying `reboot_at` through the route, confirmation page, and aggregate service.
+
+- Fixed issue #2682 by restoring generated Mist API documentation to the bundled OpenAPI source and by keeping the historical AOS specification out of current SDK drift checks. Follow-up issue #2688 will refresh the bundled OpenAPI specification.
+
+- Fixed issue #1768 by making analyzer read paths and skip reasons visible in reports.
+
+- Fixed issue #2667 by isolating `AppContext` state for each entry-point invocation.
+
+- Fixed issue #2682 by updating Mist API references for mistapi 0.64.0, including the AOS-CX register command rename and the new site IoT endpoint count.
+
+- Fixed issue #2650 by splitting the root pytest coverage gate into coverage shards that combine before the unchanged threshold runs.
+
+- Fail scheduled pre-checks with no targets for issue #2657.
+
+- **Fixed**: The Menu 1 closeout now records its deployment evidence. Issue #995.
+
+- **Fixed**: The SpecKit task audit now rejects a checked task that cites a missing evidence path. Issue #2655.
+
+- The portal now renews the site lock for the whole upgrade run. The operator
+  takes the site on the capture page, before any run exists, so the stored lock
+  named no run. The heartbeat refuses to renew a lock that names no run, so the
+  lock expired about one minute into every run. A second operator could then
+  take the site while the first run still wrote firmware. The run now names
+  itself in the lock that protects it. Issue #2648.
+
+- A run now takes the data tier of the pre-check capture that it adopts. The
+  upgrade button sends no tier, so a run that adopted a tier 3 capture kept
+  tier 2. The post-check capture then held no radio row, no alarm row, no
+  switch port row, and no power-over-ethernet row, and the comparison could not
+  show an access point that returned from a firmware write with a radio down.
+  Issue #2640.
+
+- Fixed issue #1004 by removing the remaining `MistHelper.py` suppression comments and repairing the findings that they hid.
+
+- The post-check capture now reads the same data tier as the pre-check capture
+  of the same run. A tier 3 run kept no radio row, no alarm row, no switch port
+  row, and no power-over-ethernet row in the second capture, so the comparison
+  could not show an access point that returned from a firmware upgrade with a
+  radio down. Issue #2624.
+- The run history page now counts the devices of each run. Every row printed
+  `0`, because the run list query returned no target list. The query now returns
+  the length of that list. Issue #2625.
+
+- Fixed issue #2615. The portal refuses a firmware write when the operator address uses a reserved domain such as `.invalid`, because that address reaches no mailbox and no person can answer for the write. The refusal covers the single-site start and the multi-site start. A capture and every read still accept any address. The run page and the history page now show the Mist account beside the typed address.
+
+- The capture history page narrowed the run list and the capture list to one
+  site, and the audit log still showed rows for other sites. The audit log now
+  obeys the same site. The expiry inference still reads the whole trail, so the
+  inferred rows do not change. Issue #2596.
+
+- The capture history note named a filter control that the page does not hold.
+  The note now names the next page control and the previous page control, which
+  both exist on that page. Issue #2595.
+
+- Issue #2482: `python MistHelper.py --test` now runs local safe checks without a Mist API token.
+
+- The E2E browser tests now add a per-test timeout guard. This stops one browser
+  wait from blocking the full suite for hours. Issue #2482.
+
+- The multi-site confirmation page now names the target version of each
+  selected device family. Earlier the page showed an empty `Firmware:` line for
+  a switch upgrade or a gateway upgrade. See issue #2528.
+
+- The organization upgrade pages now show a refused request inside the page.
+  Earlier the browser opened a raw JSON document, and the multi-site workflow
+  then looked different from the single-site workflow. See issue #2523.
+
+### Removed
+
+- The Python wheel no longer ships the `tools/` package. A customer never runs
+  the repository linters, the analyzers, or the compliance checkers. See issue
+  #3404.
+- The Python wheel no longer exposes the `test-quality-analyzer` and the
+  `ste-linter` console scripts. Both commands serve MistHelper development
+  only. Install `misthelper-devtools` to get them. See issue #3404.
+- The container image no longer ships the `scripts/` directory. The image kept
+  about 55 development scripts that no container path runs. See issue #3404.
+
+- The repository no longer holds a local copy of the in-house development
+  tooling. The `tools/` package, the `src/juniper_skills/` package, the
+  `scripts/juniper_skills/` scripts, and the `tests/unit/juniper_skills/`
+  tests moved to `jmorrison-juniper/misthelper-devtools`. See issue #3404.
+
+- Closes #3403: The Starlink desktop dashboard, `starlink_dashboard.py`, and its test left MistHelper. The dashboard now has its own repository with its commit history, https://github.com/jmorrison-juniper/starlink-dashboard. No MistHelper menu, container, or portal used the dashboard.
+
+- The 16 agent skills under `.github/skills/` left the repository. They now live
+  at the user level in `~/.copilot/skills/`, where one copy serves every
+  repository on the workstation. The `ste-lint` workflow, the container policy
+  guardrail, the git-flow instruction, and `.gitignore` no longer point at the
+  folder. Issue #3401 records the move.
+
+- Removed the root `sys.modules["MistHelper"]` alias for issue #2670 after source back-references moved, and removed remaining source root lookups.
+
+### Security
+
+- Closes #3241: The multi-site job page and its status poll now refuse a job that the browser session did not start, with the same answer as the cancel route, and they read no cloud job for it.
+
+- Mask credential fields in the portal preview before the browser receives them. Closes #3156.
+
+- Every Zscaler probe connection now sets a TLS 1.2 floor through one shared
+  context builder. The code no longer relies on the interpreter default, so a
+  future build cannot lower the floor without a test failure. See issue #2978.
+
+### Other entries in this release
+
+Each heading below names one change. Each bullet starts with its change type.
+
+### Explain why no documented endpoint can replace the Marvis Actions labs endpoints (menu 270)
+
+- **Changed**: The Marvis Actions API report now holds the section "Why no
+  documented endpoint can replace the labs endpoints". The section states the
+  three conditions that a replacement must meet, and it compares each similar
+  documented endpoint with the `labs` list, schema, and resolve. It covers the
+  alarm search, count, acknowledge, and suppress requests, and the alarm
+  definitions. It also covers the MSP count, the troubleshoot endpoint, the device
+  events, the SLE and Marvis Client endpoints, the Marvis settings, and the
+  webhooks. Issue #3368.
+
+- **Changed**: The report records the live evidence of 2026-09-25. Only 33 of 114
+  actions had a Marvis alarm, and no alarm holds the `row_key` that the resolve
+  needs. The alarm search has no status filter, and the alarm acknowledge records
+  a note, not a resolution code. Issue #3368.
+
+- **Changed**: A table in the report compares the 35 topics with the alarm types.
+  It shows where the names, the examples, and the live join do not agree. The
+  report also names the errors in the examples of the alarm definitions. It tells
+  the operator to join the alarm `id` to the action `uuid` instead. Issue #3368.
+
+### Add the Marvis alarm to each exported Marvis Action (menu 270)
+
+- **Added**: Menu 270 modes 1, 2, and 4 search the Marvis alarms one time for
+  each export. Each exported row then holds the eight alarm columns `alarm_id`,
+  `alarm_type`, `alarm_status`, `alarm_resolved_time_iso`, `alarm_acked`,
+  `alarm_acked_time_iso`, `alarm_ack_admin_name`, and `alarm_note`. The CSV
+  file, the SQLite table, and the ArangoDB document hold the same values. The
+  join matches the alarm `action_id` or the alarm `id` to the action `uuid`. Two
+  count lines show the number of joined actions and the number of alarms without
+  an action. Issue #3339.
+
+- **Changed**: The Marvis Actions export holds 51 columns instead of 43. The
+  eight alarm columns come after `exported_at`, so the first 43 columns keep
+  their positions. If the alarm search fails, the export writes every action
+  with empty alarm columns, and one warning line names the reason. Mode 3 sends
+  no alarm search, and no mode acknowledges an alarm. Issue #3339.
+
+### Read both self-drive signals of a Marvis Action (menu 270)
+
+- **Fixed**: The Marvis Actions API report no longer states that `self_driven`
+  proves a fix by Marvis. No Mist document defines the field. In the lab
+  organization, 8 rows hold `self_driven` as `True`, and the only row with the
+  status `marvis_self_driven` holds no `self_driven` value. The report now tells
+  the operator to read both signals, and it records a live read of the org
+  setting `marvis.auto_operations` and its audit log. The comments in
+  `src/marvis/actions/model.py` agree with the report. Issue #3340.
+
+### Export the closed Marvis Actions (menu 270, mode 4)
+
+- **Added**: Menu 270 mode 4 exports the closed Marvis Actions only, and it
+  changes no Mist data. A closed action holds the status Resolved By User, AI
+  Validated, Marvis Self Driven, or Expired Action. The tables add a `Closed`
+  column, and in mode 4 they show only the topics that hold a closed action. The
+  columns `status_name`, `label_name`, `comment`, `resolve_time_iso`, and
+  `validation_time_iso` show how and when each action closed. Mode 4 writes the
+  outputs of mode 1, logs a caution line for each unknown status key, and runs in
+  the operations portal. Issue #3342.
+
+- **Changed**: Each column of the menu 270 tables fits its widest value, and the
+  Name column moves to the end. In the portal log, the row of each known topic
+  stays on one line. If a line is wider than the log viewer, only the end of the
+  name wraps, and the numbers stay in their columns. Issue #3342.
+
+### Export and resolve Marvis Actions by category and subcategory (menu 270)
+
+- **Added**: Menu 270 reads every Marvis Action of one organization, and a
+  numbered table filters the actions by category and by subcategory. Mode 1
+  exports every action, and mode 2 exports the open actions only. Each mode
+  writes `OrgMarvisActions.csv`. The `--output-format sqlite` flag writes the
+  SQLite table `OrgMarvisActions` instead. When ArangoDB answers, the run also
+  writes the collection `listOrgMarvisActions`, which receives the full nested
+  action. The CSV file holds a fixed set of columns with readable names for the
+  category, the subcategory, the status, the site, and the device. Issue #3299.
+
+- **Added**: Mode 3 marks the open actions of the selected topics as resolved.
+  The operator chooses one of the four resolution codes of Mist and can add a
+  comment. The code for another method needs a comment. The run shows a preview
+  of every action, and it sends no request until the operator types `RESOLVE`
+  and the action count. The run reads the list again, records the status that
+  Mist reports for each action, and writes
+  `OrgMarvisActionsResolveResults.csv`. Issue #3299.
+
+- **Added**: `MARVIS_RESOLVE_MAX_ACTIONS` limits the number of actions that one
+  resolve run changes. The default is 500. Issue #3299.
+
+- **Added**: The operations portal on port 8055 runs menu 270 under the heading
+  "Marvis Actions", with six controls in prompt order. Issue #3299.
+
+- **Added**: `documentation/marvis-actions-api-endpoints.md` lists every API
+  endpoint that menu 270 calls, with the request, the response, and the paging
+  rule. Issue #3299.
+
+### Juniper documentation corpus harvester
+
+- **Added**: A new package `src/juniper_docs/` downloads the United States and
+  English Juniper documentation set. The harvester reads the sitemap index and
+  builds a document list. It keeps the newest release note in each train. It
+  finds one companion PDF for each document root and downloads each PDF. It
+  sorts each file into a category from the slug. Many documents match no slug
+  keyword. For each such document, the harvester reads a small PDF text sample
+  in memory. It makes a sub-category from the content signals. It then discards
+  the text. The run stops and starts again with no loss. The run stays polite,
+  and one bad document does not stop it. The harvester writes a folder tree, a
+  manifest, and a summary. Issue #3081.
+- **Changed**: The classes `JvdCatalogClient`, `JvdPdfResolver`, and
+  `JvdDownloader` move from `scripts/crawl_jvd.py` into
+  `src/juniper_docs/acquire/`. The class `ReleaseNoteSelector` moves from
+  `scripts/jvd_doc_selector.py` into `src/juniper_docs/discovery/`. The script
+  `scripts/crawl_jvd.py` imports the moved classes directly. It keeps no stub
+  and no wrapper. Issue #3081.
+- **Security**: The harvester prefers to verify the certificate through the
+  Zscaler root CA in the repository. The unverified mode is a fallback that the
+  operator selects. That mode carries one `# nosec B323` mark with a reason.
+  The content classifier keeps the sample text in memory only. It writes no
+  body text to the store, to the manifest, or to a file on disk. Issue #3081.
+
+### The operations dashboard lists every safe operation
+
+- **Fixed**: The operations dashboard listed 86 operations while
+  `OperationRegistry` called 165 of them safe to run. A second gate compared the
+  menu number against 90, and a menu number states when an operation was added,
+  not what the operation does. That bound hid 79 operations, and a new safe
+  operation above it never appeared. The registry verdict now decides alone, and
+  a guard fails when a numeric bound returns. Issue #3082.
+- **Fixed**: The site dropdown, the device dropdown, and the client dropdown
+  listed their entries in the order the Mist API returned them. Each list now
+  reads in the order of the label the page shows, without regard to letter case.
+  An entry with no label sorts last and stays reachable. The wireless clients
+  and the wired clients interleave by name instead of forming two blocks. Issue
+  #3083.
+- **Added**: `scripts/generate_portal_menu_registry.py` rewrites the static
+  description map from the menu titles and the registry, so the fallback list
+  cannot drift again. Issue #3082.
+
+### Operation results are readable as a table
+
+- **Added**: A finished operation now shows its rows as an interactive table on
+  the operations page, with no extra click. The table sorts on any column,
+  filters on a text box, pages through the result, and opens a row to show every
+  field with its name. The execution log stays available for a failure. A run
+  that wrote no file states that plainly. Issue #3048.
+- **Fixed**: A click on a column heading in the data preview moved the sort
+  arrow and left the rows in file order. The browser held the sort state and
+  never sent it, and the preview route never read one. The server now orders the
+  whole result set, a number column orders by value, and an empty cell sorts
+  last. A file larger than the sort limit reports that the order covers a part
+  of it, so a partial order never looks complete. Issue #3047.
+
+### Device handler cleanup
+
+- **Changed**: Narrowed twenty handlers in device utilities so unexpected faults keep evidence. Issue #2750.
+
+### Broad handler cleanup slice C
+
+- **Changed**: Narrowed twenty handlers in tenant and inventory code so unexpected faults keep evidence. Issue #2750.
+
+### Reduce comparator weak zero assertions
+
+- **Fixed**: Strengthened CSV comparator and template configuration tests with direct output and guard proofs. Issue #2711.
+
+### Broad handler cleanup slice B
+
+- **Changed**: Narrowed twenty handlers in constant and organization exports so unexpected faults keep evidence. Issue #2750.
+
+### Reduce Arango weak zero assertions
+
+- **Fixed**: Strengthened Arango writer schema tests with direct mapping and edge proofs. Issue #2711.
+
+### Reduce weak zero assertions
+
+- **Fixed**: Strengthened WAN2 variable migration tests with direct output and call proofs. Issue #2711.
+
+### Operations web dashboard can run an operation again
+
+- **Fixed**: The operations page on port 8055 could not run any operation. Every
+  panel carried the Bootstrap class `d-none`, and the page script tried to
+  reveal each one by writing `element.style.display`. Bootstrap declares that
+  class with `display: none !important`, which outranks an inline style, so the
+  panel stayed invisible. A user selected an operation and saw nothing. The Run
+  button, the execution log, and the output file list are all visible again.
+  Issue #3030.
+- **Changed**: The operations page subtitle no longer names the range "menus
+  1-89". The registry decides which operations the portal lists, and that range
+  went stale. Issue #3030.
+
+### Broad handler cleanup slice
+
+- **Changed**: Narrowed four handlers in bootstrap and data parsing so unexpected faults keep evidence. Issue #2750.
+
+### Git-reading guards no longer fail inside a full test run
+
+- **Fixed**: Three guards that read git passed alone and failed inside a full
+  test run. The editor terminal injects a git configuration set through
+  `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n`, and `GIT_CONFIG_VALUE_n`, and one
+  value is empty. On Windows an assignment of an empty string removes the
+  variable from the process block that a child reads, so git counted three
+  entries, found two, and stopped with `fatal: unable to parse command-line
+  config`. The guards now build a git environment that drops an unusable
+  configuration set and keeps a whole one. Issue #3022.
+
+### Test suite no longer writes the checked-in OID ledger
+
+- **Fixed**: The mib generator performance test pointed the runner at
+  `data/mib_generator/oid_assignments.json`. A generate run saves the ledger, so
+  the test wrote that tracked file and left the working tree dirty. An engineer
+  then read a change that nobody made. The test now writes a temporary copy, and
+  a new test proves the tracked file stays untouched. Issue #3021.
+
+### Rogue DHCP scan reads the alarm resolution fields (menu 269)
+
+- **Fixed**: Menu 269 marked a resolved rogue DHCP alarm `active`. The state rule
+  read the acknowledgement flag and the last seen time only, so an alarm that
+  Mist resolved inside the last day still read as a standing fault. The rule now
+  reads the `status` field and the `resolved_time` field that the alarm carries.
+  A `resolved` or `closed` status reads `historical`. A `reoccured` status still
+  reads `active`, because the fault returned. Issue #2996.
+
+### Scan the organization for rogue DHCP servers on switches (menu 269)
+
+- **Added**: Menu 269 scans one organization for every rogue DHCP server signal
+  in a 30-day window. It reads organization alarms, organization switch events,
+  site alarms, site switch events, and Marvis config actions. It queries the
+  organization first, then it queries only a site that an organization result
+  named, so a large organization does not spend a request on every site. The
+  operation merges the sources into one table, marks each row `active` or
+  `historical`, prints the table, and writes `OrgRogueDhcpServers.csv` through
+  CSV, SQLite, or ArangoDB. Issue #2985.
+- **Added**: The operations web dashboard on port 8055 runs menu 269 and shows
+  its output file. The upgrade capture portal on port 8056 is unchanged. Issue
+  #2985.
+
+### Juniper documentation skill factory
+
+- **Added**: A new package `src/juniper_skills/` converts the harvested Juniper
+  Markdown corpus into agent-ready skill packages. The factory reads a converted
+  document, joins its split parts, repairs the converter defects, re-fences the
+  command samples, splits the text into bounded topics, restates each fact as a
+  cited knowledge card, and assembles a domain skill. Each package holds three
+  levels: a router, a document index, and a topic file. An agent reads the
+  router and one topic instead of the whole document. A measured question costs
+  6,856 bytes instead of 741,428 bytes, which is a 108 times reduction.
+  Issue #2925.
+- **Added**: A canonical skill store outside the repository publishes each skill
+  by Windows directory junction to the GitHub Copilot path, the Claude path, and
+  the repository `.github/skills` path. One build serves every agent host on the
+  computer. Issue #2925.
+- **Added**: A live watcher enqueues a document when the upstream converter
+  writes it. The watcher ignores a touch that does not change content, waits for
+  a slow write to finish, and rebuilds a whole part set when one part changes.
+  Issue #2925.
+- **Added**: A work queue records 5,693 logical documents, 10,081 parts, 28
+  split part sets, and 4,186 duplicates. A version resolver marks 593 documents
+  superseded across 115 product families, so the factory skips 102,198 pages of
+  obsolete product versions. Issue #2925.
+- **Security**: A verbatim similarity guard measures the longest run of prose
+  that a generated topic shares with its source. The guard clears a run of 0 to
+  7 words, warns at 8 to 12 words, and fails at 13 words. It excludes commands,
+  configuration, command output, identifiers, numeric limits, and standard
+  names, because the factory keeps those verbatim on purpose. A measured
+  experiment flagged a verbatim copy at 42 words and a lightly edited copy at 14
+  words, and cleared a genuine restatement at 1 word. A guard that checks zero
+  files fails. Issue #2925.
+
+### SQLite write success proof
+
+- **Fixed**: The SQLite writer logs the write-success claim only after the row-count verification succeeds. Issue #2866.
+
+### Virtual environment install health check
+
+- **Added**: Bootstrap reports corrupt package install records and names the
+  reinstall command that repairs them. Issue #2887.
+
+### Docker deployment parity statement
+
+- **Changed**: The container deployment guide now states the verified and
+  unverified Docker parity status. Issue #2721.
+
+### SSR NOC runbook command corrections and four new troubleshooting guides
+
+- **Fixed**: Six PCLI commands in the SSR gateway runbooks do not exist in any
+  SSR release. `show system connected`, `show route`, `show bgp neighbor` in the
+  singular form, `show sessions summary`, `show events filter type`, and
+  `ping <target> source <ip>` all fail at the prompt. Every occurrence now names
+  the working command. Issue #2677.
+- **Added**: `documentation/noc-runbooks/SSR_CONSOLE_HEALTH_CHECK.md` gives a
+  seven-stage console triage sequence. Each step states the reason to run the
+  command, the healthy output, and the failure signature with the next action.
+  Issue #2677.
+- **Added**: `documentation/noc-runbooks/SSR_ALARM_INDEX.md` maps every alarm
+  that an SSR raises about itself, and every Mist gateway alarm key, to a runbook.
+  Each row carries the trigger threshold and the clear threshold. Issue #2677.
+- **Added**: `documentation/noc-runbooks/SSR_APPLICATION_PERFORMANCE.md` covers a
+  user complaint about an application, which no runbook covered before.
+  Issue #2677.
+- **Added**: `documentation/noc-runbooks/SSR_EVIDENCE_CAPTURE.md` covers the
+  support archive, the packet capture, and the log level, with the cleanup that
+  each one needs. Issue #2677.
+- **Added**: `documentation/noc-runbooks/SSR_FIRMWARE_HEALTH.md` covers a fault
+  that follows a software change. Issue #2677.
+- **Added**: `scripts/verify_ssr_commands.py` checks every command in a runbook
+  against the vendor command reference, so this defect cannot return unnoticed.
+  Issue #2677.
+- **Added**: `scripts/fetch_ssr_docs.py` and `scripts/pdf_to_markdown.py` rebuild
+  the vendor reference corpus on demand. Issue #2677.
+- **Changed**: `.gitignore` excludes `documentation/references/`. That directory
+  holds verbatim Juniper Networks documentation, so it follows the same rule as
+  the licensed ASD-STE100 source above it. Issue #2677.
+
+### Endpoint family sub-menu descriptions and safety flags
+
+- **Added**: Each of the 286 operations in menus 259 to 268 now shows a plain description and a safety flag beside the Mist operationId. Issue #1807.
+- **Added**: `src/export/endpoint_catalog.py` holds one description and one safety word for every endpoint family operation. Issue #1807.
+
+### Quality-gate issue close scope
+
+- **Fixed**: A run on main no longer closes the quality-gate issue of a pull request that is still open. Issue #2623.
+
+### Scheduled firmware reboot settle
+
+- **Fixed**: The upgrade portal honors scheduled gateway and switch reboots before it fails a phase. Issue #2566.
+- **Fixed**: The upgrade portal reconciles timed-out devices with cloud firmware success and target version before it fails a phase. Issue #2566.
+
+### Package version comparison
+
+- **Fixed**: The dependency check now uses `packaging` for version constraints,
+  so it rejects a release candidate when a final release is required. Issue #1708.
+
+### Guard direct changelog edits
+
+- **Fixed**: The guardrail test now fails when a pull request edits
+  `CHANGELOG.md` outside a release aggregation branch. Issue #1899.
+
+### Auto-merge timeline pagination
+
+- **Fixed**: The auto-merge reopen guard reads every issue timeline page before
+  it decides that no person reopened the issue. Issue #2617.
+
+### Bound upgrade site lock renewal
+
+- **Fixed**: The upgrade driver stops renewing a no-run site lock and applies
+  a configurable renewal limit. Issue #2564.
+
+### Auto-merge reopen guard
+
+- **Fixed**: The auto-merge schedule leaves a linked issue open when a person
+  reopens it after the merge. Issue #2605.
+
+### Site lock renewal bound
+
+- **Fixed**: A site lock renewal now stops at a configurable run life. Issue #2564.
+- **Changed**: The lock banner names the holding run, so an operator can open that run and stop it. Issue #2564.
+
+### Exclusion drift cache
+
+- **Changed**: The advisory exclusion drift script starts fewer mypy processes and reuses duplicate scan results. Issue #2571.
+
+### Lock audit history read memory
+
+- **Changed**: The history reader keeps only the requested lock audit page while it infers expiry rows across the full trail. Issue #2574.
+
+### Ruff S rule decision
+
+- **Changed**: The notes for the quality gates keep Bandit as the security
+  syntax linter. The notes keep Ruff without `S`. Issue #1780.
+
+### Auto-merge linked issue close
+
+- **Fixed**: The auto-merge workflow lets a schedule close linked issues after
+  GitHub suppresses the merge event from `GITHUB_TOKEN`. Issue #2550.
+
+### Cache CLI menu and mode tables
+
+- **Changed**: `MistHelper.py` now reuses the menu key order and the mode table for repeated CLI paths. Issue #2573.
+
+### Pull request preservation evidence
+
+- **Changed**: The multi-agent Git workflow now requires preservation proof
+  before an agent closes an unmerged pull request. Issue #2466.
+
+### Performance recorder byte bound
+
+- **Fixed**: The performance recorder queue now uses an approximate byte bound
+  and an entry bound. Issue #2482.
+
+### Performance monitoring final report
+
+- **Changed**: The performance report now includes the memory table, the
+  end-to-end composed bound, and the sharded suite result. Issue #2482.
+
+### End-to-end performance hook benchmark
+
+- **Added**: The client comparison path now has an opt-in performance hook and
+  an offline overhead benchmark. Issue #2482.
+- **Changed**: The benchmark reports measured clock ticks and paired intervals
+  beside the composed bound. Issue #2482.
+
+### Performance memory measurement
+
+- **Added**: The performance memory harness and report now show measured traced
+  Python memory and Windows process memory. Issue #2482.
+
+### Release-note fragment guardrail (issue #2541)
+
+- **Added**: `tests/guardrails/test_changelog_fragment_policy.py` reads the
+  `changelog.d/` directory and the instruction files. The guard fails when a
+  fragment uses a name outside the three allowed forms, when a fragment takes a
+  shared name such as `unreleased.md`, when a dated name states a day that no
+  calendar holds, when a fragment holds no change type, or when an instruction
+  file drops the rule. Issue #2541.
+
+### Capture log fixture source (issue #2505)
+
+- **Fixed**: The capture log baseline tool now reads a fixture `source` value and resolves that fixture in the named file. Issue #2505.
+
+### Bulk preview and site lock release
+
+- **Added**: The upgrade capture portal previews selected bulk runs with server counts before an operator cancels or retries them. Issue #2447.
+- **Fixed**: The browser test server releases its site lock after a run, so a later run can use the site. Issue #2447.
+
+### Performance monitoring modules
+
+- **Added**: `src/utils/performance/` holds the recorder, the bounded sink, the
+  stopwatch, the event contract, and the privacy filter. A span measures one
+  boundary, and the level gate decides whether the span emits an event. The
+  sink bounds its memory and opens a circuit after repeated write failures.
+- **Added**: `tests/test_performance_monitoring.py` covers the level gate, the
+  sampler, the bounded queue, the circuit, and the privacy filter with 71
+  tests.
+
+### Python performance hook catalog (issue #2482)
+
+- **Added**: The SpecKit workflow for the performance monitoring plan records the
+  hook catalog, the Python file inventory, the scan summary, and the strategy
+  coverage table. Issue #2482.
+- **Added**: `tests/guardrails/test_performance_hook_catalog.py` reads each shipped
+  artifact and compares it against an AST scan of the recorded files. The guard
+  fails when a catalog row names a file that no longer exists, when a hook row
+  names a symbol that no longer exists, or when a summary count disagrees with the
+  table it describes. Issue #2482.
+
 ### Citation reference lint performance (issue #2487)
 
 - **Changed**: The citation lint tool now builds the default file index and
