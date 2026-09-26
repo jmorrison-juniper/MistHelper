@@ -2,10 +2,11 @@
   error.html - the shared fault page of the upgrade capture portal.
 
   Why this file exists:
-    A browser request can fail for seven reasons. contracts/README.md lists the
-    status codes 400, 401, 403, 404, 409, 429, and 500. One page for all seven
-    keeps the wording and the recovery link identical, so the operator learns
-    one page instead of seven.
+    A browser request can fail for eight reasons. contracts/README.md lists the
+    status codes 400, 401, 403, 404, 409, 429, 500, and 503. One page for all
+    eight keeps the wording and the recovery link identical, so the operator
+    learns one page instead of eight. Issue #3439 adds the status 503 for a site
+    read that lost a page.
 
     A JSON request receives the error envelope instead. This page shows the same
     three fields to a person.
