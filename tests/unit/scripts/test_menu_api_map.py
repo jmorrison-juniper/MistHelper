@@ -14,6 +14,7 @@ from __future__ import annotations  # Postponed annotations keep the type hints 
 
 import ast  # Builds the handler expression of a synthetic menu option.
 import json  # Names the decode error that a damaged data file raises.
+import re  # Finds the Mermaid labels in the generated pages.
 import textwrap  # Removes the indent of each fixture source file.
 import time  # Supplies the start time that the check command reports.
 from pathlib import Path  # Builds the fixture file paths.
@@ -39,7 +40,13 @@ from scripts.menu_api_map.analysis.walker import (  # The code under test.
     MenuResult,
     MenuWalker,
 )
-from scripts.menu_api_map.render.mermaid import MAX_BREAKDOWN, MermaidDiagram  # The diagram builder.
+from scripts.menu_api_map.render.mermaid import (  # The diagram builder and its limits.
+    LINT_TRIGGERS,
+    MAX_BREAKDOWN,
+    MAX_LABEL_LINE,
+    MAX_PATH_LINE,
+    MermaidDiagram,
+)
 from scripts.menu_api_map.render.pages import PageInput, PageSet  # The page builder.
 
 SDK_VERSION = "0.0.test"  # The version that the fixture SDK index reports.
@@ -373,20 +380,85 @@ def test_breakdown_caps_the_endpoint_nodes_and_counts_the_rest() -> None:
     """A large menu shows MAX_BREAKDOWN endpoint nodes, and one node counts the rest."""
     diagram = MermaidDiagram.breakdown(synthetic_menu("Read items", MAX_BREAKDOWN + 2))  # Two endpoints too many.
     assert diagram.count("--> e") == MAX_BREAKDOWN  # The endpoint node limit.
-    assert '"2 more endpoints in the table"' in diagram  # The summary node.
+    assert '"2 more endpoints in<br/>the table"' in diagram  # The summary node, on two short lines.
     assert 'c1["Reader"]' in diagram  # The caller node names the class.
 
 
 def test_breakdown_uses_the_singular_for_one_hidden_endpoint() -> None:
     """One hidden endpoint gives a singular noun in the summary node."""
     diagram = MermaidDiagram.breakdown(synthetic_menu("Read items", MAX_BREAKDOWN + 1))  # One endpoint too many.
-    assert '"1 more endpoint in the table"' in diagram  # The singular form.
+    assert '"1 more endpoint in<br/>the table"' in diagram  # The singular form.
 
 
 def test_endpoint_label_keeps_the_path_braces() -> None:
     """An endpoint label keeps the path parameters, so a reader can match the path to the table."""
     use = EndpointUse("?", "/api/v1/orgs/{org_id}/sites", "", "", "src.a:Reader.run", "path")  # No method.
-    assert MermaidDiagram.endpoint_label(use) == "Unknown /api/v1/orgs/{org_id}/sites"  # The label text.
+    assert MermaidDiagram.endpoint_label(use) == "Unknown<br/>/api/v1/orgs<br/>/{org_id}/sites"  # The label text.
+
+
+def test_path_lines_break_a_path_at_its_slashes() -> None:
+    """A long request path breaks at its slashes, and a long segment stays whole."""
+    lines = MermaidDiagram.path_lines("/api/v1/sites/{site_id}/stats/devices/{device_id}")  # A long path.
+    assert lines == ["/api/v1/sites", "/{site_id}/stats", "/devices/{device_id}"]  # Three short lines.
+    assert all(len(line) <= MAX_PATH_LINE for line in lines)  # Each line fits the limit.
+    long_segment = "/" + "x" * (MAX_PATH_LINE + 5)  # One segment that is longer than the limit.
+    assert MermaidDiagram.path_lines(long_segment) == [long_segment]  # The segment stays whole.
+
+
+def test_wrap_breaks_a_label_at_spaces_underscores_and_capitals() -> None:
+    """A label breaks into short lines, so that the diagram fits the wiki column."""
+    assert MermaidDiagram.wrap("Menu 36: Check and export gateways") == "Menu 36: Check and<br/>export gateways"
+    assert MermaidDiagram.wrap("_fetch_site_name_lookup_from_api") == "_fetch_site_name<br/>_lookup_from_api"
+    wrapped = MermaidDiagram.wrap("WiredClientManufacturerReportGenerator")  # A long class name.
+    assert wrapped == "WiredClient<br/>ManufacturerReport<br/>Generator"  # Breaks before the capitals.
+
+
+def test_wrap_keeps_a_name_whole_when_a_break_changes_the_lint_names() -> None:
+    """A break that makes a new class-like name, such as ExportManager, keeps the name on one line."""
+    name = "OrganizationInventoryExportManager"  # A break before Export makes ExportManager.
+    assert MermaidDiagram.wrap(name) == name  # The name stays whole.
+
+
+def test_overview_is_a_star_with_the_most_used_families_first() -> None:
+    """The overview diagram links one root to each family and counts the menu options of each family."""
+    uses = [EndpointUse("GET", "/api/v1/sites/{site_id}", "api.v1.sites.sites.getSiteInfo", "", "", "sdk")]
+    results = [
+        MenuResult(MenuOption(n, "Read", "safe", ast.Constant(None), "None"), uses, [], 1, False, "") for n in (1, 2)
+    ]
+    diagram = MermaidDiagram.overview("safe", results)  # Two menu options that use one family.
+    assert 'root["safe: 2 menu options"]' in diagram  # The root counts the menu options.
+    assert 'root --> f_sites_sites["sites/sites<br/>2 menu options"]' in diagram  # The family counts its menus.
+    assert diagram.count("-->") == 1  # One edge for each family, and no crossing edges.
+
+
+def test_generated_diagram_labels_fit_the_wiki_column() -> None:
+    """Each flowchart label line in the map pages is short, so that GitHub does not cut off the diagram.
+
+    GitHub scales a diagram that is wider than the wiki column, and then cuts
+    off the bottom of the diagram. The fixed diagrams on the index page use the
+    TB direction, and a line with spaces wraps, so only a long word is a risk.
+    """
+    # One path segment, such as /{gatewaytemplate_id}, cannot break, so allow a small margin.
+    limit = max(MAX_LABEL_LINE, MAX_PATH_LINE) + 8  # The longest line that fits a column of the diagram.
+    pages = sorted((REPO_ROOT / "documentation/menu-api").glob("*.md"))  # The generated map pages.
+    too_long = [  # Each label line without a space that is longer than the limit.
+        (page.name, line)
+        for page in pages
+        for block in re.findall(r"```mermaid\n(.*?)```", page.read_text(encoding="utf-8"), re.S)
+        for label in re.findall(r'\["([^"]*)"\]', block)
+        for line in label.split("<br/>")
+        if " " not in line and len(line) > limit and not LINT_TRIGGERS.search(line)
+    ]
+    assert len(pages) >= 1, "the generated map pages are missing"
+    assert too_long == [], f"diagram label lines wider than {limit} characters: {too_long[:5]}"
+
+
+def test_generated_pages_hold_few_enough_diagrams_for_github() -> None:
+    """Each map page holds 50 diagrams or fewer, because GitHub fails to render the last diagrams of a long page."""
+    pages = sorted((REPO_ROOT / "documentation/menu-api").glob("*.md"))  # The generated map pages.
+    counts = {page.name: page.read_text(encoding="utf-8").count("```mermaid") for page in pages}
+    assert len(pages) >= 1, "the generated map pages are missing"
+    assert {name: count for name, count in counts.items() if count > 50} == {}  # No page is over the limit.
 
 
 def test_menu_label_hides_a_title_that_the_reference_lint_reads_as_a_class() -> None:

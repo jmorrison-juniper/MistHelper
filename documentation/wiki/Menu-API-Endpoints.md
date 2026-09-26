@@ -25,11 +25,12 @@ If a change adds or removes an API call, the job fails until you write the pages
 - The walk stops at a shared helper. The shared helper section lists the endpoints of each helper.
 - The HTTP method is Unknown when the code holds the path in a string and does not state the method.
 - The diagram of a menu option shows 12 endpoints or fewer. The table lists each endpoint.
+- A menu option with fewer than 3 endpoints has no diagram. Its table lists the endpoints.
 
 ## How a menu option reaches the Mist cloud
 
 ```mermaid
-flowchart LR
+flowchart TB
     operator["Operator"] --> menu["Menu option in MistHelper.py"]
     menu --> handler["Handler class below src/"]
     handler --> helpers["Shared helpers: input, cache, and export"]
@@ -45,7 +46,7 @@ flowchart LR
 ## How the tool builds the map
 
 ```mermaid
-flowchart LR
+flowchart TB
     table["menu_actions table in MistHelper.py"] --> handler["Handler expression"]
     handler --> walk["Breadth-first walk of the call graph"]
     walk --> stop["Stop at a shared helper"]

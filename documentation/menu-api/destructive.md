@@ -11,228 +11,27 @@ Warning: a menu option in this category changes the live Mist cloud configuratio
 
 ## Overview
 
-Each overview diagram links a menu option to the SDK families that it uses.
-The section of each menu option has a second diagram.
+The overview diagram shows the SDK families that the menu options of this category use.
+Each family node shows the number of menu options that use that family.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
 flowchart LR
-    m154["Menu 154: DESTRUCTIVE: Advanced AP firmware upg..."]
-    m154 --> f_orgs_devices
-    m154 --> f_sites_devices
-    m154 --> f_const_device_models
-    m154 --> f_msps_orgs
-    m154 --> f_orgs_gatewaytemplates
-    m154 --> f_orgs_logs
-    m154 --> more154["5 more families"]
-    m155["Menu 155: DESTRUCTIVE: Advanced Switch firmware..."]
-    m155 --> f_sites_devices
-    m155 --> f_orgs_devices
-    m155 --> f_orgs_gatewaytemplates
-    m155 --> f_orgs_inventory
-    m155 --> f_orgs_orgs
-    m155 --> f_orgs_sites
-    m156["Menu 156: DESTRUCTIVE: Advanced SSR firmware up..."]
-    m156 --> f_orgs_ssr
-    m156 --> f_orgs_gatewaytemplates
-    m156 --> f_orgs_inventory
-    m156 --> f_orgs_orgs
-    m156 --> f_orgs_sites
-    m156 --> f_sites_devices
-    m156 --> more156["1 more family"]
-    m157["Menu 157: DESTRUCTIVE: Org-Level AP Firmware Up..."]
-    m157 --> f_orgs_devices
-    m157 --> f_msps_orgs
-    m157 --> f_orgs_inventory
-    m157 --> f_orgs_sites
-    m157 --> f_orgs_stats
-    m157 --> f_sites_devices
-    m158["Menu 158: DESTRUCTIVE: Reboot all devices assoc..."]
-    m158 --> f_sites_devices
-    m158 --> f_orgs_devices
-    m158 --> f_orgs_gatewaytemplates
-    m158 --> f_orgs_inventory
-    m158 --> f_orgs_sites
-    m158 --> f_sites_stats
-    m159["Menu 159: Bounce Switch/Gateway Port y/N confir..."]
-    m159 --> f_sites_devices
-    m159 --> f_sites_stats
-    m159 --> f_websocket_channels
-    m160["Menu 160: Reprovision Switch/Gateway y/N confir..."]
-    m160 --> f_sites_devices
-    m160 --> f_sites_stats
-    m161["Menu 161: DESTRUCTIVE: Convert a virtual chassi..."]
-    m161 --> f_orgs_inventory
-    m161 --> f_orgs_sites
-    m161 --> f_sites_devices
-    m161 --> f_sites_sites
-    m162["Menu 162: DESTRUCTIVE: Convert all virtual chas..."]
-    m162 --> f_orgs_inventory
-    m162 --> f_orgs_sites
-    m162 --> f_sites_devices
-    m163["Menu 163: DESTRUCTIVE: Update Gateway Templates..."]
-    m163 --> f_orgs_gatewaytemplates
-    m163 --> f_sites_devices
-    m163 --> f_orgs_sites
-    m164["Menu 164: DESTRUCTIVE: Apply Gateway Template C..."]
-    m164 --> f_orgs_gatewaytemplates
-    m164 --> f_orgs_sites
-    m165["Menu 165: DESTRUCTIVE: Clone Gateway Template b..."]
-    m165 --> f_orgs_gatewaytemplates
-    m165 --> f_orgs_sites
-    m165 --> f_sites_sites
-    m166["Menu 166: DESTRUCTIVE: Configure WAN Probe Over..."]
-    m166 --> f_orgs_gatewaytemplates
-    m166 --> f_orgs_sites
-    m167["Menu 167: DESTRUCTIVE: Configure WAN Probe on D..."]
-    m167 --> f_sites_devices
-    m167 --> f_orgs_gatewaytemplates
-    m167 --> f_orgs_sites
-    m168["Menu 168: Site Auto-Upgrade Configuration - Con..."]
-    m168 --> f_sites_setting
-    m168 --> f_msps_orgs
-    m168 --> f_orgs_devices
-    m168 --> f_orgs_sites
-    f_const_device_models["const/device_models"]
-    f_msps_orgs["msps/orgs"]
-    f_orgs_devices["orgs/devices"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_logs["orgs/logs"]
-    f_orgs_orgs["orgs/orgs"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_ssr["orgs/ssr"]
-    f_orgs_stats["orgs/stats"]
-    f_sites_devices["sites/devices"]
-    f_sites_setting["sites/setting"]
-    f_sites_sites["sites/sites"]
-    f_sites_stats["sites/stats"]
-    f_websocket_channels["websocket channels"]
-```
-
-```mermaid
-flowchart LR
-    m169["Menu 169: DESTRUCTIVE: Site Analytics Configura..."]
-    m169 --> f_sites_setting
-    m169 --> f_orgs_sites
-    m170["Menu 170: Bulk RADIUS WLAN Configuration - Conf..."]
-    m170 --> f_orgs_wlans
-    m170 --> f_sites_wlans
-    m171["Menu 171: DESTRUCTIVE: Create 137 test sites fr..."]
-    m171 --> f_orgs_sites
-    m172["Menu 172: DESTRUCTIVE: Create country-specific..."]
-    m172 --> f_orgs_rftemplates
-    m172 --> f_orgs_deviceprofiles
-    m172 --> f_orgs_sites
-    m172 --> f_sites_sites
-    m173["Menu 173: DESTRUCTIVE: Scan org for AP models a..."]
-    m173 --> f_orgs_deviceprofiles
-    m173 --> f_orgs_inventory
-    m174["Menu 174: DESTRUCTIVE: Assign APs to Device Pro..."]
-    m174 --> f_orgs_deviceprofiles
-    m174 --> f_orgs_inventory
-    m175["Menu 175: Enhanced SSH Command Runner - Execute..."]
-    m176["Menu 176: SSH Runner - Target gateways by templ..."]
-    m176 --> f_sites_devices
-    m176 --> f_orgs_gatewaytemplates
-    m176 --> f_orgs_inventory
-    m176 --> f_orgs_sites
-    m176 --> f_sites_stats
-    m177["Menu 177: DESTRUCTIVE: Clear ARP Cache type CLEAR"]
-    m177 --> f_sites_devices
-    m177 --> f_sites_stats
-    m178["Menu 178: DESTRUCTIVE: Clear BGP Routes type CLEAR"]
-    m178 --> f_sites_devices
-    m178 --> f_sites_stats
-    m179["Menu 179: DESTRUCTIVE: Clear Session on SSR/SRX..."]
-    m179 --> f_sites_devices
-    m179 --> f_sites_stats
-    m180["Menu 180: DESTRUCTIVE: Clear MAC Table type CLEAR"]
-    m180 --> f_sites_devices
-    m180 --> f_sites_stats
-    m181["Menu 181: DESTRUCTIVE: Clear BPDU Errors on Swi..."]
-    m181 --> f_sites_devices
-    m181 --> f_sites_stats
-    m182["Menu 182: DESTRUCTIVE: Clear Learned MACs from..."]
-    m182 --> f_sites_devices
-    m182 --> f_sites_stats
-    m183["Menu 183: DESTRUCTIVE: Clear Policy Hit Count o..."]
-    m183 --> f_sites_devices
-    m183 --> f_sites_stats
-    f_orgs_deviceprofiles["orgs/deviceprofiles"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_rftemplates["orgs/rftemplates"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_wlans["orgs/wlans"]
-    f_sites_devices["sites/devices"]
-    f_sites_setting["sites/setting"]
-    f_sites_sites["sites/sites"]
-    f_sites_stats["sites/stats"]
-    f_sites_wlans["sites/wlans"]
-```
-
-```mermaid
-flowchart LR
-    m184["Menu 184: Release DHCP Lease on Switch/Gateway y/N"]
-    m184 --> f_sites_devices
-    m184 --> f_sites_stats
-    m185["Menu 185: Release DHCP Lease on SSR/SRX y/N"]
-    m185 --> f_sites_devices
-    m185 --> f_sites_stats
-    m186["Menu 186: Clear CSV Cache Files delete all gene..."]
-    m187["Menu 187: Import Org WAN/Gateway Config cross-o..."]
-    m187 --> f_orgs_deviceprofiles
-    m187 --> f_orgs_gatewaytemplates
-    m187 --> f_orgs_networks
-    m187 --> f_orgs_servicepolicies
-    m187 --> f_orgs_services
-    m187 --> f_orgs_vpns
-    m189["Menu 189: Create a new organization support ticket"]
-    m189 --> f_orgs_tickets
-    m190["Menu 190: Add a comment with optional file atta..."]
-    m190 --> f_orgs_tickets
-    m191["Menu 191: Update fields on an existing support..."]
-    m191 --> f_orgs_tickets
-    m194["Menu 194: DESTRUCTIVE: Clone Device Config to G..."]
-    m194 --> f_orgs_gatewaytemplates
-    m194 --> f_sites_devices
-    m194 --> f_orgs_sites
-    m206["Menu 206: DESTRUCTIVE: Manage org Zscaler synth..."]
-    m206 --> f_orgs_setting
-    m206 --> f_sites_setting
-    m206 --> f_orgs_sites
-    m207["Menu 207: DESTRUCTIVE: Migrate APs between devi..."]
-    m207 --> f_sites_devices
-    m207 --> f_orgs_deviceprofiles
-    m207 --> f_orgs_sites
-    m208["Menu 208: DESTRUCTIVE: Revert an AP profile mig..."]
-    m208 --> f_orgs_deviceprofiles
-    m208 --> f_sites_devices
-    m239["Menu 239: Launch the upgrade capture portal on..."]
-    m239 --> f_sites_devices
-    m239 --> f_orgs_devices
-    m239 --> f_orgs_ssr
-    m239 --> f_orgs_stats
-    m239 --> f_sites_stats
-    m239 --> f_orgs_inventory
-    m239 --> more239["3 more families"]
-    f_orgs_deviceprofiles["orgs/deviceprofiles"]
-    f_orgs_devices["orgs/devices"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_networks["orgs/networks"]
-    f_orgs_servicepolicies["orgs/servicepolicies"]
-    f_orgs_services["orgs/services"]
-    f_orgs_setting["orgs/setting"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_ssr["orgs/ssr"]
-    f_orgs_stats["orgs/stats"]
-    f_orgs_tickets["orgs/tickets"]
-    f_orgs_vpns["orgs/vpns"]
-    f_sites_devices["sites/devices"]
-    f_sites_setting["sites/setting"]
-    f_sites_stats["sites/stats"]
+    root["destructive: 42 menu<br/>options"]
+    root --> f_sites_devices["sites/devices<br/>25 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>21 menu options"]
+    root --> f_sites_stats["sites/stats<br/>16 menu options"]
+    root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>12 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>10 menu options"]
+    root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>6 menu options"]
+    root --> f_orgs_devices["orgs/devices<br/>6 menu options"]
+    root --> f_sites_setting["sites/setting<br/>4 menu options"]
+    root --> f_msps_orgs["msps/orgs<br/>3 menu options"]
+    root --> f_orgs_ssr["orgs/ssr<br/>3 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>3 menu options"]
+    root --> f_orgs_tickets["orgs/tickets<br/>3 menu options"]
+    root --> more["15 more families"]
 ```
 
 ## Menu 154
@@ -244,23 +43,23 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 154: DESTRUCTIVE: Advanced AP firmware upg..."]
-    menu --> c1["BulkAPFirmwareUpgrader"]
-    c1 --> e1["GET /api/v1/const/device_models"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/devices/versions"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e4["POST /api/v1/sites/{site_id}/devices/upgrade"]
-    c1 --> e5["PUT /api/v1/sites/{site_id}/setting"]
-    c1 --> e6["GET /api/v1/sites/{site_id}/stats/devices"]
+    menu["Menu 154:<br/>DESTRUCTIVE:<br/>Advanced AP firmware<br/>upg..."]
+    menu --> c1["BulkAPFirmware<br/>Upgrader"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/device_models"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/versions"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e4["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade"]
+    c1 --> e5["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
     menu --> c2["FirmwareUpgradeStatusChecker"]
-    c2 --> e7["GET /api/v1/orgs/{org_id}/devices/events/search"]
-    c2 --> e8["GET /api/v1/orgs/{org_id}/logs/search"]
-    c2 --> e9["GET /api/v1/orgs/{org_id}/ssr/upgrade"]
-    c2 --> e10["GET /api/v1/sites/{site_id}/devices/upgrade"]
-    c2 --> e11["GET /api/v1/sites/{site_id}/devices/upgrade/{upgrade_id}"]
+    c2 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/events/search"]
+    c2 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/logs<br/>/search"]
+    c2 --> e9["GET<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
+    c2 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade"]
+    c2 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade<br/>/{upgrade_id}"]
     menu --> c3["FirmwareManager"]
-    c3 --> e12["GET /api/v1/msps/{msp_id}/orgs"]
-    menu --> more["5 more endpoints in the table"]
+    c3 --> e12["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
+    menu --> more["5 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -292,16 +91,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 155: DESTRUCTIVE: Advanced Switch firmware..."]
-    menu --> c1["BulkSwitchFirmwareUpgrader"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/devices/versions"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/inventory"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e5["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e6["POST /api/v1/sites/{site_id}/devices/upgrade"]
+    menu["Menu 155:<br/>DESTRUCTIVE:<br/>Advanced Switch<br/>firmware..."]
+    menu --> c1["BulkSwitchFirmware<br/>Upgrader"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/versions"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e6["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade"]
     menu --> c2["GatewayExportUtils"]
-    c2 --> e7["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
+    c2 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -323,18 +122,18 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 156: DESTRUCTIVE: Advanced SSR firmware up..."]
+    menu["Menu 156:<br/>DESTRUCTIVE:<br/>Advanced SSR<br/>firmware up..."]
     menu --> c1["FirmwareManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/inventory"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e4["POST /api/v1/orgs/{org_id}/ssr/upgrade"]
-    c1 --> e5["GET /api/v1/orgs/{org_id}/ssr/versions"]
-    c1 --> e6["GET /api/v1/sites/{site_id}/devices"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e4["POST<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/versions"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
     menu --> c2["GatewayExportUtils"]
-    c2 --> e7["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    menu --> c3["RunningFirmwareVersionResolver"]
-    c3 --> e8["GET /api/v1/sites/{site_id}/stats/devices"]
+    c2 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    menu --> c3["RunningFirmware<br/>VersionResolver"]
+    c3 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -357,16 +156,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 157: DESTRUCTIVE: Org-Level AP Firmware Up..."]
-    menu --> c1["OrgLevelAPFirmwareUpgrader"]
-    c1 --> e1["GET /api/v1/msps/{msp_id}/orgs"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/devices/upgrade"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/devices/versions"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/inventory"]
-    c1 --> e5["GET /api/v1/orgs/{org_id}/stats/devices"]
-    c1 --> e6["GET /api/v1/sites/{site_id}/devices"]
+    menu["Menu 157:<br/>DESTRUCTIVE:<br/>Org-Level AP<br/>Firmware Up..."]
+    menu --> c1["OrgLevelAPFirmware<br/>Upgrader"]
+    c1 --> e1["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/versions"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e7["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -388,20 +187,20 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 158: DESTRUCTIVE: Reboot all devices assoc..."]
+    menu["Menu 158:<br/>DESTRUCTIVE: Reboot<br/>all devices assoc..."]
     menu --> c1["GatewayExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["APIFetchUtils"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/inventory"]
-    c2 --> e5["GET /api/v1/sites/{site_id}/devices/{device_id}"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c2 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
     menu --> c3["DeviceRebootManager"]
-    c3 --> e6["POST /api/v1/sites/{site_id}/devices/{device_id}/restart"]
+    c3 --> e6["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/restart"]
     menu --> c4["OrgInventoryExporter"]
-    c4 --> e7["GET /api/v1/orgs/{org_id}/devices"]
+    c4 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/devices"]
     menu --> c5["OrgSiteExporter"]
-    c5 --> e8["GET /api/v1/orgs/{org_id}/sites"]
+    c5 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -424,13 +223,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 159: Bounce Switch/Gateway Port y/N confir..."]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/bounce_port"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    menu["Menu 159: Bounce<br/>Switch/Gateway Port<br/>y/N confir..."]
+    menu --> c1["_UtilityCommands<br/>Action"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/bounce_port"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -446,15 +245,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 160: Reprovision Switch/Gateway y/N confir..."]
-    menu --> c1["_UtilityCommandsAction"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/reprovision"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/reprovision` | [`sites.devices.reprovisionSiteOctermDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/reprovision-site-octerm-device) | [`_UtilityCommandsAction._invoke_reprovision`](../../src/device/_utility_commands_action.py) | Call |
@@ -469,14 +259,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 161: DESTRUCTIVE: Convert a virtual chassi..."]
+    menu["Menu 161:<br/>DESTRUCTIVE: Convert<br/>a virtual chassi..."]
     menu --> c1["VirtualChassisManager"]
-    c1 --> e1["GET /api/v1/sites/{site_id}"]
-    c1 --> e2["POST /api/v1/sites/{site_id}/devices/{device_id}/vc/convert_to_virtualmac"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}"]
+    c1 --> e2["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/vc<br/>/convert_to_virtualmac"]
     menu --> c2["OrgInventoryExporter"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/inventory"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c3["OrgSiteExporter"]
-    c3 --> e4["GET /api/v1/orgs/{org_id}/sites"]
+    c3 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -495,13 +285,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 162: DESTRUCTIVE: Convert all virtual chas..."]
+    menu["Menu 162:<br/>DESTRUCTIVE: Convert<br/>all virtual chas..."]
     menu --> c1["OrgInventoryExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c2["OrgSiteExporter"]
-    c2 --> e2["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c3["VirtualChassisManager"]
-    c3 --> e3["POST /api/v1/sites/{site_id}/devices/{device_id}/vc/convert_to_virtualmac"]
+    c3 --> e3["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/vc<br/>/convert_to_virtualmac"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -519,18 +309,18 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 163: DESTRUCTIVE: Update Gateway Templates..."]
+    menu["Menu 163:<br/>DESTRUCTIVE: Update<br/>Gateway Templates..."]
     menu --> c1["_Wan2VariableDevice"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices/{device_id}"]
-    c1 --> e3["PUT /api/v1/sites/{site_id}/devices/{device_id}"]
-    menu --> c2["_Wan2VariableTemplate"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
-    c2 --> e5["PUT /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+    c1 --> e3["PUT<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+    menu --> c2["_Wan2Variable<br/>Template"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
+    c2 --> e5["PUT<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
     menu --> c3["GatewayExportUtils"]
-    c3 --> e6["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
+    c3 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
     menu --> c4["OrgSiteExporter"]
-    c4 --> e7["GET /api/v1/orgs/{org_id}/sites"]
+    c4 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -552,13 +342,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 164: DESTRUCTIVE: Apply Gateway Template C..."]
+    menu["Menu 164:<br/>DESTRUCTIVE: Apply<br/>Gateway Template<br/>C..."]
     menu --> c1["GatewayTemplateConfigManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
-    c1 --> e3["PUT /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
+    c1 --> e3["PUT<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
     menu --> c2["OrgSiteExporter"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -577,14 +367,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 165: DESTRUCTIVE: Clone Gateway Template b..."]
+    menu["Menu 165:<br/>DESTRUCTIVE: Clone<br/>Gateway Template<br/>b..."]
     menu --> c1["GatewayTemplateConfigManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
-    c1 --> e4["PUT /api/v1/sites/{site_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
+    c1 --> e4["PUT<br/>/api/v1/sites<br/>/{site_id}"]
     menu --> c2["OrgSiteExporter"]
-    c2 --> e5["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -604,14 +394,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 166: DESTRUCTIVE: Configure WAN Probe Over..."]
+    menu["Menu 166:<br/>DESTRUCTIVE:<br/>Configure WAN Probe<br/>Over..."]
     menu --> c1["WANProbeConfigManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
-    c1 --> e2["PUT /api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
+    c1 --> e2["PUT<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates<br/>/{gatewaytemplate_id}"]
     menu --> c2["GatewayExportUtils"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
     menu --> c3["OrgSiteExporter"]
-    c3 --> e4["GET /api/v1/orgs/{org_id}/sites"]
+    c3 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -630,15 +420,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 167: DESTRUCTIVE: Configure WAN Probe on D..."]
+    menu["Menu 167:<br/>DESTRUCTIVE:<br/>Configure WAN Probe<br/>on D..."]
     menu --> c1["WANProbeDeviceOverrideManager"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices/{device_id}"]
-    c1 --> e3["PUT /api/v1/sites/{site_id}/devices/{device_id}"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+    c1 --> e3["PUT<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
     menu --> c2["GatewayExportUtils"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
     menu --> c3["OrgSiteExporter"]
-    c3 --> e5["GET /api/v1/orgs/{org_id}/sites"]
+    c3 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -658,16 +448,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 168: Site Auto-Upgrade Configuration - Con..."]
+    menu["Menu 168: Site<br/>Auto-Upgrade<br/>Configuration -<br/>Con..."]
     menu --> c1["SiteAutoUpgradeConfigurator"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/devices/versions"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/setting"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/versions"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/sites"]
-    menu --> c3["OrgLevelAPFirmwareUpgrader"]
-    c3 --> e4["GET /api/v1/msps/{msp_id}/orgs"]
-    menu --> c4["_perform_site_settings_update"]
-    c4 --> e5["PUT /api/v1/sites/{site_id}/setting"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    menu --> c3["OrgLevelAPFirmware<br/>Upgrader"]
+    c3 --> e4["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
+    menu --> c4["_perform_site<br/>_settings_update"]
+    c4 --> e5["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -687,12 +477,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 169: DESTRUCTIVE: Site Analytics Configura..."]
+    menu["Menu 169:<br/>DESTRUCTIVE: Site<br/>Analytics<br/>Configura..."]
     menu --> c1["SiteAnalyticsConfigurator"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/setting"]
-    c1 --> e2["PUT /api/v1/sites/{site_id}/setting"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    c1 --> e2["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -710,11 +500,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 170: Bulk RADIUS WLAN Configuration - Conf..."]
+    menu["Menu 170: Bulk<br/>RADIUS WLAN<br/>Configuration -<br/>Conf..."]
     menu --> c1["BulkRadiusWLANConfigManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/wlans"]
-    c1 --> e2["PUT /api/v1/orgs/{org_id}/wlans/{wlan_id}"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/wlans"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/wlans"]
+    c1 --> e2["PUT<br/>/api/v1/orgs<br/>/{org_id}/wlans<br/>/{wlan_id}"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/wlans"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -730,13 +520,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`RateLimitingUtils`](README.md#ratelimitingutils)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 171: DESTRUCTIVE: Create 137 test sites fr..."]
-    menu --> c1["SiteConfigManager"]
-    c1 --> e1["POST /api/v1/orgs/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.createOrgSite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/create-org-site) | [`SiteConfigManager._create_single_site`](../../src/site/site_config_manager.py) | Call |
@@ -750,14 +533,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 172: DESTRUCTIVE: Create country-specific..."]
+    menu["Menu 172:<br/>DESTRUCTIVE: Create<br/>country-specific..."]
     menu --> c1["SiteConfigManager"]
-    c1 --> e1["POST /api/v1/orgs/{org_id}/deviceprofiles/{deviceprofile_id}/assign"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/rftemplates"]
-    c1 --> e3["POST /api/v1/orgs/{org_id}/rftemplates"]
-    c1 --> e4["PUT /api/v1/orgs/{org_id}/rftemplates/{rftemplate_id}"]
-    c1 --> e5["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e6["PUT /api/v1/sites/{site_id}"]
+    c1 --> e1["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles<br/>/{deviceprofile_id}<br/>/assign"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/rftemplates"]
+    c1 --> e3["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/rftemplates"]
+    c1 --> e4["PUT<br/>/api/v1/orgs<br/>/{org_id}<br/>/rftemplates<br/>/{rftemplate_id}"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e6["PUT<br/>/api/v1/sites<br/>/{site_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -778,11 +561,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 173: DESTRUCTIVE: Scan org for AP models a..."]
+    menu["Menu 173:<br/>DESTRUCTIVE: Scan<br/>org for AP models<br/>a..."]
     menu --> c1["SiteConfigManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -800,11 +583,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 174: DESTRUCTIVE: Assign APs to Device Pro..."]
+    menu["Menu 174:<br/>DESTRUCTIVE: Assign<br/>APs to Device Pro..."]
     menu --> c1["SiteConfigManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/deviceprofiles/{deviceprofile_id}/assign"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles<br/>/{deviceprofile_id}<br/>/assign"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -831,16 +614,16 @@ Menu 175 connects over SSH to the devices that the operator names. It sends no M
 
 ```mermaid
 flowchart LR
-    menu["Menu 176: SSH Runner - Target gateways by templ..."]
+    menu["Menu 176: SSH Runner<br/>- Target gateways by<br/>templ..."]
     menu --> c1["GatewayExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/inventory"]
-    c2 --> e5["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c2 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c3["APIFetchUtils"]
-    c3 --> e6["GET /api/v1/sites/{site_id}/devices/{device_id}"]
+    c3 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -859,15 +642,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 177: DESTRUCTIVE: Clear ARP Cache type CLEAR"]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/clear_arp"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_arp` | [`sites.devices.clearSiteSsrArpCache`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/clear-site-ssr-arp-cache) | [`_UtilityCommandsClear._invoke_arp_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -879,15 +653,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().clear_bgp_routes()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 178: DESTRUCTIVE: Clear BGP Routes type CLEAR"]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/clear_bgp"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -901,15 +666,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 179: DESTRUCTIVE: Clear Session on SSR/SRX..."]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/clear_session"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_session` | [`sites.devices.clearSiteDeviceSession`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/clear-site-device-session) | [`_UtilityCommandsClear._invoke_session_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -921,15 +677,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().clear_mac_table()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 180: DESTRUCTIVE: Clear MAC Table type CLEAR"]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/clear_mac_table"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -943,15 +690,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 181: DESTRUCTIVE: Clear BPDU Errors on Swi..."]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/clear_bpdu_error"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_bpdu_error` | [`sites.devices.clearBpduErrorsFromPortsOnSwitch`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/clear-bpdu-errors-from-ports-on-switch) | [`_UtilityCommandsClear._invoke_bpdu_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -963,15 +701,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().clear_learned_macs()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 182: DESTRUCTIVE: Clear Learned MACs from..."]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/clear_macs"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -985,15 +714,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 183: DESTRUCTIVE: Clear Policy Hit Count o..."]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/clear_policy_hit_count"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/clear_policy_hit_count` | [`sites.devices.clearSiteDevicePolicyHitCount`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/clear-site-device-policy-hit-count) | [`_UtilityCommandsClear._invoke_policy_clear`](../../src/device/_utility_commands_clear.py) | Call |
@@ -1006,15 +726,6 @@ flowchart LR
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 184: Release DHCP Lease on Switch/Gateway y/N"]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/release_dhcp_leases"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/release_dhcp_leases` | [`sites.devices.releaseSiteDeviceDhcpLease`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/release-site-device-dhcp-lease) | [`_UtilityCommandsClear._invoke_dhcp_release`](../../src/device/_utility_commands_clear.py) | Call |
@@ -1026,15 +737,6 @@ flowchart LR
 - Handler: `lambda: _get_duc_instance().release_dhcp_ssr()`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 185: Release DHCP Lease on SSR/SRX y/N"]
-    menu --> c1["_UtilityCommandsClear"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/release_dhcp"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1058,20 +760,20 @@ Menu 186 deletes the local CSV cache files. It sends no API request.
 
 ```mermaid
 flowchart LR
-    menu["Menu 187: Import Org WAN/Gateway Config cross-o..."]
+    menu["Menu 187: Import Org<br/>WAN/Gateway Config<br/>cross-o..."]
     menu --> c1["OrgConfigMigrationManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e4["POST /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e5["GET /api/v1/orgs/{org_id}/networks"]
-    c1 --> e6["POST /api/v1/orgs/{org_id}/networks"]
-    c1 --> e7["GET /api/v1/orgs/{org_id}/servicepolicies"]
-    c1 --> e8["POST /api/v1/orgs/{org_id}/servicepolicies"]
-    c1 --> e9["GET /api/v1/orgs/{org_id}/services"]
-    c1 --> e10["POST /api/v1/orgs/{org_id}/services"]
-    c1 --> e11["GET /api/v1/orgs/{org_id}/vpns"]
-    c1 --> e12["POST /api/v1/orgs/{org_id}/vpns"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e4["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/networks"]
+    c1 --> e6["POST<br/>/api/v1/orgs<br/>/{org_id}/networks"]
+    c1 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/servicepolicies"]
+    c1 --> e8["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/servicepolicies"]
+    c1 --> e9["GET<br/>/api/v1/orgs<br/>/{org_id}/services"]
+    c1 --> e10["POST<br/>/api/v1/orgs<br/>/{org_id}/services"]
+    c1 --> e11["GET<br/>/api/v1/orgs<br/>/{org_id}/vpns"]
+    c1 --> e12["POST<br/>/api/v1/orgs<br/>/{org_id}/vpns"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1096,13 +798,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 189: Create a new organization support ticket"]
-    menu --> c1["OrgTicketManager"]
-    c1 --> e1["POST /api/v1/orgs/{org_id}/tickets"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.createOrgTicket`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/create-org-ticket) | [`OrgTicketManager._submit_create_ticket`](../../src/org/org_ticket_manager.py) | Call |
@@ -1116,11 +811,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 190: Add a comment with optional file atta..."]
+    menu["Menu 190: Add a<br/>comment with<br/>optional file<br/>atta..."]
     menu --> c1["OrgTicketManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/tickets"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/tickets/{ticket_id}/comments"]
-    c1 --> e3["POST /api/v1/orgs/{org_id}/tickets/{ticket_id}/comments"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/tickets"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/tickets<br/>/{ticket_id}<br/>/comments"]
+    c1 --> e3["POST<br/>/api/v1/orgs<br/>/{org_id}/tickets<br/>/{ticket_id}<br/>/comments"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1136,14 +831,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 191: Update fields on an existing support..."]
-    menu --> c1["OrgTicketManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/tickets"]
-    c1 --> e2["PUT /api/v1/orgs/{org_id}/tickets/{ticket_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) | [`OrgTicketManager._fetch_tickets_for_selection`](../../src/org/org_ticket_manager.py) | Call |
@@ -1158,13 +845,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 194: DESTRUCTIVE: Clone Device Config to G..."]
+    menu["Menu 194:<br/>DESTRUCTIVE: Clone<br/>Device Config to<br/>G..."]
     menu --> c1["DeviceConfigTemplateClonerManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e5["GET /api/v1/sites/{site_id}/devices/{device_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1184,17 +871,17 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 206: DESTRUCTIVE: Manage org Zscaler synth..."]
-    menu --> c1["SyntheticProbeSettingApplier"]
-    c1 --> e1["PUT /api/v1/orgs/{org_id}/setting"]
+    menu["Menu 206:<br/>DESTRUCTIVE: Manage<br/>org Zscaler synth..."]
+    menu --> c1["SyntheticProbe<br/>SettingApplier"]
+    c1 --> e1["PUT<br/>/api/v1/orgs<br/>/{org_id}/setting"]
     menu --> c2["_fetch_setting"]
-    c2 --> e2["GET /api/v1/orgs/{org_id}/setting"]
+    c2 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
     menu --> c3["_fetch_site_setting"]
-    c3 --> e3["GET /api/v1/sites/{site_id}/setting"]
+    c3 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
     menu --> c4["_list_org_sites"]
-    c4 --> e4["GET /api/v1/orgs/{org_id}/sites"]
+    c4 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c5["_put_site_setting"]
-    c5 --> e5["PUT /api/v1/sites/{site_id}/setting"]
+    c5 --> e5["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1214,12 +901,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 207: DESTRUCTIVE: Migrate APs between devi..."]
+    menu["Menu 207:<br/>DESTRUCTIVE: Migrate<br/>APs between devi..."]
     menu --> c1["APProfileMigrationManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e4["PUT /api/v1/sites/{site_id}/devices/{device_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e4["PUT<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1236,14 +923,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`RateLimitingUtils`](README.md#ratelimitingutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 208: DESTRUCTIVE: Revert an AP profile mig..."]
-    menu --> c1["APProfileMigrationManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles/{deviceprofile_id}"]
-    c1 --> e2["PUT /api/v1/sites/{site_id}/devices/{device_id}"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/deviceprofiles/{deviceprofile_id}` | [`orgs.deviceprofiles.getOrgDeviceProfile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/get-org-device-profile) | [`APProfileMigrationManager._verify_source_profile_exists`](../../src/device/ap_profile_migration_manager.py) | Call |
@@ -1258,26 +937,26 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 239: Launch the upgrade capture portal on..."]
+    menu["Menu 239: Launch the<br/>upgrade capture<br/>portal on..."]
     menu --> c1["_ENDPOINT_MODULES"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id}"]
-    c1 --> e2["POST /api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id}/cancel"]
-    c1 --> e3["POST /api/v1/orgs/{org_id}/ssr/upgrade/{upgrade_id}/cancel"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/devices/events/search"]
-    c1 --> e5["GET /api/v1/sites/{site_id}/devices/upgrade/{upgrade_id}"]
-    c1 --> e6["POST /api/v1/sites/{site_id}/devices/upgrade/{upgrade_id}/cancel"]
-    c1 --> e7["GET /api/v1/sites/{site_id}/ssr/upgrade/{upgrade_id}"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade<br/>/{upgrade_id}"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade<br/>/{upgrade_id}/cancel"]
+    c1 --> e3["POST<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade<br/>/{upgrade_id}/cancel"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/events/search"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade<br/>/{upgrade_id}"]
+    c1 --> e6["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade<br/>/{upgrade_id}/cancel"]
+    c1 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/ssr<br/>/upgrade<br/>/{upgrade_id}"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e8["GET /api/v1/orgs/{org_id}/sites"]
-    menu --> c3["AggregateUpgradeService"]
-    c3 --> e9["POST /api/v1/orgs/{org_id}/devices/upgrade"]
+    c2 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    menu --> c3["AggregateUpgrade<br/>Service"]
+    c3 --> e9["POST<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade"]
     menu --> c4["ENDPOINT_ORG_SSRS"]
-    c4 --> e10["POST /api/v1/orgs/{org_id}/ssr/upgrade"]
+    c4 --> e10["POST<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
     menu --> c5["ENDPOINT_SITE_DEVICE"]
-    c5 --> e11["POST /api/v1/sites/{site_id}/devices/{device_id}/upgrade"]
-    menu --> c6["ENDPOINT_SITE_DEVICES"]
-    c6 --> e12["POST /api/v1/sites/{site_id}/devices/upgrade"]
-    menu --> more["8 more endpoints in the table"]
+    c5 --> e11["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/upgrade"]
+    menu --> c6["ENDPOINT_SITE_DEVICE<br/>S"]
+    c6 --> e12["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade"]
+    menu --> more["8 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |

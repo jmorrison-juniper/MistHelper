@@ -9,305 +9,27 @@ The index page explains how to read the map: [Menu API endpoint map](README.md).
 
 ## Overview
 
-Each overview diagram links a menu option to the SDK families that it uses.
-The section of each menu option has a second diagram.
+The overview diagram shows the SDK families that the menu options of this category use.
+Each family node shows the number of menu options that use that family.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
 flowchart LR
-    m1["Menu 1: Export a list of all sites in the org..."]
-    m1 --> f_orgs_sites
-    m2["Menu 2: Export a list of sites with location..."]
-    m2 --> f_orgs_sites
-    m3["Menu 3: Export all sites using the list sites..."]
-    m3 --> f_orgs_sites
-    m4["Menu 4: Export all current guest users and la..."]
-    m4 --> f_orgs_guests
-    m5["Menu 5: Export E911 report for the organization"]
-    m5 --> f_orgs_exports
-    m6["Menu 6: Site Config Analysis - Scan all sites..."]
-    m6 --> f_orgs_sites
-    m6 --> f_sites_setting
-    m6 --> f_sites_zones
-    m7["Menu 7: Site Inventory Health Analysis - Find..."]
-    m7 --> f_orgs_inventory
-    m7 --> f_orgs_sites
-    m8["Menu 8: Export the full inventory of devices..."]
-    m8 --> f_orgs_inventory
-    m9["Menu 9: Export a list of all devices in the o..."]
-    m9 --> f_orgs_devices
-    m10["Menu 10: Export a list of all devices with ass..."]
-    m10 --> f_orgs_inventory
-    m10 --> f_orgs_sites
-    m11["Menu 11: Export a list of gateways with associ..."]
-    m11 --> f_orgs_inventory
-    m11 --> f_orgs_sites
-    m12["Menu 12: Export combined inventory with site a..."]
-    m12 --> f_orgs_inventory
-    m12 --> f_orgs_orgs
-    m12 --> f_orgs_sites
-    m13["Menu 13: Export org device model counts, firmw..."]
-    m13 --> f_msps_orgs
-    m13 --> f_orgs_devices
-    m13 --> f_orgs_inventory
-    m13 --> f_orgs_orgs
-    m15["Menu 15: Export statistics for all devices in..."]
-    m15 --> f_orgs_stats
-    m16["Menu 16: Export VPN peer path statistics for t..."]
-    m16 --> f_orgs_stats
-    f_msps_orgs["msps/orgs"]
-    f_orgs_devices["orgs/devices"]
-    f_orgs_exports["orgs/exports"]
-    f_orgs_guests["orgs/guests"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_orgs["orgs/orgs"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_stats["orgs/stats"]
-    f_sites_setting["sites/setting"]
-    f_sites_zones["sites/zones"]
-```
-
-```mermaid
-flowchart LR
-    m17["Menu 17: Export all switch virtual chassis VC/..."]
-    m17 --> f_orgs_inventory
-    m17 --> f_sites_devices
-    m20["Menu 20: Export all organization alarms from t..."]
-    m20 --> f_orgs_alarms
-    m21["Menu 21: Export all device events from the pas..."]
-    m21 --> f_orgs_devices
-    m22["Menu 22: Export audit logs for the organizatio..."]
-    m22 --> f_orgs_logs
-    m23["Menu 23: Export self admin account audit log"]
-    m23 --> f_self_logs
-    m24["Menu 24: Export security events for the organi..."]
-    m24 --> f_sites_insights
-    m24 --> f_orgs_secintelprofiles
-    m24 --> f_orgs_secpolicies
-    m24 --> f_orgs_sites
-    m25["Menu 25: Audit Log Analysis - Mermaid timeline..."]
-    m25 --> f_orgs_logs
-    m26["Menu 26: Offline Device Report"]
-    m26 --> f_orgs_sites
-    m26 --> f_orgs_stats
-    m27["Menu 27: Export wireless client statistics for..."]
-    m27 --> f_orgs_clients
-    m28["Menu 28: Export wired client statistics for th..."]
-    m28 --> f_orgs_wired_clients
-    m29["Menu 29: Export rogue client detections for th..."]
-    m29 --> f_sites_insights
-    m29 --> f_orgs_sites
-    m30["Menu 30: Export rogue AP detections for the or..."]
-    m30 --> f_orgs_sites
-    m30 --> f_sites_insights
-    m31["Menu 31: Export gateway management overlay IPs..."]
-    m31 --> f_sites_devices
-    m31 --> f_orgs_gatewaytemplates
-    m31 --> f_orgs_inventory
-    m31 --> f_orgs_sites
-    m31 --> f_sites_stats
-    m32["Menu 32: Export gateway templates from the org..."]
-    m32 --> f_orgs_gatewaytemplates
-    m33["Menu 33: Export synthetic test results for all..."]
-    m33 --> f_orgs_inventory
-    m33 --> f_orgs_sites
-    m33 --> f_sites_devices
-    f_orgs_alarms["orgs/alarms"]
-    f_orgs_clients["orgs/clients"]
-    f_orgs_devices["orgs/devices"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_logs["orgs/logs"]
-    f_orgs_secintelprofiles["orgs/secintelprofiles"]
-    f_orgs_secpolicies["orgs/secpolicies"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_stats["orgs/stats"]
-    f_orgs_wired_clients["orgs/wired_clients"]
-    f_self_logs["self/logs"]
-    f_sites_devices["sites/devices"]
-    f_sites_insights["sites/insights"]
-    f_sites_stats["sites/stats"]
-```
-
-```mermaid
-flowchart LR
-    m34["Menu 34: Export all synthetic test results inc..."]
-    m34 --> f_orgs_inventory
-    m34 --> f_sites_synthetic_test
-    m35["Menu 35: Find gateway ports overridden from te..."]
-    m35 --> f_sites_devices
-    m35 --> f_sites_stats
-    m35 --> f_orgs_inventory
-    m35 --> f_orgs_sites
-    m36["Menu 36: Check and export gateways with duplic..."]
-    m36 --> f_orgs_inventory
-    m36 --> f_orgs_sites
-    m36 --> f_sites_stats
-    m37["Menu 37: Export all organization templates gat..."]
-    m37 --> f_orgs_aptemplates
-    m37 --> f_orgs_gatewaytemplates
-    m37 --> f_orgs_networktemplates
-    m37 --> f_orgs_rftemplates
-    m37 --> f_orgs_sitetemplates
-    m38["Menu 38: Export network template information f..."]
-    m38 --> f_orgs_networktemplates
-    m39["Menu 39: Export RF template information for th..."]
-    m39 --> f_orgs_rftemplates
-    m40["Menu 40: Export AP template information for th..."]
-    m40 --> f_orgs_deviceprofiles
-    m41["Menu 41: Export switch template information fo..."]
-    m41 --> f_orgs_networktemplates
-    m42["Menu 42: Export license information for the or..."]
-    m42 --> f_raw_requests
-    m43["Menu 43: Export license usage information for..."]
-    m43 --> f_orgs_licenses
-    m44["Menu 44: Export PSK Pre-Shared Key information..."]
-    m44 --> f_orgs_psks
-    m45["Menu 45: Export webhook configuration for the..."]
-    m45 --> f_orgs_webhooks
-    m46["Menu 46: Export WLAN configuration for the org..."]
-    m46 --> f_orgs_wlans
-    m47["Menu 47: Export API token information for the..."]
-    m47 --> f_orgs_apitokens
-    m48["Menu 48: Export administrator information for..."]
-    m48 --> f_orgs_admins
-    f_orgs_admins["orgs/admins"]
-    f_orgs_apitokens["orgs/apitokens"]
-    f_orgs_aptemplates["orgs/aptemplates"]
-    f_orgs_deviceprofiles["orgs/deviceprofiles"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_inventory["orgs/inventory"]
-    f_orgs_licenses["orgs/licenses"]
-    f_orgs_networktemplates["orgs/networktemplates"]
-    f_orgs_psks["orgs/psks"]
-    f_orgs_rftemplates["orgs/rftemplates"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_sitetemplates["orgs/sitetemplates"]
-    f_orgs_webhooks["orgs/webhooks"]
-    f_orgs_wlans["orgs/wlans"]
-    f_raw_requests["raw requests"]
-    f_sites_devices["sites/devices"]
-    f_sites_stats["sites/stats"]
-    f_sites_synthetic_test["sites/synthetic_test"]
-```
-
-```mermaid
-flowchart LR
-    m49["Menu 49: Export SSO Single Sign-On information..."]
-    m49 --> f_orgs_ssos
-    m50["Menu 50: Export MX Edge information for the or..."]
-    m50 --> f_orgs_mxedges
-    m51["Menu 51: Export Organization SLE Metrics Servi..."]
-    m51 --> f_orgs_insights
-    m52["Menu 52: Export SLE summary metrics for all si..."]
-    m52 --> f_orgs_insights
-    m53["Menu 53: Export Organization Insight Metrics c..."]
-    m53 --> f_orgs_insights
-    m53 --> f_const_alarm_defs
-    m53 --> f_const_ap_channels
-    m53 --> f_const_ap_esl_versions
-    m53 --> f_const_ap_led_status
-    m53 --> f_const_app_categories
-    m53 --> more53["23 more families"]
-    m54["Menu 54: Export all available const definition..."]
-    m54 --> f_const_alarm_defs
-    m54 --> f_const_ap_channels
-    m54 --> f_const_ap_esl_versions
-    m54 --> f_const_ap_led_status
-    m54 --> f_const_app_categories
-    m54 --> f_const_app_subcategories
-    m54 --> more54["22 more families"]
-    m55["Menu 55: Export OSPF adjacency statistics for..."]
-    m55 --> f_orgs_stats
-    m56["Menu 56: Export JSI PBN Product Bulletin Notif..."]
-    m56 --> f_orgs_jsi
-    m57["Menu 57: Export JSI SIRT Security Incident Res..."]
-    m57 --> f_orgs_jsi
-    m58["Menu 58: Export Org WAN/Gateway Config JSON bu..."]
-    m58 --> f_orgs_deviceprofiles
-    m58 --> f_orgs_gatewaytemplates
-    m58 --> f_orgs_networks
-    m58 --> f_orgs_servicepolicies
-    m58 --> f_orgs_services
-    m58 --> f_orgs_vpns
-    m58 --> more58["1 more family"]
-    m188["Menu 188: Export all organization support ticke..."]
-    m188 --> f_orgs_tickets
-    m193["Menu 193: Export all tickets with full details..."]
-    m193 --> f_orgs_tickets
-    m204["Menu 204: Export JSI assets and contract search..."]
-    m204 --> f_orgs_jsi
-    m205["Menu 205: Export Org Mist Edge event search res..."]
-    m205 --> f_orgs_mxedges
-    m230["Menu 230: Search wireless client sessions for t..."]
-    m230 --> f_orgs_clients
-    f_const_alarm_defs["const/alarm_defs"]
-    f_const_ap_channels["const/ap_channels"]
-    f_const_ap_esl_versions["const/ap_esl_versions"]
-    f_const_ap_led_status["const/ap_led_status"]
-    f_const_app_categories["const/app_categories"]
-    f_const_app_subcategories["const/app_subcategories"]
-    f_orgs_clients["orgs/clients"]
-    f_orgs_deviceprofiles["orgs/deviceprofiles"]
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_insights["orgs/insights"]
-    f_orgs_jsi["orgs/jsi"]
-    f_orgs_mxedges["orgs/mxedges"]
-    f_orgs_networks["orgs/networks"]
-    f_orgs_servicepolicies["orgs/servicepolicies"]
-    f_orgs_services["orgs/services"]
-    f_orgs_ssos["orgs/ssos"]
-    f_orgs_stats["orgs/stats"]
-    f_orgs_tickets["orgs/tickets"]
-    f_orgs_vpns["orgs/vpns"]
-```
-
-```mermaid
-flowchart LR
-    m231["Menu 231: Search wireless client events for the..."]
-    m231 --> f_orgs_clients
-    m232["Menu 232: Search WAN clients for the organizati..."]
-    m232 --> f_orgs_wan_clients
-    m233["Menu 233: Search WAN client events for the orga..."]
-    m233 --> f_orgs_wan_clients
-    m234["Menu 234: Search system events for the organiza..."]
-    m234 --> f_orgs_events
-    m243["Menu 243: Generate the SNMP MIB from the Mist O..."]
-    m248["Menu 248: Search sites for the organization sea..."]
-    m248 --> f_orgs_sites
-    m249["Menu 249: Search devices for the organization s..."]
-    m249 --> f_orgs_devices
-    m250["Menu 250: Search organization variables searchO..."]
-    m250 --> f_orgs_vars
-    m251["Menu 251: Search user MAC assignments for the o..."]
-    m251 --> f_orgs_usermacs
-    m252["Menu 252: Search other-device events for the or..."]
-    m252 --> f_orgs_otherdevices
-    m253["Menu 253: Search Mist Edges for the organizatio..."]
-    m253 --> f_orgs_mxedges
-    m255["Menu 255: Search PSK portal logs for the organi..."]
-    m255 --> f_orgs_pskportals
-    m269["Menu 269: Scan the organization for rogue DHCP..."]
-    m269 --> f_orgs_alarms
-    m269 --> f_orgs_devices
-    m269 --> f_orgs_sites
-    m269 --> f_sites_alarms
-    m269 --> f_sites_devices
-    m269 --> f_sites_marvis_configs
-    f_orgs_alarms["orgs/alarms"]
-    f_orgs_clients["orgs/clients"]
-    f_orgs_devices["orgs/devices"]
-    f_orgs_events["orgs/events"]
-    f_orgs_mxedges["orgs/mxedges"]
-    f_orgs_otherdevices["orgs/otherdevices"]
-    f_orgs_pskportals["orgs/pskportals"]
-    f_orgs_sites["orgs/sites"]
-    f_orgs_usermacs["orgs/usermacs"]
-    f_orgs_vars["orgs/vars"]
-    f_orgs_wan_clients["orgs/wan_clients"]
-    f_sites_alarms["sites/alarms"]
-    f_sites_devices["sites/devices"]
-    f_sites_marvis_configs["sites/marvis_configs"]
+    root["safe: 73 menu<br/>options"]
+    root --> f_orgs_sites["orgs/sites<br/>18 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
+    root --> f_orgs_devices["orgs/devices<br/>5 menu options"]
+    root --> f_sites_devices["sites/devices<br/>5 menu options"]
+    root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>4 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>4 menu options"]
+    root --> f_orgs_clients["orgs/clients<br/>3 menu options"]
+    root --> f_orgs_insights["orgs/insights<br/>3 menu options"]
+    root --> f_orgs_jsi["orgs/jsi<br/>3 menu options"]
+    root --> f_orgs_mxedges["orgs/mxedges<br/>3 menu options"]
+    root --> f_orgs_networktemplates["orgs/networktemplates<br/>3 menu options"]
+    root --> f_orgs_orgs["orgs/orgs<br/>3 menu options"]
+    root --> more["67 more families"]
 ```
 
 ## Menu 1
@@ -316,13 +38,6 @@ flowchart LR
 - Handler: `OrgSiteExporter.sites`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 1: Export a list of all sites in the org..."]
-    menu --> c1["OrgSiteExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -335,13 +50,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 2: Export a list of sites with location..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
@@ -352,13 +60,6 @@ flowchart LR
 - Handler: `OrgSiteExporter.sites_list_api`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 3: Export all sites using the list sites..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -371,13 +72,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 4: Export all current guest users and la..."]
-    menu --> c1["OrgSiteExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/guests/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/guests/search` | [`orgs.guests.searchOrgGuestAuthorization`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/guests/search-org-guest-authorization) | [`OrgSiteExporter.current_guests`](../../src/export/org_site_exporter.py) | Call |
@@ -388,13 +82,6 @@ flowchart LR
 - Handler: `OrgExportUtils.e911_report`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 5: Export E911 report for the organization"]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/exports/e911_report"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -409,13 +96,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 6: Site Config Analysis - Scan all sites..."]
+    menu["Menu 6: Site Config<br/>Analysis - Scan all<br/>sites..."]
     menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c2["_collect_one_setting"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/setting"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
     menu --> c3["_collect_one_zone"]
-    c3 --> e3["GET /api/v1/sites/{site_id}/zones"]
+    c3 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/zones"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -431,15 +118,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`MainEntrypoint`](README.md#mainentrypoint), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 7: Site Inventory Health Analysis - Find..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-    menu --> c2["SiteInventoryHealthAnalyzer"]
-    c2 --> e2["GET /api/v1/orgs/{org_id}/inventory"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`SiteInventoryHealthAnalyzer._fetch_devices`](../../src/analytics/site_inventory_health_analyzer.py) | Call |
@@ -452,13 +130,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 8: Export the full inventory of devices..."]
-    menu --> c1["OrgInventoryExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgInventoryExporter.inventory`](../../src/export/org_inventory_exporter.py) | Reference |
@@ -469,13 +140,6 @@ flowchart LR
 - Handler: `OrgInventoryExporter.devices`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 9: Export a list of all devices in the o..."]
-    menu --> c1["OrgInventoryExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/devices"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -488,14 +152,6 @@ flowchart LR
 - Shared helpers: [`CacheUtils`](README.md#cacheutils), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 10: Export a list of all devices with ass..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
@@ -507,14 +163,6 @@ flowchart LR
 - Handler: `OrgInventoryExporter.gateways_with_site_info`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 11: Export a list of gateways with associ..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/sites"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -530,12 +178,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 12: Export combined inventory with site a..."]
+    menu["Menu 12: Export<br/>combined inventory<br/>with site a..."]
     menu --> c1["OrgInventoryExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -553,13 +201,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 13: Export org device model counts, firmw..."]
-    menu --> c1["OrgDeviceInventorySummaryCore"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/devices/search"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/inventory"]
+    menu["Menu 13: Export org<br/>device model counts,<br/>firmw..."]
+    menu --> c1["OrgDeviceInventory<br/>SummaryCore"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/search"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c2["_call_list_msp_orgs"]
-    c2 --> e4["GET /api/v1/msps/{msp_id}/orgs"]
+    c2 --> e4["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -576,13 +224,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 15: Export statistics for all devices in..."]
-    menu --> c1["OrgDeviceStatsExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/stats/devices"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`OrgDeviceStatsExporter.device_stats`](../../src/export/org_device_stats_exporter.py) | Reference |
@@ -594,13 +235,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 16: Export VPN peer path statistics for t..."]
-    menu --> c1["OrgDeviceStatsExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/stats/vpn_peers/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/stats/vpn_peers/search` | [`orgs.stats.searchOrgPeerPathStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/vpn-peers/search-org-peer-path-stats) | [`OrgDeviceStatsExporter.vpn_peer_stats`](../../src/export/org_device_stats_exporter.py) | Reference |
@@ -611,15 +245,6 @@ flowchart LR
 - Handler: `OrgDeviceStatsExporter.switch_vc_stats`
 - Shared helpers: [`CacheUtils`](README.md#cacheutils), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 17: Export all switch virtual chassis VC/..."]
-    menu --> c1["OrgInventoryExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    menu --> c2["SwitchVcStatsService"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/devices/{device_id}/vc"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -633,13 +258,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 20: Export all organization alarms from t..."]
-    menu --> c1["OrgAlarmEventExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/alarms/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`OrgAlarmEventExporter.alarms`](../../src/export/org_alarm_event_exporter.py) | Reference |
@@ -650,13 +268,6 @@ flowchart LR
 - Handler: `OrgAlarmEventExporter.device_events`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 21: Export all device events from the pas..."]
-    menu --> c1["OrgAlarmEventExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/devices/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -669,13 +280,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 22: Export audit logs for the organizatio..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/logs/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) | [`OrgExportUtils.audit_logs`](../../src/export/org_export_utils.py) | Call |
@@ -686,13 +290,6 @@ flowchart LR
 - Handler: `SelfExportUtils.audit_logs`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 23: Export self admin account audit log"]
-    menu --> c1["SelfExportUtils"]
-    c1 --> e1["GET /api/v1/self/logs"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -707,15 +304,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 24: Export security events for the organi..."]
-    menu --> c1["SecurityEventsService"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/secintelprofiles"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/secpolicies"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/insights/rogues/clients"]
+    menu["Menu 24: Export<br/>security events for<br/>the organi..."]
+    menu --> c1["SecurityEvents<br/>Service"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/secintelprofiles"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/secpolicies"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/rogues/clients"]
     menu --> c2["OrgSiteExporter"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c3["_ROGUE_KINDS"]
-    c3 --> e5["GET /api/v1/sites/{site_id}/insights/rogues"]
+    c3 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/rogues"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -733,13 +330,6 @@ flowchart LR
 - Shared helpers: [`CacheUtils`](README.md#cacheutils), [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 25: Audit Log Analysis - Mermaid timeline..."]
-    menu --> c1["AuditAnalysisOps"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/logs/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) | [`AuditAnalysisOps._fetch_filtered_audit_entries`](../../src/audit/audit_analysis_ops.py) | Call |
@@ -750,15 +340,6 @@ flowchart LR
 - Handler: `OfflineDeviceReporter.execute`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 26: Offline Device Report"]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites"]
-    menu --> c2["OfflineDeviceReporter"]
-    c2 --> e2["GET /api/v1/orgs/{org_id}/stats/devices"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -772,13 +353,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 27: Export wireless client statistics for..."]
-    menu --> c1["OrgClientSecurityExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/clients/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/clients/search` | [`orgs.clients.searchOrgWirelessClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-clients) | [`OrgClientSecurityExporter.wireless_clients`](../../src/export/org_client_security_exporter.py) | Reference |
@@ -789,13 +363,6 @@ flowchart LR
 - Handler: `OrgClientSecurityExporter.wired_clients`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 28: Export wired client statistics for th..."]
-    menu --> c1["OrgClientSecurityExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/wired_clients/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -810,12 +377,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 29: Export rogue client detections for th..."]
+    menu["Menu 29: Export<br/>rogue client<br/>detections for th..."]
     menu --> c1["OrgClientSecurityExporter"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/insights/rogues"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/insights/rogues/clients"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/rogues"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/rogues/clients"]
     menu --> c2["OrgSiteExporter"]
-    c2 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -831,15 +398,6 @@ flowchart LR
 - Shared helpers: [`CacheUtils`](README.md#cacheutils), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 30: Export rogue AP detections for the or..."]
-    menu --> c1["OrgClientSecurityExporter"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/insights/rogues"]
-    menu --> c2["OrgSiteExporter"]
-    c2 --> e2["GET /api/v1/orgs/{org_id}/sites"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](../../src/export/org_site_exporter.py) | Reference |
@@ -854,16 +412,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 31: Export gateway management overlay IPs..."]
+    menu["Menu 31: Export<br/>gateway management<br/>overlay IPs..."]
     menu --> c1["GatewayExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e3["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c2["APICoreFetchUtils"]
-    c2 --> e4["GET /api/v1/orgs/{org_id}/inventory"]
-    c2 --> e5["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c2 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c3["APIFetchUtils"]
-    c3 --> e6["GET /api/v1/sites/{site_id}/devices/{device_id}"]
+    c3 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -882,13 +440,6 @@ flowchart LR
 - Shared helpers: [`CacheUtils`](README.md#cacheutils), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`MainEntrypoint`](README.md#mainentrypoint)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 32: Export gateway templates from the org..."]
-    menu --> c1["GatewayExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`GatewayExportUtils.templates`](../../src/gateway/gateway_export_utils.py) | Call |
@@ -902,13 +453,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 33: Export synthetic test results for all..."]
+    menu["Menu 33: Export<br/>synthetic test<br/>results for all..."]
     menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     menu --> c2["GatewayTestExporter"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/devices/{device_id}/synthetic_test"]
-    menu --> c3["_fetch_site_name_lookup_from_api"]
-    c3 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/synthetic_test"]
+    menu --> c3["_fetch_site_name<br/>_lookup_from_api"]
+    c3 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -924,15 +475,6 @@ flowchart LR
 - Shared helpers: [`CacheUtils`](README.md#cacheutils), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`RateLimitingUtils`](README.md#ratelimitingutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 34: Export all synthetic test results inc..."]
-    menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    menu --> c2["GatewayTestResultsService"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/synthetic_test/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
@@ -947,17 +489,17 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 35: Find gateway ports overridden from te..."]
+    menu["Menu 35: Find<br/>gateway ports<br/>overridden from<br/>te..."]
     menu --> c1["DeviceDataFetcher"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices/{device_id}"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
     menu --> c2["GatewayExportUtils"]
-    c2 --> e3["GET /api/v1/sites/{site_id}/devices"]
-    c2 --> e4["GET /api/v1/sites/{site_id}/stats/ports/search"]
+    c2 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c2 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/ports/search"]
     menu --> c3["APICoreFetchUtils"]
-    c3 --> e5["GET /api/v1/orgs/{org_id}/sites"]
+    c3 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c4["APIFetchUtils"]
-    c4 --> e6["GET /api/v1/orgs/{org_id}/inventory"]
+    c4 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -978,13 +520,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 36: Check and export gateways with duplic..."]
+    menu["Menu 36: Check and<br/>export gateways with<br/>duplic..."]
     menu --> c1["APICoreFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/inventory"]
-    menu --> c2["_call_get_site_device_stats"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_fetch_site_name_lookup_from_api"]
-    c3 --> e3["GET /api/v1/orgs/{org_id}/sites"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    menu --> c2["_call_get_site<br/>_device_stats"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_fetch_site_name<br/>_lookup_from_api"]
+    c3 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1002,13 +544,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 37: Export all organization templates gat..."]
+    menu["Menu 37: Export all<br/>organization<br/>templates gat..."]
     menu --> c1["OrgTemplateExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/aptemplates"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/networktemplates"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/rftemplates"]
-    c1 --> e5["GET /api/v1/orgs/{org_id}/sitetemplates"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/aptemplates"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/networktemplates"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/rftemplates"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/sitetemplates"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1026,13 +568,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 38: Export network template information f..."]
-    menu --> c1["OrgTemplateExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/networktemplates"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`OrgTemplateExporter.network_templates`](../../src/export/org_template_exporter.py) | Reference |
@@ -1043,13 +578,6 @@ flowchart LR
 - Handler: `OrgTemplateExporter.rf_templates`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 39: Export RF template information for th..."]
-    menu --> c1["OrgTemplateExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/rftemplates"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1062,13 +590,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 40: Export AP template information for th..."]
-    menu --> c1["OrgTemplateExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`OrgTemplateExporter.ap_templates`](../../src/export/org_template_exporter.py) | Call |
@@ -1079,13 +600,6 @@ flowchart LR
 - Handler: `OrgTemplateExporter.switch_templates`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 41: Export switch template information fo..."]
-    menu --> c1["OrgTemplateExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/networktemplates"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1098,13 +612,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 42: Export license information for the or..."]
-    menu --> c1["OrgAdminExporter"]
-    c1 --> e1["GET /api/v1/orgs/{current_org_id}/licenses"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{current_org_id}/licenses` | None (raw request) | [`OrgAdminExporter._fetch_license_payload`](../../src/export/org_admin_exporter.py) | Path |
@@ -1115,13 +622,6 @@ flowchart LR
 - Handler: `OrgAdminExporter.usage`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 43: Export license usage information for..."]
-    menu --> c1["OrgAdminExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/licenses/usages"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1134,13 +634,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 44: Export PSK Pre-Shared Key information..."]
-    menu --> c1["OrgConfigExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/psks"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/psks` | [`orgs.psks.listOrgPsks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psks/list-org-psks) | [`OrgConfigExporter.psks`](../../src/export/org_config_exporter.py) | Reference |
@@ -1151,13 +644,6 @@ flowchart LR
 - Handler: `OrgConfigExporter.webhooks`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 45: Export webhook configuration for the..."]
-    menu --> c1["OrgConfigExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/webhooks"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1170,13 +656,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 46: Export WLAN configuration for the org..."]
-    menu --> c1["OrgConfigExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/wlans"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`OrgConfigExporter.wlans`](../../src/export/org_config_exporter.py) | Reference |
@@ -1187,13 +666,6 @@ flowchart LR
 - Handler: `OrgAdminExporter.api_tokens`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 47: Export API token information for the..."]
-    menu --> c1["OrgAdminExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/apitokens"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1206,13 +678,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 48: Export administrator information for..."]
-    menu --> c1["OrgAdminExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/admins"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`OrgAdminExporter.admins`](../../src/export/org_admin_exporter.py) | Reference |
@@ -1223,13 +688,6 @@ flowchart LR
 - Handler: `OrgAdminExporter.sso`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 49: Export SSO Single Sign-On information..."]
-    menu --> c1["OrgAdminExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/ssos"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1242,13 +700,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 50: Export MX Edge information for the or..."]
-    menu --> c1["OrgConfigExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/mxedges"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/mxedges` | [`orgs.mxedges.listOrgMxEdges`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/list-org-mx-edges) | [`OrgConfigExporter.mx_edges`](../../src/export/org_config_exporter.py) | Reference |
@@ -1259,14 +710,6 @@ flowchart LR
 - Handler: `OrgExportUtils.sle_metrics`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 51: Export Organization SLE Metrics Servi..."]
-    menu --> c1["SLEMetricsService"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/insights/sites-sle"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/insights/{metric}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1279,13 +722,6 @@ flowchart LR
 - Handler: `OrgExportUtils.sites_sle_summary`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 52: Export SLE summary metrics for all si..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/insights/sites-sle"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1300,21 +736,21 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 53: Export Organization Insight Metrics c..."]
+    menu["Menu 53: Export<br/>Organization Insight<br/>Metrics c..."]
     menu --> c1["ConstDefinitionsExporter"]
-    c1 --> e1["GET /api/v1/const/alarm_defs"]
-    c1 --> e2["GET /api/v1/const/ap_channels"]
-    c1 --> e3["GET /api/v1/const/ap_esl_versions"]
-    c1 --> e4["GET /api/v1/const/ap_led_status"]
-    c1 --> e5["GET /api/v1/const/app_categories"]
-    c1 --> e6["GET /api/v1/const/app_subcategories"]
-    c1 --> e7["GET /api/v1/const/applications"]
-    c1 --> e8["GET /api/v1/const/client_events"]
-    c1 --> e9["GET /api/v1/const/countries"]
-    c1 --> e10["GET /api/v1/const/default_gateway_config"]
-    c1 --> e11["GET /api/v1/const/device_events"]
-    c1 --> e12["GET /api/v1/const/device_models"]
-    menu --> more["18 more endpoints in the table"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/alarm_defs"]
+    c1 --> e2["GET<br/>/api/v1/const<br/>/ap_channels"]
+    c1 --> e3["GET<br/>/api/v1/const<br/>/ap_esl_versions"]
+    c1 --> e4["GET<br/>/api/v1/const<br/>/ap_led_status"]
+    c1 --> e5["GET<br/>/api/v1/const<br/>/app_categories"]
+    c1 --> e6["GET<br/>/api/v1/const<br/>/app_subcategories"]
+    c1 --> e7["GET<br/>/api/v1/const<br/>/applications"]
+    c1 --> e8["GET<br/>/api/v1/const<br/>/client_events"]
+    c1 --> e9["GET<br/>/api/v1/const<br/>/countries"]
+    c1 --> e10["GET<br/>/api/v1/const<br/>/default_gateway_config"]
+    c1 --> e11["GET<br/>/api/v1/const<br/>/device_events"]
+    c1 --> e12["GET<br/>/api/v1/const<br/>/device_models"]
+    menu --> more["18 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1359,21 +795,21 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 54: Export all available const definition..."]
+    menu["Menu 54: Export all<br/>available const<br/>definition..."]
     menu --> c1["ConstDefinitionsExporter"]
-    c1 --> e1["GET /api/v1/const/alarm_defs"]
-    c1 --> e2["GET /api/v1/const/ap_channels"]
-    c1 --> e3["GET /api/v1/const/ap_esl_versions"]
-    c1 --> e4["GET /api/v1/const/ap_led_status"]
-    c1 --> e5["GET /api/v1/const/app_categories"]
-    c1 --> e6["GET /api/v1/const/app_subcategories"]
-    c1 --> e7["GET /api/v1/const/applications"]
-    c1 --> e8["GET /api/v1/const/client_events"]
-    c1 --> e9["GET /api/v1/const/countries"]
-    c1 --> e10["GET /api/v1/const/default_gateway_config"]
-    c1 --> e11["GET /api/v1/const/device_events"]
-    c1 --> e12["GET /api/v1/const/device_models"]
-    menu --> more["16 more endpoints in the table"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/alarm_defs"]
+    c1 --> e2["GET<br/>/api/v1/const<br/>/ap_channels"]
+    c1 --> e3["GET<br/>/api/v1/const<br/>/ap_esl_versions"]
+    c1 --> e4["GET<br/>/api/v1/const<br/>/ap_led_status"]
+    c1 --> e5["GET<br/>/api/v1/const<br/>/app_categories"]
+    c1 --> e6["GET<br/>/api/v1/const<br/>/app_subcategories"]
+    c1 --> e7["GET<br/>/api/v1/const<br/>/applications"]
+    c1 --> e8["GET<br/>/api/v1/const<br/>/client_events"]
+    c1 --> e9["GET<br/>/api/v1/const<br/>/countries"]
+    c1 --> e10["GET<br/>/api/v1/const<br/>/default_gateway_config"]
+    c1 --> e11["GET<br/>/api/v1/const<br/>/device_events"]
+    c1 --> e12["GET<br/>/api/v1/const<br/>/device_models"]
+    menu --> more["16 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1414,13 +850,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 55: Export OSPF adjacency statistics for..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/stats/ospf_peers/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/stats/ospf_peers/search` | [`orgs.stats.searchOrgOspfStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/ospf/search-org-ospf-stats) | [`OrgExportUtils.ospf_stats`](../../src/export/org_export_utils.py) | Reference |
@@ -1432,13 +861,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 56: Export JSI PBN Product Bulletin Notif..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/jsi/pbn/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/jsi/pbn/search` | [`orgs.jsi.searchOrgJsiPbn`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-pbn) | [`OrgExportUtils.jsi_pbn`](../../src/export/org_export_utils.py) | Reference |
@@ -1449,13 +871,6 @@ flowchart LR
 - Handler: `OrgExportUtils.jsi_sirt`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 57: Export JSI SIRT Security Incident Res..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/jsi/sirt/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1470,21 +885,21 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 58: Export Org WAN/Gateway Config JSON bu..."]
+    menu["Menu 58: Export Org<br/>WAN/Gateway Config<br/>JSON bu..."]
     menu --> c1["OrgConfigMigrationManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e3["POST /api/v1/orgs/{org_id}/deviceprofiles"]
-    c1 --> e4["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e5["POST /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e6["GET /api/v1/orgs/{org_id}/networks"]
-    c1 --> e7["POST /api/v1/orgs/{org_id}/networks"]
-    c1 --> e8["GET /api/v1/orgs/{org_id}/servicepolicies"]
-    c1 --> e9["POST /api/v1/orgs/{org_id}/servicepolicies"]
-    c1 --> e10["GET /api/v1/orgs/{org_id}/services"]
-    c1 --> e11["POST /api/v1/orgs/{org_id}/services"]
-    c1 --> e12["GET /api/v1/orgs/{org_id}/vpns"]
-    menu --> more["1 more endpoint in the table"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e3["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e5["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/networks"]
+    c1 --> e7["POST<br/>/api/v1/orgs<br/>/{org_id}/networks"]
+    c1 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/servicepolicies"]
+    c1 --> e9["POST<br/>/api/v1/orgs<br/>/{org_id}<br/>/servicepolicies"]
+    c1 --> e10["GET<br/>/api/v1/orgs<br/>/{org_id}/services"]
+    c1 --> e11["POST<br/>/api/v1/orgs<br/>/{org_id}/services"]
+    c1 --> e12["GET<br/>/api/v1/orgs<br/>/{org_id}/vpns"]
+    menu --> more["1 more endpoint in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1510,13 +925,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 188: Export all organization support ticke..."]
-    menu --> c1["OrgTicketManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/tickets"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) | [`OrgTicketManager.list_tickets`](../../src/org/org_ticket_manager.py) | Reference |
@@ -1527,14 +935,6 @@ flowchart LR
 - Handler: `OrgTicketManager.export_ticket_details`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 193: Export all tickets with full details..."]
-    menu --> c1["OrgTicketManager"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/tickets"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/tickets/{ticket_id}"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1548,13 +948,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 204: Export JSI assets and contract search..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/jsi/inventory/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/jsi/inventory/search` | [`orgs.jsi.searchOrgJsiAssetsAndContracts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-assets-and-contracts) | [`OrgExportUtils.jsi_assets`](../../src/export/org_export_utils.py) | Reference |
@@ -1565,13 +958,6 @@ flowchart LR
 - Handler: `OrgExportUtils.mist_edge_events`
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 205: Export Org Mist Edge event search res..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/mxedges/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1584,13 +970,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 230: Search wireless client sessions for t..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/clients/sessions/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/clients/sessions/search` | [`orgs.clients.searchOrgWirelessClientSessions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-client-sessions) | [`OrgSearchExporter.wireless_client_sessions`](../../src/export/org_search_exporter.py) | Reference |
@@ -1601,13 +980,6 @@ flowchart LR
 - Handler: `OrgSearchExporter.wireless_client_events`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 231: Search wireless client events for the..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/clients/events/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1620,13 +992,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 232: Search WAN clients for the organizati..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/wan_clients/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/wan_clients/search` | [`orgs.wan_clients.searchOrgWanClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wan/search-org-wan-clients) | [`OrgSearchExporter.wan_clients`](../../src/export/org_search_exporter.py) | Reference |
@@ -1638,13 +1003,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 233: Search WAN client events for the orga..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/wan_clients/events/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/wan_clients/events/search` | [`orgs.wan_clients.searchOrgWanClientEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wan/search-org-wan-client-events) | [`OrgSearchExporter.wan_client_events`](../../src/export/org_search_exporter.py) | Reference |
@@ -1655,13 +1013,6 @@ flowchart LR
 - Handler: `OrgSearchExporter.system_events`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 234: Search system events for the organiza..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/events/system/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1682,13 +1033,6 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 248: Search sites for the organization sea..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/sites/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites/search` | [`orgs.sites.searchOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/search-org-sites) | [`OrgSearchExporter.sites`](../../src/export/org_search_exporter.py) | Reference |
@@ -1699,13 +1043,6 @@ flowchart LR
 - Handler: `OrgSearchExporter.devices`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 249: Search devices for the organization s..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/devices/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1718,13 +1055,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 250: Search organization variables searchO..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/vars/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/vars/search` | [`orgs.vars.searchOrgVars`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vars/search-org-vars) | [`OrgSearchExporter.org_vars`](../../src/export/org_search_exporter.py) | Reference |
@@ -1735,13 +1065,6 @@ flowchart LR
 - Handler: `OrgSearchExporter.user_macs`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 251: Search user MAC assignments for the o..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/usermacs/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1754,13 +1077,6 @@ flowchart LR
 - Shared helpers: [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 252: Search other-device events for the or..."]
-    menu --> c1["OrgExportUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/otherdevices/events/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/otherdevices/events/search` | [`orgs.otherdevices.searchOrgOtherDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/others/search-org-other-device-events) | [`OrgExportUtils.other_device_events`](../../src/export/org_export_utils.py) | Reference |
@@ -1772,13 +1088,6 @@ flowchart LR
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
 
-```mermaid
-flowchart LR
-    menu["Menu 253: Search Mist Edges for the organizatio..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/mxedges/search"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/mxedges/search` | [`orgs.mxedges.searchOrgMxEdges`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/search-org-mx-edges) | [`OrgSearchExporter.mx_edges`](../../src/export/org_search_exporter.py) | Reference |
@@ -1789,13 +1098,6 @@ flowchart LR
 - Handler: `OrgSearchExporter.psk_portal_logs`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 1
-
-```mermaid
-flowchart LR
-    menu["Menu 255: Search PSK portal logs for the organi..."]
-    menu --> c1["OrgSearchExporter"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/pskportals/logs/search"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -1810,14 +1112,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 269: Scan the organization for rogue DHCP..."]
+    menu["Menu 269: Scan the<br/>organization for<br/>rogue DHCP..."]
     menu --> c1["RogueDhcpScanner"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/alarms/search"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/devices/events/search"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/sites"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/alarms/search"]
-    c1 --> e5["GET /api/v1/sites/{site_id}/devices/events/search"]
-    c1 --> e6["GET /api/v1/sites/{site_id}/marvis_configs/search"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/alarms<br/>/search"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/events/search"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/alarms<br/>/search"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/events/search"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/marvis_configs<br/>/search"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |

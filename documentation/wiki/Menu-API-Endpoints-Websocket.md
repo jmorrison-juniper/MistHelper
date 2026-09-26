@@ -9,117 +9,25 @@ The index page explains how to read the map: [Menu API endpoint map](Menu-API-En
 
 ## Overview
 
-Each overview diagram links a menu option to the SDK families that it uses.
-The section of each menu option has a second diagram.
+The overview diagram shows the SDK families that the menu options of this category use.
+Each family node shows the number of menu options that use that family.
+A menu option with three endpoints or more has a second diagram in its section.
 That diagram links the menu option to the classes that send the requests, and each class to its endpoints.
 
 ```mermaid
 flowchart LR
-    m102["Menu 102: Show MAC table on switch device via W..."]
-    m102 --> f_raw_requests
-    m102 --> f_sites_devices
-    m102 --> f_websocket_channels
-    m103["Menu 103: Show forwarding table on gateway devi..."]
-    m103 --> f_raw_requests
-    m103 --> f_sites_devices
-    m103 --> f_websocket_channels
-    m104["Menu 104: Show routing table on switches via We..."]
-    m104 --> f_raw_requests
-    m104 --> f_sites_devices
-    m104 --> f_websocket_channels
-    m105["Menu 105: Show SSR/SRX routing table via dedica..."]
-    m105 --> f_sites_devices
-    m105 --> f_websocket_channels
-    m106["Menu 106: Show OSPF Neighbors on SSR/SRX Gateway"]
-    m106 --> f_sites_devices
-    m106 --> f_sites_stats
-    m106 --> f_websocket_channels
-    m107["Menu 107: Show OSPF Interfaces on SSR/SRX Gateway"]
-    m107 --> f_sites_devices
-    m107 --> f_sites_stats
-    m107 --> f_websocket_channels
-    m108["Menu 108: Show OSPF Database on SSR/SRX Gateway"]
-    m108 --> f_sites_devices
-    m108 --> f_sites_stats
-    m108 --> f_websocket_channels
-    m109["Menu 109: Show OSPF Summary on SSR/SRX Gateway"]
-    m109 --> f_sites_devices
-    m109 --> f_sites_stats
-    m109 --> f_websocket_channels
-    m110["Menu 110: Show Sessions on SSR/SRX Gateway"]
-    m110 --> f_sites_devices
-    m110 --> f_sites_stats
-    m110 --> f_websocket_channels
-    m111["Menu 111: Show Service Path on SSR Gateway"]
-    m111 --> f_sites_devices
-    m111 --> f_sites_stats
-    m111 --> f_websocket_channels
-    m112["Menu 112: Show BGP Summary on Switch or Gateway"]
-    m112 --> f_sites_devices
-    m112 --> f_sites_stats
-    m112 --> f_websocket_channels
-    m113["Menu 113: Show ARP Table on Switch or Gateway"]
-    m113 --> f_sites_devices
-    m113 --> f_sites_stats
-    m113 --> f_websocket_channels
-    m114["Menu 114: Show DHCP Leases on Switch or Gateway"]
-    m114 --> f_sites_devices
-    m114 --> f_sites_stats
-    m114 --> f_websocket_channels
-    m115["Menu 115: Show 802.1X Table on Switch"]
-    m115 --> f_sites_devices
-    m115 --> f_sites_stats
-    m115 --> f_websocket_channels
-    m116["Menu 116: Show EVPN Database on Switch or Gateway"]
-    m116 --> f_sites_devices
-    m116 --> f_sites_stats
-    m116 --> f_websocket_channels
-    f_raw_requests["raw requests"]
-    f_sites_devices["sites/devices"]
-    f_sites_stats["sites/stats"]
-    f_websocket_channels["websocket channels"]
-```
-
-```mermaid
-flowchart LR
-    m117["Menu 117: Test DNS Resolution on SSR Gateway"]
-    m117 --> f_sites_devices
-    m117 --> f_sites_stats
-    m117 --> f_websocket_channels
-    m118["Menu 118: WebSocket Device Ping - Execute ping..."]
-    m118 --> f_sites_devices
-    m118 --> f_websocket_channels
-    m119["Menu 119: WebSocket Device ARP - Execute ARP co..."]
-    m119 --> f_sites_devices
-    m119 --> f_websocket_channels
-    m120["Menu 120: WebSocket Service Ping - Execute serv..."]
-    m120 --> f_sites_devices
-    m120 --> f_orgs_gatewaytemplates
-    m120 --> f_orgs_networks
-    m120 --> f_orgs_servicepolicies
-    m120 --> f_orgs_services
-    m120 --> f_sites_gatewaytemplates
-    m120 --> more120["4 more families"]
-    m121["Menu 121: Run ARP command on an AP and receive..."]
-    m121 --> f_raw_requests
-    m121 --> f_websocket_channels
-    m122["Menu 122: Cable Test on Switch Port"]
-    m122 --> f_sites_devices
-    m122 --> f_sites_stats
-    m122 --> f_websocket_channels
-    m123["Menu 123: Traceroute from device to destination..."]
-    m123 --> f_sites_devices
-    m123 --> f_sites_stats
-    m123 --> f_websocket_channels
-    f_orgs_gatewaytemplates["orgs/gatewaytemplates"]
-    f_orgs_networks["orgs/networks"]
-    f_orgs_servicepolicies["orgs/servicepolicies"]
-    f_orgs_services["orgs/services"]
-    f_raw_requests["raw requests"]
-    f_sites_devices["sites/devices"]
-    f_sites_gatewaytemplates["sites/gatewaytemplates"]
-    f_sites_stats["sites/stats"]
-    f_websocket_channels["websocket channels"]
+    root["websocket: 22 menu<br/>options"]
+    root --> f_websocket_channels["websocket channels<br/>22 menu options"]
+    root --> f_sites_devices["sites/devices<br/>21 menu options"]
+    root --> f_sites_stats["sites/stats<br/>15 menu options"]
+    root --> f_raw_requests["raw requests<br/>4 menu options"]
+    root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>1 menu option"]
+    root --> f_orgs_networks["orgs/networks<br/>1 menu option"]
+    root --> f_orgs_servicepolicies["orgs/servicepolicies<br/>1 menu option"]
+    root --> f_orgs_services["orgs/services<br/>1 menu option"]
+    root --> f_sites_gatewaytemplates["sites/gatewaytemplates<br/>1 menu option"]
+    root --> f_sites_networks["sites/networks<br/>1 menu option"]
+    root --> f_sites_servicepolicies["sites/servicepolicies<br/>1 menu option"]
 ```
 
 ## Menu 102
@@ -131,13 +39,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 102: Show MAC table on switch device via W..."]
+    menu["Menu 102: Show MAC<br/>table on switch<br/>device via W..."]
     menu --> c1["MacTableCommand"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_mac_table"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_mac_table"]
     menu --> c2["WebSocketManager"]
-    c2 --> e2["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c2 --> e2["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
     menu --> c3["_ws_cmd_deps"]
-    c3 --> e3["GET /api/v1/sites/{site_id}/devices"]
+    c3 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -155,12 +63,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 103: Show forwarding table on gateway devi..."]
+    menu["Menu 103: Show<br/>forwarding table on<br/>gateway devi..."]
     menu --> c1["RoutingUtils"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e2["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e2["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
     menu --> c2["_RoutingUtilsPayload"]
-    c2 --> e3["POST /api/v1/sites/{site_id}/devices/{device_id}/{endpoint}"]
+    c2 --> e3["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/{endpoint}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -178,12 +86,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 104: Show routing table on switches via We..."]
+    menu["Menu 104: Show<br/>routing table on<br/>switches via We..."]
     menu --> c1["RoutingUtils"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e2["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e2["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
     menu --> c2["_RoutingUtilsPayload"]
-    c2 --> e3["POST /api/v1/sites/{site_id}/devices/{device_id}/{endpoint}"]
+    c2 --> e3["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/{endpoint}"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -201,12 +109,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 105: Show SSR/SRX routing table via dedica..."]
+    menu["Menu 105: Show<br/>SSR/SRX routing<br/>table via dedica..."]
     menu --> c1["RoutingUtils"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices"]
-    c1 --> e2["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c1 --> e2["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
     menu --> c2["_RoutingUtilsPayload"]
-    c2 --> e3["POST /api/v1/sites/{site_id}/devices/{device_id}/show_route"]
+    c2 --> e3["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_route"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -224,13 +132,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 106: Show OSPF Neighbors on SSR/SRX Gateway"]
+    menu["Menu 106: Show OSPF<br/>Neighbors on SSR/SRX<br/>Gateway"]
     menu --> c1["_OSPF_NEIGHBORS_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_ospf_neighbors"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_ospf_neighbors"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -248,13 +156,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 107: Show OSPF Interfaces on SSR/SRX Gateway"]
-    menu --> c1["_OSPF_INTERFACES_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_ospf_interfaces"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    menu["Menu 107: Show OSPF<br/>Interfaces on<br/>SSR/SRX Gateway"]
+    menu --> c1["_OSPF_INTERFACES_SPE<br/>C"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_ospf_interfaces"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -272,13 +180,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 108: Show OSPF Database on SSR/SRX Gateway"]
+    menu["Menu 108: Show OSPF<br/>Database on SSR/SRX<br/>Gateway"]
     menu --> c1["_OSPF_DATABASE_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_ospf_database"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_ospf_database"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -296,13 +204,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 109: Show OSPF Summary on SSR/SRX Gateway"]
+    menu["Menu 109: Show OSPF<br/>Summary on SSR/SRX<br/>Gateway"]
     menu --> c1["_OSPF_SUMMARY_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_ospf_summary"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_ospf_summary"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -320,13 +228,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 110: Show Sessions on SSR/SRX Gateway"]
+    menu["Menu 110: Show<br/>Sessions on SSR/SRX<br/>Gateway"]
     menu --> c1["_SESSION_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_session"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_session"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -344,13 +252,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 111: Show Service Path on SSR Gateway"]
+    menu["Menu 111: Show<br/>Service Path on SSR<br/>Gateway"]
     menu --> c1["_SERVICE_PATH_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_service_path"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_service_path"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -368,13 +276,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 112: Show BGP Summary on Switch or Gateway"]
+    menu["Menu 112: Show BGP<br/>Summary on Switch or<br/>Gateway"]
     menu --> c1["_BGP_SUMMARY_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_bgp_summary"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_bgp_summary"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -392,13 +300,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 113: Show ARP Table on Switch or Gateway"]
+    menu["Menu 113: Show ARP<br/>Table on Switch or<br/>Gateway"]
     menu --> c1["_ARP_TABLE_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_arp"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_arp"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -416,14 +324,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 114: Show DHCP Leases on Switch or Gateway"]
-    menu --> c1["_UtilityCommandsSelection"]
-    c1 --> e1["GET /api/v1/sites/{site_id}/devices/{device_id}"]
-    c1 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    menu["Menu 114: Show DHCP<br/>Leases on Switch or<br/>Gateway"]
+    menu --> c1["_UtilityCommands<br/>Selection"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
     menu --> c2["_DHCP_LEASES_SPEC"]
-    c2 --> e3["POST /api/v1/sites/{site_id}/devices/{device_id}/show_dhcp_leases"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e4["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c2 --> e3["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_dhcp_leases"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e4["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -442,13 +350,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 115: Show 802.1X Table on Switch"]
+    menu["Menu 115: Show<br/>802.1X Table on<br/>Switch"]
     menu --> c1["_DOT1X_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_dot1x"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_dot1x"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -466,13 +374,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 116: Show EVPN Database on Switch or Gateway"]
+    menu["Menu 116: Show EVPN<br/>Database on Switch<br/>or Gateway"]
     menu --> c1["_EVPN_DATABASE_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/show_evpn_database"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/show_evpn_database"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -490,13 +398,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 117: Test DNS Resolution on SSR Gateway"]
+    menu["Menu 117: Test DNS<br/>Resolution on SSR<br/>Gateway"]
     menu --> c1["_DNS_RESOLUTION_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/resolve_dns"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/resolve_dns"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -512,15 +420,6 @@ flowchart LR
 - Shared helpers: [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 118: WebSocket Device Ping - Execute ping..."]
-    menu --> c1["WebSocketManager"]
-    c1 --> e1["WS /sites/{site_id}/devices/{device_id}/cmd"]
-    menu --> c2["_ws_cmd_deps"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/devices"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`_ws_cmd_deps`](https://github.com/jmorrison-juniper/MistHelper/blob/main/MistHelper.py) | Reference |
@@ -532,15 +431,6 @@ flowchart LR
 - Handler: `lambda: ArpDeviceExecutor().execute(_ws_cmd_deps())`
 - Shared helpers: [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`PromptUtils`](Menu-API-Endpoints#promptutils)
 - Endpoints: 2
-
-```mermaid
-flowchart LR
-    menu["Menu 119: WebSocket Device ARP - Execute ARP co..."]
-    menu --> c1["WebSocketManager"]
-    c1 --> e1["WS /sites/{site_id}/devices/{device_id}/cmd"]
-    menu --> c2["_ws_cmd_deps"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/devices"]
-```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
@@ -556,23 +446,23 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 120: WebSocket Service Ping - Execute serv..."]
+    menu["Menu 120: WebSocket<br/>Service Ping -<br/>Execute serv..."]
     menu --> c1["APITenantFetchUtils"]
-    c1 --> e1["GET /api/v1/orgs/{org_id}/gatewaytemplates"]
-    c1 --> e2["GET /api/v1/orgs/{org_id}/networks"]
-    c1 --> e3["GET /api/v1/orgs/{org_id}/servicepolicies"]
-    c1 --> e4["GET /api/v1/sites/{site_id}/gatewaytemplates/derived"]
-    c1 --> e5["GET /api/v1/sites/{site_id}/networks/derived"]
-    c1 --> e6["GET /api/v1/sites/{site_id}/servicepolicies/derived"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/networks"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/servicepolicies"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/gatewaytemplates<br/>/derived"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/networks<br/>/derived"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/servicepolicies<br/>/derived"]
     menu --> c2["ServicePingManager"]
-    c2 --> e7["GET /api/v1/sites/{site_id}/devices"]
-    c2 --> e8["POST /api/v1/sites/{site_id}/devices/{device_id}/service_ping"]
-    c2 --> e9["WS /sites/{site_id}/devices/{device_id}/cmd"]
-    menu --> c3["ServicePingDiscoveryMixin"]
-    c3 --> e10["GET /api/v1/sites/{site_id}/devices/{device_id}"]
-    c3 --> e11["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
+    c2 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    c2 --> e8["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/service_ping"]
+    c2 --> e9["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
+    menu --> c3["ServicePingDiscovery<br/>Mixin"]
+    c3 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+    c3 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
     menu --> c4["APIFetchUtils"]
-    c4 --> e12["GET /api/v1/orgs/{org_id}/services"]
+    c4 --> e12["GET<br/>/api/v1/orgs<br/>/{org_id}/services"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -597,14 +487,6 @@ flowchart LR
 - Shared helpers: [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
 - Endpoints: 2
 
-```mermaid
-flowchart LR
-    menu["Menu 121: Run ARP command on an AP and receive..."]
-    menu --> c1["ARPCommandManager"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/arp"]
-    c1 --> e2["WS /sites/{site_id}/devices/{device_id}/cmd"]
-```
-
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/arp` | None (raw request) | [`ARPCommandManager._trigger_command`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/device/arp_command_manager.py) | Path |
@@ -619,13 +501,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 122: Cable Test on Switch Port"]
+    menu["Menu 122: Cable Test<br/>on Switch Port"]
     menu --> c1["_CABLE_TEST_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/cable_test"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/cable_test"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -643,13 +525,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    menu["Menu 123: Traceroute from device to destination..."]
+    menu["Menu 123: Traceroute<br/>from device to<br/>destination..."]
     menu --> c1["_TRACEROUTE_SPEC"]
-    c1 --> e1["POST /api/v1/sites/{site_id}/devices/{device_id}/traceroute"]
-    menu --> c2["_UtilityCommandsSelection"]
-    c2 --> e2["GET /api/v1/sites/{site_id}/stats/devices/{device_id}"]
-    menu --> c3["_UtilityCommandsWebsocket"]
-    c3 --> e3["WS /sites/{site_id}/devices/{device_id}/cmd"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/traceroute"]
+    menu --> c2["_UtilityCommands<br/>Selection"]
+    c2 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["_UtilityCommands<br/>Websocket"]
+    c3 --> e3["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
