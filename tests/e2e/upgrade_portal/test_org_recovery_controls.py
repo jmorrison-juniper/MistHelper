@@ -130,6 +130,31 @@ class TestMultiSiteRecoveryControls:
         sync_api.expect(page.locator(SUMMARY_ROWS)).to_have_count(6)  # Three devices at each of two sites.
         page.screenshot(path=str(tmp_path / "retry-cleared.png"), full_page=True)
 
+    def test_a_retry_with_one_cleared_type_plans_the_other_failed_device(
+        self, controls_operator_page: Any, tmp_path: Path
+    ) -> None:
+        """Issue #3389: the operator clears one type of a retry, and the plan keeps the other failed device."""
+        page = controls_operator_page  # The operator that owns the seeded operations.
+        open_seeded_page(page, job_path(RETRY_OPERATION_ID), "org-upgrade-retry-controls")
+        page.get_by_test_id("org-upgrade-retry").click()
+        page.wait_for_url(OPTIONS_PATH)
+        sync_api.expect(page.get_by_test_id("org-upgrade-retry-banner")).to_contain_text(RETRY_OPERATION_ID)
+        page.get_by_test_id("org-upgrade-type-switch").uncheck()  # The failed switch waits for a later retry.
+        page.screenshot(path=str(tmp_path / "retry-one-type-options.png"), full_page=True)
+
+        page.get_by_test_id("org-upgrade-review").click()  # The first site now holds no retry device.
+        page.wait_for_url(CONFIRM_PATH)
+        sync_api.expect(page.get_by_test_id("org-upgrade-confirm")).to_contain_text("Devices: 1")
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(f"Access points {NEW_VERSION}")
+        firmware = page.get_by_test_id("org-upgrade-firmware").inner_text()  # The firmware line of the plan.
+        assert "Switches" not in firmware  # The cleared switch type leaves the plan.
+        page.screenshot(path=str(tmp_path / "retry-one-type-confirm.png"), full_page=True)
+
+        page.goto("/upgrade/org/options", wait_until="domcontentloaded")  # The retry stays open until a clear.
+        page.get_by_test_id("org-upgrade-retry-clear").click()  # Leave no retry for the next journey.
+        page.wait_for_url(OPTIONS_PATH)
+        sync_api.expect(page.get_by_test_id("org-upgrade-retry-banner")).to_have_count(0)
+
     def test_the_check_proves_one_child_job_and_keeps_the_other(
         self, controls_operator_page: Any, tmp_path: Path
     ) -> None:
