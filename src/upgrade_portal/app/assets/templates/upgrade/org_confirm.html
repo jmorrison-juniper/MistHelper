@@ -1,5 +1,13 @@
 {% extends 'layout.html' %}
 {% set confirm_word = 'CONFIRM' %}
+{#
+  Issue #3452. The Warning and the two pre-check buttons stated a plural scope,
+  so a plan of one site read "all selected sites". The texts now follow the
+  count of the selected sites. The line "Sites" states the count, so the texts
+  do not repeat it. A retry keeps only the sites of its devices, so the texts
+  follow the retry sites too.
+#}
+{% set one_site = site_count == 1 %}
 
 {% block title %}Confirm the upgrade{% endblock %}
 {% block heading %}<h1>Confirm the upgrade</h1>{% endblock %}
@@ -61,8 +69,8 @@
     {% endif %}
   {% endif %}
 
-  <div class="alert alert-danger" role="alert">
-    Warning: the upgrade can interrupt network service at all selected sites. Cancellation does not restore upgraded devices.
+  <div class="alert alert-danger" role="alert" data-testid="org-upgrade-scope-warning">
+    Warning: the upgrade can interrupt network service at {{ 'the selected site' if one_site else 'each selected site' }}. Cancellation does not restore upgraded devices.
   </div>
 
   {% if not writes_enabled %}
@@ -117,11 +125,11 @@
             class="portal-button portal-button-primary"
             data-testid="org-upgrade-precheck-missing"
             data-precheck-scope="missing"
-            {% if not prechecks.missing %}disabled{% endif %}>Take the missing pre-checks</button>
+            {% if not prechecks.missing %}disabled{% endif %}>{{ 'Take the missing pre-check' if one_site else 'Take the missing pre-checks' }}</button>
     <button type="button"
             class="portal-button"
             data-testid="org-upgrade-precheck-all"
-            data-precheck-scope="all">Take new pre-checks for all sites</button>
+            data-precheck-scope="all">{{ 'Take a new pre-check for the site' if one_site else 'Take a new pre-check for each site' }}</button>
     {% if not prechecks.ready %}
       <p class="portal-card-note" data-testid="org-upgrade-precheck-hint">The portal needs a saved pre-check capture for each site before an upgrade starts.</p>
     {% endif %}
