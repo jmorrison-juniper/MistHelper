@@ -74,4 +74,4 @@ interrogate==1.7.0
 # Repository analyzers and linters are installed from the public devtools repo.
 # Pin the full commit because a branch reference can change without a MistHelper
 # change; update this pin with a reviewed devtools change.
-misthelper-devtools @ git+https://github.com/jmorrison-juniper/misthelper-devtools.git@5dada141be653d75d817e79275d415dd66f1a51e
+misthelper-devtools @ git+https://github.com/jmorrison-juniper/misthelper-devtools.git@8cef1a881a55f758254eb78b0233d9be00656078

@@ -5,7 +5,6 @@ from __future__ import annotations  # Keep annotations light for pytest.
 from pathlib import Path  # Anchor CLI paths at the repository root.
 
 import pytest  # Capture stdout from the CLI.
-
 from tools.ste_linter.cli import LinterCLI  # CLI under test.
 
 

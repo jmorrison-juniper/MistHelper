@@ -122,9 +122,7 @@ class TestExclusionDriftReporter:
         reporter = ExclusionDriftReporter()
         reporter.load_exclusions()
         first = Exclusion("bandit", "scripts", "scripts", 1)
-        second = Exclusion(
-            "bandit", "scripts\\", "scripts", 1
-        )
+        second = Exclusion("bandit", "scripts\\", "scripts", 1)
         with patch.object(reporter, "_commands_for", return_value=[["tool"]]):
             with patch("scripts.check_exclusion_drift.subprocess.run") as run:
                 run.return_value.stdout = '{"results":[{"issue_text":"one"}]}'

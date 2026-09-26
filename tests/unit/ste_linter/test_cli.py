@@ -7,7 +7,6 @@ import pathlib  # Builds paths to the fixtures.
 import sys  # Test CLI defaults without inheriting the pytest command line.
 
 import pytest  # Catches the SystemExit from the version flag.
-
 from tools.ste_linter.cli import main  # The entry function under test.
 
 # The folder that holds the shared fixture files.

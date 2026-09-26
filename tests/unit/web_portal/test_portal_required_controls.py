@@ -81,7 +81,7 @@ def runnable() -> set:
     # scope here. The executor owns that verdict, and OperationRegistry backs it.
     executor = OperationExecutor(build_static_menu_actions(), None, None, None)
     try:
-        return {menu for menu in read_menu_handlers() if executor._is_portal_runnable(menu)}
+        return {menu for menu in read_menu_handlers(REPO_ROOT) if executor._is_portal_runnable(menu)}
     finally:
         executor.shutdown()  # Close the pool, so the test leaves no worker thread behind.
 
@@ -89,9 +89,9 @@ def runnable() -> set:
 @pytest.fixture(scope="module")
 def audit() -> dict:
     """Return the prompt kinds each portal menu row reaches."""
-    index = FunctionIndex()  # Parsing every source file once keeps this affordable.
+    index = FunctionIndex(REPO_ROOT)  # Parsing every source file once keeps this affordable.
     walker = PromptWalker(index)
-    handlers = read_menu_handlers()
+    handlers = read_menu_handlers(REPO_ROOT)
     report = {}
     for menu, dotted in handlers.items():
         prompts, note = walker.prompts_for(dotted)

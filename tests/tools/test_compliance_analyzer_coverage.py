@@ -5,7 +5,6 @@ from __future__ import annotations  # Keep annotations light for pytest.
 from pathlib import Path  # Build output paths safely.
 
 import pytest  # Capture stdout and provide tmp_path.
-
 from tools.compliance_analyzer.__main__ import ComplianceCLI  # CLI under test.
 
 
