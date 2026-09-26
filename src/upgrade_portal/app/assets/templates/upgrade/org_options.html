@@ -42,10 +42,15 @@
     the save. portal.css prepends "Caution:" to a flash-warning. A reload
     recovers the read, so the signal word is Caution and not Warning. The save
     names the same sites when a read is still short.
+
+    Issue #3462. The banner put the plural nouns "these sites" and "those
+    sites" before a list of one site. The count of the listed sites now
+    chooses the nouns, with the rule of the site count note above.
   #}
   {% if partial_site_names %}
+    {% set one_partial_site = partial_site_names | length == 1 %}
     <div class="flash-item flash-warning" role="status" data-testid="org-upgrade-partial-inventory">
-      <span>The portal did not read the complete device list at these sites: {{ partial_site_names | join(', ') }}. The device table can leave out devices of those sites. Reload this page before you save the options.</span>
+      <span>The portal did not read the complete device list at {{ 'this site' if one_partial_site else 'these sites' }}: {{ partial_site_names | join(', ') }}. The device table can leave out devices of {{ 'that site' if one_partial_site else 'those sites' }}. Reload this page before you save the options.</span>
     </div>
   {% endif %}
   {#
