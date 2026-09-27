@@ -5,10 +5,10 @@ from __future__ import annotations  # Keep annotations light for Python 3.13.
 import logging  # Log each analyzer command before and after it runs.
 from pathlib import Path  # Build paths without hardcoded separators.
 
-from tools.compliance_analyzer.__main__ import ComplianceCLI  # Reuse the package CLI without subprocess.
-from tools.refactor_analyzer.__main__ import RefactorCLI  # Reuse the package CLI without subprocess.
-from tools.ste_linter.cli import LinterCLI  # Reuse the package CLI without subprocess.
-from tools.test_quality_analyzer.__main__ import TestQualityCLI  # Reuse the package CLI without subprocess.
+from misthelper_devtools.compliance_analyzer.__main__ import ComplianceCLI  # Reuse the package CLI without subprocess.
+from misthelper_devtools.refactor_analyzer.__main__ import RefactorCLI  # Reuse the package CLI without subprocess.
+from misthelper_devtools.ste_linter.cli import LinterCLI  # Reuse the package CLI without subprocess.
+from misthelper_devtools.test_quality_analyzer.__main__ import TestQualityCLI  # Reuse the package CLI in-process.
 
 logger = logging.getLogger(__name__)  # Module logger for analyzer orchestration.
 

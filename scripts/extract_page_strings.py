@@ -1,7 +1,7 @@
 """Extract the visible page strings of the portal templates for the T228 audit.
 
 Why:
-    ``tools/ste_linter`` grades a Markdown file and a Python file. Every page
+    ``misthelper_devtools.ste_linter`` grades a Markdown file and a Python file. Every page
     string of this portal lives in a Jinja template, so the linter never read
     one. T228 asks for an audit of those strings. This script turns the visible
     text of each template into one Markdown file, which the linter then grades

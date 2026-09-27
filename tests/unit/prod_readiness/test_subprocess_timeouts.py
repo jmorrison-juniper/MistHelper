@@ -55,7 +55,7 @@ class TestSymbolDiffTimeout:
     """The symbol comparator must bound its git call."""
 
     def test_git_show_passes_a_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from tools.symbol_diff import comparator
+        from misthelper_devtools.symbol_diff import comparator
 
         recorder = _RecordingRun(returncode=0, stdout="x = 1\n")
         monkeypatch.setattr(comparator.subprocess, "run", recorder)
@@ -65,7 +65,7 @@ class TestSymbolDiffTimeout:
         assert recorder.captured["timeout"] == comparator._GIT_TIMEOUT_SECONDS
 
     def test_a_stalled_git_show_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from tools.symbol_diff import comparator
+        from misthelper_devtools.symbol_diff import comparator
 
         monkeypatch.setattr(comparator.subprocess, "run", _TimeoutRun())
 
@@ -79,7 +79,7 @@ class TestComplianceAnalyzerTimeout:
     """The compliance analyzer must bound its git call."""
 
     def test_check_ignore_passes_a_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from tools.compliance_analyzer import engine
+        from misthelper_devtools.compliance_analyzer import engine
 
         recorder = _RecordingRun(returncode=0, stdout=b"")
         monkeypatch.setattr(engine.subprocess, "run", recorder)
@@ -90,7 +90,7 @@ class TestComplianceAnalyzerTimeout:
         assert recorder.captured["timeout"] == engine._GIT_TIMEOUT_SECONDS
 
     def test_a_stalled_check_ignore_keeps_every_file(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from tools.compliance_analyzer import engine
+        from misthelper_devtools.compliance_analyzer import engine
 
         monkeypatch.setattr(engine.subprocess, "run", _TimeoutRun())
         monkeypatch.setattr(engine.ComplianceAnalyzer, "_resolve_git_executable", staticmethod(lambda: "git"))

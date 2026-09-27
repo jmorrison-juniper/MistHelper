@@ -5,9 +5,11 @@ from __future__ import annotations  # Keep annotations stable on the supported P
 import json  # Parse generated analyzer reports for detector metric coverage checks.
 from pathlib import Path  # Build repository-relative paths without hardcoded separators.
 
+import misthelper_devtools.test_quality_analyzer as test_quality_analyzer
 import pytest  # Type pytest fixtures used by repository guard tests.
-import tools.test_quality_analyzer as test_quality_analyzer
-from tools.guard_proof_audit import GuardProofAuditor  # Exercise the same auditor used by the command line.
+from misthelper_devtools.guard_proof_audit import (
+    GuardProofAuditor,  # Exercise the same auditor used by the command line.
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Point the audit at the checked out repository.
 

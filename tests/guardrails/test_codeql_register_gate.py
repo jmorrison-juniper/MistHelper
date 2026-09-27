@@ -13,6 +13,7 @@ import yaml
 
 CI_WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 GATE_JOB = "codeql_register_check"
+ISSUE_JOB = "quality_gate_issues"  # The shared job opens and closes the gate issues (issue #3487).
 Workflow = dict[str | bool, Any]  # Include the Boolean key that PyYAML creates for an unquoted "on" key.
 
 
@@ -80,16 +81,11 @@ class TestCodeqlRegisterGate:
 
 
 class TestRegisterReporting:
-    """Connect the audit result to the existing issue lifecycle."""
+    """Connect the audit result to the shared quality-gate issue job."""
 
-    @pytest.mark.parametrize("job_name", ["create_failure_issues", "close_resolved_issues"])
-    def test_the_reporting_job_reads_the_actual_gate_result(self, workflow: Workflow, job_name: str) -> None:
-        """A needs entry alone is insufficient without the matching result entry."""
-        job = workflow["jobs"][job_name]
+    def test_the_reporting_job_reads_the_actual_gate_result(self, workflow: Workflow) -> None:
+        """The shared job reads each result from the needs context, so the gate must be in needs once."""
+        job = workflow["jobs"][ISSUE_JOB]
         assert job["needs"].count(GATE_JOB) == 1
         assert "always()" in job["if"]
-        commands = "\n".join(step.get("run", "") for step in job["steps"])
-        expected = 'RESULTS[codeql_register_check]="${{ needs.codeql_register_check.result }}"'
-        assert commands.count(expected) == 1
-        expected_result = "failure" if job_name == "create_failure_issues" else "success"
-        assert f'if [ "$result" = "{expected_result}" ]; then' in commands
+        assert job["with"]["results"] == "${{ toJSON(needs) }}"

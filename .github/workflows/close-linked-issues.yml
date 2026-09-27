@@ -7,11 +7,14 @@ name: Close linked issues on merge
 # label and started nothing at all. The schedule below sweeps for those.
 # See issue #1742.
 #
-# The shared workflow in misthelper-devtools does the work. It closes each open
-# issue that a closing keyword in the pull request body names. The sweep reads
+# The shared workflow in misthelper-devtools does the work. It reads the list
+# of linked issues that GitHub keeps for each merged pull request. A closing
+# keyword in the body and a link in the Development panel both put an issue in
+# that list. The workflow closes each open issue in the list. The sweep reads
 # the timeline of each issue first, and it keeps an issue open when a person
-# reopened it after the merge. The close-linked-issues job in auto-merge.yml
-# follows the same rule. Issue #3450 moved this workflow to the shared copy.
+# reopened it after the merge. Issue #3450 moved this workflow to the shared
+# copy. The close-linked-issues job in auto-merge.yml calls the same shared
+# workflow every six hours (issue #3487).
 
 on:
   pull_request:
@@ -44,6 +47,6 @@ jobs:
     permissions:
       issues: write
       pull-requests: read
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-close-linked-issues.yml@e0bcb680817721a41d3add1dfb7498afeadb6503 # v0.3.0
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-close-linked-issues.yml@bf1ba8a29ee9bab27b721db6e613fd5cd83d82fa # v0.4.0
     with:
       lookback-hours: ${{ github.event.inputs.lookback-hours || '24' }}

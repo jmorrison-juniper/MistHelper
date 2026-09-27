@@ -254,7 +254,7 @@ class WorktreeBootstrapper:
     def check_environment_health(self) -> None:
         """Report corrupt package install records without stopping setup."""
         LOGGER.info("Checking virtual environment package install records.")  # Log before the filesystem health scan.
-        command = [str(self.interpreter), "-m", "tools.venv_health"]  # Use the installed guard inside the new venv.
+        command = [str(self.interpreter), "-m", "misthelper_devtools.venv_health"]  # Use the guard inside the new venv.
         try:
             result = subprocess.run(command, check=False)  # Preserve the guard's severity-aware console output.
         except OSError as error:

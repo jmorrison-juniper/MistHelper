@@ -313,7 +313,7 @@ class MarvisFilterPrompts:
             The answer. The default is ``all``.
         """
         MarvisFilterPrompts._log_table("Marvis Action categories", rows)  # WHY: show the numbers first.
-        # The prompt call stays in this method, so tools/prompt_audit.py counts it as its own prompt.
+        # The prompt call stays in this method, so misthelper_devtools.prompt_audit counts it as its own prompt.
         answer = InputUtils.safe_input(  # WHY: the EOF-safe prompt returns the default on a closed stream.
             "Enter the categories to include, as numbers or keys separated by commas [all]: ",
             default_value=ALL_KEYWORD,  # WHY: a blank answer keeps every category.
@@ -333,7 +333,7 @@ class MarvisFilterPrompts:
             The answer. The default is ``all``.
         """
         MarvisFilterPrompts._log_table("Marvis Action subcategories", rows)  # WHY: show the numbers first.
-        # The prompt call stays in this method, so tools/prompt_audit.py counts it as its own prompt.
+        # The prompt call stays in this method, so misthelper_devtools.prompt_audit counts it as its own prompt.
         answer = InputUtils.safe_input(  # WHY: the EOF-safe prompt returns the default on a closed stream.
             "Enter the subcategories to include, as numbers, keys, or category/subcategory pairs [all]: ",
             default_value=ALL_KEYWORD,  # WHY: a blank answer keeps every subcategory of the kept categories.

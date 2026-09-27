@@ -107,17 +107,9 @@ GitHub assigns the Copilot cloud agent only for a user token. Without the
 secret, the shared workflow writes one comment on the issue that tells how to
 set it up, and it adds no `in-progress` label.
 
-Two sets of jobs stay local.
-
-- `auto-merge.yml` keeps its own jobs. The orphaned-push report and the
-  `closingIssuesReferences` close job have no shared copy, and
-  `tests/guardrails/test_auto_merge_issue_close.py` reads the job text.
-- The `create_failure_issues` and `close_resolved_issues` jobs in `ci.yml` stay
-  local. `tests/guardrails/test_codeql_register_gate.py` and
-  `tests/guardrails/test_quality_gate_close_scope.py` read the job text. The
-  shared `reusable-quality-gate-issues.yml` with `scope: all` does the same
-  work. To move these jobs, write the guardrail tests for the shared workflow
-  first.
+Phase 3 kept two sets of jobs local: the jobs of `auto-merge.yml` and the
+`create_failure_issues` and `close_resolved_issues` jobs of `ci.yml`. Phase 6
+moved both sets to the shared workflows.
 
 ## Phase 4: keep the test quality baseline here
 
@@ -140,8 +132,9 @@ Of the 335 removed entries, 7 named two test files that moved to the devtools
 repository. The other 328 named findings that later changes repaired. The gate
 now reports a finding that comes back at one of those places.
 
-A copy of `baseline.json` stays in the devtools package. MistHelper no longer
-reads that copy, so a later devtools release can remove it.
+Devtools release v0.4.0 removed the copy of `baseline.json` from the package.
+Without the `--baseline` option, the command now reads
+`.github/test-quality-baseline.json` in the current repository.
 
 ## Phase 5: keep the product benchmarks and the analyzer settings here
 
@@ -162,4 +155,29 @@ settings.
 | The ratchet guard checks each `--config` option and the tables of the settings file. | `tests/guardrails/test_quality_ratchet_files.py` |
 
 The container image does not copy `scripts/`, so the product never ships these
-modules. A later devtools release can remove its copy of the four modules.
+modules. Devtools release v0.4.0 removed its copy of the four modules.
+
+## Phase 6: adopt devtools release v0.4.0
+
+Issue #3487 moved MistHelper to devtools release v0.4.0. That release installs
+the tools as one `misthelper_devtools` package, reads the test quality baseline
+from the repository, and adds shared workflows for the jobs that Phase 3 kept
+local.
+
+| Change | File |
+| - | - |
+| The development requirements pin the v0.4.0 commit. Each workflow caller pins the same commit. | `requirements-dev.txt` and `.github/workflows/` |
+| Each import and each `python -m` command names `misthelper_devtools` instead of `tools`. The citation and SpecKit jobs run the `check-citations` and `speckit-task-audit` commands. | `.github/workflows/ci.yml`, `scripts/`, and `tests/` |
+| The auto-merge workflow calls `reusable-auto-merge.yml` with the orphaned-push report. Its close job calls `reusable-close-linked-issues.yml` every six hours, so a missed close event waits six hours at most. | `.github/workflows/auto-merge.yml` |
+| One `quality_gate_issues` job calls `reusable-quality-gate-issues.yml`. Its `needs` list is the list of gates that get an issue. `ci.yml` sets `scope: all`. The portable template keeps the default scope. | `.github/workflows/ci.yml` and `.github/quality-gates-portable.yml` |
+| The weekly report calls `reusable-stranded-branch-report.yml`. The `stranded-branch-report` command replaces the local script and its test. | `.github/workflows/stranded-branch-report.yml` |
+| The writing guide check calls `reusable-ste-lint.yml` with the same guide, settings file, and score. | `.github/workflows/ste-lint.yml` |
+| The tests of the tools moved to the devtools repository, so MistHelper deleted its copies. The golden analyzer test stays, and it reads the settings file of this repository. | `tests/tools/` and `tests/unit/` |
+| A new test grades the writing guide of this repository. | `tests/unit/test_ste_writing_guide.py` |
+| The guardrail tests check each caller, its pinned commit, its inputs, and its permissions. | `tests/guardrails/test_auto_merge_issue_close.py`, `tests/guardrails/test_quality_gate_close_scope.py`, and `tests/guardrails/test_codeql_register_gate.py` |
+| The baseline drops the entries of the deleted test files. The performance catalog drops the rows of the deleted files. | `.github/test-quality-baseline.json` and `specs/2448-misthelper-performance-monitoring/artifacts/` |
+
+The shared auto-merge job does not merge a pull request that edits a file in
+`.github/workflows/`, because GitHub refuses to let the workflow token write a
+workflow file. The job writes a comment on the pull request instead. Merge such
+a pull request by hand after its checks pass.

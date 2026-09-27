@@ -24,7 +24,7 @@ asserts the SC-002 golden anchors are present in the generated report:
       corpus.)
 
 The CLI is invoked programmatically via ``main(argv)`` (imported from
-``tools.test_quality_analyzer.__main__``). Outputs are written to a
+``misthelper_devtools.test_quality_analyzer.__main__``). Outputs are written to a
 ``tmp_path`` subdirectory so the test never touches the committed
 analyzer output artefacts.
 
@@ -40,10 +40,7 @@ import json  # Parse the CLI-produced report.json for assertion.
 from pathlib import Path  # Path arithmetic for repo-root anchoring.
 
 import pytest  # Fixture primitives (tmp_path, monkeypatch).
-import tools.test_quality_analyzer as test_quality_analyzer
-from tools.test_quality_analyzer.__main__ import main  # CLI entrypoint under test.
-
-_ANALYZER_ROOT = Path(test_quality_analyzer.__file__).resolve().parent
+from misthelper_devtools.test_quality_analyzer.__main__ import main  # CLI entrypoint under test.
 
 # Fixed timestamp keeps the report envelope byte-stable across CI runs.
 _FROZEN_TIMESTAMP = "2026-07-14T00:00:00+00:00"  # ISO-8601 UTC per --fixed-timestamp contract.
@@ -65,7 +62,7 @@ def _run_cli_over_repo(
     monkeypatch: pytest.MonkeyPatch,  # Ensures cwd is repo root during the run.
 ) -> dict:
     """Invoke the CLI against the real repo tree and return the parsed report JSON."""
-    # Anchor the run at repo root so relative config paths (default config.toml) resolve.
+    # Anchor the run at repo root so the relative scan roots resolve.
     monkeypatch.chdir(repo_root)  # Restored automatically by monkeypatch teardown.
     # Output paths under tmp_path so we never touch committed output artefacts.
     report_path = tmp_path / "report.json"  # JSON report artefact -- hermetic path.
@@ -76,7 +73,7 @@ def _run_cli_over_repo(
         "src",
         "tests",  # SC-002 anchors live under both roots.
         "--config",
-        str(_ANALYZER_ROOT / "config.toml"),
+        str(repo_root / ".github" / "test-quality-config.toml"),  # MistHelper rules (issue #3466).
         "--report",
         str(report_path),  # Hermetic JSON output path.
         "--summary",

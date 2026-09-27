@@ -48,13 +48,18 @@ cleanup, even a pull request that you plan to close without a merge.
 
 ## The check
 
-`scripts/report_stranded_branches.py` names every branch that holds commits above
-the base branch and has no open pull request. The `Stranded Branch Report`
-workflow runs it every Monday and keeps one open issue with the result.
+The `stranded-branch-report` command of the `misthelper-devtools` package names
+every branch that holds commits above the base branch and has no pull request
+that keeps its head. An open pull request keeps the head. A closed or merged
+pull request keeps the head that it had when it closed. The `Stranded Branch
+Report` workflow runs the command every Monday through the shared
+`reusable-stranded-branch-report.yml` workflow and keeps one open issue with the
+result. Issue #3487 moved the check from `scripts/report_stranded_branches.py`
+to that package.
 
 ```powershell
-python scripts/report_stranded_branches.py
-python scripts/report_stranded_branches.py --min-age-days 14 --fail-on-find
+stranded-branch-report
+stranded-branch-report --min-age-days 14 --fail-on-find
 ```
 
 The report skips a branch that is younger than the quiet period, because recent

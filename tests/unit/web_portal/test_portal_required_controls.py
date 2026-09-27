@@ -9,7 +9,7 @@ The portal answers an operation through ``web_input_context``. It feeds
 one recorded answer to each ``input()`` call, in order. An operation
 therefore needs one registry parameter for each prompt it reaches.
 
-``tools/prompt_audit.py`` reads the menu table, walks the call graph of
+``misthelper_devtools.prompt_audit`` reads the menu table, walks the call graph of
 each handler, and reports the prompts that handler reaches. These tests
 compare that report against ``PARAMETER_REGISTRY``.
 
@@ -27,7 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tools.prompt_audit import FunctionIndex, PromptWalker, read_menu_handlers  # noqa: E402
+from misthelper_devtools.prompt_audit import FunctionIndex, PromptWalker, read_menu_handlers  # noqa: E402
+
 from web_portal.menu_registry import build_static_menu_actions  # noqa: E402
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # noqa: E402
 

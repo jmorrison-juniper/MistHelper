@@ -3,7 +3,8 @@
 # ================================================================
 # Portable: copy to any repo, customize the env block below.
 # Reusable: other workflows can call via workflow_call.
-# Failures: auto-creates GitHub issues for each failing gate.
+# Failures: the shared quality-gate issue workflow opens an issue for each
+# failing gate and closes it after the gate passes.
 # ================================================================
 name: Quality Gates
 
@@ -710,7 +711,7 @@ jobs:
       # the text that a maintainer reads while changing code. A dated record
       # under `specs/` keeps its citation on purpose.
       - run: python -m pip install -r requirements-dev.txt
-      - run: python -m tools.check_citations src tests
+      - run: check-citations src tests
 
   menu_reference_drift:
     name: "Menu reference drift"
@@ -758,7 +759,7 @@ jobs:
       # Issue #1741: task records can drift after delivery.
       # This advisory report names the open boxes without blocking day one.
       - name: Report unchecked SpecKit tasks
-        run: python -m tools.speckit_task_audit || true
+        run: speckit-task-audit || true
 
   exclusion_drift:
     name: "Quality exclusion drift (advisory)"
@@ -1132,120 +1133,19 @@ jobs:
         run: ruff check . --statistics
 
   # ──────────────────────────────────────────────────────────────
-  # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
+  # GATE RESULTS → GITHUB ISSUES (one issue for each failed gate)
   # ──────────────────────────────────────────────────────────────
-  create_failure_issues:
-    name: "Create issues for failures"
-    needs:
-      - ruff
-      - black
-      - mypy
-      - pytest
-      - bandit
-      - pip_audit
-      - pylint
-      - radon
-      - vulture
-      - pydocstyle
-      - interrogate
-      - codeql_register_check
-      - ops_portal
-      - ops_platform_pytest
-    if: ${{ always() && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: read
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: false
-      - name: Ensure issue labels exist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh label create "bug" --color "d73a4a" --description "Something isn't working" 2>/dev/null || true
-          gh label create "ci" --color "0e8a16" --description "CI/CD pipeline" 2>/dev/null || true
-          gh label create "quality-gate" --color "fbca04" --description "Quality gate failure" 2>/dev/null || true
-      - name: Create issues for each failed gate
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          HEAD_REF: ${{ github.head_ref || github.ref_name }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          declare -A RESULTS
-          RESULTS[ruff]="${{ needs.ruff.result }}"
-          RESULTS[black]="${{ needs.black.result }}"
-          RESULTS[mypy]="${{ needs.mypy.result }}"
-          RESULTS[pytest]="${{ needs.pytest.result }}"
-          RESULTS[bandit]="${{ needs.bandit.result }}"
-          RESULTS[pip_audit]="${{ needs.pip_audit.result }}"
-          RESULTS[pylint]="${{ needs.pylint.result }}"
-          RESULTS[radon]="${{ needs.radon.result }}"
-          RESULTS[vulture]="${{ needs.vulture.result }}"
-          RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
-          RESULTS[interrogate]="${{ needs.interrogate.result }}"
-          RESULTS[codeql_register_check]="${{ needs.codeql_register_check.result }}"
-          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
-          RESULTS[ops_platform_pytest]="${{ needs.ops_platform_pytest.result }}"
-
-          # Scope: a PR failure gets a scoped title (per-PR). A branch failure uses a
-          # gate-only title, so repeated runs on the same branch reuse one issue.
-          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
-            SCOPE="PR #${PR_NUMBER}"
-            SEARCH_PREFIX="CI: quality-gate"
-            TITLE_SUFFIX=" (PR #${PR_NUMBER})"
-            PR_LINK="**PR**: #${PR_NUMBER} — ${PR_TITLE}"
-          else
-            # A run on main now arrives by dispatch as well as by push, so the
-            # wording names the branch instead of the trigger. See issue #1851.
-            SCOPE="run on ${HEAD_REF}"
-            TITLE_SUFFIX=""
-            PR_LINK="**Run scope**: \`${HEAD_REF}\`"
-          fi
-
-          for gate in "${!RESULTS[@]}"; do
-            result="${RESULTS[$gate]}"
-            if [ "$result" = "failure" ]; then
-              TITLE="CI: quality-gate \`${gate}\` failed${TITLE_SUFFIX}"
-
-              # Skip if an open issue already exists with this exact scoped title.
-              EXISTING=$(gh issue list --state open --search "in:title \"${TITLE}\"" --json number --jq 'length')
-              if [ "$EXISTING" != "0" ]; then
-                echo "Issue already exists for gate: ${gate} (scope: ${SCOPE}) — skipping"
-                continue
-              fi
-
-              BODY="## Quality Gate Failure
-
-          **Gate**: \`${gate}\`
-          ${PR_LINK}
-          **Branch**: \`${HEAD_REF}\`
-          **Commit**: \`${{ github.sha }}\`
-          **Workflow run**: ${RUN_URL}
-
-          ### Action Required
-          Review the [workflow run](${RUN_URL}) for details and fix the failing gate.
-
-          _Auto-generated by Quality Gates CI_"
-
-              gh issue create \
-                --title "$TITLE" \
-                --label "bug,ci,quality-gate" \
-                --body "$BODY"
-              echo "Created issue for failed gate: ${gate} (scope: ${SCOPE})"
-            fi
-          done
-
-  # ──────────────────────────────────────────────────────────────
-  # SUCCESS → AUTO-CLOSE resolved quality-gate issues
-  # ──────────────────────────────────────────────────────────────
-  close_resolved_issues:
-    name: "Close resolved quality-gate issues"
+  # WHY a shared workflow: the misthelper-devtools job holds the rules of the
+  # two inline jobs that stood here, so each Mist repository reads one copy
+  # (issue #3487). The needs list is the gate list.
+  #
+  # WHY scope all: a pull request run opens an issue whose title names that pull
+  # request, and only a run of that pull request closes that issue. A run on main
+  # closes the main issue of a gate, but it keeps the issue of an open pull
+  # request (issue #2623). A run on main starts from a push or from the dispatch
+  # that the Auto-merge workflow sends after a merge (issue #1851).
+  quality_gate_issues:
+    name: "Sync quality-gate issues"
     needs:
       - ruff
       - black
@@ -1262,76 +1162,10 @@ jobs:
       - ops_portal
       - ops_platform_pytest
     if: ${{ always() }}
-    runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: read
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: false
-      - name: Close issues for passing gates
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_REF: ${{ github.head_ref || github.ref_name }}
-          # A run on main is authoritative for the issue state. A merge that
-          # GITHUB_TOKEN performs starts no push run, so the Auto-merge
-          # workflow dispatches this workflow instead. See issue #1851.
-          IS_MAIN_RUN: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
-        run: |
-          declare -A RESULTS
-          RESULTS[ruff]="${{ needs.ruff.result }}"
-          RESULTS[black]="${{ needs.black.result }}"
-          RESULTS[mypy]="${{ needs.mypy.result }}"
-          RESULTS[pytest]="${{ needs.pytest.result }}"
-          RESULTS[bandit]="${{ needs.bandit.result }}"
-          RESULTS[pip_audit]="${{ needs.pip_audit.result }}"
-          RESULTS[pylint]="${{ needs.pylint.result }}"
-          RESULTS[radon]="${{ needs.radon.result }}"
-          RESULTS[vulture]="${{ needs.vulture.result }}"
-          RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
-          RESULTS[interrogate]="${{ needs.interrogate.result }}"
-          RESULTS[codeql_register_check]="${{ needs.codeql_register_check.result }}"
-          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
-          RESULTS[ops_platform_pytest]="${{ needs.ops_platform_pytest.result }}"
-
-          for gate in "${!RESULTS[@]}"; do
-            result="${RESULTS[$gate]}"
-            if [ "$result" = "success" ]; then
-              # On PR events: close only the PR-scoped issue for this gate.
-              # On a run on main: close all open issues for this gate (main is authoritative).
-              if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
-                EXACT_TITLE="CI: quality-gate \`${gate}\` failed (PR #${PR_NUMBER})"
-                SEARCH_QUERY="in:title \"${EXACT_TITLE}\""
-              elif [ "$IS_MAIN_RUN" = "true" ]; then
-                SEARCH_QUERY="in:title \"CI: quality-gate \`${gate}\` failed\""
-              else
-                continue
-              fi
-
-              ISSUES=$(gh issue list --state open --label "quality-gate" --search "$SEARCH_QUERY" --json number --jq '.[].number')
-              for issue_number in $ISSUES; do
-                # A main run speaks for main only. An issue that names a pull
-                # request belongs to that pull request, and only the run of that
-                # pull request may report its gate state. See issue #2623.
-                if [ "$IS_MAIN_RUN" = "true" ]; then
-                  issue_title=$(gh issue view "$issue_number" --json title --jq '.title')
-                  scoped_pr=$(printf '%s' "$issue_title" | sed -n 's/.*(PR #\([0-9][0-9]*\)).*/\1/p')
-                  if [ -n "$scoped_pr" ]; then
-                    pr_state=$(gh pr view "$scoped_pr" --json state --jq '.state' 2>/dev/null || echo "")
-                    if [ "$pr_state" = "OPEN" ]; then
-                      echo "Skipped issue #${issue_number} (gate: ${gate}). Pull request #${scoped_pr} is still open."
-                      continue
-                    fi
-                  fi
-                fi
-                gh issue close "$issue_number" \
-                  --reason completed \
-                  --comment "Auto-closed: \`${gate}\` gate now passing on \`${HEAD_REF}\` (commit \`${{ github.sha }}\`)."
-                echo "Closed issue #${issue_number} (gate: ${gate})"
-              done
-            fi
-          done
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-quality-gate-issues.yml@bf1ba8a29ee9bab27b721db6e613fd5cd83d82fa # v0.4.0
+    with:
+      results: ${{ toJSON(needs) }}
+      scope: all
