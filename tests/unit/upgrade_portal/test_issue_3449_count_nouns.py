@@ -280,7 +280,8 @@ def test_the_history_note_agrees_with_each_count(
 ) -> None:
     """User Story 2: the whole history note, for each row of the acceptance table."""
     view = _history_view(total, offset, limit)  # The real builder.
-    page = environment.get_template(_HISTORY_TEMPLATE).render(site_name="Site A", history_view=view)  # The page.
+    scope = review.HistoryScope(site_id="site-a", site_name="Site A")  # Issue #3482: the page of one named site.
+    page = environment.get_template(_HISTORY_TEMPLATE).render(history_scope=scope, history_view=view)  # The page.
     assert _note(page, _HISTORY_NOTE_ID) == f"{_HISTORY_NOTE_START} {sentence}"  # The whole note.
 
 

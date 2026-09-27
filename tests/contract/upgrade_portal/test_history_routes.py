@@ -923,3 +923,84 @@ def test_the_history_note_names_an_offset_and_a_page_size_of_one_with_the_singul
     words = history_words(signed_in_client, history_app, 2, {LIMIT_FIELD: "1", OFFSET_FIELD: "1"})  # Page two.
     expected = "The site holds 2 captures. This page starts after 1 capture, and one page holds 1 row."
     assert expected in words  # The offset and the page size take the singular noun.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3482: the history with no site names every site
+# ---------------------------------------------------------------------------
+
+OTHER_SITE_ID = "00000000-0000-0000-0000-0000000000cc"  # A second site in the same store.
+OTHER_SITE_NAME = "Second Test Site"  # The name that the rows of the second site carry.
+
+
+def scope_words(client: FlaskClient, app: Flask, rows: list[dict[str, Any]], query: dict[str, str]) -> str:
+    """Return the collapsed text of one history page over a canned capture list.
+
+    Args:
+        client: The signed-in test client.
+        app: The wired application, which takes a new capture list seam.
+        rows: The whole capture list that the store hands back.
+        query: The query values of the page, such as the site.
+
+    Returns:
+        The page text, with one space between every word.
+    """
+    app.config[CAPTURE_LISTER_KEY] = RecordingCaptureLister(rows=rows)  # This test controls the list.
+    page = client.get(HISTORY_PAGE_PATH, query_string=query).get_data(as_text=True)  # The rendered page.
+    return " ".join(page.split())  # The template wraps each sentence across lines.
+
+
+def two_site_rows() -> list[dict[str, Any]]:
+    """Return one capture row of each of two sites, newest first.
+
+    Returns:
+        The rows. The first row carries the site name "Test Site".
+    """
+    second = {**capture_row(2), SITE_ID_FIELD: OTHER_SITE_ID, "site_name": OTHER_SITE_NAME}  # A second site.
+    return [capture_row(1), second]  # The old route named the site of the first row.
+
+
+def test_the_history_with_no_site_names_every_site(signed_in_client: FlaskClient, history_app: Flask) -> None:
+    """The note of the page with no site names every site and counts with "The portal holds".
+
+    Why:
+        The note named the site of the first row for the captures of two
+        sites. Issue #3482 holds that report.
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    words = scope_words(signed_in_client, history_app, two_site_rows(), {})  # The page with no site.
+    expected = (  # The whole note of the page with no site.
+        "The list shows the stored captures of every site. The portal holds 2 captures. "
+        "This page starts after 0 captures, and one page holds 25 rows."
+    )
+    assert expected in words  # The note names every site.
+    assert "The stored captures of every site. Each row holds" in words  # The caption names the same scope.
+
+
+def test_the_history_with_no_site_names_no_single_site(signed_in_client: FlaskClient, history_app: Flask) -> None:
+    """No text of the Captures card of the page with no site names one site.
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    words = scope_words(signed_in_client, history_app, two_site_rows(), {})  # The page with no site.
+    assert "The list shows the stored captures of Test Site." not in words  # The old note named the first row.
+    assert "The site holds" not in words  # The page shows no single site.
+    assert "The stored captures of the site." not in words  # The old caption named one site.
+
+
+def test_the_history_of_one_site_keeps_the_site_name(signed_in_client: FlaskClient, history_app: Flask) -> None:
+    """The note of the page of one site keeps the site name and the words "The site holds".
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    rows = [capture_row(1)]  # The one capture of the site.
+    words = scope_words(signed_in_client, history_app, rows, {SITE_ID_FIELD: SITE_ID})  # The page of one site.
+    assert "The list shows the stored captures of Test Site. The site holds 1 capture." in words  # No change.
+    assert "The stored captures of the site. Each row holds" in words  # The caption of one site does not change.

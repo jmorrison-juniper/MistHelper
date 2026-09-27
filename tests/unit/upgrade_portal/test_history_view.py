@@ -548,7 +548,7 @@ def test_the_page_shows_the_table_and_every_row(environment: Environment) -> Non
         environment: The Jinja environment.
     """
     view = render.build_history_view(_StorePage(_capture_rows(2), total=2, limit=25, offset=0))
-    page = _render_page(environment, page_title="Capture history", site_name="Site A", history_view=view)
+    page = _render_page(environment, page_title="Capture history", history_view=view)
     assert 'data-testid="history-table"' in page
     assert 'data-testid="history-row-cap-0"' in page
     assert 'data-testid="history-open-cap-0"' in page
