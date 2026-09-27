@@ -381,6 +381,72 @@
     width: 10%;
 }
 
+/*
+ * Issue #3486. The history with no site lists the captures of every site in
+ * one table, so a Site column follows the Capture column. The route adds the
+ * class `history-table-sites` to that table only. The page of one site keeps
+ * the nine widths above.
+ *
+ * The ten widths total 100 percent. A browser measured the width that each
+ * cell needs, with the padding. The role word needs 55 pixels, the state badge
+ * needs 98, and the Open control needs 88. The start moment, the state, the
+ * three number columns, and the action keep the shares of the table of one
+ * site. The Linux font of the test runner is wider than the Windows font, so
+ * the role column gets 1 more percent. The Site column and that 1 percent come
+ * from the capture column and the device type column. A real capture
+ * identifier holds 39 characters and clips at every width, and the title
+ * attribute holds the whole identifier.
+ */
+.history-table.history-table-sites {
+    /* WHY 60rem: a window of 1024 pixels gives the table 982 pixels, so the
+     * table fills the window and does not scroll sideways. At 60rem the role
+     * column still holds 67 pixels, so the role word stays on one line. */
+    min-width: 60rem;
+}
+
+.history-table.history-table-sites thead th:nth-child(1) {
+    width: 12%;
+}
+
+/* A site name such as `E2E Stored Poll Site` fits this share at a window of
+ * 1280 pixels. A longer name clips, and the title attribute holds the whole
+ * name. */
+.history-table.history-table-sites thead th:nth-child(2) {
+    width: 13%;
+}
+
+.history-table.history-table-sites thead th:nth-child(3) {
+    width: 14%;
+}
+
+.history-table.history-table-sites thead th:nth-child(4) {
+    width: 7%;
+}
+
+.history-table.history-table-sites thead th:nth-child(5) {
+    width: 9%;
+}
+
+.history-table.history-table-sites thead th:nth-child(6) {
+    width: 7%;
+}
+
+.history-table.history-table-sites thead th:nth-child(7) {
+    width: 12%;
+}
+
+.history-table.history-table-sites thead th:nth-child(8) {
+    width: 7%;
+}
+
+.history-table.history-table-sites thead th:nth-child(9) {
+    width: 9%;
+}
+
+.history-table.history-table-sites thead th:nth-child(10) {
+    width: 10%;
+}
+
 /* The row header of this table reads as a plain cell. `.portal-table` styles
  * the `td` element alone, so the browser default would center the identifier
  * and print it in bold beside seven left aligned cells. */
@@ -424,6 +490,15 @@
  * That text wraps and stands the row above the height budget of issue #2106,
  * so the cell clips and keeps the whole value in its title attribute. */
 .history-table .cell-device-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Issue #3486. A long site name stays on one line and ends in an ellipsis, so
+ * the row keeps the height budget of issue #2106. The title attribute of the
+ * cell holds the whole name. */
+.history-table .cell-site {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

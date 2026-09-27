@@ -268,6 +268,7 @@ state.
 | `history-row-{capture_id}` | One history row |
 | `history-open-{capture_id}` | Open that capture |
 | `history-device-type-{capture_id}` | The device types that the capture holds |
+| `history-site-{capture_id}` | The site of that capture. Only the history with no site shows this cell (issue #3486). |
 | `history-page-next` | Next page |
 | `history-page-previous` | Previous page |
 
