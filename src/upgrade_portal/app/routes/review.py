@@ -1620,9 +1620,12 @@ def read_site_name(rows: Sequence[Mapping[str, Any]]) -> str:
     """Return the site name that the history rows carry.
 
     Why:
-        The page names the site in its heading, and the store already carries
-        the name on each row. Reading it here saves a second cloud call, and
-        an organization wide history simply shows no name.
+        The note of the Captures card names the site, and the store already
+        carries the name on each row. A read here saves a second cloud call.
+
+        Issue #3482. The rows of the page with no site belong to many sites,
+        so the first name names one of them only. ``HistoryScope.for_page``
+        therefore calls this reader for the page of one site only.
 
     Args:
         rows: The rows of this page.
@@ -1630,11 +1633,77 @@ def read_site_name(rows: Sequence[Mapping[str, Any]]) -> str:
     Returns:
         The first site name found, or an empty string.
     """
-    for row in rows:
-        name = text_field(row, SITE_NAME_FIELD)
-        if name:
+    for row in rows:  # The rows of one site all carry the same name.
+        name = text_field(row, SITE_NAME_FIELD)  # A row with no name gives an empty text.
+        if name:  # The first stored name is the name of the site.
             return name
-    return ""
+    return ""  # No row of this page carries a name.
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryScope:
+    """The scope of one history page: every site, or one site.
+
+    Why:
+        Issue #3482. The page with no site read the site name of its first
+        row. For the captures of two sites, the note then said "The list shows
+        the stored captures of E2E Stand-In Site. The site holds 5 captures."
+        The scope holds the request values, and each text is a property. The
+        template prints the texts and holds no rule.
+
+        The page with no site reads every capture in the store, so the texts
+        say "every site" and "The portal holds". Issue #3484 holds the change
+        that narrows the list to the selected organization.
+
+    Attributes:
+        site_id: The site of the request, or an empty text for every site.
+        site_name: The site name that the rows carry, or an empty text.
+    """
+
+    site_id: str = ""  # An absent site means every site, as section 6 of the HTTP contract states.
+    site_name: str = ""  # The name that the rows of one site carry.
+
+    @classmethod
+    def for_page(cls, site_id: str, rows: Sequence[Mapping[str, Any]]) -> HistoryScope:
+        """Return the scope of one history page.
+
+        Why:
+            The page with no site shows the rows of many sites. The name of the
+            first row names one of them only, so the scope reads a name for the
+            page of one site only.
+
+        Args:
+            site_id: The site of the request, or an empty text for every site.
+            rows: The shaped rows of this page.
+
+        Returns:
+            The scope of the page.
+        """
+        logger.info("review: the portal reads the scope of the history page")  # Before the read.
+        site_name = read_site_name(rows) if site_id else ""  # The page with no site names no site.
+        logger.debug("review: the history scope names one site: %s", bool(site_id))  # After the read.
+        return cls(site_id=site_id, site_name=site_name)  # The request values of the page.
+
+    @property
+    def capture_lead_text(self) -> str:
+        """Return the first sentence of the note of the Captures card."""
+        if not self.site_id:  # The page lists the captures of every site.
+            return "The list shows the stored captures of every site."  # FR-001 names no single site.
+        if self.site_name:  # The rows of the site carry its name.
+            return f"The list shows the stored captures of {self.site_name}."  # FR-003 keeps the name.
+        return "The list shows the stored captures."  # A site with no capture has no name on a row.
+
+    @property
+    def capture_holder_text(self) -> str:
+        """Return the words before the count of the note, such as "The site holds"."""
+        return "The site holds" if self.site_id else "The portal holds"  # The holder of the counted captures.
+
+    @property
+    def capture_caption_text(self) -> str:
+        """Return the first sentence of the hidden caption of the capture table."""
+        if self.site_id:  # The page of one site keeps its old caption.
+            return "The stored captures of the site."  # FR-004 names the same scope as the note.
+        return "The stored captures of every site."  # A screen reader hears the scope of every site.
 
 
 def call_builder(builder: Callable[..., Any], rows: list[dict[str, Any]], window: PageWindow) -> Any:
@@ -2017,7 +2086,8 @@ def history_page() -> str:
         HISTORY_TEMPLATE,
         page_title=HISTORY_PAGE_TITLE,
         signed_in=True,
-        site_name=read_site_name(shaped),
+        # Issue #3482. The scope names every site when the request names no site.
+        history_scope=HistoryScope.for_page(site_id, shaped),
         history_view=page_view,
         moment_texts=moment_texts(shaped),
         # Issue #2199 adds the runs section beside the captures section.

@@ -137,7 +137,7 @@ def _render_markup(theme: str) -> str:
     view = render.build_history_view(rows)  # A plain row list is the second shape this builder reads.
     return environment.get_template(_TEMPLATE_NAME).render(
         page_title="Capture history",
-        site_name="Site A",
+        history_scope=review.HistoryScope(site_id="site-a", site_name="Site A"),  # Issue #3482: one named site.
         history_view=view,
         moment_texts=review.moment_texts(rows),
         theme=theme,
