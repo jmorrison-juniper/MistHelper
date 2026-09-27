@@ -3,20 +3,20 @@
     "tracked": "git ls-files '*.py'",
     "untracked": "git ls-files --others --exclude-standard '*.py'"
   },
-  "eligible_file_count": 1349,
-  "tracked_file_count": 1349,
+  "eligible_file_count": 1344,
+  "tracked_file_count": 1344,
   "untracked_file_count": 0,
-  "function_count": 27531,
+  "function_count": 27518,
   "async_function_count": 167,
-  "class_count": 4078,
-  "symbol_count": 31776,
-  "nested_symbol_count": 18091,
+  "class_count": 4074,
+  "symbol_count": 31759,
+  "nested_symbol_count": 18078,
   "parse_error_count": 0,
   "parse_errors": [],
   "disposition_counts": {
     "aggregate boundary only": 414,
-    "benchmark/profile only": 773,
-    "no hook": 104,
+    "benchmark/profile only": 769,
+    "no hook": 103,
     "production hook": 58
   },
   "inclusion_roots": {
@@ -27,7 +27,7 @@
     "scripts": 42,
     "specs": 2,
     "src": 473,
-    "tests": 681,
+    "tests": 676,
     "web_portal": 16,
     "wsgi.py": 1,
     "wsgi_capture.py": 1
@@ -49,7 +49,7 @@
     "reason": "The scan uses these temporary scripts inside the specification directory and removes them before final validation."
   },
   "hook_catalog": {
-    "inventory_file_rows": 1349,
+    "inventory_file_rows": 1344,
     "hook_count": 718,
     "files_with_hooks": 498,
     "monitor_type_counts": {

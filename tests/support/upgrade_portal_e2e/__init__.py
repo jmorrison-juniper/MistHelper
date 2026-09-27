@@ -1,4 +1,13 @@
-"""Publish and assemble the isolated upgrade portal E2E support surface."""
+"""Publish and assemble the isolated upgrade portal E2E support surface.
+
+Why:
+    The real isolation of the test portal has four parts. The child
+    environment points ArangoDB and Redis at port 1 of the loopback address.
+    The stand-in cloud sessions hold no request method. The stores of this
+    package hold the runs, the captures, the actions, and the locks. The trail
+    guard of issue #3498 counts the checkout audit trail. Issue #3501 removed
+    the connector traps and the audit store, because no portal code read them.
+"""
 
 from __future__ import annotations  # Keep annotations independent from import order.
 
@@ -17,10 +26,10 @@ from src.upgrade_portal.api.run_controls import (  # Build the explicit factory 
 from src.upgrade_portal.runtime.lock import read_site_locks  # Parse process-owned locks with shipped rules.
 
 from .environment import build_child_environment as build_child_environment  # Export the credential and path scrub.
-from .records import ActionRecordStore, AuditRecordStore, PortalRecordStore, ScriptedCloudStore  # Export stores.
+from .owner import RunOwnerHeaderCheck as RunOwnerHeaderCheck  # Issue #3501: export the run owner check.
+from .records import ActionRecordStore, PortalRecordStore, ScriptedCloudStore  # Export stores.
 from .resources import E2EResources as E2EResources  # Export the allocated server resource value.
 from .resources import allocate_resources as allocate_resources  # Export unique server resource allocation.
-from .traps import ArangoConnectorTrap, MistConnectorTrap, PortalFileTrap, RedisConnectorTrap  # Export traps.
 
 logger = logging.getLogger(__name__)  # Keep override assembly records tied to this package.
 
@@ -57,34 +66,23 @@ def _action_values(
     )
 
 
-def _security_values(
-    portal: PortalRecordStore,
-    audits: AuditRecordStore,
-    seams: Mapping[str, Any],
-) -> E2ESecurityOverrides:  # Build the complete security dependency group.
-    """Build the process-owned access and audit override group."""
-    return E2ESecurityOverrides(  # Bind access and audit work to process-owned stores.
-        access_store=portal,  # Keep access decisions inside this E2E process.
+def _security_values(portal: PortalRecordStore) -> E2ESecurityOverrides:  # Build the security group.
+    """Build the process-owned lock and authorization override group."""
+    return E2ESecurityOverrides(  # Bind lock and authorization work to the process-owned store.
         lock_reader=partial(read_site_locks, client=portal),  # Read the same process-owned locks that routes write.
         lock_client=portal,  # Write locks without a Redis connection.
         authorization_reader=portal.authorization,  # Fail closed from explicit owned decisions.
-        audit_store=audits,  # Keep audit rows inside this E2E process.
-        audit_reader=audits.list,  # Read audit rows without a record file.
     )
 
 
 def _external_values(  # Build the complete external dependency group.
     cloud: ScriptedCloudStore, seams: Mapping[str, Any]
 ) -> E2EExternalOverrides:
-    """Build the scripted cloud, connector, and file override group."""
-    return E2EExternalOverrides(  # Install every external trap before route registration.
+    """Build the scripted cloud override group."""
+    return E2EExternalOverrides(  # Install every scripted cloud read before route registration.
         cloud_evidence=cloud,  # Keep reconciliation evidence inside this E2E process.
         cloud_reader=seams["cloud_reader"],  # Read scripted cloud lists.
         device_reader=seams["device_reader"],  # Read scripted device lists.
-        mist_connector=MistConnectorTrap(),  # Fail before Mist connector construction.
-        arango_connector=ArangoConnectorTrap(),  # Fail before ArangoDB connector construction.
-        redis_connector=RedisConnectorTrap(),  # Fail before Redis connector construction.
-        file_opener=PortalFileTrap(),  # Fail before portal record file access.
     )
 
 
@@ -96,17 +94,16 @@ def build_e2e_overrides(  # Build one complete factory override value.
     portal = PortalRecordStore(test_run_id)  # Own run, capture, lock, and access records.
     actions = ActionRecordStore(test_run_id, portal)  # Join process-owned action and run writes.
     portal.set_authorization("run-control:write", True)  # Permit explicit run controls in this server.
-    audits = AuditRecordStore(test_run_id)  # Own audit records.
     cloud = ScriptedCloudStore(test_run_id)  # Own scripted cloud evidence.
     for capture in seams.get("captures", ()):  # Seed only process-owned capture records.
         portal.write_capture(capture)  # Add the current test owner before storage.
-    for name, record in seams.get("cloud_scripts", {}).items():
-        cloud.write(str(name), dict(record))
+    for name, record in seams.get("cloud_scripts", {}).items():  # Seed each scripted cloud answer of this run.
+        cloud.write(str(name), dict(record))  # A copy keeps the seam table unchanged.
     overrides = E2EFactoryOverrides(  # Join all explicit groups under one validated value.
         test_run_id,
         _record_values(portal, seams),
         _action_values(actions, portal, seams),
-        _security_values(portal, audits, seams),
+        _security_values(portal),
         _external_values(cloud, seams),
     )
     logger.debug("Built the complete E2E factory override set")  # Confirm assembly without record values.
