@@ -20,9 +20,9 @@ from pathlib import Path  # Portable filesystem access on Windows + POSIX.
 from typing import Any  # Type hint for the heterogeneous inputs dict.
 
 import libcst as cst  # AST-preserving CST library for re-rendering current source.
+import misthelper_devtools.capture_log_baseline as capture_log_baseline  # Module import lets tests patch fixtures.
 import pytest  # Test framework used across the project.
-import tools.capture_log_baseline as capture_log_baseline  # Module import lets tests patch fixtures.
-from tools.capture_log_baseline import (  # Reuse the rendering primitives.
+from misthelper_devtools.capture_log_baseline import (  # Reuse the rendering primitives.
     FIXTURE_SITES,
     _extract_msg_and_args,
     _index_calls_by_line,

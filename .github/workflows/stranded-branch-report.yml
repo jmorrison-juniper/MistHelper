@@ -11,6 +11,8 @@ name: Stranded Branch Report
 # branch that lacks that protection, and it keeps one open issue with the list.
 #
 # Issue #1980 asked for the check. Issue #2251 recorded the loss that followed.
+# The shared workflow in misthelper-devtools runs the stranded-branch-report
+# command and keeps the tracking issue (issue #3487).
 
 on:
   schedule:
@@ -29,66 +31,20 @@ concurrency:
   group: stranded-branch-report
   cancel-in-progress: false
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: read
+# The job below states the permissions that it needs. The empty map here
+# removes every other permission.
+permissions: {}
 
 jobs:
-  report:
-    name: Report a branch with no pull request
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-
-      - name: Build the report
-        id: report
-        env:
-          # The script reads the API through `gh`, so it needs the run token.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MIN_AGE_DAYS: ${{ github.event.inputs.min_age_days || '7' }}
-        run: |
-          python scripts/report_stranded_branches.py \
-            --repository "${GITHUB_REPOSITORY}" \
-            --min-age-days "${MIN_AGE_DAYS}" > report.md
-          # Report whether the run found a branch, so the next step can branch on it.
-          if grep -q '^| \`' report.md; then
-            echo "found=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "found=false" >> "${GITHUB_OUTPUT}"
-          fi
-          cat report.md >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Open or update the tracking issue
-        if: steps.report.outputs.found == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TITLE: "chore(git): a branch holds work with no pull request"
-        run: |
-          # Reuse one open issue, so a weekly run never opens a second copy.
-          number=$(gh issue list --state open --search "$TITLE in:title" \
-            --json number,title --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
-          if [ -n "${number}" ]; then
-            gh issue comment "${number}" --body-file report.md
-          else
-            gh issue create --title "${TITLE}" --body-file report.md --label chore --label ci
-          fi
-
-      - name: Close the tracking issue when every branch is protected
-        if: steps.report.outputs.found == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TITLE: "chore(git): a branch holds work with no pull request"
-        run: |
-          # Close the issue only when the report is clean, so the state stays true.
-          number=$(gh issue list --state open --search "$TITLE in:title" \
-            --json number,title --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
-          if [ -n "${number}" ]; then
-            gh issue close "${number}" --comment "Every branch with work above the base branch now has an open pull request."
-          fi
+  stranded-branch-report:
+    permissions:
+      # The job checks out the command.
+      contents: read
+      # The job opens, comments on, and closes the tracking issue.
+      issues: write
+      # The report reads the open pull requests.
+      pull-requests: read
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-stranded-branch-report.yml@bf1ba8a29ee9bab27b721db6e613fd5cd83d82fa # v0.4.0
+    with:
+      # A scheduled run has no inputs, so it reads the default.
+      min-age-days: ${{ fromJSON(github.event.inputs.min_age_days || '7') }}

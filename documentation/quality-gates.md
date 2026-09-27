@@ -1,22 +1,22 @@
 # Quality Gates
 
 The workflow is `.github/workflows/ci.yml`. It defines these job IDs on
-2026-09-25.
+2026-09-26.
 
 `ruff`, `black`, `mypy`, `pytest_coverage_shards`, `pytest`,
 `codeql_register_check`, `bandit`, `pip_audit`, `pylint`, `radon`, `vulture`,
 `pydocstyle`, `interrogate`, `test_quality_gate`, `diagram_lint`,
 `mermaid_lint`, `citation_lint`, `menu_reference_drift`, `speckit_task_audit`,
 `exclusion_drift`, `playwright`, `ops_portal`, `ops_platform_pytest`,
-`ops_platform_ruff`, `create_failure_issues`, and `close_resolved_issues`.
+`ops_platform_ruff`, and `quality_gate_issues`.
 
 The workflow stages jobs with `needs`. It does not run every job in one
 parallel group. `speckit_task_audit` and `exclusion_drift` are advisory because
 they set `continue-on-error: true`.
 
 The `misthelper-devtools` package supplies `test-quality-analyzer`,
-`complexity-gate`, and `tools.check_citations`. `requirements-dev.txt` pins
-that package to one commit.
+`complexity-gate`, `check-citations`, and `speckit-task-audit`.
+`requirements-dev.txt` pins that package to one commit.
 
 The test quality baseline is `.github/test-quality-baseline.json`, and the
 analyzer settings are `.github/test-quality-config.toml`. The
@@ -63,14 +63,13 @@ The analyzer writes `report.json` and `summary.md` into
 | `test_quality_gate` | `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` | Zero new test-quality findings against the repository baseline. |
 | `diagram_lint` | `python scripts/lint_diagram_refs.py` | Every diagram reference resolves. |
 | `mermaid_lint` | `node scripts/mermaid/lint_mermaid.mjs` | Every Mermaid block parses. |
-| `citation_lint` | `python -m tools.check_citations src tests` | Every code citation resolves. |
+| `citation_lint` | `check-citations src tests` | Every code citation resolves. |
 | `menu_reference_drift` | `python scripts/generate_menu_wiki.py` plus `git diff`, then `python -m scripts.menu_api_map --check` | The menu reference and the menu API endpoint map must match the source. |
 | `playwright` | pytest under `tests/e2e/` | Every end-to-end test must pass with `UPGRADE_PORTAL_E2E_STRICT=1`. |
 | `ops_portal` | npm type check, lint, tests, and audit | The npm audit fails at the high level or above. |
 | `ops_platform_pytest` | pytest with coverage in `mist-ops-platform` | Coverage at least 56 percent and at least 390 collected tests. |
 | `ops_platform_ruff` | Ruff in `mist-ops-platform` | The correctness ratchet must report zero findings. |
-| `create_failure_issues` | `gh issue create` | Creates or reuses quality-gate issues for failed tracked gates. |
-| `close_resolved_issues` | `gh issue close` | Closes resolved quality-gate issues without closing open pull request issues. |
+| `quality_gate_issues` | The shared `reusable-quality-gate-issues.yml` workflow of `misthelper-devtools` | Opens one issue for each failed gate, and closes that issue after the gate passes. |
 
 Warning: the browser gate can report a false pass. Each browser test module
 calls `pytest.importorskip`, so a missing Playwright package turns the whole
@@ -90,8 +89,18 @@ and no signal reports the loss.
 CodeQL runs in a separate workflow, `.github/workflows/codeql.yml`. A code pull
 request must wait for CodeQL before it takes the `auto-merge` label.
 
-A gate that fails on `main` opens an issue with the `quality-gate` label. The
-same gate closes that issue when it passes again.
+The `quality_gate_issues` job keeps one issue for each failed gate. It calls
+the shared `reusable-quality-gate-issues.yml` workflow of `misthelper-devtools`
+with `scope: all` (issue #3487).
+
+- A gate that fails on `main` opens an issue with the `quality-gate` label. The
+  same gate closes that issue when it passes on `main` again.
+- A gate that fails in a pull request opens an issue whose title ends with
+  `(PR #<number>)`. A later run of that pull request closes the issue. A run on
+  `main` closes it only after the pull request closes.
+
+The `needs` list of `quality_gate_issues` is the list of gates that get an
+issue. To add a gate, add its job ID to that list.
 
 ## Exclusion drift report
 

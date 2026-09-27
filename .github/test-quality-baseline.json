@@ -1376,50 +1376,6 @@
   },
   {
     "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/tools/test_quality_analyzer/test_discovery.py",
-    "heuristic": false,
-    "line_number": 88,
-    "related_source": "tests/tools/test_quality_analyzer/test_discovery.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/tools/test_quality_analyzer/test_discovery.py",
-    "heuristic": false,
-    "line_number": 97,
-    "related_source": "tests/tools/test_quality_analyzer/test_discovery.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/tools/test_quality_analyzer/test_discovery.py",
-    "heuristic": false,
-    "line_number": 105,
-    "related_source": "tests/tools/test_quality_analyzer/test_discovery.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/tools/test_refactor_analyzer_coverage.py",
-    "heuristic": false,
-    "line_number": 19,
-    "related_source": "tests/tools/test_refactor_analyzer_coverage.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
     "explanation": "Test function 'test_generate_site_packages_skips_sites_without_alarms_or_events' contains no assertions.",
     "file_path": "tests/unit/analytics/test_data_collection_manager.py",
     "heuristic": false,
@@ -4254,17 +4210,6 @@
     "related_source": "tests/unit/ssh/test_ssh_runner_manager_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/ste_linter/test_dictionary.py",
-    "heuristic": false,
-    "line_number": 22,
-    "related_source": "tests/unit/ste_linter/test_dictionary.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
     "severity": "medium"
   },
   {

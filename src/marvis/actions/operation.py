@@ -359,7 +359,7 @@ class MarvisResolveWorkflow:
     def resolve_open_actions(self, selected: Sequence[MarvisActionRecord]) -> None:
         """Resolve the selected open actions.
 
-        The method name is unique in ``src``, so ``tools/prompt_audit.py`` can
+        The method name is unique in ``src``, so ``misthelper_devtools.prompt_audit`` can
         follow the call and count the three resolve prompts.
 
         Args:

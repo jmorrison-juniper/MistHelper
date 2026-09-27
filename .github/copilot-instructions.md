@@ -186,7 +186,7 @@ Run these four checks on every changed file before you commit a sweep.
 | Compile | `python -m py_compile <file>` | No output |
 | Lint | `python -m ruff check .` | `All checks passed` |
 | Types | `python -m mypy $MYPY_PATHS --config-file pyproject.toml` | `Success` |
-| Symbols | `python -m tools.symbol_diff --base <base> <file>` | `no module-level name changed`, exit code 0 |
+| Symbols | `symbol-diff --base <base> <file>` | `no module-level name changed`, exit code 0 |
 
 Read the type check scope from the `MYPY_PATHS` value in
 `.github/workflows/ci.yml`. Do not repeat the value here, because a repeated
@@ -810,9 +810,9 @@ The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR 
 | Docstring Coverage | **interrogate** | Coverage >= 90 percent |
 | Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
 | Mermaid Syntax | **`scripts/mermaid/lint_mermaid.mjs`** | Mermaid blocks parse successfully |
-| Citation References | **`tools.check_citations`** | Citations in `src/` and `tests/` resolve |
+| Citation References | **`check-citations`** | Citations in `src/` and `tests/` resolve |
 | Menu Reference | **`scripts/generate_menu_wiki.py`** and **`scripts.menu_api_map`** | The generated menu reference and the menu API endpoint map match the source |
-| SpecKit Tasks | **`tools.speckit_task_audit`** | Open SpecKit task records are reported as advisory output |
+| SpecKit Tasks | **`speckit-task-audit`** | Open SpecKit task records are reported as advisory output |
 | Exclusion Drift | **`scripts/check_exclusion_drift.py`** | Quality exclusion drift is reported as advisory output |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
 | Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high`, `typecheck`, `lint`, and `test` for `ops-portal/`. All four block a merge. |
@@ -821,18 +821,20 @@ The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR 
 | Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code and workflow vulnerability scanning |
 | Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
 
-The workflow defines 24 quality jobs and two issue-management jobs. Read the job
+The workflow defines 24 quality jobs and one issue-management job. Read the job
 list from `.github/workflows/ci.yml` before you trust this count. CodeQL runs in
 a separate workflow, and Dependabot is not a gate. A caller can override each
 threshold through a `workflow_call` input. The table lists the default.
 
 The `misthelper-devtools` package supplies `test-quality-analyzer`,
-`complexity-gate`, `tools.check_citations`, and `tools.speckit_task_audit`.
+`complexity-gate`, `check-citations`, `speckit-task-audit`, `symbol-diff`, and
+`stranded-branch-report`.
 `requirements-dev.txt` pins that package to one commit. The test quality
 ratchet compares each run against `.github/test-quality-baseline.json` in this
 repository. `documentation/quality-gates.md` tells how to update that file. The
-Copilot, linked-issue, container build, and release image workflows call the
-shared reusable workflows of that repository at one pinned commit.
+Copilot, auto-merge, linked-issue, quality-gate issue, stranded branch, STE lint,
+container build, and release image workflows call the shared reusable workflows
+of that repository at one pinned commit.
 `documentation/development-tooling-migration.md` lists them.
 
 Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
@@ -841,10 +843,11 @@ an advisory in `ops-portal/package-lock.json` (issue #1847).
 
 **Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
 
-**Automated issue lifecycle** (main branch only):
+**Automated issue lifecycle** (the `quality_gate_issues` job, `scope: all`):
 - Gate fails on `main` → GitHub issue auto-created with `quality-gate` label
 - Gate passes on `main` → matching open issue auto-closed
-- PR branch failures are visible in PR checks only (no issues created)
+- Gate fails in a PR → issue titled `... failed (PR #<number>)`; a later passing run of that PR closes it
+- A `main` run keeps a PR issue open while that PR is open
 
 ### Security Findings: Fix Over Suppress
 

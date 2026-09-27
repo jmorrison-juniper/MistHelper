@@ -64,10 +64,12 @@ returns nothing for work that already landed.
 
 Follow these three steps before any cleanup.
 
-1. Run the report and read the branches it names.
+1. Run the report and read the branches it names. The `stranded-branch-report`
+   command comes from the `misthelper-devtools` package in
+   `requirements-dev.txt`.
 
    ```powershell
-   python scripts/report_stranded_branches.py
+   stranded-branch-report
    ```
 
 2. Open a pull request for every branch the report names. Open the pull request
@@ -75,9 +77,10 @@ Follow these three steps before any cleanup.
    readable.
 3. Delete a branch only after step 2.
 
-The `Stranded Branch Report` workflow runs the same report every Monday. It keeps
-one open issue with the current list, and it closes that issue when every branch
-has a pull request. Issue #1980 asked for the check. Issue #2251 recorded the
+The `Stranded Branch Report` workflow runs the same report every Monday through
+the shared `reusable-stranded-branch-report.yml` workflow of
+`misthelper-devtools`. It keeps one open issue with the current list, and it
+closes that issue when every branch has a pull request. Issue #1980 asked for the check. Issue #2251 recorded the
 loss of five branches, and one head was unrecoverable.
 
 ## License

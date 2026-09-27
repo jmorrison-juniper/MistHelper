@@ -3,13 +3,16 @@ name: STE Writing Lint
 # Grade documentation prose against the Simplified Technical English rules. The
 # job fails when a graded file scores below the threshold. Widen the file list to
 # cover more documents as they reach the standard.
+#
+# The shared workflow in misthelper-devtools installs the linter at the pinned
+# commit and grades each file (issue #3487). A change to requirements-dev.txt
+# therefore does not change this job.
 
 on:
   pull_request:
     paths:
       - "documentation/**/*.md"
       - ".ste-linter.toml"
-      - "requirements-dev.txt"
       - ".github/workflows/ste-lint.yml"
   workflow_dispatch:
 
@@ -20,29 +23,20 @@ concurrency:
   group: ste-lint-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+# The job below states the permissions that it needs. The empty map here
+# removes every other permission.
+permissions: {}
 
 jobs:
   ste-lint:
-    name: STE compliance
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-
-      - name: Install the development tools
-        run: python -m pip install -r requirements-dev.txt
-
-      # The agent skills moved out of the repository to the user level at
-      # ~/.copilot/skills, so this job grades no skill file. Grade a moved skill
-      # on the workstation with the command in its verification reference.
-      - name: Grade documentation with the STE linter
-        run: >
-          ste-linter --config .ste-linter.toml --min-score 80
-          documentation/ASD-STE100_writing-guide.md
+    permissions:
+      # The job reads the files that it grades.
+      contents: read
+    # The agent skills moved out of the repository to the user level at
+    # ~/.copilot/skills, so this job grades no skill file. Grade a moved skill
+    # on the workstation with the command in its verification reference.
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-ste-lint.yml@bf1ba8a29ee9bab27b721db6e613fd5cd83d82fa # v0.4.0
+    with:
+      files: documentation/ASD-STE100_writing-guide.md
+      config: .ste-linter.toml
+      min-score: 80
