@@ -840,14 +840,73 @@ class HistoryRow:
     open_url: str = ""
 
 
+class HistoryNoteText:
+    """The three count texts of the history note, with the noun of each count.
+
+    Why:
+        Issue #3449. The note printed each count beside a fixed plural noun, so
+        a site of one capture read "The site holds 1 captures." The note also
+        said "This page starts after 0 of them", and the words "of them" cannot
+        refer to one capture. The template holds no rule, so this mixin settles
+        the noun of each count. The compare view and the route view both
+        inherit it, so the two views print one text.
+
+        The mixin holds no field and no slot. A text is a property, so each
+        JSON body and each `asdict` record of a view stays the same.
+
+    Attributes:
+        total: The number of stored captures that the page counts.
+        offset: The number of rows that the earlier pages hold.
+        page_size: The number of rows that one page holds.
+    """
+
+    __slots__ = ()  # A slots view that inherits this mixin keeps no instance dictionary.
+
+    total: int  # The view that inherits this mixin declares the field.
+    offset: int  # The view that inherits this mixin declares the field.
+    page_size: int  # The view that inherits this mixin declares the field.
+
+    @staticmethod
+    def count_text(count: int, one_word: str, many_words: str) -> str:
+        """Return one count and the noun that agrees with it.
+
+        Args:
+            count: The count to print.
+            one_word: The noun for a count of one.
+            many_words: The noun for each other count, zero included.
+
+        Returns:
+            The count and the noun, with one space between them.
+        """
+        return f"{count} {one_word if count == 1 else many_words}"  # English takes the singular for one only.
+
+    @property
+    def total_text(self) -> str:
+        """Return the number of stored captures, such as "1 capture"."""
+        return self.count_text(self.total, "capture", "captures")  # The first count of the note.
+
+    @property
+    def offset_text(self) -> str:
+        """Return the number of captures before this page, such as "0 captures"."""
+        return self.count_text(self.offset, "capture", "captures")  # The noun replaces the words "of them".
+
+    @property
+    def page_size_text(self) -> str:
+        """Return the number of rows of one page, such as "25 rows"."""
+        return self.count_text(self.page_size, "row", "rows")  # A hand-edited link can ask for one row.
+
+
 @dataclass(frozen=True, slots=True)
-class HistoryView:
+class HistoryView(HistoryNoteText):
     """The history page as the template shows it.
 
     Why:
         The template must do no arithmetic. The two boolean values and the two
         links answer every question the paging controls ask. The page shows
         a control or hides it and never compares a number.
+
+        Issue #3449. The `HistoryNoteText` mixin adds the three count texts of
+        the note as properties, so the template prints a settled noun.
 
     Attributes:
         rows: One record for each stored capture on this page.
@@ -1041,6 +1100,7 @@ __all__ = [
     "ComparisonHeader",
     "ComparisonView",
     "DeviceSection",
+    "HistoryNoteText",
     "HistoryRow",
     "HistoryView",
     "StatisticView",

@@ -866,3 +866,60 @@ def test_the_compare_package_offers_the_history_view_builder() -> None:
     view = getattr(render, HISTORY_VIEW_NAME)(list(rows))
 
     assert view is not None, "The builder answers a view for one row."
+
+
+# ---------------------------------------------------------------------------
+# Issue #3449: the history note agrees with each count
+# ---------------------------------------------------------------------------
+
+
+def history_words(client: FlaskClient, app: Flask, count: int, window: dict[str, str]) -> str:
+    """Return the collapsed text of one history page of one site.
+
+    Args:
+        client: The signed-in test client.
+        app: The wired application, which takes a new capture list seam.
+        count: The number of captures that the site holds.
+        window: The page window of the query, such as the limit and the offset.
+
+    Returns:
+        The page text, with one space between every word.
+    """
+    rows = [capture_row(number) for number in range(1, count + 1)]  # The whole history of the site.
+    app.config[CAPTURE_LISTER_KEY] = RecordingCaptureLister(rows=rows)  # This test controls the count.
+    query = {SITE_ID_FIELD: SITE_ID, **window}  # The page of one site.
+    page = client.get(HISTORY_PAGE_PATH, query_string=query).get_data(as_text=True)  # The rendered page.
+    return " ".join(page.split())  # The template wraps the sentence across lines.
+
+
+def test_the_history_note_names_one_capture_with_the_singular_noun(
+    signed_in_client: FlaskClient, history_app: Flask
+) -> None:
+    """A site that holds one capture says "1 capture".
+
+    Why:
+        The note said "The site holds 1 captures." and "This page starts after
+        0 of them". Issue #3449 holds that report.
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    words = history_words(signed_in_client, history_app, 1, {})  # One capture, and the default window.
+    expected = "The site holds 1 capture. This page starts after 0 captures, and one page holds 25 rows."
+    assert expected in words  # The whole count sentence agrees with the count.
+    assert "of them" not in words  # The words "of them" cannot refer to one capture.
+
+
+def test_the_history_note_names_an_offset_and_a_page_size_of_one_with_the_singular_noun(
+    signed_in_client: FlaskClient, history_app: Flask
+) -> None:
+    """A page of one row that starts after one capture says "1 capture" and "1 row".
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    words = history_words(signed_in_client, history_app, 2, {LIMIT_FIELD: "1", OFFSET_FIELD: "1"})  # Page two.
+    expected = "The site holds 2 captures. This page starts after 1 capture, and one page holds 1 row."
+    assert expected in words  # The offset and the page size take the singular noun.

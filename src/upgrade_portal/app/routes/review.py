@@ -1686,7 +1686,7 @@ def build_history(rows: list[dict[str, Any]], window: PageWindow) -> Any:
 
 
 @dataclass(frozen=True, slots=True)
-class HistoryPageView:
+class HistoryPageView(compare_render.HistoryNoteText):
     """The history view that the page prints.
 
     Why:
@@ -1694,6 +1694,10 @@ class HistoryPageView:
         are frozen. The route cannot add a column there, so it builds this view
         beside the compare one and adds the device types of FR-084a. The
         attribute names match the compare view, so the template reads one shape.
+
+        Issue #3449. The view inherits the ``HistoryNoteText`` mixin of the
+        compare package, so the note prints the same count texts as the
+        compare view. A text is a property and not a field.
 
     Attributes:
         rows: The rows of this page, each one with its device types.
