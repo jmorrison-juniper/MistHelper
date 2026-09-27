@@ -1568,6 +1568,41 @@ class OrgPickerView:
     next_url: str = ""  # The href of the later-page control.
     previous_url: str = ""  # The href of the earlier-page control.
 
+    @staticmethod
+    def count_text(count: int, one_word: str, many_words: str) -> str:
+        """Return one count and the noun that agrees with it.
+
+        Why:
+            Issue #3449. The note printed each count beside a fixed plural
+            noun, so a filter of one match read "The filter matches 1
+            organizations." The template holds no rule, so the view settles
+            the noun of each count.
+
+        Args:
+            count: The count to print.
+            one_word: The noun for a count of one.
+            many_words: The noun for each other count, zero included.
+
+        Returns:
+            The count and the noun, with one space between them.
+        """
+        return f"{count} {one_word if count == 1 else many_words}"  # English takes the singular for one only.
+
+    @property
+    def total_text(self) -> str:
+        """Return the number of matches, such as "1 organization"."""
+        return self.count_text(self.total, "organization", "organizations")  # The first count of the note.
+
+    @property
+    def offset_text(self) -> str:
+        """Return the number of matches before this page, such as "0 organizations"."""
+        return self.count_text(self.offset, "organization", "organizations")  # The noun replaces "of them".
+
+    @property
+    def page_size_text(self) -> str:
+        """Return the number of rows of one page, such as "25 rows"."""
+        return self.count_text(self.page_size, "row", "rows")  # The picker page size is fixed at 25 rows.
+
 
 def org_row_matches(row: dict[str, str], text: str) -> bool:
     """Report whether one organization row holds a text fragment.

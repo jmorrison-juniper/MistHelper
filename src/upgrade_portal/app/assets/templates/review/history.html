@@ -72,7 +72,10 @@
                    Each row holds capture_id, started_at, role, capture_status,
                    device_count, client_count, stored_size_bytes,
                    stored_size_text, row_test_id, open_test_id, open_url,
-                   device_type_text, and device_type_test_id.
+                   device_type_text, and device_type_test_id. The view also
+                   gives total_text, offset_text, and page_size_text, which
+                   are the three counts of the note with the noun of each
+                   count (issue #3449).
     moment_texts - the short moment of each row, keyed by the capture
                    identifier. review.moment_texts settles every entry.
     theme, themes, signed_in - see layout.html.
@@ -90,9 +93,9 @@
 #}
 {% set view = history_view | default(none, true) %}
 {% set capture_rows = view.rows | default([], true) %}
-{% set row_total = view.total | default(0, true) %}
-{% set page_size = view.page_size | default(0, true) %}
-{% set row_offset = view.offset | default(0, true) %}
+{% set total_text = view.total_text | default('0 captures', true) %}
+{% set offset_text = view.offset_text | default('0 captures', true) %}
+{% set page_size_text = view.page_size_text | default('0 rows', true) %}
 {% set has_next = view.has_next | default(false) %}
 {% set has_previous = view.has_previous | default(false) %}
 {% set next_url = view.next_url | default('', true) %}
@@ -420,14 +423,22 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Captures</h2>
 
-  <p class="portal-card-note">
+  {#
+    Issue #3449. The note printed each count beside a fixed plural noun, so a
+    site of one capture read "The site holds 1 captures." The second sentence
+    said "This page starts after 0 of them", and "of them" cannot refer to one
+    capture. The view model now gives each count with the noun that agrees
+    with it, so this template prints a settled text and holds no rule. A page
+    with no view model prints the default texts of zero.
+  #}
+  <p class="portal-card-note" data-testid="history-count-note">
     {% if site_label %}
       The list shows the stored captures of {{ site_label }}.
     {% else %}
       The list shows the stored captures.
     {% endif %}
-    The site holds {{ row_total }} captures. This page starts after
-    {{ row_offset }} of them, and one page holds {{ page_size }} rows.
+    The site holds {{ total_text }}. This page starts after
+    {{ offset_text }}, and one page holds {{ page_size_text }}.
   </p>
 </div>
 

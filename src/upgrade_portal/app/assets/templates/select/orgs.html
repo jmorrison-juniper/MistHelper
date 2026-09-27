@@ -45,22 +45,24 @@
     portal.css already styles .portal-button:disabled. The test identifier stays
     on the control in both states, so a browser test finds it on every page.
 
-  The test identifiers of contracts/ui-testids.md lines 55 to 57:
+  The test identifiers of contracts/ui-testids.md:
     org-search            - the organization filter field
+    org-search-submit     - the submit control of the filter form
+    org-search-note       - the note that states the match count (issue #3449)
     org-row-{org_id}      - one organization row
     org-select-{org_id}   - the choose button of that row
-
-  Three identifiers below are not in that contract file yet:
-    org-search-submit     - the submit control of the filter form
     org-page-next         - the later page control
     org-page-previous     - the earlier page control
-  They follow the history-page-next and history-page-previous shape of the same
-  contract file, so the picker and the history page spell one idea one way.
+  The two page controls follow the history-page-next and history-page-previous
+  shape of the same contract file, so the picker and the history page spell
+  one idea one way.
 
   Variables a route may supply:
     org_view      - the view model. Holds rows, total, page_size, offset, query,
                     has_next, has_previous, next_url, and previous_url. Each row
-                    holds org_id and name.
+                    holds org_id and name. The view also gives total_text,
+                    offset_text, and page_size_text, which are the three counts
+                    of the note with the noun of each count (issue #3449).
     organizations - the same rows, for a caller that supplies no view model.
     page_title    - the heading text and the tab text.
     theme         - the name of the current theme. See layout.html.
@@ -81,9 +83,9 @@
 {% set view = org_view | default(none, true) %}
 {% set fallback_rows = organizations | default([], true) %}
 {% set org_rows = view.rows | default(fallback_rows, true) %}
-{% set row_total = view.total | default(0, true) %}
-{% set page_size = view.page_size | default(0, true) %}
-{% set row_offset = view.offset | default(0, true) %}
+{% set total_text = view.total_text | default('', true) %}
+{% set offset_text = view.offset_text | default('', true) %}
+{% set page_size_text = view.page_size_text | default('', true) %}
 {% set filter_text = view.query | default('', true) %}
 {% set has_next = view.has_next | default(false) %}
 {% set has_previous = view.has_previous | default(false) %}
@@ -130,13 +132,20 @@
             data-testid="org-search-submit">Search every page</button>
   </form>
 
-  <p class="portal-card-note" id="org-search-note">
+  {#
+    Issue #3449. The note printed each count beside a fixed plural noun, so one
+    match read "The filter matches 1 organizations." The second sentence said
+    "This page starts after 0 of them", and "of them" cannot refer to one
+    organization. The view model now gives each count with the noun that agrees
+    with it, so this template prints a settled text and holds no rule.
+  #}
+  <p class="portal-card-note" id="org-search-note" data-testid="org-search-note">
     The filter reads the organization name and the organization identifier. The
     portal filters every organization that this sign-in may act on, and then
     shows one page of the matches.
     {% if view %}
-      The filter matches {{ row_total }} organizations. This page starts after
-      {{ row_offset }} of them, and one page holds {{ page_size }} rows.
+      The filter matches {{ total_text }}. This page starts after
+      {{ offset_text }}, and one page holds {{ page_size_text }}.
     {% endif %}
   </p>
 </div>

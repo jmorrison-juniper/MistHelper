@@ -1598,3 +1598,66 @@ def collapsed_text(page: str) -> str:
         The same text with one space between every word.
     """
     return re.sub(r"\s+", " ", page)  # One space between words, so a wrapped sentence reads as one line.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3449: the picker note agrees with each count
+# ---------------------------------------------------------------------------
+
+
+def picker_words(client: FlaskClient, query: dict[str, str]) -> str:
+    """Return the collapsed text of one picker page.
+
+    Args:
+        client: The signed-in test client.
+        query: The query arguments of the picker page.
+
+    Returns:
+        The page text, with one space between every word.
+    """
+    return collapsed_text(client.get("/select/org", query_string=query).get_data(as_text=True))  # One line.
+
+
+def test_the_picker_note_names_one_match_with_the_singular_noun(
+    select_client: FlaskClient,
+    scoped_owner: identity.SessionOwner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A filter that keeps one organization says "1 organization".
+
+    Why:
+        The note said "The filter matches 1 organizations." and "This page
+        starts after 0 of them". Issue #3449 holds that report.
+
+    Args:
+        select_client: The test client for the wired application.
+        scoped_owner: The registered operator with a stated scope.
+        monkeypatch: The fixture that states the privilege list.
+    """
+    sign_in_client(select_client, scoped_owner)  # The picker needs a signed-in operator.
+    rows = [{"org_id": "org-3449-a", "name": "Count Org A"}]  # One organization.
+    monkeypatch.setattr(select, "permitted_orgs", lambda: rows)  # The cloud names one organization.
+    words = picker_words(select_client, {"q": "Count Org"})  # The operator filters by the name.
+    expected = "The filter matches 1 organization. This page starts after 0 organizations, and one page holds 25 rows."
+    assert expected in words  # The whole count sentence agrees with the count.
+    assert "of them" not in words  # The words "of them" cannot refer to one organization.
+
+
+def test_the_picker_note_names_an_offset_of_one_with_the_singular_noun(
+    select_client: FlaskClient,
+    scoped_owner: identity.SessionOwner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A page that starts after one row says "1 organization".
+
+    Args:
+        select_client: The test client for the wired application.
+        scoped_owner: The registered operator with a stated scope.
+        monkeypatch: The fixture that states the privilege list.
+    """
+    sign_in_client(select_client, scoped_owner)  # The picker needs a signed-in operator.
+    rows = [{"org_id": "org-3449-a", "name": "Count Org A"}, {"org_id": "org-3449-b", "name": "Count Org B"}]
+    monkeypatch.setattr(select, "permitted_orgs", lambda: rows)  # The cloud names two organizations.
+    words = picker_words(select_client, {"offset": "1"})  # A hand-edited link skips one row.
+    expected = "The filter matches 2 organizations. This page starts after 1 organization, and one page holds 25 rows."
+    assert expected in words  # The offset takes the singular noun.
