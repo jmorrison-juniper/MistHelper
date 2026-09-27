@@ -66,50 +66,49 @@ class E2EActionOverrides:  # Group every action and upgrade execution seam.
 
 
 @dataclass(frozen=True, slots=True)
-class E2ESecurityOverrides:  # Group every access, lock, and audit seam.
-    """Hold access, lock, authorization, and audit seams."""
+class E2ESecurityOverrides:  # Group every lock and authorization seam.
+    """Hold the lock and authorization seams.
 
-    access_store: object  # Keep access decisions inside the E2E process.
+    Why:
+        Issue #3501 removed the access store, the audit store, and the audit
+        reader, because no portal code read them. The lock module writes its
+        audit rows to a file, and the trail guard of issue #3498 counts that
+        file.
+    """
+
     lock_reader: Callable[..., Any]  # Read process-owned site locks.
     lock_client: object  # Write process-owned site locks without Redis.
     authorization_reader: Callable[..., Any]  # Read process-owned authorization decisions.
-    audit_store: object  # Keep audit records inside the E2E process.
-    audit_reader: Callable[..., Any]  # List process-owned audit records.
 
     def config_values(self) -> Mapping[str, object]:  # Map security values to existing route keys.
-        """Return the Flask values for access, lock, and audit work."""
+        """Return the Flask values for lock and authorization work."""
         return {  # Bind every security record to one process-owned store.
-            "E2E_ACCESS_STORE": self.access_store,  # Expose the owned access record store.
             "SITE_LOCK_READER": self.lock_reader,  # Read locks without a Redis connection.
             "LOCK_STORE_CLIENT": self.lock_client,  # Write locks without a Redis connection.
             "AUTHORIZATION_READER": self.authorization_reader,  # Read owned access decisions.
-            "E2E_AUDIT_STORE": self.audit_store,  # Expose the owned audit record store.
-            "AUDIT_READER": self.audit_reader,  # Read audit rows without a record file.
         }
 
 
 @dataclass(frozen=True, slots=True)
-class E2EExternalOverrides:  # Group every cloud, connector, and file boundary.
-    """Hold cloud, connector, and portal record file seams."""
+class E2EExternalOverrides:  # Group every scripted cloud seam.
+    """Hold the scripted cloud seams.
+
+    Why:
+        Issue #3501 removed four connector traps, because no portal code read
+        them. The child environment points ArangoDB and Redis at port 1 of the
+        loopback address, so a real connector call fails at once.
+    """
 
     cloud_evidence: object  # Keep reconciliation evidence inside the E2E process.
     cloud_reader: Callable[..., Any]  # Read scripted cloud rows without Mist.
     device_reader: Callable[..., Any]  # Read scripted devices without Mist.
-    mist_connector: Callable[..., Any]  # Fail if code constructs a Mist connector.
-    arango_connector: Callable[..., Any]  # Fail if code constructs an ArangoDB connector.
-    redis_connector: Callable[..., Any]  # Fail if code constructs a Redis connector.
-    file_opener: Callable[..., Any]  # Fail if code opens a portal record file.
 
     def config_values(self) -> Mapping[str, object]:  # Map external values to existing route keys.
-        """Return the Flask values for cloud, connector, and file boundaries."""
-        return {  # Bind every external boundary before a blueprint registers.
+        """Return the Flask values for the scripted cloud seams."""
+        return {  # Bind every cloud read before a blueprint registers.
             "CLOUD_EVIDENCE": self.cloud_evidence,  # Read scripted reconciliation evidence.
             "MIST_READER": self.cloud_reader,  # Read scripted cloud lists.
             "DEVICE_READER": self.device_reader,  # Read scripted device lists.
-            "MIST_CONNECTOR": self.mist_connector,  # Trap unexpected Mist construction.
-            "ARANGO_CONNECTOR": self.arango_connector,  # Trap unexpected ArangoDB construction.
-            "REDIS_CONNECTOR": self.redis_connector,  # Trap unexpected Redis construction.
-            "PORTAL_RECORD_FILE_OPENER": self.file_opener,  # Trap portal record file access.
         }
 
 
@@ -120,8 +119,8 @@ class E2EFactoryOverrides:  # Hold one complete fail-closed E2E dependency value
     test_run_id: str  # Identify one isolated server in each response.
     records: E2ERecordOverrides  # Supply all run and capture record seams.
     actions: E2EActionOverrides  # Supply all mutation and action record seams.
-    security: E2ESecurityOverrides  # Supply all access and audit seams.
-    external: E2EExternalOverrides  # Supply all cloud, connector, and file seams.
+    security: E2ESecurityOverrides  # Supply all lock and authorization seams.
+    external: E2EExternalOverrides  # Supply all scripted cloud seams.
 
     def validate(self) -> None:  # Verify every required nested value before route registration.
         """Reject an incomplete E2E dependency set before route registration."""
@@ -159,24 +158,20 @@ class E2EFactoryOverrides:  # Hold one complete fail-closed E2E dependency value
         )
 
     def config_values(self) -> Mapping[str, object]:  # Build one complete Flask configuration map.
-        """Return the Flask configuration values for every required E2E seam."""
+        """Return the Flask configuration values for every required E2E seam.
+
+        Why:
+            Issue #3501. The map holds only the keys that code reads. The
+            factory writes the run owner header from `test_run_id`, so the map
+            holds no run key.
+        """
         logger.info("Build the E2E seam configuration")  # Start one visible installation action.
         values: dict[str, object] = {}  # Merge four explicit groups into one installation map.
         for group in (self.records, self.actions, self.security, self.external):  # Preserve group order.
             values.update(group.config_values())  # Add one complete dependency group.
-        values["E2E_OVERRIDES_ACTIVE"] = True  # Mark this application as isolated.
-        values["E2E_TEST_RUN_ID"] = self.test_run_id  # Bind responses to this test process.
+        values["E2E_OVERRIDES_ACTIVE"] = True  # Mark this application as isolated. The factory reads it.
         logger.debug("Built %s E2E seam configuration values", len(values))  # Report a safe count only.
         return values  # The wiring installs this complete map before blueprints.
-
-    def trap_call_counts(self) -> Mapping[str, int]:  # Report all external boundary calls for one response.
-        """Return the safe call count for each E2E connector and file trap."""
-        return {  # Each value contains a safe count and no connector argument.
-            "arango": len(getattr(self.external.arango_connector, "calls", ())),
-            "redis": len(getattr(self.external.redis_connector, "calls", ())),
-            "mist": len(getattr(self.external.mist_connector, "calls", ())),
-            "files": len(getattr(self.external.file_opener, "calls", ())),
-        }
 
 
 @dataclass(frozen=True, slots=True)

@@ -324,7 +324,7 @@ pie showData
 | [236](interactive-safe.md#menu-236) | Run any site-scoped Mist count endpoint (33 operations) | `interactive_safe` | 34 |
 | [237](interactive-safe.md#menu-237) | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` | 3 |
 | [238](interactive-safe.md#menu-238) | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | `interactive_safe` | 1 |
-| [239](destructive.md#menu-239) | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | `destructive` | 20 |
+| [239](destructive.md#menu-239) | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | `destructive` | 19 |
 | [240](interactive-safe.md#menu-240) | Export one organization security intelligence profile (getOrgSecIntelProfile) | `interactive_safe` | 2 |
 | [241](interactive-safe.md#menu-241) | Serve Mist Cloud health to a monitoring system on port 8057 (Prometheus and SNMP) | `interactive_safe` | 4 |
 | [242](interactive-safe.md#menu-242) | Find sites where an SSID is not broadcast by any AP | `interactive_safe` | 2 |

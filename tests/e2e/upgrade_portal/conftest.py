@@ -41,7 +41,6 @@ import socket
 import subprocess
 import threading
 import time
-import urllib.request
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -112,7 +111,8 @@ from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site
     SHORT_SITE_REASON,
 )
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, build_sdk_answer  # Issue #3438: real SDK answers.
-from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, stores, and traps.
+from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, and stores.
+    RunOwnerHeaderCheck,
     allocate_resources,
     build_child_environment,
     build_e2e_overrides,
@@ -685,9 +685,9 @@ def checkout_audit_trail_guard(request: pytest.FixtureRequest) -> Iterator[Audit
 
     Why:
         Issue #3498. The test portal wrote each lock action to the checkout
-        trail, which is the production audit trail in the main checkout. The
-        header guard `persistent_store_baseline` compares fixed values, so it
-        could not see the leak. This guard reads the file itself. The fixture
+        trail, which is the production audit trail in the main checkout. An
+        older header guard compared fixed values, so it could not see the
+        leak. Issue #3501 removed that guard. This guard reads the file itself. The fixture
         `capture_portal_server` depends on it. The first count therefore runs
         before the child starts, and the second count runs after the child
         stops.
@@ -2365,8 +2365,8 @@ def _reset_cached_state() -> None:  # Clear each process cache before isolated c
 
     wiring.reset_storage_bootstrap()  # Prevent an earlier production bootstrap state from crossing into E2E.
     factory.reset_readiness_cache()  # Prevent an earlier readiness result from crossing into E2E.
-    capture_store.reset_connection()  # Drop any cached document store handle before traps install.
-    lock.reset_connection()  # Drop any cached lock store handle before traps install.
+    capture_store.reset_connection()  # Drop any cached document store handle before the stores install.
+    lock.reset_connection()  # Drop any cached lock store handle before the stores install.
     logger.debug("Reset the E2E storage and readiness caches")  # Confirm the complete reset.
 
 
@@ -2402,7 +2402,7 @@ def _build_factory_overrides() -> E2EFactoryOverrides:  # Assemble one complete 
             }
         },
     }
-    overrides = build_e2e_overrides(TEST_RUN_ID, seams)  # Create all stores and traps before the factory call.
+    overrides = build_e2e_overrides(TEST_RUN_ID, seams)  # Create all stores before the factory call.
     logger.debug("Built the complete E2E factory override set")  # Confirm construction without record values.
     return overrides  # The factory validates this value before blueprint registration.
 
@@ -2490,46 +2490,12 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     return built  # Waitress and Gunicorn both load this object by name.
 
 
-E2E_HEADER = "X-MistHelper-E2E-Run-ID"
-TRAP_HEADERS = (
-    "X-MistHelper-E2E-Arango-Trap-Calls",
-    "X-MistHelper-E2E-Redis-Trap-Calls",
-    "X-MistHelper-E2E-Mist-Trap-Calls",
-    "X-MistHelper-E2E-File-Trap-Calls",
-)
-PERSISTENT_HEADERS = {
-    "runs": "X-MistHelper-E2E-Persistent-Runs",
-    "actions": "X-MistHelper-E2E-Persistent-Actions",
-    "audits": "X-MistHelper-E2E-Persistent-Audits",
-}
-
-
-def _assert_isolated_headers(headers: Any) -> None:
-    """Require the run owner and zero calls from every hard isolation trap."""
-    normalized = {str(name).lower(): str(value) for name, value in headers.items()}
-    assert normalized.get(E2E_HEADER.lower()) == TEST_RUN_ID
-    for name in TRAP_HEADERS:
-        assert normalized.get(name.lower()) == "0"
-
-
-def _persistent_baseline() -> dict[str, int]:
-    """Read the persistent-store baseline from one isolated health response."""
-    with urllib.request.urlopen(f"{BASE_URL}/healthz", timeout=5) as response:
-        _assert_isolated_headers(response.headers)
-        return {name: int(response.headers[header]) for name, header in PERSISTENT_HEADERS.items()}
-
-
-@pytest.fixture(scope="session", autouse=True)
-def persistent_store_baseline(capture_portal_server: str) -> Iterator[None]:
-    """Record and compare persistent counts around the complete browser suite."""
-    del capture_portal_server
-    before = _persistent_baseline()
-    record_path = ARTIFACT_DIRECTORY / "persistent-store-baselines.json"
-    record_path.write_text(json.dumps({"before": before}, indent=2), encoding="utf-8")
-    yield
-    after = _persistent_baseline()
-    record_path.write_text(json.dumps({"before": before, "after": after}, indent=2), encoding="utf-8")
-    assert after == before
+# WHY: Issue #3501. The run owner header is the one test header of the test
+# portal. Each page fixture refuses a health read that names no run or another
+# run, because a stray portal on the same address holds the records of another
+# run. The direct tests in tests/unit/upgrade_portal/test_e2e_run_owner_header.py
+# prove that the check can fail.
+OWNER_CHECK = RunOwnerHeaderCheck(TEST_RUN_ID)  # One check for each run, built once.
 
 
 @pytest.fixture(scope="session")
@@ -2572,8 +2538,8 @@ def page(context: Any, capture_portal_server: str) -> Iterator[Any]:
     context.add_cookies(portal_session_cookies())  # Both cookies, against the portal address.
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
-    assert isolation_response is not None and isolation_response.ok
-    _assert_isolated_headers(isolation_response.headers)
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
     yield opened
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2604,8 +2570,8 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
     context.add_cookies(second_operator_cookies())  # The second pair, which the server also registered.
     opened = context.new_page()
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
-    assert isolation_response is not None and isolation_response.ok
-    _assert_isolated_headers(isolation_response.headers)
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
     yield opened
     opened.close()
     context.close()  # The context holds a profile directory until it closes.
@@ -2633,7 +2599,7 @@ def firmware_operator_page(context: Any, capture_portal_server: str) -> Iterator
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test uses the reachable operator only where it starts firmware.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2658,7 +2624,7 @@ def controls_operator_page(context: Any, capture_portal_server: str) -> Iterator
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test drives the recovery controls of the seeded operations.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2684,7 +2650,7 @@ def empty_site_operator_page(context: Any, capture_portal_server: str) -> Iterat
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test selects the empty site and then clears it.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2710,7 +2676,7 @@ def short_read_operator_page(context: Any, capture_portal_server: str) -> Iterat
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test selects the short-read site and then clears it.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2738,7 +2704,7 @@ def lost_page_operator_page(context: Any, capture_portal_server: str) -> Iterato
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test reads the picker of the lost-page organization.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2767,7 +2733,7 @@ def later_check_operator_page(context: Any, capture_portal_server: str) -> Itera
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test switches the lost page on and off with the request header.
     opened.close()  # A page left open would hold a browser target for the whole run.
 

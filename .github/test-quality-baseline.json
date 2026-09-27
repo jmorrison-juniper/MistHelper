@@ -661,61 +661,6 @@
   },
   {
     "category": "weak_assertion",
-    "explanation": "Test function 'test_reload_back_forward_and_two_tabs_restore_only_local_candidates' contains no assertions.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "heuristic": false,
-    "line_number": 49,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "heuristic": false,
-    "line_number": 84,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "heuristic": false,
-    "line_number": 97,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "heuristic": false,
-    "line_number": 102,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "heuristic": false,
-    "line_number": 166,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_isolation.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
     "explanation": "Test function 'test_site_search_field_is_present' contains no assertions.",
     "file_path": "tests/e2e/upgrade_portal/test_site_selection.py",
     "heuristic": false,

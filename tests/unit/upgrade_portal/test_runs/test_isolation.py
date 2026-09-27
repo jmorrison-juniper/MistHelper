@@ -1,11 +1,18 @@
-"""Prove the E2E isolation values, stores, traps, and resources."""
+"""Prove the E2E isolation values, stores, child environment, and resources.
+
+Why:
+    The test portal holds its records in the stores of the test process. The
+    child environment points ArangoDB and Redis at port 1 of the loopback
+    address, so a real connector call fails at once. Issue #3501 removed the
+    connector traps and the audit store, because no portal code read them.
+"""
 
 from __future__ import annotations  # Keep annotations independent from import order.
 
 import shutil  # Remove the test-owned artifact root after allocation.
 from collections.abc import Callable  # Type one deliberate missing callable value.
 from pathlib import Path  # Build an approved repository data path.
-from typing import Any, cast  # Type traps and one deliberate invalid runtime value.
+from typing import cast  # Type one deliberate invalid runtime value.
 from uuid import uuid4  # Keep parallel unit test artifact roots distinct.
 
 import pytest  # Check the fail-closed exceptions.
@@ -17,24 +24,38 @@ from src.upgrade_portal.api.run_controls import (  # Import the explicit factory
     E2ERecordOverrides,
     E2ESecurityOverrides,
 )
-from tests.support.upgrade_portal_e2e import (  # Import process stores, traps, and resource controls.
+from tests.support.upgrade_portal_e2e import (  # Import process stores and resource controls.
     ActionRecordStore,
-    ArangoConnectorTrap,
-    AuditRecordStore,
-    MistConnectorTrap,
-    PortalFileTrap,
     PortalRecordStore,
-    RedisConnectorTrap,
     ScriptedCloudStore,
     allocate_resources,
     build_child_environment,
 )
 
-TRAP_CASES = (  # Pair each trap with the exact isolation contract message.
-    (ArangoConnectorTrap, "E2E isolation failed: an ArangoDB connector was called."),
-    (RedisConnectorTrap, "E2E isolation failed: a Redis connector was called."),
-    (MistConnectorTrap, "E2E isolation failed: a Mist cloud connector was called."),
-    (PortalFileTrap, "E2E isolation failed: a portal record file was opened."),
+KEPT_KEYS = frozenset(  # Issue #3501: each key that a portal route or the stand-in capture runner reads.
+    {
+        "RUN_STORE",
+        "CAPTURE_STORE",
+        "CAPTURE_RUNNER",
+        "CAPTURE_LOADER",
+        "CAPTURE_LISTER",
+        "RUN_LISTER",
+        "OPERATION_LISTER",
+        "RUN_ACTION_STORE",
+        "RUN_LAUNCHER",
+        "STOP_RUNNER",
+        "UPGRADE_OPTIONS_BUILDER",
+        "UPGRADE_OPTIONS_VIEW",
+        "UPGRADE_VERSIONS",
+        "PRECHECK_ADOPTER",
+        "SITE_LOCK_READER",
+        "LOCK_STORE_CLIENT",
+        "AUTHORIZATION_READER",
+        "CLOUD_EVIDENCE",
+        "MIST_READER",
+        "DEVICE_READER",
+        "E2E_OVERRIDES_ACTIVE",
+    }
 )
 
 
@@ -47,7 +68,6 @@ def _overrides(test_run_id: str = "e2e-unit-owner") -> E2EFactoryOverrides:  # B
     """Build one complete override value for validation tests."""
     portal = PortalRecordStore(test_run_id)  # Own run, capture, lock, and access records.
     actions = ActionRecordStore(test_run_id)  # Own action records.
-    audits = AuditRecordStore(test_run_id)  # Own audit records.
     cloud = ScriptedCloudStore(test_run_id)  # Own scripted cloud evidence.
     records = E2ERecordOverrides(  # Bind all run and capture seams.
         portal, portal, _callable, portal.load_capture, portal.list_captures, portal.list_runs, portal.list_operations
@@ -55,18 +75,8 @@ def _overrides(test_run_id: str = "e2e-unit-owner") -> E2EFactoryOverrides:  # B
     action_values = E2EActionOverrides(  # Bind all action and upgrade seams.
         actions, _callable, _callable, _callable, _callable, _callable, portal
     )
-    security = E2ESecurityOverrides(  # Bind all access and audit seams.
-        portal, _callable, portal, portal.authorization, audits, audits.list
-    )
-    external = E2EExternalOverrides(  # Bind all cloud, connector, and file seams.
-        cloud,
-        cloud.read,
-        _callable,
-        MistConnectorTrap(),
-        ArangoConnectorTrap(),
-        RedisConnectorTrap(),
-        PortalFileTrap(),
-    )
+    security = E2ESecurityOverrides(_callable, portal, portal.authorization)  # Bind the lock and access seams.
+    external = E2EExternalOverrides(cloud, cloud.read, _callable)  # Bind the scripted cloud seams.
     return E2EFactoryOverrides(test_run_id, records, action_values, security, external)  # Complete value.
 
 
@@ -77,20 +87,25 @@ def test_complete_overrides_validate_and_publish_every_seam() -> None:  # Prove 
     values = overrides.config_values()  # Read the map that wiring installs.
     assert values["RUN_STORE"] is overrides.records.run_store  # Run storage has no fallback.
     assert values["RUN_ACTION_STORE"] is overrides.actions.action_store  # Action storage has no fallback.
-    assert values["PORTAL_RECORD_FILE_OPENER"] is overrides.external.file_opener  # File access is trapped.
+    assert values["DEVICE_READER"] is overrides.external.device_reader  # Device reads stay scripted.
+
+
+def test_the_configuration_holds_only_the_keys_that_code_reads() -> None:  # Issue #3501: no dead key.
+    """The configuration map holds each key that code reads, and no other key."""
+    values = _overrides().config_values()  # Read the map that wiring installs.
+    extra = sorted(set(values) - KEPT_KEYS)  # Each key that no code reads.
+    missing = sorted(KEPT_KEYS - set(values))  # Each key that a route reads and the map lost.
+    assert extra == []  # A key that no code reads must leave the map.
+    assert missing == []  # Each kept key must stay in the map.
 
 
 def test_missing_override_fails_closed() -> None:  # Prove missing dependency validation.
-    """A missing connector fails validation before application construction."""
+    """A missing cloud read fails validation before application construction."""
     overrides = _overrides()  # Start from a complete immutable value.
-    broken_external = E2EExternalOverrides(  # Replace one required connector with an invalid value.
+    broken_external = E2EExternalOverrides(  # Replace one required cloud read with an invalid value.
         overrides.external.cloud_evidence,
         overrides.external.cloud_reader,
-        overrides.external.device_reader,
-        overrides.external.mist_connector,
         cast(Callable[..., object], None),  # A deliberate invalid value proves runtime validation.
-        overrides.external.redis_connector,
-        overrides.external.file_opener,
     )
     broken = E2EFactoryOverrides(  # Keep every other required group valid.
         overrides.test_run_id,
@@ -99,19 +114,8 @@ def test_missing_override_fails_closed() -> None:  # Prove missing dependency va
         overrides.security,
         broken_external,
     )
-    with pytest.raises(ValueError, match="external.arango_connector"):  # Name the exact missing seam.
+    with pytest.raises(ValueError, match="external.device_reader"):  # Name the exact missing seam.
         broken.validate()  # Construction must fail closed.
-
-
-@pytest.mark.parametrize(("trap_type", "message"), TRAP_CASES)
-def test_each_trap_records_and_fails_with_the_contract_message(  # Prove one trap contract.
-    trap_type: type[object], message: str
-) -> None:
-    """Each isolation trap records the call and raises the exact contract text."""
-    trap: Any = trap_type()  # Build one empty trap with the shared call-record shape.
-    with pytest.raises(AssertionError, match=f"^{message.replace('.', '[.]')}$"):  # Match the full contract text.
-        trap()  # Any call must fail before an external operation.
-    assert trap.calls == ["open" if trap_type is PortalFileTrap else "connect"]  # Record one safe name.
 
 
 def test_child_environment_scrubs_credentials_paths_and_uses_sentinels() -> None:  # Prove child isolation.
@@ -158,13 +162,10 @@ def test_each_record_store_rejects_a_different_owner() -> None:  # Prove record 
     """Every process-owned store rejects a record from another E2E run."""
     portal = PortalRecordStore("owner-a")  # Own portal records for one E2E run.
     actions = ActionRecordStore("owner-a")  # Own action records for the same E2E run.
-    audits = AuditRecordStore("owner-a")  # Own audit records for the same E2E run.
     cloud = ScriptedCloudStore("owner-a")  # Own cloud scripts for the same E2E run.
     with pytest.raises(ValueError, match="different E2E test run"):  # Reject a foreign run record.
         portal.write_run({"run_id": "run-a", "test_run_id": "owner-b"})  # Supply the wrong owner.
     with pytest.raises(ValueError, match="different E2E test run"):  # Reject a foreign action record.
         actions.write({"action_id": "action-a", "test_run_id": "owner-b"})  # Supply the wrong owner.
-    with pytest.raises(ValueError, match="different E2E test run"):  # Reject a foreign audit record.
-        audits.append({"event": "read", "test_run_id": "owner-b"})  # Supply the wrong owner.
     with pytest.raises(ValueError, match="different E2E test run"):  # Reject a foreign cloud script.
         cloud.write("evidence", {"value": [], "test_run_id": "owner-b"})  # Supply the wrong owner.
