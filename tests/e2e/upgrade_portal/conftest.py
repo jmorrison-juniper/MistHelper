@@ -117,6 +117,7 @@ from tests.support.upgrade_portal_e2e import (  # Build isolated resources, envi
     build_child_environment,
     build_e2e_overrides,
 )
+from tests.support.upgrade_portal_e2e.records.audit import AuditTrailIsolation  # Issue #3498: the trail guard.
 
 logger = logging.getLogger(__name__)
 
@@ -674,8 +675,65 @@ def _start_server() -> subprocess.Popen[bytes] | None:
     return None
 
 
+AUDIT_GUARD_KEY = pytest.StashKey[str]()  # Issue #3498: the measure that the terminal summary prints.
+AUDIT_GUARD_RECORD = "checkout-audit-trail-guard.json"  # Issue #3498: the record of the two counts.
+
+
 @pytest.fixture(scope="session")
-def capture_portal_server() -> Iterator[str]:
+def checkout_audit_trail_guard(request: pytest.FixtureRequest) -> Iterator[AuditTrailIsolation]:
+    """Count the checkout audit trail before the portal starts and after it stops.
+
+    Why:
+        Issue #3498. The test portal wrote each lock action to the checkout
+        trail, which is the production audit trail in the main checkout. The
+        header guard `persistent_store_baseline` compares fixed values, so it
+        could not see the leak. This guard reads the file itself. The fixture
+        `capture_portal_server` depends on it. The first count therefore runs
+        before the child starts, and the second count runs after the child
+        stops.
+
+        Caution: the production container writes the trail of the main
+        checkout. A real lock action during a run in the main checkout also
+        fails this guard. Run the browser suite in a worktree.
+
+    Args:
+        request: The fixture request, which carries the run configuration.
+
+    Yields:
+        The isolation of this run. A journey reads its two trails.
+    """
+    isolation = AuditTrailIsolation(ARTIFACT_DIRECTORY)  # The parent never moves its own trail.
+    logger.info("Count the checkout audit trail before the browser run")  # Log before the first count.
+    before = isolation.count_lines(isolation.checkout_trail)  # An unreadable trail fails here, before any test.
+    yield isolation  # The browser run happens here.
+    after = isolation.count_lines(isolation.checkout_trail)  # The child stopped, so no write can follow.
+    measure = isolation.measure(before, after)  # The sentence that states what the guard checked.
+    request.config.stash[AUDIT_GUARD_KEY] = measure  # The terminal summary prints the measure.
+    record = {"checkout_trail": str(isolation.checkout_trail), "before": before, "after": after, "measure": measure}
+    (ARTIFACT_DIRECTORY / AUDIT_GUARD_RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    logger.debug("Wrote the checkout audit trail record: %s", measure)  # Log after the record write.
+    isolation.require_unchanged(before, after)  # A changed count fails the run.
+
+
+def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
+    """Print the measure of the checkout audit trail guard.
+
+    Why:
+        Issue #3498. A guard must state what it checked. The fixture
+        `checkout_audit_trail_guard` stores one sentence, and this hook prints
+        it at the end of the run.
+
+    Args:
+        terminalreporter: The reporter that writes the terminal summary.
+        config: The pytest configuration for this run.
+    """
+    measure = config.stash.get(AUDIT_GUARD_KEY, "")  # Empty when no browser test started the portal.
+    if measure:  # A run that started no portal has no measure to print.
+        terminalreporter.write_line(measure)  # One line in the terminal summary.
+
+
+@pytest.fixture(scope="session")
+def capture_portal_server(checkout_audit_trail_guard: AuditTrailIsolation) -> Iterator[str]:
     """Give every browser test the address of a portal this fixture started.
 
     Why:
@@ -685,9 +743,14 @@ def capture_portal_server() -> Iterator[str]:
         answers are both faults, and the fixture names them. A workstation that
         can run no WSGI server is not a fault, so that one state reports a skip.
 
+    Args:
+        checkout_audit_trail_guard: Issue #3498. The guard counts the checkout
+            trail before this portal starts and after it stops.
+
     Yields:
         The base address of the running portal.
     """
+    del checkout_audit_trail_guard  # Requested for its two counts alone.
     if _probe_port(CAPTURE_PORT):  # A portal this fixture did not start holds no sign-in seam.
         # Issue #2260: an earlier run of this suite may own the port. The record
         # names that portal, so this run may reclaim the port instead of failing.
@@ -2371,6 +2434,12 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     from src.upgrade_portal.app.routes import upgrade  # Own the seeded run write helper.
 
     _reset_cached_state()  # Clear each cached production handle before the override set installs.
+    # WHY: Issue #3498. The site lock writes each lock action to the checkout
+    # trail, which is the production audit trail in the main checkout. This
+    # child moves the trail into the artifact directory of its run before any
+    # route exists. The history page reads the same trail, so the audit log
+    # of this portal shows the lock actions of this run alone.
+    AuditTrailIsolation(ARTIFACT_DIRECTORY).place()  # The move stays for the whole life of the child.
     overrides = _build_factory_overrides()  # Build every required process-owned dependency before routes.
     built = create_app(overrides)  # Validate and install overrides before blueprint registration.
     from src.upgrade_portal.app.routes import org_upgrade
