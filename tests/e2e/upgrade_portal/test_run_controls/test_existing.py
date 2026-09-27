@@ -25,18 +25,31 @@ What this module skips and what it fails:
     from a page that must hold it, and when a press produces no result. The
     fixture starts its own portal, so a 401 and a 404 are both faults of that
     portal, and neither may report a pass.
+
+How each test leaves the site:
+    Issue #3497. The runs of this module held the lock of the stand-in site
+    after the last test, and the next module met that lock. Each test now
+    records each run that it builds. The teardown of `portal_page` ends each
+    live run of that record, and then it frees the site lock. A refusal in the
+    teardown reports an error, because a skip would hide the next leak.
 """
 
 from __future__ import annotations
 
 import json
+import logging  # Record each step that builds a run or takes the site lock.
+from collections.abc import Iterator  # The fixture `portal_page` yields, so its teardown runs after the test.
 from typing import Any
 
 import pytest
 
+from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3497: the teardown.
+
 # The Playwright package must exist before this module defines a browser test.
 # A run without the package reports a skip and never an import error.
 sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
+
+logger = logging.getLogger(__name__)  # Keep each record of this module tied to its name.
 
 # `contracts/http-api.md` fixes this path for the site picker.
 SITE_PAGE_PATH = "/select/site"
@@ -128,17 +141,63 @@ def _browser_page(request: pytest.FixtureRequest) -> Any:
     return page
 
 
+@pytest.fixture(name="run_ledger")
+def fixture_run_ledger() -> RunLedger:
+    """Return an empty ledger for the runs that one test builds.
+
+    Why:
+        Issue #3497. The teardown of `portal_page` ends each run of this ledger,
+        so no run of this module holds the stand-in site after its test.
+
+    Returns:
+        The ledger of this test.
+    """
+    return RunLedger()  # Each test starts with no recorded run.
+
+
 @pytest.fixture(name="portal_page")
-def fixture_portal_page(request: pytest.FixtureRequest) -> Any:
-    """Return a signed-in browser page that points at the portal.
+def fixture_portal_page(request: pytest.FixtureRequest, run_ledger: RunLedger) -> Iterator[Any]:
+    """Yield a signed-in browser page that points at the portal, and free the site after the test.
+
+    Why:
+        Issue #3497. The runs of this module held the lock of the stand-in site
+        after the last test. The fixture `held_site` of `test_two_operators.py`
+        then resumed that lock, and after 300 seconds it met a refusal. The
+        teardown ends each live run of the ledger, and then it frees the site.
+        The teardown runs even when the test fails.
 
     Args:
         request: The pytest request that resolves the fixture.
+        run_ledger: The ledger of the runs that this test builds.
 
-    Returns:
+    Yields:
         The Playwright page object.
+
+    Raises:
+        AssertionError: If a step of the teardown answers a refusal.
     """
-    return _browser_page(request)
+    page = _browser_page(request)  # A missing browser binary is the one skip.
+    yield page
+    _free_the_site(page, run_ledger)  # The next test and the next module then find the site free.
+
+
+def _free_the_site(page: Any, ledger: RunLedger) -> None:
+    """End each live run of one test, and then free the site lock of that test.
+
+    Why:
+        The release route reads the lock record from the session of this
+        browser, so the teardown uses the request source of the same page.
+
+    Args:
+        page: The browser page of the test.
+        ledger: The ledger of the runs that the test built.
+    """
+    logger.info("Free the stand-in site after one test of the run controls")  # Log before the teardown.
+    site_id = _first_site_id(page)  # The picker page also publishes a fresh token.
+    release = SiteRelease(page.request, _csrf_token(page))  # The same session holds the lock record.
+    ended = release.end_runs(ledger.runs)  # A live run would hold the site for the next test.
+    release.free_site(site_id)  # A held lock would resume in the next module.
+    logger.debug("The teardown ended %s run(s) and freed the site", ended)  # Log after the teardown.
 
 
 def _first_site_id(page: Any) -> str:
@@ -200,11 +259,12 @@ def _named_live_run(answer: Any, path: str) -> str:
     return named
 
 
-def _create_run(page: Any) -> str:
+def _create_run(page: Any, ledger: RunLedger) -> str:
     """Create one upgrade run for the first site and return its key.
 
     Args:
         page: The browser page that points at the portal.
+        ledger: The ledger of the test. It records each run that the call built.
 
     Returns:
         The key of the run that this journey drives.
@@ -214,39 +274,55 @@ def _create_run(page: Any) -> str:
             401 or 404. All three name a fault of the portal that this run
             started, so none of them may report a skip.
     """
-    site_id = _first_site_id(page)
-    path = RUNS_API_TEMPLATE.format(site_id=site_id)
-    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}
+    site_id = _first_site_id(page)  # The first site row of the stand-in cloud.
+    path = RUNS_API_TEMPLATE.format(site_id=site_id)  # The create route of that site.
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # Each write needs both.
+    logger.info("Create one run for the first site")  # Log before the create call.
     try:  # The fixture started this portal, so a call that fails names a fault of it.
         answer = page.request.post(path, headers=headers, data="{}", timeout=CREATE_TIMEOUT_MS)
     except Exception as failure:  # The portal died, or it never bound the port.
         raise AssertionError(f"The create call to {path} did not complete. Cause: {failure}") from failure
+    logger.debug("The create call answered %s", answer.status)  # Log after the create call.
     if answer.status == UNAUTHORIZED_STATUS:  # `identity.require_session` refused the request.
         raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
     if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
         raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
     if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
-        return _named_live_run(answer, path)
+        return _named_live_run(answer, path)  # A seed or an earlier module built that run, so no record.
     if answer.status != CREATED_STATUS:  # No run exists, so no page of this journey can open.
         pytest.skip(f"{path} answered {answer.status}. The contract fixes 201, so no run key exists.")
-    return str(json.loads(answer.text())["run_id"])
+    run_id = str(json.loads(answer.text())["run_id"])  # The key of the run that this call built.
+    ledger.record(run_id)  # The teardown ends this run, so it cannot hold the site after the test.
+    return run_id  # The caller opens the page of this run.
 
 
-def _take_site_lock_without_a_live_run(page: Any) -> None:
-    """Take the site lock, then end the temporary run that acquired it."""
-    run_id = _create_run(page)
-    path = f"/api/runs/{run_id}/cancel"
-    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}
-    answer = page.request.post(path, headers=headers, data="{}", timeout=CREATE_TIMEOUT_MS)
-    if answer.status != OK_STATUS:
+def _take_site_lock_without_a_live_run(page: Any, ledger: RunLedger) -> None:
+    """Take the site lock, then end the temporary run that acquired it.
+
+    Args:
+        page: The browser page that points at the portal.
+        ledger: The ledger of the test. It records the temporary run.
+
+    Raises:
+        AssertionError: If the cancel or the take answers any status but 200.
+    """
+    run_id = _create_run(page, ledger)  # The create call takes the site lock for this browser.
+    path = f"/api/runs/{run_id}/cancel"  # The cancel route of the temporary run.
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # Each write needs both.
+    logger.info("Cancel the temporary run that took the site lock")  # Log before the cancel.
+    answer = page.request.post(path, headers=headers, data="{}", timeout=CREATE_TIMEOUT_MS)  # End the run.
+    logger.debug("The cancel of the temporary run answered %s", answer.status)  # Log after the cancel.
+    if answer.status != OK_STATUS:  # A live temporary run would block the retry.
         raise AssertionError(f"{path} answered {answer.status}, so the temporary lock run stayed live.")
-    site_id = _first_site_id(page)
-    lock_path = f"/api/sites/{site_id}/lock"
-    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}
-    answer = page.request.fetch(
+    site_id = _first_site_id(page)  # The picker page also publishes a fresh token.
+    lock_path = f"/api/sites/{site_id}/lock"  # The lock route of the same site.
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # The token of the new page.
+    logger.info("Take the site lock again with the word continue")  # Log before the take.
+    answer = page.request.fetch(  # The word `continue` covers a lock that stayed quiet for 300 seconds.
         lock_path, method="post", headers=headers, data=json.dumps({"confirm": "continue"}), timeout=CREATE_TIMEOUT_MS
     )
-    if answer.status != OK_STATUS:
+    logger.debug("The take of the site lock answered %s", answer.status)  # Log after the take.
+    if answer.status != OK_STATUS:  # The retry control reads this lock, so the test cannot go on.
         raise AssertionError(
             f"{lock_path} answered {answer.status}: {answer.text()}, so the browser did not regain the site lock."
         )
@@ -312,7 +388,7 @@ def _require_enabled(control: Any, name: str) -> None:
 
 
 @pytest.fixture(name="scheduled_run_page")
-def fixture_scheduled_run_page(portal_page: Any) -> Any:
+def fixture_scheduled_run_page(portal_page: Any, run_ledger: RunLedger) -> Any:
     """Return the run page of a run that has not begun.
 
     Why:
@@ -322,20 +398,21 @@ def fixture_scheduled_run_page(portal_page: Any) -> Any:
 
     Args:
         portal_page: The browser page that points at the portal.
+        run_ledger: The ledger of the test. It records the run that this fixture builds.
 
     Returns:
         The Playwright page object, on the run page.
     """
-    run_id = _create_run(portal_page)
-    _open_run_page(portal_page, run_id)
-    region = portal_page.get_by_test_id(SCHEDULE_REGION_ID)
+    run_id = _create_run(portal_page, run_ledger)  # The teardown of `portal_page` ends this run.
+    _open_run_page(portal_page, run_id)  # Open the page the way an operator opens a link.
+    region = portal_page.get_by_test_id(SCHEDULE_REGION_ID)  # The region of the two schedule controls.
     if region.count() < 1:  # The run already reached the cloud, so the stop control applies instead.
         pytest.skip("The run page holds no schedule region, so this run already reached the cloud.")
-    return portal_page
+    return portal_page  # The test presses the controls of this page.
 
 
 @pytest.fixture(name="failed_run_page")
-def fixture_failed_run_page(portal_page: Any) -> Any:
+def fixture_failed_run_page(portal_page: Any, run_ledger: RunLedger) -> Any:
     """Return the run page of the seeded failed run.
 
     Why:
@@ -350,11 +427,12 @@ def fixture_failed_run_page(portal_page: Any) -> Any:
 
     Args:
         portal_page: The browser page that points at the portal.
+        run_ledger: The ledger of the test. It records the temporary run of the lock.
 
     Returns:
         The Playwright page object, on the run page of the failed run.
     """
-    _take_site_lock_without_a_live_run(portal_page)  # Keep the lock without blocking the retry.
+    _take_site_lock_without_a_live_run(portal_page, run_ledger)  # Keep the lock without blocking the retry.
     for _ in range(SEED_TRIES):  # The seed runs on its own thread, so it may land a moment after the bind.
         opened = _open_seeded_run_page(portal_page, FAILED_RUN_ID)  # False while the seed is not written.
         if opened and portal_page.get_by_test_id(RETRY_REGION_ID).count() >= 1:  # The seeded run is readable now.
@@ -471,7 +549,7 @@ class TestTheRetryControl:
         assert scheduled_run_page.get_by_test_id(RETRY_REGION_ID).count() == 0, "a live run offers no retry"
         assert scheduled_run_page.get_by_test_id(RETRY_BUTTON_ID).count() == 0, "a live run offers no retry"
 
-    def test_a_plain_press_builds_a_retry_of_a_failed_run(self, failed_run_page: Any) -> None:
+    def test_a_plain_press_builds_a_retry_of_a_failed_run(self, failed_run_page: Any, run_ledger: RunLedger) -> None:
         """A plain press MUST build a retry and MUST ask for a fresh capture.
 
         Why:
@@ -479,28 +557,30 @@ class TestTheRetryControl:
             rebuilds a plan by hand and drops a setting on the way. Only a press
             proves that the button carries the run key to the route.
         """
-        page = failed_run_page
-        button = page.get_by_test_id(RETRY_BUTTON_ID)
-        _require_enabled(button, RETRY_BUTTON_ID)
+        page = failed_run_page  # The run page of the seeded failed run.
+        button = page.get_by_test_id(RETRY_BUTTON_ID)  # The one-press retry control.
+        _require_enabled(button, RETRY_BUTTON_ID)  # The control needs the site lock of this browser.
 
         button.click()  # A plain press. No force, and no raised timeout.
 
         page.wait_for_url(f"**{CAPTURE_PAGE_PATH}?site_id=*&run_id=*&role=pre", timeout=FLASH_TIMEOUT_MS)
+        run_ledger.record_from_url(page.url)  # Issue #3497: the teardown ends the retry run.
         assert page.get_by_test_id("capture-start-button").get_attribute("data-run-id")
 
-    def test_a_stopped_run_offers_a_fresh_run_capture(self, portal_page: Any) -> None:
+    def test_a_stopped_run_offers_a_fresh_run_capture(self, portal_page: Any, run_ledger: RunLedger) -> None:
         """A stopped attempt can restart without rebuilding the plan by hand."""
-        _take_site_lock_without_a_live_run(portal_page)  # Keep the lock without a conflicting run.
-        for _ in range(SEED_TRIES):
+        _take_site_lock_without_a_live_run(portal_page, run_ledger)  # Keep the lock without a conflicting run.
+        for _ in range(SEED_TRIES):  # The seed runs on its own thread, so it may land a moment after the bind.
             opened = _open_seeded_run_page(portal_page, STOPPED_RUN_ID)  # False while the seed is not written.
-            button = portal_page.get_by_test_id(RETRY_BUTTON_ID)
+            button = portal_page.get_by_test_id(RETRY_BUTTON_ID)  # The retry control of the stopped run.
             if opened and button.count() == 1:  # The seeded run shows its retry control.
                 break
-            portal_page.wait_for_timeout(SEED_PAUSE_MS)
-        sync_api.expect(button).to_be_visible()
-        _require_enabled(button, RETRY_BUTTON_ID)
-        button.click()
+            portal_page.wait_for_timeout(SEED_PAUSE_MS)  # Give the writer thread one more moment.
+        sync_api.expect(button).to_be_visible()  # The control must be on the page before the press.
+        _require_enabled(button, RETRY_BUTTON_ID)  # The control needs the site lock of this browser.
+        button.click()  # A plain press. No force, and no raised timeout.
         portal_page.wait_for_url(f"**{CAPTURE_PAGE_PATH}?site_id=*&run_id=*&role=pre", timeout=FLASH_TIMEOUT_MS)
-        capture_start = portal_page.get_by_test_id("capture-start-button")
-        sync_api.expect(capture_start).to_be_visible()
+        run_ledger.record_from_url(portal_page.url)  # Issue #3497: the teardown ends the retry run.
+        capture_start = portal_page.get_by_test_id("capture-start-button")  # The first control of the retry.
+        sync_api.expect(capture_start).to_be_visible()  # The operator must see where to start.
         assert capture_start.get_attribute("data-run-id")
