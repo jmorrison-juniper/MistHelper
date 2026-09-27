@@ -70,12 +70,17 @@
                     capture_lead_text, capture_holder_text, and
                     capture_caption_text. The page with no site names every
                     site, and the page of one site names that site.
+    history_columns - the columns of the Captures table (issue #3486). It
+                      gives shows_site_column, column_count, and
+                      row_values_text. The page with no site shows the Site
+                      column, and the page of one site keeps nine columns.
     history_view - the view model. Holds rows, total, page_size, offset,
                    has_next, has_previous, next_url, and previous_url.
                    Each row holds capture_id, started_at, role, capture_status,
                    device_count, client_count, stored_size_bytes,
                    stored_size_text, row_test_id, open_test_id, open_url,
-                   device_type_text, and device_type_test_id. The view also
+                   device_type_text, device_type_test_id, site_text, and
+                   site_test_id. The view also
                    gives total_text, offset_text, and page_size_text, which
                    are the three counts of the note with the noun of each
                    count (issue #3449).
@@ -115,6 +120,18 @@
 {% set capture_lead_text = scope.capture_lead_text | default('The list shows the stored captures.', true) %}
 {% set capture_holder_text = scope.capture_holder_text | default('The site holds', true) %}
 {% set capture_caption_text = scope.capture_caption_text | default('The stored captures of the site.', true) %}
+
+{#
+  Issue #3486. The page with no site lists the captures of every site in one
+  table, and no column named the site of a row. The route now supplies the
+  columns, and the columns settle the Site column, the column count, and the
+  second sentence of the caption. This template prints the values and holds no
+  rule. A page with no column value prints the nine columns of today.
+#}
+{% set columns = history_columns | default(none, true) %}
+{% set shows_site_column = columns.shows_site_column | default(false) %}
+{% set capture_column_count = columns.column_count | default(9, true) %}
+{% set capture_row_values_text = columns.row_values_text | default('Each row holds the moment, the role, the state, the device count, the device types, the client count, and the stored size.', true) %}
 
 {#
   The moment map holds the short moment of each row, keyed by the capture
@@ -469,17 +486,18 @@
 </p>
 
 <div class="portal-table-scroll">
-  <table class="portal-table history-table" id="history-table" data-testid="history-table"
+  <table class="portal-table history-table{% if shows_site_column %} history-table-sites{% endif %}" id="history-table" data-testid="history-table"
                  data-sortable>
     <caption class="visually-hidden">
-      {{ capture_caption_text }} Each row holds the moment, the role, the
-      state, the device count, the device types, the client count, and the
-      stored size.
+      {{ capture_caption_text }} {{ capture_row_values_text }}
     </caption>
 
     <thead>
       <tr>
         <th scope="col">Capture</th>
+        {% if shows_site_column %}
+          <th scope="col">Site</th>
+        {% endif %}
         <th scope="col">Started</th>
         <th scope="col">Role</th>
         <th scope="col">State</th>
@@ -509,6 +527,23 @@
             identifier in a support case therefore loses nothing.
           #}
           <th scope="row" class="cell-mono cell-capture" title="{{ row.capture_id }}">{{ row.capture_id }}</th>
+
+          {#
+            Issue #3486. The page with no site lists the captures of every
+            site, so each row names its site. The cell clips a long name and
+            keeps the whole name in the title attribute, as the capture cell
+            does. A row with no capture identifier carries no test identifier,
+            as the device type cell does.
+          #}
+          {% if shows_site_column %}
+            {% set site_text = row.site_text | default('', true) %}
+            {% set site_test_id = row.site_test_id | default('', true) %}
+            {% if site_test_id %}
+              <td class="cell-site" title="{{ site_text }}" data-testid="{{ site_test_id }}">{{ site_text }}</td>
+            {% else %}
+              <td class="cell-site" title="{{ site_text }}">{{ site_text }}</td>
+            {% endif %}
+          {% endif %}
 
           {#
             The cell shows the short moment and holds the stored moment. The
@@ -570,7 +605,7 @@
         </tr>
       {% else %}
         <tr>
-          <td colspan="9" class="portal-table-empty">
+          <td colspan="{{ capture_column_count }}" class="portal-table-empty">
             The portal found no stored capture. Run a pre-check capture first.
           </td>
         </tr>
