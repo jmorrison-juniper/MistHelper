@@ -617,50 +617,6 @@
   },
   {
     "category": "weak_assertion",
-    "explanation": "Test function 'test_bulk_preview_replaces_selection_and_gates_the_exact_phrase' contains no assertions.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "heuristic": false,
-    "line_number": 34,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "Test function 'test_bulk_preview_close_returns_focusable_history_controls' contains no assertions.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "heuristic": false,
-    "line_number": 67,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "Test function 'test_bulk_cancel_shows_the_durable_atomic_result' contains no assertions.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "heuristic": false,
-    "line_number": 80,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "Test function 'test_bulk_retry_links_the_new_run_to_a_fresh_precheck' contains no assertions.",
-    "file_path": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "heuristic": false,
-    "line_number": 94,
-    "related_source": "tests/e2e/upgrade_portal/test_run_controls/test_bulk.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
     "explanation": "Test function 'test_site_search_field_is_present' contains no assertions.",
     "file_path": "tests/e2e/upgrade_portal/test_site_selection.py",
     "heuristic": false,

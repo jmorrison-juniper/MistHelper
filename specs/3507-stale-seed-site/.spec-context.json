@@ -1,0 +1,17 @@
+{
+  "feature": "3507-stale-seed-site",
+  "issue": 3507,
+  "branch": "fix/3507-stale-seed-site",
+  "currentStep": "tasks",
+  "status": "planned",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "research.md",
+    "plan.md",
+    "tasks.md"
+  ],
+  "workflow": "speckit",
+  "specName": "",
+  "history": []
+}

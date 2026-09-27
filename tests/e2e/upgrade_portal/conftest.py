@@ -110,6 +110,7 @@ from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site
     SHORT_SITE_NAME,
     SHORT_SITE_REASON,
 )
+from tests.e2e.upgrade_portal.stale_run_seeds import StaleRunSeeds  # Issue #3507: the stale runs on their own site.
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, build_sdk_answer  # Issue #3438: real SDK answers.
 from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, and stores.
     RunOwnerHeaderCheck,
@@ -2207,8 +2208,6 @@ FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test open
 STOPPED_RUN_ID = "e2e-stopped-run-0001"  # The seeded run that proves a cancelled attempt can restart.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
 START_READY_RUN_ID = "e2e-start-ready-run-0001"  # The seeded run that proves the firmware start call.
-STALE_PRE_CLOUD_RUN_ID = "e2e-stale-precloud-0001"
-STALE_STOPPING_RUN_ID = "e2e-stale-stopping-0001"
 BULK_RETRY_RUN_ID = "e2e-bulk-retry-run-0001"
 BULK_RETRY_SITE_ID = "55555555-5555-5555-5555-555555555555"
 LIFECYCLE_RUN_ID = "e2e-lifecycle-run-0001"
@@ -2282,32 +2281,6 @@ def _start_ready_run_record() -> dict[str, Any]:
     return record  # Return a mutable copy that the start route may advance.
 
 
-def _stale_precloud_run_record() -> dict[str, Any]:
-    """Build one stale pre-cloud run for atomic bulk cancel."""
-    return {
-        "run_id": STALE_PRE_CLOUD_RUN_ID,
-        "site_id": STAND_IN_SITE_ID,
-        "org_id": STAND_IN_ORG_ID,
-        "state": "awaiting_confirmation",
-        "updated_at": "2026-09-01T10:00:00+00:00",
-        "targets": [],
-        "options": {},
-    }
-
-
-def _stale_stopping_run_record() -> dict[str, Any]:
-    """Build one stale stopping run for read-only reconciliation."""
-    return {
-        "run_id": STALE_STOPPING_RUN_ID,
-        "site_id": STAND_IN_SITE_ID,
-        "org_id": STAND_IN_ORG_ID,
-        "state": "stopping",
-        "updated_at": "2026-09-01T10:00:00+00:00",
-        "targets": [{"device_id": "e2e-target-one", "cloud_task_id": "e2e-task-one"}],
-        "options": {},
-    }
-
-
 def _bulk_retry_run_record() -> dict[str, Any]:
     """Build one isolated failed source for atomic bulk retry."""
     return {
@@ -2359,39 +2332,38 @@ def _seed_fixture_runs(built: Any, upgrade: Any) -> None:
 
 
 def _write_fixture_runs(built: Any, upgrade: Any) -> None:
-    """Write both seeded run records, and report a refusal instead of raising."""
-    try:
-        with built.app_context():
-            failed_written = upgrade.save_run(_failed_run_record())
-            stopped_written = upgrade.save_run(_stopped_run_record())
-            prepared_written = upgrade.save_run(_prepared_run_record())
-            start_ready_written = upgrade.save_run(_start_ready_run_record())
-            stale_precloud_written = upgrade.save_run(_stale_precloud_run_record())
-            stale_stopping_written = upgrade.save_run(_stale_stopping_run_record())
-            bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())
-            lifecycle_written = upgrade.save_run(_lifecycle_run_record())
+    """Write each seeded run record, and report a refusal instead of raising."""
+    logger.info("Write the seeded run records of the browser server")  # Log before the writes.
+    try:  # A refusal must not stop the server, so each related test reports the missing state.
+        with built.app_context():  # The store reads the application settings.
+            failed_written = upgrade.save_run(_failed_run_record())  # The run of the retry journey.
+            stopped_written = upgrade.save_run(_stopped_run_record())  # The run of the fresh-attempt journey.
+            prepared_written = upgrade.save_run(_prepared_run_record())  # The run of the confirmation link.
+            start_ready_written = upgrade.save_run(_start_ready_run_record())  # The run of the firmware start.
+            stale_written = StaleRunSeeds.write(upgrade, STAND_IN_ORG_ID)  # Issue #3507: on the stale site.
+            bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())  # The source of the bulk retry.
+            lifecycle_written = upgrade.save_run(_lifecycle_run_record())  # The run of the lifecycle tests.
             org_controls_written = OrgControlSeeds.write(upgrade, identity)  # Issue #3247: two operations.
             org_cancel_written = OrgCancelSeeds.write(upgrade, identity)  # Issue #3246: the running operation.
             org_ended_written = OrgEndedSeeds.write(upgrade, identity)  # Issue #3367: one child job ended first.
             later_check_written = LaterCheckSeeds.write(upgrade, identity)  # Issue #3439: the retry of page two.
-    except Exception as failure:
+    except Exception as failure:  # Any store fault ends the writes, and the warning names the cause.
         logger.warning(
             "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
             failure,
         )
-        return
+        return  # The server keeps running with the records that the store accepted.
     logger.info(
         (
             "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
-            "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s org_controls=%s "
+            "start_ready=%s stale=%s bulk_retry=%s lifecycle=%s org_controls=%s "
             "org_cancel=%s org_ended=%s later_check=%s"
         ),
         failed_written,
         stopped_written,
         prepared_written,
         start_ready_written,
-        stale_precloud_written,
-        stale_stopping_written,
+        stale_written,
         bulk_retry_written,
         lifecycle_written,
         org_controls_written,
