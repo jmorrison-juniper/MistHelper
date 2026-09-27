@@ -1651,7 +1651,8 @@ def stand_in_capture(
         The comparison journey and the history journey both need a stored
         capture, and no browser test can write one. The device map comes from
         the shipped `build_device_index`, so the test proves the stored shape
-        and never a shape that this file alone builds.
+        and never a shape that this file alone builds. Issue #3492: the count
+        map comes from the shipped `build_counts` for the same reason.
 
     Args:
         capture_id: The business key that the picker publishes.
@@ -1667,10 +1668,10 @@ def stand_in_capture(
     from src.upgrade_portal.capture import devices  # Late, so a plain collection never loads the portal.
 
     records = [{**device, "version": version} for device in stand_in_site_devices(site_id)]  # The site inventory.
-    index = devices.build_device_index(records, [])
-    clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]
+    index = devices.build_device_index(records, [])  # Issue #3494: no statistics list, so each state is empty.
+    clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]  # Radios.
     site_name = SECOND_SITE_NAME if site_id == SECOND_SITE_ID else STAND_IN_SITE_NAME  # The name of the site row.
-    return {
+    capture: dict[str, Any] = {  # The stored shape. Issue #3492: the count map follows below.
         "capture_id": capture_id,
         "run_id": STAND_IN_RUN_ID,
         "org_id": STAND_IN_ORG_ID,
@@ -1690,9 +1691,41 @@ def stand_in_capture(
         "device_index": index,
         "devices": records,
         "clients": {"wired": [], "wireless": clients, "guest": []},
-        "counts": {"devices_total": len(records), "clients_wired": 0, "clients_wireless": len(clients)},
+        "counts": {},  # Issue #3492: `stand_in_counts` fills this map below, so the key order stays the same.
         "partial_reasons": [],
     }
+    capture["counts"] = stand_in_counts(capture)  # Issue #3492: the nine counts of a real capture.
+    return capture  # One capture document with the count map of the shipped builder.
+
+
+def stand_in_counts(capture: dict[str, Any]) -> dict[str, int]:
+    """Build the count map of one seed capture with the shipped builder.
+
+    Why:
+        Issue #3492. A real capture holds the nine counts of `build_counts`,
+        and three of them count the devices of each type. A count map written
+        by hand held three keys only, so each seed row of the history read
+        "No device type". The function reads the builder through the module
+        name at call time, so a direct test can replace the builder.
+
+    Args:
+        capture: One seed capture with its device index, its device records,
+            and its client lists.
+
+    Returns:
+        The nine counts that a real capture of the same lists holds.
+    """
+    from src.upgrade_portal.capture import assembly  # Late, so a plain collection never loads the portal.
+
+    logger.info("Build the count map of the seed capture %s", capture["capture_id"])  # Log before the build.
+    sections = assembly.CaptureSections(  # The three parts of a capture that the builder reads.
+        device_index=capture["device_index"],  # The joined type and state of each device.
+        devices=capture["devices"],  # The device records of the site.
+        clients=capture["clients"],  # The wired, the wireless, and the guest client lists.
+    )
+    counts = assembly.build_counts(sections)  # The shipped writer of the count map of a real capture.
+    logger.debug("The seed capture %s holds the counts %s", capture["capture_id"], counts)  # Log after the build.
+    return counts  # The caller stores the map in the capture document.
 
 
 def stand_in_tier3_capture() -> dict[str, Any]:
@@ -1719,6 +1752,7 @@ def stand_in_tier3_capture() -> dict[str, Any]:
             "ssid": "guest-wifi",
         }
     ]
+    capture["counts"] = stand_in_counts(capture)  # Issue #3492: the count map now counts the guest client too.
     capture["extras"] = {
         "switch_ports": [{"mac": switch_mac, "port_id": "ge-0/0/1", "up": True, "speed": 1000}],
         "poe": [{"mac": switch_mac, "port_id": "ge-0/0/1", "poe_on": True, "power_draw": 4.5}],
