@@ -32,6 +32,14 @@ How each test leaves the site:
     records each run that it builds. The teardown of `portal_page` ends each
     live run of that record, and then it frees the site lock. A refusal in the
     teardown reports an error, because a skip would hide the next leak.
+
+Which runs share the first site:
+    Issue #3507. The two stale seed runs of the bulk tests sat on the first
+    site. So each create call of this module met a seed run in place of its
+    own run, and the module passed only when `test_bulk.py` ran first. The
+    seed runs now sit on a site of their own. The fixture `scheduled_run_page`
+    fails when the run page holds no schedule region, because a skip hid that
+    fault.
 """
 
 from __future__ import annotations
@@ -288,7 +296,7 @@ def _create_run(page: Any, ledger: RunLedger) -> str:
     if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
         raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
     if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
-        return _named_live_run(answer, path)  # A seed or an earlier module built that run, so no record.
+        return _named_live_run(answer, path)  # An earlier module built that run, so the ledger does not record it.
     if answer.status != CREATED_STATUS:  # No run exists, so no page of this journey can open.
         pytest.skip(f"{path} answered {answer.status}. The contract fixes 201, so no run key exists.")
     run_id = str(json.loads(answer.text())["run_id"])  # The key of the run that this call built.
@@ -402,12 +410,24 @@ def fixture_scheduled_run_page(portal_page: Any, run_ledger: RunLedger) -> Any:
 
     Returns:
         The Playwright page object, on the run page.
+
+    Raises:
+        AssertionError: If the run page holds no schedule region. Issue #3507:
+            a skip here hid a seed run that held the first site, because the
+            create call then named that seed run in place of a fresh run.
     """
+    logger.info("Open the run page of a run that has not begun")  # Log before the create call and the page.
     run_id = _create_run(portal_page, run_ledger)  # The teardown of `portal_page` ends this run.
     _open_run_page(portal_page, run_id)  # Open the page the way an operator opens a link.
     region = portal_page.get_by_test_id(SCHEDULE_REGION_ID)  # The region of the two schedule controls.
-    if region.count() < 1:  # The run already reached the cloud, so the stop control applies instead.
-        pytest.skip("The run page holds no schedule region, so this run already reached the cloud.")
+    if region.count() < 1:  # A run that has not begun must offer the schedule controls.
+        state_cell = portal_page.get_by_test_id(RUN_STATE_ID)  # The run state that the page paints.
+        state = state_cell.inner_text().strip() if state_cell.count() >= 1 else "no state"  # No wait on a gap.
+        raise AssertionError(
+            f"The run page of {run_id} holds no schedule region, and the page shows the state {state!r}. "
+            "A run that has not begun must offer the schedule controls."
+        )
+    logger.debug("The run page of %s shows the schedule region", run_id)  # Log after the page check.
     return portal_page  # The test presses the controls of this page.
 
 
