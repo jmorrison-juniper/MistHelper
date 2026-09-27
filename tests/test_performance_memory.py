@@ -8,8 +8,10 @@ from __future__ import annotations  # Keep annotations lazy during test collecti
 
 import logging  # Report test actions before and after they run.
 
-from tools.performance_memory import EventFactory, PerformanceMemoryHarness  # Reuse the measured scenarios.
-
+from scripts.benchmarks.performance_memory import (  # Reuse the measured scenarios.
+    EventFactory,
+    PerformanceMemoryHarness,
+)
 from src.utils.performance import privacy  # Check the safe value cache bound.
 from src.utils.performance.sink import DEFAULT_MAX_BYTES, BoundedSink  # Check the queue capacity bound.
 

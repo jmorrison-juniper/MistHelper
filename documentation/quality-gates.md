@@ -18,17 +18,19 @@ The `misthelper-devtools` package supplies `test-quality-analyzer`,
 `complexity-gate`, and `tools.check_citations`. `requirements-dev.txt` pins
 that package to one commit.
 
-The test quality baseline is `.github/test-quality-baseline.json`. The
-`test_quality_gate` job gives that file to each analyzer run. Without the
+The test quality baseline is `.github/test-quality-baseline.json`, and the
+analyzer settings are `.github/test-quality-config.toml`. The
+`test_quality_gate` job gives both files to each analyzer run. Without the
 `--baseline` option, the command reads the copy inside the installed package,
-and MistHelper cannot change that copy (issue #3422). A change to the baseline
-makes the job check the whole suite.
+and MistHelper cannot change that copy (issue #3422). Without the `--config`
+option, the command reads the rule settings inside the installed package
+(issue #3466). A change to either file makes the job check the whole suite.
 
 To remove the entries for test files that no longer exist, run this command at
 the repository root.
 
 ```text
-test-quality-analyzer --prune-baseline --baseline .github/test-quality-baseline.json
+test-quality-analyzer --prune-baseline --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
 ```
 
 To make the baseline hold the current findings and nothing else, use
@@ -58,7 +60,7 @@ The analyzer writes `report.json` and `summary.md` into
 | `vulture` | `vulture $VULTURE_PATHS --min-confidence $VULTURE_CONFIDENCE` | Zero findings at confidence 70. |
 | `pydocstyle` | `pydocstyle $PYDOCSTYLE_PATHS` | Zero docstring style violations. |
 | `interrogate` | `interrogate $INTERROGATE_PATHS --fail-under $INTERROGATE_THRESHOLD` | Coverage at least 90 percent. |
-| `test_quality_gate` | `test-quality-analyzer --gate --baseline .github/test-quality-baseline.json` | Zero new test-quality findings against the repository baseline. |
+| `test_quality_gate` | `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` | Zero new test-quality findings against the repository baseline. |
 | `diagram_lint` | `python scripts/lint_diagram_refs.py` | Every diagram reference resolves. |
 | `mermaid_lint` | `node scripts/mermaid/lint_mermaid.mjs` | Every Mermaid block parses. |
 | `citation_lint` | `python -m tools.check_citations src tests` | Every code citation resolves. |

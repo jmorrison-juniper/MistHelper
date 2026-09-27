@@ -621,11 +621,13 @@ jobs:
           event_name = os.environ.get("EVENT_NAME", "")  # Tell pull requests from push runs.
           base_ref = os.environ.get("BASE_REF", "")  # Name the branch that the pull request targets.
           baseline = ".github/test-quality-baseline.json"  # MistHelper owns the record of its findings (issue #3422).
-          gate = ["test-quality-analyzer", "--gate", "--baseline", baseline]  # Each run compares against that file.
+          config = ".github/test-quality-config.toml"  # MistHelper owns the analyzer rules too (issue #3466).
+          gate = ["test-quality-analyzer", "--gate", "--config", config, "--baseline", baseline]  # Use both files.
           full_gate_paths = (  # These paths can change analyzer output outside the changed test files.
               ".github/workflows/ci.yml",  # A workflow change must prove the full gate.
               "requirements-dev.txt",  # A tooling version change must prove the full gate.
               baseline,  # A baseline change must prove that each current finding still matches.
+              config,  # A rule change can add or remove a finding in any test file.
           )
 
           def is_test_file(path: str) -> bool:

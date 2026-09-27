@@ -8,14 +8,18 @@ Why:
     repair (issue #3422). The ratchet job now gives the file in this repository
     to each analyzer run.
 
+    Without `--config`, the command also reads the rule settings inside the
+    installed package, so a rule change needed a devtools release. The ratchet
+    job now gives `.github/test-quality-config.toml` to each run (issue #3466).
+
     The analyzer writes its report into `test_quality_analyzer_output/`. The
     `.gitignore` entry `output/` does not match that folder, so a `git add -A`
     after a local run committed the report (issue #3421).
 
     These tests run the ratchet script of the workflow with a fake
     `subprocess` module, and they ask git which paths it ignores. They fail
-    when a later change drops `--baseline` from one run, deletes the baseline,
-    or deletes the ignore entry.
+    when a later change drops `--baseline` or `--config` from one run, deletes
+    the baseline or the settings, or deletes the ignore entry.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tomllib
 import types
 from pathlib import Path
 
@@ -38,10 +43,12 @@ HEREDOC_START = "python - <<'PY'\n"  # The step feeds the script to Python on st
 HEREDOC_END = "\nPY"  # The line that ends the script.
 
 BASELINE = ".github/test-quality-baseline.json"  # The job runs at the repository root.
-FULL_GATE = ["test-quality-analyzer", "--gate", "--baseline", BASELINE]  # A run over the whole suite.
+CONFIG = ".github/test-quality-config.toml"  # The rule settings that MistHelper owns (issue #3466).
+FULL_GATE = ["test-quality-analyzer", "--gate", "--config", CONFIG, "--baseline", BASELINE]  # The whole suite.
 CHANGED_TEST = "tests/guardrails/test_quality_ratchet_files.py"  # This file exists, so a scoped run keeps it.
 EXPECTED_ANALYZER_RUNS = 3  # The push run, the full pull request run, and the scoped pull request run.
 BASELINE_KEYS = frozenset({"category", "file_path", "line_number", "rule_id"})  # The identity of a finding.
+CONFIG_TABLES = ("rules", "severity", "exclusions")  # The three tables that the analyzer reads.
 
 IGNORE_ENTRY = "test_quality_analyzer_output/"
 REPORT_FILES = (
@@ -137,6 +144,22 @@ def run_ratchet(
     return recorder.commands
 
 
+def option_argument(command: list[str], option: str) -> str | None:
+    """Return the value of one option in one analyzer command.
+
+    Args:
+        command: One analyzer command.
+        option: The option name, for example `--baseline`.
+
+    Returns:
+        The value, or None when the command gives no value for the option.
+    """
+    if option not in command:
+        return None
+    position = command.index(option)
+    return command[position + 1] if position + 1 < len(command) else None
+
+
 def baseline_argument(command: list[str]) -> str | None:
     """Return the value of the `--baseline` option in one analyzer command.
 
@@ -146,10 +169,36 @@ def baseline_argument(command: list[str]) -> str | None:
     Returns:
         The baseline path, or None when the command gives no baseline.
     """
-    if "--baseline" not in command:
-        return None
-    position = command.index("--baseline")
-    return command[position + 1] if position + 1 < len(command) else None
+    return option_argument(command, "--baseline")
+
+
+def config_argument(command: list[str]) -> str | None:
+    """Return the value of the `--config` option in one analyzer command.
+
+    Args:
+        command: One analyzer command.
+
+    Returns:
+        The settings path, or None when the command gives no settings file.
+    """
+    return option_argument(command, "--config")
+
+
+def every_analyzer_command(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Return the analyzer commands of the three branches that start the analyzer.
+
+    Args:
+        monkeypatch: The pytest fixture that removes each patch after the test.
+
+    Returns:
+        The commands of the push run, the full pull request run, and the scoped run.
+    """
+    runs = (
+        run_ratchet(monkeypatch, "push"),
+        run_ratchet(monkeypatch, "pull_request", ("requirements-dev.txt",)),
+        run_ratchet(monkeypatch, "pull_request", (CHANGED_TEST,)),
+    )
+    return [command for run in runs for command in run]
 
 
 def git_ignored(paths: tuple[str, ...], root: Path) -> list[str]:
@@ -194,6 +243,10 @@ class TestEachRunReadsTheRepositoryBaseline:
         """A pruned or rewritten baseline must still hold each current finding."""
         assert run_ratchet(monkeypatch, "pull_request", (BASELINE,)) == [FULL_GATE]
 
+    def test_a_rule_change_checks_the_whole_suite(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A changed rule can add or remove a finding in any test file."""
+        assert run_ratchet(monkeypatch, "pull_request", (CONFIG,)) == [FULL_GATE]
+
     def test_a_test_change_checks_only_that_test(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A scoped run still compares against the repository baseline."""
         commands = run_ratchet(monkeypatch, "pull_request", (CHANGED_TEST, "README.md"))
@@ -205,21 +258,29 @@ class TestEachRunReadsTheRepositoryBaseline:
 
     def test_no_run_reads_the_installed_baseline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """This is the fault of issue #3422: a run without `--baseline` reads the devtools copy."""
-        runs = (
-            run_ratchet(monkeypatch, "push"),
-            run_ratchet(monkeypatch, "pull_request", ("requirements-dev.txt",)),
-            run_ratchet(monkeypatch, "pull_request", (CHANGED_TEST,)),
-        )
-        commands = [command for run in runs for command in run]
+        commands = every_analyzer_command(monkeypatch)
         missing = [command for command in commands if baseline_argument(command) != BASELINE]
         print(f"The baseline guard checked {len(commands)} analyzer commands.")
         assert len(commands) == EXPECTED_ANALYZER_RUNS, f"The script started these commands: {commands}"
         assert missing == [], f"These analyzer commands do not give {BASELINE}: {missing}"
 
+    def test_no_run_reads_the_installed_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Issue #3466: a run without `--config` reads the rule settings of the devtools package."""
+        commands = every_analyzer_command(monkeypatch)
+        missing = [command for command in commands if config_argument(command) != CONFIG]
+        print(f"The settings guard checked {len(commands)} analyzer commands.")
+        assert len(commands) == EXPECTED_ANALYZER_RUNS, f"The script started these commands: {commands}"
+        assert missing == [], f"These analyzer commands do not give {CONFIG}: {missing}"
+
     def test_the_check_finds_a_command_without_a_baseline(self) -> None:
         """The check must report the command form that issue #3422 describes."""
         assert baseline_argument(["test-quality-analyzer", "--gate"]) is None
         assert baseline_argument(["test-quality-analyzer", "--gate", "--baseline"]) is None
+
+    def test_the_check_finds_a_command_without_settings(self) -> None:
+        """The check must report a command that gives no settings file."""
+        assert config_argument(["test-quality-analyzer", "--gate", "--baseline", BASELINE]) is None
+        assert config_argument(["test-quality-analyzer", "--gate", "--config"]) is None
 
 
 class TestTheBaselineFile:
@@ -233,6 +294,26 @@ class TestTheBaselineFile:
         print(f"The baseline guard checked {len(entries)} baseline entries.")
         assert len(entries) >= 1, f"{BASELINE} holds no finding"
         assert incomplete == [], f"These entries have no identity field: {incomplete[:3]}"
+
+
+class TestTheSettingsFile:
+    """The repository holds the rule settings of its gate (issue #3466)."""
+
+    def test_the_settings_give_a_severity_for_each_enabled_rule(self) -> None:
+        """A rule with no severity would take a default that no file in this repository states."""
+        settings = tomllib.loads((REPOSITORY_ROOT / CONFIG).read_text(encoding="utf-8"))
+        absent = [table for table in CONFIG_TABLES if not isinstance(settings.get(table), dict)]
+        assert absent == [], f"{CONFIG} holds no table named {absent}"
+        rules = settings["rules"]
+        enabled = [rule for rule, on in rules.items() if on is True]
+        no_severity = [rule for rule in enabled if rule not in settings["severity"]]
+        print(f"The settings guard checked {len(rules)} rules.")
+        assert len(enabled) >= 1, f"{CONFIG} enables no rule, so the gate would measure nothing"
+        assert no_severity == [], f"These enabled rules have no severity in {CONFIG}: {no_severity}"
+
+    def test_git_keeps_the_settings(self) -> None:
+        """The gate needs the settings in each checkout, so no rule may ignore the file."""
+        assert git_ignored((CONFIG,), REPOSITORY_ROOT) == []
 
 
 class TestTheReportIsIgnored:
