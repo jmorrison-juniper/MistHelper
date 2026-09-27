@@ -41,13 +41,16 @@ Why the module reaches no cloud:
     address that can reach no mail host.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # Keep annotations independent from import order.
 
-import json
-from collections.abc import Iterator
-from typing import Any
+import json  # Build the body of each call, and read the body of each answer.
+from collections.abc import Iterator  # Each lock fixture yields its value and then releases the lock.
+from typing import Any  # Playwright gives each page and each answer, so their type is Any.
+from urllib.parse import urlsplit  # Read the path of the address that a read page shows.
 
 import pytest
+
+from tests.support.upgrade_portal_e2e.site_lock import LockTakeAnswer  # Issue #3497: decide the lock take.
 
 # The Playwright package must exist before this module defines a browser test.
 # A run without the package reports a skip and never an import error.
@@ -311,6 +314,12 @@ def held_site(first_page: Any) -> Iterator[str]:
         A lock left behind would refuse the next test and the next run, so the
         release runs even when the test fails.
 
+        Issue #3497. The fixture skipped on each status other than 200, so a
+        lock that an earlier test left behind hid 18 checks of this module. A
+        grant with the state `resume` also hid that lock. `LockTakeAnswer`
+        now decides the answer. Only a workstation with no lock store, which
+        answers 503, reports a skip.
+
     Args:
         first_page: The page of the operator who takes the lock.
 
@@ -318,17 +327,13 @@ def held_site(first_page: Any) -> Iterator[str]:
         The site key that the first operator now holds.
 
     Raises:
-        AssertionError: If the lock endpoint answers 401 or 404. Both name a
-            fault of the portal, so neither may report a skip.
+        AssertionError: If the lock endpoint refuses the take, or if the grant
+            names a lock that an earlier test left behind.
     """
-    site = _open_site_picker(first_page)
-    path = LOCK_API_TEMPLATE.format(site_id=site)
-    answer = _write(first_page, "post", path, {})
-    if answer.status in (UNAUTHORIZED_STATUS, NOT_FOUND_STATUS):  # The portal itself is broken.
-        raise AssertionError(f"{path} answered {answer.status}, so the portal serves no lock route.")
-    if answer.status != OK_STATUS:  # A workstation with no lock store answers 503 here.
-        pytest.skip(f"{path} answered {answer.status}, so the first operator holds no lock.")
-    token = str(json.loads(answer.text())[TOKEN_FIELD])
+    site = _open_site_picker(first_page)  # The first site row of the stand-in cloud.
+    path = LOCK_API_TEMPLATE.format(site_id=site)  # The lock route of that site.
+    answer = _write(first_page, "post", path, {})  # A take with no word, which a free site grants.
+    token = LockTakeAnswer.require_token(path, answer.status, answer.text())  # Only a fresh lock passes.
     yield site
     _write(first_page, "delete", path, {TOKEN_FIELD: token})  # The next test then finds the site free.
 
@@ -604,7 +609,8 @@ class TestReadingIsAlwaysFree:
         Why:
             The read rule is a product decision, so a test states it. The second
             operator types nothing, holds nothing, and still reads the state and
-            the stored data of a site that another operator holds.
+            the stored data of a site that another operator holds. A redirect to
+            another page also answers 200, so the test reads the address too.
 
         Args:
             second_page: The page of the second operator.
@@ -612,7 +618,9 @@ class TestReadingIsAlwaysFree:
             path: The page that this run opens.
         """
         del held_site  # Requested so the first operator holds the lock during this read.
-        _require_built_route(_page_status(second_page, path), path)
+        _require_built_route(_page_status(second_page, path), path)  # Name a 401 or a 404 before the address check.
+        shown = urlsplit(second_page.url).path  # The path of the page that the browser shows now.
+        assert shown == path, f"{path} sent the second operator to {second_page.url} while the site was held."
 
     def test_the_second_operator_opens_the_site_view(self, second_page: Any, held_site: str) -> None:
         """The inventory page of the held site opens for the second operator.
@@ -620,14 +628,17 @@ class TestReadingIsAlwaysFree:
         Why:
             `select/sites.html` states that a read view needs no lock, so the
             open link works on a locked site too. An operator who must wait for
-            a lock to read an inventory cannot plan their own work.
+            a lock to read an inventory cannot plan their own work. A redirect
+            to another page also answers 200, so the test reads the address too.
 
         Args:
             second_page: The page of the second operator.
             held_site: The site that the first operator holds.
         """
-        path = SITE_VIEW_TEMPLATE.format(site_id=held_site)
-        _require_built_route(_page_status(second_page, path), path)
+        path = SITE_VIEW_TEMPLATE.format(site_id=held_site)  # The inventory page of the held site.
+        _require_built_route(_page_status(second_page, path), path)  # Name a 401 or a 404 before the address check.
+        shown = urlsplit(second_page.url).path  # The path of the page that the browser shows now.
+        assert shown == path, f"{path} sent the second operator to {second_page.url} while the site was held."
 
 
 class TestTheLockControlsOfThePage:

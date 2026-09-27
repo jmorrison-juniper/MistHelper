@@ -1,0 +1,37 @@
+{
+  "workflow": "speckit",
+  "specName": "Each run-control browser test frees its site, and the two-operator fixture fails on a refusal",
+  "branch": "fix/3497-retry-lock-leak",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T15:21:52.000Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T15:39:43.000Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T15:45:29.000Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T16:43:03.000Z"
+    }
+  ]
+}

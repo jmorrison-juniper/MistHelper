@@ -870,28 +870,6 @@
   },
   {
     "category": "weak_assertion",
-    "explanation": "Test function 'test_the_second_operator_opens_a_read_page' contains no assertions.",
-    "file_path": "tests/e2e/upgrade_portal/test_two_operators.py",
-    "heuristic": false,
-    "line_number": 601,
-    "related_source": "tests/e2e/upgrade_portal/test_two_operators.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "Test function 'test_the_second_operator_opens_the_site_view' contains no assertions.",
-    "file_path": "tests/e2e/upgrade_portal/test_two_operators.py",
-    "heuristic": false,
-    "line_number": 617,
-    "related_source": "tests/e2e/upgrade_portal/test_two_operators.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
     "explanation": "Test function 'test_every_dated_fragment_names_a_real_date' contains no assertions.",
     "file_path": "tests/guardrails/test_changelog_fragment_policy.py",
     "heuristic": false,
