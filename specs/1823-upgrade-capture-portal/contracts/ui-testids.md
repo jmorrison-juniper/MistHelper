@@ -60,6 +60,7 @@ Gunicorn cannot import `fcntl` on Windows.
 | `twofactor-submit` | Second factor button |
 | `org-search` | Organization filter field |
 | `org-search-submit` | The submit control of the filter form |
+| `org-search-note` | The note that states the match count and the page size |
 | `org-row-{org_id}` | One organization row |
 | `org-select-{org_id}` | The choose button in that row |
 | `org-page-next` | Next page |
@@ -263,6 +264,7 @@ state.
 | Identifier | Control |
 | --- | --- |
 | `history-table` | The history table |
+| `history-count-note` | The note that states the capture count and the page size |
 | `history-row-{capture_id}` | One history row |
 | `history-open-{capture_id}` | Open that capture |
 | `history-device-type-{capture_id}` | The device types that the capture holds |
