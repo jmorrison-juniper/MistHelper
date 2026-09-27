@@ -87,6 +87,13 @@ assertion in the clients test, because it does not count a Playwright
 `expect` call. The test now compares one mapping of the counted texts. The
 gate then gave 0 new findings in 2 files, and the two files gave 20 passes in
 29.07 seconds.
+
+The first CI run failed one unit test. The test
+`test_every_browser_module_still_carries_its_own_skip` requires an
+`importorskip` line in each module of the browser folder, and
+`test_seed_counts.py` held none. The module now carries the line. The unit,
+contract, and guardrail suites of the portal then gave 5605 passes and 2 skips
+in 437.35 seconds. The two new files gave 20 passes in 36.96 seconds.
 - [ ] T012 Open the pull request. Merge it by hand after each check passes.
 - [ ] T013 Comment on #3492 with the result. No deploy is necessary.
 

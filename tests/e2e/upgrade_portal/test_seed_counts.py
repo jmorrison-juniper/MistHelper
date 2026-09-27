@@ -21,8 +21,14 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import assembly
-from tests.e2e.upgrade_portal.conftest import (
+# WHY: Issue #2241. Each module of this folder carries its own skip, and the
+# unit test `test_e2e_strict_guard.py` proves that rule. The session fixture of
+# the folder starts the browser test server, so a workstation with no browser
+# package skips this module together with the rest of the folder.
+pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
+
+from src.upgrade_portal.capture import assembly  # WHY: The skip above runs first.
+from tests.e2e.upgrade_portal.conftest import (  # WHY: The skip above runs first.
     POST_CAPTURE_ID,
     PRE_CAPTURE_ID,
     STANDALONE_PRE_CAPTURE_ID,
