@@ -55,16 +55,20 @@ def load_workflow(path: Path) -> dict[Any, Any]:
     return parsed
 
 
-def assert_shared_call(job: dict[str, Any], workflow_file: str) -> None:
-    """Check that one job calls one shared workflow at a full commit."""
+def shared_call_problems(job: dict[str, Any], workflow_file: str) -> list[str]:
+    """Return each reason that one job does not call one shared workflow at a full commit."""
     # Read the reference, because the job body now lives in the shared file.
     uses = str(job.get("uses", ""))
+    problems = []
 
     # A local copy or a different file would bring back a second copy of the rules.
-    assert uses.startswith(f"{SHARED_PREFIX}{workflow_file}@"), f"The job must call {workflow_file}, not {uses!r}."
+    if not uses.startswith(f"{SHARED_PREFIX}{workflow_file}@"):
+        problems.append(f"The job must call {workflow_file}, not {uses!r}.")
 
     # A moving reference would change the job with no change in this repository.
-    assert FULL_COMMIT.search(uses), f"The call must pin a full commit: {uses!r}"
+    if not FULL_COMMIT.search(uses):
+        problems.append(f"The call must pin a full commit: {uses!r}")
+    return problems
 
 
 @pytest.fixture(scope="module")
@@ -130,7 +134,8 @@ class TestAutoMergeJob:
     def test_the_job_calls_the_shared_workflow(self, auto_merge: dict[Any, Any]) -> None:
         """The merge, dispatch, and orphan rules must come from one pinned copy."""
         # A local copy would drift from the other Mist repositories.
-        assert_shared_call(auto_merge["jobs"][MERGE_JOB_NAME], "reusable-auto-merge.yml")
+        problems = shared_call_problems(auto_merge["jobs"][MERGE_JOB_NAME], "reusable-auto-merge.yml")
+        assert not problems, "\n".join(problems)
 
     def test_the_job_grants_each_scope_of_the_shared_jobs(self, auto_merge: dict[Any, Any]) -> None:
         """A missing scope fails the whole run before any shared job starts."""
@@ -159,7 +164,8 @@ class TestCloseLinkedIssuesJob:
         """The workflow must keep the close job, and the job must call the shared copy."""
         # A missing job is the exact regression that issue #1926 describes.
         assert CLOSE_JOB_NAME in auto_merge["jobs"], f"Missing job: {CLOSE_JOB_NAME}"
-        assert_shared_call(auto_merge["jobs"][CLOSE_JOB_NAME], "reusable-close-linked-issues.yml")
+        problems = shared_call_problems(auto_merge["jobs"][CLOSE_JOB_NAME], "reusable-close-linked-issues.yml")
+        assert not problems, "\n".join(problems)
 
     def test_workflow_can_close_an_issue(self, auto_merge: dict[Any, Any]) -> None:
         """The close job needs the `issues: write` scope to close an issue."""
@@ -207,7 +213,8 @@ class TestCloseLinkedIssuesWorkflow:
     def test_the_job_calls_the_shared_workflow(self, close_workflow: dict[Any, Any]) -> None:
         """The sweep must come from the same pinned copy as the job in auto-merge.yml."""
         # A local copy would drift from the other Mist repositories.
-        assert_shared_call(close_workflow["jobs"][CLOSE_JOB_NAME], "reusable-close-linked-issues.yml")
+        problems = shared_call_problems(close_workflow["jobs"][CLOSE_JOB_NAME], "reusable-close-linked-issues.yml")
+        assert not problems, "\n".join(problems)
 
     def test_the_job_skips_a_pull_request_that_did_not_merge(self, close_workflow: dict[Any, Any]) -> None:
         """A closed pull request that never merged must close no issue."""
