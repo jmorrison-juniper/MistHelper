@@ -1,0 +1,8 @@
+{
+  "feature": "3508-browser-lock-leaks",
+  "issue": 3508,
+  "branch": "fix/3508-browser-lock-leaks",
+  "currentStep": "implement",
+  "status": "implemented",
+  "artifacts": ["spec.md", "checklists/requirements.md", "research.md", "plan.md", "tasks.md"]
+}

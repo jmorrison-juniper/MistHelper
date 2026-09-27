@@ -80,7 +80,7 @@ def test_bulk_preview_close_returns_focusable_history_controls(page: Any) -> Non
 def test_bulk_cancel_shows_the_durable_atomic_result(page: Any, site_lock: Any) -> None:
     """Bulk cancel changes one stale pre-cloud run and shows its durable result."""
     _open_history(page)
-    site_lock(SITE_ID)  # The fixture releases this lock, so the next test finds the site free.
+    site_lock.take(SITE_ID)  # The fixture releases this lock, so the next test finds the site free.
     page.get_by_test_id(f"history-run-select-{STALE_PRE_CLOUD_RUN_ID}").check()
     page.get_by_test_id("history-runs-cancel").click()
     page.get_by_test_id("history-runs-preview-confirmation").fill("CANCEL 1 RUNS")
@@ -94,7 +94,7 @@ def test_bulk_cancel_shows_the_durable_atomic_result(page: Any, site_lock: Any) 
 def test_bulk_retry_links_the_new_run_to_a_fresh_precheck(page: Any, site_lock: Any) -> None:
     """Bulk retry creates one run and links directly to its fresh pre-check."""
     _open_history(page, BULK_RETRY_RUN_ID)
-    site_lock(BULK_RETRY_SITE_ID)  # The fixture releases this lock, so the next test finds the site free.
+    site_lock.take(BULK_RETRY_SITE_ID)  # The fixture releases this lock, so the next test finds the site free.
     page.get_by_test_id(f"history-run-select-{BULK_RETRY_RUN_ID}").check()
     page.get_by_test_id("history-runs-retry").click()
     page.get_by_test_id("history-runs-preview-confirmation").fill("RETRY 1 RUNS")
@@ -113,7 +113,7 @@ def test_bulk_retry_links_the_new_run_to_a_fresh_precheck(page: Any, site_lock: 
 def test_stale_stopping_run_reconciles_from_read_only_evidence(page: Any, site_lock: Any) -> None:
     """The run page changes stopping only to stopped after complete evidence."""
     _open_history(page)
-    site_lock(SITE_ID)  # The fixture releases this lock, so the next test finds the site free.
+    site_lock.take(SITE_ID)  # The fixture releases this lock, so the next test finds the site free.
     response = page.goto(f"/runs/{STALE_STOPPING_RUN_ID}")
     assert response is not None and response.ok
     sync_api.expect(page.get_by_test_id("run-reconciliation-controls")).to_be_visible()

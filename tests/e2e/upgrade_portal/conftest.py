@@ -117,7 +117,10 @@ from tests.support.upgrade_portal_e2e import (  # Build isolated resources, envi
     build_child_environment,
     build_e2e_overrides,
 )
-from tests.support.upgrade_portal_e2e.records.audit import AuditTrailIsolation  # Issue #3498: the trail guard.
+from tests.support.upgrade_portal_e2e.records.audit import (  # The two trail guards of the browser run.
+    AuditTrailIsolation,  # Issue #3498: the checkout trail guard.
+    TrailHoldCheck,  # Issue #3508: the leaked hold check of the run trail.
+)
 
 logger = logging.getLogger(__name__)
 
@@ -677,6 +680,8 @@ def _start_server() -> subprocess.Popen[bytes] | None:
 
 AUDIT_GUARD_KEY = pytest.StashKey[str]()  # Issue #3498: the measure that the terminal summary prints.
 AUDIT_GUARD_RECORD = "checkout-audit-trail-guard.json"  # Issue #3498: the record of the two counts.
+HOLD_GUARD_KEY = pytest.StashKey[str]()  # Issue #3508: the measure of the run trail hold check.
+HOLD_GUARD_RECORD = "run-trail-hold-guard.json"  # Issue #3508: the record of the hold check.
 
 
 @pytest.fixture(scope="session")
@@ -715,25 +720,63 @@ def checkout_audit_trail_guard(request: pytest.FixtureRequest) -> Iterator[Audit
     isolation.require_unchanged(before, after)  # A changed count fails the run.
 
 
-def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
-    """Print the measure of the checkout audit trail guard.
+@pytest.fixture(scope="session")
+def run_trail_hold_guard(
+    request: pytest.FixtureRequest, checkout_audit_trail_guard: AuditTrailIsolation
+) -> Iterator[TrailHoldCheck]:
+    """Replay the site lock trail of the run after the portal stops, and fail on each leaked hold.
 
     Why:
-        Issue #3498. A guard must state what it checked. The fixture
-        `checkout_audit_trail_guard` stores one sentence, and this hook prints
-        it at the end of the run.
+        Issue #3508. The full browser run of issue #3497 ended with two site
+        locks held, and the run still passed. The fixture
+        `capture_portal_server` depends on this guard, so pytest tears the
+        guard down after the portal stops. No write can then follow the read.
+
+    Args:
+        request: The fixture request, which carries the run configuration.
+        checkout_audit_trail_guard: The isolation of this run, which names the run trail.
+
+    Yields:
+        The check of this run.
+    """
+    check = TrailHoldCheck(checkout_audit_trail_guard.run_trail)  # The child portal writes this trail alone.
+    yield check  # The browser run happens here.
+    logger.info("Replay the site lock trail of the browser run")  # Log before the replay.
+    started = time.perf_counter()  # Issue #3508: the replay must stay short.
+    result = check.evaluate()  # A line that the check cannot read fails here.
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 1)  # The cost of the replay.
+    request.config.stash[HOLD_GUARD_KEY] = result.measure  # The terminal summary prints the measure.
+    record: dict[str, Any] = {"run_trail": str(result.trail)}  # The trail that the check read.
+    record.update({"records": result.records, "sites": result.sites})  # The two counts of the read.
+    record.update({"leaks": list(result.leaks), "elapsed_ms": elapsed_ms, "measure": result.measure})  # The result.
+    (ARTIFACT_DIRECTORY / HOLD_GUARD_RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    logger.debug("Wrote the run trail hold record: %s", result.measure)  # Log after the record write.
+    result.require_no_leak()  # A leaked hold fails the run.
+
+
+def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
+    """Print the measure of each trail guard of the browser run.
+
+    Why:
+        Issue #3498 and issue #3508. A guard must state what it checked. The
+        fixtures `checkout_audit_trail_guard` and `run_trail_hold_guard` each
+        store one sentence, and this hook prints each sentence at the end of
+        the run.
 
     Args:
         terminalreporter: The reporter that writes the terminal summary.
         config: The pytest configuration for this run.
     """
-    measure = config.stash.get(AUDIT_GUARD_KEY, "")  # Empty when no browser test started the portal.
-    if measure:  # A run that started no portal has no measure to print.
-        terminalreporter.write_line(measure)  # One line in the terminal summary.
+    for key in (AUDIT_GUARD_KEY, HOLD_GUARD_KEY):  # The checkout trail guard, then the run trail hold check.
+        measure = config.stash.get(key, "")  # Empty when no browser test started the portal.
+        if measure:  # A run that started no portal has no measure to print.
+            terminalreporter.write_line(measure)  # One line in the terminal summary.
 
 
 @pytest.fixture(scope="session")
-def capture_portal_server(checkout_audit_trail_guard: AuditTrailIsolation) -> Iterator[str]:
+def capture_portal_server(
+    checkout_audit_trail_guard: AuditTrailIsolation, run_trail_hold_guard: TrailHoldCheck
+) -> Iterator[str]:
     """Give every browser test the address of a portal this fixture started.
 
     Why:
@@ -746,11 +789,13 @@ def capture_portal_server(checkout_audit_trail_guard: AuditTrailIsolation) -> It
     Args:
         checkout_audit_trail_guard: Issue #3498. The guard counts the checkout
             trail before this portal starts and after it stops.
+        run_trail_hold_guard: Issue #3508. The guard replays the run trail
+            after this portal stops.
 
     Yields:
         The base address of the running portal.
     """
-    del checkout_audit_trail_guard  # Requested for its two counts alone.
+    del checkout_audit_trail_guard, run_trail_hold_guard  # Requested for their teardown checks alone.
     if _probe_port(CAPTURE_PORT):  # A portal this fixture did not start holds no sign-in seam.
         # Issue #2260: an earlier run of this suite may own the port. The record
         # names that portal, so this run may reclaim the port instead of failing.

@@ -144,7 +144,7 @@ def test_response_loss_recovers_by_read_and_preserves_actor_scope(
     """A lost action response recovers by read for the same actor and hides from another actor."""
     page.set_viewport_size({"width": 360, "height": 900})  # The narrowest width.
     _open_history(page)  # Wait for the lifecycle fixture run.
-    site_lock(SITE_ID)  # The fixture releases this lock, so the next test finds the site free.
+    site_lock.take(SITE_ID)  # Issue #3508: the test releases this lock before it drops the first session.
     captured: dict[str, Any] = {}  # The body of the response that the browser loses.
 
     def lose_response(route: Any) -> None:
@@ -172,6 +172,7 @@ def test_response_loss_recovers_by_read_and_preserves_actor_scope(
 
     action_id = str(captured["action_id"])  # The action that the lost answer named.
     await_header = {"Accept": "application/json"}  # Ask for a JSON answer.
+    site_lock.release(SITE_ID)  # Issue #3508: the first session holds the lock record and the token of the page.
     page.context.clear_cookies()  # Drop the first browser session.
     page.context.add_cookies(renewed_operator_cookie_records)  # Sign in again as the same operator.
     renewed = page.request.get(f"/api/run-actions/{action_id}", headers=await_header)  # Read the action again.
