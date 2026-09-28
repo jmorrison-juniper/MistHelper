@@ -40,7 +40,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     """
 
     @staticmethod
-    def anomaly_events():
+    def anomaly_events() -> dict[str, str] | None:
         """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -50,22 +50,28 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         if not site_id:  # No site chosen.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No site selected. Exiting.")  # Tell the user.
-            return  # Abort the export.
+            return None  # Abort because the legacy missing-input log path handles the portal reason.
         site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve display name for filename.
         filename = f"SiteAnomalyEvents_{mh.EnhancedSSHRunner.sanitize_filename(site_name)}.csv"  # Build CSV name.
         metrics = SiteAnomalyExporter._discover_site_anomaly_metrics()  # Discover anomaly metric names.
         if not metrics:  # Nothing to fetch.
-            return  # Abort the export.
+            return {  # Tell the portal that metric discovery produced an intentional no-output result.
+                "portal_result_signal": "no_output",  # Mark the run as an intentional no-output completion.
+                "reason": "No potential anomaly metrics found.",  # Keep the operator reason specific.
+            }
         try:
             data, count = SiteAnomalyExporter._aggregate_site_anomaly_data(site_id, site_name, metrics)  # Fetch.
-            SiteAnomalyExporter._export_anomaly_data(data, filename, "site anomaly event", count, site_name)  # CSV
+            return SiteAnomalyExporter._export_anomaly_data(
+                data, filename, "site anomaly event", count, site_name
+            )  # Persist rows or return no-output signal.
         except Exception as exception:  # Broader export failure (flatten/write).
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Error exporting site anomaly events: %s", exception)  # Tell the user.
             logger.error("Failed to export site anomaly events for %s: %s", site_name, exception)  # Log it.
+            return None  # The legacy handled-error marker path handles this failure.
 
     @staticmethod
-    def device_anomaly_events():
+    def device_anomaly_events() -> dict[str, str] | None:
         """Export device anomaly events to SiteDeviceAnomalyEvents_[Site]_[Device].csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -75,13 +81,13 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         if not site_id:  # No site chosen.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No site selected. Exiting.")  # Tell the user.
-            return  # Abort the export.
+            return None  # Abort because the legacy missing-input log path handles the portal reason.
         site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve display name.
         selection = mh.PromptUtils.select_device_id_from_inventory(site_id)  # Prompt for a device.
         if not selection:  # No device chosen.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No device selected. Exiting.")  # Tell the user.
-            return  # Abort the export.
+            return None  # Abort because the legacy missing-input log path handles the portal reason.
         device_mac, device_name = selection[0], selection[1]  # Unpack the MAC and display name.
         filename = SiteAnomalyExporter._build_device_filename(site_name, device_name)  # Build the CSV name.
         metrics = ["ap_availability", "throughput", "capacity"]  # Device anomaly metric names.
@@ -89,11 +95,14 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             data, count = SiteAnomalyExporter._aggregate_device_anomaly_data(
                 site_id, site_name, device_mac, device_name, metrics
             )  # Loop + fetch each metric.
-            SiteAnomalyExporter._export_anomaly_data(data, filename, "device anomaly event", count, device_name)  # CSV
+            return SiteAnomalyExporter._export_anomaly_data(
+                data, filename, "device anomaly event", count, device_name
+            )  # Persist rows or return no-output signal.
         except Exception as exception:  # Broader export failure (flatten/write).
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Error exporting device anomaly events: %s", exception)  # Tell the user.
             logger.error("Failed to export device anomaly events for %s: %s", device_name, exception)  # Log it.
+            return None  # The legacy handled-error marker path handles this failure.
 
     @staticmethod
     def _build_device_filename(site_name: str, device_name: str) -> str:
@@ -215,7 +224,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def _export_anomaly_data(
         data_list: list[dict[str, Any]], filename: str, label: str, success_count: int, scope_name: str
-    ) -> None:
+    ) -> dict[str, str] | None:
         """Flatten + escape + write the aggregated anomaly rows, or write an empty CSV when there is no data."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if data_list:  # At least one metric returned data.
@@ -225,11 +234,16 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %s %s types exported to %s", success_count, label, filename)  # Tell the user the count.
             logger.info("Exported %s %s types for %s to %s", success_count, label, scope_name, filename)  # Log.
+            return None  # A real output file is sufficient completion evidence.
         else:  # No data from any metric.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! 0 %ss exported to %s (no data available)", label, filename)  # Tell the user zero.
             logger.warning("No %s available for %s", label, scope_name)  # Warn about the empty result.
             mh.DataExporter.write_with_format_selection([], filename, api_function_name="listSiteAnomalyEvents")  # type: ignore[no-untyped-call]
+            return {  # Tell the portal that this no-output result does not depend on log wording.
+                "portal_result_signal": "no_output",  # Mark the run as an intentional no-output completion.
+                "reason": f"No {label} available for {scope_name}",  # Keep the operator reason specific.
+            }
 
     _CLIENT_ANOMALY_METRICS = (  # Client-specific anomaly metrics (verified working) shared by the count + loop.
         "successful_connect",  # Note: uses underscore, not hyphen for the client endpoint.

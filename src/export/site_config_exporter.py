@@ -69,7 +69,7 @@ class SiteConfigExporter:
             return mistapi.get_all(response=local_response, mist_session=mh.apisession)  # Page all rows.
 
     @staticmethod
-    def _persist_site_wlans_csv(rawdata: list[Any], filename: str, site_name: str) -> None:
+    def _persist_site_wlans_csv(rawdata: list[Any], filename: str, site_name: str) -> dict[str, str] | None:
         """Flatten + sort by SSID + write WLAN rows (or write empty CSV when none)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows.
@@ -77,7 +77,10 @@ class SiteConfigExporter:
             mh.DataExporter.write_with_format_selection([], filename, api_function_name="listSiteWlans")  # Empty CSV.
             # WHY: Preserve user-facing zero-record notice verbatim. INFO-level structured emit.
             logger.info("! 0 records exported to data\\%s", filename)
-            return  # Done.
+            return {  # Tell the portal that this no-output result does not depend on log wording.
+                "portal_result_signal": "no_output",  # Mark the run as an intentional no-output completion.
+                "reason": f"No data provided for output to {filename}",  # Keep the operator reason specific.
+            }
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
@@ -85,9 +88,10 @@ class SiteConfigExporter:
         # WHY: Preserve user-facing record-count notice verbatim.
         logger.info("! %s records exported to data\\%s", len(processed), filename)
         logger.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
+        return None  # A real output file is sufficient completion evidence.
 
     @staticmethod
-    def wlans(site_id: str | None = None) -> None:
+    def wlans(site_id: str | None = None) -> dict[str, str] | None:
         """Export effective WLANs for a site to SiteWlans.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Starting export of site WLANs...")  # Log start.
@@ -95,11 +99,11 @@ class SiteConfigExporter:
             site_id = mh.PromptUtils.select_site()  # Select a site.
             if not site_id:  # No site.
                 logger.error("No site selected. Exiting.")  # Log the error.
-                return  # Abort.
+                return None  # Abort because the legacy missing-input log path handles the portal reason.
         site_name = SiteConfigExporter._resolve_wlan_site_name(site_id)  # Resolve site name.
         filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"  # Build CSV name.
         rawdata = SiteConfigExporter._fetch_wlans_with_fallback(site_id)  # Derived → local fallback.
-        SiteConfigExporter._persist_site_wlans_csv(rawdata, filename, site_name)  # Persist (or empty).
+        return SiteConfigExporter._persist_site_wlans_csv(rawdata, filename, site_name)  # Persist and return signal.
 
     @staticmethod
     def maps() -> None:

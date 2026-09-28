@@ -132,6 +132,13 @@ HANDLED_ERROR_MARKERS = (
     "could not",  # Prompt and lookup helpers use this wording for an unrecoverable failure.
 )
 
+# Structured handler results let the portal avoid fragile log-prose matching.
+STRUCTURED_RESULT_SIGNAL_KEY = "portal_result_signal"  # Key that names the structured handler outcome.
+STRUCTURED_RESULT_REASON_KEY = "reason"  # Key that holds the operator-readable reason text.
+STRUCTURED_NO_OUTPUT_SIGNAL = "no_output"  # Signal for a completed run that intentionally wrote no file.
+STRUCTURED_MISSING_INPUT_SIGNAL = "missing_input"  # Signal for a handler that missed required input.
+STRUCTURED_HANDLED_ERROR_SIGNAL = "handled_error"  # Signal for a handler that caught a real failure.
+
 # Prompt helper caches can change during site-scoped operations, but they are not the operation result.
 PROMPT_CACHE_OUTPUT_FILES = frozenset({"SiteList.csv"})
 
@@ -937,9 +944,10 @@ class OperationExecutor:
             func = self._menu_actions[run["menu_number"]].handler  # Use the named menu row for execution.
             if input_answers:
                 with web_input_context(input_answers):
-                    self._capture_and_run(run, func)
+                    result = self._capture_and_run(run, func)  # Capture structured handler evidence when present.
             else:
-                self._capture_and_run(run, func)
+                result = self._capture_and_run(run, func)  # Capture structured handler evidence when present.
+            run["_handler_result"] = result  # Store the returned signal for completion assessment.
             if not run.get("_stop_requested"):
                 self._finish_successful_operation(run)  # Assess result evidence before the portal reports success.
         except (EOFError, SystemExit):
@@ -965,11 +973,12 @@ class OperationExecutor:
         scanner = OutputFileScanner()  # Read the data directory the portal writes into.
         scanner.snapshot()  # Record the pre-run state, so a new file is visible later.
         try:
-            func()
+            result = func()  # Preserve a structured handler result when the handler returns one.
         finally:
             root_logger.removeHandler(handler)
             self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
             self._finalize_output_files(run, scanner.root)  # Remove phantom names and put real results first.
+        return result  # Let the completion guard use structured evidence before log-prose fallback.
 
     def _finish_successful_operation(self, run: dict) -> None:
         """Mark a returned handler as complete only when the result is honest."""
@@ -1007,6 +1016,9 @@ class OperationExecutor:
 
     def _missing_input_reason(self, run: dict) -> str | None:
         """Return the first log line that says a required input was missing."""
+        structured_reason = self._structured_result_reason(run, STRUCTURED_MISSING_INPUT_SIGNAL)  # Prefer signals.
+        if structured_reason:  # Structured evidence is independent from handler wording.
+            return structured_reason  # Return the handler supplied reason.
         for message in self._run_log_messages(run):  # Scan the user-facing log in the order the operator saw.
             lowered = message.lower()  # Normalize case so marker checks stay simple.
             if any(marker in lowered for marker in MISSING_INPUT_MARKERS):  # Detect a required missing answer.
@@ -1015,6 +1027,9 @@ class OperationExecutor:
 
     def _handled_error_reason(self, run: dict) -> str | None:
         """Return the first log line that says the handler caught an error."""
+        structured_reason = self._structured_result_reason(run, STRUCTURED_HANDLED_ERROR_SIGNAL)  # Prefer signals.
+        if structured_reason:  # Structured evidence is independent from handler wording.
+            return structured_reason  # Return the handler supplied reason.
         for message in self._run_log_messages(run):  # Scan the user-facing log in the order the operator saw.
             lowered = message.lower()  # Normalize case so marker checks stay simple.
             if any(marker in lowered for marker in HANDLED_ERROR_MARKERS):  # Detect a caught handler failure.
@@ -1023,11 +1038,25 @@ class OperationExecutor:
 
     def _no_output_reason(self, run: dict) -> str | None:
         """Return the first log line that explains a completed run with no file."""
+        structured_reason = self._structured_result_reason(run, STRUCTURED_NO_OUTPUT_SIGNAL)  # Prefer signals.
+        if structured_reason:  # Structured evidence is independent from handler wording.
+            return structured_reason  # Return the handler supplied reason.
         for message in reversed(self._run_log_messages(run)):  # Prefer the latest summary line.
             lowered = message.lower()  # Normalize case so marker checks stay simple.
             if any(marker in lowered for marker in NO_OUTPUT_REASON_MARKERS):  # Detect an empty-result explanation.
                 return message  # Return the exact line from the handler.
         return None  # No empty-result message appeared.
+
+    @staticmethod
+    def _structured_result_reason(run: dict, signal: str) -> str | None:
+        """Return a handler-supplied reason for one structured result signal."""
+        result = run.get("_handler_result")  # Read the return value that _capture_and_run stored.
+        if not isinstance(result, dict):  # Non-dict returns keep the legacy log marker path.
+            return None  # No structured evidence exists.
+        if result.get(STRUCTURED_RESULT_SIGNAL_KEY) != signal:  # Ignore unrelated structured signals.
+            return None  # This helper asks for one signal type at a time.
+        reason = str(result.get(STRUCTURED_RESULT_REASON_KEY, "")).strip()  # Normalize the operator reason text.
+        return reason or None  # Empty reasons fall back to log markers.
 
     @staticmethod
     def _run_log_messages(run: dict) -> list[str]:

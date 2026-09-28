@@ -3,7 +3,13 @@
 from __future__ import annotations  # WHY: keep annotations cheap and consistent with project style.
 
 from src.utils.menu_entry import MenuEntry  # WHY: OperationExecutor expects menu entries, not raw callables.
-from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # WHY: test the portal run contract.
+from web_portal.services.operation import (  # WHY: test the portal run contract and structured signals.
+    PARAMETER_REGISTRY,
+    STRUCTURED_NO_OUTPUT_SIGNAL,
+    STRUCTURED_RESULT_REASON_KEY,
+    STRUCTURED_RESULT_SIGNAL_KEY,
+    OperationExecutor,
+)
 
 ISSUE_3144_MENUS = ("66", "75", "76", "209", "210", "213", "224", "233")  # WHY: exact issue scope.
 SITE_OR_IDENTIFIER_MENUS = ("66", "75", "76", "209", "210", "213", "224")  # WHY: these need portal controls.
@@ -87,5 +93,22 @@ def test_handled_handler_error_does_not_complete() -> None:
         executor._finish_successful_operation(run)  # WHY: this is the path used after a handler returns.
         assert run["status"] == "failed", "A handled API error reported as Complete."  # WHY: fail honestly.
         assert "Error fetching site beacon detail" in str(run["error_message"])  # WHY: preserve the real cause.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_structured_no_output_signal_does_not_need_log_marker() -> None:
+    """A handler return value must explain no-output completion without log prose."""
+    executor = _build_executor()  # WHY: build the production executor helpers under test.
+    try:
+        run = executor._build_run_record("77")  # WHY: menu 77 is one converted anomaly handler path.
+        run["_handler_result"] = {  # WHY: emulate a converted handler that returns structured result evidence.
+            STRUCTURED_RESULT_SIGNAL_KEY: STRUCTURED_NO_OUTPUT_SIGNAL,  # WHY: avoid matching a log sentence.
+            STRUCTURED_RESULT_REASON_KEY: "Anomaly metrics returned no rows.",  # WHY: operator-readable reason.
+        }
+        message = executor._completion_message(run)  # WHY: completed no-output runs need a visible reason.
+        assert message == (  # WHY: exact text proves no marker scan is required.
+            "Operation completed with no output file: Anomaly metrics returned no rows."
+        )
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
