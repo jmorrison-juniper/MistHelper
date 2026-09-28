@@ -1,0 +1,14 @@
+{
+  "feature": "3538-cancel-result-words",
+  "issue": 3538,
+  "branch": "fix/3538-cancel-result-words",
+  "currentStep": "specify",
+  "status": "specified",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md"
+  ],
+  "workflow": "speckit",
+  "specName": "",
+  "history": []
+}
