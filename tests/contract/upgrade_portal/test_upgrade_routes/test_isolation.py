@@ -1,4 +1,12 @@
-"""Prove that the factory installs E2E isolation before route registration."""
+"""Prove that the factory installs E2E isolation before route registration.
+
+Why:
+    The test portal holds its records in the stores of the test process, and
+    the factory installs those stores before the first route registers. Issue
+    #3501 removed the connector traps, the audit store, and the fixed test
+    headers, because no code read them. An isolated response now carries the
+    run owner header only.
+"""
 
 from __future__ import annotations  # Keep annotations independent from import order.
 
@@ -14,14 +22,10 @@ from src.upgrade_portal.api.run_controls import (  # Import the explicit factory
     E2ESecurityOverrides,
 )
 from src.upgrade_portal.app import factory, wiring  # Test the real construction order.
-from tests.support.upgrade_portal_e2e import (  # Import process stores and external traps.
+from tests.support.upgrade_portal_e2e import (  # Import the process stores and the owner check.
     ActionRecordStore,
-    ArangoConnectorTrap,
-    AuditRecordStore,
-    MistConnectorTrap,
-    PortalFileTrap,
     PortalRecordStore,
-    RedisConnectorTrap,
+    RunOwnerHeaderCheck,
     ScriptedCloudStore,
 )
 
@@ -35,7 +39,6 @@ def _overrides(test_run_id: str = "e2e-contract-owner") -> E2EFactoryOverrides: 
     """Build one complete process-owned override value."""
     portal = PortalRecordStore(test_run_id)  # Own run, capture, lock, and access records.
     actions = ActionRecordStore(test_run_id)  # Own action records.
-    audits = AuditRecordStore(test_run_id)  # Own audit records.
     cloud = ScriptedCloudStore(test_run_id)  # Own scripted cloud evidence.
     records = E2ERecordOverrides(  # Bind all run and capture seams.
         portal, portal, _callable, portal.load_capture, portal.list_captures, portal.list_runs, portal.list_operations
@@ -43,18 +46,8 @@ def _overrides(test_run_id: str = "e2e-contract-owner") -> E2EFactoryOverrides: 
     action_values = E2EActionOverrides(  # Bind all action and upgrade seams.
         actions, _callable, _callable, _callable, _callable, _callable, portal
     )
-    security = E2ESecurityOverrides(  # Bind all access and audit seams.
-        portal, _callable, portal, portal.authorization, audits, audits.list
-    )
-    external = E2EExternalOverrides(  # Bind all cloud, connector, and file seams.
-        cloud,
-        cloud.read,
-        _callable,
-        MistConnectorTrap(),
-        ArangoConnectorTrap(),
-        RedisConnectorTrap(),
-        PortalFileTrap(),
-    )
+    security = E2ESecurityOverrides(_callable, portal, portal.authorization)  # Bind the lock and access seams.
+    external = E2EExternalOverrides(cloud, cloud.read, _callable)  # Bind the scripted cloud seams.
     return E2EFactoryOverrides(test_run_id, records, action_values, security, external)  # Complete value.
 
 
@@ -90,21 +83,17 @@ def test_factory_rejects_missing_overrides_before_blueprints(  # Prove fail-clos
 ) -> None:
     """An incomplete E2E value fails before route registration."""
     overrides = _overrides()  # Start from one complete value.
-    broken = E2EExternalOverrides(  # Replace one required connector with an invalid value.
+    broken = E2EExternalOverrides(  # Replace one required cloud read with an invalid value.
         overrides.external.cloud_evidence,
         overrides.external.cloud_reader,
-        overrides.external.device_reader,
-        overrides.external.mist_connector,
-        cast(Any, None),  # Supply one deliberate missing required connector.
-        overrides.external.redis_connector,
-        overrides.external.file_opener,
+        cast(Any, None),  # Supply one deliberate missing required cloud read.
     )
     registrations: list[str] = []  # Record any route registration attempt.
     monkeypatch.setattr(  # Record any unsafe route registration attempt.
         factory, "register_blueprints", lambda _app: registrations.append("registered")
     )
-    with pytest.raises(ValueError, match="external.arango_connector"):  # Name the missing boundary.
-        factory.create_app(  # Attempt construction with one missing required connector.
+    with pytest.raises(ValueError, match="external.device_reader"):  # Name the missing boundary.
+        factory.create_app(  # Attempt construction with one missing required cloud read.
             E2EFactoryOverrides(
                 overrides.test_run_id,
                 overrides.records,
@@ -119,7 +108,7 @@ def test_factory_rejects_missing_overrides_before_blueprints(  # Prove fail-clos
 def test_e2e_header_is_present_only_for_overrides(  # Prove the response header stays test-only.
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Only an E2E application returns the test run identifier header."""
+    """Only an E2E application returns a test header, and it returns the run owner header only."""
     monkeypatch.setattr(wiring, "prepare_storage", lambda: None)  # Keep production construction offline.
     isolated = factory.create_app(_overrides("e2e-header-owner"))  # Build the isolated application.
     production = factory.create_app()  # Build the compatible no-argument production form.
@@ -127,3 +116,6 @@ def test_e2e_header_is_present_only_for_overrides(  # Prove the response header 
     production_answer = production.test_client().get("/healthz")  # Read the same production route.
     assert isolated_answer.headers["X-MistHelper-E2E-Run-ID"] == "e2e-header-owner"  # Bind the response.
     assert "X-MistHelper-E2E-Run-ID" not in production_answer.headers  # Keep production responses clean.
+    isolated_names = RunOwnerHeaderCheck.e2e_header_names(isolated_answer.headers)  # Issue #3501: each test header.
+    assert isolated_names == ("x-misthelper-e2e-run-id",)  # Issue #3501: no header holds a fixed count.
+    assert RunOwnerHeaderCheck.e2e_header_names(production_answer.headers) == ()  # Production sends no test header.

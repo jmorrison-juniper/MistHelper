@@ -1004,3 +1004,91 @@ def test_the_history_of_one_site_keeps_the_site_name(signed_in_client: FlaskClie
     words = scope_words(signed_in_client, history_app, rows, {SITE_ID_FIELD: SITE_ID})  # The page of one site.
     assert "The list shows the stored captures of Test Site. The site holds 1 capture." in words  # No change.
     assert "The stored captures of the site. Each row holds" in words  # The caption of one site does not change.
+
+
+# ---------------------------------------------------------------------------
+# Issue #3486: the Captures table of the history with no site names the site of each row
+# ---------------------------------------------------------------------------
+
+
+def capture_table_words(client: FlaskClient, app: Flask, rows: list[dict[str, Any]], query: dict[str, str]) -> str:
+    """Return the collapsed markup of the Captures table of one history page.
+
+    Why:
+        The Runs table of the same page already holds a Site header. A search
+        of the whole page would find that header, so each test reads the
+        Captures table alone.
+
+    Args:
+        client: The signed-in test client.
+        app: The wired application, which takes a new capture list seam.
+        rows: The whole capture list that the store hands back.
+        query: The query values of the page, such as the site.
+
+    Returns:
+        The markup of the Captures table, with one space between every word.
+    """
+    words = scope_words(client, app, rows, query)  # The whole page, with one space between every word.
+    start = words.index('data-testid="history-table"')  # The exact test identifier of the Captures table.
+    return words[start : words.index("</table>", start)]  # The markup up to the end of that table.
+
+
+def test_the_history_with_no_site_shows_the_site_column_after_the_capture_column(
+    signed_in_client: FlaskClient, history_app: Flask
+) -> None:
+    """The Captures table of the page with no site shows the Site header second.
+
+    Why:
+        The table listed the captures of two sites, and no column named the
+        site of a row. Issue #3486 holds that report.
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    table = capture_table_words(signed_in_client, history_app, two_site_rows(), {})  # The page with no site.
+    expected = '<th scope="col">Capture</th> <th scope="col">Site</th> <th scope="col">Started</th>'  # FR-001.
+    assert expected in table  # The Site header sits between the Capture header and the Started header.
+
+
+def test_the_history_with_no_site_names_the_site_of_each_row(signed_in_client: FlaskClient, history_app: Flask) -> None:
+    """Each row of the page with no site names its site, and the caption names the site.
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    table = capture_table_words(signed_in_client, history_app, two_site_rows(), {})  # The page with no site.
+    first = '<td class="cell-site" title="Test Site" data-testid="history-site-cap-ab12cd34-01">Test Site</td>'
+    second = (  # The second row carries the name of the second site.
+        f'<td class="cell-site" title="{OTHER_SITE_NAME}" data-testid="history-site-cap-ab12cd34-02">'
+        f"{OTHER_SITE_NAME}</td>"
+    )
+    assert first in table  # FR-002, FR-003, and FR-004 for the row of the first site.
+    assert second in table  # The same three rules for the row of the second site.
+    assert "The stored captures of every site. Each row holds the site, the moment," in table  # FR-005.
+
+
+def test_the_history_of_one_site_shows_no_site_column(signed_in_client: FlaskClient, history_app: Flask) -> None:
+    """The Captures table of the page of one site keeps the nine columns of today.
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    query = {SITE_ID_FIELD: SITE_ID}  # The page of one site.
+    table = capture_table_words(signed_in_client, history_app, [capture_row(1)], query)  # One capture.
+    assert '<th scope="col">Capture</th> <th scope="col">Started</th>' in table  # FR-006: no Site header.
+    assert "cell-site" not in table  # No row holds a site cell.
+    assert "The stored captures of the site. Each row holds the moment," in table  # The caption of today.
+
+
+def test_the_empty_history_with_no_site_spans_every_column(signed_in_client: FlaskClient, history_app: Flask) -> None:
+    """The empty row of the page with no site spans the ten columns of the table.
+
+    Args:
+        signed_in_client: The signed-in client.
+        history_app: The wired application.
+    """
+    table = capture_table_words(signed_in_client, history_app, [], {})  # The page with no site and no capture.
+    assert '<td colspan="10" class="portal-table-empty">' in table  # FR-009: the old row spanned nine columns.

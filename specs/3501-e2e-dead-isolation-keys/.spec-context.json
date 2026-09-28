@@ -1,0 +1,37 @@
+{
+  "workflow": "speckit",
+  "specName": "Each isolation check of the browser test portal can fail",
+  "branch": "fix/3501-e2e-dead-isolation-keys",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T11:24:08.000Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T11:36:24.000Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T11:36:24.000Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-27T12:27:27.000Z"
+    }
+  ]
+}

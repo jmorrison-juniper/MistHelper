@@ -8,15 +8,25 @@ files only, so the worktree has no `.venv` directory. Without the runtime
 dependencies, pytest stops with one import error for each test module, and the
 reader sees a source defect that does not exist. The guard below replaces those
 errors with one message that names the bootstrap command. See issue #1866.
+
+This file also keeps each site lock action of a test out of the checkout trail,
+`data/upgrade_takeover_audit.jsonl`. In the main checkout, that file is the
+production audit trail. The fixture `isolate_site_lock_trail` moves the trail of
+each test into the temporary directory of that test. The fixture
+`checkout_site_lock_trail_guard` counts the checkout trail before the first test
+and after the last test, and a changed count fails the run. See issue #3503.
 """
 
 import importlib.util
 import logging
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+from tests.support.site_lock_trail import CheckoutTrailGuard
 
 logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
 
@@ -54,6 +64,10 @@ _UNINSTALL_COMMAND = "python -m pip uninstall -y misthelper"
 # organization and a session that a neighbor left behind, so they passed in the
 # full suite and failed when the file ran alone.
 _ISOLATED_CONFIG_ATTRIBUTES: tuple[str, ...] = ("_org_id_cache", "_apisession")
+
+# Issue #3503: the key of the sentence that the terminal summary prints for the
+# checkout site lock trail guard.
+_SITE_LOCK_GUARD_KEY = pytest.StashKey[str]()
 
 
 def _shadowing_source_path() -> Path | None:
@@ -211,3 +225,89 @@ def isolate_config_utils_state():
     yield  # Run the test with only the state that the test creates.
     for attribute in _ISOLATED_CONFIG_ATTRIBUTES:  # Clear every shared name after the test runs.
         setattr(ConfigUtils, attribute, None)  # Leave no state for the next test to inherit.
+
+
+@pytest.fixture(scope="session", autouse=True)
+def checkout_site_lock_trail_guard(request: pytest.FixtureRequest) -> Iterator[CheckoutTrailGuard | None]:
+    """Count the checkout site lock trail before the first test and after the last test.
+
+    Why:
+        Issue #3503. The tests of the upgrade portal wrote each site lock
+        action to the checkout trail, which is the production audit trail in
+        the main checkout. The fixture `isolate_site_lock_trail` now moves the
+        trail of each test, and this guard proves that no write escaped the
+        move.
+
+        The guard has the session scope, so pytest sets it up before each
+        fixture of the function scope. It therefore reads the checkout trail
+        before the first move. The browser guard of issue #3498 counts the
+        same trail, so a browser run prints two guard lines.
+
+    Args:
+        request: The fixture request, which carries the run configuration.
+
+    Yields:
+        The guard of this session, or None when the lock module cannot import.
+    """
+    try:  # The lock module pulls in the web framework of the portal, and an absent package stops the import.
+        from src.upgrade_portal.runtime import lock  # Import late, so the environment guard runs first.
+    except ImportError as fault:  # Without the lock module, no test can write a site lock action.
+        request.config.stash[_SITE_LOCK_GUARD_KEY] = CheckoutTrailGuard.skip_measure(fault)  # Print the reason.
+        logger.warning("The checkout site lock trail guard skipped, because the lock module cannot import: %s", fault)
+        yield None  # The move has no trail to move.
+        return  # No count means no decision.
+    guard = CheckoutTrailGuard(lock.audit_trail_path())  # No test has started, so this is the checkout trail.
+    logger.info("Count the checkout site lock trail before the first test")  # Log before the first count.
+    before = guard.count_lines(guard.checkout_trail)  # An unreadable trail fails here, before any test.
+    yield guard  # The test session runs here.
+    after = guard.count_lines(guard.checkout_trail)  # The last test ended, so no test can write now.
+    request.config.stash[_SITE_LOCK_GUARD_KEY] = guard.measure(before, after)  # The terminal summary prints it.
+    logger.debug("The checkout site lock trail held %s line(s) and now holds %s", before, after)  # Log the counts.
+    guard.require_unchanged(before, after)  # A changed count fails the run.
+
+
+@pytest.fixture(autouse=True)
+def isolate_site_lock_trail(
+    checkout_site_lock_trail_guard: CheckoutTrailGuard | None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Point the site lock trail of each test at a folder inside the temporary directory of that test.
+
+    Why:
+        Issue #3503. The lock module wrote each lock action of a test to the
+        checkout trail. The module reads its directory at call time, and it
+        keeps an absolute directory as written. One change therefore moves the
+        writer and the reader together. The patch object restores the
+        directory after the test. A fixture or a test that sets its own
+        directory runs after this fixture, so its own setting wins.
+
+    Args:
+        checkout_site_lock_trail_guard: The guard of this session. None means
+            that the lock module cannot import, so no test can write a trail.
+        tmp_path: The temporary directory of this test.
+        monkeypatch: The patch object that restores the directory after the test.
+    """
+    if checkout_site_lock_trail_guard is None:  # The lock module cannot import, so no test can write a trail.
+        return  # Leave the test unchanged.
+    from src.upgrade_portal.runtime import lock  # The session guard imported it, so this reads the module cache.
+
+    test_directory = tmp_path / CheckoutTrailGuard.DIRECTORY_NAME  # The trail folder of this test alone.
+    logger.info("Move the site lock trail of this test to %s", test_directory)  # Log before the move.
+    monkeypatch.setattr(lock, "AUDIT_DIRECTORY", str(test_directory))  # An absolute directory stands as written.
+    logger.debug("The site lock trail of this test now sits in %s", test_directory)  # Log after the move.
+
+
+def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter, config: pytest.Config) -> None:
+    """Print the measure of the checkout site lock trail guard.
+
+    Why:
+        Issue #3503. A guard must state what it checked. The fixture
+        `checkout_site_lock_trail_guard` stores one sentence, and this hook
+        prints it at the end of the run.
+
+    Args:
+        terminalreporter: The reporter that writes the terminal summary.
+        config: The pytest configuration for this run.
+    """
+    measure = config.stash.get(_SITE_LOCK_GUARD_KEY, "")  # Empty when the session ran no test.
+    if measure:  # A session that ran no test has no measure to print.
+        terminalreporter.write_line(measure)  # One line in the terminal summary.

@@ -75,6 +75,7 @@ FETCH_SCRIPT = """async (path) => {
 }"""  # The browser reads one answer with its own session cookies and its extra headers.
 REFUSAL_BUDGET_MS = 5000  # A refusal costs one site read on loopback, so it must answer well inside this time.
 LOCK_SETTLE_MS = 4000  # The lock take is one round trip on loopback.
+RELEASED_MESSAGE = "You released this site. Another operator may take it now."  # `portal.js` after a release.
 SEED_TRIES = 20  # The server writes the seeds on a thread, so the first read can come too early.
 SEED_PAUSE_MS = 500  # The pause between two reads of a seeded page.
 EVIDENCE_DIRECTORY = (  # The evidence folder of these journeys.
@@ -257,21 +258,51 @@ class PlanSteps:
 
         Why:
             FR-072 gives one site to one operator. One press takes a free site.
-            A site that a lock already holds opens the confirmation box, and
-            the page names the word that the box needs.
+            Issue #3508: the step never types the takeover word. A site that a
+            lock already holds means that an earlier test left its lock, so the
+            step fails and names the text of the lock banner.
 
         Args:
             page: The browser page, on the capture page.
+
+        Raises:
+            AssertionError: The banner does not report a held site after the press.
         """
+        logger.info("Take the site lock on the capture page")  # Log before the press.
+        banner = page.get_by_test_id("lock-banner")  # The server paints the lock state when the page loads.
+        if banner.get_attribute("data-lock-state") != "held":  # This browser does not hold the site yet.
+            page.get_by_test_id("lock-take-button").click()  # One press takes a free site.
+        expect_banner = sync_api.expect(banner)  # The assertion reads the state again until it settles.
+        try:  # A refused take leaves another state on the banner.
+            expect_banner.to_have_attribute("data-lock-state", "held", timeout=LOCK_SETTLE_MS)  # The press took it.
+        except AssertionError as failure:  # The site was not free, or the portal refused the take.
+            state = (page.get_by_test_id("lock-state-message").text_content() or "").strip()  # The state sentence.
+            error = (page.get_by_test_id("lock-error").text_content() or "").strip()  # The refusal sentence.
+            raise AssertionError(  # One message, so the report shows the cause next to the step.
+                f"The capture page does not report a held site after the take. The banner reads {state!r}, "
+                f"and the error region reads {error!r}. Issue #3508: an earlier test can leave its lock."
+            ) from failure
         start = page.get_by_test_id("capture-start-button")  # The control that needs the lock.
-        take = page.get_by_test_id("lock-take-button")  # The control that takes the site.
-        if take.count() == 1 and take.is_visible():  # This browser does not hold the site yet.
-            take.click()  # One press takes a free site.
-        field = page.get_by_test_id("lock-confirm-input")  # The box of a takeover.
-        if field.count() == 1 and field.is_visible():  # A lock already held the site.
-            field.fill(str(field.get_attribute("data-confirm-word") or "CONFIRM"))  # The word that the page names.
-            page.get_by_test_id("lock-confirm-submit").click()  # Send the typed word.
         sync_api.expect(start).to_be_enabled(timeout=LOCK_SETTLE_MS)  # This browser holds the site.
+        logger.debug("This browser holds the site lock")  # Log after the take.
+
+    @staticmethod
+    def release_the_site(page: Any) -> None:
+        """Release the site lock on the capture page, so the next test finds the site free.
+
+        Why:
+            Issue #3508. The capture start test took the site, and no step
+            released it. The full browser run then ended with the site held.
+
+        Args:
+            page: The browser page, on the capture page, while this browser holds the site.
+        """
+        logger.info("Release the site lock on the capture page")  # Log before the press.
+        banner = page.get_by_test_id("lock-banner")  # The banner states the lock state of the site.
+        page.get_by_test_id("lock-release-button").click()  # The page sends the release with its own token.
+        sync_api.expect(banner).to_have_attribute("data-lock-state", "free", timeout=LOCK_SETTLE_MS)  # Free.
+        sync_api.expect(page.get_by_test_id("lock-state-message")).to_have_text(RELEASED_MESSAGE)  # The words.
+        logger.debug("The capture page reports a free site")  # Log after the release.
 
     @staticmethod
     def open_seeded_page(page: Any, path: str, test_id: str) -> None:
@@ -360,6 +391,7 @@ class TestSingleSiteLaterChecks:
         assert JourneyEvidence.screenshot(page, "single-site-capture-refused.png").exists()  # The refusal.
         assert JourneyEvidence.screenshot(page, "single-site-capture-refused-visible.png", False).exists()
         JourneyEvidence.lose_page(page, False)  # The cloud answers both pages again.
+        PlanSteps.release_the_site(page)  # Issue #3508: the next test finds West free.
 
 
 class TestMultiSiteLaterChecks:

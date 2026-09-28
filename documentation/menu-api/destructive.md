@@ -932,8 +932,7 @@ flowchart LR
 
 - Title: Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check)
 - Handler: `lambda: _launch_capture_portal()`
-- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 20
+- Endpoints: 19
 
 ```mermaid
 flowchart LR
@@ -946,17 +945,16 @@ flowchart LR
     c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade<br/>/{upgrade_id}"]
     c1 --> e6["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade<br/>/{upgrade_id}/cancel"]
     c1 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/ssr<br/>/upgrade<br/>/{upgrade_id}"]
-    menu --> c2["APICoreFetchUtils"]
+    menu --> c2["build_site_rows"]
     c2 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c2 --> e9["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/sites"]
     menu --> c3["AggregateUpgrade<br/>Service"]
-    c3 --> e9["POST<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade"]
+    c3 --> e10["POST<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade"]
     menu --> c4["ENDPOINT_ORG_SSRS"]
-    c4 --> e10["POST<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
+    c4 --> e11["POST<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
     menu --> c5["ENDPOINT_SITE_DEVICE"]
-    c5 --> e11["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/upgrade"]
-    menu --> c6["ENDPOINT_SITE_DEVICE<br/>S"]
-    c6 --> e12["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/upgrade"]
-    menu --> more["8 more endpoints in<br/>the table"]
+    c5 --> e12["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/upgrade"]
+    menu --> more["7 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -965,7 +963,7 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id}` | [`orgs.devices.getOrgDeviceUpgrade`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/get-org-device-upgrade) | [`_ENDPOINT_MODULES`](../../src/firmware/upgrade_service.py) | Name |
 | POST | `/api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id}/cancel` | [`orgs.devices.cancelOrgDeviceUpgrade`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/cancel-org-device-upgrade) | [`_ENDPOINT_MODULES`](../../src/firmware/upgrade_service.py) | Name |
 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`read_upgrade_inventory`](../../src/upgrade_portal/upgrade/options.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`build_site_rows`](../../src/upgrade_portal/app/routes/select.py) | Name |
 | POST | `/api/v1/orgs/{org_id}/ssr/upgrade` | [`orgs.ssr.upgradeOrgSsrs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/upgrade-org-ssrs) | [`ENDPOINT_ORG_SSRS`](../../src/firmware/upgrade_service.py) | Name |
 | POST | `/api/v1/orgs/{org_id}/ssr/upgrade/{upgrade_id}/cancel` | [`orgs.ssr.cancelOrgSsrUpgrade`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/cancel-org-ssr-upgrade) | [`_ENDPOINT_MODULES`](../../src/firmware/upgrade_service.py) | Name |
 | GET | `/api/v1/orgs/{org_id}/ssr/versions` | [`orgs.ssr.listOrgAvailableSsrVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-ssr-versions) | [`_ssr_versions`](../../src/firmware/upgrade_service.py) | Name |
@@ -979,5 +977,4 @@ flowchart LR
 | GET | `/api/v1/sites/{site_id}/devices/versions` | [`sites.devices.listSiteAvailableDeviceVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-site-available-device-versions) | [`_version_rows`](../../src/firmware/upgrade_service.py) | Name |
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/upgrade` | [`sites.devices.upgradeDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/upgrade-device) | [`ENDPOINT_SITE_DEVICE`](../../src/firmware/upgrade_service.py) | Name |
 | GET | `/api/v1/sites/{site_id}/ssr/upgrade/{upgrade_id}` | [`sites.ssr.getSiteSsrUpgrade`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/get-site-ssr-upgrade) | [`_ENDPOINT_MODULES`](../../src/firmware/upgrade_service.py) | Name |
-| GET | `/api/v1/sites/{site_id}/stats/calls/search` | [`sites.stats.searchSiteCalls`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/calls/search-site-calls) | [`SiteSearchExporter.calls`](../../src/export/site_search_exporter.py) | Reference |
 | GET | `/api/v1/sites/{site_id}/stats/devices` | [`sites.stats.listSiteDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats) | [`SiteStatsFirmwareEvidenceReader._read_site_statistics`](../../src/upgrade_portal/api/run_controls/routes.py) | Call |

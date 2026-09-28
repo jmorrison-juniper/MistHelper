@@ -146,6 +146,25 @@ NO_DEVICE_TYPE_TEXT = "No device type"
 DEVICE_TYPE_SEPARATOR = ", "
 CAPTURE_ID_FIELD = "capture_id"
 
+# Issue #3486. The history with no site lists the captures of every site in one
+# table, so each row names its site. The site cell carries its own test
+# identifier, as the device type cell does, so a browser test reads the cell of
+# one capture without a column position. The page of one site names its site in
+# the note, so its table keeps the nine columns of today.
+SITE_TEXT_FIELD = "site_text"  # The row field that holds the printed site text.
+SITE_TEST_ID_FIELD = "site_test_id"  # The row field that holds the test identifier of the site cell.
+SITE_TEST_ID_PREFIX = "history-site-"  # The test identifier of one site cell is this prefix and the capture.
+EVERY_SITE_COLUMN_COUNT = 10  # The Captures table with the Site column.
+ONE_SITE_COLUMN_COUNT = 9  # The Captures table of one site, which does not change.
+EVERY_SITE_ROW_VALUES_TEXT = (  # The second sentence of the hidden caption of the table with the Site column.
+    "Each row holds the site, the moment, the role, the state, the device count, the device types, "
+    "the client count, and the stored size."
+)
+ONE_SITE_ROW_VALUES_TEXT = (  # The second sentence of the hidden caption of the table of one site.
+    "Each row holds the moment, the role, the state, the device count, the device types, the client count, "
+    "and the stored size."
+)
+
 # Section 6 of `contracts/http-api.md` sets the two page defaults. The two bounds
 # are the portal's own, because the contract sets none and an unbounded limit
 # lets one request read the whole unlimited retention of FR-032 in one answer.
@@ -1365,20 +1384,22 @@ def short_moment(value: Any) -> str:
 UNKNOWN_RUN_STATE = "unknown"
 
 
-def run_site_label(record: Mapping[str, Any]) -> str:
-    """Return the site name of one run, or its identifier.
+def record_site_label(record: Mapping[str, Any]) -> str:
+    """Return the site name of one stored record, or its identifier.
 
     Why:
         An old record holds the identifier alone. A row with an empty site tells
         the operator nothing, and the identifier at least reaches the site page.
+        The Runs table and the Captures table read the site with this one rule,
+        so the two tables of the history name a site the same way (issue #3486).
 
     Args:
-        record: The stored run record.
+        record: The stored run record or the stored capture record.
 
     Returns:
         The site name, the site identifier, or an empty text.
     """
-    return str(record.get("site_name") or record.get("site_id") or "")
+    return str(record.get("site_name") or record.get("site_id") or "")  # An empty name reads as no name.
 
 
 def run_end_moment(record: Mapping[str, Any], state: str) -> str:  # Select an end time from the canonical state.
@@ -1457,7 +1478,7 @@ def run_history_identity_fields(record: Mapping[str, Any], state: str) -> dict[s
     """
     return {  # Keep simple fallback fields out of the row composer.
         "run_id": str(record.get("run_id") or ""),  # Keep the stored identifier for links and test hooks.
-        "site_name": run_site_label(record),  # Show a name and fall back to the site identifier.
+        "site_name": record_site_label(record),  # Show a name and fall back to the site identifier.
         "site_id": str(record.get("site_id") or ""),  # Keep the site scope available for later controls.
         **run_operator_fields(record),  # Show both operator labels without adding branch count here.
         "state": state,  # Show the stored state or the safe unknown value.
@@ -1706,6 +1727,42 @@ class HistoryScope:
         return "The stored captures of every site."  # A screen reader hears the scope of every site.
 
 
+@dataclass(frozen=True, slots=True)
+class HistoryCaptureColumns:
+    """The columns of the Captures table of one history page.
+
+    Why:
+        Issue #3486. The page with no site lists the captures of every site in
+        one table, and no column named the site of a row. The page of one site
+        names its site in the note, so a Site column there repeats one name in
+        each row. The class holds the request value, and each column value is a
+        property. The template prints the values and holds no rule.
+
+        The class stands apart from ``HistoryScope``. The scope settles the
+        texts of the note, and this class settles the shape of the table.
+
+    Attributes:
+        site_id: The site of the request, or an empty text for every site.
+    """
+
+    site_id: str = ""  # An absent site means every site, as section 6 of the HTTP contract states.
+
+    @property
+    def shows_site_column(self) -> bool:
+        """Return True when the table names the site of each row."""
+        return not self.site_id  # Only the page with no site mixes the captures of many sites.
+
+    @property
+    def column_count(self) -> int:
+        """Return the number of table columns, which the empty row spans."""
+        return EVERY_SITE_COLUMN_COUNT if self.shows_site_column else ONE_SITE_COLUMN_COUNT  # FR-009.
+
+    @property
+    def row_values_text(self) -> str:
+        """Return the second sentence of the hidden caption, which names the values of each row."""
+        return EVERY_SITE_ROW_VALUES_TEXT if self.shows_site_column else ONE_SITE_ROW_VALUES_TEXT  # FR-005.
+
+
 def call_builder(builder: Callable[..., Any], rows: list[dict[str, Any]], window: PageWindow) -> Any:
     """Call the history view builder with the window when it accepts one.
 
@@ -1832,12 +1889,14 @@ def view_row_mapping(row: Any) -> dict[str, Any]:
 
 
 def page_rows(view: Any, shaped: Sequence[Mapping[str, Any]]) -> tuple[Mapping[str, Any], ...]:
-    """Return the rows of the page, each one naming its device types.
+    """Return the rows of the page, each one naming its device types and its site.
 
     Why:
         The compare view holds the printed columns and the stored rows hold the
-        ``counts`` map. The two join on the capture identifier, so a compare
-        view that reordered its rows still meets the right counts.
+        ``counts`` map and the site fields. The two join on the capture
+        identifier, so a compare view that reordered its rows still meets the
+        right stored row. Issue #3486 adds the site text, because the page with
+        no site lists the captures of every site in one table.
 
     Args:
         view: The compare view.
@@ -1846,15 +1905,20 @@ def page_rows(view: Any, shaped: Sequence[Mapping[str, Any]]) -> tuple[Mapping[s
     Returns:
         The rows, ready for the page.
     """
-    counts_by_id = {row.get(CAPTURE_ID_FIELD, ""): row for row in shaped}  # One read of the store rows.
+    logger.info("review: the portal adds the device types and the site of each history row")  # Before the join.
+    stored_by_id = {row.get(CAPTURE_ID_FIELD, ""): row for row in shaped}  # One read of the store rows.
     built = []  # The rows that the page prints.
     for row in view_field(view, ROWS_KEY, ()):  # The compare view fixes the printed order.
-        copied = view_row_mapping(row)
+        copied = view_row_mapping(row)  # A frozen compare row cannot grow a field, so the route copies it.
         capture_id = str(copied.get(CAPTURE_ID_FIELD, ""))  # The join key, and the identifier of the cell.
-        copied[DEVICE_TYPE_FIELD] = device_type_text(counts_by_id.get(capture_id, copied))
+        stored = stored_by_id.get(capture_id, copied)  # The stored row, or the copy when no stored row matches.
+        copied[DEVICE_TYPE_FIELD] = device_type_text(stored)  # FR-084a names the device types of the capture.
         copied[DEVICE_TYPE_TEST_ID_FIELD] = f"{DEVICE_TYPE_TEST_ID_PREFIX}{capture_id}" if capture_id else ""
-        built.append(copied)
-    return tuple(built)
+        copied[SITE_TEXT_FIELD] = record_site_label(stored)  # The Runs table names a site with the same rule.
+        copied[SITE_TEST_ID_FIELD] = f"{SITE_TEST_ID_PREFIX}{capture_id}" if capture_id else ""  # No hook if no ID.
+        built.append(copied)  # Keep the printed order of the compare view.
+    logger.debug("review: the portal shaped %s history rows with a site text", len(built))  # After the join.
+    return tuple(built)  # A tuple, so the page view stays frozen.
 
 
 def build_page_view(view: Any, shaped: Sequence[Mapping[str, Any]]) -> HistoryPageView:
@@ -2088,6 +2152,8 @@ def history_page() -> str:
         signed_in=True,
         # Issue #3482. The scope names every site when the request names no site.
         history_scope=HistoryScope.for_page(site_id, shaped),
+        # Issue #3486. The Captures table of every site names the site of each row.
+        history_columns=HistoryCaptureColumns(site_id=site_id),
         history_view=page_view,
         moment_texts=moment_texts(shaped),
         # Issue #2199 adds the runs section beside the captures section.

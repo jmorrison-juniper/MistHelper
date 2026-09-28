@@ -41,7 +41,6 @@ import socket
 import subprocess
 import threading
 import time
-import urllib.request
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -111,11 +110,17 @@ from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site
     SHORT_SITE_NAME,
     SHORT_SITE_REASON,
 )
+from tests.e2e.upgrade_portal.stale_run_seeds import StaleRunSeeds  # Issue #3507: the stale runs on their own site.
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, build_sdk_answer  # Issue #3438: real SDK answers.
-from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, stores, and traps.
+from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, and stores.
+    RunOwnerHeaderCheck,
     allocate_resources,
     build_child_environment,
     build_e2e_overrides,
+)
+from tests.support.upgrade_portal_e2e.records.audit import (  # The two trail guards of the browser run.
+    AuditTrailIsolation,  # Issue #3498: the checkout trail guard.
+    TrailHoldCheck,  # Issue #3508: the leaked hold check of the run trail.
 )
 
 logger = logging.getLogger(__name__)
@@ -674,8 +679,105 @@ def _start_server() -> subprocess.Popen[bytes] | None:
     return None
 
 
+AUDIT_GUARD_KEY = pytest.StashKey[str]()  # Issue #3498: the measure that the terminal summary prints.
+AUDIT_GUARD_RECORD = "checkout-audit-trail-guard.json"  # Issue #3498: the record of the two counts.
+HOLD_GUARD_KEY = pytest.StashKey[str]()  # Issue #3508: the measure of the run trail hold check.
+HOLD_GUARD_RECORD = "run-trail-hold-guard.json"  # Issue #3508: the record of the hold check.
+
+
 @pytest.fixture(scope="session")
-def capture_portal_server() -> Iterator[str]:
+def checkout_audit_trail_guard(request: pytest.FixtureRequest) -> Iterator[AuditTrailIsolation]:
+    """Count the checkout audit trail before the portal starts and after it stops.
+
+    Why:
+        Issue #3498. The test portal wrote each lock action to the checkout
+        trail, which is the production audit trail in the main checkout. An
+        older header guard compared fixed values, so it could not see the
+        leak. Issue #3501 removed that guard. This guard reads the file itself. The fixture
+        `capture_portal_server` depends on it. The first count therefore runs
+        before the child starts, and the second count runs after the child
+        stops.
+
+        Caution: the production container writes the trail of the main
+        checkout. A real lock action during a run in the main checkout also
+        fails this guard. Run the browser suite in a worktree.
+
+    Args:
+        request: The fixture request, which carries the run configuration.
+
+    Yields:
+        The isolation of this run. A journey reads its two trails.
+    """
+    isolation = AuditTrailIsolation(ARTIFACT_DIRECTORY)  # The parent never moves its own trail.
+    logger.info("Count the checkout audit trail before the browser run")  # Log before the first count.
+    before = isolation.count_lines(isolation.checkout_trail)  # An unreadable trail fails here, before any test.
+    yield isolation  # The browser run happens here.
+    after = isolation.count_lines(isolation.checkout_trail)  # The child stopped, so no write can follow.
+    measure = isolation.measure(before, after)  # The sentence that states what the guard checked.
+    request.config.stash[AUDIT_GUARD_KEY] = measure  # The terminal summary prints the measure.
+    record = {"checkout_trail": str(isolation.checkout_trail), "before": before, "after": after, "measure": measure}
+    (ARTIFACT_DIRECTORY / AUDIT_GUARD_RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    logger.debug("Wrote the checkout audit trail record: %s", measure)  # Log after the record write.
+    isolation.require_unchanged(before, after)  # A changed count fails the run.
+
+
+@pytest.fixture(scope="session")
+def run_trail_hold_guard(
+    request: pytest.FixtureRequest, checkout_audit_trail_guard: AuditTrailIsolation
+) -> Iterator[TrailHoldCheck]:
+    """Replay the site lock trail of the run after the portal stops, and fail on each leaked hold.
+
+    Why:
+        Issue #3508. The full browser run of issue #3497 ended with two site
+        locks held, and the run still passed. The fixture
+        `capture_portal_server` depends on this guard, so pytest tears the
+        guard down after the portal stops. No write can then follow the read.
+
+    Args:
+        request: The fixture request, which carries the run configuration.
+        checkout_audit_trail_guard: The isolation of this run, which names the run trail.
+
+    Yields:
+        The check of this run.
+    """
+    check = TrailHoldCheck(checkout_audit_trail_guard.run_trail)  # The child portal writes this trail alone.
+    yield check  # The browser run happens here.
+    logger.info("Replay the site lock trail of the browser run")  # Log before the replay.
+    started = time.perf_counter()  # Issue #3508: the replay must stay short.
+    result = check.evaluate()  # A line that the check cannot read fails here.
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 1)  # The cost of the replay.
+    request.config.stash[HOLD_GUARD_KEY] = result.measure  # The terminal summary prints the measure.
+    record: dict[str, Any] = {"run_trail": str(result.trail)}  # The trail that the check read.
+    record.update({"records": result.records, "sites": result.sites})  # The two counts of the read.
+    record.update({"leaks": list(result.leaks), "elapsed_ms": elapsed_ms, "measure": result.measure})  # The result.
+    (ARTIFACT_DIRECTORY / HOLD_GUARD_RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    logger.debug("Wrote the run trail hold record: %s", result.measure)  # Log after the record write.
+    result.require_no_leak()  # A leaked hold fails the run.
+
+
+def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
+    """Print the measure of each trail guard of the browser run.
+
+    Why:
+        Issue #3498 and issue #3508. A guard must state what it checked. The
+        fixtures `checkout_audit_trail_guard` and `run_trail_hold_guard` each
+        store one sentence, and this hook prints each sentence at the end of
+        the run.
+
+    Args:
+        terminalreporter: The reporter that writes the terminal summary.
+        config: The pytest configuration for this run.
+    """
+    for key in (AUDIT_GUARD_KEY, HOLD_GUARD_KEY):  # The checkout trail guard, then the run trail hold check.
+        measure = config.stash.get(key, "")  # Empty when no browser test started the portal.
+        if measure:  # A run that started no portal has no measure to print.
+            terminalreporter.write_line(measure)  # One line in the terminal summary.
+
+
+@pytest.fixture(scope="session")
+def capture_portal_server(
+    checkout_audit_trail_guard: AuditTrailIsolation, run_trail_hold_guard: TrailHoldCheck
+) -> Iterator[str]:
     """Give every browser test the address of a portal this fixture started.
 
     Why:
@@ -685,9 +787,16 @@ def capture_portal_server() -> Iterator[str]:
         answers are both faults, and the fixture names them. A workstation that
         can run no WSGI server is not a fault, so that one state reports a skip.
 
+    Args:
+        checkout_audit_trail_guard: Issue #3498. The guard counts the checkout
+            trail before this portal starts and after it stops.
+        run_trail_hold_guard: Issue #3508. The guard replays the run trail
+            after this portal stops.
+
     Yields:
         The base address of the running portal.
     """
+    del checkout_audit_trail_guard, run_trail_hold_guard  # Requested for their teardown checks alone.
     if _probe_port(CAPTURE_PORT):  # A portal this fixture did not start holds no sign-in seam.
         # Issue #2260: an earlier run of this suite may own the port. The record
         # names that portal, so this run may reclaim the port instead of failing.
@@ -1651,7 +1760,8 @@ def stand_in_capture(
         The comparison journey and the history journey both need a stored
         capture, and no browser test can write one. The device map comes from
         the shipped `build_device_index`, so the test proves the stored shape
-        and never a shape that this file alone builds.
+        and never a shape that this file alone builds. Issue #3492: the count
+        map comes from the shipped `build_counts` for the same reason.
 
     Args:
         capture_id: The business key that the picker publishes.
@@ -1667,10 +1777,10 @@ def stand_in_capture(
     from src.upgrade_portal.capture import devices  # Late, so a plain collection never loads the portal.
 
     records = [{**device, "version": version} for device in stand_in_site_devices(site_id)]  # The site inventory.
-    index = devices.build_device_index(records, [])
-    clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]
+    index = devices.build_device_index(records, [])  # Issue #3494: no statistics list, so each state is empty.
+    clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]  # Radios.
     site_name = SECOND_SITE_NAME if site_id == SECOND_SITE_ID else STAND_IN_SITE_NAME  # The name of the site row.
-    return {
+    capture: dict[str, Any] = {  # The stored shape. Issue #3492: the count map follows below.
         "capture_id": capture_id,
         "run_id": STAND_IN_RUN_ID,
         "org_id": STAND_IN_ORG_ID,
@@ -1690,9 +1800,41 @@ def stand_in_capture(
         "device_index": index,
         "devices": records,
         "clients": {"wired": [], "wireless": clients, "guest": []},
-        "counts": {"devices_total": len(records), "clients_wired": 0, "clients_wireless": len(clients)},
+        "counts": {},  # Issue #3492: `stand_in_counts` fills this map below, so the key order stays the same.
         "partial_reasons": [],
     }
+    capture["counts"] = stand_in_counts(capture)  # Issue #3492: the nine counts of a real capture.
+    return capture  # One capture document with the count map of the shipped builder.
+
+
+def stand_in_counts(capture: dict[str, Any]) -> dict[str, int]:
+    """Build the count map of one seed capture with the shipped builder.
+
+    Why:
+        Issue #3492. A real capture holds the nine counts of `build_counts`,
+        and three of them count the devices of each type. A count map written
+        by hand held three keys only, so each seed row of the history read
+        "No device type". The function reads the builder through the module
+        name at call time, so a direct test can replace the builder.
+
+    Args:
+        capture: One seed capture with its device index, its device records,
+            and its client lists.
+
+    Returns:
+        The nine counts that a real capture of the same lists holds.
+    """
+    from src.upgrade_portal.capture import assembly  # Late, so a plain collection never loads the portal.
+
+    logger.info("Build the count map of the seed capture %s", capture["capture_id"])  # Log before the build.
+    sections = assembly.CaptureSections(  # The three parts of a capture that the builder reads.
+        device_index=capture["device_index"],  # The joined type and state of each device.
+        devices=capture["devices"],  # The device records of the site.
+        clients=capture["clients"],  # The wired, the wireless, and the guest client lists.
+    )
+    counts = assembly.build_counts(sections)  # The shipped writer of the count map of a real capture.
+    logger.debug("The seed capture %s holds the counts %s", capture["capture_id"], counts)  # Log after the build.
+    return counts  # The caller stores the map in the capture document.
 
 
 def stand_in_tier3_capture() -> dict[str, Any]:
@@ -1719,6 +1861,7 @@ def stand_in_tier3_capture() -> dict[str, Any]:
             "ssid": "guest-wifi",
         }
     ]
+    capture["counts"] = stand_in_counts(capture)  # Issue #3492: the count map now counts the guest client too.
     capture["extras"] = {
         "switch_ports": [{"mac": switch_mac, "port_id": "ge-0/0/1", "up": True, "speed": 1000}],
         "poe": [{"mac": switch_mac, "port_id": "ge-0/0/1", "poe_on": True, "power_draw": 4.5}],
@@ -2065,8 +2208,6 @@ FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test open
 STOPPED_RUN_ID = "e2e-stopped-run-0001"  # The seeded run that proves a cancelled attempt can restart.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
 START_READY_RUN_ID = "e2e-start-ready-run-0001"  # The seeded run that proves the firmware start call.
-STALE_PRE_CLOUD_RUN_ID = "e2e-stale-precloud-0001"
-STALE_STOPPING_RUN_ID = "e2e-stale-stopping-0001"
 BULK_RETRY_RUN_ID = "e2e-bulk-retry-run-0001"
 BULK_RETRY_SITE_ID = "55555555-5555-5555-5555-555555555555"
 LIFECYCLE_RUN_ID = "e2e-lifecycle-run-0001"
@@ -2140,32 +2281,6 @@ def _start_ready_run_record() -> dict[str, Any]:
     return record  # Return a mutable copy that the start route may advance.
 
 
-def _stale_precloud_run_record() -> dict[str, Any]:
-    """Build one stale pre-cloud run for atomic bulk cancel."""
-    return {
-        "run_id": STALE_PRE_CLOUD_RUN_ID,
-        "site_id": STAND_IN_SITE_ID,
-        "org_id": STAND_IN_ORG_ID,
-        "state": "awaiting_confirmation",
-        "updated_at": "2026-09-01T10:00:00+00:00",
-        "targets": [],
-        "options": {},
-    }
-
-
-def _stale_stopping_run_record() -> dict[str, Any]:
-    """Build one stale stopping run for read-only reconciliation."""
-    return {
-        "run_id": STALE_STOPPING_RUN_ID,
-        "site_id": STAND_IN_SITE_ID,
-        "org_id": STAND_IN_ORG_ID,
-        "state": "stopping",
-        "updated_at": "2026-09-01T10:00:00+00:00",
-        "targets": [{"device_id": "e2e-target-one", "cloud_task_id": "e2e-task-one"}],
-        "options": {},
-    }
-
-
 def _bulk_retry_run_record() -> dict[str, Any]:
     """Build one isolated failed source for atomic bulk retry."""
     return {
@@ -2217,39 +2332,38 @@ def _seed_fixture_runs(built: Any, upgrade: Any) -> None:
 
 
 def _write_fixture_runs(built: Any, upgrade: Any) -> None:
-    """Write both seeded run records, and report a refusal instead of raising."""
-    try:
-        with built.app_context():
-            failed_written = upgrade.save_run(_failed_run_record())
-            stopped_written = upgrade.save_run(_stopped_run_record())
-            prepared_written = upgrade.save_run(_prepared_run_record())
-            start_ready_written = upgrade.save_run(_start_ready_run_record())
-            stale_precloud_written = upgrade.save_run(_stale_precloud_run_record())
-            stale_stopping_written = upgrade.save_run(_stale_stopping_run_record())
-            bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())
-            lifecycle_written = upgrade.save_run(_lifecycle_run_record())
+    """Write each seeded run record, and report a refusal instead of raising."""
+    logger.info("Write the seeded run records of the browser server")  # Log before the writes.
+    try:  # A refusal must not stop the server, so each related test reports the missing state.
+        with built.app_context():  # The store reads the application settings.
+            failed_written = upgrade.save_run(_failed_run_record())  # The run of the retry journey.
+            stopped_written = upgrade.save_run(_stopped_run_record())  # The run of the fresh-attempt journey.
+            prepared_written = upgrade.save_run(_prepared_run_record())  # The run of the confirmation link.
+            start_ready_written = upgrade.save_run(_start_ready_run_record())  # The run of the firmware start.
+            stale_written = StaleRunSeeds.write(upgrade, STAND_IN_ORG_ID)  # Issue #3507: on the stale site.
+            bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())  # The source of the bulk retry.
+            lifecycle_written = upgrade.save_run(_lifecycle_run_record())  # The run of the lifecycle tests.
             org_controls_written = OrgControlSeeds.write(upgrade, identity)  # Issue #3247: two operations.
             org_cancel_written = OrgCancelSeeds.write(upgrade, identity)  # Issue #3246: the running operation.
             org_ended_written = OrgEndedSeeds.write(upgrade, identity)  # Issue #3367: one child job ended first.
             later_check_written = LaterCheckSeeds.write(upgrade, identity)  # Issue #3439: the retry of page two.
-    except Exception as failure:
+    except Exception as failure:  # Any store fault ends the writes, and the warning names the cause.
         logger.warning(
             "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
             failure,
         )
-        return
+        return  # The server keeps running with the records that the store accepted.
     logger.info(
         (
             "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
-            "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s org_controls=%s "
+            "start_ready=%s stale=%s bulk_retry=%s lifecycle=%s org_controls=%s "
             "org_cancel=%s org_ended=%s later_check=%s"
         ),
         failed_written,
         stopped_written,
         prepared_written,
         start_ready_written,
-        stale_precloud_written,
-        stale_stopping_written,
+        stale_written,
         bulk_retry_written,
         lifecycle_written,
         org_controls_written,
@@ -2268,8 +2382,8 @@ def _reset_cached_state() -> None:  # Clear each process cache before isolated c
 
     wiring.reset_storage_bootstrap()  # Prevent an earlier production bootstrap state from crossing into E2E.
     factory.reset_readiness_cache()  # Prevent an earlier readiness result from crossing into E2E.
-    capture_store.reset_connection()  # Drop any cached document store handle before traps install.
-    lock.reset_connection()  # Drop any cached lock store handle before traps install.
+    capture_store.reset_connection()  # Drop any cached document store handle before the stores install.
+    lock.reset_connection()  # Drop any cached lock store handle before the stores install.
     logger.debug("Reset the E2E storage and readiness caches")  # Confirm the complete reset.
 
 
@@ -2305,7 +2419,7 @@ def _build_factory_overrides() -> E2EFactoryOverrides:  # Assemble one complete 
             }
         },
     }
-    overrides = build_e2e_overrides(TEST_RUN_ID, seams)  # Create all stores and traps before the factory call.
+    overrides = build_e2e_overrides(TEST_RUN_ID, seams)  # Create all stores before the factory call.
     logger.debug("Built the complete E2E factory override set")  # Confirm construction without record values.
     return overrides  # The factory validates this value before blueprint registration.
 
@@ -2337,6 +2451,12 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     from src.upgrade_portal.app.routes import upgrade  # Own the seeded run write helper.
 
     _reset_cached_state()  # Clear each cached production handle before the override set installs.
+    # WHY: Issue #3498. The site lock writes each lock action to the checkout
+    # trail, which is the production audit trail in the main checkout. This
+    # child moves the trail into the artifact directory of its run before any
+    # route exists. The history page reads the same trail, so the audit log
+    # of this portal shows the lock actions of this run alone.
+    AuditTrailIsolation(ARTIFACT_DIRECTORY).place()  # The move stays for the whole life of the child.
     overrides = _build_factory_overrides()  # Build every required process-owned dependency before routes.
     built = create_app(overrides)  # Validate and install overrides before blueprint registration.
     from src.upgrade_portal.app.routes import org_upgrade
@@ -2387,46 +2507,12 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     return built  # Waitress and Gunicorn both load this object by name.
 
 
-E2E_HEADER = "X-MistHelper-E2E-Run-ID"
-TRAP_HEADERS = (
-    "X-MistHelper-E2E-Arango-Trap-Calls",
-    "X-MistHelper-E2E-Redis-Trap-Calls",
-    "X-MistHelper-E2E-Mist-Trap-Calls",
-    "X-MistHelper-E2E-File-Trap-Calls",
-)
-PERSISTENT_HEADERS = {
-    "runs": "X-MistHelper-E2E-Persistent-Runs",
-    "actions": "X-MistHelper-E2E-Persistent-Actions",
-    "audits": "X-MistHelper-E2E-Persistent-Audits",
-}
-
-
-def _assert_isolated_headers(headers: Any) -> None:
-    """Require the run owner and zero calls from every hard isolation trap."""
-    normalized = {str(name).lower(): str(value) for name, value in headers.items()}
-    assert normalized.get(E2E_HEADER.lower()) == TEST_RUN_ID
-    for name in TRAP_HEADERS:
-        assert normalized.get(name.lower()) == "0"
-
-
-def _persistent_baseline() -> dict[str, int]:
-    """Read the persistent-store baseline from one isolated health response."""
-    with urllib.request.urlopen(f"{BASE_URL}/healthz", timeout=5) as response:
-        _assert_isolated_headers(response.headers)
-        return {name: int(response.headers[header]) for name, header in PERSISTENT_HEADERS.items()}
-
-
-@pytest.fixture(scope="session", autouse=True)
-def persistent_store_baseline(capture_portal_server: str) -> Iterator[None]:
-    """Record and compare persistent counts around the complete browser suite."""
-    del capture_portal_server
-    before = _persistent_baseline()
-    record_path = ARTIFACT_DIRECTORY / "persistent-store-baselines.json"
-    record_path.write_text(json.dumps({"before": before}, indent=2), encoding="utf-8")
-    yield
-    after = _persistent_baseline()
-    record_path.write_text(json.dumps({"before": before, "after": after}, indent=2), encoding="utf-8")
-    assert after == before
+# WHY: Issue #3501. The run owner header is the one test header of the test
+# portal. Each page fixture refuses a health read that names no run or another
+# run, because a stray portal on the same address holds the records of another
+# run. The direct tests in tests/unit/upgrade_portal/test_e2e_run_owner_header.py
+# prove that the check can fail.
+OWNER_CHECK = RunOwnerHeaderCheck(TEST_RUN_ID)  # One check for each run, built once.
 
 
 @pytest.fixture(scope="session")
@@ -2469,8 +2555,8 @@ def page(context: Any, capture_portal_server: str) -> Iterator[Any]:
     context.add_cookies(portal_session_cookies())  # Both cookies, against the portal address.
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
-    assert isolation_response is not None and isolation_response.ok
-    _assert_isolated_headers(isolation_response.headers)
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
     yield opened
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2501,8 +2587,8 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
     context.add_cookies(second_operator_cookies())  # The second pair, which the server also registered.
     opened = context.new_page()
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
-    assert isolation_response is not None and isolation_response.ok
-    _assert_isolated_headers(isolation_response.headers)
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
     yield opened
     opened.close()
     context.close()  # The context holds a profile directory until it closes.
@@ -2530,7 +2616,7 @@ def firmware_operator_page(context: Any, capture_portal_server: str) -> Iterator
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test uses the reachable operator only where it starts firmware.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2555,7 +2641,7 @@ def controls_operator_page(context: Any, capture_portal_server: str) -> Iterator
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test drives the recovery controls of the seeded operations.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2581,7 +2667,7 @@ def empty_site_operator_page(context: Any, capture_portal_server: str) -> Iterat
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test selects the empty site and then clears it.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2607,7 +2693,7 @@ def short_read_operator_page(context: Any, capture_portal_server: str) -> Iterat
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test selects the short-read site and then clears it.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2635,7 +2721,7 @@ def lost_page_operator_page(context: Any, capture_portal_server: str) -> Iterato
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test reads the picker of the lost-page organization.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -2664,7 +2750,7 @@ def later_check_operator_page(context: Any, capture_portal_server: str) -> Itera
     opened = context.new_page()  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
-    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test switches the lost page on and off with the request header.
     opened.close()  # A page left open would hold a browser target for the whole run.
 
