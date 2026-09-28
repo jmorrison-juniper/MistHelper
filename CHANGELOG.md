@@ -12,6 +12,250 @@ the merged fragments into this file at release time.
 
 ## [Unreleased]
 
+## [26.09.28.19.49] - 2026-09-28
+
+This release collects 21 release-note fragments from `changelog.d/`. The
+previous GitHub release is `v26.09.26.06.19`.
+
+### Added
+
+- Added `tests/guardrails/test_markdown_links.py`. The guardrail follows every
+  relative Markdown link and heading anchor in the tracked tree, then fails when
+  a target is absent. It also fails on an unresolved OpenAPI cross-reference
+  placeholder. The guardrail does not check the folder `documentation/wiki/`.
+  A wiki page links to a bare page name, and that name resolves only on the
+  published wiki. Issue #3442.
+
+### Changed
+
+- `scripts/generate_api_docs.py` now resolves an OpenAPI cross-reference
+  placeholder to a relative link while it writes a page, so regeneration cannot
+  bring the placeholders back. Issue #3442.
+
+### Fixed
+
+- The capture history of the upgrade capture portal no longer names one site
+  for the captures of every site (issue #3482). This fix applies to the history
+  with no site. The note of the Captures card now starts with "The list shows
+  the stored captures of every site", and its count sentence starts with "The
+  portal holds". The caption of the table now names every site. Before this
+  change, the note named only the site of the first row. The history of one
+  site does not change.
+
+- The Captures table of the capture history names the site of each row
+  (issue #3486). The change applies to the history with no site. A Site column
+  follows the Capture column, and its header sorts the rows by the site name.
+  If a site name is too long, it clips on one line, and the title of the cell
+  holds the full name. The hidden caption of the table also names the site.
+  The history of one site does not change.
+
+- The upgrade capture portal now makes the noun agree with each count in two
+  notes (issue #3449). For one match, the organization picker note says "1
+  organization" and not "1 organizations". For one capture, the capture history
+  note says "1 capture" and not "1 captures". The second sentence of each note
+  names the noun, and it no longer says "of them". A page size of one reads as
+  "1 row". A count of zero, or of two or more, keeps the plural noun. Each note
+  also carries a test identifier, `org-search-note` or `history-count-note`.
+
+- The fresh container install steps now state measured facts. An audit ran every
+  documented step against a Podman host and a clean clone (issue #3465).
+  - The files `Containerfile` and `Dockerfile` pin the `misthelper` account to
+    UID 1000 and GID 1000. The account took its number from the base image
+    before, so the number moved from 999 to 994. The documented `chown` target
+    then went stale.
+  - The install documents no longer tell an operator to run `chmod -R 777 data`.
+    Windows and macOS need no command, and a Linux host uses
+    `podman unshare chown -R 1000:1000 data`.
+  - The documents name `podman compose` as the start command again. They now
+    name the `PODMAN_COMPOSE_PROVIDER` setting. That setting corrects the
+    Windows volume defect of issue #2184. A deployment then no longer depends on
+    the in-house `scripts\compose.ps1` helper.
+  - The wiki page `documentation/wiki/Container-Setup.md` no longer claims that
+    `Containerfile` and `Dockerfile` hold two different build strategies. The two
+    files hold the same bytes, and a test already proves it.
+  - The runtime message for an unwritable data folder names the pinned account.
+    It also names a compose command that exists inside the shipped image.
+- The guardrail `tests/guardrails/test_container_account_identifiers.py` holds
+  the documents to the account number that `Containerfile` pins. Issue #3465.
+
+- The Mermaid diagrams on the menu API endpoint wiki pages now fit the wiki
+  column and render. GitHub cut off the bottom of 223 of 289 diagrams, because
+  long request paths and names made each diagram wider than the column. The
+  generator now breaks each label into short lines. Each category page now has
+  one overview diagram. That diagram links the category to its most used SDK
+  families. It replaces up to seven diagrams of crossing edges. Issue #3460.
+- GitHub did not render the last diagrams of a page with more than about 60
+  diagrams. A menu option with fewer than three endpoints now has no diagram,
+  because its table shows the same endpoints. The largest page now has 27
+  diagrams. Issue #3460.
+
+- Repaired 87 broken relative links across the documentation tree. The
+  `documentation/api/` pages carried `$e/<Tag>/<operationId>` placeholders from
+  the upstream Mist OpenAPI spec. These now point at the generated page for the
+  same operation. The `documentation/diagrams/` pages promised PNG fallback
+  images that no commit ever added. The pages now name the beta Mermaid type
+  instead. Planning records under `specs/` used the wrong relative depth, or
+  named a contract file that the author never created. Issue #3442.
+
+- Fixed the README Wiki table for issue #3433. Its links now open the published
+  wiki, where the page-to-page links work, not the repository source copies.
+
+### Other entries in this release
+
+Each heading below names one change. Each bullet starts with its change type.
+
+### Refuse the upgrade options save after a short device read
+
+- **Fixed**: The options save of the upgrade capture portal now refuses a site
+  whose device list read lost a page. Before this change, the save planned the
+  devices of the pages that the portal read. The devices of the lost pages kept
+  the old firmware, and no record named them.
+
+  The portal now checks the status and the body of each page of that read. An
+  error page in the middle of the read no longer stops the options page with
+  status 500. The options page of each mode shows a Caution banner for a short
+  site. The refusal tells the operator to reload the page and to save the
+  options again. Issue #3424.
+
+### Name a lost page in the site picker and in the reconciliation read
+
+- **Fixed**: The site picker of the upgrade capture portal now shows a Caution
+  note for each read that loses a page. Before this change, the picker showed a
+  short site list that read as whole. A site could also show 0 devices when it
+  held devices.
+
+  Each mode of the picker shows the note above the site list. The note tells
+  the operator to reload the page. The site list answer of `GET /api/sites`
+  holds the new fields `site_list_complete` and `device_counts_complete`. The
+  portal keeps a whole read only, so a reload reads the cloud again. The
+  reconciliation read of a stopped run now marks each target of a lost page
+  with unavailable evidence, instead of a stored version. Issue #3438.
+
+### Name an incomplete site list at each later site check
+
+- **Fixed**: The upgrade capture portal no longer tells the operator that a
+  site does not exist when the site read lost a page. Before this change, nine
+  later steps refused a site of a lost page as unknown. The operator then read
+  the wrong cause and chose the sites again.
+
+  Each step now answers the status 503 with the code `site_list_incomplete`.
+  The message tells the operator to try again. The site choice, the inventory
+  page, the inventory answer, and the capture start use the rule. The options
+  page, the options save, the confirm page, the pre-check start, and the retry
+  use it too. A refused step changes no stored state. A browser page shows the
+  shared error page with a link to the site list. A refused site choice returns
+  to the site picker with a Caution message. A whole site list keeps the
+  answers of today, and a site of a kept page still passes. Issue #3439.
+
+### Count each proven device in the counts of a multi-site operation
+
+- **Fixed**: After the multi-site check proves a child job, the progress page
+  counts each device of that child job as upgraded. The child row, the
+  operation block, and the status poll now show the same counts as the device
+  table. A device that the cloud lists as failed stays failed. A child job with
+  no proof keeps its counts. Issue #3457.
+
+### State the correct site noun on the multi-site options page
+
+- **Fixed**: The multi-site options page now states the correct site noun for
+  a plan of one site. The note says "1 selected site" instead of "1 selected
+  sites". A plan of two or more sites keeps the plural noun. Issue #3447.
+
+### Name one site on the multi-site confirm page for a plan of one site
+
+- **Fixed**: For a plan of one site, the confirm page of the multi-site mode
+  now shows a singular scope. The Warning reads "at the selected site", and the
+  two pre-check buttons read "Take the missing pre-check" and "Take a new
+  pre-check for the site". For two or more sites, the Warning reads "at each
+  selected site". The button of a full pre-check then reads "Take a new
+  pre-check for each site". A retry of one site uses the same texts. Issue
+  #3452.
+
+### State the correct device noun in the multi-site check result
+
+- **Fixed**: The portal now states the correct device noun in the check
+  result of a multi-site child job. For one device, the result reads "The
+  target version runs on 0 of 1 device". For two or more devices, the result
+  keeps the plural noun. The progress page and the stored record show the
+  same text. A record of an earlier check keeps its old text. Issue #3453.
+
+### State the correct site noun in each multi-site refusal and banner
+
+- **Fixed**: The multi-site options page and the multi-site start now state
+  the singular noun for a list of one site. The short-read banner says "at
+  this site" and "devices of that site". The three save refusals say "at this
+  site". The start refusal says "no pre-check capture for this site". A list
+  of two or more sites keeps the plural noun. Issue #3462.
+
+### Test quality baseline in MistHelper
+
+- **Changed**: The test quality ratchet compares each run against
+  `.github/test-quality-baseline.json` in this repository instead of the copy
+  inside the installed `misthelper-devtools` package. A change to that file
+  makes the ratchet check the whole suite. The file drops 335 entries that
+  matched no current finding, so the gate reports a repaired finding that
+  comes back. Issue #3422.
+- **Fixed**: Git ignores `test_quality_analyzer_output/`, so a local analyzer
+  run no longer leaves its report as an untracked change. Issue #3421.
+
+### Benchmarks and analyzer settings in MistHelper
+
+- **Changed**: The memory harness, the two overhead benchmarks, and the
+  end-to-end store reset command are in `scripts/` again. Each one imports
+  MistHelper product code, so the `misthelper-devtools` package could not run
+  them. Issue #3466.
+- **Changed**: The test quality ratchet reads its rule settings from
+  `.github/test-quality-config.toml` in this repository instead of the copy
+  inside the installed `misthelper-devtools` package. A change to that file
+  makes the ratchet check the whole suite. Issue #3466.
+
+### Shared devtools workflows
+
+- **Changed**: The Copilot, linked-issue, container build, and release image
+  workflows call the shared reusable workflows in `misthelper-devtools` at
+  release v0.3.0. `requirements-dev.txt` pins the same release. Issue #3450.
+- **Fixed**: A release publishes the container image for `linux/amd64` and
+  `linux/arm64`, so the `latest` tag keeps an arm64 image. The scheduled
+  linked-issue sweep keeps an issue open when a person reopened it after the
+  merge. A failed Copilot assignment writes one comment with the cause and adds
+  no `in-progress` label. Issue #3450.
+
+### Shared complexity gate
+
+- **Changed**: The Radon job pipes its JSON report into the `complexity-gate`
+  command of `misthelper-devtools` instead of an inline script. The limit stays
+  at 10. Issue #3456.
+- **Fixed**: When radon cannot parse a file, the job fails with a report line
+  that names the file, instead of with a Python traceback. Issue #3456.
+
+### Development tooling on devtools release v0.4.0
+
+- **Changed**: The development requirements pin release v0.4.0 of
+  `misthelper-devtools`, and each caller of a shared workflow pins the same
+  commit. The workflows for auto-merge, quality-gate issues, stranded branches,
+  and STE lint now call the shared workflows of that repository. Issue #3487.
+- **Removed**: The stranded branch script and the copies of the tests for the
+  tools. The `stranded-branch-report` command of the package replaces the
+  script. Issue #3487.
+
+### Development tooling on devtools release v0.5.2
+
+- **Changed**: The development requirements pin release v0.5.2 of
+  `misthelper-devtools`, and each caller of a shared workflow pins the same
+  commit. The CodeQL workflow calls the shared CodeQL workflow. The CI jobs run
+  the `codeql-verdict-register`, `bandit-exclude-check`, `diagram-refs`, and
+  `exclusion-drift` commands and the `mermaid-lint` action. The pre-commit file
+  adds the `markdown-link-check` hook. Issue #3515.
+- **Fixed**: After a merge, the auto-merge workflow no longer starts a second
+  run of `ci.yml`, `codeql.yml`, or `container-build.yml` on a tip that a run
+  already covers. The run list of GitHub can answer from old data. The shared
+  workflow of release v0.5.2 looks for a run on the tip commit itself. Issue
+  #3515 and jmorrison-juniper/misthelper-devtools#32.
+- **Removed**: The local copies of the CodeQL register, diagram, exclusion
+  drift, Mermaid, test shard, and worktree cleanup scripts, their tests, and the
+  portable gate template. The `pytest-chunks` and `worktree-cleanup` commands
+  replace the shard and cleanup scripts. Issue #3515.
+
 ## [26.09.26.06.19] - 2026-09-26
 
 This release collects 312 release-note fragments from `changelog.d/`. It also
