@@ -44,7 +44,7 @@ jobs:
       issues: write
       # The report reads the open pull requests.
       pull-requests: read
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-stranded-branch-report.yml@bf1ba8a29ee9bab27b721db6e613fd5cd83d82fa # v0.4.0
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-stranded-branch-report.yml@3f498b1f04da258f046894a3ea6718ea6968d583 # v0.5.1
     with:
       # A scheduled run has no inputs, so it reads the default.
       min-age-days: ${{ fromJSON(github.event.inputs.min_age_days || '7') }}

@@ -169,7 +169,7 @@ local.
 | The development requirements pin the v0.4.0 commit. Each workflow caller pins the same commit. | `requirements-dev.txt` and `.github/workflows/` |
 | Each import and each `python -m` command names `misthelper_devtools` instead of `tools`. The citation and SpecKit jobs run the `check-citations` and `speckit-task-audit` commands. | `.github/workflows/ci.yml`, `scripts/`, and `tests/` |
 | The auto-merge workflow calls `reusable-auto-merge.yml` with the orphaned-push report. Its close job calls `reusable-close-linked-issues.yml` every six hours, so a missed close event waits six hours at most. | `.github/workflows/auto-merge.yml` |
-| One `quality_gate_issues` job calls `reusable-quality-gate-issues.yml`. Its `needs` list is the list of gates that get an issue. `ci.yml` sets `scope: all`. The portable template keeps the default scope. | `.github/workflows/ci.yml` and `.github/quality-gates-portable.yml` |
+| One `quality_gate_issues` job calls `reusable-quality-gate-issues.yml`. Its `needs` list is the list of gates that get an issue. `ci.yml` sets `scope: all`. The portable template kept the default scope until Phase 7 deleted it. | `.github/workflows/ci.yml` and `.github/quality-gates-portable.yml` |
 | The weekly report calls `reusable-stranded-branch-report.yml`. The `stranded-branch-report` command replaces the local script and its test. | `.github/workflows/stranded-branch-report.yml` |
 | The writing guide check calls `reusable-ste-lint.yml` with the same guide, settings file, and score. | `.github/workflows/ste-lint.yml` |
 | The tests of the tools moved to the devtools repository, so MistHelper deleted its copies. The golden analyzer test stays, and it reads the settings file of this repository. | `tests/tools/` and `tests/unit/` |
@@ -181,3 +181,34 @@ The shared auto-merge job does not merge a pull request that edits a file in
 `.github/workflows/`, because GitHub refuses to let the workflow token write a
 workflow file. The job writes a comment on the pull request instead. Merge such
 a pull request by hand after its checks pass.
+
+## Phase 7: adopt devtools release v0.5.1
+
+Issue #3515 moved MistHelper to devtools release v0.5.1. Release v0.5.0
+supplies the CodeQL job, the Mermaid parser, and the local check scripts that
+Phase 6 kept, so MistHelper deleted its copies. Release v0.5.1 repairs the
+shared link check for a link that starts with `/`.
+
+| Change | File |
+| - | - |
+| The development requirements pin the v0.5.1 commit. Each workflow caller and the Mermaid action pin the same commit. | `requirements-dev.txt` and `.github/workflows/` |
+| The CodeQL workflow calls `reusable-codeql.yml`. The file name did not change, so each code scanning alert keeps its key. | `.github/workflows/codeql.yml` |
+| The register job runs `codeql-verdict-register check`. The Bandit job runs `bandit-exclude-check` with two product source samples. The drift job runs `exclusion-drift`. | `.github/workflows/ci.yml` |
+| The diagram job runs `diagram-refs`. An allowlist file holds the MistHelper module names that the diagrams use. | `.github/workflows/ci.yml` and `.github/diagram-refs-allowlist.txt` |
+| The Mermaid job calls the `mermaid-lint` action. The action installs its own parser. | `.github/workflows/ci.yml` and `scripts/mermaid/` |
+| The test quality ratchet gives `--changed-from` and `--full-gate-path` in place of an inline script. | `.github/workflows/ci.yml` |
+| The `pytest-chunks` command replaces the local shard script. The `worktree-cleanup merged` and `worktree-cleanup stale-admin` commands replace the two cleanup scripts. | `scripts/` and `.github/copilot-instructions.md` |
+| The Markdown link guard uses the `MarkdownLinkChecker` class of the devtools package. The guard and the new pre-commit hook skip `documentation/wiki/`. | `tests/guardrails/test_markdown_links.py` |
+| The pre-commit file runs the `ste-linter` and `markdown-link-check` hooks of the devtools repository. Each other hook release matches the version that `requirements-dev.txt` pins. | `.pre-commit-config.yaml` |
+| The portable template of the gate jobs is deleted. A new repository calls `reusable-python-quality-gates.yml` instead. | `.github/quality-gates-portable.yml` |
+| The tests of the deleted scripts moved to the devtools repository. The guard tests check each new command, pin, and input. | `tests/` |
+| The baseline drops the entries of the deleted test files. The performance catalog drops the rows of the deleted files. | `.github/test-quality-baseline.json` and `specs/2448-misthelper-performance-monitoring/artifacts/` |
+
+A wiki page links to a bare page name, such as `Menu-API-Endpoints`. Only the
+published wiki resolves that name, so each link check skips the wiki tree.
+
+Some generated API pages and specs link to the upstream API reference with a
+link that starts with `/`, such as `/#operations/listInsightMetrics`. GitHub
+starts that link at the repository root, and so does the shared link check.
+Release v0.5.0 reported each of the 17 links as a missing file, so this phase
+waited for release v0.5.1.

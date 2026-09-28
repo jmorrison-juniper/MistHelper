@@ -165,7 +165,7 @@ exclude = ["src/juniper_skills/**"]
 line-length = 120
 target-version = "py313"
 # Ruff exclusion counts live in quality_gate_exclusions.json.
-# Run scripts/check_exclusion_drift.py to measure them without blocking CI.
+# Run the exclusion-drift command to measure them without blocking CI.
 extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
 
 [tool.ruff.lint]
@@ -254,7 +254,7 @@ warn_unused_configs = true
 warn_unused_ignores = true
 explicit_package_bases = true
 # Exclusion paths and recorded counts live in quality_gate_exclusions.json.
-# Run scripts/check_exclusion_drift.py to measure them without blocking CI.
+# Run the exclusion-drift command to measure them without blocking CI.
 #   mist-ops-platform     -- vendored subtree ships its own ./src/__init__.py, which
 #                            would collide with the project's top-level src/ package if
 #                            both were scanned (duplicate-module error). Hard requirement.
@@ -459,8 +459,9 @@ targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "wsgi_capture.py", "we
 # slash matches a Linux path only. Keep both spellings whenever an exclusion
 # names a nested path.
 # The bandit job in .github/workflows/ci.yml checks this rule. The step "Check
-# the bandit exclude list on both path separators" fails when an entry that
-# holds a separator carries one spelling only.
+# the bandit exclude list on both path separators" runs the
+# bandit-exclude-check command of misthelper-devtools. It fails when an entry
+# that holds a separator carries one spelling only.
 exclude_dirs = [
     "tests",
     ".venv",
@@ -526,7 +527,7 @@ fail-under = 9.5
 init-hook = "import sys; from pathlib import Path; sys.path.insert(0, str(Path.cwd()))"
 
 # Pylint exclusion counts live in quality_gate_exclusions.json.
-# Run scripts/check_exclusion_drift.py to measure them without blocking CI.
+# Run the exclusion-drift command to measure them without blocking CI.
 ignore-paths = [
   '^src[\\/]maps[\\/].*$',
   '^src[\\/]ssh[\\/].*$',
