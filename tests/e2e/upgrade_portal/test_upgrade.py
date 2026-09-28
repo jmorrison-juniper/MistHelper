@@ -26,12 +26,20 @@ Why the helpers repeat `test_capture.py`:
     The shared `conftest.py` of this directory belongs to every browser module,
     and a helper for one journey does not belong in it. The four helpers below
     therefore live in this module, beside the tests that read them.
+
+Why each test ends its own run:
+    Issue #3511. The first test created a run, and each later test met the 409
+    of FR-037 and used the same run. The plan save moved that run to the state
+    `awaiting_confirmation`, and the run stayed live after the module. The
+    live-run check of #3511 found it. Each test now records the run that it
+    creates, and the teardown cancels that run, even when the test fails.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +49,7 @@ from tests.e2e.upgrade_portal.conftest import (  # Issue #3377: the stand-in fac
     JOURNEY_SITE_ID,  # The site that only this journey uses.
     STAND_IN_DEVICE_TYPES,  # The stand-in cloud offers one device of each of these types.
 )
+from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3511: the teardown.
 
 # The Playwright package must exist before this module defines a browser test.
 # A run without the package reports a skip and never an import error.
@@ -307,44 +316,134 @@ def _named_live_run(answer: Any, path: str) -> str:
     return named
 
 
-@pytest.fixture
-def run_id(portal_page: Any) -> str:
-    """Create one upgrade run for the journey site and return its key.
-
-    Why:
-        Every page of this journey needs a run key, and the contract fixes no
-        page that lists the runs of a site. The fixture therefore creates a run
-        through the documented endpoint, exactly as the site page does. The
-        first test of the module gets a new run. Each later test meets the 409
-        of FR-037, and the refusal names that same run.
+def _post_the_run(page: Any, path: str) -> Any:
+    """Send the create call of one run, and fail when the portal cannot answer it.
 
     Args:
-        portal_page: The browser page that points at the portal.
+        page: The browser page that points at the portal.
+        path: The create endpoint of the journey site.
 
     Returns:
-        The key of the fresh run.
+        The answer of the create call.
 
     Raises:
         AssertionError: If the call never completed, or if the endpoint answers
-            401, 404, or any other status than 201 and 409. Each one names a
-            fault of the portal that the server fixture started, so none of
-            them may report a skip.
+            401 or 404. Each one names a fault of the portal that the server
+            fixture started, so none of them may report a skip.
     """
-    site_id = _journey_site_id(portal_page)  # Issue #3377: no seeded run holds this site.
-    path = RUNS_API_TEMPLATE.format(site_id=site_id)
-    headers = {CSRF_HEADER: _csrf_token(portal_page), "Content-Type": "application/json"}
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # The page token signs the call.
+    logger.info("Create one run for the upgrade journey at %s", path)  # Log before the create call.
     try:  # The fixture started this portal, so a call that fails names a fault of it.
-        answer = portal_page.request.post(path, headers=headers, data="{}")
+        answer = page.request.post(path, headers=headers, data="{}")  # The documented create call.
     except Exception as failure:  # The portal died, or it never bound the port.
         raise AssertionError(f"The create call to {path} did not complete. Cause: {failure}") from failure
+    logger.debug("The create call answered %s", answer.status)  # Log the status only.
     if answer.status == UNAUTHORIZED_STATUS:  # `identity.require_session` refused the request.
         raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
     if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
         raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
+    return answer  # The caller reads 201 or 409.
+
+
+def _run_key(answer: Any, path: str, ledger: RunLedger) -> str:
+    """Return the key of the run that one create answer names.
+
+    Why:
+        Issue #3511. The ledger holds only a run that this test built. A 409
+        names a run that an earlier test left live, and the module check then
+        reports that run. The teardown of this test leaves it alone.
+
+    Args:
+        answer: The answer of the create call.
+        path: The create endpoint, which the failure text names.
+        ledger: The ledger of the runs that this test builds.
+
+    Returns:
+        The key of the run that the journey opens.
+
+    Raises:
+        AssertionError: If the endpoint answers any other status than 201 and 409.
+    """
     if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
         return _named_live_run(answer, path)  # The journey opens that run, as the refusal instructs.
     assert answer.status == CREATED_STATUS, f"{path} answered {answer.status}. The contract fixes 201 for a new run."
-    return str(json.loads(answer.text())["run_id"])  # The key of the run that this call created.
+    created = str(json.loads(answer.text())["run_id"])  # The key of the run that this call created.
+    ledger.record(created)  # Issue #3511: the teardown ends this run, so the site stays free.
+    return created  # Each page of this journey opens this run.
+
+
+@pytest.fixture(name="run_ledger")
+def fixture_run_ledger() -> RunLedger:
+    """Return an empty ledger for the run that one journey test builds.
+
+    Why:
+        Issue #3511. The teardown of `run_id` ends each run of this ledger, so
+        no test leaves a live run at the journey site for a later module.
+
+    Returns:
+        The ledger of this test.
+    """
+    return RunLedger()  # Each test starts with no recorded run.
+
+
+def _end_the_journey_runs(page: Any, ledger: RunLedger) -> None:
+    """End each live run that one journey test built.
+
+    Why:
+        Issue #3511. The journey never starts its run, so the run stays in
+        `created` or in `awaiting_confirmation` after the test. A live run
+        blocks each later create call at the same site (FR-037). The cancel
+        route ends a run that sent nothing, and it sends no cloud call.
+
+    Args:
+        page: The Playwright page object, on a page that draws the layout.
+        ledger: The ledger of the runs that the test built.
+
+    Raises:
+        AssertionError: The page publishes no token, or a cancel answered a refusal.
+    """
+    if not ledger.runs:  # The test opened a run that it did not build, so no run needs an end.
+        logger.debug("The journey test built no run, so the teardown ends no run")  # Log the empty ledger.
+        return
+    logger.info("End the %d run(s) of the journey test", len(ledger.runs))  # Log before the teardown step.
+    meta = page.get_by_test_id(CSRF_META_ID)  # The layout publishes the token under this identifier.
+    token = str(meta.get_attribute("content") or "") if meta.count() > 0 else ""  # A page with no layout has none.
+    if not token:  # A cancel with no token meets the cross-site request check.
+        raise AssertionError(f"The page publishes no {CSRF_META_ID} token, so the journey runs stay live. See #3511.")
+    ended = SiteRelease(page.request, token).end_runs(ledger.runs)  # A refused cancel fails the teardown.
+    logger.debug("The journey teardown ended %d run(s)", ended)  # Log after the teardown step.
+
+
+@pytest.fixture
+def run_id(portal_page: Any, run_ledger: RunLedger) -> Iterator[str]:
+    """Create one upgrade run for the journey site, yield its key, and then end the run.
+
+    Why:
+        Every page of this journey needs a run key, and the contract fixes no
+        page that lists the runs of a site. The fixture therefore creates a run
+        through the documented endpoint, exactly as the site page does.
+
+        Issue #3511. The run stayed live after the module. The fixture now
+        records the run that it creates, and the teardown cancels that run,
+        even when the test fails. Each test therefore opens its own run. The
+        teardown of `confirm_page` releases the site lock first, so the cancel
+        meets a free site.
+
+    Args:
+        portal_page: The browser page that points at the portal.
+        run_ledger: The ledger of the runs that this test builds.
+
+    Yields:
+        The key of the run that the test opens.
+
+    Raises:
+        AssertionError: If the create call fails, or if a cancel of the
+            teardown answers a refusal.
+    """
+    path = RUNS_API_TEMPLATE.format(site_id=_journey_site_id(portal_page))  # Issue #3377: no seed holds this site.
+    answer = _post_the_run(portal_page, path)  # A fault of the portal fails here.
+    yield _run_key(answer, path, run_ledger)  # The test opens this run.
+    _end_the_journey_runs(portal_page, run_ledger)  # Issue #3511: the next create call then answers 201.
 
 
 @pytest.fixture

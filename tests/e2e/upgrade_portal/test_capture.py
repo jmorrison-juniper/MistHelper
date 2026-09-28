@@ -20,6 +20,12 @@ Identifier contract:
     The badge test reads the badge text and never the style class, because
     `portal.css` writes a signal word through a stylesheet rule that no text
     reader returns.
+
+Why each test ends with a plain assertion:
+    The test quality gate counts a plain `assert` statement. It does not count
+    a Playwright `expect` call. Each `expect` call waits for the page script,
+    and the plain assertion then reads one more fact of the same state, such
+    as the site that the start control writes to.
 """
 
 from __future__ import annotations
@@ -28,8 +34,11 @@ import logging
 import re
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import parse_qs, urlsplit  # Read the site from the address of the capture page.
 
 import pytest
+
+from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3511: the walk teardown.
 
 logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
 
@@ -90,6 +99,10 @@ TAKEOVER_WORD = "CONFIRM"  # FR-079 fixes this word and this letter case. The pa
 CONFIRM_WORD_ATTRIBUTE = "data-confirm-word"  # The page names the word the gate reads.
 LOCK_RELEASE_BUTTON_ID = "lock-release-button"  # The control that gives the site back at once.
 LOCK_SETTLE_MS = 4000  # The take call is one round trip on loopback, so it settles quickly.
+
+# Issue #3511: the teardown of the walk cancels each run of the walk. Each write
+# needs the cross-site request token, and the layout publishes it on each page.
+CSRF_META_ID = "csrf-meta"  # `layout.html` publishes the token under this identifier.
 
 # The options page and the confirm page of the run the upgrade button creates.
 # `contracts/http-api.md` section 5 fixes both page paths and the create path.
@@ -314,8 +327,14 @@ class TestCaptureControls:
         Args:
             capture_page: The page that shows the capture view.
         """
-        sync_api.expect(capture_page.get_by_test_id(CAPTURE_TIER_ID)).to_be_visible()
-        sync_api.expect(capture_page.get_by_test_id(CAPTURE_START_ID)).to_be_visible()
+        logger.info("Wait for the capture page to show the tier list and the start control")  # Log before the wait.
+        sync_api.expect(capture_page.get_by_test_id(CAPTURE_TIER_ID)).to_be_visible()  # The tier list of the capture.
+        start = capture_page.get_by_test_id(CAPTURE_START_ID)  # The control that starts the capture.
+        sync_api.expect(start).to_be_visible()  # The page shows the start control.
+        page_site = parse_qs(urlsplit(capture_page.url).query).get("site_id", [""])[0]  # The site of the page.
+        start_site = start.get_attribute("data-site-id")  # The site that a press of the control writes to.
+        logger.debug("The start control names site %s on the page of site %s", start_site, page_site)  # Log the read.
+        assert start_site == page_site, f"The start control names site {start_site!r} on the page of {page_site!r}."
 
     def test_tier_list_starts_at_tier_two_and_accepts_tier_three(self, capture_page: Any) -> None:
         """The tier list opens on tier 2 and accepts tier 3.
@@ -330,10 +349,13 @@ class TestCaptureControls:
         Args:
             capture_page: The page that shows the capture view.
         """
-        tier_list = capture_page.get_by_test_id(CAPTURE_TIER_ID)
-        sync_api.expect(tier_list).to_have_value(DEFAULT_TIER)
-        tier_list.select_option(HIGH_TIER)
-        sync_api.expect(tier_list).to_have_value(HIGH_TIER)
+        tier_list = capture_page.get_by_test_id(CAPTURE_TIER_ID)  # The list that picks the capture tier.
+        sync_api.expect(tier_list).to_have_value(DEFAULT_TIER)  # The list opens on tier 2.
+        logger.info("Pick tier %s in the tier list", HIGH_TIER)  # Log before the pick.
+        picked = tier_list.select_option(HIGH_TIER)  # The call fails when the page offers no tier 3.
+        logger.debug("The tier list picked %s", picked)  # Log after the pick.
+        sync_api.expect(tier_list).to_have_value(HIGH_TIER)  # The list now shows tier 3.
+        assert picked == [HIGH_TIER], f"The tier list picked {picked}, and the test asked for tier {HIGH_TIER}."
 
 
 def _is_capture_start(answer: Any) -> bool:
@@ -377,8 +399,14 @@ class TestCaptureProgress:
         Args:
             capture_page: The page that shows the capture view.
         """
-        for key in SECTION_KEYS:
-            sync_api.expect(capture_page.get_by_test_id(f"capture-section-{key}")).to_be_visible()
+        logger.info("Read the state of each of the %s capture sections", len(SECTION_KEYS))  # Log before the reads.
+        states: list[str] = []  # The state word of each section, in the order of the contract.
+        for key in SECTION_KEYS:  # The contract fixes six sections.
+            section = capture_page.get_by_test_id(f"capture-section-{key}")  # The element of one section.
+            sync_api.expect(section).to_be_visible()  # A missing section hides a part of the capture.
+            states.append((section.locator("[data-section-state]").inner_text() or "").strip())  # The state word.
+        logger.debug("The capture sections read %s", states)  # Log after the reads.
+        assert "" not in states, f"A section shows no state word: {dict(zip(SECTION_KEYS, states, strict=True))}."
 
     def test_start_button_starts_a_capture(self, capture_page: Any) -> None:
         """The start button posts a capture and the region takes the identifier.
@@ -444,7 +472,12 @@ class TestCaptureResult:
         Args:
             capture_page: The page that shows the capture view.
         """
-        sync_api.expect(capture_page.get_by_test_id(CAPTURE_ERROR_ID)).to_be_hidden()
+        error = capture_page.get_by_test_id(CAPTURE_ERROR_ID)  # The alert region of the capture page.
+        logger.info("Check that the error region is hidden and empty before a capture")  # Log before the checks.
+        sync_api.expect(error).to_be_hidden()  # A shown alert announces a fault at once.
+        text = (error.text_content() or "").strip()  # The text that the alert announces when it shows.
+        logger.debug("The error region holds %r", text)  # Log after the read.
+        assert text == "", f"{CAPTURE_ERROR_ID} holds {text!r} before a capture starts, so it names a false fault."
 
 
 def _first_stored_capture_id(page: Any) -> str:
@@ -695,27 +728,81 @@ def _release_the_site(page: Any) -> None:
         logger.info("The site release did not complete, so a later test may meet the lease. Cause: %s", failure)
 
 
+def _end_the_walk_runs(page: Any, ledger: RunLedger) -> None:
+    """End each live run that one walk built.
+
+    Why:
+        Issue #3511. The walk creates a run and never starts it, so the run
+        stays live after the test. A live run blocks each later create call at
+        the same site (FR-037). The cancel route binds each write of a run to
+        the operator that holds the site (FR-038i), so this step runs before
+        the release.
+
+    Args:
+        page: The Playwright page object, on a page that draws the layout.
+        ledger: The ledger of the runs that the walk built.
+
+    Raises:
+        AssertionError: The page publishes no token, or a cancel answered a refusal.
+    """
+    if not ledger.runs:  # The walk stopped before it built a run, so no run needs an end.
+        logger.debug("The walk built no run, so the teardown ends no run")  # Log the empty ledger.
+        return
+    logger.info("End the %d run(s) of the walk", len(ledger.runs))  # Log before the teardown step.
+    meta = page.get_by_test_id(CSRF_META_ID)  # The layout publishes the token under this identifier.
+    token = str(meta.get_attribute("content") or "") if meta.count() > 0 else ""  # A page with no layout has none.
+    if not token:  # A cancel with no token meets the cross-site request check.
+        raise AssertionError(
+            f"The page publishes no {CSRF_META_ID} token, so the walk runs stay live. See issue #3511."
+        )
+    ended = SiteRelease(page.request, token).end_runs(ledger.runs)  # A refused cancel fails the teardown.
+    logger.debug("The walk teardown ended %d run(s)", ended)  # Log after the teardown step.
+
+
+@pytest.fixture(name="run_ledger")
+def fixture_run_ledger() -> RunLedger:
+    """Return an empty ledger for the runs that one walk builds.
+
+    Why:
+        Issue #3511. The teardown of `walking_page` ends each run of this
+        ledger, so no walk leaves a live run at the site for a later module.
+
+    Returns:
+        The ledger of this test.
+    """
+    return RunLedger()  # Each test starts with no recorded run.
+
+
 # WHY: Issue #2259. The walk takes the site lock, and the lease outlives the
 # test. Without the release below, every later test that writes to this site
 # reads a refusal and reports a skip, so one walk would starve the suite.
+# Issue #3511: the run of the walk also outlived the test. The teardown now
+# cancels each run of the ledger first, and then it releases the site.
 @pytest.fixture(name="walking_page")
-def fixture_walking_page(portal_page: Any) -> Iterator[Any]:
-    """Give a browser page to the walk, and release the site afterwards.
+def fixture_walking_page(portal_page: Any, run_ledger: RunLedger) -> Iterator[Any]:
+    """Give a browser page to the walk, end the runs of the walk, and then release the site.
 
     Args:
         portal_page: The browser page that points at the running portal.
+        run_ledger: The ledger of the runs that the walk builds.
 
     Yields:
         The Playwright page object.
+
+    Raises:
+        AssertionError: A cancel of a walk run answered a refusal. The site release still runs.
     """
     yield portal_page
-    _release_the_site(portal_page)  # The next test then finds the site free.
+    try:  # FR-002: a refused cancel fails the teardown.
+        _end_the_walk_runs(portal_page, run_ledger)  # A live run would block each later create call.
+    finally:  # FR-002: the release runs even when a cancel fails.
+        _release_the_site(portal_page)  # The next test then finds the site free.
 
 
 class TestUpgradeJourney:
     """The operator walks from the site list to the confirm page by clicking."""
 
-    def test_walk_from_the_site_list_reaches_the_confirm_page(self, walking_page: Any) -> None:
+    def test_walk_from_the_site_list_reaches_the_confirm_page(self, walking_page: Any, run_ledger: RunLedger) -> None:
         """The upgrade button carries the operator from a capture to the confirm page.
 
         Why:
@@ -725,8 +812,12 @@ class TestUpgradeJourney:
             options save. A broken step leaves the operator with no path from a
             verified pre-check to an upgrade.
 
+            Issue #3511. The walk records its run in the ledger, so the teardown
+            ends the run and no later module meets a live run at this site.
+
         Args:
             walking_page: The browser page that points at the running portal.
+            run_ledger: The ledger that the teardown of `walking_page` reads.
         """
         _walk_to_capture_view(walking_page)  # Site list, to inventory, to capture view, by clicks alone.
         _start_and_reveal_upgrade(walking_page)  # Start the capture and wait for the upgrade button.
@@ -740,6 +831,7 @@ class TestUpgradeJourney:
 
         walking_page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
         run_id = _run_id_from_url(walking_page.url)  # The options URL holds the run key that the walk follows.
+        run_ledger.record(run_id)  # Issue #3511: the teardown ends this run, so the site stays free.
         picker = walking_page.get_by_test_id(VERSION_SELECT_ALL_ID)  # The bulk control fills every device version.
         if picker.locator("option").count() <= 1:  # Only the empty prompt exists, so no version can plan a device.
             pytest.skip("The options page offered no version, so the save would keep an empty plan.")
@@ -759,42 +851,56 @@ class TestUpgradeJourney:
         walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
         sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
 
-    def test_a_refused_second_start_shows_a_link_to_the_open_run(self, walking_page: Any) -> None:
+    def test_a_refused_second_start_shows_a_link_to_the_open_run(
+        self, walking_page: Any, run_ledger: RunLedger
+    ) -> None:
         """Issue #2172: the open-run refusal now carries a link, not plain text.
 
         Why:
-            One run already holds a site once the first create call lands,
-            whether that call landed just now or before this test began. A
+            The first create call of this test builds one run at the site. A
             second create call at the same site must then answer 409 with
             `upgrade_already_running`, and the error region must render the
             named run as a link to its live view, not as inert text the
             operator has to copy by hand.
 
+            Issue #3511. The first call must answer 201. An earlier test once
+            left a live run at this site, and the refusal then named that run.
+            The test now checks that the refusal names the run of this test.
+
         Args:
             walking_page: The browser page that points at the running portal.
+            run_ledger: The ledger that the teardown of `walking_page` reads.
         """
-        _walk_to_capture_view(walking_page)
-        _start_and_reveal_upgrade(walking_page)
+        _walk_to_capture_view(walking_page)  # Site list, to inventory, to capture view, by clicks alone.
+        _start_and_reveal_upgrade(walking_page)  # Start the capture and wait for the upgrade button.
         with walking_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as first_event:
             walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The first attempt sets up the scenario.
-        first_status = first_event.value.status
-        if first_status not in (CREATED_STATUS, LOCKED_STATUS):  # Neither state can seed a live run at this site.
-            pytest.skip(f"The first run create answered {first_status}, so this walk cannot set up its scenario.")
+        first_status = first_event.value.status  # The status reads without a body, so it survives the navigation.
+        if first_status == UNREACHABLE_STATUS:  # A dead lock store stops each run, so the scenario cannot start.
+            pytest.skip("The first run create answered 503. The portal cannot reach the site lock store.")
+        assert first_status == CREATED_STATUS, (  # FR-003: the test must build its own run.
+            f"The first run create answered {first_status}, not 201. A 409 names a live run of an earlier test. "
+            "See issue #3511."
+        )
+        walking_page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)  # The new run opens.
+        own_run_id = _run_id_from_url(walking_page.url)  # The options URL holds the key of the new run.
+        run_ledger.record(own_run_id)  # Issue #3511: the teardown ends this run, so the site stays free.
 
         _walk_to_capture_view(walking_page)  # Back to the same site's capture view, by clicking alone.
         _start_and_reveal_upgrade(walking_page)  # A fresh capture, so the upgrade button shows again.
         with walking_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as second_event:
             walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # A run already holds this site now.
-        second_status = second_event.value.status
+        second_status = second_event.value.status  # The refusal answer carries the status of the second call.
         if second_status == UNREACHABLE_STATUS:  # The lock store answered no better on the second try either.
             pytest.skip("The second run create answered 503. The portal cannot reach the site lock store.")
         assert second_status == LOCKED_STATUS, f"The second run create answered {second_status}, not 409."
 
-        error_region = walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ERROR_ID)
+        error_region = walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ERROR_ID)  # The region names the refusal.
         sync_api.expect(error_region).to_contain_text("Open that run before you start", timeout=START_TIMEOUT_MS)
-        link = error_region.locator("a")
+        link = error_region.locator("a")  # The refusal names the live run as a link.
         sync_api.expect(link).to_be_visible(timeout=START_TIMEOUT_MS)
-        run_id = (link.inner_text() or "").strip()
+        run_id = (link.inner_text() or "").strip()  # The link text names the run that holds the site.
         assert run_id != "", "The link inside the error region named no run identifier."
-        href = link.get_attribute("href") or ""
+        assert run_id == own_run_id, f"The refusal named the run {run_id}, not the run {own_run_id} of this test."
+        href = link.get_attribute("href") or ""  # The link must open the live view of that run.
         assert href == f"/runs/{run_id}", f"The link pointed at {href!r}, not /runs/{run_id}."

@@ -1,0 +1,17 @@
+{
+  "feature": "3511-walk-live-run",
+  "issue": 3511,
+  "branch": "fix/3511-walk-live-run",
+  "currentStep": "tasks",
+  "status": "planned",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "research.md",
+    "plan.md",
+    "tasks.md"
+  ],
+  "workflow": "speckit",
+  "specName": "",
+  "history": []
+}

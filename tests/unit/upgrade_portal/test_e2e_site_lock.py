@@ -28,6 +28,7 @@ from tests.support.upgrade_portal_e2e.site_lock import (  # The classes under te
 
 RUN_ID = "e2e-run-3497"  # A run that one browser test built.
 RETRY_RUN_ID = "e2e-retry-3497"  # The retry run that the retry control built.
+FINAL_RUN_ID = "e2e-final-3511"  # Issue #3511: a run of the same ledger that already ended.
 SITE_ID = "22222222-2222-2222-2222-222222222222"  # The stand-in site of the run-control tests.
 CSRF_TOKEN = "csrf-3497"  # The token for the cross-site request check.
 LOCK_TOKEN = "lock-3497"  # The token that a lock take gives back.
@@ -181,6 +182,15 @@ class TestTheEndOfTheRuns:
         requests = ScriptedRequests({("get", STATUS_PATH): [missing]})  # A cancel call would find no script.
         assert SiteRelease(requests, CSRF_TOKEN).end_runs([RUN_ID]) == 0  # No run needed a cancel.
         assert requests.paths() == [("get", STATUS_PATH)]  # The teardown moved on after the read.
+
+    def test_a_ledger_with_a_live_run_and_a_final_run_sends_one_cancel(self) -> None:
+        """Issue #3511: the live run gets one cancel, and the final run of the same ledger gets none."""
+        final_path = f"/api/runs/{FINAL_RUN_ID}/status"  # The status route of the run that already ended.
+        script = _live_run_script()  # The first run is live and accepts one cancel.
+        script[("get", final_path)] = [StandInAnswer.of(200, {"run_id": FINAL_RUN_ID, "state": "cancelled"})]
+        requests = ScriptedRequests(script)  # A cancel of the final run would find no script.
+        assert SiteRelease(requests, CSRF_TOKEN).end_runs([RUN_ID, FINAL_RUN_ID]) == 1  # One run needed a cancel.
+        assert requests.paths() == [("get", STATUS_PATH), ("post", CANCEL_PATH), ("get", final_path)]  # In order.
 
     def test_a_refused_cancel_fails_and_names_the_path_the_status_and_the_body(self) -> None:
         """A cancel that the portal refuses fails the teardown with the refusal body."""

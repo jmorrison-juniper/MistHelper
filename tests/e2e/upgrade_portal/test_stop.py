@@ -21,18 +21,37 @@ Where the stop control lives:
 Why the helpers repeat `test_capture.py`:
     The shared `conftest.py` of this directory belongs to every browser module,
     and a helper for one journey does not belong in it.
+
+Why each test ends its own run:
+    Issue #3511. The first test created a run, and each later test met the 409
+    of FR-037 and used the same run. The canned stop answer never reaches the
+    server, so the run stayed in the state `created` after the module. The
+    live-run check of #3511 found it. Each test now records the run that it
+    creates, and the teardown cancels that run, even when the test fails.
+
+Why each test ends with a plain assertion:
+    The test quality gate counts a plain `assert` statement. It does not count
+    a Playwright `expect` call. Each `expect` call waits for the page script,
+    and the plain assertion then reads one more fact of the same state, such
+    as the typed text or the list that must not name the device.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
+from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3511: the teardown.
+
 # The Playwright package must exist before this module defines a browser test.
 # A run without the package reports a skip and never an import error.
 sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
+
+logger = logging.getLogger(__name__)  # The teardown steps reach the pytest log.
 
 # `contracts/http-api.md` fixes this path for the site picker.
 SITE_PAGE_PATH = "/select/site"
@@ -251,42 +270,129 @@ def _named_live_run(answer: Any, path: str) -> str:
     return named
 
 
-@pytest.fixture
-def run_id(portal_page: Any) -> str:
-    """Create one upgrade run for the first site and return its key.
-
-    Why:
-        The run page needs a run key, and the contract fixes no page that lists
-        the runs of a site. The fixture therefore creates a run through the
-        documented endpoint. The run never starts, so nothing reaches hardware.
+def _post_the_run(page: Any, path: str) -> Any:
+    """Send the create call of one run, and fail when the portal cannot answer it.
 
     Args:
-        portal_page: The browser page that points at the portal.
+        page: The browser page that points at the portal.
+        path: The create endpoint of the first site.
 
     Returns:
-        The key of the fresh run.
+        The answer of the create call.
 
     Raises:
         AssertionError: If the call never completed, or if the endpoint answers
             401 or 404. All three name a fault of the portal that the server
             fixture started, so none of them may report a skip.
     """
-    site_id = _first_site_id(portal_page)
-    path = RUNS_API_TEMPLATE.format(site_id=site_id)
-    headers = {CSRF_HEADER: _csrf_token(portal_page), "Content-Type": "application/json"}
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # The page token signs the call.
+    logger.info("Create one run for the stop journey at %s", path)  # Log before the create call.
     try:  # The fixture started this portal, so a call that fails names a fault of it.
-        answer = portal_page.request.post(path, headers=headers, data="{}")
+        answer = page.request.post(path, headers=headers, data="{}")  # The documented create call.
     except Exception as failure:  # The portal died, or it never bound the port.
         raise AssertionError(f"The create call to {path} did not complete. Cause: {failure}") from failure
+    logger.debug("The create call answered %s", answer.status)  # Log the status only.
     if answer.status == UNAUTHORIZED_STATUS:  # `identity.require_session` refused the request.
         raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
     if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
         raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
+    return answer  # The caller reads 201 or 409.
+
+
+def _run_key(answer: Any, path: str, ledger: RunLedger) -> str:
+    """Return the key of the run that one create answer names.
+
+    Why:
+        Issue #3511. The ledger holds only a run that this test built. The
+        teardown therefore never cancels a run of another test or module.
+
+    Args:
+        answer: The answer of the create call.
+        path: The create endpoint, which the skip text names.
+        ledger: The ledger of the runs that this test builds.
+
+    Returns:
+        The key of the run that the stop journey opens.
+    """
     if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
         return _named_live_run(answer, path)  # The journey opens that run, as the refusal instructs.
     if answer.status != CREATED_STATUS:  # No run exists, so the run page cannot open.
         pytest.skip(f"{path} answered {answer.status}. The contract fixes 201, so no run key exists.")
-    return str(json.loads(answer.text())["run_id"])
+    created = str(json.loads(answer.text())["run_id"])  # The key of the run that this test built.
+    ledger.record(created)  # Issue #3511: the teardown ends this run, so the site stays free.
+    return created  # The run page of this test opens this run.
+
+
+@pytest.fixture(name="run_ledger")
+def fixture_run_ledger() -> RunLedger:
+    """Return an empty ledger for the run that one stop test builds.
+
+    Why:
+        Issue #3511. The teardown of `run_id` ends each run of this ledger, so
+        no stop test leaves a live run at the first site for a later module.
+
+    Returns:
+        The ledger of this test.
+    """
+    return RunLedger()  # Each test starts with no recorded run.
+
+
+def _end_the_stop_runs(page: Any, ledger: RunLedger) -> None:
+    """End each live run that one stop test built.
+
+    Why:
+        Issue #3511. The browser answers each stop call of this module with a
+        canned answer, so the run never leaves the state `created`. A live run
+        blocks each later create call at the same site (FR-037). The cancel
+        route ends a run that sent nothing, and it sends no cloud call.
+
+    Args:
+        page: The Playwright page object, on a page that draws the layout.
+        ledger: The ledger of the runs that the test built.
+
+    Raises:
+        AssertionError: The page publishes no token, or a cancel answered a refusal.
+    """
+    if not ledger.runs:  # The test opened a run that it did not build, so no run needs an end.
+        logger.debug("The stop test built no run, so the teardown ends no run")  # Log the empty ledger.
+        return
+    logger.info("End the %d run(s) of the stop test", len(ledger.runs))  # Log before the teardown step.
+    meta = page.get_by_test_id(CSRF_META_ID)  # The layout publishes the token under this identifier.
+    token = str(meta.get_attribute("content") or "") if meta.count() > 0 else ""  # A page with no layout has none.
+    if not token:  # A cancel with no token meets the cross-site request check.
+        raise AssertionError(f"The page publishes no {CSRF_META_ID} token, so the stop runs stay live. See #3511.")
+    ended = SiteRelease(page.request, token).end_runs(ledger.runs)  # A refused cancel fails the teardown.
+    logger.debug("The stop teardown ended %d run(s)", ended)  # Log after the teardown step.
+
+
+@pytest.fixture
+def run_id(portal_page: Any, run_ledger: RunLedger) -> Iterator[str]:
+    """Create one upgrade run for the first site, yield its key, and then end the run.
+
+    Why:
+        The run page needs a run key, and the contract fixes no page that lists
+        the runs of a site. The fixture therefore creates a run through the
+        documented endpoint. The run never starts, so nothing reaches hardware.
+
+        Issue #3511. The run stayed live after the module. The fixture now
+        records the run that it creates, and the teardown cancels that run,
+        even when the test fails. Each test therefore opens its own run.
+
+    Args:
+        portal_page: The browser page that points at the portal.
+        run_ledger: The ledger of the runs that this test builds.
+
+    Yields:
+        The key of the run that the test opens.
+
+    Raises:
+        AssertionError: If the create call fails, or if a cancel of the
+            teardown answers a refusal.
+    """
+    path = RUNS_API_TEMPLATE.format(site_id=_first_site_id(portal_page))  # The create path of the first site.
+    answer = _post_the_run(portal_page, path)  # A fault of the portal fails here.
+    yield _run_key(answer, path, run_ledger)  # The test opens this run.
+    _end_the_stop_runs(portal_page, run_ledger)  # Issue #3511: the next create call at this site then answers 201.
 
 
 @pytest.fixture
@@ -378,7 +484,12 @@ class TestStopGate:
         Args:
             run_page: The page that shows the live run view.
         """
-        sync_api.expect(run_page.get_by_test_id(STOP_BUTTON_ID)).to_be_visible()
+        stop = run_page.get_by_test_id(STOP_BUTTON_ID)  # The control that opens the stop box.
+        logger.info("Wait for the run page to show the stop control")  # Log before the wait.
+        sync_api.expect(stop).to_be_visible()  # The page can show the control after the load.
+        enabled = stop.is_enabled()  # A live run must accept a press of the control.
+        logger.debug("The stop control shows, and the enabled state is %s", enabled)  # Log after the read.
+        assert enabled is True, "The stop control is locked, so the operator cannot stop the live run."
 
     def test_the_typed_word_box_stays_closed_until_the_stop_press(self, run_page: Any) -> None:
         """The confirmation field is hidden before the operator presses stop.
@@ -390,7 +501,12 @@ class TestStopGate:
         Args:
             run_page: The page that shows the live run view.
         """
-        sync_api.expect(run_page.get_by_test_id(STOP_INPUT_ID)).to_be_hidden()
+        logger.info("Check that the stop box is closed before the stop press")  # Log before the checks.
+        sync_api.expect(run_page.get_by_test_id(STOP_INPUT_ID)).to_be_hidden()  # The field waits for the press.
+        stop = run_page.get_by_test_id(STOP_BUTTON_ID)  # The control that opens the box.
+        expanded = stop.get_attribute("aria-expanded")  # The box state that a screen reader announces.
+        logger.debug("The stop control reports aria-expanded=%s", expanded)  # Log after the read.
+        assert expanded == "false", f"The stop control reports aria-expanded={expanded!r} before the press."
 
     def test_the_stop_press_opens_the_box_and_leaves_the_stop_locked(self, run_page: Any) -> None:
         """The first press only opens the box, so it starts no work.
@@ -403,8 +519,13 @@ class TestStopGate:
         Args:
             run_page: The page that shows the live run view.
         """
-        _open_stop_box(run_page)
-        sync_api.expect(run_page.get_by_test_id(STOP_SUBMIT_ID)).to_be_disabled()
+        logger.info("Press the stop control and check that the stop stays locked")  # Log before the press.
+        _open_stop_box(run_page)  # The first press opens the box and sends no stop.
+        sync_api.expect(run_page.get_by_test_id(STOP_SUBMIT_ID)).to_be_disabled()  # The markup locks the submit.
+        stop = run_page.get_by_test_id(STOP_BUTTON_ID)  # The control that opened the box.
+        expanded = stop.get_attribute("aria-expanded")  # The box state that a screen reader announces.
+        logger.debug("The stop control reports aria-expanded=%s after the press", expanded)  # Log after the read.
+        assert expanded == "true", f"The stop control reports aria-expanded={expanded!r} after the press."
 
     @pytest.mark.parametrize("typed", NEAR_MISS_WORDS)
     def test_a_near_miss_of_the_word_keeps_the_stop_locked(self, run_page: Any, typed: str) -> None:
@@ -418,8 +539,13 @@ class TestStopGate:
             run_page: The page that shows the live run view.
             typed: The near miss the test types into the field.
         """
-        _open_stop_box(run_page).fill(typed)
-        sync_api.expect(run_page.get_by_test_id(STOP_SUBMIT_ID)).to_be_disabled()
+        logger.info("Type the near miss %r into the stop box", typed)  # Log before the typing.
+        field = _open_stop_box(run_page)  # Open the box that reads the typed word.
+        field.fill(typed)  # Type one near miss of the word.
+        sync_api.expect(run_page.get_by_test_id(STOP_SUBMIT_ID)).to_be_disabled()  # The gate refuses the near miss.
+        value = field.input_value()  # The text that the gate read.
+        logger.debug("The stop box holds %r, and the stop stays locked", value)  # Log after the read.
+        assert value == typed, f"The stop box holds {value!r}, so the test did not type the near miss {typed!r}."
 
     def test_the_exact_word_unlocks_the_stop(self, run_page: Any) -> None:
         """The exact word in capital letters unlocks the stop control.
@@ -427,8 +553,14 @@ class TestStopGate:
         Args:
             run_page: The page that shows the live run view.
         """
-        _open_stop_box(run_page).fill(STOP_WORD)
-        sync_api.expect(run_page.get_by_test_id(STOP_SUBMIT_ID)).to_be_enabled(timeout=GATE_TIMEOUT_MS)
+        logger.info("Type the exact word into the stop box")  # Log before the typing.
+        field = _open_stop_box(run_page)  # Open the box that reads the typed word.
+        field.fill(STOP_WORD)  # Type the exact word in capital letters.
+        submit = run_page.get_by_test_id(STOP_SUBMIT_ID)  # The control that sends the stop.
+        sync_api.expect(submit).to_be_enabled(timeout=GATE_TIMEOUT_MS)  # The gate unlocks the stop.
+        value = field.input_value()  # The text that unlocked the stop.
+        logger.debug("The stop box holds %r, and the stop is unlocked", value)  # Log after the read.
+        assert value == STOP_WORD, f"The stop box holds {value!r}, and the stop unlocked for that text."
 
     def test_a_cleared_field_locks_the_stop_again(self, run_page: Any) -> None:
         """The stop locks again after the operator clears the word.
@@ -441,12 +573,16 @@ class TestStopGate:
         Args:
             run_page: The page that shows the live run view.
         """
-        field = _open_stop_box(run_page)
-        field.fill(STOP_WORD)
-        submit = run_page.get_by_test_id(STOP_SUBMIT_ID)
-        sync_api.expect(submit).to_be_enabled(timeout=GATE_TIMEOUT_MS)
-        field.fill("")
-        sync_api.expect(submit).to_be_disabled(timeout=GATE_TIMEOUT_MS)
+        logger.info("Type the word, clear it, and check that the stop locks again")  # Log before the typing.
+        field = _open_stop_box(run_page)  # Open the box that reads the typed word.
+        field.fill(STOP_WORD)  # Type the exact word first.
+        submit = run_page.get_by_test_id(STOP_SUBMIT_ID)  # The control that sends the stop.
+        sync_api.expect(submit).to_be_enabled(timeout=GATE_TIMEOUT_MS)  # The word unlocks the stop.
+        field.fill("")  # Clear the word, as an operator who changes their mind does.
+        sync_api.expect(submit).to_be_disabled(timeout=GATE_TIMEOUT_MS)  # The gate locks the stop again.
+        value = field.input_value()  # The text that the gate read last.
+        logger.debug("The stop box holds %r, and the stop is locked again", value)  # Log after the read.
+        assert value == "", f"The stop box still holds {value!r}, so the test did not clear the word."
 
 
 class TestStopOutcome:
@@ -462,7 +598,12 @@ class TestStopOutcome:
         Args:
             run_page: The page that shows the live run view.
         """
-        sync_api.expect(run_page.get_by_test_id(STOP_OUTCOME_ID)).to_be_hidden()
+        outcome = run_page.get_by_test_id(STOP_OUTCOME_ID)  # The region that names the result of a stop.
+        logger.info("Check that the stop result region is closed before a stop")  # Log before the checks.
+        sync_api.expect(outcome).to_be_hidden()  # The region waits for a stop answer.
+        count = outcome.count()  # A hidden check also passes for a region that is absent.
+        logger.debug("The run page holds %s stop result region(s)", count)  # Log after the read.
+        assert count == 1, f"The run page holds {count} stop result regions, so a stop answer cannot paint."
 
     def test_the_outcome_names_the_sentence_the_server_sent(self, run_page: Any) -> None:
         """The plain sentence of the answer leads the result region.
@@ -474,9 +615,14 @@ class TestStopOutcome:
         Args:
             run_page: The page that shows the live run view.
         """
-        _send_the_stop(run_page, FULL_STOP_ANSWER)
-        message = run_page.get_by_test_id(STOP_MESSAGE_ID)
-        sync_api.expect(message).to_have_text(str(FULL_STOP_ANSWER["outcome"]["message"]))
+        expected = str(FULL_STOP_ANSWER["outcome"]["message"])  # The sentence of the canned answer.
+        logger.info("Send the stop and read the sentence of the result")  # Log before the stop.
+        _send_the_stop(run_page, FULL_STOP_ANSWER)  # Send the stop and wait for the result region.
+        message = run_page.get_by_test_id(STOP_MESSAGE_ID)  # The line that leads the result region.
+        sync_api.expect(message).to_have_text(expected)  # The script paints the sentence after the answer.
+        shown = (message.text_content() or "").strip()  # The sentence that the region shows.
+        logger.debug("The stop result reads %r", shown)  # Log after the read.
+        assert shown == expected, f"The stop result reads {shown!r}, and the answer sent {expected!r}."
 
     def test_the_outcome_names_the_device_it_cancelled(self, run_page: Any) -> None:
         """The cancelled list holds each address the answer named.
@@ -488,8 +634,13 @@ class TestStopOutcome:
         Args:
             run_page: The page that shows the live run view.
         """
-        _send_the_stop(run_page, FULL_STOP_ANSWER)
-        sync_api.expect(run_page.get_by_test_id(STOP_CANCELLED_ID)).to_contain_text(CANCELLED_MAC)
+        logger.info("Send the stop and read the cancelled list")  # Log before the stop.
+        _send_the_stop(run_page, FULL_STOP_ANSWER)  # Send the stop and wait for the result region.
+        cancelled = run_page.get_by_test_id(STOP_CANCELLED_ID)  # The list of each cancelled device.
+        sync_api.expect(cancelled).to_contain_text(CANCELLED_MAC)  # The script paints the list after the answer.
+        writing = run_page.get_by_test_id(STOP_WRITING_ID).inner_text()  # One call paints the three lists.
+        logger.debug("The writing list reads %r", writing)  # Log after the read.
+        assert CANCELLED_MAC not in writing, f"The cancelled device {CANCELLED_MAC} also shows as a writing device."
 
     def test_the_outcome_names_the_device_that_keeps_writing(self, run_page: Any) -> None:
         """The writing list holds each device the stop could not reach in time.
@@ -502,8 +653,13 @@ class TestStopOutcome:
         Args:
             run_page: The page that shows the live run view.
         """
-        _send_the_stop(run_page, FULL_STOP_ANSWER)
-        sync_api.expect(run_page.get_by_test_id(STOP_WRITING_ID)).to_contain_text(WRITING_MAC)
+        logger.info("Send the stop and read the writing list")  # Log before the stop.
+        _send_the_stop(run_page, FULL_STOP_ANSWER)  # Send the stop and wait for the result region.
+        writing = run_page.get_by_test_id(STOP_WRITING_ID)  # The list of each device that keeps writing.
+        sync_api.expect(writing).to_contain_text(WRITING_MAC)  # The script paints the list after the answer.
+        cancelled = run_page.get_by_test_id(STOP_CANCELLED_ID).inner_text()  # One call paints the three lists.
+        logger.debug("The cancelled list reads %r", cancelled)  # Log after the read.
+        assert WRITING_MAC not in cancelled, f"The writing device {WRITING_MAC} also shows as a cancelled device."
 
     def test_the_outcome_names_the_device_with_no_cancel_path(self, run_page: Any) -> None:
         """The third list holds each device the cloud offers no cancel for.
@@ -516,8 +672,13 @@ class TestStopOutcome:
         Args:
             run_page: The page that shows the live run view.
         """
-        _send_the_stop(run_page, FULL_STOP_ANSWER)
-        sync_api.expect(run_page.get_by_test_id(STOP_NO_CANCEL_ID)).to_contain_text(NO_CANCEL_MAC)
+        logger.info("Send the stop and read the list of each device with no cancel path")  # Log before the stop.
+        _send_the_stop(run_page, FULL_STOP_ANSWER)  # Send the stop and wait for the result region.
+        no_cancel = run_page.get_by_test_id(STOP_NO_CANCEL_ID)  # The list of each device with no cancel path.
+        sync_api.expect(no_cancel).to_contain_text(NO_CANCEL_MAC)  # The script paints the list after the answer.
+        cancelled = run_page.get_by_test_id(STOP_CANCELLED_ID).inner_text()  # One call paints the three lists.
+        logger.debug("The cancelled list reads %r", cancelled)  # Log after the read.
+        assert NO_CANCEL_MAC not in cancelled, f"The device {NO_CANCEL_MAC} has no cancel path, but shows as cancelled."
 
     def test_an_empty_list_reads_as_a_sentence_and_never_as_a_blank(self, run_page: Any) -> None:
         """Each empty list carries a sentence, so a blank never reads as a fault.
@@ -544,8 +705,13 @@ class TestStopOutcome:
         Args:
             run_page: The page that shows the live run view.
         """
-        _send_the_stop(run_page, FULL_STOP_ANSWER)
-        sync_api.expect(run_page.get_by_test_id(RUN_STATE_ID)).to_have_text(STOPPING_STATE, timeout=GATE_TIMEOUT_MS)
+        logger.info("Send the stop and read the run state")  # Log before the stop.
+        _send_the_stop(run_page, FULL_STOP_ANSWER)  # Send the stop and wait for the result region.
+        state = run_page.get_by_test_id(RUN_STATE_ID)  # The region that names the state of the run.
+        sync_api.expect(state).to_have_text(STOPPING_STATE, timeout=GATE_TIMEOUT_MS)  # The answer writes the state.
+        shown = (state.text_content() or "").strip()  # The state that the operator reads.
+        logger.debug("The run state reads %r after the stop", shown)  # Log after the read.
+        assert shown == STOPPING_STATE, f"The run state reads {shown!r}, and the answer sent {STOPPING_STATE!r}."
 
     def test_the_stop_cannot_be_sent_a_second_time(self, run_page: Any) -> None:
         """The stop control locks after the portal sends one stop.
@@ -557,5 +723,10 @@ class TestStopOutcome:
         Args:
             run_page: The page that shows the live run view.
         """
-        _send_the_stop(run_page, FULL_STOP_ANSWER)
-        sync_api.expect(run_page.get_by_test_id(STOP_BUTTON_ID)).to_be_disabled(timeout=GATE_TIMEOUT_MS)
+        logger.info("Send the stop and check that both stop controls lock")  # Log before the stop.
+        _send_the_stop(run_page, FULL_STOP_ANSWER)  # Send the stop and wait for the result region.
+        stop = run_page.get_by_test_id(STOP_BUTTON_ID)  # The control that opens the stop box.
+        sync_api.expect(stop).to_be_disabled(timeout=GATE_TIMEOUT_MS)  # The answer locks the control.
+        submit_enabled = run_page.get_by_test_id(STOP_SUBMIT_ID).is_enabled()  # The script locks it before the send.
+        logger.debug("The submit control is enabled after the stop: %s", submit_enabled)  # Log after the read.
+        assert submit_enabled is False, "The submit is live after the stop, so a second press sends a second stop."
