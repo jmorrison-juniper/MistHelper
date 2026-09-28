@@ -12,7 +12,9 @@ var selectedMenuNumber = null;
 var selectedCategory = null;
 var currentRunId = null;
 var currentSSE = null;
+var currentStatusFallbackTimer = null;  // Track the active silence timer so old runs cannot update new runs.
 var currentParameters = [];
+var STATUS_FALLBACK_MS = 15000;  // Ask the server before the 210 second operator timeout can expire.
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -744,22 +746,27 @@ function startSSEStream(runId) {
     if (currentSSE) {
         currentSSE.close();
     }
+    clearStatusFallbackTimer();  // A new stream owns its own fallback timer.
 
     var url = '/api/operations/stream?run_id=' + encodeURIComponent(runId);
     var source = new EventSource(url);
     currentSSE = source;
+    armStatusFallback(runId);  // Recover if the stream opens but never sends a terminal event.
 
     source.addEventListener('log', function(event) {
+        armStatusFallback(runId);  // Any stream activity proves the run still belongs to this connection.
         var data = JSON.parse(event.data);
         appendLog(data.message, data.level || 'INFO');
     });
 
     source.addEventListener('debug_log', function(event) {
+        armStatusFallback(runId);  // Debug-only traffic must still delay the silence fallback.
         var data = JSON.parse(event.data);
         appendDebugLog(data.message, data.level || 'DEBUG');
     });
 
     source.addEventListener('status', function(event) {
+        armStatusFallback(runId);  // A running status is not terminal, so keep the fallback armed.
         var data = JSON.parse(event.data);
         if (data.status === 'running') {
             setStatus('running', data.description || 'Running...');
@@ -767,11 +774,13 @@ function startSSEStream(runId) {
     });
 
     source.addEventListener('progress', function(event) {
+        armStatusFallback(runId);  // Progress means the stream is alive, so restart the quiet window.
         var data = JSON.parse(event.data);
         updateProgress(data.percent || 0, data.message || '');
     });
 
     source.addEventListener('complete', function(event) {
+        clearStatusFallbackTimer();  // A terminal stream event no longer needs REST recovery.
         var data = JSON.parse(event.data);
         updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
         setStatus('complete', data.message || 'Operation completed');  // Keep a no-output reason visible.
@@ -781,6 +790,7 @@ function startSSEStream(runId) {
     });
 
     source.addEventListener('error_event', function(event) {
+        clearStatusFallbackTimer();  // A terminal error event no longer needs REST recovery.
         var data = JSON.parse(event.data);
         setStatus('error', data.message || 'Operation failed');
         appendLog('ERROR: ' + (data.message || 'Unknown error'), 'ERROR');
@@ -789,35 +799,55 @@ function startSSEStream(runId) {
     });
 
     source.addEventListener('heartbeat', function() {
+        armStatusFallback(runId);  // A heartbeat proves the stream is alive without changing the UI.
         // Keep-alive; nothing to display
     });
 
     source.onerror = function() {
         // Connection lost - check status via REST fallback
         if (currentRunId) {
-            checkRunStatus(currentRunId);
+            checkRunStatus(currentRunId, true);  // Keep checking if the server says the run still has work.
         }
         source.close();
     };
 }
 
-function checkRunStatus(runId) {
+function clearStatusFallbackTimer() {
+    if (!currentStatusFallbackTimer) return;  // No timer exists, so there is nothing to cancel.
+    clearTimeout(currentStatusFallbackTimer);  // Cancel the old timer before it can update a stale run.
+    currentStatusFallbackTimer = null;  // Mark the timer slot empty for the next run.
+}
+
+function armStatusFallback(runId) {
+    clearStatusFallbackTimer();  // Keep only one fallback timer active for one run.
+    currentStatusFallbackTimer = setTimeout(function() {
+        if (currentRunId !== runId) return;  // Ignore timers that belong to a completed or replaced run.
+        checkRunStatus(runId, true);  // Ask the server when the stream stays quiet.
+    }, STATUS_FALLBACK_MS);  // Bound the wait so the operator does not sit at Running for 210 seconds.
+}
+
+function checkRunStatus(runId, rearmWhenRunning) {
     fetch('/api/operations/status/' + encodeURIComponent(runId))
         .then(readJsonAnswer)
         .then(function(data) {
             if (data.status === 'completed') {
+                clearStatusFallbackTimer();  // A terminal REST answer no longer needs more fallback checks.
                 updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
                 setStatus('complete', data.completion_message || 'Operation completed');  // Show the no-output reason when the run has no file.
                 showOutputFiles(data.output_files || []);
                 finishRun();
             } else if (data.status === 'failed') {
+                clearStatusFallbackTimer();  // A terminal REST answer no longer needs more fallback checks.
                 setStatus('error', data.error_message || 'Operation failed');
                 appendLog('ERROR: ' + (data.error_message || 'Unknown error'), 'ERROR');
                 finishRun();
+            } else if (rearmWhenRunning && currentRunId === runId) {
+                armStatusFallback(runId);  // Keep checking at a bounded cadence while the server still runs.
             }
-            // If still running, SSE reconnect will handle it
+            // If still running, the rearmed fallback asks the server again.
         })
         .catch(function() {
+            clearStatusFallbackTimer();  // Stop more fallback checks after a clear connection failure.
             setStatus('error', 'Lost connection to server');
             finishRun();
         });
@@ -964,6 +994,7 @@ function isPreviewable(filename) {
 }
 
 function finishRun() {
+    clearStatusFallbackTimer();  // Stop stale timers before controls move back to idle.
     currentRunId = null;
     currentSSE = null;
     var btn = document.getElementById('runBtn');
