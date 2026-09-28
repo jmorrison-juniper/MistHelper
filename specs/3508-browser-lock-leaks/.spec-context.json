@@ -4,5 +4,15 @@
   "branch": "fix/3508-browser-lock-leaks",
   "currentStep": "implement",
   "status": "implemented",
-  "artifacts": ["spec.md", "checklists/requirements.md", "research.md", "plan.md", "tasks.md"]
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "research.md",
+    "plan.md",
+    "tasks.md"
+  ],
+  "workflow": "speckit",
+  "specName": "",
+  "history": [],
+  "telemetryInstanceId": "520f0148-f668-4b6f-9d49-98b88cdeaa96"
 }
