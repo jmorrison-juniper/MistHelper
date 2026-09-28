@@ -39,18 +39,32 @@ Why the module reaches no cloud:
     call fails inside the process. No test starts a capture, starts an upgrade,
     or writes a firmware version. Every address below is a reserved `.invalid`
     address that can reach no mail host.
+
+Why each control test ends its own run:
+    Issue #3511. The first control test created a run on the held site, and
+    each later test met the 409 of FR-037 and used the same run. No test starts
+    that run, so the run stayed in the state `created` after the module. The
+    live-run check of #3511 found it. The fixture `held_run` now records the run
+    that it creates, and its teardown cancels that run, even when the test fails.
 """
 
 from __future__ import annotations  # Keep annotations independent from import order.
 
 import json  # Build the body of each call, and read the body of each answer.
+import logging  # Issue #3511: the teardown of each control test logs its cancels.
 from collections.abc import Iterator  # Each lock fixture yields its value and then releases the lock.
 from typing import Any  # Playwright gives each page and each answer, so their type is Any.
 from urllib.parse import urlsplit  # Read the path of the address that a read page shows.
 
 import pytest
 
-from tests.support.upgrade_portal_e2e.site_lock import LockTakeAnswer  # Issue #3497: decide the lock take.
+from tests.support.upgrade_portal_e2e.site_lock import (  # Issues #3497 and #3511: the lock take and the run end.
+    LockTakeAnswer,
+    RunLedger,
+    SiteRelease,
+)
+
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
 
 # The Playwright package must exist before this module defines a browser test.
 # A run without the package reports a skip and never an import error.
@@ -338,7 +352,7 @@ def held_site(first_page: Any) -> Iterator[str]:
     _write(first_page, "delete", path, {TOKEN_FIELD: token})  # The next test then finds the site free.
 
 
-def _run_on(page: Any, site: str) -> str:
+def _run_on(page: Any, site: str, ledger: RunLedger) -> str:
     """Create one upgrade run on a site and return its key.
 
     Why:
@@ -347,9 +361,13 @@ def _run_on(page: Any, site: str) -> str:
         that opens with no saved plan. The run never starts, so nothing reaches
         a device.
 
+        Issue #3511. The ledger holds only a run that this test built. The
+        teardown therefore never cancels a run of another test or module.
+
     Args:
         page: The page of the operator who holds the site.
         site: The site key.
+        ledger: The ledger of the runs that this test builds.
 
     Returns:
         The run key.
@@ -358,19 +376,87 @@ def _run_on(page: Any, site: str) -> str:
         AssertionError: If the create answers 401 or 404. Both name a fault of
             the portal, so neither may report a skip.
     """
-    path = RUN_CREATE_TEMPLATE.format(site_id=site)
-    answer = _write(page, "post", path, {})
+    path = RUN_CREATE_TEMPLATE.format(site_id=site)  # The create route of the held site.
+    logger.info("Create one run for the lock controls at %s", path)  # Log before the create call.
+    answer = _write(page, "post", path, {})  # The documented create call, with an empty body.
+    logger.debug("The create call answered %s", answer.status)  # Log the status only.
     if answer.status in (UNAUTHORIZED_STATUS, NOT_FOUND_STATUS):  # The portal itself is broken.
         raise AssertionError(f"{path} answered {answer.status}, so the portal serves no run route.")
-    body = json.loads(answer.text())
+    body = json.loads(answer.text())  # Both the grant and the refusal carry a JSON body.
     if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
-        named = str(body.get(ERROR_FIELD, {}).get(DETAILS_FIELD, {}).get(RUN_ID_FIELD, ""))
+        named = str(body.get(ERROR_FIELD, {}).get(DETAILS_FIELD, {}).get(RUN_ID_FIELD, ""))  # The named run.
         if not named:  # The refusal must name the live run, or the operator cannot open it.
             raise AssertionError(f"{path} answered 409 and named no run to open. The body reads: {answer.text()!r}")
-        return named
+        return named  # The ledger does not record a run that another test built.
     if answer.status != CREATED_STATUS:  # No run exists, so no page below can carry the banner.
         pytest.skip(f"{path} answered {answer.status}, so no run key exists.")
-    return str(body[RUN_ID_FIELD])
+    created = str(body[RUN_ID_FIELD])  # The key of the run that this test built.
+    ledger.record(created)  # Issue #3511: the teardown ends this run, so the site stays free.
+    return created  # The progress page of this test opens this run.
+
+
+@pytest.fixture(name="run_ledger")
+def fixture_run_ledger() -> RunLedger:
+    """Return an empty ledger for the run that one control test builds.
+
+    Why:
+        Issue #3511. The teardown of `held_run` ends each run of this ledger, so
+        no control test leaves a live run at the held site for a later module.
+
+    Returns:
+        The ledger of this test.
+    """
+    return RunLedger()  # Each test starts with no recorded run.
+
+
+def _end_the_lock_runs(page: Any, ledger: RunLedger) -> None:
+    """End each live run that one control test built.
+
+    Why:
+        Issue #3511. No control test starts its run, so the run never leaves
+        the state `created`. A live run blocks each later create call at the
+        same site (FR-037). The cancel route ends a run that sent nothing, and
+        it sends no cloud call.
+
+    Args:
+        page: The page of the operator who built the run, on a page that draws the layout.
+        ledger: The ledger of the runs that the test built.
+
+    Raises:
+        AssertionError: The page publishes no token, or a cancel answered a refusal.
+    """
+    if not ledger.runs:  # The test opened a run that it did not build, so no run needs an end.
+        logger.debug("The control test built no run, so the teardown ends no run")  # Log the empty ledger.
+        return
+    logger.info("End the %d run(s) of the control test", len(ledger.runs))  # Log before the teardown step.
+    token = _csrf_token(page) if page.get_by_test_id(CSRF_META_ID).count() > 0 else ""  # A bare page has none.
+    if not token:  # A cancel with no token meets the cross-site request check.
+        raise AssertionError(f"The page publishes no {CSRF_META_ID} token, so the control runs stay live. See #3511.")
+    ended = SiteRelease(page.request, token).end_runs(ledger.runs)  # A refused cancel fails the teardown.
+    logger.debug("The control teardown ended %d run(s)", ended)  # Log after the teardown step.
+
+
+@pytest.fixture
+def held_run(first_page: Any, held_site: str, run_ledger: RunLedger) -> Iterator[str]:
+    """Create one run on the held site, yield its key, and then end the run.
+
+    Why:
+        Issue #3511. Each control test needs a run for its progress page. The
+        teardown cancels the run of this test before `held_site` releases the
+        lock. The cancel route refuses only a different operator, so the cancel
+        also works after the release control of a test freed the site.
+
+    Args:
+        first_page: The page of the operator who holds the lock.
+        held_site: The site that this operator holds.
+        run_ledger: The ledger of the runs that this test builds.
+
+    Yields:
+        The key of the run that the test opens.
+    """
+    run = _run_on(first_page, held_site, run_ledger)  # A skip here leaves an empty ledger.
+    yield run  # The test opens the progress page of this run.
+    _end_the_lock_runs(first_page, run_ledger)  # Issue #3511: no live run stays for a later module.
 
 
 def _banner_of(page: Any, run: str) -> Any:
@@ -651,7 +737,7 @@ class TestTheLockControlsOfThePage:
         cannot work, however correct the server is.
     """
 
-    def test_the_holder_reads_a_held_banner_with_a_release_control(self, first_page: Any, held_site: str) -> None:
+    def test_the_holder_reads_a_held_banner_with_a_release_control(self, first_page: Any, held_run: str) -> None:
         """The page of the holder names the hold and offers the release.
 
         Why:
@@ -661,15 +747,15 @@ class TestTheLockControlsOfThePage:
 
         Args:
             first_page: The page of the operator who holds the lock.
-            held_site: The site that this operator holds.
+            held_run: The run on the site that this operator holds.
         """
-        banner = _banner_of(first_page, _run_on(first_page, held_site))
+        banner = _banner_of(first_page, held_run)  # The progress page of the run carries the banner.
         assert banner.get_attribute(LOCK_STATE_ATTRIBUTE) == LOCK_STATE_HELD
         sync_api.expect(first_page.get_by_test_id(LOCK_RELEASE_BUTTON_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
         sync_api.expect(first_page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_hidden(timeout=GATE_TIMEOUT_MS)
 
     def test_the_second_operator_reads_a_locked_banner_with_a_take_control(
-        self, first_page: Any, second_page: Any, held_site: str
+        self, second_page: Any, held_run: str
     ) -> None:
         """The page of the second operator names the holder and offers the take.
 
@@ -679,19 +765,17 @@ class TestTheLockControlsOfThePage:
             because an abandoned session is the case this control exists for.
 
         Args:
-            first_page: The page of the operator who holds the lock.
             second_page: The page of the second operator.
-            held_site: The site that the first operator holds.
+            held_run: The run on the site that the first operator holds.
         """
-        run = _run_on(first_page, held_site)
-        banner = _banner_of(second_page, run)
+        banner = _banner_of(second_page, held_run)  # The second operator opens the same progress page.
         assert banner.get_attribute(LOCK_STATE_ATTRIBUTE) == LOCK_STATE_LOCKED
         message = second_page.get_by_test_id(LOCK_STATE_MESSAGE_ID)
         assert HOLDER_EMAIL in message.inner_text(), f"The banner reads: {message.inner_text()!r}"
         sync_api.expect(second_page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
 
     def test_the_take_control_of_a_held_site_writes_the_refusal_in_the_page(
-        self, first_page: Any, second_page: Any, held_site: str
+        self, second_page: Any, held_run: str
     ) -> None:
         """A press on the take control of a held site fills the error region.
 
@@ -701,19 +785,17 @@ class TestTheLockControlsOfThePage:
             a button that appears to do nothing.
 
         Args:
-            first_page: The page of the operator who holds the lock.
             second_page: The page of the second operator.
-            held_site: The site that the first operator holds.
+            held_run: The run on the site that the first operator holds.
         """
-        run = _run_on(first_page, held_site)
-        _banner_of(second_page, run)
+        _banner_of(second_page, held_run)  # The second operator opens the progress page of the held site.
         second_page.get_by_test_id(LOCK_TAKE_BUTTON_ID).click()
         region = second_page.get_by_test_id(LOCK_ERROR_ID)
         sync_api.expect(region).to_be_visible(timeout=GATE_TIMEOUT_MS)
         assert region.inner_text().strip(), "The take control wrote no sentence into the error region."
 
     def test_the_take_control_opens_the_takeover_pair_on_a_confirmation_refusal(
-        self, first_page: Any, second_page: Any, held_site: str
+        self, second_page: Any, held_run: str
     ) -> None:
         """A confirmation refusal opens the field and the takeover button.
 
@@ -724,12 +806,10 @@ class TestTheLockControlsOfThePage:
             then does.
 
         Args:
-            first_page: The page of the operator who holds the lock.
             second_page: The page of the second operator.
-            held_site: The site that the first operator holds.
+            held_run: The run on the site that the first operator holds.
         """
-        run = _run_on(first_page, held_site)
-        _banner_of(second_page, run)
+        _banner_of(second_page, held_run)  # The second operator opens the progress page of the held site.
         refusal = {
             ERROR_FIELD: {
                 CODE_FIELD: CONFIRMATION_REQUIRED_CODE,
@@ -744,7 +824,7 @@ class TestTheLockControlsOfThePage:
         sync_api.expect(second_page.get_by_test_id(LOCK_CONFIRM_SUBMIT_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
         assert field.get_attribute("data-confirm-word") == TAKEOVER_WORD
 
-    def test_the_takeover_button_sends_the_typed_word(self, first_page: Any, second_page: Any, held_site: str) -> None:
+    def test_the_takeover_button_sends_the_typed_word(self, second_page: Any, held_run: str) -> None:
         """The takeover button carries the typed word to the lock call.
 
         Why:
@@ -752,12 +832,10 @@ class TestTheLockControlsOfThePage:
             empty word would take a site that the server meant to protect.
 
         Args:
-            first_page: The page of the operator who holds the lock.
             second_page: The page of the second operator.
-            held_site: The site that the first operator holds.
+            held_run: The run on the site that the first operator holds.
         """
-        run = _run_on(first_page, held_site)
-        _banner_of(second_page, run)
+        _banner_of(second_page, held_run)  # The second operator opens the progress page of the held site.
         sent: list[str] = []
 
         def handle(route: Any) -> None:
@@ -786,7 +864,7 @@ class TestTheLockControlsOfThePage:
         sync_api.expect(field).to_be_visible(timeout=GATE_TIMEOUT_MS)
         assert TAKEOVER_WORD in sent, f"The takeover button sent {sent!r} and never the typed word."
 
-    def test_the_release_control_gives_the_site_back(self, first_page: Any, held_site: str) -> None:
+    def test_the_release_control_gives_the_site_back(self, first_page: Any, held_run: str) -> None:
         """A press on the release control frees the site and offers the take.
 
         Why:
@@ -797,9 +875,9 @@ class TestTheLockControlsOfThePage:
 
         Args:
             first_page: The page of the operator who holds the lock.
-            held_site: The site that this operator holds.
+            held_run: The run on the site that this operator holds.
         """
-        banner = _banner_of(first_page, _run_on(first_page, held_site))
+        banner = _banner_of(first_page, held_run)  # The progress page of the run carries the banner.
         first_page.get_by_test_id(LOCK_RELEASE_BUTTON_ID).click()
         sync_api.expect(first_page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
         assert banner.get_attribute(LOCK_STATE_ATTRIBUTE) == LOCK_STATE_FREE

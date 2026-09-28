@@ -13,6 +13,11 @@ Why:
     The multi-site journey comes first, because pytest keeps the file order.
     The single-site journey creates a run, and that run holds the short-read
     site. The multi-site journey therefore reads the site before a run holds it.
+
+    Issue #3511. The run of the single-site journey stayed live after the
+    module, and the live-run check of #3511 found it. The teardown of that
+    journey now cancels the run, so no later module meets a live run at the
+    short-read site.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +36,7 @@ from tests.e2e.upgrade_portal.short_read_seeds import (
     SHORT_SITE_ID,
     SHORT_SITE_NAME,
 )
+from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3511: the teardown.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -206,6 +213,62 @@ def is_options_save(answer: Any) -> bool:
     return str(answer.request.method) == "POST" and str(answer.url).endswith(OPTIONS_API_SUFFIX)
 
 
+def end_the_short_site_runs(page: Any, ledger: RunLedger) -> None:
+    """End each live run that the single-site journey built.
+
+    Why:
+        Issue #3511. The single-site journey creates a run and never starts it,
+        so the run stayed live after the module. A live run blocks each later
+        create call at the short-read site (FR-037).
+
+    Args:
+        page: The browser page, on a portal page that publishes the token.
+        ledger: The ledger of the runs that the journey built.
+
+    Raises:
+        AssertionError: The page publishes no token, or a cancel answered a refusal.
+    """
+    if not ledger.runs:  # The journey stopped before it built a run, so no run needs an end.
+        logger.debug("The journey built no run, so the teardown ends no run")  # Log the empty ledger.
+        return
+    logger.info("End the %d run(s) of the short-read site", len(ledger.runs))  # Log before the teardown step.
+    meta = page.get_by_test_id(CSRF_META_ID)  # The layout publishes the token under this identifier.
+    token = str(meta.get_attribute("content") or "") if meta.count() > 0 else ""  # A page with no layout has none.
+    if not token:  # A cancel with no token meets the cross-site request check.
+        raise AssertionError(f"The page publishes no {CSRF_META_ID} token, so the run stays live. See issue #3511.")
+    ended = SiteRelease(page.request, token).end_runs(ledger.runs)  # A refused cancel fails the teardown.
+    logger.debug("The teardown ended %d run(s) of the short-read site", ended)  # Log after the teardown step.
+
+
+@pytest.fixture(name="run_ledger")
+def fixture_run_ledger() -> RunLedger:
+    """Return an empty ledger for the runs that one journey builds.
+
+    Returns:
+        The ledger of this test.
+    """
+    return RunLedger()  # Each test starts with no recorded run.
+
+
+@pytest.fixture(name="short_read_page")
+def fixture_short_read_page(short_read_operator_page: Any, run_ledger: RunLedger) -> Iterator[Any]:
+    """Yield the page of the short-read operator, and end the runs of the journey after the test.
+
+    Why:
+        Issue #3511. The teardown runs even when the journey fails, so no run
+        of this module holds the short-read site after the module.
+
+    Args:
+        short_read_operator_page: The browser page of the short-read operator.
+        run_ledger: The ledger of the runs that the journey builds.
+
+    Yields:
+        The browser page of the short-read operator.
+    """
+    yield short_read_operator_page
+    end_the_short_site_runs(short_read_operator_page, run_ledger)  # The page closes after this teardown.
+
+
 def test_the_multi_site_page_names_the_short_site_and_refuses_the_save(short_read_operator_page: Any) -> None:
     """The banner and the refusal name the short-read site, and the plan saves after the operator clears it."""
     page = short_read_operator_page  # The separate operator, so no other journey sees the short-read site.
@@ -246,11 +309,14 @@ def test_the_multi_site_page_names_the_short_site_and_refuses_the_save(short_rea
     assert save_screenshot(page, "multi-site-recovered-confirm.png").exists()  # The summary before the typed word.
 
 
-def test_the_single_site_page_shows_the_banner_and_refuses_the_save(short_read_operator_page: Any) -> None:
+def test_the_single_site_page_shows_the_banner_and_refuses_the_save(
+    short_read_page: Any, run_ledger: RunLedger
+) -> None:
     """The single-site page shows the banner, and the save of the short read answers 400 with the reload text."""
-    page = short_read_operator_page  # The separate operator, so no other journey sees the short-read site.
+    page = short_read_page  # The separate operator, so no other journey sees the short-read site.
     page.goto(MODE_PATH, wait_until="domcontentloaded")  # A portal page publishes the token in its head.
     run_id = create_the_short_site_run(page)  # One run of the short-read site.
+    run_ledger.record(run_id)  # Issue #3511: the teardown ends this run, so the site stays free.
     page.goto(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id), wait_until="domcontentloaded")  # The options page.
     banner = page.get_by_test_id(SITE_BANNER_ID)  # The Caution banner of the single-site page.
     sync_api.expect(banner).to_be_visible()  # The operator sees the gap before the plan.

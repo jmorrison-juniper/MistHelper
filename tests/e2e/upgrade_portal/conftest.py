@@ -119,6 +119,7 @@ from tests.support.upgrade_portal_e2e import (  # Build isolated resources, envi
     build_child_environment,
     build_e2e_overrides,
 )
+from tests.support.upgrade_portal_e2e.live_runs import LiveRunCheck, SiteRunReader  # Issue #3511: the run check.
 from tests.support.upgrade_portal_e2e.records.audit import (  # The two trail guards of the browser run.
     AuditTrailIsolation,  # Issue #3498: the checkout trail guard.
     TrailHoldCheck,  # Issue #3508: the leaked hold check of the run trail.
@@ -684,6 +685,9 @@ AUDIT_GUARD_KEY = pytest.StashKey[str]()  # Issue #3498: the measure that the te
 AUDIT_GUARD_RECORD = "checkout-audit-trail-guard.json"  # Issue #3498: the record of the two counts.
 HOLD_GUARD_KEY = pytest.StashKey[str]()  # Issue #3508: the measure of the run trail hold check.
 HOLD_GUARD_RECORD = "run-trail-hold-guard.json"  # Issue #3508: the record of the hold check.
+LIVE_RUN_KEY = pytest.StashKey[list[LiveRunCheck]]()  # Issue #3511: the check of each module, for the summary.
+LIVE_RUN_RECORD = "live-run-check.jsonl"  # Issue #3511: one line of the live-run check for each module.
+LIVE_RUN_STATE = SimpleNamespace(running=False, live=frozenset())  # Issue #3511: the portal flag and the last scan.
 
 
 @pytest.fixture(scope="session")
@@ -767,14 +771,72 @@ def run_trail_hold_guard(
     result.require_no_leak()  # A leaked hold fails the run.
 
 
-def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
-    """Print the measure of each trail guard of the browser run.
+def _picker_site_ids() -> list[str]:
+    """Return the key of each site that the site picker lists.
 
     Why:
-        Issue #3498 and issue #3508. A guard must state what it checked. The
-        fixtures `checkout_audit_trail_guard` and `run_trail_hold_guard` each
-        store one sentence, and this hook prints each sentence at the end of
-        the run.
+        Issue #3511. A single-site create journey builds its run on a site that
+        the picker lists. The live-run check reads the same list, so a new
+        picker site joins the check with no second list to keep.
+
+    Returns:
+        The site keys, in the order of the picker.
+
+    Raises:
+        AssertionError: The stand-in site read did not answer a list of sites.
+    """
+    sites = stand_in_cloud_read("listOrgSites")  # The fixed site list of the stand-in organization.
+    if not isinstance(sites, list):  # A real-walk read answers a device read, which names no picker site.
+        raise AssertionError("The stand-in site read of issue #3511 must answer a list of sites.")
+    return [str(site["id"]) for site in sites]  # The key of each picker site.
+
+
+@pytest.fixture(scope="module", autouse=True)
+def module_live_run_check(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Fail each module that leaves a new live run at a site of the picker.
+
+    Why:
+        Issue #3511. The walk of `test_capture.py` left one run live on the
+        first site of the picker. Each later create call at that site answered
+        409, and two tests then used the leftover run in place of their own
+        run. This check reads the run history of each picker site after each
+        module, and it fails the module that left a new live run.
+
+        A module that ended before the portal started skips the check, because
+        no run can exist yet. Pytest ends each module fixture before the
+        session fixtures, so the last module still reads a running portal.
+
+    Args:
+        request: The fixture request, which names the module and carries the run configuration.
+
+    Yields:
+        Nothing. The check runs after the last test of the module.
+    """
+    yield  # The tests of the module run here.
+    if not LIVE_RUN_STATE.running:  # No portal runs, so no module could leave a live run.
+        return  # Nothing to check.
+    before = LIVE_RUN_STATE.live  # The live runs after the previous module.
+    cookies = "; ".join(f"{item['name']}={item['value']}" for item in portal_session_cookies())  # A signed read.
+    logger.info("Scan the picker sites for a live run after %s", request.node.nodeid)  # Log before the scan.
+    scan = SiteRunReader(BASE_URL, cookies).scan(_picker_site_ids())  # A failed read fails the module here.
+    LIVE_RUN_STATE.live = scan.runs  # The next module compares against this scan, so no leak counts twice.
+    check = LiveRunCheck(request.node.nodeid, before, scan)  # The decision of this module.
+    with (ARTIFACT_DIRECTORY / LIVE_RUN_RECORD).open("a", encoding="utf-8") as trail:  # One line for each module.
+        trail.write(json.dumps(check.record()) + "\n")  # The counts, the leaks, and the time of the scan.
+    request.config.stash.setdefault(LIVE_RUN_KEY, []).append(check)  # The terminal summary adds each check.
+    logger.debug("Wrote the live-run record: %s leak(s) in %s ms", len(check.leaks), scan.elapsed_ms)  # After.
+    check.require_no_leak()  # A new live run fails the module.
+
+
+def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
+    """Print the measure of each trail guard and of the live-run check of the browser run.
+
+    Why:
+        Issue #3498, issue #3508, and issue #3511. A guard must state what it
+        checked. The fixtures `checkout_audit_trail_guard` and
+        `run_trail_hold_guard` each store one sentence. The fixture
+        `module_live_run_check` stores the check of each module. This hook
+        prints each sentence at the end of the run.
 
     Args:
         terminalreporter: The reporter that writes the terminal summary.
@@ -784,6 +846,9 @@ def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> Non
         measure = config.stash.get(key, "")  # Empty when no browser test started the portal.
         if measure:  # A run that started no portal has no measure to print.
             terminalreporter.write_line(measure)  # One line in the terminal summary.
+    live_runs = LiveRunCheck.summary(config.stash.get(LIVE_RUN_KEY, []))  # Issue #3511: empty with no portal.
+    if live_runs:  # A run that started no portal ran no live-run check.
+        terminalreporter.write_line(live_runs)  # One line in the terminal summary.
 
 
 @pytest.fixture(scope="session")
@@ -819,7 +884,9 @@ def capture_portal_server(
     process = _start_server()
     if process is None:  # The command exists, so a portal that never answered is a real fault.
         pytest.fail(START_FAILED_MESSAGE, pytrace=False)
+    LIVE_RUN_STATE.running = True  # Issue #3511: each module check may now read the portal.
     yield BASE_URL
+    LIVE_RUN_STATE.running = False  # Issue #3511: no module check may read a stopped portal.
     _stop_server(process)
 
 
