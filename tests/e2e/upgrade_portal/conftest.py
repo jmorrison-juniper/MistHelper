@@ -120,6 +120,11 @@ from tests.support.upgrade_portal_e2e import (  # Build isolated resources, envi
     build_e2e_overrides,
 )
 from tests.support.upgrade_portal_e2e.live_runs import LiveRunCheck, SiteRunReader  # Issue #3511: the run check.
+from tests.support.upgrade_portal_e2e.org_operations import (  # Issue #3518: the teardown of each operation.
+    OrgOperationLedger,
+    OrgOperationRelease,
+    OrgStartTap,
+)
 from tests.support.upgrade_portal_e2e.records.audit import (  # The two trail guards of the browser run.
     AuditTrailIsolation,  # Issue #3498: the checkout trail guard.
     TrailHoldCheck,  # Issue #3508: the leaked hold check of the run trail.
@@ -2678,7 +2683,35 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
 
 
 @pytest.fixture
-def firmware_operator_page(context: Any, capture_portal_server: str) -> Iterator[Any]:
+def org_operation_ledger(context: Any) -> Iterator[OrgOperationLedger]:
+    """Record each multi-site operation that the browser context of one test starts.
+
+    Why:
+        Issue #3518. A journey that failed before its cancel left the operation
+        live, and the operation held both stand-in sites. A route of the
+        context fetches the answer of each Start request of each tab, before
+        the page gets it. The teardown of `firmware_operator_page` then ends
+        each recorded operation, also when the page never reached the progress
+        page. A route turns off the HTTP cache of the context, so only the
+        tests that take this fixture pay that cost.
+
+    Args:
+        context: The browser context that `pytest-playwright` built.
+
+    Yields:
+        The ledger of the context.
+    """
+    ledger = OrgOperationLedger()  # One ledger for one test.
+    tap = OrgStartTap(ledger)  # The tap reads each Start answer before a page gets it.
+    context.route(OrgStartTap.ROUTE, tap.pass_start)  # Each tab of the context sends its Start request through it.
+    yield ledger  # The page fixture and the teardown journey read the ledger.
+    context.unroute(OrgStartTap.ROUTE, tap.pass_start)  # The tap reads nothing after the test.
+
+
+@pytest.fixture
+def firmware_operator_page(
+    context: Any, capture_portal_server: str, org_operation_ledger: OrgOperationLedger
+) -> Iterator[Any]:
     """Open a browser page that can start a firmware write.
 
     Why:
@@ -2687,9 +2720,14 @@ def firmware_operator_page(context: Any, capture_portal_server: str) -> Iterator
         read-only paths and gives write-path tests one registered reachable
         address.
 
+        Issue #3518. Each multi-site journey starts its operation with this
+        page. After the test, the fixture ends each operation that is still
+        live, so a failed step cannot leave both stand-in sites held.
+
     Args:
         context: The browser context that `pytest-playwright` built.
         capture_portal_server: The address of the running portal.
+        org_operation_ledger: The ledger of each operation that the context started.
 
     Yields:
         The browser page, with the firmware-write session cookies in place.
@@ -2701,7 +2739,10 @@ def firmware_operator_page(context: Any, capture_portal_server: str) -> Iterator
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test uses the reachable operator only where it starts firmware.
-    opened.close()  # A page left open would hold a browser target for the whole run.
+    try:  # Close the page also when the teardown fails.
+        OrgOperationRelease.end_for(opened, org_operation_ledger)  # Issue #3518: end each live operation.
+    finally:  # A page left open would hold a browser target for the whole run.
+        opened.close()  # Close the page of the test.
 
 
 @pytest.fixture

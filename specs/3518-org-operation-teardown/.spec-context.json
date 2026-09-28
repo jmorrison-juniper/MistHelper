@@ -1,0 +1,17 @@
+{
+  "feature": "3518-org-operation-teardown",
+  "issue": 3518,
+  "branch": "fix/3518-org-operation-leak",
+  "currentStep": "implement",
+  "status": "implemented",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "research.md",
+    "plan.md",
+    "tasks.md"
+  ],
+  "workflow": "speckit",
+  "specName": "",
+  "history": []
+}

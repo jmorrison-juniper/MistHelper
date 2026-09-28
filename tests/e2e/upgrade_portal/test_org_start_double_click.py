@@ -8,20 +8,21 @@ Why:
     the page sends.
 
     Each journey that starts an operation ends with a cancel, so both stand-in
-    sites go back for the later browser tests. The fixture of this file also
-    cancels an operation that a failed step left running.
+    sites go back for the later browser tests. Issue #3518: the fixture
+    `firmware_operator_page` also ends each operation that a failed step left
+    running, also when the page never reached the progress page.
 """
 
 from __future__ import annotations  # Keep the annotations independent from the import order.
 
 import json  # Build the body of the simulated lock store refusal.
 import re  # Match the address of each page of the journey.
-from collections.abc import Iterator  # The fixture yields one page.
+from collections.abc import Callable  # Issue #3518: the start step takes the press of the Start button.
 from pathlib import Path  # Build the path of each screenshot.
 from typing import Any  # Playwright objects carry no stable static type here.
 from urllib.parse import urlsplit  # Read the path of each request address.
 
-import pytest  # Supplies the fixture that cleans up after a failed journey.
+import pytest  # Skip the module when Playwright is not installed.
 
 from src.upgrade_portal.app.routes.upgrade import LOCK_STORE_DOWN_CODE, LOCK_STORE_DOWN_MESSAGE
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, RELOAD_TIMEOUT_MS, OrgCancelSteps
@@ -45,7 +46,7 @@ OPTIONS_FORM = "form[action='/api/org-upgrades/options']"  # The options form.
 START_FORM = "form[action='/api/org-upgrades']"  # The confirmation form.
 FORM_STATE = "data-org-form-state"  # The attribute that marks a closed form.
 REPLAY_SENTENCE = "This confirmed request already started a multi-site upgrade."  # The FR-004 sentence.
-ENDED_STATES = ("cancelled", "completed", "failed")  # An operation in these states holds no site.
+START_ANSWER_TIMEOUT_MS = 45_000  # Issue #3518: three times the slowest start that a loaded machine measured.
 HOLD_TRIES = 100  # The bound on the wait for the held request.
 HOLD_PAUSE_MS = 50  # The pause between two checks of the held request.
 
@@ -130,8 +131,7 @@ class OrgFormSteps:
             page: The browser page on the confirmation page.
         """
         page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # The typed word opens the start button.
-        page.get_by_test_id("org-upgrade-start").click()  # One click sends one Start request.
-        page.wait_for_url(JOB_PATH, timeout=RELOAD_TIMEOUT_MS)  # The progress page must open.
+        OrgStartSteps.open_progress(page, page.get_by_test_id("org-upgrade-start").click)  # One click, one request.
         return OrgFormSteps.operation_id(page)  # The progress page address holds the operation id.
 
     @staticmethod
@@ -145,6 +145,10 @@ class OrgFormSteps:
         assert match is not None, f"The page is not a progress page: {page.url}"  # Any other page is a defect.
         return str(match.group(1))  # The first group holds the operation id.
 
+
+class OrgStartSteps:
+    """Hold the steps that send the Start request and wait for its answer."""
+
     @staticmethod
     def is_start_answer(answer: Any) -> bool:
         """Return True for the answer to the Start request.
@@ -154,9 +158,28 @@ class OrgFormSteps:
         """
         return answer.request.method == "POST" and urlsplit(answer.url).path == SUBMIT_API  # The start only.
 
+    @staticmethod
+    def open_progress(page: Any, press: Callable[[], object]) -> None:
+        """Press the Start button, wait for the Start answer, and then wait for the progress page.
 
-class OrgJourneyCleanup:
-    """Hold the steps that free both stand-in sites after a journey."""
+        Why:
+            Issue #3518. On a machine with a heavy load, the progress page
+            request reached the server 15.15 seconds after the start. The old
+            step waited 15 seconds for the progress page only, so it failed on
+            the confirmation page with no word about the start. Each wait now
+            has its own bound, and a refusal fails the step with its status.
+
+        Args:
+            page: The browser page on the confirmation page.
+            press: The action that presses the Start button, such as one click or a double click.
+        """
+        with page.expect_response(  # Keep the real server answer of the Start request.
+            OrgStartSteps.is_start_answer, timeout=START_ANSWER_TIMEOUT_MS
+        ) as started:
+            press()  # The page script sends the Start request.
+        status = started.value.status  # The HTTP status of the Start answer.
+        assert status == 200, f"The portal refused the Start request with HTTP {status}"  # FR-008: name the status.
+        page.wait_for_url(JOB_PATH, timeout=RELOAD_TIMEOUT_MS)  # The script opens the progress page next.
 
     @staticmethod
     def wait_for_hold(page: Any, held: list[Any]) -> Any:
@@ -172,38 +195,13 @@ class OrgJourneyCleanup:
             page.wait_for_timeout(HOLD_PAUSE_MS)  # Let the dispatch loop run the handler.
         raise AssertionError("The Start request did not reach the route.")
 
-    @staticmethod
-    def cancel_if_running(page: Any) -> None:
-        """Cancel the operation of the progress page when a failed step left it running.
-
-        Args:
-            page: The browser page of the journey.
-        """
-        if page.is_closed() or JOB_PATH.match(page.url) is None:  # No progress page, so no site stays locked.
-            return
-        page.reload(wait_until="domcontentloaded")  # Read the newest state of the operation.
-        status = page.locator("[data-org-upgrade-field='status']").inner_text().strip()  # The shown state.
-        if status not in ENDED_STATES:  # A running operation holds both sites.
-            OrgCancelSteps.cancel(page)  # Free both sites for the next journey.
-
-
-@pytest.fixture
-def operator_page(firmware_operator_page: Any) -> Iterator[Any]:
-    """Yield the firmware operator page, and cancel an operation that a failed step left running.
-
-    Args:
-        firmware_operator_page: The browser page of the operator who can start firmware.
-    """
-    yield firmware_operator_page  # The journey drives this page.
-    OrgJourneyCleanup.cancel_if_running(firmware_operator_page)  # A failed journey must not lock the next one.
-
 
 class TestOrgFormsSendOneRequest:
     """Prove that each multi-site form sends one request for one operator action."""
 
-    def test_a_double_click_sends_one_request_for_each_form(self, operator_page: Any, tmp_path: Path) -> None:
+    def test_a_double_click_sends_one_request_for_each_form(self, firmware_operator_page: Any, tmp_path: Path) -> None:
         """A double click on Review, on Start, and on Cancel sends one request each (US1)."""
-        page = operator_page  # The operator who holds the firmware role.
+        page = firmware_operator_page  # The operator who holds the firmware role.
         requests = OrgRequestLog(page)  # Count each POST request that the page sends.
         OrgFormSteps.open_options(page)  # Fill the options form of both stand-in sites.
         page.get_by_test_id("org-upgrade-review").dblclick()  # The second click must send nothing.
@@ -211,8 +209,7 @@ class TestOrgFormsSendOneRequest:
         assert requests.count(OPTIONS_API) == 1  # FR-001: one Review request.
         OrgPrecheckSteps.take_missing(page)  # Issue #3243: each site needs a verified pre-check.
         page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # The typed word opens the start button.
-        page.get_by_test_id("org-upgrade-start").dblclick()  # The second click must send nothing.
-        page.wait_for_url(JOB_PATH, timeout=RELOAD_TIMEOUT_MS)  # The first Start request opens the progress page.
+        OrgStartSteps.open_progress(page, page.get_by_test_id("org-upgrade-start").dblclick)  # Two clicks.
         page.screenshot(path=str(tmp_path / "3242-after-start-double-click.png"), full_page=True)  # Visual proof.
         assert requests.count(SUBMIT_API) == 1  # FR-001: one Start request, so no refusal hides the start.
         page.get_by_test_id("org-upgrade-cancel-confirmation").fill("CANCEL")  # The typed word opens Cancel.
@@ -222,16 +219,16 @@ class TestOrgFormsSendOneRequest:
         sync_api.expect(page.locator("[data-org-upgrade-field='status']")).to_have_text("cancelled")  # One cancel.
         assert requests.count_suffix(CANCEL_SUFFIX) == 1  # FR-001: one Cancel request.
 
-    def test_a_second_tab_links_to_the_operation_that_runs(self, operator_page: Any, tmp_path: Path) -> None:
+    def test_a_second_tab_links_to_the_operation_that_runs(self, firmware_operator_page: Any, tmp_path: Path) -> None:
         """A second tab gets a refusal that links to the running operation (US2)."""
-        page = operator_page  # Tab A of the operator.
+        page = firmware_operator_page  # Tab A of the operator.
         OrgFormSteps.open_confirm(page)  # Build one confirmed plan, and take its pre-checks.
         second = page.context.new_page()  # Tab B shares the session cookie of tab A.
         second.goto(page.url, wait_until="domcontentloaded")  # Tab B opens the same confirmation page.
         OrgPrecheckSteps.wait_until_ready(second)  # The server paints the field of tab B unlocked.
         operation_id = OrgFormSteps.start(page)  # Tab A starts the operation.
         second.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # Tab B types the word too.
-        with second.expect_response(OrgFormSteps.is_start_answer) as refused:  # Keep the real server answer.
+        with second.expect_response(OrgStartSteps.is_start_answer) as refused:  # Keep the real server answer.
             second.get_by_test_id("org-upgrade-start").click()  # Tab B sends the same confirmed plan.
         assert refused.value.status == 409  # The durable record refuses the second start.
         link = second.get_by_test_id("org-upgrade-job-link")  # FR-005: the refusal links to the operation.
@@ -251,16 +248,16 @@ class TestOrgFormsSendOneRequest:
         second.close()  # Close tab B before tab A cancels.
         OrgCancelSteps.cancel(page)  # Free both sites for the next journey.
 
-    def test_a_retryable_refusal_opens_the_form_again(self, operator_page: Any, tmp_path: Path) -> None:
+    def test_a_retryable_refusal_opens_the_form_again(self, firmware_operator_page: Any, tmp_path: Path) -> None:
         """The form closes while the request runs, and a refusal that started nothing opens it again (US3)."""
-        page = operator_page  # The operator who holds the firmware role.
+        page = firmware_operator_page  # The operator who holds the firmware role.
         OrgFormSteps.open_confirm(page)  # Build one confirmed plan, and take its pre-checks.
         requests = OrgRequestLog(page)  # Count the held Start request and the retry.
         held: list[Any] = []  # The first Start request waits here for the test.
         page.route(SUBMIT_ROUTE, lambda route: held.append(route), times=1)  # Hold only the first Start request.
         page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # The typed word opens the start button.
         page.get_by_test_id("org-upgrade-start").click()  # The request now waits in the route.
-        route = OrgJourneyCleanup.wait_for_hold(page, held)  # The request is in flight now.
+        route = OrgStartSteps.wait_for_hold(page, held)  # The request is in flight now.
         sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # FR-001: closed in flight.
         sync_api.expect(page.get_by_test_id("org-upgrade-confirmation")).to_be_disabled()  # The field closes too.
         sync_api.expect(page.locator(START_FORM)).to_have_attribute(FORM_STATE, "sending")  # FR-002: one state.
@@ -272,14 +269,13 @@ class TestOrgFormsSendOneRequest:
         sync_api.expect(page.get_by_test_id("org-upgrade-job-link")).to_have_count(0)  # No operation to link.
         sync_api.expect(page.locator(".flash-item")).to_contain_text(LOCK_STORE_DOWN_MESSAGE)  # The plain cause.
         page.screenshot(path=str(tmp_path / "3242-retryable-refusal.png"), full_page=True)  # Visual proof.
-        page.get_by_test_id("org-upgrade-start").click()  # The retry reaches the real server.
-        page.wait_for_url(JOB_PATH, timeout=RELOAD_TIMEOUT_MS)  # The retry opens the progress page.
+        OrgStartSteps.open_progress(page, page.get_by_test_id("org-upgrade-start").click)  # The retry runs.
         assert requests.count(SUBMIT_API) == 2  # FR-003: the held request and exactly one retry.
         OrgCancelSteps.cancel(page)  # Free both sites for the next journey.
 
-    def test_a_restored_page_opens_its_forms_again(self, operator_page: Any) -> None:
+    def test_a_restored_page_opens_its_forms_again(self, firmware_operator_page: Any) -> None:
         """A page that the browser restores from its cache loads again, so no form stays closed (FR-009)."""
-        page = operator_page  # The operator who holds the firmware role.
+        page = firmware_operator_page  # The operator who holds the firmware role.
         OrgFormSteps.open_options(page)  # Show the options form.
         page.evaluate("window.misthelperIssue3242 = 'kept'")  # A new document removes this marker.
         page.locator(OPTIONS_FORM).evaluate(f"form => form.setAttribute('{FORM_STATE}', 'sending')")  # Closed.
