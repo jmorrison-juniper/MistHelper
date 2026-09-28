@@ -221,3 +221,8 @@ The job then started a second run of `ci.yml`, `codeql.yml`, or
 `container-build.yml` on a tip that a run already covered. Release v0.5.2 looks
 for a run on the tip commit itself, so this phase moved to release v0.5.2
 before the merge.
+
+After the merge, no MistHelper workflow names `github/codeql-action`. So a
+later change deleted the Dependabot rule that kept that action on the floating
+`v4` tag. The shared CodeQL workflow keeps the `v4` tag, and the Dependabot
+configuration of the devtools repository holds the same rule.
