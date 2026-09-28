@@ -20,14 +20,6 @@ updates:
       - "ci"
     commit-message:
       prefix: "ci"
-    ignore:
-      # Keep CodeQL on the floating major tag "v4". GitHub moves that tag to
-      # each new CodeQL release, so the scans get fixes without a pull request.
-      # Dependabot would otherwise replace "v4" with an exact release such as
-      # "v4.37.3", and each later fix would wait for a person to merge a bump.
-      # Dependabot still proposes a new major version. Issue #3469.
-      - dependency-name: "github/codeql-action"
-        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
 
   - package-ecosystem: "npm"
     directory: "/ops-portal"
