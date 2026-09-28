@@ -241,7 +241,9 @@ def checkout_site_lock_trail_guard(request: pytest.FixtureRequest) -> Iterator[C
         The guard has the session scope, so pytest sets it up before each
         fixture of the function scope. It therefore reads the checkout trail
         before the first move. The browser guard of issue #3498 counts the
-        same trail, so a browser run prints two guard lines.
+        same trail, so a browser run prints two guard lines. Issue #3512: the
+        browser guard reads its path from this guard, because a browser module
+        can start the portal after the move of its first test.
 
     Args:
         request: The fixture request, which carries the run configuration.
