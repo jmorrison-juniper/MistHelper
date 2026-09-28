@@ -90,3 +90,15 @@ def test_categories_themselves_stay_in_name_order(executor):
     categories = executor.build_category_list(build_static_menu_actions())  # Run the code under test.
     names = [category["name"] for category in categories]  # Read the category names in page order.
     assert names == sorted(names)  # The existing sort by name must survive the new operation sort.
+
+
+def test_the_shipped_menu_has_no_work_in_progress_rows(executor):
+    """Rows 63 through 65 are real site exports, not unfinished work."""
+    categories = executor.build_category_list(build_static_menu_actions())  # Build the shipped portal categories.
+    by_name = {
+        category["name"]: category["operations"] for category in categories
+    }  # Index categories for direct checks.
+    wip_rows = by_name.get("Work In Progress", [])  # Read the category that issue #3158 reported.
+    assert wip_rows == []  # A working export must not appear under an unfinished-work warning category.
+    site_rows = {row["menu_number"] for row in by_name["Site Data Exports"]}  # Find rows in the corrected category.
+    assert {"63", "64", "65"}.issubset(site_rows)  # The three repaired rows must stay visible as site exports.

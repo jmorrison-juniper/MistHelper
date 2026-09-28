@@ -64,6 +64,9 @@ CATEGORY_OVERRIDES = {
     10: "Organization Exports",  # Export all devices with site and address information.
     40: "Template Exports",  # Export AP template information for the organization.
     41: "Template Exports",  # Export switch template information for the organization.
+    63: "Site Data Exports",  # Export virtual chassis data for one switch.
+    64: "Site Data Exports",  # Export WiFi client session data for one site.
+    65: "Site Data Exports",  # Export client statistics for one site.
 }
 
 # The safety categories that the portal may run. `OperationRegistry` in
@@ -320,7 +323,6 @@ def _build_registry() -> dict:
         # These rows reach a site prompt first and a plain input() call after
         # it. The sweep proved that a plain call survives a closed stream by
         # taking its default, so the site control alone unblocks the run.
-        "63",  # SiteDeviceExporter.device_virtual_chassis
         "64",  # SiteClientExporter.wifi_clients
         "67",  # SiteConfigExporter.maps
         "82",  # SiteExportUtils.switches_metrics
@@ -446,6 +448,11 @@ def _build_registry() -> dict:
     registry["76"] = {  # Menu 76 asks for a site and then one device.
         "category": "interactive",  # The portal must render input controls before Run.
         "parameters": [_site_param(), _device_param("all")],  # Answer the site and device prompts.
+    }
+
+    registry["63"] = {  # Menu 63 asks for a site and then one switch by index or name.
+        "category": "interactive",  # The portal must collect both answers before it starts the export.
+        "parameters": [_site_param(), _device_param("switch")],  # Feed the site prompt, then the switch prompt.
     }
 
     # --- Ping device (menu 87) ---
