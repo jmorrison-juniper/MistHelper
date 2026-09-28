@@ -52,8 +52,8 @@ The analyzer writes `report.json` and `summary.md` into
 | `mypy` | `mypy $MYPY_PATHS --config-file pyproject.toml` | Zero errors under the `pyproject.toml` settings. |
 | `pytest_coverage_shards` | pytest with coverage data | Each shard must pass. Each test has a 120 second timeout. |
 | `pytest` | `coverage report` | Direct events use `COVERAGE_THRESHOLD=80`. A `workflow_call` input can override it. |
-| `codeql_register_check` | `scripts/codeql_verdict_register.py check` | The CodeQL dismissed-alert register must match GitHub. |
-| `bandit` | `bandit -c pyproject.toml -r .` | Zero findings at any severity. |
+| `codeql_register_check` | `codeql-verdict-register check` | The CodeQL dismissed-alert register must match GitHub. |
+| `bandit` | `bandit-exclude-check`, then `bandit -c pyproject.toml -r .` | Zero findings at any severity. |
 | `pip_audit` | `pip-audit -r requirements.txt` | Zero known vulnerabilities. |
 | `pylint` | `pylint $SRC_PATH --fail-under=$PYLINT_THRESHOLD` | Score at least 9.5. |
 | `radon` | `radon cc -j` into `complexity-gate --max 10` | No block above cyclomatic complexity 10. |
@@ -61,8 +61,8 @@ The analyzer writes `report.json` and `summary.md` into
 | `pydocstyle` | `pydocstyle $PYDOCSTYLE_PATHS` | Zero docstring style violations. |
 | `interrogate` | `interrogate $INTERROGATE_PATHS --fail-under $INTERROGATE_THRESHOLD` | Coverage at least 90 percent. |
 | `test_quality_gate` | `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` | Zero new test-quality findings against the repository baseline. |
-| `diagram_lint` | `python scripts/lint_diagram_refs.py` | Every diagram reference resolves. |
-| `mermaid_lint` | `node scripts/mermaid/lint_mermaid.mjs` | Every Mermaid block parses. |
+| `diagram_lint` | `diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt` | Every diagram reference resolves. |
+| `mermaid_lint` | The shared `mermaid-lint` action of `misthelper-devtools` | Every Mermaid block parses. |
 | `citation_lint` | `check-citations src tests` | Every code citation resolves. |
 | `menu_reference_drift` | `python scripts/generate_menu_wiki.py` plus `git diff`, then `python -m scripts.menu_api_map --check` | The menu reference and the menu API endpoint map must match the source. |
 | `playwright` | pytest under `tests/e2e/` | Every end-to-end test must pass with `UPGRADE_PORTAL_E2E_STRICT=1`. |
@@ -107,8 +107,8 @@ issue. To add a gate, add its job ID to that list.
 The file `quality_gate_exclusions.json` records each documented Ruff, mypy,
 Bandit, and Pylint exclusion with its recorded finding count.
 
-The `Quality exclusion drift (advisory)` job runs
-`scripts/check_exclusion_drift.py`. It compares each current count with the
+The `Quality exclusion drift (advisory)` job runs the `exclusion-drift` command
+of `misthelper-devtools`. It compares each current count with the
 recorded count and uploads a JSON report. It reports growth and zero counts in
 the job log. It never blocks a pull request.
 

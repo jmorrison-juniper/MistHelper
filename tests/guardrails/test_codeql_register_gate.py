@@ -3,6 +3,9 @@
 The gate audits live metadata with a read-only job token. It must report a
 failure, not a skipped or advisory result, when the audit cannot finish.
 The parent makes the exact check name required before the recovery merges.
+
+Issue #3515 moved the register tool to the `codeql-verdict-register` command of
+misthelper-devtools, so the job installs the pinned development tools first.
 """
 
 from pathlib import Path
@@ -14,6 +17,8 @@ import yaml
 CI_WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 GATE_JOB = "codeql_register_check"
 ISSUE_JOB = "quality_gate_issues"  # The shared job opens and closes the gate issues (issue #3487).
+INSTALL_COMMAND = "python -m pip install -r requirements-dev.txt"  # The pinned devtools come from this file.
+CHECK_COMMAND = "codeql-verdict-register check"  # The shipped check, with no repair flag.
 Workflow = dict[str | bool, Any]  # Include the Boolean key that PyYAML creates for an unquoted "on" key.
 
 
@@ -42,7 +47,7 @@ class TestCodeqlRegisterGate:
         """No added shell command may hide a failed check or generate a repair."""
         job = workflow["jobs"][GATE_JOB]
         commands = [step["run"] for step in job["steps"] if "run" in step]
-        assert commands == ["python scripts/codeql_verdict_register.py check"]
+        assert commands == [INSTALL_COMMAND, CHECK_COMMAND]
         assert not job.get("continue-on-error", False)
         assert "defaults" not in job
         for step in job["steps"]:
@@ -57,7 +62,7 @@ class TestCodeqlRegisterGate:
         assert "security-events" not in workflow["permissions"]
         assert "GH_TOKEN" not in workflow.get("env", {})
         assert "GH_TOKEN" not in job.get("env", {})
-        check = next(step for step in job["steps"] if "run" in step)
+        check = next(step for step in job["steps"] if step.get("run") == CHECK_COMMAND)
         assert check["env"] == {"GH_HOST": "github.com", "GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
         assert all("GH_TOKEN" not in step.get("env", {}) for step in job["steps"] if step is not check)
 

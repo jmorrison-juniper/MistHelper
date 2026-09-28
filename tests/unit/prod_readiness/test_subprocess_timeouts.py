@@ -125,10 +125,14 @@ class TestComplexityCheckTimeout:
 
 
 class TestVerdictRegisterTimeout:
-    """The CodeQL verdict register must bound its network call."""
+    """The CodeQL verdict register must bound its network call.
+
+    Issue #3515 moved the register tool to misthelper-devtools. The CI gate
+    runs that command, so this test reads the installed module.
+    """
 
     def test_gh_api_passes_a_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from scripts import codeql_verdict_register as register
+        from misthelper_devtools import codeql_verdict_register as register
 
         recorder = _RecordingRun(returncode=0, stdout="[[]]")
         monkeypatch.setattr(register.subprocess, "run", recorder)
@@ -138,7 +142,7 @@ class TestVerdictRegisterTimeout:
         assert recorder.captured["timeout"] == register._GH_TIMEOUT_SECONDS
 
     def test_a_stalled_gh_api_raises_a_named_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from scripts import codeql_verdict_register as register
+        from misthelper_devtools import codeql_verdict_register as register
 
         monkeypatch.setattr(register.subprocess, "run", _TimeoutRun())
 

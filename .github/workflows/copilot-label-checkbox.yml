@@ -29,7 +29,7 @@ jobs:
   check-copilot-checkbox:
     permissions:
       issues: write
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-copilot-assign.yml@bf1ba8a29ee9bab27b721db6e613fd5cd83d82fa # v0.4.0
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-copilot-assign.yml@0b969be7f60599f9a19ebc3069161f9353a1d830 # v0.5.2
     with:
       issue-number: ${{ github.event.issue.number }}
       require-checkbox: true

@@ -370,6 +370,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      # Issue #3515: the register tool is the codeql-verdict-register command of
+      # misthelper-devtools, so the job installs the pinned development tools.
+      - run: python -m pip install -r requirements-dev.txt
       # Refs #2088. The register missed seven dismissed alerts with no CI failure.
       # This live audit can fail after metadata changes, even on an unchanged commit.
       # Denied API access must fail, including on a fork. Never add a token fallback.
@@ -377,7 +381,7 @@ jobs:
         env:
           GH_HOST: github.com
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/codeql_verdict_register.py check
+        run: codeql-verdict-register check
 
   bandit:
     name: "Bandit (security)"
@@ -408,35 +412,12 @@ jobs:
         # entry matches a Linux path only. A Windows run then scanned the analyzer
         # fixtures and reported 42 extra findings that this job never sees.
         # This job runs on Linux, so only an explicit check can hold the Windows form.
-        run: |
-          python - <<'PY'
-          import pathlib  # Reads pyproject.toml from the checkout root.
-          import tomllib  # Parses the TOML config that bandit also reads.
-
-          from bandit.core.manager import _is_file_included  # The matcher bandit uses.
-
-          config = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
-          excludes = config["tool"]["bandit"]["exclude_dirs"]  # The list under test.
-          failures = []  # Collects every problem, so one run reports all of them.
-          for entry in excludes:  # A separator-free entry matches on both platforms.
-              if "/" not in entry and "\\" not in entry:
-                  continue  # No separator, so no platform gap.
-              posix = entry.replace("\\", "/")  # The Linux spelling of this entry.
-              windows = posix.replace("/", "\\")  # The Windows spelling of this entry.
-              for spelling in (posix, windows):  # Both spellings must be present.
-                  if spelling not in excludes:
-                      failures.append("exclude_dirs misses the spelling %r" % spelling)
-          samples = [  # A product source path must remain in the Bandit scope.
-              "./src/utils/zen_city_metadata.py",
-              ".\\src\\utils\\zen_city_metadata.py",
-          ]
-          for sample in samples:  # Bandit must include the product source on either platform.
-              if not _is_file_included(sample, ["*.py"], excludes):
-                  failures.append("bandit unexpectedly excludes %s" % sample)
-          if failures:  # A failure here means a Windows run and CI disagree.
-              raise SystemExit("issue #1722 guard failed: " + "; ".join(failures))
-          print("bandit exclude_dirs pairs both path separator spellings")
-          PY
+        # Issue #3515: the check is the bandit-exclude-check command of
+        # misthelper-devtools. The two samples keep product source in the scan.
+        run: >-
+          bandit-exclude-check
+          --include-sample ./src/utils/zen_city_metadata.py
+          --include-sample '.\src\utils\zen_city_metadata.py'
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
         # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)
@@ -612,53 +593,16 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
+        # A pull request run scans only the changed test files. A change to
+        # the baseline, to the settings file, or to a --full-gate-path file
+        # scans the whole suite. The analyzer states the scope on its
+        # gate_scope line. Push and manual runs always scan the whole suite.
         run: |
-          python - <<'PY'
-          import os  # Read the workflow event inputs from the environment.
-          import subprocess  # Run git and the analyzer with explicit arguments.
-          import sys  # Return the analyzer exit code to the job.
-          from pathlib import Path  # Identify pytest files without hardcoded separators.
-
-          event_name = os.environ.get("EVENT_NAME", "")  # Tell pull requests from push runs.
-          base_ref = os.environ.get("BASE_REF", "")  # Name the branch that the pull request targets.
-          baseline = ".github/test-quality-baseline.json"  # MistHelper owns the record of its findings (issue #3422).
-          config = ".github/test-quality-config.toml"  # MistHelper owns the analyzer rules too (issue #3466).
-          gate = ["test-quality-analyzer", "--gate", "--config", config, "--baseline", baseline]  # Use both files.
-          full_gate_paths = (  # These paths can change analyzer output outside the changed test files.
-              ".github/workflows/ci.yml",  # A workflow change must prove the full gate.
-              "requirements-dev.txt",  # A tooling version change must prove the full gate.
-              baseline,  # A baseline change must prove that each current finding still matches.
-              config,  # A rule change can add or remove a finding in any test file.
-          )
-
-          def is_test_file(path: str) -> bool:
-              name = Path(path).name  # Use only the file name for pytest naming rules.
-              return path.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))  # Match tests.
-
-          if event_name != "pull_request":
-              raise SystemExit(  # Push and manual runs prove the full repository baseline.
-                  subprocess.call(gate),
-              )
-
-          changed = subprocess.check_output(  # Read the pull request file set from git.
-              ["git", "diff", "--name-only", f"origin/{base_ref}", "HEAD"],
-              text=True,
-          ).splitlines()
-          if any(path in full_gate_paths for path in changed):
-              raise SystemExit(  # Analyzer and workflow changes must prove the full repository baseline.
-                  subprocess.call(gate),
-              )
-
-          changed_tests = [path for path in changed if Path(path).exists() and is_test_file(path)]  # Scan live tests.
-          if not changed_tests:
-              print("gate_scope: 0 files checked, 0 findings checked")  # Prove that no test file changed.
-              print("test_quality_analyzer: 0 findings (0/0/0/0), 0 skipped, 0 parse errors")  # Keep summary shape.
-              print("gate: 0 new findings vs baseline")  # Keep the ratchet result visible.
-              raise SystemExit(0)  # A pull request without changed tests cannot add a test-quality finding.
-
-          command = [*gate, "--roots", *changed_tests]  # Scope.
-          raise SystemExit(subprocess.call(command))  # Return the analyzer result to the job.
-          PY
+          scope=()
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            scope=(--changed-from "origin/$BASE_REF" --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt)
+          fi
+          test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json "${scope[@]}"
 
   # ──────────────────────────────────────────────────────────────
   # PROJECT-SPECIFIC (remove or adapt when copying to other repos)
@@ -674,7 +618,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: python scripts/lint_diagram_refs.py
+          cache: pip
+      # Issue #3515: the lint is the diagram-refs command of misthelper-devtools.
+      # The allowlist file holds the MistHelper module names that the diagrams use.
+      - run: python -m pip install -r requirements-dev.txt
+      - run: diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt
 
   mermaid_lint:
     name: "Mermaid syntax lint"
@@ -684,16 +632,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-node@v7
+      # Issue #3515: the parser is the mermaid-lint action of misthelper-devtools.
+      - uses: jmorrison-juniper/misthelper-devtools/.github/actions/mermaid-lint@0b969be7f60599f9a19ebc3069161f9353a1d830 # v0.5.2
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: scripts/mermaid/package-lock.json
-      - name: Install Mermaid parser dependencies
-        working-directory: scripts/mermaid
-        run: npm ci
-      - name: Parse Mermaid blocks
-        run: node scripts/mermaid/lint_mermaid.mjs
+          docs-dir: documentation
+          extra-files: README.md
 
   citation_lint:
     name: "Citation reference lint"
@@ -776,7 +719,8 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - name: Measure excluded findings
-        run: python scripts/check_exclusion_drift.py --format github --output exclusion-drift.json
+        # Issue #3515: the report is the exclusion-drift command of misthelper-devtools.
+        run: exclusion-drift --format github --output exclusion-drift.json
       - name: Upload the machine-readable report
         uses: actions/upload-artifact@v7
         with:
@@ -1165,7 +1109,7 @@ jobs:
     permissions:
       issues: write
       pull-requests: read
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-quality-gate-issues.yml@bf1ba8a29ee9bab27b721db6e613fd5cd83d82fa # v0.4.0
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-quality-gate-issues.yml@0b969be7f60599f9a19ebc3069161f9353a1d830 # v0.5.2
     with:
       results: ${{ toJSON(needs) }}
       scope: all

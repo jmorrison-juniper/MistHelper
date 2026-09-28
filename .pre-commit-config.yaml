@@ -1,13 +1,15 @@
+# Keep each rev at the version that requirements-dev.txt pins, so a hook and
+# its CI gate run the same tool release.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.16.8
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
+    rev: v2.3.1
     hooks:
       - id: mypy
         files: ^MistHelper\.py$
@@ -15,17 +17,22 @@ repos:
         args: [--config-file=pyproject.toml]
 
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.3
+    rev: 1.9.4
     hooks:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
 
-  - repo: local
+  # The writing linter and the link check come from misthelper-devtools at the
+  # release that requirements-dev.txt pins.
+  - repo: https://github.com/jmorrison-juniper/misthelper-devtools
+    rev: v0.5.2
     hooks:
       - id: ste-linter
-        name: STE writing linter
-        entry: ste-linter --config .ste-linter.toml --min-score 80
-        language: system
+        args: [--config, .ste-linter.toml, --min-score, "80"]
         files: \.(md|py)$
         exclude: ^(tests/fixtures/|abandoned-specs/|specs/)
+      # A wiki page links to a bare page name that only the published wiki
+      # resolves, so the hook skips that tree like the guardrail test does.
+      - id: markdown-link-check
+        args: [--exclude, "documentation/wiki/**"]

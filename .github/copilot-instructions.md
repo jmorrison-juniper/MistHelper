@@ -117,15 +117,16 @@ python -m ruff check MistHelper.py    # Lint check. Must pass clean.
 python -m black --check MistHelper.py # Format check. Drop --check to auto-fix.
 ```
 
-On Windows, use the bounded local shard runner for full local test evidence.
-It splits the large portal test trees and prints one final summary line.
+On Windows, use the bounded `pytest-chunks` command of `misthelper-devtools`
+for full local test evidence. It splits the large portal test trees and prints
+one final summary line. With `-x`, it stops after the first failed chunk.
 Measured on 2026-09-17 in the OneDrive worktree, the unit shard took
 1179.3 seconds and the contract, guardrail, and integration shard took
 366.3 seconds.
 
 ```powershell
-python scripts\run_local_test_shard.py unit --chunk-timeout 900 --test-timeout 120
-python scripts\run_local_test_shard.py other --chunk-timeout 900 --test-timeout 120
+pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\unit --split tests\unit\upgrade_portal
+pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\contract tests\guardrails tests\integration --split tests\contract\upgrade_portal --split tests\integration\upgrade_portal
 ```
 
 Build and run the container on your own machine. Podman builds the same
@@ -801,19 +802,19 @@ The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR 
 | Tests + Coverage | **pytest + pytest-cov** | Unit and integration tests, coverage >= 80 percent |
 | Test Quality | **`test-quality-analyzer`** | New or changed tests must not add quality findings |
 | Security Lint | **Bandit** | AST-based Python security issues at every severity |
-| Static Analysis Register | **CodeQL verdict register** | Dismissed CodeQL alerts must match the checked-in register |
+| Static Analysis Register | **`codeql-verdict-register`** | Dismissed CodeQL alerts must match the checked-in register |
 | Dependency CVEs | **pip-audit** | Known vulnerabilities in `requirements.txt` |
 | Code Quality | **Pylint** | Score >= 9.5 |
 | Complexity | **Radon** and **`complexity-gate`** | No block above cyclomatic complexity 10 |
 | Dead Code | **Vulture** | Zero findings at confidence 70 |
 | Docstring Style | **pydocstyle** | Zero violations |
 | Docstring Coverage | **interrogate** | Coverage >= 90 percent |
-| Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
-| Mermaid Syntax | **`scripts/mermaid/lint_mermaid.mjs`** | Mermaid blocks parse successfully |
+| Diagram References | **`diagram-refs`** with `.github/diagram-refs-allowlist.txt` | Every diagram reference resolves |
+| Mermaid Syntax | **`mermaid-lint` action** of `misthelper-devtools` | Mermaid blocks parse successfully |
 | Citation References | **`check-citations`** | Citations in `src/` and `tests/` resolve |
 | Menu Reference | **`scripts/generate_menu_wiki.py`** and **`scripts.menu_api_map`** | The generated menu reference and the menu API endpoint map match the source |
 | SpecKit Tasks | **`speckit-task-audit`** | Open SpecKit task records are reported as advisory output |
-| Exclusion Drift | **`scripts/check_exclusion_drift.py`** | Quality exclusion drift is reported as advisory output |
+| Exclusion Drift | **`exclusion-drift`** | Quality exclusion drift is reported as advisory output |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
 | Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high`, `typecheck`, `lint`, and `test` for `ops-portal/`. All four block a merge. |
 | Ops Platform Tests | **pytest** (CI `ops_platform_pytest` job) | The ops platform tests collect at least 390 tests and meet 56 percent coverage |
@@ -827,21 +828,23 @@ a separate workflow, and Dependabot is not a gate. A caller can override each
 threshold through a `workflow_call` input. The table lists the default.
 
 The `misthelper-devtools` package supplies `test-quality-analyzer`,
-`complexity-gate`, `check-citations`, `speckit-task-audit`, `symbol-diff`, and
-`stranded-branch-report`.
+`complexity-gate`, `check-citations`, `speckit-task-audit`, `symbol-diff`,
+`stranded-branch-report`, `codeql-verdict-register`, `bandit-exclude-check`,
+`diagram-refs`, `exclusion-drift`, `pytest-chunks`, `worktree-cleanup`, and
+`markdown-link-check`. The same repository supplies the `mermaid-lint` action.
 `requirements-dev.txt` pins that package to one commit. The test quality
 ratchet compares each run against `.github/test-quality-baseline.json` in this
 repository. `documentation/quality-gates.md` tells how to update that file. The
 Copilot, auto-merge, linked-issue, quality-gate issue, stranded branch, STE lint,
-container build, and release image workflows call the shared reusable workflows
-of that repository at one pinned commit.
+CodeQL, container build, and release image workflows call the shared reusable
+workflows of that repository at one pinned commit.
 `documentation/development-tooling-migration.md` lists them.
 
 Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
 gate that reads the npm dependency tree, so it is the only check that can report
 an advisory in `ops-portal/package-lock.json` (issue #1847).
 
-**Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
+**Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, Bandit, and the shared `ste-linter` and `markdown-link-check` hooks of `misthelper-devtools` locally to catch issues before push.
 
 **Automated issue lifecycle** (the `quality_gate_issues` job, `scope: all`):
 - Gate fails on `main` → GitHub issue auto-created with `quality-gate` label

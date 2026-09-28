@@ -1,0 +1,19 @@
+# Diagram names that diagram-refs must skip (issue #3515).
+# The diagrams in documentation/diagrams/ name MistHelper modules and layers.
+# These names are not Python symbols, so the lint cannot find them in the source.
+# Put one name on each line. The lint skips blank lines and lines that start with #.
+APIFetching
+ConfigObjects
+DataProcessing
+GatewayExporter
+GatewayExporters
+InfrastructureCore
+MigrationManager
+MistHelper
+OrgExporter
+OrgExporters
+SiteExporter
+SiteExporters
+SystemRegistry
+UITUI
+WebSocketNet

@@ -1,7 +1,7 @@
 """Mermaid helpers: the overview diagrams and the diagrams that group the menu options of one category.
 
 The diagram labels use plain characters only. The labels never hold an SDK
-function name or a class name, because ``scripts/lint_diagram_refs.py`` checks
+function name or a class name, because the ``diagram-refs`` command checks
 each name in a diagram that ends in a class suffix, such as ``Config``.
 """
 

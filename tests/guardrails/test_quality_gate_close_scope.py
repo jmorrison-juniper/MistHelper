@@ -15,9 +15,12 @@ Why:
     Issue #3487 moved the job body to `reusable-quality-gate-issues.yml` in
     misthelper-devtools. That shared script keeps the issue of an open pull
     request, and the shared repository tests it. These tests hold the wiring in
-    both files of this repository. Each file must call the pinned shared
-    workflow, pass the result of each gate, and keep its scope. A file that
-    brings back an inline copy of the job fails.
+    the CI workflow of this repository. The workflow must call the pinned
+    shared workflow, pass the result of each gate, and keep its scope. A
+    workflow that brings back an inline copy of the job fails.
+
+    Issue #3515 deleted the portable template .github/quality-gates-portable.yml.
+    Another repository calls the shared quality gate workflow instead.
 """
 
 from __future__ import annotations
@@ -31,11 +34,8 @@ import yaml
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
-# Both files carry the same job. The first one runs here. The second one ships
-# to another repository, so it must hold the same guard.
 CI_WORKFLOW = Path(".github/workflows/ci.yml")
-PORTABLE_WORKFLOW = Path(".github/quality-gates-portable.yml")
-WORKFLOW_FILES = (CI_WORKFLOW, PORTABLE_WORKFLOW)
+WORKFLOW_FILES = (CI_WORKFLOW,)
 
 JOB_NAME = "quality_gate_issues"
 
@@ -45,12 +45,11 @@ SHARED_CALL = re.compile(
 )
 
 # The scope of each file. A pull request run in this repository opens an issue
-# whose title names the pull request. The template keeps the default scope, so
-# only a run on main changes an issue there.
-EXPECTED_SCOPE: dict[Path, str | None] = {CI_WORKFLOW: "all", PORTABLE_WORKFLOW: None}
+# whose title names the pull request.
+EXPECTED_SCOPE: dict[Path, str | None] = {CI_WORKFLOW: "all"}
 
 # The gates of each file. A gate that leaves this list opens no issue when it fails.
-TEMPLATE_GATES = {
+QUALITY_GATES = {
     "ruff",
     "black",
     "mypy",
@@ -64,8 +63,7 @@ TEMPLATE_GATES = {
     "interrogate",
 }
 EXPECTED_GATES: dict[Path, set[str]] = {
-    CI_WORKFLOW: TEMPLATE_GATES | {"codeql_register_check", "ops_portal", "ops_platform_pytest"},
-    PORTABLE_WORKFLOW: TEMPLATE_GATES,
+    CI_WORKFLOW: QUALITY_GATES | {"codeql_register_check", "ops_portal", "ops_platform_pytest"},
 }
 
 # The job names that the inline copies used before issue #3487.
@@ -88,7 +86,7 @@ def issue_job(relative_path: Path) -> dict[str, Any]:
 
 
 class TestTheWorkflowCallsTheSharedJob:
-    """Both workflow files must hand the gate results to the shared job."""
+    """The CI workflow must hand the gate results to the shared job."""
 
     @pytest.mark.parametrize("relative_path", WORKFLOW_FILES, ids=lambda path: path.name)
     def test_the_job_calls_the_pinned_shared_workflow(self, relative_path: Path) -> None:
