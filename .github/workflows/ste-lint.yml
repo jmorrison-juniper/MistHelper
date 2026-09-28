@@ -35,7 +35,7 @@ jobs:
     # The agent skills moved out of the repository to the user level at
     # ~/.copilot/skills, so this job grades no skill file. Grade a moved skill
     # on the workstation with the command in its verification reference.
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-ste-lint.yml@3f498b1f04da258f046894a3ea6718ea6968d583 # v0.5.1
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-ste-lint.yml@0b969be7f60599f9a19ebc3069161f9353a1d830 # v0.5.2
     with:
       files: documentation/ASD-STE100_writing-guide.md
       config: .ste-linter.toml

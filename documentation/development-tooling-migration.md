@@ -182,16 +182,17 @@ The shared auto-merge job does not merge a pull request that edits a file in
 workflow file. The job writes a comment on the pull request instead. Merge such
 a pull request by hand after its checks pass.
 
-## Phase 7: adopt devtools release v0.5.1
+## Phase 7: adopt devtools release v0.5.2
 
-Issue #3515 moved MistHelper to devtools release v0.5.1. Release v0.5.0
+Issue #3515 moved MistHelper to devtools release v0.5.2. Release v0.5.0
 supplies the CodeQL job, the Mermaid parser, and the local check scripts that
 Phase 6 kept, so MistHelper deleted its copies. Release v0.5.1 repairs the
-shared link check for a link that starts with `/`.
+shared link check for a link that starts with `/`. Release v0.5.2 repairs the
+dispatch job of the shared auto-merge workflow.
 
 | Change | File |
 | - | - |
-| The development requirements pin the v0.5.1 commit. Each workflow caller and the Mermaid action pin the same commit. | `requirements-dev.txt` and `.github/workflows/` |
+| The development requirements pin the v0.5.2 commit. Each workflow caller and the Mermaid action pin the same commit. | `requirements-dev.txt` and `.github/workflows/` |
 | The CodeQL workflow calls `reusable-codeql.yml`. The file name did not change, so each code scanning alert keeps its key. | `.github/workflows/codeql.yml` |
 | The register job runs `codeql-verdict-register check`. The Bandit job runs `bandit-exclude-check` with two product source samples. The drift job runs `exclusion-drift`. | `.github/workflows/ci.yml` |
 | The diagram job runs `diagram-refs`. An allowlist file holds the MistHelper module names that the diagrams use. | `.github/workflows/ci.yml` and `.github/diagram-refs-allowlist.txt` |
@@ -212,3 +213,11 @@ link that starts with `/`, such as `/#operations/listInsightMetrics`. GitHub
 starts that link at the repository root, and so does the shared link check.
 Release v0.5.0 reported each of the 17 links as a missing file, so this phase
 waited for release v0.5.1.
+
+After a merge, the dispatch job of the shared auto-merge workflow starts each
+main workflow that shows no run on the tip of `main`. Release v0.5.1 read the
+newest run from the run list of GitHub, and that list can answer from old data.
+The job then started a second run of `ci.yml`, `codeql.yml`, or
+`container-build.yml` on a tip that a run already covered. Release v0.5.2 looks
+for a run on the tip commit itself, so this phase moved to release v0.5.2
+before the merge.

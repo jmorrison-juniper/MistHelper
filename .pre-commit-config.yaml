@@ -26,7 +26,7 @@ repos:
   # The writing linter and the link check come from misthelper-devtools at the
   # release that requirements-dev.txt pins.
   - repo: https://github.com/jmorrison-juniper/misthelper-devtools
-    rev: v0.5.1
+    rev: v0.5.2
     hooks:
       - id: ste-linter
         args: [--config, .ste-linter.toml, --min-score, "80"]

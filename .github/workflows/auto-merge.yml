@@ -58,7 +58,7 @@ jobs:
       contents: write
       # The job sets the auto-merge state and writes the notice comments.
       pull-requests: write
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-auto-merge.yml@3f498b1f04da258f046894a3ea6718ea6968d583 # v0.5.1
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-auto-merge.yml@0b969be7f60599f9a19ebc3069161f9353a1d830 # v0.5.2
     with:
       # The workflows that a push to main starts. The dispatch job reads this
       # one list, so a new main workflow needs one edit only.
@@ -82,7 +82,7 @@ jobs:
       issues: write
       # The job reads the linked issues of each merged pull request.
       pull-requests: read
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-close-linked-issues.yml@3f498b1f04da258f046894a3ea6718ea6968d583 # v0.5.1
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-close-linked-issues.yml@0b969be7f60599f9a19ebc3069161f9353a1d830 # v0.5.2
     with:
       # Four runs a day read each merged pull request four times.
       lookback-hours: '24'
