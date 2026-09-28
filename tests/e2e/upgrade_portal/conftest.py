@@ -112,6 +112,7 @@ from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site
 )
 from tests.e2e.upgrade_portal.stale_run_seeds import StaleRunSeeds  # Issue #3507: the stale runs on their own site.
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, build_sdk_answer  # Issue #3438: real SDK answers.
+from tests.support.site_lock_trail import CheckoutTrailGuard  # Issue #3512: the root guard of the checkout trail.
 from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, and stores.
     RunOwnerHeaderCheck,
     allocate_resources,
@@ -686,7 +687,9 @@ HOLD_GUARD_RECORD = "run-trail-hold-guard.json"  # Issue #3508: the record of th
 
 
 @pytest.fixture(scope="session")
-def checkout_audit_trail_guard(request: pytest.FixtureRequest) -> Iterator[AuditTrailIsolation]:
+def checkout_audit_trail_guard(
+    request: pytest.FixtureRequest, checkout_site_lock_trail_guard: CheckoutTrailGuard | None
+) -> Iterator[AuditTrailIsolation]:
     """Count the checkout audit trail before the portal starts and after it stops.
 
     Why:
@@ -698,17 +701,26 @@ def checkout_audit_trail_guard(request: pytest.FixtureRequest) -> Iterator[Audit
         before the child starts, and the second count runs after the child
         stops.
 
+        Issue #3512. Eleven modules start the portal inside their first test,
+        after the root conftest moved the trail of that test. A read of the
+        lock module here then names the moved trail. So this guard reads the
+        checkout trail from the root guard, which read it before the first
+        move.
+
         Caution: the production container writes the trail of the main
         checkout. A real lock action during a run in the main checkout also
         fails this guard. Run the browser suite in a worktree.
 
     Args:
         request: The fixture request, which carries the run configuration.
+        checkout_site_lock_trail_guard: The root guard of issue #3503, which
+            holds the checkout trail.
 
     Yields:
         The isolation of this run. A journey reads its two trails.
     """
-    isolation = AuditTrailIsolation(ARTIFACT_DIRECTORY)  # The parent never moves its own trail.
+    # WHY: Issue #3512. The root guard read the checkout trail before the first move of the session.
+    isolation = AuditTrailIsolation.for_session(ARTIFACT_DIRECTORY, checkout_site_lock_trail_guard)  # Checkout trail.
     logger.info("Count the checkout audit trail before the browser run")  # Log before the first count.
     before = isolation.count_lines(isolation.checkout_trail)  # An unreadable trail fails here, before any test.
     yield isolation  # The browser run happens here.
@@ -2449,6 +2461,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     """
     from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
     from src.upgrade_portal.app.routes import upgrade  # Own the seeded run write helper.
+    from src.upgrade_portal.runtime import lock  # Issue #3512: the module that names the checkout trail.
 
     _reset_cached_state()  # Clear each cached production handle before the override set installs.
     # WHY: Issue #3498. The site lock writes each lock action to the checkout
@@ -2456,7 +2469,10 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     # child moves the trail into the artifact directory of its run before any
     # route exists. The history page reads the same trail, so the audit log
     # of this portal shows the lock actions of this run alone.
-    AuditTrailIsolation(ARTIFACT_DIRECTORY).place()  # The move stays for the whole life of the child.
+    # Issue #3512: the child runs no pytest fixture, so no move applies before
+    # this read. The parent reads the same path from the root guard.
+    checkout_trail = lock.audit_trail_path()  # The lock module still names the checkout trail here.
+    AuditTrailIsolation(ARTIFACT_DIRECTORY, checkout_trail).place()  # The move stays for the whole life of the child.
     overrides = _build_factory_overrides()  # Build every required process-owned dependency before routes.
     built = create_app(overrides)  # Validate and install overrides before blueprint registration.
     from src.upgrade_portal.app.routes import org_upgrade

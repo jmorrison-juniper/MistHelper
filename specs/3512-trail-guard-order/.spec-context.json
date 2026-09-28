@@ -1,0 +1,17 @@
+{
+  "feature": "3512-trail-guard-order",
+  "issue": 3512,
+  "branch": "fix/3512-trail-guard-order",
+  "currentStep": "implement",
+  "status": "implemented",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "research.md",
+    "plan.md",
+    "tasks.md"
+  ],
+  "workflow": "speckit",
+  "specName": "",
+  "history": []
+}

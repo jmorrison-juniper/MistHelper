@@ -14,16 +14,24 @@ Why:
     Each test passes the `monkeypatch` fixture to the move. The fixture then
     restores the directory of the lock module after the test, so no other test
     reads a moved trail.
+
+    Issue #3512 found that the browser guard read the moved trail of the first
+    test when a module started the portal inside that test. The browser guard
+    now reads the checkout trail from the root guard of issue #3503. The tests
+    of `TestTheSessionBuild` prove that source with the move of the root
+    conftest in place.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from src.upgrade_portal.runtime import lock
+from tests.support.site_lock_trail import CheckoutTrailGuard
 from tests.support.upgrade_portal_e2e.records.audit import AuditTrailIsolation
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
@@ -32,6 +40,7 @@ ORG_ID = "11111111-1111-1111-1111-111111111111"  # The stand-in organization of 
 SITE_ID = "34983498-3498-3498-3498-349834983498"  # The journey site of issue #3498.
 OPERATOR_EMAIL = "e2e.operator@example.invalid"  # A reserved address that reaches no mail host.
 TRAIL_RECORD = '{"action": "take"}\n'  # One record of the append-only trail.
+CHECKOUT_ROOT = Path(__file__).resolve().parents[3]  # Issue #3512: this file sits at the depth of the lock module.
 
 
 @pytest.fixture(name="isolation")
@@ -179,3 +188,44 @@ class TestTheGuardDecision:
         measure = isolation.measure(0, 0)
 
         assert measure.endswith(f"The trail of this run holds 1 line(s), at {isolation.run_trail}.")
+
+
+class TestTheSessionBuild:
+    """The browser guard reads the checkout trail from the root guard, in each order. Issue #3512."""
+
+    def test_a_build_with_no_checkout_trail_fails(self, tmp_path: Path) -> None:
+        """A build that names no checkout trail MUST fail, so no default can read a moved trail (FR-002)."""
+        logger.info("Checking a build that names no checkout trail")  # Report the plan.
+        constructor: Any = AuditTrailIsolation  # Any, because this call leaves out a required argument on purpose.
+
+        with pytest.raises(TypeError) as caught:
+            constructor(tmp_path / "run")
+
+        assert "checkout_trail" in str(caught.value)
+
+    def test_a_late_build_names_the_trail_of_the_root_guard(
+        self, tmp_path: Path, checkout_site_lock_trail_guard: CheckoutTrailGuard | None
+    ) -> None:
+        """A build under the move of the root conftest MUST name the trail of the root guard (FR-001, FR-005)."""
+        logger.info("Checking a build that starts after the move of this test")  # Report the plan.
+        moved = tmp_path / CheckoutTrailGuard.DIRECTORY_NAME / lock.AUDIT_FILE_NAME  # The trail of this test.
+        assert lock.audit_trail_path() == moved, "Without the move, this test cannot show the fault of issue #3512."
+
+        built = AuditTrailIsolation.for_session(tmp_path / "run", checkout_site_lock_trail_guard)
+
+        expected = (CHECKOUT_ROOT / "data" / lock.AUDIT_FILE_NAME, False)  # The checkout trail, not the moved trail.
+        assert (built.checkout_trail, built.checkout_trail == moved) == expected
+
+    def test_a_build_with_no_root_guard_fails(self, tmp_path: Path) -> None:
+        """A build with no root guard MUST fail and name the lock module, and never read a moved trail (FR-003)."""
+        logger.info("Checking a build that has no root guard")  # Report the plan.
+
+        with pytest.raises(RuntimeError) as caught:
+            AuditTrailIsolation.for_session(tmp_path / "run", None)
+
+        message = str(caught.value)  # The text that a maintainer reads in the failed run.
+        assert (message, "checkout_site_lock_trail_guard" in message, "lock module" in message) == (
+            AuditTrailIsolation.NO_ROOT_GUARD,
+            True,
+            True,
+        )

@@ -6,6 +6,7 @@ Why:
     test ended, and the run still passed. `TrailHoldCheck` replays the trail of
     the run after the test portal stops. `TrailLine` reads each line strictly,
     and `TrailHoldResult` holds the counts, the measure, and the decision.
+    Issue #3512 made the parent read the checkout trail from the root guard.
 """
 
 from __future__ import annotations  # Keep annotations independent from import order.
@@ -20,6 +21,7 @@ import pytest  # Issue #3498: the move uses the public patch object of pytest.
 
 from src.upgrade_portal.compare import lock_audit  # Issue #3508: the expiry rule of the audit log of the portal.
 from src.upgrade_portal.runtime import lock  # Issue #3498: the module that writes the site lock trail.
+from tests.support.site_lock_trail import CheckoutTrailGuard  # Issue #3512: the root guard names the checkout trail.
 
 logger = logging.getLogger(__name__)  # Keep the trail records tied to this module.
 
@@ -36,6 +38,12 @@ class AuditTrailIsolation:  # Keep the site lock trail of one browser run away f
         trail before and after the run, so a write that escapes the move fails
         the run.
 
+        Issue #3512. The root conftest moves the trail of each test, and a
+        module can start the portal inside its first test. A read of the lock
+        module in the parent then names the moved trail of that test. So the
+        parent reads the checkout trail from the root guard through
+        `for_session`, and each caller names its checkout trail.
+
     Caution: the production container writes the trail of the main checkout. A
     real lock action during a browser run in the main checkout also changes the
     count, and the guard then fails. Run the browser suite in a worktree.
@@ -46,19 +54,55 @@ class AuditTrailIsolation:  # Keep the site lock trail of one browser run away f
         " Call AuditTrailIsolation.place in the test portal before create_app."
         " If a real operator took a site during the run, run the browser suite in a worktree."
     )
+    NO_ROOT_GUARD: ClassVar[str] = (  # Issue #3512: the message of a build that has no root guard.
+        "The root guard checkout_site_lock_trail_guard gave None, because the lock module cannot import."
+        " The browser guard of issue #3498 needs the checkout trail that the root guard reads before the first move."
+    )
 
-    def __init__(self, artifact_directory: Path, checkout_trail: Path | None = None) -> None:
+    def __init__(self, artifact_directory: Path, checkout_trail: Path) -> None:
         """Bind the isolation to one run directory and one checkout trail.
 
         Args:
             artifact_directory: The directory of this browser run alone.
-            checkout_trail: The trail that the production portal writes. No
-                value reads the path that the lock module reports now, so a
-                caller builds the isolation before a move.
+            checkout_trail: The trail that the production portal writes. The
+                parent process reads it from the root guard through
+                `for_session`. The child process runs no pytest fixture, so it
+                reads the path of the lock module before its move. Issue #3512
+                removed the default, because a read after a move names the
+                moved trail.
         """
         self.artifact_directory = artifact_directory  # The run owns this directory, and no other run writes it.
-        self.checkout_trail = checkout_trail or lock.audit_trail_path()  # The default path of the lock module.
+        self.checkout_trail = checkout_trail  # Issue #3512: the caller names the trail, so no move can change it.
         self.run_trail = artifact_directory / lock.AUDIT_FILE_NAME  # The trail of this run alone.
+
+    @classmethod
+    def for_session(cls, artifact_directory: Path, root_guard: CheckoutTrailGuard | None) -> AuditTrailIsolation:
+        """Build the isolation of the parent process from the root guard of the session.
+
+        Why:
+            Issue #3512. The root fixture `isolate_site_lock_trail` moves the
+            trail of each test. A module that starts the portal inside its
+            first test starts the browser guard after that move. The root guard
+            read the checkout trail before the first move, so this build reads
+            that value, in each order.
+
+        Args:
+            artifact_directory: The directory of this browser run alone.
+            root_guard: The root guard `checkout_site_lock_trail_guard`. None
+                means that the lock module cannot import.
+
+        Returns:
+            The isolation that counts the checkout trail.
+
+        Raises:
+            RuntimeError: If the root guard is None.
+        """
+        logger.info("Build the browser trail guard of %s from the root guard", artifact_directory)  # Log first.
+        if root_guard is None:  # The root guard skipped, so it holds no checkout trail.
+            raise RuntimeError(cls.NO_ROOT_GUARD)  # Never read the lock module here, because a move can apply.
+        built = cls(artifact_directory, root_guard.checkout_trail)  # The trail that the root guard read first.
+        logger.debug("The browser trail guard counts %s", built.checkout_trail)  # Log after the build.
+        return built  # The fixture counts this trail before and after the run.
 
     def place(self, patcher: pytest.MonkeyPatch | None = None) -> Path:
         """Point the site lock trail of this process at the run directory.
