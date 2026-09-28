@@ -218,5 +218,6 @@
       "at": "2026-09-26T02:44:02.769Z"
     }
   ],
-  "currentTask": "T023"
+  "currentTask": "T023",
+  "telemetryInstanceId": "71bda8dd-ac3d-4c1b-9860-a3ca306cc7ed"
 }

@@ -36,7 +36,7 @@ python -m src.juniper_docs.harvest.runner --sitemap-source tests/unit/juniper_do
 ```
 
 Expected outcome: the tool builds the inventory and applies the release-note filter on
-the subset, then resolves and downloads each companion PDF from the fixture host.
+the subset. Then it resolves and downloads each companion PDF from the fixture host.
 
 ## Validate the acceptance scenarios
 
@@ -87,16 +87,24 @@ counts and the total bytes (FR-036, SC-009).
 
 A full run writes to `data/juniper_corpus/` by default. After the 2026 harvest, the
 operator consolidated every harvested PDF, the earlier `jvd_pdfs/` output, and the
-locally scavenged PDF files into one root:
+locally scavenged PDF files into one root. The operator then moved that local reference
+corpus out of this checkout and into the Juniper skills repository:
 
 ```text
-data/juniper_pdf_library/
+juniper-agent-skills/reference-materials/juniper_pdf_library/
+```
+
+The corpus stays on the local workstation. A new clone of either repository does not
+hold it. On this workstation, set the root path with this command:
+
+```powershell
+$corpusRoot = Join-Path $HOME 'juniper-agent-skills\reference-materials\juniper_pdf_library'
 ```
 
 That root holds one folder for each category and one `library_index.csv` file. The
 index lists the category, the file name, the relative path, and the size in bytes of
 every PDF. The preserved state database sits at
-`data/juniper_pdf_library/_harvest_record/harvest_state.db`.
+`_harvest_record/harvest_state.db` under that root.
 
 Point a downstream tool, such as a PDF-to-Markdown converter, at that one root. Every
 file in the root is unique by SHA-256 content hash, so the tool reads no duplicate.
@@ -107,7 +115,7 @@ forces a full re-harvest of more than 15,000 documents.
 
 ```powershell
 # Count the files and confirm that every content hash is unique
-Get-ChildItem data/juniper_pdf_library -Recurse -File -Filter *.pdf | Measure-Object
+Get-ChildItem $corpusRoot -Recurse -File -Filter *.pdf | Measure-Object
 ```
 
 ## Run the quality gates
