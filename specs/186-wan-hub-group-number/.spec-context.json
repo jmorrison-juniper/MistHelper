@@ -6,5 +6,6 @@
   "currentStep": "specify",
   "status": "draft",
   "stepHistory": {},
-  "transitions": []
+  "transitions": [],
+  "telemetryInstanceId": "9d317c68-d14d-4079-ad4e-c6d27e60e52e"
 }
