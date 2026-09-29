@@ -1,6 +1,6 @@
 {
-  "currentStep": "specify",
-  "status": "specified",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
   "featureDirectory": "specs/3557-org-security-posture",
   "specFile": "specs/3557-org-security-posture/spec.md"
 }
