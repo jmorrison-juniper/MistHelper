@@ -1,8 +1,8 @@
 {
-  "currentStep": "specify",
-  "status": "specified",
+  "currentStep": "plan",
+  "status": "planned",
   "featureDirectory": "specs/3555-psk-hygiene-report",
   "specFile": "specs/3555-psk-hygiene-report/spec.md",
   "issue": 3555,
-  "updatedAt": "2026-09-29T15:06:45-05:00"
+  "updatedAt": "2026-09-29T16:01:18-05:00"
 }
