@@ -11,14 +11,20 @@ Build one organization-level WAN edge scorecard operation. The operation reports
 ## 2. Menu Wiring
 
 - Add menu 279 with the label "Organization WAN Edge Scorecard".
+- Register menu 279 as `safe`.
+- Use handler class `WanEdgeScorecard` with static `run()`.
 - The operation must run in `--test` without a prompt.
 - The operation must write outputs under `data/`.
 
 ## 3. Data Source Contract
 
+- Use `listOrgDevicesStats` with `type=gateway`.
 - Reuse the gateway statistics fetch that menu 18 or menu 15 already holds.
 - Do not add a second pagination implementation for gateway statistics.
 - Read gateway statistics once for the organization data set when possible.
+- Before coding, read `src/export/org_device_stats_exporter.py`.
+- Before coding, read the menu 18 gateway stats path named `_dispatch_gateway_stats_device_stats_with_freshness`.
+- Before coding, read `stats_gateway`, `dhcpd_stat_lan`, `vpn_peers`, and `bgp_peers` in `documentation/mist-api-openapi3json.json`.
 
 ## 4. Gateway Scorecard Output Contract
 
