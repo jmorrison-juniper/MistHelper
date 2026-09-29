@@ -32,3 +32,7 @@ Add menu `291` to the `destructive` row.
 ## Deferred registration
 
 The integration pull request registers menu `291` in `MistHelper.py` and `src/utils/operation_registry.py`. This feature branch does not edit those files.
+
+## Environment documentation
+
+Add `RRM_SETTLE_SECONDS=300` to `deploy/.env.example` if the integration pull request owns environment documentation. This feature branch cannot edit that file under the fleet contract.
