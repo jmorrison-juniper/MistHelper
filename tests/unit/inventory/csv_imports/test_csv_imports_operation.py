@@ -105,6 +105,18 @@ def test_csv_imports_operation_missing_required_column_stops_request() -> None:
     _remove_runtime_files()  # WHY: leave no scratch files.
 
 
+def test_csv_imports_operation_missing_file_stops_request() -> None:
+    """A missing input file stops before any request."""
+    _remove_runtime_files()  # WHY: start from a clean local scratch directory.
+    RecordingClient.sent = []  # WHY: isolate this test from earlier calls.
+    options = CsvImportOptions(
+        import_key="site_assets", dry_run=False, confirmation="IMPORT 1", scope_id="site-id"
+    )  # WHY: select a missing file.
+    CsvImportOperation.run(options=options, deps=_deps())  # WHY: execute the missing-file guard.
+    assert RecordingClient.sent == []  # WHY: no file means no Mist request can be valid.
+    assert not (RUNTIME_DIR / "CsvImportLog.csv").exists()  # WHY: no parsed row count exists for the audit log.
+
+
 def test_csv_imports_operation_does_not_log_psk_passphrase(caplog: Any) -> None:
     """PSK passphrases do not appear in log records."""
     _remove_runtime_files()  # WHY: start from a clean local scratch directory.
@@ -119,5 +131,7 @@ def test_csv_imports_operation_does_not_log_psk_passphrase(caplog: Any) -> None:
     CsvImportOperation.run(options=options, deps=_deps())  # WHY: execute the live path through the client double.
     assert RecordingClient.sent == [("site_psks", "site-id", RUNTIME_DIR / "import_site_psks.csv")]
     assert "secret-psk-value" not in caplog.text  # WHY: no log line may contain a passphrase.
-    assert "row_count,False" not in caplog.text  # WHY: log lines state counts, not raw rows.
+    assert "secret-psk-value" not in (RUNTIME_DIR / "CsvImportLog.csv").read_text(
+        encoding="utf-8"
+    )  # WHY: audit log is safe.
     _remove_runtime_files()  # WHY: leave no scratch files.

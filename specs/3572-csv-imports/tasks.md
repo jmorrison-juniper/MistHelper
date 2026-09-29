@@ -26,8 +26,8 @@
 
 ## Phase 4 - Validation and analysis
 
-- [ ] T014 Run py_compile, ruff, black, mypy, pydocstyle, pytest, vulture, and interrogate on the owned package and tests.
-- [ ] T015 Run SpecKit analysis, repair findings, and commit the repair.
+- [x] T014 Run py_compile, ruff, black, mypy, pydocstyle, pytest, vulture, and interrogate on the owned package and tests.
+- [x] T015 Run SpecKit analysis, repair findings, and commit the repair.
 
 ## Deferred integration tasks
 

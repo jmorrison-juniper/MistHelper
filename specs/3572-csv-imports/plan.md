@@ -29,6 +29,10 @@ Menu 292 adds a destructive CSV import operation for organization PSKs, organiza
 3. `operation.py` resolves the shared Mist session, reads operator input, calls the model and client, supports dry run mode, and writes the result log.
 4. Tests target the model and client without network access. Operation tests inject dependencies and use small CSV files inside the test path.
 
+## Constitution Review
+
+The assigned package adds `src/inventory/csv_imports/` under an existing noncompliant parent. `src/inventory/` already has more than five direct children in this worktree. The fleet contract assigns this package path, so this feature records the structural debt here and does not add any other direct child under `src/inventory/`. The incremental remediation is to move future inventory features under domain subpackages, then retire the older direct module files in a separate refactor.
+
 ## Safety Rules
 
 - The operation sends no request until the operator types `IMPORT <row_count>`.
