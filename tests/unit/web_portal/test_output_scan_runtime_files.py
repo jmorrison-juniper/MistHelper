@@ -18,6 +18,7 @@ that silently stops skipping.
 
 from __future__ import annotations
 
+import os
 import re
 from collections import deque
 from pathlib import Path
@@ -186,6 +187,85 @@ class TestPrunedTreesStayOutOfTheWalk:
         (bulky / "old.csv").write_text("a\n", encoding="utf-8")
         (tmp_path / "New.csv").write_text("a\n", encoding="utf-8")
         assert scanner.changed_files() == ["New.csv"]
+
+
+class TestFullWalkFallback:
+    """The costly full walk runs only when both fast paths find no output."""
+
+    def _write_existing_reports(self, root: Path, count: int) -> Path:
+        """Create historical reports and return one rewrite target."""
+        reports = root / "reports"  # Keep the historical files in one measured folder.
+        reports.mkdir()  # Create the folder before the scanner records directory marks.
+        for index in range(count):  # Build enough files to show when the full walk runs.
+            (reports / f"report-{index:04d}.csv").write_text("before\n", encoding="utf-8")
+        return reports / "report-0007.csv"  # Return a stable existing file for rewrite tests.
+
+    def _move_file_time_after_mark(self, path: Path) -> None:
+        """Move one file timestamp after the scanner mark."""
+        stamp = path.stat().st_mtime + 10  # Use seconds because os.utime accepts floats.
+        os.utime(path, (stamp, stamp))  # Make the rewritten file newer on every filesystem.
+
+    def test_tracked_write_avoids_full_walk_with_many_existing_files(self, tmp_path):
+        """A tracked report must not stat every historical report."""
+        self._write_existing_reports(tmp_path, 1000)  # Create historical files before the snapshot.
+        scanner = OutputFileScanner(str(tmp_path))  # Scan the temporary data root.
+        scanner.snapshot()  # Start write tracking after the historical files exist.
+        (tmp_path / "Tracked.csv").write_text("after\n", encoding="utf-8")  # Use the tracked Path.open route.
+        assert scanner.changed_files() == ["Tracked.csv"]
+        assert scanner.last_scanned_files <= 3
+
+    def test_utime_rewrite_uses_full_walk_when_fast_paths_find_nothing(self, tmp_path):
+        """An untracked timestamp rewrite must still reach the result panel."""
+        target = self._write_existing_reports(tmp_path, 25)  # Create an existing report before the snapshot.
+        scanner = OutputFileScanner(str(tmp_path))  # Scan the temporary data root.
+        scanner.snapshot()  # Record the start mark before the untracked rewrite.
+        self._move_file_time_after_mark(target)  # Simulate a C writer that updates only file metadata.
+        assert scanner.changed_files() == ["reports/report-0007.csv"]
+        assert scanner.last_scanned_files >= 25
+
+    def test_os_open_rewrite_uses_full_walk_when_fast_paths_find_nothing(self, tmp_path):
+        """A writer that bypasses Python open must still reach the result panel."""
+        target = self._write_existing_reports(tmp_path, 25)  # Create an existing report before the snapshot.
+        scanner = OutputFileScanner(str(tmp_path))  # Scan the temporary data root.
+        scanner.snapshot()  # Record the start mark before the low-level rewrite.
+        descriptor = os.open(target, os.O_WRONLY | os.O_TRUNC)  # Bypass builtins.open and Path.open hooks.
+        try:
+            os.write(descriptor, b"after\n")  # Rewrite the file through the low-level descriptor.
+        finally:
+            os.close(descriptor)  # Close the descriptor so the timestamp is visible.
+        self._move_file_time_after_mark(target)  # Make the rewrite deterministic across filesystems.
+        assert scanner.changed_files() == ["reports/report-0007.csv"]
+        assert scanner.last_scanned_files >= 25
+
+    def test_replace_rewrite_uses_full_walk_when_fast_paths_find_nothing(self, tmp_path):
+        """A temp-file replace onto an existing name must still reach the panel."""
+        target = self._write_existing_reports(tmp_path, 25)  # Create an existing report before the snapshot.
+        scanner = OutputFileScanner(str(tmp_path))  # Scan the temporary data root.
+        scanner.snapshot()  # Record the start mark before the replace.
+        replacement = target.with_name("report-0007.csv.replace")  # Keep the temp file inside the test root.
+        replacement.write_text("after\n", encoding="utf-8")  # Create the replacement through normal Python I/O.
+        os.replace(replacement, target)  # Replace the existing name through an untracked filesystem operation.
+        self._move_file_time_after_mark(target)  # Make the replacement newer than the probe mark.
+        assert scanner.changed_files() == ["reports/report-0007.csv"]
+        assert scanner.last_scanned_files >= 25
+
+    def test_no_output_pays_full_walk_and_returns_empty(self, tmp_path):
+        """A run with no output pays the full walk and reports no false file."""
+        self._write_existing_reports(tmp_path, 25)  # Create historical files before the snapshot.
+        scanner = OutputFileScanner(str(tmp_path))  # Scan the temporary data root.
+        scanner.snapshot()  # Record a run that writes no file.
+        assert scanner.changed_files() == []
+        assert scanner.last_scanned_files == 25
+
+    def test_tracked_result_skips_untracked_rewrite_full_walk(self, tmp_path):
+        """The untracked rewrite is not reported because the fast path found evidence."""
+        target = self._write_existing_reports(tmp_path, 25)  # Create an existing report before the snapshot.
+        scanner = OutputFileScanner(str(tmp_path))  # Scan the temporary data root.
+        scanner.snapshot()  # Record the start mark before both writes.
+        self._move_file_time_after_mark(target)  # Rewrite one existing file outside the tracking hook.
+        (tmp_path / "Tracked.csv").write_text("after\n", encoding="utf-8")  # Add fast-path evidence.
+        assert scanner.changed_files() == ["Tracked.csv"]
+        assert scanner.last_scanned_files <= 3
 
 
 # Issue #3201: the test suites write their artifacts into the data folder, and

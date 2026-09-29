@@ -209,6 +209,8 @@ class OutputFileScanner:
         self.last_scanned_files = 0  # Reset the stat count so tests can prove the scan scope.
         found = self._changed_tracked_files()  # First read only files that Python opened for writing.
         found.update(self._changed_files_by_directory_marks())  # Add files from untracked directory changes.
+        if not found:  # Use the costly fallback only when the fast paths found no output evidence.
+            found.update(self._changed_files_by_full_walk())  # Preserve untracked in-place rewrites.
         names = list(found)  # Convert to a list because the result panel expects ordered names.
         names.sort()  # A stable order keeps the result panel readable between runs.
         logger.debug("Output scan found %d changed files", len(names))  # Log the measured count.
@@ -220,7 +222,7 @@ class OutputFileScanner:
         with self._tracking_lock:  # Copy under lock so another run cannot mutate the set during iteration.
             candidates = tuple(self._write_candidates)  # Freeze the candidate list for this check.
         for path in candidates:  # Check only files that were opened for writing during this run.
-            name = self._changed_reportable_path(path)  # Return a relative name only when the timestamp qualifies.
+            name = self._changed_reportable_path(path, allow_equal=True)  # A tracked write can share the probe tick.
             if name is not None:  # A qualifying name is an operation output candidate.
                 changed.add(name)  # Add the name without a duplicate.
         return changed  # Return the tracked result names.
@@ -248,7 +250,19 @@ class OutputFileScanner:
                 changed.add(name)  # Add the relative name.
         return changed  # Return all changed files found in this directory.
 
-    def _changed_reportable_path(self, path: Path) -> str | None:
+    def _changed_files_by_full_walk(self) -> set[str]:
+        """Return changed files by scanning each reportable file."""
+        logger.info("Output scan starts full walk fallback for %s", self._root)  # Log before the costly scan.
+        state = self._read_state()  # Reuse the pruned full walk that finds untracked in-place rewrites.
+        changed = {name for name, stamp in state.items() if stamp > self._started_at}  # Use the untracked rule.
+        logger.debug(
+            "Output scan full walk read %d files and found %d changed files",
+            len(state),
+            len(changed),
+        )  # Log the fallback cost and result count.
+        return changed  # Return names that changed after the run-start mark.
+
+    def _changed_reportable_path(self, path: Path, allow_equal: bool = False) -> str | None:
         """Return a relative name when path is a changed reportable file."""
         try:
             if not path.is_file():  # A vanished path or directory is not an output file.
@@ -257,7 +271,10 @@ class OutputFileScanner:
                 return None
             self.last_scanned_files += 1  # Count each file stat the optimized scan still pays.
             stamp = path.stat().st_mtime_ns  # Read the file clock that the snapshot probe also used.
-            if stamp <= self._started_at:  # A strict comparison excludes files the run did not touch.
+            threshold_missed = stamp < self._started_at  # Allow tracked writes to share the probe timestamp.
+            if not allow_equal:  # The directory fallback needs the stricter untracked-writer rule.
+                threshold_missed = stamp <= self._started_at  # Reject untracked files that share the probe time.
+            if threshold_missed:  # A non-qualifying timestamp excludes files the run did not touch.
                 return None
             return path.relative_to(self._root).as_posix()  # Use portal-stable POSIX names.
         except OSError as error:  # A file can vanish between tracking and stat.
@@ -400,6 +417,7 @@ class OutputFileScanner:
             try:
                 # Read integer nanoseconds. A float rounds two close instants
                 # to one value and hides a report. Issue #3172.
+                self.last_scanned_files += 1  # Count each file stat that the full walk fallback pays.
                 state[path.relative_to(self._root).as_posix()] = path.stat().st_mtime_ns
             except OSError as error:  # A file can vanish between the walk and the stat call.
                 logger.debug("Output scan skipped %s: %s", path, error)  # Record the skip for a reader.
