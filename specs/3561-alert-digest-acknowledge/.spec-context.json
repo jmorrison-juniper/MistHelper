@@ -1,0 +1,17 @@
+{
+  "workflow": "speckit",
+  "specName": "Alert Digest Acknowledge",
+  "branch": "3561-alert-digest-acknowledge",
+  "currentStep": "specify",
+  "status": "specified",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-29T21:08:40.408Z"
+    }
+  ],
+  "telemetryInstanceId": "b15b6e4d-a2bf-49e0-a6c3-03254b176e6e"
+}
