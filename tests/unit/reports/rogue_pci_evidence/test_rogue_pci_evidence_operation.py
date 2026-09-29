@@ -66,6 +66,10 @@ class _FakeClient:
         del sites  # The fake data does not need the site list.
         return [{"site_id": "site-1", "ssid": "CorpWiFi", "bssid": "11:22:33:44:55:66"}]  # Provide a honeypot.
 
+    def list_org_rogue_events(self):
+        """Return no extra rogue event detections."""
+        return []  # Keep the operation test focused on the site rogue AP row.
+
     def list_site_settings(self, sites):
         """Return one site setting record."""
         del sites  # The fake data does not need the site list.

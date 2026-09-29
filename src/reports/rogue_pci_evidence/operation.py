@@ -62,6 +62,7 @@ class RoguePciEvidencePack:
         wlans = client.list_org_wlans()  # Read WLANs for approved SSID matching.
         sites = client.list_org_sites()  # Read sites for coverage and per-site queries.
         raw_detections = client.list_site_rogue_aps(sites)  # Read the raw rogue AP detections.
+        raw_detections.extend(client.list_org_rogue_events())  # Add available org rogue event rows.
         settings_by_site = client.list_site_settings(sites)  # Read one site setting per site with pacing.
         context = RoguePciEvidenceModel.build_context(org_id, wlans, sites, raw_detections)  # Build shared lookups.
         detection_rows = RoguePciEvidenceModel.detection_rows(raw_detections, context)  # Classify detection rows.

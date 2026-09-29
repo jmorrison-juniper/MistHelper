@@ -96,3 +96,17 @@ class RoguePciEvidenceClient:
             rows.extend(site_rows)  # Add this site's rows to the aggregate.
             logger.debug("Read rogue AP rows=%d for site %s", len(site_rows), site_id)  # Log after the API call.
         return rows  # Return all tagged rogue AP rows.
+
+    def list_org_rogue_events(self, duration: str = "168h") -> list[dict[str, Any]]:
+        """Return available org rogue event rows."""
+        logger.info("Reading organization rogue events for PCI evidence")  # Log before the API call.
+        response = mistapi.api.v1.orgs.events.searchOrgEvents(  # Use the available org event search endpoint.
+            self.apisession,
+            self.org_id,
+            type="rogue-ap-detected",
+            duration=duration,
+            limit=self.page_limit,
+        )
+        rows = self._paged(response)  # Page all matching event rows.
+        logger.debug("Read organization rogue event rows=%d", len(rows))  # Log after the API call.
+        return rows  # Return event rows for evidence aggregation.

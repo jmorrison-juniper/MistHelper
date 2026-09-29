@@ -37,7 +37,7 @@
 
 - [x] T013 [P] [US2] Add honeypot, rogue, and neighbor classification tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
 - [x] T014 [US2] Implement detection normalization and classification in `src/reports/rogue_pci_evidence/model.py`.
-- [x] T015 [US2] Implement rogue AP and event row aggregation in `src/reports/rogue_pci_evidence/client.py`.
+- [x] T015 [US2] Implement rogue AP and org event row aggregation in `src/reports/rogue_pci_evidence/client.py`.
 
 ## Phase 5: User Story 3 - Report site detection settings (P3)
 
@@ -53,8 +53,8 @@
 
 - [x] T019 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, and `pytest` on the new package and tests.
 - [x] T020 Run `vulture` and `interrogate` on `src/reports/rogue_pci_evidence`.
-- [ ] T021 Repair any `speckit.analyze` findings in `specs/3562-rogue-pci-evidence/`, `src/reports/rogue_pci_evidence/`, and `tests/unit/reports/rogue_pci_evidence/`.
-- [ ] T022 Create the draft pull request body in `specs/3562-rogue-pci-evidence/pr-body.md`.
+- [x] T021 Repair any `speckit.analyze` findings in `specs/3562-rogue-pci-evidence/`, `src/reports/rogue_pci_evidence/`, and `tests/unit/reports/rogue_pci_evidence/`.
+- [x] T022 Create the draft pull request body in `specs/3562-rogue-pci-evidence/pr-body.md`.
 
 ## Deferred Integration Tasks
 

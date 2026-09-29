@@ -83,7 +83,7 @@ A compliance owner needs to know which sites have rogue detection, honeypot dete
 - **FR-010**: The operation MUST use org site data from `listOrgSites` to include every site in the settings report.
 - **FR-011**: The operation MUST read one site setting record per site with `getSiteSetting` and the shared pacer.
 - **FR-012**: The specification cost for the site settings pass MUST be one `getSiteSetting` request for each site in the organization.
-- **FR-013**: The operation MUST use rogue event data from `searchOrgRogueEvents` and rogue AP data from `listSiteRogueAPs` to build the evidence pack.
+- **FR-013**: The operation MUST use available rogue event data through `searchOrgEvents` and rogue AP data from `listSiteRogueAPs` to build the evidence pack.
 - **FR-014**: The operation MUST create `RogueSiteSettings.csv` with one row per site.
 - **FR-015**: `RogueSiteSettings.csv` MUST include rogue detection enabled, honeypot detection enabled, neighbor RSSI threshold, approved SSID count, and approved BSSID count.
 - **FR-016**: A site with `rogue.enabled` false MUST appear in `RogueSiteSettings.csv` with detection off.

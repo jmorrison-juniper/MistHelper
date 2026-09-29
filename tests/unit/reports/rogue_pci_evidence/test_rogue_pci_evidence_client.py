@@ -35,3 +35,19 @@ def test_site_settings_uses_one_pacer_call_per_site():
     assert api_mock.call_count == 2  # Verify one settings call for each site.
     assert sleep_mock.call_count == 2  # Verify the client obeyed the pacer delay.
     assert set(result) == {"site-1", "site-2"}  # Verify settings are keyed by site id.
+
+
+def test_org_rogue_events_uses_available_org_event_search():
+    """The client reads rogue event evidence from the available org event endpoint."""
+    client = RoguePciEvidenceClient(object(), "org-1")  # Build the client with default dependencies.
+    fake_response = SimpleNamespace(data={"results": [{"ssid": "CorpWiFi"}]})  # Return a minimal event page.
+    with patch(
+        "src.reports.rogue_pci_evidence.client.mistapi.get_all", return_value=[{"ssid": "CorpWiFi"}]
+    ):  # Patch paging.
+        with patch(
+            "src.reports.rogue_pci_evidence.client.mistapi.api.v1.orgs.events.searchOrgEvents",
+            return_value=fake_response,
+        ) as api_mock:  # Patch Mist.
+            rows = client.list_org_rogue_events()  # Read the available event rows.
+    assert rows == [{"ssid": "CorpWiFi"}]  # Verify rows return from the pager.
+    api_mock.assert_called_once()  # Verify the org event endpoint was called.
