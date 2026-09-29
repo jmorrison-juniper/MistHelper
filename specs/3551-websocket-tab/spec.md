@@ -68,7 +68,7 @@ An operator chooses a site and a device. The page shows only the utilities that 
 
 ### User Story 3 - Run a remote packet capture (Priority: P2)
 
-An operator starts a packet capture on an access point, a switch, a gateway, or a Mist Edge. The operator sets a duration, a packet count, a packet length, and an optional capture filter. The page shows a summary line for each packet. The operator can stop the capture early.
+An operator starts a packet capture on an access point, a switch, a gateway, or a Mist Edge. The operator sets a packet count, a packet length, and an optional capture filter. Each capture lasts 60 seconds at most. The page shows a summary line for each packet. The operator can stop the capture early.
 
 **Why this priority**: A capture proves what a device sends and receives. It changes no configuration, but it uses device resources and it can hold client data, so it follows the channel streams and the read-only utilities.
 
@@ -76,7 +76,7 @@ An operator starts a packet capture on an access point, a switch, a gateway, or 
 
 **Acceptance Scenarios**:
 
-1. **Given** a duration above the limit, **When** the operator starts the capture, **Then** the page shows the limit. The server sends no request.
+1. **Given** a packet count above the limit, **When** the operator starts the capture, **Then** the page shows the limit. The server sends no request.
 2. **Given** a live capture, **When** a packet record arrives, **Then** the card shows its time, source, destination, protocol, and length. The card shows only the fields that the record holds.
 3. **Given** a live capture, **When** the operator stops it early, **Then** the server tells Mist to stop the capture and closes the connection.
 
@@ -176,7 +176,7 @@ The portal owner turns on the shell flag. An operator opens a remote shell on a 
 
 **Packet captures**
 
-- **FR-015**: An operator MUST be able to start a remote capture with a duration, a packet count, a packet length, and an optional capture filter. The server MUST enforce a fixed range for each number.
+- **FR-015**: An operator MUST be able to start a remote capture with a packet count, a packet length, and an optional capture filter. The server MUST enforce a fixed range for each number. Each capture MUST last 60 seconds at most. Issue #3575 tracks a longer capture.
 - **FR-016**: The page MUST show a summary of each packet record. When the operator stops a capture early, the server MUST tell Mist to stop the capture.
 
 **State-changing utilities and the remote shell**
@@ -230,5 +230,6 @@ The portal owner turns on the shell flag. An operator opens a remote shell on a 
 - A channel sends data only when the organization uses the feature. For example, the location channels need maps and BLE, and the Mist Edge channels need a Mist Edge. An empty stream is a valid result, and the card states that no message arrived yet.
 - The device commands that send no WebSocket output are out of scope. These are clear MAC table, clear learned MAC, clear BPDU error, clear 802.1X sessions, and clear policy hit count. The Operations tab is the place for REST-only commands.
 - The CLI WebSocket menus 102 through 123 stay the same.
+- A remote capture lasts 60 seconds at most in this version. 60 seconds is also the shortest capture that Mist accepts. Issue #3575 tracks a longer capture.
 - The container runs the portal in one process, so one process holds every session.
 - The portal uses the `mistapi` package for the Mist connection, the regional host, and the device utilities.
