@@ -2,8 +2,8 @@
   "workflow": "speckit",
   "specName": "WebSockets tab in the Operations portal",
   "branch": "feat/3551-websocket-tab",
-  "currentStep": "plan",
-  "status": "planned",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
   "history": [
     {
       "step": "specify",
@@ -18,6 +18,13 @@
       "kind": "complete",
       "by": "agent",
       "at": "2026-09-29T21:48:49.005Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-29T22:37:07.308Z"
     }
   ],
   "telemetryInstanceId": "df1b0c16-95f1-47a4-87ce-2cf829d22c5e"
