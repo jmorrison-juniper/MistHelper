@@ -1,0 +1,14 @@
+{
+  "feature": "3554-admin-token-hygiene",
+  "issue": 3554,
+  "branch": "feat/3554-admin-token-hygiene",
+  "currentStep": "specify",
+  "status": "specified",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md"
+  ],
+  "workflow": "speckit",
+  "specName": "Admin Token Hygiene",
+  "history": []
+}
