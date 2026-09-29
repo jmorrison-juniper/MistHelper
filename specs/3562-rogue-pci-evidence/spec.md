@@ -89,7 +89,7 @@ A compliance owner needs to know which sites have rogue detection, honeypot dete
 - **FR-016**: A site with `rogue.enabled` false MUST appear in `RogueSiteSettings.csv` with detection off.
 - **FR-017**: `RogueEvidenceSummary.md` MUST count sites with detection off.
 - **FR-018**: `RogueEvidenceSummary.md` MUST state that the Mist cloud sits outside the cardholder data environment and MUST name the source page used for that statement.
-- **FR-019**: The source page name in the summary MUST be `Juniper Mist Cloud PCI DSS Shared Responsibility and Compliance` unless project evidence selects a newer page name during implementation.
+- **FR-019**: The source page name in the summary MUST be `05-wlan-threat-client-and-pci-controls.md`.
 - **FR-020**: The operation MUST use the repository output pattern for collected API data and MUST write evidence files through the approved export path.
 - **FR-021**: The operation MUST not change Mist cloud configuration.
 - **FR-022**: The operation MUST not collect, store, or print cardholder data.
