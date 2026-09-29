@@ -4,25 +4,25 @@
 
 ## Phase 1 - Package foundations
 
-- [ ] T001 Create `src/inventory/csv_imports/__init__.py` with the public operation export.
-- [ ] T002 Create `src/inventory/csv_imports/model.py` with import definitions, CSV parsing, validation, preview masking, confirmation parsing, and result-row helpers.
-- [ ] T003 Create `src/inventory/csv_imports/client.py` with a `CsvImportClient` class that calls the five SDK `*File` functions.
-- [ ] T004 Create `src/inventory/csv_imports/operation.py` with `CsvImportOperation.run()` and dependency seams for tests.
+- [x] T001 Create `src/inventory/csv_imports/__init__.py` with the public operation export.
+- [x] T002 Create `src/inventory/csv_imports/model.py` with import definitions, CSV parsing, validation, preview masking, confirmation parsing, and result-row helpers.
+- [x] T003 Create `src/inventory/csv_imports/client.py` with a `CsvImportClient` class that calls the five SDK `*File` functions.
+- [x] T004 Create `src/inventory/csv_imports/operation.py` with `CsvImportOperation.run()` and dependency seams for tests.
 
 ## Phase 2 - Tests
 
-- [ ] T005 Create `tests/unit/inventory/csv_imports/__init__.py`.
-- [ ] T006 Add model tests for missing required columns, preview masking, confirmation parsing, and result rows.
-- [ ] T007 Add one client contract test for each multipart import type.
-- [ ] T008 Add operation tests that prove dry run and wrong confirmation send no request, and that `CsvImportLog.csv` is written.
-- [ ] T009 Add a log-capture test that proves a PSK passphrase never appears in a log line.
+- [x] T005 Create `tests/unit/inventory/csv_imports/__init__.py`.
+- [x] T006 Add model tests for missing required columns, preview masking, confirmation parsing, and result rows.
+- [x] T007 Add one client contract test for each multipart import type.
+- [x] T008 Add operation tests that prove dry run and wrong confirmation send no request, and that `CsvImportLog.csv` is written.
+- [x] T009 Add a log-capture test that proves a PSK passphrase never appears in a log line.
 
 ## Phase 3 - Documentation and wiring
 
-- [ ] T010 Create `specs/3572-csv-imports/wiring.md` with every section required by the fleet contract.
-- [ ] T011 Mark the `MistHelper.py` registration, `OperationRegistry` entry, primary key strategy, README, generated menu reference, and category table changes as deferred to the integration pull request.
-- [ ] T012 Create `changelog.d/issue-3572-csv-imports.md` with one `### Added` heading and one issue-named bullet.
-- [ ] T013 Create `specs/3572-csv-imports/pr-body.md` for the draft pull request.
+- [x] T010 Create `specs/3572-csv-imports/wiring.md` with every section required by the fleet contract.
+- [x] T011 Mark the `MistHelper.py` registration, `OperationRegistry` entry, primary key strategy, README, generated menu reference, and category table changes as deferred to the integration pull request.
+- [x] T012 Create `changelog.d/issue-3572-csv-imports.md` with one `### Added` heading and one issue-named bullet.
+- [x] T013 Create `specs/3572-csv-imports/pr-body.md` for the draft pull request.
 
 ## Phase 4 - Validation and analysis
 
