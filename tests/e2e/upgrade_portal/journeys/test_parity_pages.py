@@ -17,7 +17,7 @@ PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded single-site run with opt
 START_READY_RUN_ID = "e2e-start-ready-run-0001"  # The seeded single-site run that can start.
 TARGET_VERSION = "0.15.1"  # The version that every stand-in model offers.
 REPO_ROOT = Path(__file__).parents[4]  # Tests change the working directory, so artifact paths must be absolute.
-SHOTS = REPO_ROOT / "data/test-artifacts/upgrade-portal-journeys/upj-parity"  # Required screenshot directory.
+SHOTS = REPO_ROOT / "test-artifacts" / "upgrade-portal-journeys" / "upj-parity"  # Required screenshot directory.
 OK_STATUS = 200  # A rendered page answers this status.
 ACCEPTED_STATUS = 202  # A start request answers this status.
 

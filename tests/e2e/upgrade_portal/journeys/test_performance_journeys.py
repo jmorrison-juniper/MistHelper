@@ -13,7 +13,7 @@ import pytest
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
 REPO_ROOT = Path(__file__).parents[4]  # Keep artifacts in the worktree, not the pytest run directory.
-ARTIFACT_ROOT = REPO_ROOT / "data" / "test-artifacts" / "upgrade-portal-journeys" / "upj-perf"
+ARTIFACT_ROOT = REPO_ROOT / "test-artifacts" / "upgrade-portal-journeys" / "upj-perf"
 RESULTS_PATH = ARTIFACT_ROOT / "perf-results.json"
 SITE_ID = "22222222-2222-2222-2222-222222222222"
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"

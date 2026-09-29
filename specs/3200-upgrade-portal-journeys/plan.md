@@ -40,7 +40,7 @@ Playwright 1.63, `pytest-playwright` 0.9, pytest 9.1.1, and `pytest-timeout`
 
 **Storage**: The process-owned record stores of
 `tests/support/upgrade_portal_e2e/records/`. The artifacts go to
-`data/test-artifacts/upgrade-portal-journeys/<harness-run-identifier>/`. The
+`test-artifacts/upgrade-portal-journeys/<harness-run-identifier>/`. The
 harness uses no ArangoDB, no Redis, and no production store.
 
 **Testing**: pytest collects the journeys. The `journey` marker and the

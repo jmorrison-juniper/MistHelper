@@ -103,6 +103,8 @@ Output/
 OUTPUT/
 # The test-quality-analyzer command writes its report here (issue #3421).
 test_quality_analyzer_output/
+# WHY: browser journey evidence is local test output, not source.
+/test-artifacts/
 exports/
 Exports/
 EXPORTS/

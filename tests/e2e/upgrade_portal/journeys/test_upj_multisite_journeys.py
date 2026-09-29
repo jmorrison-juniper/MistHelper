@@ -139,6 +139,7 @@ class MultiSiteJourney:
         Returns:
             The address of the progress page.
         """
+        self.ensure_prechecks_ready()  # The portal blocks the write until each selected site has a pre-check.
         self.page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # The exact word.
         expect(self.page.get_by_test_id("org-upgrade-start")).to_be_enabled()  # The word opens the button.
         self.recorder.step("confirmation typed")  # Record the open button.
@@ -146,6 +147,19 @@ class MultiSiteJourney:
         self.page.wait_for_url(JOB_URL)  # The progress page of the new operation.
         self.recorder.step("progress page")  # Record the first progress view.
         return str(self.page.url)  # The caller may open the same page again.
+
+    def ensure_prechecks_ready(self) -> None:
+        """Take missing pre-check captures when the confirm page requires them."""
+        confirmation = self.page.get_by_test_id("org-upgrade-confirmation")  # The field is disabled until ready.
+        if confirmation.is_enabled():  # A previous journey or seed already provided the captures.
+            return  # The operator can type the confirmation word now.
+        self.recorder.step("take missing pre-checks", self._take_missing_prechecks)  # Record the required gate.
+        expect(confirmation).to_be_enabled(timeout=120_000)  # Wait for the reload after both captures verify.
+
+    def _take_missing_prechecks(self) -> None:
+        """Press the missing pre-check button and wait for the confirm page reload."""
+        self.page.get_by_test_id("org-upgrade-precheck-missing").click()  # Start only the missing captures.
+        self.page.wait_for_load_state("networkidle", timeout=120_000)  # Wait for the reload that unlocks the field.
 
     def fulfill_status(self, payload: dict[str, Any]) -> None:
         """Answer the status read of the progress page with a fixed body.

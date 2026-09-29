@@ -953,7 +953,7 @@ identifier. An example is `F-STOP-M`.
 - **FR-063**: A failed journey MUST keep a browser trace.
 
 - **FR-064**: Each harness run MUST write one report and one index page into
-  `data/test-artifacts/upgrade-portal-journeys/<harness-run-identifier>/`.
+  `test-artifacts/upgrade-portal-journeys/<harness-run-identifier>/`.
 
 - **FR-065**: The report MUST follow a documented schema with a version number.
 
@@ -1135,7 +1135,7 @@ status with a status of FR-073.
   each step for the stand-in credential values. The scan MUST find no match.
 
 - **SR-015**: The harness MUST write only below
-  `data/test-artifacts/upgrade-portal-journeys/` and the temporary directory
+  `test-artifacts/upgrade-portal-journeys/` and the temporary directory
   of the operating system. It MUST change no production record.
 
 - **SR-016**: The harness MUST start no container.

@@ -23,7 +23,7 @@ pytestmark = pytest.mark.journey  # The journey runner opts these tests in.
 
 AGENT = "upj-crosscut"  # The assigned explorer name.
 SHOTS = (
-    Path(__file__).parents[4] / "data" / "test-artifacts" / "upgrade-portal-journeys" / AGENT
+    Path(__file__).parents[4] / "test-artifacts" / "upgrade-portal-journeys" / AGENT
 )  # The required screenshot folder.
 SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first stand-in site.
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second stand-in site.
@@ -333,7 +333,7 @@ def test_locks_heartbeat_conflict_and_release(page: Any, second_operator_page: A
     expect(first.get_by_test_id("lock-state-message")).to_contain_text("You hold", timeout=GATE_TIMEOUT_MS)  # Held.
     first_shots.step("held lock banner")  # Capture the held state.
     token = first.get_by_test_id("lock-banner").get_attribute("data-lock-token")  # Read the heartbeat token.
-    assert token, "The held banner has no lock token."  # The heartbeat needs this value.
+    assert token is not None and token != "", "The held banner has no lock token."  # The heartbeat needs this value.
     heartbeat = first.request.post(  # Beat the lock through the documented API.
         f"/api/sites/{SITE_ID}/lock/heartbeat",
         data={"lock_token": token},
@@ -427,6 +427,7 @@ def test_missing_run_error_page_offers_back_link(page: Any) -> None:
     expect(page.get_by_role("link", name="Go to the site list")).to_be_visible(
         timeout=GATE_TIMEOUT_MS
     )  # Recovery link.
+    assert page.get_by_role("link", name="Go to the site list").count() == 1  # The error page offers recovery.
 
 
 @pytest.mark.xfail(strict=True, reason="F-upj-crosscut-02: missing org job renders JSON instead of an error page")
@@ -437,6 +438,7 @@ def test_missing_org_job_error_page_offers_back_link(page: Any) -> None:
     expect(page.get_by_role("link", name="Go to the site list")).to_be_visible(
         timeout=GATE_TIMEOUT_MS
     )  # Recovery link.
+    assert page.get_by_role("link", name="Go to the site list").count() == 1  # The error page offers recovery.
 
 
 @pytest.mark.xfail(strict=True, reason="F-upj-crosscut-03: unknown URL renders JSON instead of an error page")
@@ -447,6 +449,7 @@ def test_unknown_url_error_page_offers_back_link(page: Any) -> None:
     expect(page.get_by_role("link", name="Go to the site list")).to_be_visible(
         timeout=GATE_TIMEOUT_MS
     )  # Recovery link.
+    assert page.get_by_role("link", name="Go to the site list").count() == 1  # The error page offers recovery.
 
 
 @pytest.mark.xfail(strict=True, reason="F-upj-crosscut-04: CSRF POST returns JSON without a recovery link")

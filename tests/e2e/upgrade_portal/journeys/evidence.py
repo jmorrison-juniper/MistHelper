@@ -22,9 +22,9 @@ from typing import Any  # The Playwright objects carry no stub types in this pro
 logger = logging.getLogger(__name__)  # Keep the journey records under this module name.
 
 # WHY: The repository root is four levels above this file. The artifacts stay
-# under `data/`, which git ignores, so no screenshot reaches a commit.
+# under `test-artifacts/`, which git ignores, so no screenshot reaches a commit.
 REPO_ROOT = Path(__file__).parents[4]  # tests/e2e/upgrade_portal/journeys -> repository root.
-ARTIFACT_ROOT = REPO_ROOT / "data" / "test-artifacts" / "upgrade-portal-journeys"  # One folder for all journeys.
+ARTIFACT_ROOT = REPO_ROOT / "test-artifacts" / "upgrade-portal-journeys"  # One folder for all journeys.
 NAVIGATION_TIMING = (  # Read the server time and the load time that the browser measured.
     "() => { const n = performance.getEntriesByType('navigation')[0];"
     " return n ? { ttfb: n.responseStart - n.requestStart, load: n.loadEventEnd } : null; }"
