@@ -35,6 +35,7 @@ class FakeClient:
         self.devices = devices  # WHY: list_inventory returns this controlled set.
         self.replacements: list[ReplaceRequest] = []  # WHY: tests assert request gating.
         self.backup_read = False  # WHY: tests assert backup read happened before request.
+        self.fail_replace = False  # WHY: one test verifies durable logging when Mist refuses the request.
 
     def list_inventory(self) -> list[InventoryDevice]:
         """Return fake inventory devices."""
@@ -47,6 +48,8 @@ class FakeClient:
 
     def replace_device(self, request: ReplaceRequest) -> dict[str, str]:
         """Record the replacement request."""
+        if self.fail_replace:  # WHY: simulate a Mist request failure without network access.
+            raise RuntimeError("Mist refused replacement")  # WHY: operation must write an error row.
         self.replacements.append(request)  # WHY: tests assert exactly one sent request.
         return {"message": "sent"}  # WHY: operation writes this result message.
 
@@ -122,6 +125,21 @@ def test_operation_cancel_sends_no_request(monkeypatch: Any) -> None:
     DeviceReplaceOperation.run_with_dependencies("org-1", client, persistence, dry_run=False)  # WHY: exercise cancel.
     assert client.replacements == []  # WHY: request must not send without exact confirmation.
     assert "cancelled" in (TEST_DATA_DIR / "DeviceReplaceLog.csv").read_text(encoding="utf-8")
+    _clean_data_dir()  # WHY: leave no project-relative test artifact.
+
+
+def test_operation_logs_error_when_replace_request_fails(monkeypatch: Any) -> None:
+    """Mist request failures create an error log row."""
+    _clean_data_dir()  # WHY: isolate file evidence for this test.
+    old_device = _device()  # WHY: source device.
+    new_device = _device(id="new-id", mac="aabbcc000002", site_id="", name="New AP")  # WHY: target device.
+    client = FakeClient([old_device, new_device])  # WHY: fake inventory and replacement send.
+    client.fail_replace = True  # WHY: force the replace request to fail.
+    FakeInputUtils.answers = ["Old AP", "1", "REPLACE"]  # WHY: reach the failing replace call.
+    monkeypatch.setattr(operation_module, "SourceDependencyResolver", FakeResolver)  # WHY: no interactive input.
+    persistence = DeviceReplacePersistence(TEST_DATA_DIR)  # WHY: controlled project-relative outputs.
+    DeviceReplaceOperation.run_with_dependencies("org-1", client, persistence, dry_run=False)  # WHY: exercise error.
+    assert "error" in (TEST_DATA_DIR / "DeviceReplaceLog.csv").read_text(encoding="utf-8")
     _clean_data_dir()  # WHY: leave no project-relative test artifact.
 
 

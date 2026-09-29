@@ -143,7 +143,20 @@ class DeviceReplaceOperation:
                 "Dry run completed. No request was sent.",
             )
             return  # WHY: dry-run stops before the destructive API call.
-        result = client.replace_device(request)  # WHY: all safety gates passed, so send one request.
+        try:  # WHY: a refused Mist request still needs a durable result row.
+            result = client.replace_device(request)  # WHY: all safety gates passed, so send one request.
+        except Exception as error:  # WHY: preserve the error in the operator log and stop cleanly.
+            logger.error("Mist inventory replacement request failed: %s", error)  # WHY: operator sees the cause.
+            DeviceReplaceOperation._write_result(
+                org_id,
+                persistence,
+                old_device,
+                new_device,
+                backup_path,
+                "error",
+                str(error),
+            )
+            return  # WHY: the failed request has a durable row, so the workflow is complete.
         message = str(result.get("message") or result.get("status") or "Replacement request sent.")  # WHY: row text.
         DeviceReplaceOperation._write_result(org_id, persistence, old_device, new_device, backup_path, "sent", message)
 
