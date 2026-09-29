@@ -1,0 +1,17 @@
+{
+  "workflow": "speckit",
+  "specName": "WebSockets tab in the Operations portal",
+  "branch": "feat/3551-websocket-tab",
+  "currentStep": "specify",
+  "status": "specified",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-29T18:50:56.061Z"
+    }
+  ],
+  "telemetryInstanceId": "df1b0c16-95f1-47a4-87ce-2cf829d22c5e"
+}
