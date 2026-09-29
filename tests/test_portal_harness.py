@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import sys
 from datetime import datetime
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from portal_harness import (
+from tests.portal_harness import (  # Import through the package so root tools imports stay visible.
     classify_select_state,
     classify_terminal_defects,
     parse_log_phase_timing,
@@ -51,6 +47,17 @@ def test_log_phase_parser_uses_utc_start_window() -> None:
     assert timing.walk_seconds == 2.0
 
 
+def test_log_phase_parser_handles_empty_input_window() -> None:
+    """An empty log stays safe when the caller passes no start window."""
+    lines: list[str] = []  # Exercise an empty log because a new run can have no lines yet.
+
+    timing = parse_log_phase_timing(lines, "0", None)  # Use no window to prove the optional guard stays safe.
+
+    assert timing.handler_seconds is None  # No start marker means the handler duration is unknown.
+    assert timing.walk_seconds is None  # No walk marker means the walk duration is unknown.
+    assert timing.error_lines == []  # No log lines must produce no false error.
+
+
 def test_verdict_reconciliation_detects_status_mismatch() -> None:
     """A stale badge cannot override the server run state."""
     verdict = reconcile_verdict("failed", "Complete", run_started=True)
@@ -85,3 +92,17 @@ def test_terminal_defect_classification_marks_failed_and_slow() -> None:
     assert [defect["kind"] for defect in defects] == ["runtime", "performance"]
     assert defects[0]["severity"] == "high"
     assert defects[1]["severity"] == "medium"
+
+
+def test_terminal_defect_classification_accepts_negative_elapsed() -> None:
+    """A clock rollback does not create a false terminal defect."""
+    defects = classify_terminal_defects("-1", "", "completed", -1.0, "")  # Use edge values from a bad clock sample.
+
+    assert defects == []  # A completed run below the slow threshold has no defect.
+
+
+def test_terminal_defect_classification_accepts_zero_elapsed() -> None:
+    """An instant completed run does not create a performance defect."""
+    defects = classify_terminal_defects(0, "Zero duration", "completed", 0, "")  # Exercise zero timer values.
+
+    assert defects == []  # A completed run at zero seconds has no defect.
