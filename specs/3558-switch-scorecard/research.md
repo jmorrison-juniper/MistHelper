@@ -12,7 +12,7 @@
 
 **Decision**: Use `mistapi.api.v1.orgs.stats.listOrgDevicesStats`.
 
-**Rationale**: The implementation step must verify this symbol in the installed SDK before coding the client. If the symbol is absent, the client records the mismatch and uses the session path method.
+**Rationale**: The installed SDK exposes `<function listOrgDevicesStats ...>` at `mistapi.api.v1.orgs.stats.listOrgDevicesStats`, verified with the assigned virtual environment on 2026-09-29. If a future SDK removes the symbol, the client must record the mismatch and use the session path method.
 
 **Alternatives considered**: A hand-built pagination loop was rejected by the fleet contract.
 
