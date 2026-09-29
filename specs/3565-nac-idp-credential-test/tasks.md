@@ -12,10 +12,10 @@
 
 **Purpose**: Create the owned feature paths and non-code feature records.
 
-- [ ] T001 Create package structure in `src/troubleshooting/nac_idp_credential_test/` with `__init__.py`.
-- [ ] T002 Create test structure in `tests/unit/troubleshooting/nac_idp_credential_test/` with `__init__.py`.
-- [ ] T003 Create release note `changelog.d/issue-3565-nac-idp-credential-test.md`.
-- [ ] T004 Create wiring manifest `specs/3565-nac-idp-credential-test/wiring.md` and mark `MistHelper.py` registration as deferred to the integration pull request.
+- [x] T001 Create package structure in `src/troubleshooting/nac_idp_credential_test/` with `__init__.py`. (delivered: src/troubleshooting/nac_idp_credential_test/__init__.py)
+- [x] T002 Create test structure in `tests/unit/troubleshooting/nac_idp_credential_test/` with `__init__.py`. (delivered: tests/unit/troubleshooting/nac_idp_credential_test/__init__.py)
+- [x] T003 Create release note `changelog.d/issue-3565-nac-idp-credential-test.md`. (delivered: changelog.d/issue-3565-nac-idp-credential-test.md)
+- [x] T004 Create wiring manifest `specs/3565-nac-idp-credential-test/wiring.md` and mark `MistHelper.py` registration as deferred to the integration pull request. (delivered: specs/3565-nac-idp-credential-test/wiring.md)
 
 ---
 
@@ -132,3 +132,4 @@
 2. Add failure-path tests and clean failure output.
 3. Run all owned quality gates.
 4. Update tasks as delivered with evidence notes.
+
