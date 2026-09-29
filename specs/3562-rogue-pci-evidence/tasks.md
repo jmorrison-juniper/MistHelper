@@ -6,17 +6,17 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create package directory and `__init__.py` in `src/reports/rogue_pci_evidence/__init__.py`.
-- [ ] T002 Create test directory and `__init__.py` in `tests/unit/reports/rogue_pci_evidence/__init__.py`.
-- [ ] T003 Create release note fragment in `changelog.d/issue-3562-rogue-pci-evidence.md`.
-- [ ] T004 Update wiring manifest in `specs/3562-rogue-pci-evidence/wiring.md` with final handler, menu, primary key, and deferred registration details.
+- [x] T001 Create package directory and `__init__.py` in `src/reports/rogue_pci_evidence/__init__.py`.
+- [x] T002 Create test directory and `__init__.py` in `tests/unit/reports/rogue_pci_evidence/__init__.py`.
+- [x] T003 Create release note fragment in `changelog.d/issue-3562-rogue-pci-evidence.md`.
+- [x] T004 Update wiring manifest in `specs/3562-rogue-pci-evidence/wiring.md` with final handler, menu, primary key, and deferred registration details.
 
 ## Phase 2: Foundational
 
-- [ ] T005 Implement dataclasses and constants in `src/reports/rogue_pci_evidence/model.py`.
-- [ ] T006 Implement CSV row builders and summary builder in `src/reports/rogue_pci_evidence/model.py`.
-- [ ] T007 Implement no-network model fixtures in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
-- [ ] T008 Implement client test doubles in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_client.py`.
+- [x] T005 Implement dataclasses and constants in `src/reports/rogue_pci_evidence/model.py`.
+- [x] T006 Implement CSV row builders and summary builder in `src/reports/rogue_pci_evidence/model.py`.
+- [x] T007 Implement no-network model fixtures in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
+- [x] T008 Implement client test doubles in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_client.py`.
 
 ## Phase 3: User Story 1 - Export PCI rogue evidence pack (P1)
 
@@ -24,10 +24,10 @@
 
 **Independent Test**: Run the operation with fake client data and fake exporters. Confirm that all three outputs are written with no prompt.
 
-- [ ] T009 [P] [US1] Add operation tests for the three evidence outputs in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_operation.py`.
-- [ ] T010 [US1] Implement the Mist API client shell in `src/reports/rogue_pci_evidence/client.py`.
-- [ ] T011 [US1] Implement `RoguePciEvidencePack.run()` orchestration in `src/reports/rogue_pci_evidence/operation.py`.
-- [ ] T012 [US1] Implement Markdown summary writing in `src/reports/rogue_pci_evidence/operation.py`.
+- [x] T009 [P] [US1] Add operation tests for the three evidence outputs in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_operation.py`.
+- [x] T010 [US1] Implement the Mist API client shell in `src/reports/rogue_pci_evidence/client.py`.
+- [x] T011 [US1] Implement `RoguePciEvidencePack.run()` orchestration in `src/reports/rogue_pci_evidence/operation.py`.
+- [x] T012 [US1] Implement Markdown summary writing in `src/reports/rogue_pci_evidence/operation.py`.
 
 ## Phase 4: User Story 2 - Classify rogue detections (P2)
 
@@ -35,9 +35,9 @@
 
 **Independent Test**: Use fixture rows where one SSID equals an org WLAN SSID and the BSSID is not an org AP BSSID. Confirm `honeypot`.
 
-- [ ] T013 [P] [US2] Add honeypot, rogue, and neighbor classification tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
-- [ ] T014 [US2] Implement detection normalization and classification in `src/reports/rogue_pci_evidence/model.py`.
-- [ ] T015 [US2] Implement rogue AP and event row aggregation in `src/reports/rogue_pci_evidence/client.py`.
+- [x] T013 [P] [US2] Add honeypot, rogue, and neighbor classification tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
+- [x] T014 [US2] Implement detection normalization and classification in `src/reports/rogue_pci_evidence/model.py`.
+- [x] T015 [US2] Implement rogue AP and event row aggregation in `src/reports/rogue_pci_evidence/client.py`.
 
 ## Phase 5: User Story 3 - Report site detection settings (P3)
 
@@ -45,14 +45,14 @@
 
 **Independent Test**: Use fixture settings with one `rogue.enabled` false site. Confirm CSV and summary counts.
 
-- [ ] T016 [P] [US3] Add site settings and detection-off summary tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
-- [ ] T017 [US3] Implement paced `getSiteSetting` reads in `src/reports/rogue_pci_evidence/client.py`.
-- [ ] T018 [US3] Implement site settings row mapping in `src/reports/rogue_pci_evidence/model.py`.
+- [x] T016 [P] [US3] Add site settings and detection-off summary tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
+- [x] T017 [US3] Implement paced `getSiteSetting` reads in `src/reports/rogue_pci_evidence/client.py`.
+- [x] T018 [US3] Implement site settings row mapping in `src/reports/rogue_pci_evidence/model.py`.
 
 ## Phase 6: Polish and Cross-Cutting
 
-- [ ] T019 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, and `pytest` on the new package and tests.
-- [ ] T020 Run `vulture` and `interrogate` on `src/reports/rogue_pci_evidence`.
+- [x] T019 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, and `pytest` on the new package and tests.
+- [x] T020 Run `vulture` and `interrogate` on `src/reports/rogue_pci_evidence`.
 - [ ] T021 Repair any `speckit.analyze` findings in `specs/3562-rogue-pci-evidence/`, `src/reports/rogue_pci_evidence/`, and `tests/unit/reports/rogue_pci_evidence/`.
 - [ ] T022 Create the draft pull request body in `specs/3562-rogue-pci-evidence/pr-body.md`.
 
@@ -85,4 +85,3 @@
 3. Build the operation after the model and client seams exist.
 4. Prove each user story with a no-network unit test.
 5. Keep MistHelper registration deferred to [wiring.md](./wiring.md).
-
