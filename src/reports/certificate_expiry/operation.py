@@ -71,8 +71,28 @@ class CertificateExpiryReport:
         )  # Log result.
 
     @staticmethod
+    def _primary_key_strategy_ready() -> bool:
+        """Return true when the integration pull request installed the export strategy."""
+        from src.refactors.endpoint_primary_key_strategies import (  # Import lazily to avoid startup work.
+            ENDPOINT_PRIMARY_KEY_STRATEGIES,
+        )
+
+        return EXPORT_ENDPOINT_NAME in ENDPOINT_PRIMARY_KEY_STRATEGIES  # Require a strategy before live export.
+
+    @staticmethod
+    def _ensure_primary_key_strategy() -> None:
+        """Stop export until integration adds the primary key strategy."""
+        logger.info("Certificate expiry report checks primary key strategy")  # Log before the guard check.
+        if not CertificateExpiryReport._primary_key_strategy_ready():  # Block unregistered live exports.
+            raise RuntimeError(
+                "certificate_expiry_report primary key strategy is not registered"
+            )  # Stop before DataExporter writes.
+        logger.debug("Certificate expiry report primary key strategy is registered")  # Log the guard result.
+
+    @staticmethod
     def _export(report: CertificateReport) -> bool:
         """Write the report rows to the configured backend."""
+        CertificateExpiryReport._ensure_primary_key_strategy()  # Block export until integration completes wiring.
         rows = report.export_rows()  # Convert records to export dictionaries after the privacy guard.
         logger.info("Certificate expiry report writes rows=%d to %s", len(rows), EXPORT_FILENAME)  # Log before export.
         written = SourceDependencyResolver.DataExporter.write_with_format_selection(  # Use the shared export pipeline.

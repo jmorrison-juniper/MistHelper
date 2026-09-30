@@ -3,7 +3,7 @@
 from __future__ import annotations  # Keep annotations import-safe during startup.
 
 import logging  # Log API reads without logging response bodies.
-from collections.abc import Callable  # Type SDK callables without a concrete function type.
+from collections.abc import Callable  # Type page-reader callables without a concrete SDK function type.
 from dataclasses import dataclass  # Return source payloads and failures together.
 from typing import Any  # Type SDK response payloads without unsafe casts.
 
@@ -48,11 +48,25 @@ class CertificateExpiryClient:
             return len(rows) if isinstance(rows, list) else len(payload)  # Return a metadata-safe count.
         return 0 if payload is None else 1  # Count scalar metadata as one value.
 
+    @staticmethod
+    def _error_status(response: object) -> int | None:
+        """Return an HTTP error status from a response when one exists."""
+        status = getattr(response, "status_code", None)  # Read the SDK or test response status when present.
+        if isinstance(status, int) and status >= 400:  # Treat client and server errors as failed sources.
+            return status  # Return the error status for a metadata-only log.
+        return None  # Return no error for successful or statusless responses.
+
     def _read_single(self, source_name: str, operation: Callable[..., object]) -> tuple[Any, str | None]:
         """Read one non-paginated operation."""
         logger.info("Certificate expiry report reads source=%s", source_name)  # Log before the API call.
         try:  # Keep one failed source from stopping the report.
             response = operation(self.mist_session, self.org_id)  # Call the SDK operation.
+            status = self._error_status(response)  # Check HTTP status without reading sensitive payloads.
+            if status is not None:  # Convert API errors into failed source metadata.
+                logger.warning(
+                    "Certificate expiry source=%s returned HTTP status=%d", source_name, status
+                )  # Log status.
+                return [], source_name  # Return an empty payload and mark the source failed.
             payload = self._response_data(response)  # Unwrap the SDK response.
             logger.debug(
                 "Certificate expiry source=%s returned count=%d", source_name, self._payload_count(payload)
@@ -65,8 +79,7 @@ class CertificateExpiryClient:
     def _read_paginated(
         self,
         source_name: str,
-        operation: Callable[..., object],
-        **kwargs: Any,
+        page_reader: Callable[[int], object],
     ) -> tuple[list[Any], str | None]:
         """Read one operation that accepts limit and page."""
         logger.info(
@@ -76,9 +89,13 @@ class CertificateExpiryClient:
         page = 1  # Mist list endpoints start pagination at page one.
         try:  # Keep pagination failures scoped to this source.
             while True:  # Read until a page returns fewer rows than the limit.
-                response = operation(
-                    self.mist_session, self.org_id, limit=self.page_limit, page=page, **kwargs
-                )  # Call one page.
+                response = page_reader(page)  # Read one page through an explicit SDK call site.
+                status = self._error_status(response)  # Check HTTP status before reading payload details.
+                if status is not None:  # Convert API errors into failed source metadata.
+                    logger.warning(
+                        "Certificate expiry source=%s page=%d returned HTTP status=%d", source_name, page, status
+                    )  # Log status only.
+                    return rows, source_name  # Return any prior rows and mark the source failed.
                 payload = self._response_data(response)  # Unwrap the SDK response.
                 page_rows = self._page_rows(payload)  # Normalize rows from SDK and wrapped payloads.
                 rows.extend(page_rows)  # Add the current page rows to the source list.
@@ -100,10 +117,19 @@ class CertificateExpiryClient:
         """Read device certificate expiry values."""
         return self._read_paginated(  # Use pagination because the endpoint exposes limit and page.
             "listOrgDevicesStats",
-            mistapi.api.v1.orgs.stats.listOrgDevicesStats,
+            self._read_device_stats_page,
+        )
+
+    def _read_device_stats_page(self, page: int) -> object:
+        """Read one device stats page with explicit Mist SDK arguments."""
+        return mistapi.api.v1.orgs.stats.listOrgDevicesStats(
+            self.mist_session,
+            self.org_id,
+            limit=self.page_limit,
+            page=page,
             type="all",
             fields="cert_expiry,name,mac,type,site_id",
-        )
+        )  # Keep SDK compatibility by avoiding kwargs forwarding.
 
     def read_org_settings(self) -> tuple[Any, str | None]:
         """Read organization settings certificate fields."""
@@ -119,15 +145,25 @@ class CertificateExpiryClient:
 
     def read_org_ssos(self) -> tuple[list[Any], str | None]:
         """Read SSO IdP certificate data."""
-        return self._read_paginated(
-            "listOrgSsos", mistapi.api.v1.orgs.ssos.listOrgSsos
-        )  # The SDK module name is plural `ssos`.
+        return self._read_paginated("listOrgSsos", self._read_org_ssos_page)  # The SDK module name is plural `ssos`.
+
+    def _read_org_ssos_page(self, page: int) -> object:
+        """Read one SSO page with explicit Mist SDK arguments."""
+        return mistapi.api.v1.orgs.ssos.listOrgSsos(
+            self.mist_session, self.org_id, limit=self.page_limit, page=page
+        )  # Keep SDK compatibility by avoiding kwargs forwarding.
 
     def read_org_psk_portals(self) -> tuple[list[Any], str | None]:
         """Read PSK portal IdP certificate data."""
         return self._read_paginated(
-            "listOrgPskPortals", mistapi.api.v1.orgs.pskportals.listOrgPskPortals
+            "listOrgPskPortals", self._read_org_psk_portals_page
         )  # The SDK module name is `pskportals`.
+
+    def _read_org_psk_portals_page(self, page: int) -> object:
+        """Read one PSK portal page with explicit Mist SDK arguments."""
+        return mistapi.api.v1.orgs.pskportals.listOrgPskPortals(
+            self.mist_session, self.org_id, limit=self.page_limit, page=page
+        )  # Keep SDK compatibility by avoiding kwargs forwarding.
 
     @staticmethod
     def _page_rows(payload: Any) -> list[Any]:
@@ -144,6 +180,10 @@ class CertificateExpiryClient:
         logger.info("Certificate expiry report reads source=%s", "getOrgNacCrl")  # Log before the raw read.
         try:  # Keep a metadata failure from stopping certificate rows.
             response = self.mist_session.mist_get(path)  # Read the OpenAPI path through the session seam.
+            status = self._error_status(response)  # Check HTTP status before reading payload details.
+            if status is not None:  # Convert API errors into failed source metadata.
+                logger.warning("Certificate expiry source=%s returned HTTP status=%d", "getOrgNacCrl", status)  # Log.
+                return [], "getOrgNacCrl"  # Return an empty payload and mark the source failed.
             payload = self._response_data(response)  # Unwrap the response without logging content.
             logger.debug(
                 "Certificate expiry source=%s returned count=%d", "getOrgNacCrl", self._payload_count(payload)

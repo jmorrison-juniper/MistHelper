@@ -1,6 +1,6 @@
 # Implementation Plan: Certificate Expiry Report
 
-**Branch**: `3553-certificate-expiry-report` | **Date**: 2026-09-29 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/3553-certificate-expiry-report` | **Date**: 2026-09-29 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/3553-certificate-expiry-report/spec.md`
 
@@ -12,6 +12,15 @@ Add menu 272 as a read-only organization certificate expiry report. The report w
 certificate expiry, organization certificate settings, NAC server certificates, SSO IdP
 certificates, PSK portal IdP certificates, and CA certificates. It will normalize all sources into
 one `CertificateExpiry.csv` file and one console band summary.
+
+This fleet branch delivers the package, tests, release note, and wiring manifest. The integration
+pull request must register menu 272 in `MistHelper.py`, `src/utils/operation_registry.py`,
+`src/refactors/endpoint_primary_key_strategies.py`, `README.md`, and generated references before
+the feature reaches release.
+
+The package remains unregistered on this branch. `CertificateExpiryReport.run()` includes a runtime
+guard that blocks export until the integration pull request adds the primary key strategy. No
+production path can export rows without that strategy.
 
 The implementation will use a class-based package at `src/reports/certificate_expiry/`. The package
 will contain `client.py` for Mist API reads, `model.py` for dataclasses and pure normalization, and
@@ -27,12 +36,13 @@ session, organization, and exporter through `SourceDependencyResolver`, matching
 `DataExporter` and `SourceDependencyResolver` facilities. `requirements.txt` will receive an
 explicit `cryptography` pin during implementation.
 
-**Storage**: Multi-backend export through `DataExporter.write_with_format_selection()` with
-`CertificateExpiry.csv` under `data/`. The planned endpoint name is `certificate_expiry_report`.
+**Storage**: Multi-backend export through `DataExporter.write_with_format_selection()` with the
+bare filename `CertificateExpiry.csv`. `DataExporter` resolves the effective path under `data/`.
+The planned endpoint name is `certificate_expiry_report`.
 
 **Testing**: `pytest` unit tests under `tests/unit/reports/certificate_expiry/`. Planned validation
-also includes `python -m py_compile MistHelper.py`, `python -m ruff check MistHelper.py`, and
-`python -m black --check MistHelper.py`.
+also includes syntax, Ruff, Black, mypy, pydocstyle, Vulture, and interrogate checks for
+`src/reports/certificate_expiry/` and `tests/unit/reports/certificate_expiry/`.
 
 **Target Platform**: Windows local development and the existing Linux container runtime.
 
@@ -41,9 +51,10 @@ also includes `python -m py_compile MistHelper.py`, `python -m ruff check MistHe
 **Performance Goals**: Complete one organization report with one bounded pass over each source.
 Use paginated reads where the Mist endpoint declares pagination.
 
-**Constraints**: The report is read-only. It must run in `--test` without prompts. It must not log or
-export certificate bodies, private keys, passwords, or complete PEM text. It must use
-`SourceDependencyResolver`, `DataExporter`, and platform-safe paths.
+**Constraints**: The report is read-only. Its handler must run without prompts in unit tests, and
+the integrated menu must run in `--test` without prompts after the integration pull request wires
+menu 272. It must not log or export certificate bodies, private keys, or complete PEM text. It
+must use `SourceDependencyResolver`, `DataExporter`, and platform-safe paths.
 
 **Scale/Scope**: One organization, six certificate scopes, one CSV export, and one console summary.
 The feature owns `src/reports/certificate_expiry/` and `tests/unit/reports/certificate_expiry/`
@@ -124,8 +135,9 @@ Key decisions:
 - Use `listOrgCertificates` for organization CA certificate data. The assignment name
   `getOrgCertificates` maps to this verified OpenAPI and SDK operation.
 - Use `listOrgSsos` and `listOrgPskPortals` for SAML IdP certificate fields.
-- Treat `getOrgCrlFile` and `getOrgNacCrl` as non-row sources because their schemas do not expose
-  active certificate expiry rows.
+- Treat `getOrgCrlFile` and `getOrgNacCrl` as metadata-only completeness sources because their
+  schemas do not expose active certificate expiry rows. Successful reads create no CSV rows, and
+  failed reads appear only in the failed-source summary.
 - Use direct `cryptography` imports to parse PEM certificates. Pin the dependency in
   `requirements.txt` during implementation.
 
@@ -160,6 +172,11 @@ These entries are planned for the implementation step, because this step edits o
 | Check | Planned command | Expected result |
 | - | - | - |
 | Unit tests | `python -m pytest tests\unit\reports\certificate_expiry` | All certificate report unit tests pass. |
-| Syntax | `python -m py_compile MistHelper.py` | No output. |
-| Lint | `python -m ruff check MistHelper.py` | All checks pass. |
-| Format | `python -m black --check MistHelper.py` | No file needs formatting. |
+| Syntax | `python -m py_compile MistHelper.py <each new .py file>` | No output. |
+| Lint | `python -m ruff check src\reports\certificate_expiry tests\unit\reports\certificate_expiry` | All checks pass. |
+| Format | `python -m black --check src\reports\certificate_expiry tests\unit\reports\certificate_expiry` | No file needs formatting. |
+| Types | `python -m mypy src\reports\certificate_expiry --config-file pyproject.toml` | No type errors. |
+| Docstrings | `python -m pydocstyle src\reports\certificate_expiry` | No docstring errors. |
+| Dead code | `python -m vulture src\reports\certificate_expiry --min-confidence 70` | No findings. |
+| Docstring coverage | `python -m interrogate -v src\reports\certificate_expiry` | At least 90 percent coverage. |
+| Dependency security | `python -m pip_audit -r requirements.txt` | No vulnerabilities that block the pull request. |

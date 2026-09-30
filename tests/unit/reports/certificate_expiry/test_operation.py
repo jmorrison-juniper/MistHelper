@@ -79,6 +79,9 @@ def operation_fixture(monkeypatch) -> None:
         operation, "SourceDependencyResolver", SourceDependencyResolverStub
     )  # Replace the resolver seam.
     monkeypatch.setattr(operation, "CertificateExpiryClient", ClientStub)  # Replace the client seam.
+    monkeypatch.setattr(
+        CertificateExpiryReport, "_primary_key_strategy_ready", staticmethod(lambda: True)
+    )  # Simulate the deferred integration primary key strategy.
 
 
 def test_operation_runs_without_prompt_and_exports_contract() -> None:
@@ -107,6 +110,16 @@ def test_operation_runs_without_prompt_and_exports_contract() -> None:
     assert call["rows"][0]["owner_name"] == "ap-1"  # Verify the row came from the fixture.
 
 
+def test_operation_blocks_export_without_primary_key_strategy(monkeypatch) -> None:
+    """The handler stops before export when integration has not registered the strategy."""
+    monkeypatch.setattr(
+        CertificateExpiryReport, "_primary_key_strategy_ready", staticmethod(lambda: False)
+    )  # Simulate missing integration wiring.
+    with pytest.raises(RuntimeError, match="primary key strategy"):  # Verify the operation fails before export.
+        CertificateExpiryReport.run()  # Run the handler with the missing strategy guard.
+    assert ExporterStub.calls == []  # Verify no export happens without the strategy.
+
+
 def test_mixed_source_resilience_keeps_valid_rows() -> None:
     """One unparsable value does not remove a valid row."""
     generated_at = datetime.now(tz=UTC)  # Build a current fixture expiry window.
@@ -122,8 +135,8 @@ def test_mixed_source_resilience_keeps_valid_rows() -> None:
     assert {row["note"] for row in rows} == {"", "unparsable"}  # Verify the parse failure is visible.
 
 
-def test_privacy_logs_and_rows_do_not_expose_certificate_text(caplog) -> None:
-    """Logs and output rows omit PEM bodies and private-key markers."""
+def test_privacy_logs_console_and_rows_do_not_expose_certificate_text(caplog, capsys) -> None:
+    """Logs, console lines, and output rows omit PEM bodies and private-key markers."""
     generated_at = datetime.now(tz=UTC)  # Build a current fixture expiry window.
     pem = CertificateFixtureFactory.pem(
         generated_at + timedelta(days=60), "private.example"
@@ -138,10 +151,13 @@ def test_privacy_logs_and_rows_do_not_expose_certificate_text(caplog) -> None:
     CertificateExpiryReport.run()  # Run the operation with fakes.
     output_text = str(ExporterStub.calls[0]["rows"])  # Inspect the exported metadata only.
     log_text = caplog.text  # Inspect captured log messages.
+    console_text = capsys.readouterr().out  # Inspect console summary lines.
     assert "BEGIN CERTIFICATE" not in output_text  # Verify no PEM marker in rows.
     assert "BEGIN PRIVATE KEY" not in output_text  # Verify no private-key marker in rows.
     assert "BEGIN CERTIFICATE" not in log_text  # Verify no PEM marker in logs.
     assert "BEGIN PRIVATE KEY" not in log_text  # Verify no private-key marker in logs.
+    assert "BEGIN CERTIFICATE" not in console_text  # Verify no PEM marker in console output.
+    assert "BEGIN PRIVATE KEY" not in console_text  # Verify no private-key marker in console output.
 
 
 def test_console_summary_counts_match_export_rows(capsys) -> None:
@@ -172,6 +188,20 @@ def test_failed_source_summary_is_separate_from_empty_sources(caplog) -> None:
     caplog.set_level(logging.WARNING)  # Capture warning lines.
     CertificateExpiryReport.run()  # Run the operation with fakes.
     assert "Certificate expiry failed sources: listOrgCertificates" in caplog.text  # Verify failed source summary.
+
+
+def test_crl_metadata_creates_no_rows_and_failed_source_summary(caplog) -> None:
+    """CRL metadata stays out of rows, and CRL failures stay in the summary."""
+    ClientStub.payloads = {
+        "getOrgCrlFile": {"available": True},
+        "getOrgNacCrl": {"available": False},
+    }  # Provide metadata-only CRL evidence.
+    ClientStub.failed_sources = ["getOrgNacCrl"]  # Simulate a failed CRL metadata read.
+    caplog.set_level(logging.WARNING)  # Capture warning lines.
+    CertificateExpiryReport.run()  # Run the operation with only CRL metadata.
+    rows = ExporterStub.calls[0]["rows"]  # Read exported rows.
+    assert rows == []  # Verify metadata-only CRL sources do not create rows.
+    assert "Certificate expiry failed sources: getOrgNacCrl" in caplog.text  # Verify CRL failure summary.
 
 
 def test_wiring_manifest_contains_deferred_sections() -> None:

@@ -12,15 +12,15 @@
 
 ### User Story 1 - Run certificate expiry report without prompts (Priority: P1)
 
-A NOC operator runs menu 272 in test mode and receives a complete certificate expiry report without any prompt. The report gives one organization-wide list of certificates and the number of days remaining before each certificate expires.
+A NOC operator runs menu 272 in test mode after the integration pull request wires the menu entry. This branch delivers the no-prompt handler, export contract, tests, and wiring manifest. The report gives one organization-wide list of certificates and the number of days remaining before each certificate expires.
 
 **Why this priority**: This is the main value of the feature. Operators need one repeatable view of certificate renewal risk instead of manually checking multiple certificate locations.
 
-**Independent Test**: Run the operation with `--test`. Confirm that it completes without interactive input and writes `data/CertificateExpiry.csv`.
+**Independent Test**: Run the report handler with a unit fixture that replaces the menu dispatcher, Mist session, and exporter. Confirm that it completes without interactive input and requests `CertificateExpiry.csv`. The integration pull request must prove the full `--test` menu path after it registers menu 272.
 
 **Acceptance Scenarios**:
 
-1. **Given** test mode is active, **When** the operator runs menu 272, **Then** the operation completes without prompting for input.
+1. **Given** test mode is active and menu 272 is wired by the integration pull request, **When** the operator runs menu 272, **Then** the operation completes without prompting for input.
 2. **Given** certificate data exists, **When** the operation finishes, **Then** `data/CertificateExpiry.csv` contains one row for each certificate found.
 3. **Given** a certificate row is written, **When** the operator opens the report, **Then** the row includes scope, owner name or device name, subject, issuer, not_after in UTC, days remaining, band, and any note needed to explain parse status.
 
@@ -81,7 +81,7 @@ A NOC operator reads the console summary after the run and sees how many certifi
 
 **Why this priority**: The summary gives immediate risk awareness before the operator opens the CSV file.
 
-**Independent Test**: Run menu 272 with known test data and compare each console band count to the rows in `data/CertificateExpiry.csv`.
+**Independent Test**: Run the report handler with known test data and compare each console band count to the exported rows.
 
 **Acceptance Scenarios**:
 
@@ -118,11 +118,11 @@ A reviewer checks that the feature has the required planning and release artifac
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST add menu 272 as the certificate expiry report operation.
-- **FR-002**: The operation MUST run in `--test` with no prompt.
-- **FR-003**: The operation MUST write `CertificateExpiry.csv` under `data/`.
+- **FR-001**: This branch MUST prepare the menu 272 report handler and fleet wiring evidence. The integration pull request MUST register menu 272 before release.
+- **FR-002**: The integrated operation MUST run in `--test` with no prompt. This branch MUST prove the handler no-prompt behavior with a unit fixture.
+- **FR-003**: The operation MUST pass the bare filename `CertificateExpiry.csv` to `DataExporter`, which writes under `data/`.
 - **FR-004**: The CSV MUST contain one row per certificate found.
-- **FR-005**: Each CSV row MUST include scope, owner name or device name, subject, issuer, not_after in UTC, days remaining, band, and note.
+- **FR-005**: Each CSV row MUST include scope, owner name or device name, subject, issuer, serial, not_after in UTC, days remaining, band, and note.
 - **FR-006**: Supported scope values MUST include `device`, `org device cert`, `NAC server cert`, `SSO IdP`, `PSK portal IdP`, and `CA cert`.
 - **FR-007**: A valid PEM certificate string MUST parse to a `not_after` date using the `cryptography` package.
 - **FR-008**: An unparsable certificate value MUST produce exactly one CSV row with note `unparsable` and MUST NOT raise an exception.
@@ -140,6 +140,9 @@ A reviewer checks that the feature has the required planning and release artifac
 - **FR-020**: The wiring manifest `specs/3553-certificate-expiry-report/wiring.md` MUST exist and include every fleet contract section.
 - **FR-021**: The release note fragment `changelog.d/issue-3553-certificate-expiry-report.md` MUST exist before release.
 - **FR-022**: The operation MUST keep report output inside the `data/` directory.
+- **FR-023**: CRL sources MUST be read as metadata-only completeness evidence. They MUST NOT create certificate rows unless a future API exposes a certificate expiry value.
+- **FR-024**: Failed CRL reads MUST appear only in the failed-source summary.
+- **FR-025**: The handler MUST block export until `certificate_expiry_report` exists in the primary key strategy table.
 
 ### Key Entities
 
@@ -152,7 +155,7 @@ A reviewer checks that the feature has the required planning and release artifac
 
 ### Measurable Outcomes
 
-- **SC-001**: In test mode, the operation completes without prompting and creates `data/CertificateExpiry.csv` in 100% of test runs with valid fixtures.
+- **SC-001**: The handler test completes without prompting and requests `CertificateExpiry.csv` in 100% of valid fixture runs. The integration pull request proves the full `--test` path.
 - **SC-002**: 100% of supported certificate sources in the test fixture produce rows with the required shared column set.
 - **SC-003**: 100% of fixture certificates are assigned to the expected band based on their UTC not_after value and days remaining.
 - **SC-004**: Unparsable certificate values complete without exception and produce exactly one `unparsable` row in 100% of parse-failure test cases.

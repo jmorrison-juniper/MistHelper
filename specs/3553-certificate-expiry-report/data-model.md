@@ -30,7 +30,7 @@ Validation rules:
 - The source must preserve the source name for parse-failure notes.
 - The source must produce no row when the certificate value is absent.
 
-## Entity: CertificateRecord
+## Entity: CertificateExpiryRecord
 
 Purpose: One metadata-only row in `CertificateExpiry.csv`.
 
@@ -71,7 +71,7 @@ Fields:
 | - | - | - | - |
 | `org_id` | string | Yes | Organization identifier used by the report. |
 | `generated_at` | string | Yes | UTC ISO 8601 run timestamp. |
-| `rows` | list of `CertificateRecord` | Yes | Metadata-only report rows. |
+| `rows` | list of `CertificateExpiryRecord` | Yes | Metadata-only report rows. |
 | `band_counts` | map | Yes | Counts for all four bands. |
 | `source_counts` | map | Yes | Count of rows by source. |
 | `failed_sources` | list of strings | Yes | Source names that could not be read. |

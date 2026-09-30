@@ -64,3 +64,59 @@ def test_client_keeps_successful_rows_when_one_source_fails(monkeypatch) -> None
     result = client.collect_sources()  # Collect with one failing source.
     assert "listOrgCertificates" in result.failed_sources  # Verify failed-source collection.
     assert result.payloads["getOrgSettings"] == {"device_cert": {}}  # Verify successful sources remain available.
+
+
+def test_client_records_http_4xx_source_failure(monkeypatch) -> None:
+    """A client HTTP failure records the source and keeps other sources available."""
+    session = SimpleNamespace(mist_get=Mock(return_value=SimpleNamespace(data=[])))  # Use a non-network fake session.
+    client = CertificateExpiryClient(session, "org-1", page_limit=1000)  # Build the client under test.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.stats,
+        "listOrgDevicesStats",
+        Mock(return_value=SimpleNamespace(status_code=403, data={"error": "forbidden"})),
+    )  # Return one client error response.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.setting, "getOrgSettings", Mock(return_value=SimpleNamespace(data={"device_cert": {}}))
+    )  # Patch settings.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.cert, "listOrgCertificates", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch certificates.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.ssos, "listOrgSsos", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch SSO reads.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.pskportals, "listOrgPskPortals", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch PSK portals.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.crl, "getOrgCrlFile", Mock(return_value=SimpleNamespace(data=b""))
+    )  # Patch CRL evidence.
+    result = client.collect_sources()  # Collect with one client-error source.
+    assert "listOrgDevicesStats" in result.failed_sources  # Verify 4xx failed-source collection.
+    assert result.payloads["listOrgDevicesStats"] == []  # Verify 4xx data is not exported.
+
+
+def test_client_records_http_5xx_source_failure(monkeypatch) -> None:
+    """A server HTTP failure records the source and keeps other sources available."""
+    session = SimpleNamespace(mist_get=Mock(return_value=SimpleNamespace(data=[])))  # Use a non-network fake session.
+    client = CertificateExpiryClient(session, "org-1", page_limit=1000)  # Build the client under test.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.stats, "listOrgDevicesStats", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch device stats.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.setting, "getOrgSettings", Mock(return_value=SimpleNamespace(status_code=503, data={}))
+    )  # Return one server error response.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.cert, "listOrgCertificates", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch certificates.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.ssos, "listOrgSsos", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch SSO reads.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.pskportals, "listOrgPskPortals", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch PSK portals.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.crl, "getOrgCrlFile", Mock(return_value=SimpleNamespace(data=b""))
+    )  # Patch CRL evidence.
+    result = client.collect_sources()  # Collect with one server-error source.
+    assert "getOrgSettings" in result.failed_sources  # Verify 5xx failed-source collection.
+    assert result.payloads["getOrgSettings"] == []  # Verify 5xx data is not exported.
