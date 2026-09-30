@@ -2,7 +2,7 @@
 
 # Menu API endpoints: interactive
 
-This page lists the Mist API endpoints of the 29 menu options in the `interactive` category.
+This page lists the Mist API endpoints of the 33 menu options in the `interactive` category.
 A menu option in this category needs a live operator session.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -16,8 +16,8 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["interactive: 29 menu<br/>options"]
-    root --> f_sites_devices["sites/devices<br/>16 menu options"]
+    root["interactive: 33 menu<br/>options"]
+    root --> f_sites_devices["sites/devices<br/>17 menu options"]
     root --> f_sites_stats["sites/stats<br/>14 menu options"]
     root --> f_orgs_sites["orgs/sites<br/>7 menu options"]
     root --> f_websocket_channels["websocket channels<br/>4 menu options"]
@@ -29,7 +29,7 @@ flowchart LR
     root --> f_orgs_orgs["orgs/orgs<br/>2 menu options"]
     root --> f_orgs_pcaps["orgs/pcaps<br/>2 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>2 menu options"]
-    root --> more["25 more families"]
+    root --> more["34 more families"]
 ```
 
 ## Menu 0
@@ -683,3 +683,97 @@ flowchart LR
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) | [`OrgTicketManager._fetch_tickets_for_selection`](../../src/org/org_ticket_manager.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/tickets/{ticket_id}` | [`orgs.tickets.getOrgTicket`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/get-org-ticket) | [`OrgTicketManager._fetch_ticket_detail`](../../src/org/org_ticket_manager.py) | Call |
+
+## Menu 283
+
+- Title: Trigger a synthetic test on demand
+- Handler: `SyntheticTestTrigger.run`
+- Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils)
+- Endpoints: 5
+
+```mermaid
+flowchart LR
+    menu["Menu 283: Trigger a<br/>synthetic test on<br/>demand"]
+    menu --> c1["SyntheticTestClient"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/check_radius_server"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/synthetic_test"]
+    c1 --> e3["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}<br/>/synthetic_test"]
+    c1 --> e4["POST<br/>/api/v1/sites<br/>/{site_id}<br/>/synthetic_test"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/synthetic_test<br/>/search"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/check_radius_server` | [`sites.devices.startSiteSwitchRadiusSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/start-site-switch-radius-synthetic-test) | [`SyntheticTestClient._trigger_by_scope`](../../src/troubleshooting/synthetic_test_trigger/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}/synthetic_test` | [`sites.devices.getSiteDeviceSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/get-site-device-synthetic-test) | [`SyntheticTestClient._poll_by_scope`](../../src/troubleshooting/synthetic_test_trigger/client.py) | Call |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/synthetic_test` | [`sites.devices.triggerSiteDeviceSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/trigger-site-device-synthetic-test) | [`SyntheticTestClient._trigger_by_scope`](../../src/troubleshooting/synthetic_test_trigger/client.py) | Call |
+| POST | `/api/v1/sites/{site_id}/synthetic_test` | [`sites.synthetic_test.triggerSiteSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/trigger-site-synthetic-test) | [`SyntheticTestClient._trigger_by_scope`](../../src/troubleshooting/synthetic_test_trigger/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/synthetic_test/search` | [`sites.synthetic_test.searchSiteSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/search-site-synthetic-test) | [`SyntheticTestClient._poll_by_scope`](../../src/troubleshooting/synthetic_test_trigger/client.py) | Call |
+
+## Menu 284
+
+- Title: Test the guest portal SMS provider
+- Handler: `SmsProviderTest.run`
+- Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils)
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 284: Test the<br/>guest portal SMS<br/>provider"]
+    menu --> c1["SmsProviderTest<br/>Client"]
+    c1 --> e1["POST<br/>/api/v1/utils<br/>/test_smsglobal"]
+    c1 --> e2["POST<br/>/api/v1/utils<br/>/test_telstra"]
+    c1 --> e3["POST<br/>/api/v1/utils<br/>/test_twilio"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| POST | `/api/v1/utils/test_smsglobal` | [`utils.test_smsglobal.testSiteWlanSmsGlobal`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/test-site-wlan-sms-global) | [`SmsProviderTestClient._default_calls`](../../src/troubleshooting/sms_provider_test/client.py) | Reference |
+| POST | `/api/v1/utils/test_telstra` | [`utils.test_telstra.testSiteWlanTelstraSetup`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/test-site-wlan-telstra-setup) | [`SmsProviderTestClient._default_calls`](../../src/troubleshooting/sms_provider_test/client.py) | Reference |
+| POST | `/api/v1/utils/test_twilio` | [`utils.test_twilio.testSiteWlanTwilioSetup`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/test-site-wlan-twilio-setup) | [`SmsProviderTestClient._default_calls`](../../src/troubleshooting/sms_provider_test/client.py) | Reference |
+
+## Menu 285
+
+- Title: Validate a NAC identity provider credential
+- Handler: `NacIdpCredentialTest.run`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter)
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 285: Validate a<br/>NAC identity<br/>provider cred..."]
+    menu --> c1["NacIdpCredential<br/>Client"]
+    c1 --> e1["POST<br/>/api/v1/orgs<br/>/{org_id}/mist_nac<br/>/test_idp"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/ssos"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| POST | `/api/v1/orgs/{org_id}/mist_nac/test_idp` | [`orgs.mist_nac.validateOrgIdpCredential`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-idp/validate-org-idp-credential) | [`NacIdpCredentialClient.validate_credential`](../../src/troubleshooting/nac_idp_credential_test/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`NacIdpCredentialClient._read_nac_setting_idps`](../../src/troubleshooting/nac_idp_credential_test/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`NacIdpCredentialClient._read_sso_idps`](../../src/troubleshooting/nac_idp_credential_test/client.py) | Call |
+
+## Menu 290
+
+- Title: Run spectrum analysis and RF diagnostic recording
+- Handler: `RfDiagnosticsOperation.run`
+- Shared helpers: [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils)
+- Endpoints: 4
+
+```mermaid
+flowchart LR
+    menu["Menu 290: Run<br/>spectrum analysis<br/>and RF diagnost..."]
+    menu --> c1["RfDiagnosticsClient"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}<br/>/analyze_spectrum"]
+    c1 --> e2["POST<br/>/api/v1/sites<br/>/{site_id}/rfdiags"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/rfdiags<br/>/{rfdiag_id}<br/>/download"]
+    c1 --> e4["POST<br/>/api/v1/sites<br/>/{site_id}/rfdiags<br/>/{rfdiag_id}/stop"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| POST | `/api/v1/sites/{site_id}/analyze_spectrum` | [`sites.analyze_spectrum.initiateSiteAnalyzeSpectrum`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/spectrum-analysis/initiate-site-analyze-spectrum) | [`RfDiagnosticsClient.start_spectrum`](../../src/troubleshooting/rf_diagnostics/client.py) | Call |
+| POST | `/api/v1/sites/{site_id}/rfdiags` | [`sites.rfdiags.startSiteRecording`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rfdiags/start-site-recording) | [`RfDiagnosticsClient.start_recording`](../../src/troubleshooting/rf_diagnostics/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/rfdiags/{rfdiag_id}/download` | [`sites.rfdiags.downloadSiteRfdiagRecording`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rfdiags/download-site-rfdiag-recording) | [`RfDiagnosticsClient.download_recording`](../../src/troubleshooting/rf_diagnostics/client.py) | Call |
+| POST | `/api/v1/sites/{site_id}/rfdiags/{rfdiag_id}/stop` | [`sites.rfdiags.stopSiteRfdiagRecording`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rfdiags/stop-site-rfdiag-recording) | [`RfDiagnosticsClient.stop_recording`](../../src/troubleshooting/rf_diagnostics/client.py) | Call |

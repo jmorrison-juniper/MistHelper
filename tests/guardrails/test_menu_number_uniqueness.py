@@ -48,6 +48,8 @@ KNOWN_TEMPORARY_MENU_GAPS: frozenset[str] = frozenset(
     {
         "280",  # Issue #3617: reserved until the menu 280 module passes human review in #3637.
         "281",  # Issue #3617: reserved until the menu 281 module passes human review in #3637.
+        "286",  # Issue #3618: reserved until menu 286 passes human review in PR #3634 and PR #3582.
+        "287",  # Issue #3618: reserved until menu 287 passes human review in PR #3634 and PR #3582.
     }
 )
 

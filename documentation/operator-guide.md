@@ -10,7 +10,7 @@ does not start.
 
 ## The menu
 
-The tool holds **279 operations**, numbered 1 to 282 with gaps at 152, 280-281.
+The tool holds **285 operations**, numbered 1 to 290 with gaps at 152, 280-281, 286-287.
 Menu 0 is Exit. Read [the menu reference](menu_reference.md) for the full list,
 which is generated from the code.
 
@@ -65,6 +65,24 @@ health, VPN peers, BGP peers, and DHCP pool status.
 
 Menu 282 exports a rogue and PCI evidence pack. Use it to collect rogue AP
 detection evidence for a PCI DSS review.
+
+Menu 283 triggers one synthetic test on demand. Use it when you must validate a
+site test path before a larger repair.
+
+Menu 284 tests a guest portal SMS provider. Use it to verify external SMS
+credentials before you troubleshoot guest access.
+
+Menu 285 validates one NAC identity provider credential. Use it before an
+Access Assurance cutover.
+
+Menu 288 shows Session Smart Router registration commands. Use it when you must
+onboard a router manually.
+
+Menu 289 exports a site client fingerprint census. Use it to plan NAC policy
+groups from observed client attributes.
+
+Menu 290 runs bounded RF diagnostics. Use it to start AP spectrum analysis or a
+client RF diagnostic recording.
 
 ## What MistHelper does
 

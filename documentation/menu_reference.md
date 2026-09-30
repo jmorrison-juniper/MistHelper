@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **279 actionable menu entries**, numbered
-1 to 282 with gaps at 152, 280-281.
-Menu 0 is Exit, so the registry holds 280 entries in total.
+MistHelper defines **285 actionable menu entries**, numbered
+1 to 290 with gaps at 152, 280-281, 286-287.
+Menu 0 is Exit, so the registry holds 286 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,10 +22,10 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270 | Interactive safe | 93 operations. They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. An operation that can change Mist data first asks for a typed value, such as a token or a count. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289 | Interactive safe | 95 operations. They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. An operation that can change Mist data first asks for a typed value, such as a token or a count. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-279, 282 | Safe org exports | 83 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
-| 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
+| 0, 124-150, 192, 283-285, 290 | Interactive | 33 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
 | 14, 18-19, 59, 97-101, 153 | Resource intensive | 10 operations. They run long or fetch a large payload. |
 | 151 | Continuous loop | 1 operations. They loop until the operator stops them. |
@@ -314,6 +314,12 @@ never runs in an automated test pass.
 | 278 | Export the organization access point scorecard | Safe org exports | `ApScorecard.run` |
 | 279 | Organization WAN Edge Scorecard | Safe org exports | `WanEdgeScorecard.run` |
 | 282 | Export the rogue and PCI evidence pack | Safe org exports | `RoguePciEvidencePack.run` |
+| 283 | Trigger a synthetic test on demand | Interactive | `SyntheticTestTrigger.run` |
+| 284 | Test the guest portal SMS provider | Interactive | `SmsProviderTest.run` |
+| 285 | Validate a NAC identity provider credential | Interactive | `NacIdpCredentialTest.run` |
+| 288 | Show the SSR registration commands | Interactive safe | `SsrRegistrationCommands.run` |
+| 289 | Export the client fingerprint census for a site | Interactive safe | `ClientFingerprintCensus.run` |
+| 290 | Run spectrum analysis and RF diagnostic recording | Interactive | `RfDiagnosticsOperation.run` |
 
 ### Endpoint family sub-menus (259-268)
 

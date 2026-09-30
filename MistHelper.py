@@ -672,6 +672,9 @@ from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main e
 
 MainEntrypoint.bind_host_module(sys.modules[__name__])  # Give source packages a bound host without root imports.
 
+from src.gateway.ssr_registration.operation import (
+    SsrRegistrationCommands,  # Menu 288 (issue #3568) -- show SSR registration commands.
+)
 from src.marvis.actions.operation import (
     MarvisActionsOperation,  # Menu 270 (issue #3299) -- Marvis Actions export and bulk resolve.
 )
@@ -714,6 +717,9 @@ from src.reports.ap_scorecard.operation import (
     ApScorecard,  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.
 )
 from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- cert expiry.
+from src.reports.client_fingerprint_census.operation import (
+    ClientFingerprintCensus,  # Menu 289 (issue #3569) -- export a site client fingerprint census.
+)
 from src.reports.e911_bssid import (
     E911BSSIDReportGenerator,  # Module-level for tests + lazy-import re-export for src.export.org_export_utils
 )
@@ -771,6 +777,18 @@ from src.troubleshooting.marvis_troubleshoot_utils import (
 )
 from src.troubleshooting.marvis_troubleshoot_utils import (
     MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export
+)
+from src.troubleshooting.nac_idp_credential_test.operation import (
+    NacIdpCredentialTest,  # Menu 285 (issue #3565) -- validate one NAC identity provider credential safely.
+)
+from src.troubleshooting.rf_diagnostics.operation import (
+    RfDiagnosticsOperation,  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.
+)
+from src.troubleshooting.sms_provider_test.operation import (
+    SmsProviderTest,  # Menu 284 (issue #3564) -- Test guest portal SMS provider setup.
+)
+from src.troubleshooting.synthetic_test_trigger.operation import (
+    SyntheticTestTrigger,  # Menu 283 (issue #3563) -- trigger one synthetic test on demand.
 )
 from src.troubleshooting.troubleshoot_utils import (
     TroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
@@ -4604,6 +4622,54 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("282"),  # Read the safety class.
         destructive=False,  # The evidence pack reads Mist data and writes local files only.
         supports_fast=False,  # Keep report pacing under the handler.
+    ),
+    "283": GlobalImportManager.MenuEntry(  # Use named fields for menu 283.
+        menu_id="283",  # Store key for drift checks.
+        handler=SyntheticTestTrigger.run,
+        title="Trigger a synthetic test on demand",
+        category=OperationRegistry.skip_category("283"),  # Read the safety class.
+        destructive=False,  # The operation requires confirmation before it starts one bounded test.
+        supports_fast=False,  # Keep trigger pacing under the handler.
+    ),
+    "284": GlobalImportManager.MenuEntry(  # Use named fields for menu 284.
+        menu_id="284",  # Store key for drift checks.
+        handler=SmsProviderTest.run,
+        title="Test the guest portal SMS provider",
+        category=OperationRegistry.skip_category("284"),  # Read the safety class.
+        destructive=False,  # The operation sends one test message after confirmation only.
+        supports_fast=False,  # Keep provider test pacing under the handler.
+    ),
+    "285": GlobalImportManager.MenuEntry(  # Use named fields for menu 285.
+        menu_id="285",  # Store key for drift checks.
+        handler=NacIdpCredentialTest.run,
+        title="Validate a NAC identity provider credential",
+        category=OperationRegistry.skip_category("285"),  # Read the safety class.
+        destructive=False,  # The operation validates one credential and exports no password.
+        supports_fast=False,  # Keep credential test pacing under the handler.
+    ),
+    "288": GlobalImportManager.MenuEntry(  # Use named fields for menu 288.
+        menu_id="288",  # Store key for drift checks.
+        handler=SsrRegistrationCommands.run,
+        title="Show the SSR registration commands",
+        category=OperationRegistry.skip_category("288"),  # Read the safety class.
+        destructive=False,  # The operation reads commands and asks before a local file write.
+        supports_fast=False,  # Keep command fetch pacing under the handler.
+    ),
+    "289": GlobalImportManager.MenuEntry(  # Use named fields for menu 289.
+        menu_id="289",  # Store key for drift checks.
+        handler=ClientFingerprintCensus.run,
+        title="Export the client fingerprint census for a site",
+        category=OperationRegistry.skip_category("289"),  # Read the safety class.
+        destructive=False,  # The operation reads counts and writes one local report.
+        supports_fast=False,  # Keep census pacing under the handler.
+    ),
+    "290": GlobalImportManager.MenuEntry(  # Use named fields for menu 290.
+        menu_id="290",  # Store key for drift checks.
+        handler=RfDiagnosticsOperation.run,
+        title="Run spectrum analysis and RF diagnostic recording",
+        category=OperationRegistry.skip_category("290"),  # Read the safety class.
+        destructive=False,  # The operation starts bounded diagnostics only after confirmation.
+        supports_fast=False,  # Keep diagnostic pacing under the handler.
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.

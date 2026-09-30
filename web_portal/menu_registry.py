@@ -192,6 +192,8 @@ MENU_DESCRIPTIONS = {
     "278": "Export the organization access point scorecard",
     "279": "Organization WAN Edge Scorecard",
     "282": "Export the rogue and PCI evidence pack",
+    "288": "Show the SSR registration commands",
+    "289": "Export the client fingerprint census for a site",
 }
 
 
