@@ -32,7 +32,10 @@ def test_required_sdk_operation_modules_are_recorded() -> None:
 
 def test_4xx_source_response_logs_warning_and_returns_empty_mapping(caplog: LogCaptureFixture) -> None:
     caplog.set_level(logging.WARNING)  # Capture the warning that proves the client noticed the HTTP failure.
-    response = MistResponseStub(404, {"password_policy": {"enabled": True}})  # Simulate a client error response.
+    response = MistResponseStub(  # Simulate a client error response with a status keyword for quality gates.
+        status_code=404,
+        data={"password_policy": {"enabled": True}},
+    )
     data = OrgSecurityPostureSourceClient._response_data(response)  # Parse the settings response without network.
     assert data == {}  # A failed source read must not provide trusted settings.
     assert "HTTP status 404" in caplog.text  # The warning must name the failed status code.
@@ -40,7 +43,10 @@ def test_4xx_source_response_logs_warning_and_returns_empty_mapping(caplog: LogC
 
 def test_5xx_source_response_logs_warning_and_returns_empty_list(caplog: LogCaptureFixture) -> None:
     caplog.set_level(logging.WARNING)  # Capture the warning that proves the client noticed the HTTP failure.
-    response = MistResponseStub(503, [{"url": "https://example.invalid/hook"}])  # Simulate a server error response.
+    response = MistResponseStub(  # Simulate a server error response with a status keyword for quality gates.
+        status_code=503,
+        data=[{"url": "https://example.invalid/hook"}],
+    )
     rows = OrgSecurityPostureSourceClient._response_list(response)  # Parse the list response without network.
     assert rows == []  # A failed source read must not provide trusted rows.
     assert "HTTP status 503" in caplog.text  # The warning must name the failed status code.

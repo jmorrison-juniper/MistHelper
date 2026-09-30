@@ -4,5 +4,11 @@ from src.reports.org_security_posture import OrganizationSecuritySourceData, Org
 
 
 def test_package_exports_runner_and_model() -> None:
-    assert OrgSecurityPostureChecklist is not None  # Deferred integration needs the static handler export.
-    assert OrganizationSecuritySourceData is not None  # Tests and integration need the source data model export.
+    assert callable(OrgSecurityPostureChecklist.run)  # Deferred integration needs the static handler export.
+    assert OrganizationSecuritySourceData.__annotations__ == {  # Integration needs the source data contract.
+        "org_settings": "dict[str, Any]",
+        "org_ssos": "list[dict[str, Any]]",
+        "org_admins": "list[dict[str, Any]]",
+        "org_api_tokens": "list[dict[str, Any]]",
+        "org_webhooks": "list[dict[str, Any]]",
+    }

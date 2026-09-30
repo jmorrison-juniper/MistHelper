@@ -11,5 +11,5 @@ def test_test_mode_uses_fixture_data_without_api_context() -> None:
         return True  # Simulate successful export.
 
     summary = OrgSecurityPostureChecklist.run(test_mode=True, write_fn=write_fn)  # Run with no API session or org ID.
-    assert captured_rows  # Test mode must still produce CSV rows.
+    assert len(captured_rows) == 19  # Test mode must produce one row for each registered check.
     assert summary["pass"] == len(captured_rows)  # The built-in fixture is fully passing.
