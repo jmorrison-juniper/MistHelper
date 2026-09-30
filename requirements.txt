@@ -3,6 +3,8 @@
 
 # Core API and networking
 mistapi>=0.64.0,<0.65
+# Issue #3553: parse certificate expiry metadata from PEM certificates.
+cryptography>=50.0.1,<51
 requests>=2.34.2,<3
 websocket-client>=1.8.0,<2
 urllib3>=2.8.0,<3
@@ -79,7 +81,7 @@ hypothesis>=6.151.12,<7
 libcst>=1.9.0,<2
 
 # Note: The following are transitive dependencies installed automatically:
-# bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,
+# bcrypt, certifi, cffi, charset_normalizer, click, contourpy,
 # cycler, decorator, deprecation, Flask, fonttools, future, geocoder, hvac,
 # idna, importlib-metadata, invoke, itsdangerous, jinja2, kiwisolver,
 # markdown-it-py, markupsafe, mdurl, narwhals, nest-asyncio,
