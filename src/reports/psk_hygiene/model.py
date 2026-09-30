@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -44,7 +44,7 @@ class PskInput:
             name=_text(record.get("name")),  # Use an empty name when Mist omits it.
             ssid=normalize_ssid(record.get("ssid")),  # Trim SSID text for matching.
             role=_text(record.get("role")),  # Use an empty role when Mist omits it.
-            vlan=record.get("vlan"),  # Preserve the visible VLAN value from Mist.
+            vlan=record.get("vlan_id", record.get("vlan")),  # Prefer the Mist PSK vlan_id field when present.
             usage=_optional_int(record.get("usage")),  # Normalize empty usage to None.
             max_usage=_optional_int(record.get("max_usage")),  # Normalize empty maximum usage to None.
             expire_time=_optional_text(record.get("expire_time")),  # Preserve the visible expire value.
@@ -83,6 +83,11 @@ class PskHygieneRow:
     def as_output_row(self) -> dict[str, str | int | bool]:
         """Return a dictionary safe for output backends."""
         return asdict(self)  # Convert the dataclass into the output row contract.
+
+    @classmethod
+    def column_names(cls) -> list[str]:
+        """Return output column names in stable order."""
+        return [field.name for field in fields(cls)]  # Use the dataclass as the single column-order source.
 
     @property
     def finding_labels(self) -> tuple[str, ...]:

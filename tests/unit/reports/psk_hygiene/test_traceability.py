@@ -10,10 +10,10 @@ def test_wiring_manifest_has_issue_3555_sections() -> None:
     root = Path(__file__).resolve().parents[4]  # Resolve the repository root from the test file.
     wiring = root / "specs" / "3555-psk-hygiene-report" / "wiring.md"  # Build the feature wiring path.
     text = wiring.read_text(encoding="utf-8")  # Read the traceability artifact.
-    assert "Issue**: #3555" in text  # The manifest must name the owning issue.
-    assert "Branch Contract" in text  # The manifest must include branch evidence.
-    assert "Scope Boundary" in text  # The manifest must include scope evidence.
-    assert "Release Note Contract" in text  # The manifest must include release evidence.
+    assert "Menu entries" in text  # The manifest must name the menu row.
+    assert "274" in text  # The manifest must name the assigned menu number.
+    assert "PskHygieneReport.run" in text  # The manifest must name the handler.
+    assert "psk_hygiene_report" in text  # The manifest must name the database strategy key.
 
 
 def test_release_fragment_exists_for_issue_3555() -> None:

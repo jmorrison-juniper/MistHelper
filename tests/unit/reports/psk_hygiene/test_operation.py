@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import builtins
 import logging
+from collections.abc import Iterator
 from typing import Any
+
+import pytest
 
 from src.reports.psk_hygiene.operation import PskHygieneReport
 
@@ -27,12 +30,17 @@ class _FakeDataExporter:
 
     @classmethod
     def write_with_format_selection(
-        cls, rows: list[dict[str, str | int | bool]], filename: str, api_function_name: str
+        cls,
+        rows: list[dict[str, str | int | bool]],
+        filename: str,
+        api_function_name: str,
+        fieldnames: list[str] | None = None,
     ) -> None:
         """Capture a sanitized export call."""
         cls.rows = rows  # Save the exported rows for contract checks.
         cls.filename = filename  # Save the filename for contract checks.
         cls.api_function_name = api_function_name  # Save the source name for contract checks.
+        cls.fieldnames = fieldnames or []  # Save column order for contract checks.
 
 
 class _FakeResolver:
@@ -45,6 +53,11 @@ class _FakeResolver:
 
 class _FakeClient:
     """Provide PSK hygiene inputs without network access."""
+
+    def __init__(self, apisession: object, org_id: str) -> None:
+        """Store operation constructor inputs."""
+        self.apisession = apisession  # Prove the operation passed the shared session.
+        self.org_id = org_id  # Prove the operation passed the resolved organization.
 
     def fetch_psks(self) -> list[dict[str, Any]]:
         """Return fake PSK rows with secret fields."""
@@ -71,23 +84,35 @@ class _FakeClient:
         return []  # Keep the operation test focused on direct WLAN matching.
 
 
+@pytest.fixture(autouse=True)
+def _operation_seams() -> Iterator[None]:
+    """Replace operation seams without changing the no-argument handler."""
+    original_client = PskHygieneReport.CLIENT_CLASS  # Save the production client seam.
+    original_resolver = PskHygieneReport.DEPENDENCY_RESOLVER  # Save the production dependency seam.
+    original_output = PskHygieneReport.OUTPUT  # Save the production console seam.
+    _FakeDataExporter.rows = []  # Clear rows before each test.
+    PskHygieneReport.CLIENT_CLASS = _FakeClient  # Use fake client inputs.
+    PskHygieneReport.DEPENDENCY_RESOLVER = _FakeResolver  # Use fake runtime dependencies.
+    PskHygieneReport.OUTPUT = lambda line: None  # Default tests do not need console text.
+    yield  # Let the test run with fake seams.
+    PskHygieneReport.CLIENT_CLASS = original_client  # Restore the production client seam.
+    PskHygieneReport.DEPENDENCY_RESOLVER = original_resolver  # Restore the production dependency seam.
+    PskHygieneReport.OUTPUT = original_output  # Restore the production console seam.
+
+
 def test_run_does_not_prompt(monkeypatch: Any) -> None:
     """The operation runs without calling input."""
     monkeypatch.setattr(builtins, "input", lambda prompt="": (_ for _ in ()).throw(AssertionError("prompt")))  # Fail.
-    result = PskHygieneReport.run(
-        client=_FakeClient(), dependency_resolver=_FakeResolver, output=lambda line: None
-    )  # Run the operation with fake dependencies.
+    result = PskHygieneReport.run()  # Run the no-argument menu handler with fake seams.
     assert result is True  # The operation should return a menu-test success value.
 
 
 def test_export_contract_columns() -> None:
     """The export receives the required PSK hygiene columns."""
-    PskHygieneReport.run(
-        client=_FakeClient(), dependency_resolver=_FakeResolver, output=lambda line: None
-    )  # Run the report with fake dependencies.
+    PskHygieneReport.run()  # Run the report with fake dependencies.
     row = _FakeDataExporter.rows[0]  # Read the captured export row.
     assert _FakeDataExporter.filename == "PskHygiene.csv"  # The output file name must match the contract.
-    assert _FakeDataExporter.api_function_name == "pskHygieneReport"  # The source name must be stable.
+    assert _FakeDataExporter.api_function_name == "psk_hygiene_report"  # The source name must be stable.
     assert set(row) == {  # The exported row must contain exactly the required safe columns.
         "name",
         "ssid",
@@ -108,7 +133,8 @@ def test_run_redacts_secrets_from_rows_logs_and_console(caplog: Any) -> None:
     """The operation never emits passphrase values."""
     output_lines: list[str] = []  # Capture console summary lines.
     caplog.set_level(logging.DEBUG)  # Capture debug logs for redaction proof.
-    PskHygieneReport.run(client=_FakeClient(), dependency_resolver=_FakeResolver, output=output_lines.append)  # Run.
+    PskHygieneReport.OUTPUT = output_lines.append  # Capture console summary lines.
+    PskHygieneReport.run()  # Run the no-argument handler.
     combined_output = "\n".join(output_lines)  # Combine console text for one redaction check.
     combined_rows = str(_FakeDataExporter.rows)  # Combine exported row values for one redaction check.
     assert "secret-value" not in combined_output  # The current passphrase must not reach console output.
@@ -123,7 +149,8 @@ def test_run_redacts_secrets_from_rows_logs_and_console(caplog: Any) -> None:
 def test_console_summary_counts_match_rows() -> None:
     """The console summary includes counts that match rows."""
     output_lines: list[str] = []  # Capture console summary lines.
-    PskHygieneReport.run(client=_FakeClient(), dependency_resolver=_FakeResolver, output=output_lines.append)  # Run.
+    PskHygieneReport.OUTPUT = output_lines.append  # Capture console summary lines.
+    PskHygieneReport.run()  # Run the no-argument handler.
     assert "Total PSKs reviewed: 1" in output_lines  # The total count should match one fake PSK.
     assert "Uncapped multi-use keys: 1" in output_lines  # The uncapped count should match the fake PSK.
     assert "Pending rotations: 1" in output_lines  # The rotation count should match the fake PSK.
@@ -133,7 +160,8 @@ def test_console_summary_counts_match_rows() -> None:
 def test_console_summary_redacts_secrets() -> None:
     """The console summary never includes secret values."""
     output_lines: list[str] = []  # Capture console summary lines.
-    PskHygieneReport.run(client=_FakeClient(), dependency_resolver=_FakeResolver, output=output_lines.append)  # Run.
+    PskHygieneReport.OUTPUT = output_lines.append  # Capture console summary lines.
+    PskHygieneReport.run()  # Run the no-argument handler.
     summary = "\n".join(output_lines)  # Combine summary lines for a redaction check.
     assert "secret-value" not in summary  # The current passphrase must not reach the summary.
     assert "old-secret-value" not in summary  # The old passphrase must not reach the summary.

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from src.reports.psk_hygiene import client as client_module
+from src.reports.psk_hygiene.client import DEFAULT_LIMIT
 
 
 def test_client_fetches_paginated_psks(monkeypatch: Any) -> None:
@@ -15,7 +16,7 @@ def test_client_fetches_paginated_psks(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         client_module.mistapi.api.v1.orgs.psks,
         "listOrgPsks",
-        lambda session, org_id: calls.append(f"psks:{org_id}") or response,
+        lambda session, org_id, limit: calls.append(f"psks:{org_id}:{limit}") or response,
     )  # Replace the SDK PSK endpoint with a fake.
     monkeypatch.setattr(
         client_module.mistapi,
@@ -24,7 +25,7 @@ def test_client_fetches_paginated_psks(monkeypatch: Any) -> None:
     )  # Replace pagination with a deterministic fake.
     client = client_module.PskHygieneClient(SimpleNamespace(), "org-1")  # Build the read-only client.
     assert client.fetch_psks() == [{"name": "key"}]  # The client should return normalized records.
-    assert calls == ["psks:org-1", "get_all"]  # The endpoint must run before pagination.
+    assert calls == [f"psks:org-1:{DEFAULT_LIMIT}", "get_all"]  # The endpoint must run before pagination.
 
 
 def test_client_fetches_paginated_wlans(monkeypatch: Any) -> None:
@@ -34,7 +35,7 @@ def test_client_fetches_paginated_wlans(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         client_module.mistapi.api.v1.orgs.wlans,
         "listOrgWlans",
-        lambda session, org_id: calls.append(f"wlans:{org_id}") or response,
+        lambda session, org_id, limit: calls.append(f"wlans:{org_id}:{limit}") or response,
     )  # Replace the SDK WLAN endpoint with a fake.
     monkeypatch.setattr(
         client_module.mistapi,
@@ -43,7 +44,7 @@ def test_client_fetches_paginated_wlans(monkeypatch: Any) -> None:
     )  # Replace pagination with a deterministic fake.
     client = client_module.PskHygieneClient(SimpleNamespace(), "org-1")  # Build the read-only client.
     assert client.fetch_wlans() == [{"ssid": "Facility"}]  # The client should return normalized records.
-    assert calls == ["wlans:org-1", "get_all"]  # The endpoint must run before pagination.
+    assert calls == [f"wlans:org-1:{DEFAULT_LIMIT}", "get_all"]  # The endpoint must run before pagination.
 
 
 def test_client_fetches_paginated_templates(monkeypatch: Any) -> None:
@@ -53,7 +54,7 @@ def test_client_fetches_paginated_templates(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         client_module.mistapi.api.v1.orgs.templates,
         "listOrgTemplates",
-        lambda session, org_id: calls.append(f"templates:{org_id}") or response,
+        lambda session, org_id, limit: calls.append(f"templates:{org_id}:{limit}") or response,
     )  # Replace the SDK template endpoint with a fake.
     monkeypatch.setattr(
         client_module.mistapi,
@@ -62,4 +63,4 @@ def test_client_fetches_paginated_templates(monkeypatch: Any) -> None:
     )  # Replace pagination with a deterministic fake.
     client = client_module.PskHygieneClient(SimpleNamespace(), "org-1")  # Build the read-only client.
     assert client.fetch_templates() == [{"name": "Template"}]  # The client should return normalized records.
-    assert calls == ["templates:org-1", "get_all"]  # The endpoint must run before pagination.
+    assert calls == [f"templates:org-1:{DEFAULT_LIMIT}", "get_all"]  # The endpoint must run before pagination.

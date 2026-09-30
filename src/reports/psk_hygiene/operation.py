@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from src.config.source_dependency_resolver import SourceDependencyResolver
 from src.reports.psk_hygiene.client import PskHygieneClient
 from src.reports.psk_hygiene.model import (
     HygieneSummary,
+    PskHygieneRow,
     build_hygiene_rows,
     psk_inputs_from_records,
     wlan_references_from_records,
@@ -35,26 +36,23 @@ class PskHygieneClientProtocol(Protocol):
 class PskHygieneReport:
     """Run the PSK hygiene report without prompts."""
 
-    API_NAME = "pskHygieneReport"  # Give DataExporter a stable report source name.
+    API_NAME = "psk_hygiene_report"  # Give DataExporter a stable report source name.
     FILENAME = "PskHygiene.csv"  # Keep the output file name aligned with the contract.
+    CLIENT_CLASS: ClassVar[Any] = PskHygieneClient  # Allow tests to replace the client without changing run().
+    DEPENDENCY_RESOLVER: ClassVar[Any] = SourceDependencyResolver  # Allow tests to replace shared runtime services.
+    OUTPUT: ClassVar[Callable[[str], None]] = echo  # Allow tests to capture console summary lines.
 
-    @staticmethod
-    def run(
-        client: PskHygieneClientProtocol | None = None,
-        dependency_resolver: Any | None = None,
-        output: Callable[[str], None] | None = None,
-    ) -> bool:
+    @classmethod
+    def run(cls) -> bool:
         """Run the PSK hygiene report and return success."""
-        resolver = dependency_resolver or SourceDependencyResolver  # Use the standard dependency seam by default.
-        output_fn = output or echo  # Use the repository console helper unless a test supplies a fake.
         logger.info("Resolving PSK hygiene report dependencies")  # Log before reading runtime dependencies.
-        apisession = resolver.apisession  # Reuse the authenticated Mist session from the application context.
-        org_id = resolver.ConfigUtils.get_cached_or_prompted_org_id()  # Reuse the standard organization resolver.
-        report_client = client or PskHygieneClient(apisession, org_id)  # Build the read-only client when needed.
+        apisession = cls.DEPENDENCY_RESOLVER.apisession  # Reuse the authenticated Mist session from the app context.
+        org_id = cls.DEPENDENCY_RESOLVER.ConfigUtils.get_cached_or_prompted_org_id()  # Reuse the standard resolver.
+        report_client = cls.CLIENT_CLASS(apisession, org_id)  # Build the read-only client through the testable seam.
         logger.debug("Resolved PSK hygiene dependencies for one organization")  # Avoid logging the organization ID.
-        rows, summary = PskHygieneReport._build_report(report_client)  # Fetch, sanitize, and score report data.
-        PskHygieneReport._write_summary(summary, output_fn)  # Print and log sanitized summary counts.
-        PskHygieneReport._export_rows(resolver, rows)  # Export sanitized rows through the configured backend.
+        rows, summary = cls._build_report(report_client)  # Fetch, sanitize, and score report data.
+        cls._write_summary(summary, cls.OUTPUT)  # Print and log sanitized summary counts.
+        cls._export_rows(cls.DEPENDENCY_RESOLVER, rows)  # Export sanitized rows through the configured backend.
         return True  # Signal success to menu test handling.
 
     @staticmethod
@@ -104,5 +102,6 @@ class PskHygieneReport:
             rows,
             PskHygieneReport.FILENAME,
             api_function_name=PskHygieneReport.API_NAME,
+            fieldnames=PskHygieneRow.column_names(),
         )  # Write only sanitized rows through the configured backend.
         logger.debug("Exported %d PSK hygiene rows", len(rows))  # Log only the safe exported row count.
