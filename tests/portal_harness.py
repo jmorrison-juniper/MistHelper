@@ -17,7 +17,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, TimeoutError, sync_playwright
 
 PORTAL_URL = os.environ.get("PORTAL_HARNESS_BASE_URL", "http://127.0.0.1:8055")
-ARTIFACT_ROOT = pathlib.Path("data/portal-test-artifacts")
+ARTIFACT_ROOT = pathlib.Path(__file__).resolve().parents[1] / "test-artifacts" / "operations-portal"
 SLOW_RUN_SECONDS = 45.0
 RUN_TIMEOUT_SECONDS = 210.0
 ROW_READY_SECONDS = 15.0

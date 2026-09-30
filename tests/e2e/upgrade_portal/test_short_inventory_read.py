@@ -83,7 +83,7 @@ TARGET_ROW_SELECTOR = '[data-testid^="upgrade-target-row-"]'  # One table row fo
 KEPT_DEVICE_COUNT = 3  # The short read keeps one device of each type, which is less than the site list count.
 SAVE_TIMEOUT_MS = 10000  # The save call reads the stand-in inventory, which may wait on a busy workstation.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of these journeys.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "short-inventory-read"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "short-inventory-read"
 )
 
 

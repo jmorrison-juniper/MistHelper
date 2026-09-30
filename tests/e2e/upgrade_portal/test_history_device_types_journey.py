@@ -78,7 +78,7 @@ cell => {
 }
 """  # A range measures the whole phrase, and the clip of the cell does not change the measure.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "history-device-types"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "history-device-types"
 )
 
 

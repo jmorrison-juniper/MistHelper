@@ -325,8 +325,7 @@ class TestTestOutputNeverSlowsTheWalk:
                         continue
                     if "test" in re.split(r"[-_.]", name.lower()):  # The name marks itself as test output.
                         named.setdefault(name, module.relative_to(REPOSITORY_ROOT).as_posix())
-        # Measured on 2026-09-23: three folders. The floor proves the guard still
-        # finds the known writers, so a broken pattern cannot report a clean result.
-        assert len(named) >= 3, f"the guard found only {sorted(named)}, so its patterns no longer match"
+        # Measured after issue #3202: two folders. The floor proves that the patterns still find known writers.
+        assert len(named) >= 2, f"the guard found only {sorted(named)}, so its patterns no longer match"
         unpruned = {name: module for name, module in named.items() if name not in EXCLUDED_DIR_NAMES}
         assert not unpruned, f"these test output folders are not pruned, so each run pays their walk: {unpruned}"

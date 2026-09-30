@@ -17,6 +17,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -28,12 +29,18 @@ logger = logging.getLogger(__name__)  # WHY: keep test log records on the module
 # The conftest that holds the reclaim. A conftest is not importable by name, so
 # these tests load it by path, the same way the conftest loads its own settings.
 _CONFTEST_PATH = Path(__file__).resolve().parents[3] / "tests" / "e2e" / "upgrade_portal" / "conftest.py"
+_FORBIDDEN_ARTIFACT_PATTERNS = (  # Match each path shape that writes test output into production data.
+    re.compile(r"""["']data["']\)?\s*/\s*["']test-artifacts["']"""),  # Match split pathlib paths.
+    re.compile(r"""["']data/portal-test-artifacts["']"""),  # Match the combined operations portal path.
+)
 
 
 @pytest.fixture(name="portal_conftest")
 def fixture_portal_conftest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     """Load the browser conftest and point its record at a temporary file."""
     logger.info("Loading the browser conftest from %s", _CONFTEST_PATH)  # Report before the load.
+    checkout_root = _CONFTEST_PATH.parents[3] / "data" / "test-artifacts" / "upgrade-portal"  # Live data path.
+    before = set(checkout_root.glob("*")) if checkout_root.exists() else set()  # Record existing artifacts.
     name = "upgrade_portal_e2e_conftest_owner"  # One fixed name, so a second load reuses the entry.
     spec = importlib.util.spec_from_file_location(name, _CONFTEST_PATH)
     assert spec is not None and spec.loader is not None, "the browser conftest must be loadable"
@@ -45,6 +52,8 @@ def fixture_portal_conftest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
         spec.loader.exec_module(module)
     finally:
         sys.modules.pop(name, None)
+    after = set(checkout_root.glob("*")) if checkout_root.exists() else set()  # Find import-time writes.
+    assert after == before, "loading the browser conftest must not create an artifact in repository data"
     monkeypatch.setattr(module, "SERVER_OWNER_PATH", tmp_path / "portal.pid")  # No shared file.
     monkeypatch.setattr(module, "RECLAIM_TRIES", 2)  # Two tries keep every test quick.
     monkeypatch.setattr(module, "RECLAIM_PAUSE_SECONDS", 0.0)  # No test waits on a real clock.
@@ -92,6 +101,37 @@ class TestTheOwnerRecord:
 
         portal_conftest._record_owner(_StandInProcess(4321))  # WHY: this must not raise.
         assert not portal_conftest.SERVER_OWNER_PATH.exists()  # WHY: prove the failed write left no bad record.
+
+
+class TestArtifactPaths:
+    """No test writer targets the repository data directory."""
+
+    @staticmethod
+    def _mounted_artifact_references(root: Path) -> list[Path]:
+        """Return each Python file that names a forbidden artifact path."""
+        logger.info("Scan test modules for mounted-data artifact paths")  # Record the guard before the scan.
+        references = []  # Collect each source file that can write test output into production data.
+        for path in sorted(root.rglob("*.py")):  # Read every Python test module under the supplied root.
+            source = path.read_text(encoding="utf-8")  # Read the source without importing its side effects.
+            if any(pattern.search(source) for pattern in _FORBIDDEN_ARTIFACT_PATTERNS):  # Find old path shapes.
+                references.append(path)  # Keep the file path for the failure report.
+        logger.debug("Scanned test modules and found %d forbidden path(s)", len(references))  # Report the count.
+        return references  # Give the caller every file that must move its artifacts.
+
+    def test_no_test_writer_targets_repository_data(self) -> None:
+        """Every test artifact writer stays outside the mounted data directory."""
+        test_root = _CONFTEST_PATH.parents[3] / "tests"  # Scan the complete test tree.
+        references = self._mounted_artifact_references(test_root)  # Find each mounted-data writer.
+        current_file = Path(__file__).resolve()  # This guard names the forbidden patterns as test data.
+        unexpected = [path for path in references if path.resolve() != current_file]  # Exclude this guard only.
+        assert not unexpected, f"test artifact writers target repository data: {unexpected}"  # Fail with every file.
+
+    def test_the_guard_detects_a_mounted_data_artifact_path(self, tmp_path: Path) -> None:
+        """The guard reports a test module that targets production data."""
+        bad_file = tmp_path / "test_bad_artifact.py"  # Create one isolated bad source file.
+        bad_file.write_text('ROOT = Path("data") / "test-artifacts"\n', encoding="utf-8")  # Seed the fault.
+        references = self._mounted_artifact_references(tmp_path)  # Run the same decision as the repository guard.
+        assert references == [bad_file], "the guard must report the mounted-data artifact writer"  # Prove failure.
 
 
 class TestReadingTheRecord:

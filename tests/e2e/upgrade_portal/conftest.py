@@ -39,6 +39,7 @@ import os
 import signal
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 from collections.abc import Iterator
@@ -148,6 +149,7 @@ REPO_ROOT = Path(__file__).parents[3]
 # from its scrubbed environment and never allocates a second server identity.
 CHILD_TEST_RUN_ID = os.environ.get("UPGRADE_PORTAL_E2E_RUN_ID", "")  # Empty only in the parent test process.
 if CHILD_TEST_RUN_ID:  # The WSGI child must use the resources that the parent allocated.
+    PARENT_ARTIFACT_DIRECTORY = None  # The child uses the artifact paths that the parent selected.
     E2E_RESOURCES = None  # The child owns no reservation socket.
     TEST_RUN_ID = CHILD_TEST_RUN_ID  # Keep record ownership equal to the expected response header.
     CAPTURE_PORT = int(os.environ[PORT_VARIABLE])  # Use the exact port that the parent passes.
@@ -155,7 +157,8 @@ if CHILD_TEST_RUN_ID:  # The WSGI child must use the resources that the parent a
     SERVER_LOG_PATH = Path(os.environ["UPGRADE_PORTAL_E2E_LOG_PATH"])  # Keep the parent-selected log path.
     SERVER_OWNER_PATH = Path(os.environ["UPGRADE_PORTAL_E2E_OWNER_PATH"])  # Keep the parent-selected owner path.
 else:  # The parent test process allocates one unique server resource set.
-    E2E_RESOURCES = allocate_resources(REPO_ROOT / "data" / "test-artifacts" / "upgrade-portal")
+    PARENT_ARTIFACT_DIRECTORY = tempfile.TemporaryDirectory(prefix="misthelper-upgrade-portal-")  # Auto-clean.
+    E2E_RESOURCES = allocate_resources(Path(PARENT_ARTIFACT_DIRECTORY.name))  # Stay outside repository data.
     TEST_RUN_ID = E2E_RESOURCES.test_run_id  # Bind all parent expectations to the allocated owner.
     CAPTURE_PORT = E2E_RESOURCES.port  # Pass the exact reserved loopback port to the child.
     ARTIFACT_DIRECTORY = E2E_RESOURCES.artifact_directory  # Keep all artifacts under one unique directory.

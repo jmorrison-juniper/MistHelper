@@ -13,7 +13,7 @@ sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not 
 MODE_PATH = "/select/mode"
 SITE_ID = "22222222-2222-2222-2222-222222222222"
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"
-SCREENSHOT_DIRECTORY = Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "fix-options"
+SCREENSHOT_DIRECTORY = Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "fix-options"
 
 
 def _save_screenshot(page: Any, name: str) -> Path:

@@ -55,7 +55,7 @@ rows => rows.map(row => {
 """  # One read gives the site, the action, and the operator of each row, so a long card needs no round trip each.
 GATE_TIMEOUT_MS = 5000  # The pages are server rendered, and each lock answer arrives from the stand-in store.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "audit-log"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "audit-log"
 )
 
 
@@ -69,7 +69,7 @@ def save_screenshot(page: Any, name: str) -> Path:
     Returns:
         The path of the saved file.
     """
-    SCREENSHOT_DIRECTORY.mkdir(parents=True, exist_ok=True)  # Keep the evidence under the repository data tree.
+    SCREENSHOT_DIRECTORY.mkdir(parents=True, exist_ok=True)  # Keep evidence outside the production data tree.
     path = SCREENSHOT_DIRECTORY / name  # One stable file name for each page state.
     logger.info("Save the journey screenshot %s", name)  # Log before the file write.
     page.screenshot(path=str(path), full_page=True)  # Capture the full page for the visual review.
