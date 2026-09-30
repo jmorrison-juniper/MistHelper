@@ -1,0 +1,35 @@
+"""Tests for API posture checks."""
+
+from src.reports.org_security_posture.checks.api import (
+    ApiAccessRestrictionCheck,
+    ApiTokenExpirationCheck,
+    ApiWebhookHttpsCheck,
+)
+from tests.unit.reports.org_security_posture.fixtures.api_posture_cases import ApiPostureCases
+
+
+def test_absent_api_setting_returns_review_with_absent_reason() -> None:
+    source_data = ApiPostureCases.absent_api_policy()  # Use source data without an API policy.
+    result = ApiAccessRestrictionCheck().run(source_data)  # Evaluate API access posture.
+    assert result.verdict == "review"  # Missing API settings must not pass.
+    assert "absent" in result.reason.lower()  # The reason must state that evidence is absent.
+
+
+def test_non_https_webhook_url_fails() -> None:
+    source_data = ApiPostureCases.non_https_webhook()  # Use source data with an HTTP webhook.
+    result = ApiWebhookHttpsCheck().run(source_data)  # Evaluate webhook transport posture.
+    assert result.verdict == "fail"  # Non-HTTPS webhooks must fail.
+    assert "non-https" in result.reason.lower()  # The reason must identify the transport defect.
+
+
+def test_long_lived_api_token_fails() -> None:
+    source_data = ApiPostureCases.long_lived_token()  # Use source data with an overlong token lifetime.
+    result = ApiTokenExpirationCheck().run(source_data)  # Evaluate token expiration posture.
+    assert result.verdict == "fail"  # Tokens over 365 days must fail.
+
+
+def test_absent_api_token_expiration_returns_review() -> None:
+    source_data = ApiPostureCases.absent_api_policy()  # Use source data without token evidence.
+    result = ApiTokenExpirationCheck().run(source_data)  # Evaluate token expiration posture.
+    assert result.verdict == "review"  # Missing token evidence requires review.
+    assert "absent" in result.reason.lower()  # The reason must state that evidence is absent.
