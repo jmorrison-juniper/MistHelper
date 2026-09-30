@@ -70,8 +70,8 @@ Actual menu registration, destructive test exclusion wiring, README updates, men
 
 - [X] T037 Run the SpecKit analyze step against `specs/3566-client-coa-disconnect/`.
 - [X] T038 Repair each analyze finding and commit the repairs.
-- [ ] T039 Push the branch after implementation gates pass.
-- [ ] T040 Push once more after analyze repairs land.
-- [ ] T041 Write `specs/3566-client-coa-disconnect/pr-body.md` with `Closes #3566`, the file list, the destructive operation warning, and the deferred wiring note.
+- [X] T039 Push the branch after implementation gates pass.
+- [X] T040 Push once more after analyze repairs land.
+- [X] T041 Write `specs/3566-client-coa-disconnect/pr-body.md` with `Closes #3566`, the file list, the destructive operation warning, and the deferred wiring note.
 - [ ] T042 Open a draft pull request against `main`.
 - [ ] T043 Add labels `feature`, `src`, and `tests`.
