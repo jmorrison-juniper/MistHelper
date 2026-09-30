@@ -131,7 +131,12 @@ def build_confirmation(prompt_target: str, raw_confirmation: str) -> Confirmatio
         logger.debug("Confirmation normalization failed")  # WHY: after failed normalization.
         normalized_confirmation = ""  # WHY: invalid confirmation can never match the prompt target.
     matched = normalized_confirmation == prompt_target  # WHY: exact normalized comparison is the safety gate.
-    confirmation = Confirmation(prompt_target, raw_confirmation, normalized_confirmation, matched)  # WHY: record result.
+    confirmation = Confirmation(  # WHY: record the full confirmation state for audits and tests.
+        prompt_target,
+        raw_confirmation,
+        normalized_confirmation,
+        matched,
+    )
     logger.debug("Built confirmation with matched=%s", matched)  # WHY: after confirmation build.
     return confirmation  # WHY: handler uses matched flag to continue or stop.
 

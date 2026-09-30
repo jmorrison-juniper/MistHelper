@@ -190,7 +190,10 @@ class ClientSessionControl:  # WHY: required class based handler for menu 286.
         logger.info("Prompting for client session control confirmation")  # WHY: before destructive confirmation.
         prompt = f"Type {request.target.display_value} again to confirm: "  # WHY: exact normalized target gate.
         raw_confirmation = deps.safe_input_fn(prompt, context="client_session_control_confirmation")  # WHY: EOF-safe.
-        confirmation = build_confirmation(request.target.normalized_value, str(raw_confirmation))  # WHY: compare target.
+        confirmation = build_confirmation(  # WHY: normalize and compare the operator confirmation.
+            request.target.normalized_value,
+            str(raw_confirmation),
+        )
         logger.debug("Confirmation prompt completed with matched=%s", confirmation.matched)  # WHY: after prompt.
         return confirmation  # WHY: caller decides whether to continue.
 

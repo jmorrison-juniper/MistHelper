@@ -52,15 +52,15 @@
 
 ## Phase 6: Quality Gates
 
-- [ ] T028 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m py_compile src\device\client_session_control\__init__.py src\device\client_session_control\models.py src\device\client_session_control\actions.py src\device\client_session_control\audit.py src\device\client_session_control\handler.py`.
-- [ ] T029 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m ruff check src\device\client_session_control tests\unit\device\client_session_control`.
-- [ ] T030 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m black --check src\device\client_session_control tests\unit\device\client_session_control`.
-- [ ] T031 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m mypy src\device\client_session_control --config-file pyproject.toml`.
-- [ ] T032 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m pydocstyle src\device\client_session_control`.
-- [ ] T033 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m pytest tests\unit\device\client_session_control -q --timeout=120`.
-- [ ] T034 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m vulture src\device\client_session_control --min-confidence 70`.
-- [ ] T035 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m interrogate -v src\device\client_session_control`.
-- [ ] T036 Commit any repairs from the quality gates.
+- [X] T028 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m py_compile src\device\client_session_control\__init__.py src\device\client_session_control\models.py src\device\client_session_control\actions.py src\device\client_session_control\audit.py src\device\client_session_control\handler.py`.
+- [X] T029 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m ruff check src\device\client_session_control tests\unit\device\client_session_control`.
+- [X] T030 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m black --check src\device\client_session_control tests\unit\device\client_session_control`.
+- [X] T031 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m mypy src\device\client_session_control --config-file pyproject.toml`.
+- [X] T032 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m pydocstyle src\device\client_session_control`.
+- [X] T033 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m pytest tests\unit\device\client_session_control -q --timeout=120`.
+- [X] T034 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m vulture src\device\client_session_control --min-confidence 70`.
+- [X] T035 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m interrogate -v src\device\client_session_control`.
+- [X] T036 Commit any repairs from the quality gates.
 
 ## Phase 7: Analyze, Push, and Pull Request
 
