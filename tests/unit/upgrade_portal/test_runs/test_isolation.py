@@ -3,15 +3,20 @@
 Why:
     The test portal holds its records in the stores of the test process. The
     child environment points ArangoDB and Redis at port 1 of the loopback
-    address, so a real connector call fails at once. Issue #3501 removed the
-    connector traps and the audit store, because no portal code read them.
+    address, so a real connector call fails at once. The child also disables
+    container autostart, even when the parent enables it (issue #3496).
+    Issue #3501 removed the connector traps and the audit store, because no
+    portal code read them.
 """
 
 from __future__ import annotations  # Keep annotations independent from import order.
 
+import logging
+import os
 from collections.abc import Callable  # Type one deliberate missing callable value.
 from pathlib import Path  # Build an isolated temporary artifact path.
 from typing import cast  # Type one deliberate invalid runtime value.
+from unittest.mock import Mock, call, patch
 
 import pytest  # Check the fail-closed exceptions.
 
@@ -22,6 +27,8 @@ from src.upgrade_portal.api.run_controls import (  # Import the explicit factory
     E2ERecordOverrides,
     E2ESecurityOverrides,
 )
+from src.upgrade_portal.app.config import load_arango_settings, load_redis_settings
+from src.upgrade_portal.runtime import dependencies
 from tests.support.upgrade_portal_e2e import (  # Import process stores and resource controls.
     ActionRecordStore,
     PortalRecordStore,
@@ -137,6 +144,52 @@ def test_child_environment_scrubs_credentials_paths_and_uses_sentinels() -> None
     assert child["REDIS_PORT"] == "1"  # Use the required lock store port sentinel.
     assert child["PATH"] == "test-path"  # Preserve noncredential process settings.
     assert not any(value.startswith("production") for value in child.values())  # Leak no production value.
+
+
+@pytest.mark.parametrize("inherited_autostart", [None, "", "1", "true", "yes", "on", "0", "off"])
+def test_child_environment_disables_autostart_without_changing_parent(inherited_autostart: str | None) -> None:
+    """Every child disables autostart without changing the parent settings."""
+    parent = {} if inherited_autostart is None else {"CAPTURE_AUTOSTART": inherited_autostart}
+    before = parent.copy()
+    child = build_child_environment(parent)
+    assert child["CAPTURE_AUTOSTART"] == "0"
+    assert parent == before
+
+
+def test_child_environment_preserves_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The builder changes no setting in the process environment."""
+    monkeypatch.setenv("CAPTURE_AUTOSTART", "1")
+    before = dict(os.environ)
+    child = build_child_environment(os.environ)
+    changed = {
+        name for name in before.keys() | os.environ.keys() if before.get(name) != os.environ.get(name)
+    }  # Compare every parent value without exposing credential values in a failed assertion.
+    assert changed == set()
+    assert child["CAPTURE_AUTOSTART"] == "0"
+
+
+def test_child_preflight_never_calls_container_runtime(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Both unavailable test stores stay down without a container runtime call."""
+    child = build_child_environment({"CAPTURE_AUTOSTART": "1"})
+    runtime_guard = Mock(side_effect=AssertionError("The test portal called the container runtime."))
+    for name in ("find_runtime", "read_container_state", "start_container"):
+        monkeypatch.setattr(dependencies, name, runtime_guard)  # A regression must fail before any host action.
+    with (
+        patch.dict(os.environ, child, clear=True),
+        patch.object(dependencies, "service_answers", return_value=False) as probes,
+        caplog.at_level(logging.INFO),
+    ):
+        report = dependencies.run_preflight(load_arango_settings(), load_redis_settings())
+    assert probes.call_args_list == [call("127.0.0.1", 1), call("127.0.0.1", 1)]
+    assert [reading.state for reading in report.readings] == [
+        dependencies.DependencyState.DOWN,
+        dependencies.DependencyState.DOWN,
+    ]
+    assert runtime_guard.call_count == 0
+    assert "container start allowed=False" in caplog.text
+    assert "0 of 2 dependencies answer" in caplog.text
 
 
 def test_resource_allocation_uses_unique_ports_paths_and_identifiers(tmp_path: Path) -> None:  # Prove isolation.
