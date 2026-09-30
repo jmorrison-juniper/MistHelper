@@ -111,6 +111,7 @@ WRITES_ENABLED_CONFIG_KEY = "ORG_UPGRADE_WRITES_ENABLED"
 DEVICE_VERSION_READER_CONFIG_KEY = "ORG_DEVICE_VERSION_READER"  # Issue #3249: a test replaces the stats read.
 ANCHOR_READER_CONFIG_KEY = "ORG_SETTLE_ANCHOR_READER"  # Issue #3245: a test replaces the anchor read.
 CASCADE_STARTER_CONFIG_KEY = "ORG_CASCADE_STARTER"  # Issue #3245: a test replaces the watch thread.
+SUBMISSION_CLOCK_CONFIG_KEY = "ORG_UPGRADE_SUBMISSION_CLOCK"  # Issue #3324: contract tests fix the submit clock.
 RETRY_CACHE_KEY = "org_retry_plan"  # Issue #3247: one request builds the retry plan one time.
 PLAN_OPTION_DROPPED = frozenset({"operation_id", "target_count"})  # Issue #3247: values of the browser session only.
 
@@ -127,6 +128,10 @@ CANCEL_FAILED = "org_upgrade_cancel_failed"
 NOT_CANCELLABLE = "org_upgrade_not_cancellable"  # Issue #3225: a final operation refuses a cancel.
 WRITE_DISABLED = "org_upgrade_write_disabled"
 ALREADY_SUBMITTED = "org_upgrade_already_submitted"
+START_TIME_PASSED = "org_upgrade_start_time_passed"  # Issue #3324: the confirmed schedule is no longer valid.
+START_TIME_PASSED_MESSAGE = (  # Name the recovery control on the confirmation page.
+    "The saved start time is in the past. " "Use the form on this confirmation page to move it, then confirm again."
+)
 LEGACY_REPLAY_MESSAGE = "This confirmed request already started an organization upgrade."  # Issue #3242.
 AGGREGATE_REPLAY_MESSAGE = "This confirmed request already started a multi-site upgrade."  # Issue #3242.
 UNKNOWN_REPLAY_MESSAGE = (  # Issue #3242: the first cloud answer named no job, so the refusal links nothing.
@@ -212,6 +217,26 @@ class OrgUpgradeScheduleReader:
         """Return the reboot delay text that the options page and confirmation page show."""
         reboot_at = options.get("reboot_at")  # Read the raw duration saved by the organization route.
         return str(reboot_at) if reboot_at is not None else ""  # Preserve the operator text without a unit change.
+
+
+class OrgSubmissionScheduleGuard:
+    """Refuse a confirmed schedule after its absolute start time passes."""
+
+    @staticmethod
+    def refusal(options: Mapping[str, Any]) -> tuple[Response, int] | None:
+        """Return a refusal when the saved start time is before the submit clock."""
+        start_time = options.get("start_time")  # Read the validated epoch value from the confirmed plan.
+        if not isinstance(start_time, int) or isinstance(start_time, bool):  # An absent schedule starts at once.
+            return None  # Preserve the immediate-start behavior when the operator set no start time.
+        logger.info("Check the confirmed organization upgrade start time")  # Log before the submit-time guard.
+        configured_clock = current_app.config.get(SUBMISSION_CLOCK_CONFIG_KEY)  # Tests can fix this boundary.
+        moment = configured_clock() if callable(configured_clock) else datetime.now(UTC)  # Read one UTC clock value.
+        current_epoch = int(moment.timestamp())  # Compare whole seconds with the stored Mist API value.
+        if start_time >= current_epoch:  # The exact boundary is not in the past.
+            logger.debug("The confirmed organization upgrade start time is current or future")  # Log the result.
+            return None  # Continue to the pre-check and cloud submission boundaries.
+        logger.warning("The organization upgrade refused a confirmed start time that is in the past")  # Log refusal.
+        return json_error(CONFLICT_STATUS, START_TIME_PASSED, START_TIME_PASSED_MESSAGE)  # Name the recovery step.
 
 
 class OrgOptionRefusal:
@@ -1708,6 +1733,9 @@ def submit_upgrade() -> Response | tuple[Response, int]:
     loaded = _load_submission_context(request_nonce)  # Validate organization, sites, session, and locks.
     if not isinstance(loaded, SubmissionContext):  # A failed safeguard returns its existing response.
         return loaded  # Stop before any destructive action.
+    refusal = OrgSubmissionScheduleGuard.refusal(loaded.options)  # Issue #3324: recheck the absolute start time.
+    if refusal is not None:  # The operator confirmed after the saved start time.
+        return refusal  # Send no pre-check write, site lock, aggregate child, or Mist cloud request.
     operation = _owned_operation(loaded.options, loaded.org_id)  # Read an owned durable plan only.
     prechecks = _submission_prechecks(loaded, operation)  # Issue #3243: the pre-check capture of each site.
     refusal = _precheck_refusal(prechecks)  # The rule of the single-site start, before any write.
