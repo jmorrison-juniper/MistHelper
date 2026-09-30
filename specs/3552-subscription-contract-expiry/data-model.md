@@ -69,7 +69,8 @@
 4. If no severe condition applies, set status to `Active`.
 5. If no end date exists, show the missing value marker and do not assign a
    dated band.
-6. If days remaining is less than 0, assign band `expired`.
+6. If the date difference is less than 0, export days remaining as `0` and
+   assign band `expired`.
 7. If days remaining is 0 through 30, assign band `0-30 days`.
 8. If days remaining is 31 through 90, assign band `31-90 days`.
 9. If days remaining is more than 90, assign band `more than 90 days`.

@@ -23,7 +23,10 @@ An operator runs menu 271 to get one subscription expiry report for the selected
 1. **Given** a subscription type with usage less than or equal to entitlement and an end date more than 90 days in the future, **When** the operator runs menu 271, **Then** SubscriptionExpiry.csv contains that subscription type with status "Active", the correct days remaining, and band "more than 90 days".
 2. **Given** a subscription type with an end date 1 to 30 days in the future, **When** the operator runs menu 271, **Then** SubscriptionExpiry.csv contains that subscription type with band "0-30 days".
 3. **Given** a subscription type with an end date 31 to 90 days in the future, **When** the operator runs menu 271, **Then** SubscriptionExpiry.csv contains that subscription type with band "31-90 days".
-4. **Given** a subscription type with an end date before the report date, **When** the operator runs menu 271, **Then** SubscriptionExpiry.csv contains that subscription type with status "Expired", a negative or zero days remaining value as appropriate, and band "expired".
+4. **Given** a subscription type with an end date before the report date, **When** the operator runs menu 271, **Then** SubscriptionExpiry.csv contains this data:
+   - status "Expired"
+   - days remaining `0`
+   - band "expired"
 5. **Given** a subscription type where usage is greater than entitlement, **When** the operator runs menu 271, **Then** SubscriptionExpiry.csv contains that subscription type with status "Exceeded".
 6. **Given** a subscription type that is present but not active for use, **When** the operator runs menu 271, **Then** SubscriptionExpiry.csv contains that subscription type with status "Inactive".
 
