@@ -71,6 +71,8 @@ Manual SpecKit analysis found no blocking inconsistency across `spec.md`, `plan.
 - `black --check`: passed for `src/site/rrm_reset` and `tests/unit/site/rrm_reset`.
 - `mypy`: passed for `src/site/rrm_reset`.
 - `pydocstyle`: passed for `src/site/rrm_reset`.
-- `pytest`: `10 passed` for `tests/unit/site/rrm_reset`.
+- `pytest`: `11 passed` for `tests/unit/site/rrm_reset`.
+- `complexity-gate`: passed for `src/site/rrm_reset` with max complexity `10`.
+- `test-quality-analyzer`: passed for changes since `origin/main`.
 - `vulture`: passed for `src/site/rrm_reset`.
 - `interrogate`: `100.0%` for `src/site/rrm_reset`.

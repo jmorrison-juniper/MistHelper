@@ -31,13 +31,25 @@ def test_rrm_reset_client_reset_uses_documented_fallback_path() -> None:
     assert session.calls == [(RESET_RRM_PATH.format(site_id="site-1"), {"bands": ["24", "5", "6"]})]
 
 
-def test_rrm_reset_client_current_plan_raises_on_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Current-plan reads reject failing HTTP status codes."""
+def test_rrm_reset_client_current_plan_raises_on_http_4xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Current-plan reads reject HTTP 4xx status codes."""
     client = RrmResetClient(object())  # WHY: patched SDK ignores the session.
 
     def fake_read(_session: object, _site_id: str) -> SimpleNamespace:
-        return SimpleNamespace(status_code=503, data={})  # WHY: simulate cloud failure.
+        return SimpleNamespace(status_code=404, data={})  # WHY: simulate a missing RRM site plan.
 
     monkeypatch.setattr("mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning", fake_read)  # WHY: no network.
-    with pytest.raises(RuntimeError):  # WHY: caller must stop before destructive requests.
+    with pytest.raises(RuntimeError, match="HTTP 404"):  # WHY: caller must stop before destructive requests.
+        client.get_current_plan("site-1")  # WHY: failed read should raise.
+
+
+def test_rrm_reset_client_current_plan_raises_on_http_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Current-plan reads reject HTTP 5xx status codes."""
+    client = RrmResetClient(object())  # WHY: patched SDK ignores the session.
+
+    def fake_read(_session: object, _site_id: str) -> SimpleNamespace:
+        return SimpleNamespace(status_code=503, data={})  # WHY: simulate a Mist cloud failure.
+
+    monkeypatch.setattr("mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning", fake_read)  # WHY: no network.
+    with pytest.raises(RuntimeError, match="HTTP 503"):  # WHY: caller must stop before destructive requests.
         client.get_current_plan("site-1")  # WHY: failed read should raise.
