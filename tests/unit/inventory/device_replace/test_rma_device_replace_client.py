@@ -6,6 +6,7 @@ from dataclasses import dataclass  # WHY: fake responses need simple data and st
 from typing import Any  # WHY: fake SDK calls store arbitrary body payloads.
 
 import mistapi  # WHY: monkeypatch the same SDK functions that the client calls.
+import pytest  # WHY: assert client behavior for failed HTTP responses.
 
 from src.inventory.device_replace.client import DeviceReplaceClient  # WHY: test the API seam.
 from src.inventory.device_replace.models import InventoryDevice, ReplaceRequest  # WHY: build typed inputs.
@@ -56,3 +57,28 @@ def test_get_old_configuration_reads_site_device(monkeypatch: Any) -> None:
     data = DeviceReplaceClient("session", "org-1").get_old_configuration(old_device)  # WHY: exercise read path.
     assert sent == {"site_id": "site", "device_id": "dev"}
     assert data == {"name": "old"}
+
+
+def test_list_inventory_raises_for_4xx_response(monkeypatch: Any) -> None:
+    """Inventory reads fail clearly when Mist returns a 4xx status."""
+    response = FakeResponse({"message": "forbidden"}, status_code=403)  # WHY: simulate a Mist privilege failure.
+    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", lambda *args, **kwargs: response)  # WHY.
+    client = DeviceReplaceClient(object(), "org-1")  # WHY: exercise the real client guard.
+    with pytest.raises(RuntimeError, match="getOrgInventory returned HTTP 403: forbidden"):
+        client.list_inventory()  # WHY: a failed inventory read must stop before paging.
+
+
+def test_replace_device_raises_for_5xx_response(monkeypatch: Any) -> None:
+    """Replacement sends fail clearly when Mist returns a 5xx status."""
+
+    def fake_replace(session: Any, org_id: str, body: dict[str, object]) -> FakeResponse:
+        _ = session  # WHY: keep the fake signature aligned with the SDK.
+        _ = org_id  # WHY: keep the fake signature aligned with the SDK.
+        _ = body  # WHY: keep the fake signature aligned with the SDK.
+        return FakeResponse({"error": "cloud unavailable"}, status_code=503)  # WHY: simulate a server failure.
+
+    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "replaceOrgDevices", fake_replace)  # WHY: no network call.
+    request = ReplaceRequest(site_id="site", mac="old", inventory_mac="new")  # WHY: valid request reaches guard.
+    client = DeviceReplaceClient("session", "org-1")  # WHY: exercise the real client guard.
+    with pytest.raises(RuntimeError, match="replaceOrgDevices returned HTTP 503: cloud unavailable"):
+        client.replace_device(request)  # WHY: a failed replace must raise for operation logging.
