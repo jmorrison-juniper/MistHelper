@@ -46,3 +46,7 @@ Add menu `278` to the safe operations documentation. Regenerate the menu referen
 ## Release note note
 
 Create `changelog.d/issue-3559-ap-scorecard.md` during implementation, not during this plan step. Use one `### Added` heading and one bullet that names issue `#3559`.
+
+## Integration validation note
+
+After the integration pull request registers menu `278`, run `MistHelper.py --test` with the repository virtual environment. Confirm that menu `278` runs with no prompt and routes both exports through `data/ApScorecard.csv` and `data/ApScorecardBySite.csv`. The feature-owned tests prove the handler calls no direct `input()` prompt and passes both file names to `DataExporter`; the final `--test` and `data/` path proof needs the deferred menu registration.

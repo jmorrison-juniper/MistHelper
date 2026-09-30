@@ -33,6 +33,7 @@ The client must not implement a custom page loop. It must call the existing `API
 | - | - |
 | `site` | Use `site_name` when present. Otherwise use `site_id`. |
 | `site_id` | Copy from source row. |
+| `org_id` | Copy from the operation context. |
 | `ap_name` | Copy from `name`. |
 | `mac` | Copy from `mac`. |
 | `model` | Copy from `model`. |
@@ -60,6 +61,7 @@ The client must not implement a custom page loop. It must call the existing `API
 | - | - |
 | `site` | Site display value. |
 | `site_id` | Site identifier. |
+| `org_id` | Organization identifier from the operation context. |
 | `ap_count` | Number of APs at the site. |
 | `connection_status_percent` | Connected AP percent. |
 | `connection_status_band` | Color band. |

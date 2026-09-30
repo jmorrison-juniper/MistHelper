@@ -26,6 +26,12 @@ def test_ap_scorecard_detail_rows_have_required_columns(ap_stats_payload: list[d
     assert set(AP_SCORECARD_COLUMNS) == set(row.__dataclass_fields__)
 
 
+def test_ap_scorecard_detail_rows_include_org_id(ap_stats_payload: list[dict[str, object]]) -> None:
+    """Detail row dictionaries include the organization identifier."""
+    row = build_ap_rows(ap_stats_payload, org_id="org-1")[0]
+    assert row.org_id == "org-1"
+
+
 def test_ap_scorecard_vlan_failure_lists_vlan_ids(ap_stats_payload: list[dict[str, object]]) -> None:
     """Inactive wired VLANs fail the VLAN tile and list the VLAN IDs."""
     row = build_ap_rows(ap_stats_payload)[2]
@@ -71,8 +77,9 @@ def test_ap_scorecard_site_redundancy_counts(ap_stats_payload: list[dict[str, ob
 
 def test_ap_scorecard_site_summary_has_required_tile_columns(ap_stats_payload: list[dict[str, object]]) -> None:
     """Site row dictionaries expose every contract column."""
-    row = build_site_rows(build_ap_rows(ap_stats_payload))[0]
+    row = build_site_rows(build_ap_rows(ap_stats_payload, org_id="org-1"))[0]
     assert set(SITE_SCORECARD_COLUMNS) == set(row.__dataclass_fields__)
+    assert row.org_id == "org-1"
 
 
 def test_ap_scorecard_organization_summary_percentages(ap_stats_payload: list[dict[str, object]]) -> None:
@@ -92,8 +99,8 @@ def test_ap_scorecard_site_name_falls_back_to_site_id() -> None:
     assert rows[0].site == "site-only"
 
 
-def test_ap_scorecard_power_requested_fills_needed_value() -> None:
-    """LLDP power requested is the fallback for the required needed column."""
+def test_ap_scorecard_power_needed_requires_exact_field() -> None:
+    """LLDP power needed stays empty when the exact source field is absent."""
     rows = build_ap_rows(
         [
             {
@@ -105,4 +112,4 @@ def test_ap_scorecard_power_requested_fills_needed_value() -> None:
             }
         ]
     )
-    assert rows[0].lldp_power_needed == 25500
+    assert rows[0].lldp_power_needed == ""

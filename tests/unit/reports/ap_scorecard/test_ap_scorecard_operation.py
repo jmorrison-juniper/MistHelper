@@ -33,10 +33,13 @@ def test_ap_scorecard_operation_is_test_safe_and_writes_both_files(
 ) -> None:
     """The operation uses shared org resolution and writes both contract files."""
     exports: list[tuple[str, list[Mapping[str, object]], str]] = []
+    monkeypatch.setattr("builtins.input", _raise_if_input_is_called)
     _patch_operation(monkeypatch, ap_stats_payload, exports)
     operation.ApScorecard.run()
     assert [export[0] for export in exports] == ["ApScorecard.csv", "ApScorecardBySite.csv"]
     assert [export[2] for export in exports] == ["ap_scorecard", "ap_scorecard_by_site"]
+    assert all(row["org_id"] == "org-1" for row in exports[0][1])
+    assert all(row["org_id"] == "org-1" for row in exports[1][1])
 
 
 def test_ap_scorecard_operation_handles_no_ap_payload(caplog, monkeypatch) -> None:
@@ -78,3 +81,8 @@ def _patch_operation(
             DataExporter=SimpleNamespace(write_with_format_selection=fake_write),
         ),
     )
+
+
+def _raise_if_input_is_called(*args: object, **kwargs: object) -> str:
+    """Fail if the operation calls a direct prompt."""
+    raise AssertionError("ApScorecard.run must not call input directly.")

@@ -119,7 +119,7 @@ Do not change the shared files below in this feature implementation. Record thei
 
 - [X] T030 [P] [US3] Add an organization summary calculation test for all five tile percentages in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
 - [X] T031 [P] [US3] Add a console summary test for all five tile names in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
-- [X] T032 [P] [US3] Add a test-safe operation test that proves no prompt occurs and both output file names are used in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
+- [X] T032 [P] [US3] Add a test-safe operation test that proves no direct prompt occurs and both output file names are used in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
 - [X] T033 [P] [US3] Add a no-AP payload test that expects a clear log message and no misleading success summary in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
 
 ### Implementation for User Story 3
@@ -191,7 +191,7 @@ Do not change the shared files below in this feature implementation. Record thei
 
 | Acceptance criterion | Test tasks |
 | - | - |
-| `--test` runs with no prompt and writes both files under `data/` | T032 |
+| `--test` runs with no prompt and writes both files under `data/` | T032 proves the feature-owned no-prompt and export-name seam. The final `MistHelper.py --test` and `data/` path proof is deferred to the integration pull request because menu `278` registration is deferred in `wiring.md`. |
 | Color band uses `98.5%` for green and `80%` for red | T021 |
 | Redundancy values `1`, `2`, and `3` or more map to all categories | T023, T024 |
 | Non-empty `inactive_wired_vlans` fails the VLAN tile and lists IDs | T015 |
@@ -273,4 +273,3 @@ Task: "T038 Add a release note fragment test for one ### Added heading and one #
 - The implementation must not add a custom pagination loop.
 - The implementation must use `DataExporter.write_with_format_selection()` for both exports.
 - The implementation must not edit shared integration files outside `specs/3559-ap-scorecard/wiring.md`.
-

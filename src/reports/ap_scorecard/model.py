@@ -13,6 +13,7 @@ SECONDS_PER_DAY = 86400.0  # WHY: uptime arrives as seconds and the report shows
 AP_SCORECARD_COLUMNS = [  # WHY: keep ApScorecard.csv in a stable operator-friendly order.
     "site",
     "site_id",
+    "org_id",
     "ap_name",
     "mac",
     "model",
@@ -38,6 +39,7 @@ AP_SCORECARD_COLUMNS = [  # WHY: keep ApScorecard.csv in a stable operator-frien
 SITE_SCORECARD_COLUMNS = [  # WHY: keep ApScorecardBySite.csv in a stable operator-friendly order.
     "site",
     "site_id",
+    "org_id",
     "ap_count",
     "connection_status_percent",
     "connection_status_band",
@@ -69,6 +71,7 @@ class ApScorecardRow:
 
     site: str  # WHY: operators sort and filter by site display name.
     site_id: str  # WHY: site identifiers remain stable when names change.
+    org_id: str  # WHY: deferred database keys need the organization identifier.
     ap_name: str  # WHY: AP name is the operator-facing device label.
     mac: str  # WHY: MAC address is the stable AP identity in Mist stats.
     model: str  # WHY: model scopes the predominant firmware calculation.
@@ -97,6 +100,7 @@ class SiteScorecardRow:
 
     site: str  # WHY: operators read site names in the summary file.
     site_id: str  # WHY: site identifiers remain stable for database keys.
+    org_id: str  # WHY: deferred database keys need the organization identifier.
     ap_count: int  # WHY: every tile percentage needs the denominator.
     connection_status_percent: float  # WHY: connected AP percentage drives the first tile.
     connection_status_band: str  # WHY: color band matches the Mist page.
@@ -168,10 +172,10 @@ def predominant_versions(rows: Sequence[Mapping[str, object]]) -> dict[str, str]
     return {model: counter.most_common(1)[0][0] for model, counter in counters.items()}  # WHY: choose the mode.
 
 
-def build_ap_rows(rows: Sequence[Mapping[str, object]]) -> list[ApScorecardRow]:
+def build_ap_rows(rows: Sequence[Mapping[str, object]], org_id: str = "") -> list[ApScorecardRow]:
     """Build AP scorecard rows from raw AP statistics rows."""
     expected_versions = predominant_versions(rows)  # WHY: version compliance falls back to the predominant version.
-    return [_build_ap_row(row, expected_versions) for row in rows]  # WHY: create one output row for each AP.
+    return [_build_ap_row(row, expected_versions, org_id) for row in rows]  # WHY: create one output row for each AP.
 
 
 def ap_rows_as_dicts(rows: Sequence[ApScorecardRow]) -> list[dict[str, object]]:
@@ -189,7 +193,10 @@ def build_site_rows(rows: Sequence[ApScorecardRow]) -> list[SiteScorecardRow]:
     grouped: dict[tuple[str, str], list[ApScorecardRow]] = defaultdict(list)  # WHY: group AP rows by site.
     for row in rows:  # WHY: each AP belongs to exactly one site in the scorecard.
         grouped[(row.site_id, row.site)].append(row)  # WHY: keep display name beside the stable site ID.
-    return [_build_site_row(site_id, site, site_rows) for (site_id, site), site_rows in sorted(grouped.items())]
+    return [
+        _build_site_row(site_id, site, site_rows[0].org_id, site_rows)
+        for (site_id, site), site_rows in sorted(grouped.items())
+    ]
 
 
 def build_organization_summary(rows: Sequence[ApScorecardRow]) -> OrganizationSummary:
@@ -205,7 +212,7 @@ def build_organization_summary(rows: Sequence[ApScorecardRow]) -> OrganizationSu
     )
 
 
-def _build_ap_row(row: Mapping[str, object], expected_versions: Mapping[str, str]) -> ApScorecardRow:
+def _build_ap_row(row: Mapping[str, object], expected_versions: Mapping[str, str], org_id: str) -> ApScorecardRow:
     """Build one AP scorecard row."""
     model = _text(row.get("model"))  # WHY: model scopes version compliance.
     version = _text(row.get("version"))  # WHY: version is compared to the expected version.
@@ -215,6 +222,7 @@ def _build_ap_row(row: Mapping[str, object], expected_versions: Mapping[str, str
     return ApScorecardRow(  # WHY: one typed row keeps exports and aggregations aligned.
         site=_site_name(row),
         site_id=_text(row.get("site_id")),
+        org_id=org_id,
         ap_name=_text(row.get("name")),
         mac=_text(row.get("mac")),
         model=model,
@@ -230,7 +238,7 @@ def _build_ap_row(row: Mapping[str, object], expected_versions: Mapping[str, str
         power_opmode=_text(row.get("power_opmode")),
         power_budget=_scalar_or_empty(row.get("power_budget")),
         lldp_power_allocated=_scalar_or_empty(lldp_stat.get("power_allocated")),
-        lldp_power_needed=_scalar_or_empty(lldp_stat.get("power_needed", lldp_stat.get("power_requested"))),
+        lldp_power_needed=_scalar_or_empty(lldp_stat.get("power_needed")),
         config_reverted=_optional_bool(row.get("config_reverted")),
         last_trouble=_readable_mapping(row.get("last_trouble")),
         expiring_certificate_count=len(_mapping(row.get("expiring_certs"))),
@@ -238,7 +246,7 @@ def _build_ap_row(row: Mapping[str, object], expected_versions: Mapping[str, str
     )
 
 
-def _build_site_row(site_id: str, site: str, rows: Sequence[ApScorecardRow]) -> SiteScorecardRow:
+def _build_site_row(site_id: str, site: str, org_id: str, rows: Sequence[ApScorecardRow]) -> SiteScorecardRow:
     """Build one site summary row from AP rows."""
     total = len(rows)  # WHY: every tile percentage uses the site AP count.
     connection = _percent(_count(rows, _is_connected), total)  # WHY: connected APs drive the first tile.
@@ -249,6 +257,7 @@ def _build_site_row(site_id: str, site: str, rows: Sequence[ApScorecardRow]) -> 
     return SiteScorecardRow(  # WHY: one typed row keeps the site export stable.
         site=site,
         site_id=site_id,
+        org_id=org_id,
         ap_count=total,
         connection_status_percent=connection,
         connection_status_band=tile_color_band(connection),

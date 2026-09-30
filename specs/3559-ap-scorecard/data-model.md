@@ -33,6 +33,7 @@ One export row for `ApScorecard.csv`.
 | - | - | - |
 | `site` | `site_name` or `site_id` | Must not be empty. |
 | `site_id` | `site_id` | Must not be empty. |
+| `org_id` | operation context | Must match the organization used for the API call. |
 | `ap_name` | `name` | Empty is allowed. |
 | `mac` | `mac` | Must not be empty. |
 | `model` | `model` | Must not be empty. |
@@ -62,6 +63,7 @@ One export row for `ApScorecardBySite.csv`.
 | - | - |
 | `site` | The site display value. |
 | `site_id` | The site identifier. |
+| `org_id` | The organization identifier used for the API call. |
 | `ap_count` | Count of AP rows for the site. |
 | `connection_status_percent` | Connected APs divided by AP count. |
 | `connection_status_band` | Color band from the AP threshold rule. |

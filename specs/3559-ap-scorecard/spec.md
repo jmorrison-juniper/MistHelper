@@ -128,6 +128,7 @@ A maintainer receives the supporting feature files needed for integration and re
 
 ## Assumptions
 
+- The feature-owned tests prove the handler no-prompt path and export-name seam. The integration pull request proves `MistHelper.py --test` and the final `data/` paths after menu `278` is registered.
 - The source of the tile names, health meanings, and color thresholds is the Mist `Access Points` page.
 - The operation is for organization-wide AP reporting, not a site-only report.
 - The scorecard uses only data that is already in the organization AP device statistics payload.

@@ -44,12 +44,16 @@ def test_ap_scorecard_client_uses_mistapi_get_all(monkeypatch: pytest.MonkeyPatc
     assert observed == {"response": response, "mist_session": session}
 
 
-def test_ap_scorecard_client_rejects_http_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("status_code", [400, 500])
+def test_ap_scorecard_client_rejects_http_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
     """The client raises on HTTP failures instead of returning empty success."""
     monkeypatch.setattr(
         client.mistapi.api.v1.orgs.stats,
         "listOrgDevicesStats",
-        lambda *args, **kwargs: SimpleNamespace(status_code=500),
+        lambda *args, **kwargs: SimpleNamespace(status_code=status_code),
     )
-    with pytest.raises(RuntimeError, match="HTTP status 500"):
+    with pytest.raises(RuntimeError, match=f"HTTP status {status_code}"):
         client.ApScorecardClient(object(), "org-1").list_ap_stats()

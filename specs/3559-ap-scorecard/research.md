@@ -59,7 +59,7 @@ Rationale:
 - `switch_redundancy` drives `AP Switch Redundancy`. Value `1` means no redundancy. Value `2` means good redundancy. Value `3` or more means excellent redundancy.
 - `config_reverted`, `last_trouble`, and available anomaly indicators drive `Potential Anomalies` until a later implementation confirms a more specific payload field.
 - `power_constrained`, `power_opmode`, `power_budget`, and `lldp_stat.power_allocated` describe reduced power behavior.
-- `lldp_stat.power_needed` is requested by the feature. If the payload lacks `power_needed`, the implementation should use a safe empty value and may map `power_requested` only when a test or runtime payload proves it is the same concept.
+- `lldp_stat.power_needed` is requested by the feature. If the payload lacks `power_needed`, the implementation uses a safe empty value. The OpenAPI examples show `power_requested`, but they do not define it as the same value as `power_needed`.
 - `expiring_certs` is a map of certificate serial numbers to expiry timestamps for certificates that expire within `30` days.
 - `uptime` is in seconds and must be converted to uptime days for the AP row.
 

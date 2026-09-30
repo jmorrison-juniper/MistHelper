@@ -44,7 +44,7 @@ class ApScorecard:
             logger.info("No access point statistics were found. No AP scorecard files were written.")  # WHY: clear.
             return  # WHY: stop before exports and summary.
         logger.info("Building AP scorecard detail rows")  # WHY: log before transformation.
-        ap_rows = build_ap_rows(source_rows)  # WHY: model creates one detail row per AP.
+        ap_rows = build_ap_rows(source_rows, org_id=org_id)  # WHY: include org ID for database keys.
         logger.debug("Built AP scorecard detail rows=%d", len(ap_rows))  # WHY: summarize transformation.
         logger.info("Building AP scorecard site summary rows")  # WHY: log before transformation.
         site_rows = build_site_rows(ap_rows)  # WHY: model aggregates rows by site.
