@@ -500,7 +500,7 @@ def test_insights_handles_api_error_without_an_empty_export(caplog: pytest.LogCa
     errors = [(record.name, record.levelno) for record in caplog.records if record.levelno >= logging.ERROR]
     assert errors == [("src.export.site_export_utils", logging.ERROR)]
     assert "Failed to export site SLE metric insights for site site-1 from listSiteSlesMetrics" in caplog.text
-    assert "No empty export was written." in caplog.text
+    assert "The export does not retry with empty rows." in caplog.text
 
 
 # ---------------------------------------------------------------------------

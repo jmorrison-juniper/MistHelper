@@ -244,6 +244,11 @@ def test_the_wlan_export_logs_before_the_write(fake_host: ModuleType, caplog: py
         pytest.param(("parse", {"enabled": None, "supported": []}, "TypeError"), id="invalid-metric-list"),
         pytest.param(("writer", OSError("password=fake-secret-value"), "OSError"), id="writer-error"),
         pytest.param(("writer-empty", OSError("password=fake-secret-value"), "OSError"), id="empty-writer-error"),
+        pytest.param(("writer-after", OSError("password=fake-secret-value"), "OSError"), id="writer-error-after-write"),
+        pytest.param(
+            ("writer-empty-after", OSError("password=fake-secret-value"), "OSError"),
+            id="empty-writer-error-after-write",
+        ),
     ],
 )
 def test_an_insight_exception_preserves_output_and_reports_the_failure(
@@ -264,13 +269,23 @@ def test_an_insight_exception_preserves_output_and_reports_the_failure(
     write = MagicMock(
         side_effect=failure if writer_failure else lambda *_args, **_kwargs: output.write_bytes(b"changed")
     )
+    after_write = stage.endswith("after")
+    if after_write:
+
+        def fail_after_write(*_args: Any, **_kwargs: Any) -> None:
+            output.write_bytes(b"initial writer output")
+            if isinstance(failure, Exception):
+                raise failure
+            raise AssertionError("The writer failure case requires an exception.")
+
+        write.side_effect = fail_after_write
     exporter = _build_response_insight_exporter(200, write)
     api_call = exporter.mistapi.api.v1.sites.sle.listSiteSlesMetrics
     if stage == "api":
         api_call.side_effect = failure
     elif stage == "parse":
         api_call.return_value.data = failure
-    elif stage == "writer-empty":
+    elif stage in ("writer-empty", "writer-empty-after"):
         api_call.return_value.data = {}
     exporter.insights()
     errors = [
@@ -283,7 +298,7 @@ def test_an_insight_exception_preserves_output_and_reports_the_failure(
             _INSIGHT_MODULE,
             logging.ERROR,
             "Failed to export site SLE metric insights for site site-1 from listSiteSlesMetrics. "
-            "No empty export was written.",
+            "The export does not retry with empty rows.",
         )
     ]
     assert "Traceback (most recent call last):" in caplog.text
@@ -294,7 +309,8 @@ def test_an_insight_exception_preserves_output_and_reports_the_failure(
     assert write.call_count == (1 if writer_failure else 0)
     api_call.assert_called_once_with(exporter.apisession, "site-1", scope="site", scope_id="site-1")
     actual = output.read_bytes() if output.exists() else None
-    assert actual == (original if existing_output else None)
+    expected = b"initial writer output" if after_write else original if existing_output else None
+    assert actual == expected
 
 
 def test_the_empty_insight_export_logs_after_the_write(caplog: pytest.LogCaptureFixture) -> None:

@@ -365,7 +365,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             failure = Exception(f"{type(exception).__name__}: Exception details omitted to protect secrets")
             logger.error(
                 "Failed to export site SLE metric insights for site %s from listSiteSlesMetrics. "
-                "No empty export was written.",
+                "The export does not retry with empty rows.",
                 site_id,
                 exc_info=(Exception, failure, exception.__traceback__),
             )
