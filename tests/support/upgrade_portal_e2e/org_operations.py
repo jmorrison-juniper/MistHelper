@@ -13,9 +13,9 @@ Why:
     id of each operation from the answer of the Start request. `OrgStartTap`
     fetches each Start answer before a page gets it, so no navigation can drop
     the body. `OrgOperationCalls` sends the status reads and the cancels.
-    `OrgOperationRelease` ends each live operation of the ledger, and it waits
-    for the final state. Each class holds one set of decisions, so a direct
-    test proves each decision with no browser and no portal.
+    `OrgOperationRelease` ends each live operation of the ledger. It waits for
+    the final child state and the end of the phase watch. Each class holds one
+    set of decisions, so a direct test proves each decision with no browser.
 """
 
 from __future__ import annotations  # Keep annotations independent from import order.
@@ -364,13 +364,13 @@ class OrgOperationRelease:  # End each live operation of one browser test.
 
     Why:
         The portal frees the sites of an operation only after each child job
-        settles. The status route checks the child jobs, so the reads after a
-        cancel also free the sites. The field `cancel_allowed` tells whether an
-        operation is live. The progress page uses the same field, so this class
-        holds no copy of the final states.
+        settles and the phase watch ends. The status route checks both states,
+        so the reads after a cancel also free the sites. The fields
+        `cancel_allowed` and `phase_active` tell whether the teardown must wait.
     """
 
     LIVE_FIELD: ClassVar[str] = "cancel_allowed"  # True while the operator can cancel the operation.
+    PHASE_ACTIVE_FIELD: ClassVar[str] = "phase_active"  # True while the watch or post-check stage still runs.
     STATE_FIELD: ClassVar[str] = "status"  # The state of the operation, which each message names.
     READ_TRIES: ClassVar[int] = 30  # The bound on the status reads after one cancel.
     READ_PAUSE_S: ClassVar[float] = 0.5  # The pause between two status reads.
@@ -439,9 +439,13 @@ class OrgOperationRelease:  # End each live operation of one browser test.
 
     def _end_one(self, operation_id: str) -> int:
         """End one operation, and return 1 for a cancel or 0 for no cancel."""
-        if not self._is_live(operation_id, self._calls.read_status(operation_id)):  # The test ended the operation.
+        body = self._calls.read_status(operation_id)  # Read both the child state and the phase watch state.
+        if not self._is_live(operation_id, body):  # The test ended the operation and the phase watch.
             logger.debug("The operation is final, so it needs no cancel")  # SC-004: one read only.
             return 0  # No cancel.
+        if not self._cancel_allowed(operation_id, body):  # The child jobs ended before the phase watch.
+            self._wait_until_final(operation_id)  # Wait for the post-check stage and the lock release.
+            return 0  # No cancel was necessary.
         answer = self._calls.cancel(operation_id)  # The operation holds both stand-in sites.
         if answer.status == OrgOperationCalls.CONFLICT_STATUS:  # The operation can have ended first.
             self._accept_race(operation_id, str(answer.text()))  # FR-005: read the state again.
@@ -452,11 +456,13 @@ class OrgOperationRelease:  # End each live operation of one browser test.
     def _accept_race(self, operation_id: str, refusal: str) -> None:
         """Accept a 409 only when the next status read shows a final state."""
         body = self._calls.read_status(operation_id)  # One read after the 409.
-        if self._is_live(operation_id, body):  # A replay or a damaged state, not a race.
+        if self._cancel_allowed(operation_id, body):  # A replay or a damaged state, not a race.
             raise AssertionError(
                 f"The teardown of issue #3518 sent the cancel of {operation_id}, and the portal answered 409. "
                 f"The operation stays in the state {body.get(self.STATE_FIELD)!r}. The body reads: {refusal!r}"
             )
+        if self._phase_active(operation_id, body):  # The child jobs ended before the post-check stage.
+            self._wait_until_final(operation_id)  # Keep the sites held until the phase watch releases them.
         logger.debug("The operation ended before the cancel, so the 409 is a race")  # Log the accepted race.
 
     def _wait_until_final(self, operation_id: str) -> None:
@@ -476,11 +482,27 @@ class OrgOperationRelease:  # End each live operation of one browser test.
 
     @classmethod
     def _is_live(cls, operation_id: str, body: dict[str, Any]) -> bool:
-        """Return the flag `cancel_allowed` of one status answer, or fail when it is not a boolean."""
+        """Return True while a child job or the phase watch still runs."""
+        return cls._cancel_allowed(operation_id, body) or cls._phase_active(operation_id, body)  # Either scope.
+
+    @classmethod
+    def _cancel_allowed(cls, operation_id: str, body: dict[str, Any]) -> bool:
+        """Return the boolean cancel flag of one status answer."""
         flag = body.get(cls.LIVE_FIELD)  # The progress page reads the same field.
         if not isinstance(flag, bool):  # A wrong answer must not pass as a final state.
             raise AssertionError(
                 f"The teardown of issue #3518 read the status of {operation_id}, and the answer holds no "
                 f"boolean field {cls.LIVE_FIELD!r}. The field holds {flag!r}."
             )
-        return flag  # True means that the operation is live.
+        return flag  # True means that one child job can still accept a cancel.
+
+    @classmethod
+    def _phase_active(cls, operation_id: str, body: dict[str, Any]) -> bool:
+        """Return the boolean phase-watch flag of one status answer."""
+        flag = body.get(cls.PHASE_ACTIVE_FIELD, False)  # An earlier portal answer has no phase watch.
+        if not isinstance(flag, bool):  # A wrong answer must not pass as a released lock scope.
+            raise AssertionError(
+                f"The teardown of issue #3518 read the status of {operation_id}, and the answer holds no "
+                f"boolean field {cls.PHASE_ACTIVE_FIELD!r}. The field holds {flag!r}."
+            )
+        return flag  # True means that the phase watch or the post-check stage still needs the site.
