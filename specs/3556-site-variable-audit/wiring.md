@@ -80,4 +80,6 @@ C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m
 C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pytest tests\unit\reports\site_variable_audit -q --timeout=120
 C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m vulture src\reports\site_variable_audit --min-confidence 70
 C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m interrogate -v src\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m radon cc src\reports\site_variable_audit -j | & C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\complexity-gate.exe --max 10
+& C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\test-quality-analyzer.exe --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main
 ```

@@ -17,6 +17,8 @@ Closes #3556
 - [x] No new Ruff lint violations for the owned package and tests.
 - [x] Code formatted with Black for the owned package and tests.
 - [x] mypy passes for the owned package.
+- [x] Complexity gate passes for the owned package with max complexity 10.
+- [x] Test quality ratchet passes for changed tests.
 
 ## Security
 
