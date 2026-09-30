@@ -129,17 +129,19 @@ The implementation must use a focused package and injected fakes in tests.
 
 Verified these OpenAPI operation IDs in `documentation/mist-api-openapi3json.json` with the worktree script:
 
-| Operation ID | Method and path |
-| - | - |
-| `reauthSiteDot1xWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/coa` |
-| `reauthSiteDot1xWiredClient` | `POST /api/v1/sites/{site_id}/wired_clients/{client_mac}/coa` |
-| `reauthOrgDot1xWirelessClient` | `POST /api/v1/orgs/{org_id}/clients/{client_mac}/coa` |
-| `reauthOrgDot1xWiredClient` | `POST /api/v1/orgs/{org_id}/wired_clients/{client_mac}/coa` |
-| `disconnectSiteWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/disconnect` |
-| `unauthorizeSiteWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/unauthorize` |
-| `deauthSiteWirelessClientsConnectedToARogue` | `POST /api/v1/sites/{site_id}/rogues/{rogue_bssid}/deauth_clients` |
+| Operation ID | Method and path | Required path parameters | Query parameters | Request body | Success response |
+| - | - | - | - | - | - |
+| `reauthSiteDot1xWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/coa` | `site_id`, `client_mac` | None | None | `200 OK` with no content schema |
+| `reauthSiteDot1xWiredClient` | `POST /api/v1/sites/{site_id}/wired_clients/{client_mac}/coa` | `site_id`, `client_mac` | None | None | `200 OK` with `response_wired_coa` fields such as `device_mac`, `port_id`, and `session` |
+| `reauthOrgDot1xWirelessClient` | `POST /api/v1/orgs/{org_id}/clients/{client_mac}/coa` | `org_id`, `client_mac` | None | None | `200 OK` with no content schema |
+| `reauthOrgDot1xWiredClient` | `POST /api/v1/orgs/{org_id}/wired_clients/{client_mac}/coa` | `org_id`, `client_mac` | None | None | `200 OK` with `response_wired_coa` fields such as `device_mac`, `port_id`, and `session` |
+| `disconnectSiteWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/disconnect` | `site_id`, `client_mac` | None | None | `200 OK` with no content schema |
+| `unauthorizeSiteWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/unauthorize` | `site_id`, `client_mac` | None | None | `200 OK` with no content schema |
+| `deauthSiteWirelessClientsConnectedToARogue` | `POST /api/v1/sites/{site_id}/rogues/{rogue_bssid}/deauth_clients` | `site_id`, `rogue_bssid` | None | None | `200 OK` with no content schema |
+
+Each operation also declares error responses for `400`, `401`, `403`, `404`, and `429`.
+The implementation treats an SDK response with `status_code` of `400` or higher as a Mist failure.
 
 Verified installed `mistapi` with `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe`.
 The environment reports `mistapi` version `0.64.0`.
 All seven functions are importable with the expected site or organization scope arguments.
-

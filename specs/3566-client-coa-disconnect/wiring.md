@@ -59,6 +59,44 @@ Integration pull request responsibilities:
 - Entry point: static `run()`
 - Skip reason: Destructive client session control requires typed target confirmation and must not run in automated safe or fast tests.
 
+## Menu entries
+
+| menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
+| - | - | - | - | - | - | - | - |
+| 286 | Client CoA, reauthentication, and disconnect | `src.device.client_session_control.handler` | `ClientSessionControl.run` | destructive | Destructive client session control requires typed target confirmation and must not run in automated safe or fast tests. | True | False |
+
+## OperationRegistry comment
+
+One `# WHY:` paragraph for the registry entry:
+
+```python
+# WHY: Client CoA, reauthentication, disconnect, guest unauthorize, and rogue client deauth can drop live sessions, so menu 286 is destructive and requires typed target confirmation plus dry-run support.
+```
+
+Registration is deferred to the integration pull request.
+
+## Primary key strategies
+
+Not applicable.
+Menu 286 sends destructive client session control requests and writes a local audit CSV.
+It does not export Mist API collection data and does not require a primary-key strategy.
+
+```python
+# No ENDPOINT_PRIMARY_KEY_STRATEGIES entry is required for menu 286.
+```
+
+## copilot-instructions category table
+
+The `destructive` category row gains menu `286`.
+The destructive count increases by one.
+The menu list adds `286` to the existing destructive set.
+
+## Import line for MistHelper.py
+
+```python
+from src.device.client_session_control.handler import ClientSessionControl  # Menu 286 (issue #3566) -- destructive client session control handler.
+```
+
 ## Dry Run Wiring Contract
 
 The menu handler lambda must pass the global CLI dry run value to the handler.
