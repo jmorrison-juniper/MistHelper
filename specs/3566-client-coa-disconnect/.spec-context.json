@@ -1,0 +1,14 @@
+{
+  "currentStep": "plan",
+  "status": "planned",
+  "feature": "3566-client-coa-disconnect",
+  "updatedAt": "2026-09-29T17:09:03.814-05:00",
+  "lifecycle": [
+    {
+      "timestamp": "2026-09-29T17:09:03.814-05:00",
+      "step": "plan",
+      "command": "speckit.companion.after-plan",
+      "status": "planned"
+    }
+  ]
+}
