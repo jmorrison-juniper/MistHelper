@@ -188,6 +188,7 @@ class FakeStatisticsReader:
         readings: Mapping[str, gate.GateReading] | None = None,
         fail_rounds: Collection[int] = (),
         partial_reasons: Sequence[dict[str, Any]] = (),
+        reading_schedule: Sequence[Mapping[str, gate.GateReading]] = (),
     ) -> None:
         """Build one fake statistics reader.
 
@@ -195,11 +196,13 @@ class FakeStatisticsReader:
             readings: One reading for each device, keyed by the address.
             fail_rounds: The one-based rounds at which the read raises.
             partial_reasons: The reasons that each answer carries.
+            reading_schedule: The readings for each poll round.
         """
-        self._readings = dict(readings or {})
-        self._fail_rounds = frozenset(fail_rounds)
-        self._partial_reasons = list(partial_reasons)
-        self.calls = 0
+        self._readings = dict(readings or {})  # Keep the stable answer for tests that need no timeline.
+        self._fail_rounds = frozenset(fail_rounds)  # Let a test place a cloud fault on an exact round.
+        self._partial_reasons = list(partial_reasons)  # Keep the cloud causes that the gate must report.
+        self._reading_schedule = [dict(item) for item in reading_schedule]  # Replay a measured firmware timeline.
+        self.calls = 0  # Count the cloud calls so the tests can prove the rate budget.
 
     def read(self) -> gate.FleetRead:
         """Return the fleet reading of this round.
@@ -210,10 +213,17 @@ class FakeStatisticsReader:
         Raises:
             RuntimeError: When the test scheduled a failure for this round.
         """
-        self.calls += 1
-        if self.calls in self._fail_rounds:
+        self.calls += 1  # Advance the one-based poll round before selecting its answer.
+        if self.calls in self._fail_rounds:  # Raise only on the rounds that the test selected.
             raise RuntimeError("the cloud refused the statistics read")
-        return gate.FleetRead(readings=dict(self._readings), partial_reasons=list(self._partial_reasons))
+        readings = self._readings  # Use the stable answer when the test has no timeline.
+        if self._reading_schedule:  # Select the measured state for this poll when a timeline exists.
+            index = min(self.calls - 1, len(self._reading_schedule) - 1)  # Repeat the final state after the schedule.
+            readings = self._reading_schedule[index]  # Give the gate the cloud state of this poll round.
+        return gate.FleetRead(  # Return fresh containers so the gate cannot change the test fixture.
+            readings=dict(readings),
+            partial_reasons=list(self._partial_reasons),
+        )
 
 
 class RecordingReporter:
@@ -609,6 +619,52 @@ def test_a_timeout_without_success_status_still_records_failure() -> None:
     assert outcome.not_returned == (SWITCH_MAC,)  # WHY: The driver must mark the missing device.
 
 
+def test_an_active_srx1500_upgrade_extends_past_thirty_minutes_and_settles() -> None:
+    """An active SRX1500 job can use 52 minutes and still settle as upgraded."""
+    reconnect_round = 158  # WHY: A 20-second poll sees the measured 52-minute reconnect on this round.
+    active_reading = gate.GateReading(  # WHY: The cloud still ran the firmware job at the old 30-minute limit.
+        SWITCH_MAC,
+        VERSION_BEFORE,
+        UPTIME_BEFORE,
+        fwupdate_status="inprogress",
+    )
+    upgraded_reading = gate.GateReading(  # WHY: The device later reports the requested firmware and a fresh uptime.
+        SWITCH_MAC,
+        VERSION_AFTER,
+        976,
+        fwupdate_status=phase_gate.FWUPDATE_SUCCESS,
+    )
+    events = FakeReconnectReader([()] * (reconnect_round - 1) + [(SWITCH_MAC,)])  # Replay the late reconnect event.
+    readings = [{SWITCH_MAC: active_reading}] * 95 + [{SWITCH_MAC: upgraded_reading}]  # Complete after 31 minutes.
+    statistics = FakeStatisticsReader(reading_schedule=readings)  # Replay the job state through the long wait.
+    harness = Harness(events, statistics)  # Use the production limits with a fake clock.
+    target = target_entry(SWITCH_MAC, "gateway", uptime_before=None)  # Match the SRX1500 run with no earlier uptime.
+    outcome = harness.adapter.settle(RUN_ID, "gateways", [target])  # Run the measured gateway timeline.
+    assert outcome.state == PhaseState.SETTLED.value  # The successful upgrade must not become a false failure.
+    assert outcome.not_returned == ()  # The driver must not mark the SRX1500 as missing.
+    assert outcome.settled_targets == ((SWITCH_MAC, VERSION_AFTER),)  # The history must record the requested version.
+    assert harness.clock() > START_TIME + float(phase_gate.PHASE_DEADLINE_SECONDS)  # The wait passed 30 minutes.
+    assert harness.clock() < START_TIME + 60 * 60  # The replay settled near 53 minutes and before the hard limit.
+
+
+def test_an_active_gateway_job_stops_at_the_hard_limit() -> None:
+    """An unfinished gateway job cannot extend past the 90-minute hard limit."""
+    reading = gate.GateReading(  # WHY: Positive active-job evidence keeps the gateway in the extended wait.
+        SWITCH_MAC,
+        VERSION_BEFORE,
+        UPTIME_BEFORE,
+        fwupdate_status="inprogress",
+    )
+    statistics = FakeStatisticsReader({SWITCH_MAC: reading})  # Repeat the unfinished cloud state for every poll.
+    harness = Harness(FakeReconnectReader(), statistics)  # Use the production limits with no reconnect event.
+    target = target_entry(SWITCH_MAC, "gateway")  # Select the only family that can use the extension.
+    outcome = harness.adapter.settle(RUN_ID, "gateways", [target])  # Run through the standard and hard limits.
+    assert outcome.state == PhaseState.FAILED.value  # The hard limit must end an upgrade that never finishes.
+    assert outcome.not_returned == (SWITCH_MAC,)  # The driver must mark the unresolved gateway.
+    assert harness.clock() == START_TIME + float(phase_gate.GATEWAY_HARD_DEADLINE_SECONDS)  # Prove the final bound.
+    assert harness.statistics.calls == phase_gate.polls_per_phase(phase_gate.GATEWAY_HARD_DEADLINE_SECONDS)
+
+
 def test_an_empty_phase_settles_at_once() -> None:
     """A phase with no device target needs no poll and no wait."""
     harness = Harness(FakeReconnectReader(), FakeStatisticsReader())
@@ -772,6 +828,15 @@ def test_a_whole_phase_holds_the_documented_call_budget() -> None:
     hourly = phase_gate.calls_per_phase() * gate.SECONDS_PER_HOUR // phase_gate.PHASE_DEADLINE_SECONDS
     assert hourly == gate.MAX_CALLS_PER_HOUR
     assert hourly < gate.HOURLY_CALL_QUOTA * 0.08
+
+
+def test_the_gateway_hard_limit_keeps_the_documented_call_rate() -> None:
+    """The longer gateway limit changes duration but not the hourly call rate."""
+    calls = phase_gate.calls_per_phase(phase_gate.GATEWAY_HARD_DEADLINE_SECONDS)  # Count the longest gateway phase.
+    hourly = calls * gate.SECONDS_PER_HOUR // phase_gate.GATEWAY_HARD_DEADLINE_SECONDS  # Convert calls to one hour.
+    assert calls == 540  # WHY: Ninety minutes holds 270 rounds with two calls in each round.
+    assert hourly == gate.MAX_CALLS_PER_HOUR  # WHY: The extension keeps the documented 360-call hourly rate.
+    assert hourly < gate.HOURLY_CALL_QUOTA * 0.08  # WHY: The longer wait still uses less than eight percent.
 
 
 def test_the_deadline_is_a_whole_number_of_rounds() -> None:

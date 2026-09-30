@@ -21,19 +21,16 @@ Why:
     of ``gate.read_reboot_hint`` is an aid and never a signal, so this loop
     never calls it. A third call in the round would break the budget.
 
-    The deadline for one phase is 30 minutes. FR-047 makes a limit mandatory
-    and names no number, so this module chooses one and states the reason here.
-    A Junos device writes the image and then reboots. The vendor publishes
-    no settle time for a switch or a gateway
-    (``research/settle-gate-apis.md`` section 11). The value cannot come
-    from vendor guidance.
+    The standard deadline for one phase is 30 minutes. FR-047 makes a limit
+    mandatory and names no number. A Junos device writes the image and then
+    reboots. The vendor publishes no settle time for a switch or a gateway.
 
-    Thirty minutes covers a slow chassis and still holds the call budget
-    exactly. Thirty minutes at 20 seconds is 90 rounds. Each round is one event
-    call plus one statistics call, a rate of 360 calls each hour. A run whose
-    four phases all reach the limit therefore lasts 2 hours at that same rate.
-    A longer limit would leave an operator with no news for too long, and a
-    shorter one would call a healthy slow switch a failure.
+    Thirty minutes at 20 seconds is 90 rounds. Each round makes one event call
+    and one statistics call. The rate is 360 calls each hour.
+
+    A gateway can need more than 30 minutes. If its firmware job is active at
+    the standard deadline, the gate continues to a 90-minute hard deadline.
+    This policy keeps the same hourly call rate and prevents an unlimited wait.
 
     Every wait goes through an injected sleep, and every clock reading comes
     from the gate that the caller passed. One clock serves the phase deadline
@@ -48,7 +45,7 @@ import logging
 import math  # WHY: A scheduled reboot can end between two poll ticks.
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Final, Protocol
 
 from src.upgrade_portal.capture.devices import normalize_device_mac
@@ -64,8 +61,15 @@ logger = logging.getLogger(__name__)
 # limit holds the pair of poll streams at gate.MAX_CALLS_PER_HOUR exactly.
 PHASE_DEADLINE_SECONDS: Final[int] = 1800
 
+# WHY: A measured SRX1500 upgrade needed 52 minutes. Ninety minutes gives a
+# bounded recovery window without holding the site lock for an unlimited time.
+GATEWAY_HARD_DEADLINE_SECONDS: Final[int] = 90 * 60
+
 # WHY: Only wired infrastructure phases use the delayed reboot option today.
 SCHEDULED_REBOOT_TYPES: Final[frozenset[str]] = frozenset({"gateway", "switch"})
+
+# WHY: The vendor schema names these states as unfinished firmware work.
+FWUPDATE_ACTIVE_STATUSES: Final[frozenset[str]] = frozenset({"inprogress", "scheduled"})
 
 # WHY: Mist reports this token only after the firmware job completed.
 FWUPDATE_SUCCESS: Final[str] = "success"
@@ -376,6 +380,7 @@ class _PhaseWatch:
         phase: The phase name that the outcome carries.
         targets: One gate target for each device of the phase.
         deadline: The clock reading at which the wait stops.
+        hard_deadline: The final clock reading for an extended gateway wait.
         progress: The signals of each device so far, keyed by the address.
     """
 
@@ -383,6 +388,7 @@ class _PhaseWatch:
     phase: str
     targets: tuple[gate.GateTarget, ...]
     deadline: float
+    hard_deadline: float
     round_limit: int
     progress: dict[str, gate.GateProgress]
     poll_after: float
@@ -725,9 +731,16 @@ class PhaseSettleGate:
             poll_after,
             self._deadline_seconds,
         )  # WHY: A delayed start or reboot moves the settle window.
+        hard_deadline = deadline  # WHY: Other device families keep one standard deadline.
+        if family == "gateway":  # WHY: Only gateways use the active-job extension policy.
+            hard_deadline = ScheduledSettleWindow.deadline(
+                now,
+                poll_after,
+                GATEWAY_HARD_DEADLINE_SECONDS,
+            )  # A scheduled start or reboot anchors the bounded gateway extension.
         limit = polls_per_phase(self._deadline_seconds)  # WHY: The cloud poll budget starts at the reboot window.
         progress = {target.mac: gate.GateProgress() for target in entries}  # WHY: Each device starts with no signal.
-        return _PhaseWatch(run_id, phase, entries, deadline, limit, progress, poll_after)
+        return _PhaseWatch(run_id, phase, entries, deadline, hard_deadline, limit, progress, poll_after)
 
     def _wait(self, watch: _PhaseWatch) -> PhaseOutcome:
         """Poll until the phase settles or the wait reaches its limit.
@@ -779,7 +792,45 @@ class PhaseSettleGate:
             self._deps.sleep(float(gate.POLL_INTERVAL_SECONDS))
             if self._deps.settle_gate.now() >= watch.deadline:
                 break
+        extended = self._extend_active_gateway(watch)  # WHY: An active SRX job needs more than the standard window.
+        if extended is not None:  # WHY: Continue only when current cloud evidence proves unfinished gateway work.
+            return self._wait(extended)  # WHY: The hard deadline and round cap keep this single extension bounded.
         return self._timeout(watch, note)
+
+    def _extend_active_gateway(self, watch: _PhaseWatch) -> _PhaseWatch | None:
+        """Extend an active gateway firmware job to the hard deadline."""
+        if watch.family != "gateway":  # WHY: The measured long upgrade applies only to the gateway family.
+            return None  # WHY: Switches and access points keep the standard deadline.
+        if watch.deadline >= watch.hard_deadline:  # WHY: The second limit is final and must never extend again.
+            return None  # WHY: The caller now reconciles success or reports failure.
+        active = tuple(  # WHY: Name each missing device whose latest cloud state proves unfinished firmware work.
+            target.mac
+            for target in watch.targets
+            if target.mac in watch.missing
+            and (reading := watch.last_readings.get(target.mac)) is not None
+            and reading.fwupdate_status in FWUPDATE_ACTIVE_STATUSES
+        )
+        if not active:  # WHY: An empty or terminal status gives no reason to hold the site lock longer.
+            return None  # WHY: The standard timeout path remains strict without positive active-job evidence.
+        now = self._deps.settle_gate.now()  # WHY: The remaining round cap starts at the standard deadline.
+        logger.info(
+            "Run %s phase %s extends the active gateway wait to its hard limit for device(s): %s",
+            watch.run_id,
+            watch.phase,
+            ", ".join(active),
+        )  # Log the safety decision before the longer wait.
+        extended = replace(
+            watch,
+            deadline=watch.hard_deadline,
+            round_limit=_round_limit(now, watch.hard_deadline),
+        )  # WHY: Keep prior progress while the remaining rounds reach the final limit.
+        logger.debug(
+            "Run %s phase %s added %s gateway poll round(s)",
+            watch.run_id,
+            watch.phase,
+            extended.round_limit,
+        )  # Log the bounded size of the extension.
+        return extended  # WHY: The next wait keeps the lock heartbeat and the same poll rate.
 
     def _round(self, watch: _PhaseWatch) -> str:
         """Run one poll round and report how far the phase moved.
@@ -1099,11 +1150,13 @@ def as_phase_gate(adapter: PhaseSettleGate) -> PhaseGate:
 
 __all__ = [
     "CALLS_PER_ROUND",
+    "FWUPDATE_ACTIVE_STATUSES",
+    "FWUPDATE_SUCCESS",
+    "GATEWAY_HARD_DEADLINE_SECONDS",
     "NOTE_EVENT_READ_FAILED",
     "NOTE_STATISTICS_PARTIAL",
     "NOTE_STATISTICS_READ_FAILED",
     "PHASE_DEADLINE_SECONDS",
-    "FWUPDATE_SUCCESS",
     "SCHEDULED_REBOOT_TYPES",
     "CloudReconnectReader",
     "CloudStatisticsReader",
