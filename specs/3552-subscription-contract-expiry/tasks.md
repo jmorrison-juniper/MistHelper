@@ -39,9 +39,9 @@ implemented and tested as an independent increment where possible.
 
 **Purpose**: Create the package and test directories without integration wiring.
 
-- [ ] T001 Create the report package files `src/reports/subscription_expiry/__init__.py`, `src/reports/subscription_expiry/client.py`, `src/reports/subscription_expiry/model.py`, and `src/reports/subscription_expiry/operation.py`
-- [ ] T002 Create the unit test files `tests/unit/reports/subscription_expiry/test_client.py`, `tests/unit/reports/subscription_expiry/test_model.py`, and `tests/unit/reports/subscription_expiry/test_operation.py`
-- [ ] T003 Review `specs/3552-subscription-contract-expiry/wiring.md` and confirm the deferred integration boundary before implementation starts
+- [X] T001 Create the report package files `src/reports/subscription_expiry/__init__.py`, `src/reports/subscription_expiry/client.py`, `src/reports/subscription_expiry/model.py`, and `src/reports/subscription_expiry/operation.py`
+- [X] T002 Create the unit test files `tests/unit/reports/subscription_expiry/test_client.py`, `tests/unit/reports/subscription_expiry/test_model.py`, and `tests/unit/reports/subscription_expiry/test_operation.py`
+- [X] T003 Review `specs/3552-subscription-contract-expiry/wiring.md` and confirm the deferred integration boundary before implementation starts
 
 ---
 
@@ -52,12 +52,12 @@ implemented and tested as an independent increment where possible.
 **Critical**: Do not start user story implementation until this phase is
 complete.
 
-- [ ] T004 [P] Define report constants, missing value markers, band names, bucket names, and status values in `src/reports/subscription_expiry/model.py`
-- [ ] T005 [P] Define `ReportContext`, `LicenseSummarySource`, `LicenseUsageSource`, and `JsiContractSource` dataclasses in `src/reports/subscription_expiry/model.py`
-- [ ] T006 [P] Define `SubscriptionExpiryRow`, `ContractExpiryRow`, and `ConsoleSummary` dataclasses in `src/reports/subscription_expiry/model.py`
-- [ ] T007 Implement date normalization for ISO strings, Unix timestamps, missing values, and invalid values in `src/reports/subscription_expiry/model.py`
-- [ ] T008 Implement `SubscriptionExpiryClient` response-wrapper conversion without scoring or export logic in `src/reports/subscription_expiry/client.py`
-- [ ] T009 Add client unit tests for plain-container conversion and JSI pagination in `tests/unit/reports/subscription_expiry/test_client.py`
+- [X] T004 [P] Define report constants, missing value markers, band names, bucket names, and status values in `src/reports/subscription_expiry/model.py`
+- [X] T005 [P] Define `ReportContext`, `LicenseSummarySource`, `LicenseUsageSource`, and `JsiContractSource` dataclasses in `src/reports/subscription_expiry/model.py`
+- [X] T006 [P] Define `SubscriptionExpiryRow`, `ContractExpiryRow`, and `ConsoleSummary` dataclasses in `src/reports/subscription_expiry/model.py`
+- [X] T007 Implement date normalization for ISO strings, Unix timestamps, missing values, and invalid values in `src/reports/subscription_expiry/model.py`
+- [X] T008 Implement `SubscriptionExpiryClient` response-wrapper conversion without scoring or export logic in `src/reports/subscription_expiry/client.py`
+- [X] T009 Add client unit tests for plain-container conversion and JSI pagination in `tests/unit/reports/subscription_expiry/test_client.py`
 
 **Checkpoint**: Source data can be normalized and API seams can be tested with
 fake client data.
@@ -75,18 +75,18 @@ type and all expected column values.
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Add failing tests for subscription bands and days remaining in `tests/unit/reports/subscription_expiry/test_model.py`
-- [ ] T011 [P] [US1] Add failing tests for `Active`, `Expired`, `Exceeded`, and `Inactive` status scoring in `tests/unit/reports/subscription_expiry/test_model.py`
-- [ ] T012 [P] [US1] Add failing tests for empty subscription data, missing end dates, missing entitlement, missing usage, and duplicate subscription types in `tests/unit/reports/subscription_expiry/test_model.py`
+- [X] T010 [P] [US1] Add failing tests for subscription bands and days remaining in `tests/unit/reports/subscription_expiry/test_model.py`
+- [X] T011 [P] [US1] Add failing tests for `Active`, `Expired`, `Exceeded`, and `Inactive` status scoring in `tests/unit/reports/subscription_expiry/test_model.py`
+- [X] T012 [P] [US1] Add failing tests for empty subscription data, missing end dates, missing entitlement, missing usage, and duplicate subscription types in `tests/unit/reports/subscription_expiry/test_model.py`
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement license usage aggregation by subscription type in `src/reports/subscription_expiry/model.py`
-- [ ] T014 [US1] Implement subscription end date selection and days remaining calculation in `src/reports/subscription_expiry/model.py`
-- [ ] T015 [US1] Implement subscription status and band scoring in `src/reports/subscription_expiry/model.py`
-- [ ] T016 [US1] Implement subscription row ordering and one-row-per-type output in `src/reports/subscription_expiry/model.py`
-- [ ] T017 [US1] Add subscription export orchestration for `SubscriptionExpiry.csv` in `src/reports/subscription_expiry/operation.py`
-- [ ] T018 [US1] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k subscription` and fix defects in `src/reports/subscription_expiry/model.py`
+- [X] T013 [US1] Implement license usage aggregation by subscription type in `src/reports/subscription_expiry/model.py`
+- [X] T014 [US1] Implement subscription end date selection and days remaining calculation in `src/reports/subscription_expiry/model.py`
+- [X] T015 [US1] Implement subscription status and band scoring in `src/reports/subscription_expiry/model.py`
+- [X] T016 [US1] Implement subscription row ordering and one-row-per-type output in `src/reports/subscription_expiry/model.py`
+- [X] T017 [US1] Add subscription export orchestration for `SubscriptionExpiry.csv` in `src/reports/subscription_expiry/operation.py`
+- [X] T018 [US1] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k subscription` and fix defects in `src/reports/subscription_expiry/model.py`
 
 **Checkpoint**: User Story 1 produces independently testable subscription rows.
 
@@ -103,18 +103,18 @@ device and all expected column values.
 
 ### Tests for User Story 2
 
-- [ ] T019 [P] [US2] Add failing tests for contract buckets in `tests/unit/reports/subscription_expiry/test_model.py`
-- [ ] T020 [P] [US2] Add failing tests for `Supported` and `Unsupported` state scoring in `tests/unit/reports/subscription_expiry/test_model.py`
-- [ ] T021 [P] [US2] Add failing tests for empty contract data, missing end dates, missing serial, missing model, and duplicate devices in `tests/unit/reports/subscription_expiry/test_model.py`
+- [X] T019 [P] [US2] Add failing tests for contract buckets in `tests/unit/reports/subscription_expiry/test_model.py`
+- [X] T020 [P] [US2] Add failing tests for `Supported` and `Unsupported` state scoring in `tests/unit/reports/subscription_expiry/test_model.py`
+- [X] T021 [P] [US2] Add failing tests for empty contract data, missing end dates, missing serial, missing model, and duplicate devices in `tests/unit/reports/subscription_expiry/test_model.py`
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Implement contract end date selection from JSI source fields in `src/reports/subscription_expiry/model.py`
-- [ ] T023 [US2] Implement contract status and contract state scoring in `src/reports/subscription_expiry/model.py`
-- [ ] T024 [US2] Implement contract bucket scoring with three-month and twelve-month boundaries in `src/reports/subscription_expiry/model.py`
-- [ ] T025 [US2] Implement contract row ordering and one-row-per-device output in `src/reports/subscription_expiry/model.py`
-- [ ] T026 [US2] Add contract export orchestration for `ContractExpiry.csv` in `src/reports/subscription_expiry/operation.py`
-- [ ] T027 [US2] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k contract` and fix defects in `src/reports/subscription_expiry/model.py`
+- [X] T022 [US2] Implement contract end date selection from JSI source fields in `src/reports/subscription_expiry/model.py`
+- [X] T023 [US2] Implement contract status and contract state scoring in `src/reports/subscription_expiry/model.py`
+- [X] T024 [US2] Implement contract bucket scoring with three-month and twelve-month boundaries in `src/reports/subscription_expiry/model.py`
+- [X] T025 [US2] Implement contract row ordering and one-row-per-device output in `src/reports/subscription_expiry/model.py`
+- [X] T026 [US2] Add contract export orchestration for `ContractExpiry.csv` in `src/reports/subscription_expiry/operation.py`
+- [X] T027 [US2] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k contract` and fix defects in `src/reports/subscription_expiry/model.py`
 
 **Checkpoint**: User Story 2 produces independently testable contract rows.
 
@@ -130,17 +130,17 @@ bucket. Verify that the summary counts match the row counts.
 
 ### Tests for User Story 3
 
-- [ ] T028 [P] [US3] Add failing tests for summary count defaults and counted rows in `tests/unit/reports/subscription_expiry/test_model.py`
-- [ ] T029 [P] [US3] Add failing tests for report run orchestration, export calls, and console output in `tests/unit/reports/subscription_expiry/test_operation.py`
-- [ ] T030 [P] [US3] Add failing tests for the JSI `400` no-linked-account path in `tests/unit/reports/subscription_expiry/test_operation.py`
+- [X] T028 [P] [US3] Add failing tests for summary count defaults and counted rows in `tests/unit/reports/subscription_expiry/test_model.py`
+- [X] T029 [P] [US3] Add failing tests for report run orchestration, export calls, and console output in `tests/unit/reports/subscription_expiry/test_operation.py`
+- [X] T030 [P] [US3] Add failing tests for the JSI `400` no-linked-account path in `tests/unit/reports/subscription_expiry/test_operation.py`
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Implement summary count creation for all bands and buckets in `src/reports/subscription_expiry/model.py`
-- [ ] T032 [US3] Implement `SubscriptionExpiryReport.run()` with `SourceDependencyResolver` context resolution in `src/reports/subscription_expiry/operation.py`
-- [ ] T033 [US3] Implement logging before and after client calls, scoring, export, and summary output in `src/reports/subscription_expiry/operation.py`
-- [ ] T034 [US3] Implement clear handling for a JSI `400` no-linked-account response in `src/reports/subscription_expiry/operation.py`
-- [ ] T035 [US3] Run `python -m pytest tests\unit\reports\subscription_expiry\test_operation.py` and fix defects in `src/reports/subscription_expiry/operation.py`
+- [X] T031 [US3] Implement summary count creation for all bands and buckets in `src/reports/subscription_expiry/model.py`
+- [X] T032 [US3] Implement `SubscriptionExpiryReport.run()` with `SourceDependencyResolver` context resolution in `src/reports/subscription_expiry/operation.py`
+- [X] T033 [US3] Implement logging before and after client calls, scoring, export, and summary output in `src/reports/subscription_expiry/operation.py`
+- [X] T034 [US3] Implement clear handling for a JSI `400` no-linked-account response in `src/reports/subscription_expiry/operation.py`
+- [X] T035 [US3] Run `python -m pytest tests\unit\reports\subscription_expiry\test_operation.py` and fix defects in `src/reports/subscription_expiry/operation.py`
 
 **Checkpoint**: User Story 3 prints summary counts that match scored rows.
 
@@ -151,12 +151,12 @@ bucket. Verify that the summary counts match the row counts.
 **Purpose**: Verify the package, preserve the integration boundary, and prepare
 pull request evidence.
 
-- [ ] T036 [P] Add public package exports for implementation classes in `src/reports/subscription_expiry/__init__.py`
-- [ ] T037 [P] Create `changelog.d/issue-3552-subscription-contract-expiry.md` only if the pull request needs a release-note fragment for this implementation branch
-- [ ] T038 Run `python -m pytest tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
-- [ ] T039 Run `python -m ruff check src\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
-- [ ] T040 Run `python -m black --check src\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
-- [ ] T041 Confirm `specs/3552-subscription-contract-expiry/wiring.md` still lists the deferred menu, registry, README, generated reference, and primary key work
+- [X] T036 [P] Add public package exports for implementation classes in `src/reports/subscription_expiry/__init__.py`
+- [X] T037 [P] Create `changelog.d/issue-3552-subscription-contract-expiry.md` only if the pull request needs a release-note fragment for this implementation branch
+- [X] T038 Run `python -m pytest tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
+- [X] T039 Run `python -m ruff check src\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
+- [X] T040 Run `python -m black --check src\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
+- [X] T041 Confirm `specs/3552-subscription-contract-expiry/wiring.md` still lists the deferred menu, registry, README, generated reference, and primary key work
 
 ---
 
