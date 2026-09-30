@@ -13,7 +13,7 @@ Fields:
 | `scope` | string | Yes | One supported report scope. |
 | `owner_field` | string | Yes | Field used to label the row owner. |
 | `value_path` | string | Yes | Dot path or list path to the certificate value. |
-| `value_kind` | string | Yes | `pem`, `epoch`, or `datetime_text`. |
+| `value_kind` | string | Yes | `pem`, `epoch`, or `pending_epoch`. |
 
 Supported scope values:
 
@@ -88,7 +88,7 @@ Validation rules:
 | `absent` | The source did not include a certificate value. | Write no row. |
 | `parsed` | A PEM value parsed successfully. | Write subject, issuer, serial, and `not_after`. |
 | `epoch` | The source supplied an epoch expiry value. | Write `not_after`, `days_remaining`, and band. |
-| `datetime_text` | The source supplied a date string. | Parse as UTC or offset-aware text. |
+| `pending_epoch` | The source supplied a pending certificate epoch value. | Write the pending expiry row with a source note. |
 | `unparsable` | The value existed but could not be parsed. | Write one row with note `unparsable`. |
 
 ## Source mapping
@@ -102,6 +102,6 @@ Validation rules:
 | Org settings NAC CA | `getOrgSettings` | `CA cert` | `mist_nac.cacerts[]` PEM |
 | Org settings NAC server | `getOrgSettings` | `NAC server cert` | `mist_nac.server_cert.cert` PEM |
 | Org SSO | `listOrgSsos` | `SSO IdP` | `idp_cert` PEM |
-| NAC portal SSO | `listOrgNacPortals` | `SSO IdP` | `sso.idp_cert` PEM |
 | PSK portal SSO | `listOrgPskPortals` | `PSK portal IdP` | `sso.idp_cert` PEM |
-| SCEP client certificates | `listOrgIssuedClientCertificates` | `NAC server cert` | `expire_time` text |
+| Org CRL file | `getOrgCrlFile` | None | Evidence only; no expiry row |
+| NAC CRL metadata | `getOrgNacCrl` | None | Evidence only; no expiry row |

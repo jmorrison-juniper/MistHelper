@@ -34,9 +34,9 @@ The client must read these operations when the configured session and organizati
 | `getOrgSettings` | `GET /api/v1/orgs/{org_id}/setting` | RadSec, device certificate, NAC CA, and NAC server certificate fields. |
 | `listOrgCertificates` | `GET /api/v1/orgs/{org_id}/cert` | Organization CA certificate data. |
 | `listOrgSsos` | `GET /api/v1/orgs/{org_id}/ssos` | Organization SSO IdP certificates. |
-| `listOrgNacPortals` | `GET /api/v1/orgs/{org_id}/nacportals` | NAC portal SSO IdP certificates and extra CA certificates. |
 | `listOrgPskPortals` | `GET /api/v1/orgs/{org_id}/pskportals` | PSK portal SSO IdP certificates. |
-| `listOrgIssuedClientCertificates` | `GET /api/v1/orgs/{org_id}/setting/mist_scep/client_certs` | Issued SCEP certificate expiry metadata. |
+| `getOrgCrlFile` | `GET /api/v1/orgs/{org_id}/crl` | CRL availability evidence. No expiry row is emitted. |
+| `getOrgNacCrl` | `GET /api/v1/orgs/{org_id}/setting/mist_nac_crls` | NAC CRL metadata evidence. No expiry row is emitted. |
 
 The implementation must inspect installed SDK signatures before it writes these calls.
 
@@ -117,7 +117,7 @@ Required test groups:
 2. PEM parse success with `cryptography`.
 3. PEM parse failure creates one `unparsable` row.
 4. Epoch `cert_expiry` normalization.
-5. Date text `expire_time` normalization.
+5. Pending certificate expiry normalization.
 6. Privacy check for PEM bodies and private key-like text.
 7. Operation uses `SourceDependencyResolver` for session, organization, and exporter.
 8. Console band counts match CSV row counts.

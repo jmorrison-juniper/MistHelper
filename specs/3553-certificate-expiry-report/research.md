@@ -104,9 +104,11 @@ Decision: Do not emit certificate expiry rows from the CRL endpoints.
 
 Rationale: The assignment named `listOrgCrl`, but OpenAPI contains no such operationId. The matching
 organization CRL endpoint is `getOrgCrlFile` at `GET /api/v1/orgs/{org_id}/crl`, and it returns a
-binary file. The NAC CRL metadata endpoint is `getOrgNacCrl` at
-`GET /api/v1/orgs/{org_id}/setting/mist_nac_crls`, and it returns CRL metadata. Neither response
-schema provides certificate expiry rows.
+binary file. The installed SDK exposes `mistapi.api.v1.orgs.crl.getOrgCrlFile()`. The NAC CRL
+metadata endpoint is `getOrgNacCrl` at `GET /api/v1/orgs/{org_id}/setting/mist_nac_crls`, and it
+returns CRL metadata. The installed SDK does not expose `getOrgNacCrl`, so the client will use
+`apisession.mist_get()` for that metadata check. Neither response schema provides certificate expiry
+rows.
 
 Alternatives considered: Parse a CRL file during menu 272. Rejected because the feature output is a
 certificate expiry report, while a CRL is a revocation list and can contain revoked certificate
@@ -146,3 +148,28 @@ different owners while preventing duplicate rows for the same certificate.
 
 Alternatives considered: Use subject and issuer as the unique key. Rejected because multiple
 certificates can share those fields.
+
+## R9. Installed SDK callable-name verification during implementation
+
+Decision: Use the installed SDK module names and signatures that were verified in the issue #3553
+worktree.
+
+Rationale: The implementation inspection found these callable names:
+
+- `mistapi.api.v1.orgs.stats.listOrgDevicesStats(mist_session, org_id, ..., limit=None, page=None)`
+- `mistapi.api.v1.orgs.setting.getOrgSettings(mist_session, org_id)`
+- `mistapi.api.v1.orgs.cert.listOrgCertificates(mist_session, org_id)`
+- `mistapi.api.v1.orgs.ssos.listOrgSsos(mist_session, org_id, limit=None, page=None)`
+- `mistapi.api.v1.orgs.pskportals.listOrgPskPortals(mist_session, org_id, limit=None, page=None)`
+- `mistapi.api.v1.orgs.crl.getOrgCrlFile(mist_session, org_id)`
+- `mistapi.api.v1.orgs.setting.getOrgNacCrl(mist_session, org_id)`
+
+Implementation adjustments:
+
+- Use `ssos`, not `sso`, for the SSO SDK module.
+- Use `pskportals`, not `psk_portals`, for the PSK portal SDK module.
+- Use `getOrgCrlFile` and `getOrgNacCrl` only as metadata evidence. Neither source creates active
+  certificate expiry rows.
+
+Alternatives considered: Use `getOrgCertificates`, `mistapi.api.v1.orgs.sso`, or
+`mistapi.api.v1.orgs.psk_portals`. Rejected because the installed SDK exposes none of those names.
