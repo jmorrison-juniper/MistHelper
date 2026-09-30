@@ -15,6 +15,18 @@ def test_absent_api_setting_returns_review_with_absent_reason() -> None:
     assert "absent" in result.reason.lower()  # The reason must state that evidence is absent.
 
 
+def test_restricted_api_access_passes() -> None:
+    source_data = ApiPostureCases.restricted_api_access()  # Use source data with a known safe API mode.
+    result = ApiAccessRestrictionCheck().run(source_data)  # Evaluate API access posture.
+    assert result.verdict == "pass"  # Restricted API access meets the recommendation.
+
+
+def test_unrestricted_api_access_fails() -> None:
+    source_data = ApiPostureCases.unrestricted_api_access()  # Use source data with a known unsafe API mode.
+    result = ApiAccessRestrictionCheck().run(source_data)  # Evaluate API access posture.
+    assert result.verdict == "fail"  # Unrestricted API access violates the recommendation.
+
+
 def test_non_https_webhook_url_fails() -> None:
     source_data = ApiPostureCases.non_https_webhook()  # Use source data with an HTTP webhook.
     result = ApiWebhookHttpsCheck().run(source_data)  # Evaluate webhook transport posture.

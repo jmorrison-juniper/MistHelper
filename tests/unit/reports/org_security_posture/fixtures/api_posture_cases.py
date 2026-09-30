@@ -12,6 +12,18 @@ class ApiPostureCases:
         return OrganizationSecuritySourceData({}, [], [], [], [])  # Empty source data forces review verdicts.
 
     @staticmethod
+    def restricted_api_access() -> OrganizationSecuritySourceData:
+        """Return source data with a restricted API access mode."""
+        settings = {"api_policy": {"access": "restricted"}}  # Restricted is one of the allowed API modes.
+        return OrganizationSecuritySourceData(settings, [], [], [], [])  # Only API access evidence is needed.
+
+    @staticmethod
+    def unrestricted_api_access() -> OrganizationSecuritySourceData:
+        """Return source data with an unrestricted API access mode."""
+        settings = {"api_policy": {"access": "unrestricted"}}  # Unrestricted API access must fail.
+        return OrganizationSecuritySourceData(settings, [], [], [], [])  # Only API access evidence is needed.
+
+    @staticmethod
     def non_https_webhook() -> OrganizationSecuritySourceData:
         """Return source data with a non-HTTPS webhook URL."""
         settings = {"api_policy": {"access": "restricted"}}  # Keep access secure so webhook is the tested defect.

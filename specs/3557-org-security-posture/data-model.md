@@ -96,3 +96,5 @@ Coordinates one checklist run.
 - A check returns `fail` when the source data clearly violates the recommended value.
 - A check returns `review` when the source value is absent, unreadable, ambiguous, or needs exception evidence.
 - A reason that reports absent source data must contain the word `absent`.
+- `ORGSEC-API-001` reads `api_policy.access`. Values `disabled`, `restricted`, and `admins_only` pass. Values `enabled`, `unrestricted`, and `all_admins` fail. All other values return `review`.
+- `ORGSEC-REMOTE-002` reads `junos_shell_access` as a role-to-access mapping. Known role keys include `admin`, `helpdesk`, `read`, and `write`. Each visible role passes only when its value is `none`. The check returns `review` when the mapping is absent, unreadable, or contains an empty role value.

@@ -35,8 +35,8 @@ The source collector returns one `OrganizationSecuritySourceData` object. Checks
 | Password policy | `getOrgSettings` | `password_policy.enabled`, `password_policy.min_length`, `password_policy.requires_special_char`, `password_policy.requires_two_factor_auth`, `password_policy.expiry_in_days` |
 | Password policy legacy evidence | `getOrgSettings` | `password_policy.requires_uppercase`, `password_policy.requires_lowercase`, `password_policy.requires_number`, `password_policy.reuse_history` return `review` when absent. |
 | Session policy | `getOrgSettings` | `ui_idle_timeout`, `session_policy.max_lifetime_hours` |
-| API policy | `getOrgSettings` | `api_policy.access` |
-| Remote shell | `getOrgSettings` | `disable_remote_shell`, `junos_shell_access.admin`, `junos_shell_access.helpdesk`, `junos_shell_access.read`, `junos_shell_access.write` |
+| API policy | `getOrgSettings` | `api_policy.access`; pass values are `disabled`, `restricted`, and `admins_only`; fail values are `enabled`, `unrestricted`, and `all_admins`; all other values return `review`. |
+| Remote shell | `getOrgSettings` | `disable_remote_shell`, `junos_shell_access` as a role-to-access mapping. Known role keys include `admin`, `helpdesk`, `read`, and `write`; each visible role value must be `none`. |
 | Packet capture | `getOrgSettings` | `disable_pcap`, `pcap_bucket_verified` |
 | Stale cleanup | `getOrgSettings` | `switch_mgmt.remove_existing_configs` |
 | SSO evidence | `listOrgSsos` | `enabled`, `id`, `name`, `domain` when present |

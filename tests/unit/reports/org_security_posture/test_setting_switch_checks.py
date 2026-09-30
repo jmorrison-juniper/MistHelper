@@ -1,10 +1,12 @@
 """Tests for switch-style organization setting checks."""
 
 from src.reports.org_security_posture.checks.access import (
+    JunosShellRoleAccessDisabledCheck,
     PacketCaptureDisabledCheck,
     RemoteShellDisabledCheck,
     StaleCleanupEnabledCheck,
 )
+from src.reports.org_security_posture.models import OrganizationSecuritySourceData
 from tests.unit.reports.org_security_posture.fixtures.representative_org_security_posture import (
     RepresentativeOrgSecurityPostureFixture,
 )
@@ -26,3 +28,15 @@ def test_stale_cleanup_enabled_passes() -> None:
     source_data = RepresentativeOrgSecurityPostureFixture.source_data()  # Use representative cleanup settings.
     result = StaleCleanupEnabledCheck().run(source_data)  # Evaluate stale cleanup posture.
     assert result.verdict == "pass"  # Enabled cleanup meets the recommendation.
+
+
+def test_junos_shell_access_empty_role_reviews() -> None:
+    source_data = OrganizationSecuritySourceData(  # Build only the setting needed by this check.
+        {"junos_shell_access": {"admin": "none", "helpdesk": ""}},
+        [],
+        [],
+        [],
+        [],
+    )
+    result = JunosShellRoleAccessDisabledCheck().run(source_data)  # Evaluate ambiguous role evidence.
+    assert result.verdict == "review"  # Empty shell role values need manual review.

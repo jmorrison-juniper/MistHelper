@@ -8,7 +8,7 @@
 
 Menu 276 will produce one organization security posture checklist for a Mist organization. The implementation will read organization settings and related organization security resources, evaluate one small check class per setting, write `data/OrgSecurityPosture.csv`, and print pass, fail, and review counts.
 
-The implementation plan defines the check model, the check registry, the runner, and the output contract. Menu wiring and primary key strategy changes are deferred to `specs/3557-org-security-posture/wiring.md`.
+The implementation plan defines the check model, the check registry, the runner, and the output contract. This branch delivers the importable handler and CSV evidence export. The primary key strategy is defined in `specs/3557-org-security-posture/wiring.md` before implementation work. Menu registration, applying the primary key strategy, database routing, generated references, and README menu documentation are deferred to the integration pull request.
 
 ## Technical Context
 
@@ -44,7 +44,7 @@ The implementation plan defines the check model, the check registry, the runner,
 | Inline Comments | PASS | Implementation must add inline comments to each generated executable line. |
 | Action Logging | PASS | Implementation must add `info` before each action and `debug` after each action. |
 | Technology and Compatibility | PASS | Use `mistapi` methods after verification. Use `pathlib.Path` or `os.path.join` for paths. |
-| Output Backends | PASS | The checklist uses the existing export path and writes the required CSV evidence file. |
+| Output Backends | PASS | The checklist uses `DataExporter.write_with_format_selection` for CSV evidence. The primary key strategy is defined in `wiring.md`, and the integration pull request applies it before database routing is enabled. |
 
 ## Project Structure
 
@@ -68,24 +68,28 @@ specs/3557-org-security-posture/
 src/
 +-- reports/
     +-- org_security_posture/
-    +-- checks/
-    |   +-- api.py
-    |   +-- base.py
-    |   +-- password.py
-    |   +-- registry.py
-    |   +-- access.py
-    +-- io/
-    |   +-- exporter.py
-    |   +-- formatting.py
-    |   +-- sources.py
-    +-- models.py
-    +-- runner.py
+        +-- checks/
+        |   +-- api.py
+        |   +-- base.py
+        |   +-- password.py
+        |   +-- registry.py
+        |   +-- access.py
+        +-- io/
+        |   +-- exporter.py
+        |   +-- formatting.py
+        |   +-- sources.py
+        +-- models.py
+        +-- runner.py
 
 tests/
 +-- unit/
     +-- reports/
         +-- org_security_posture/
-            +-- test_org_security_posture_checks.py
+            +-- test_api_checks.py
+            +-- test_console_summary.py
+            +-- test_output_contract.py
+            +-- test_password_checks.py
+            +-- test_setting_switch_checks.py
 ```
 
 **Structure Decision**: Put new implementation code in `src/reports/org_security_posture/`. This keeps the feature with other reports and preserves the fleet ownership boundary.
@@ -147,7 +151,7 @@ Before client code is written, implementation must verify these operation IDs an
 | `ORGSEC-PASSWORD-009` | Password policy | `organization settings > password policy > two-factor required` | Required | Pass when required. Fail when not required. Review when absent. |
 | `ORGSEC-SESSION-001` | Session policy | `organization settings > session policy > idle timeout` | 30 minutes or less | Pass when timeout is 30 minutes or less. Fail when higher. Review when absent. |
 | `ORGSEC-SESSION-002` | Session policy | `organization settings > session policy > maximum session lifetime` | 12 hours or less | Pass when lifetime is 12 hours or less. Fail when higher. Review when absent. |
-| `ORGSEC-API-001` | API policy | `organization settings > API policy > API access` | Restricted to authorized administrators, or disabled when not required | Pass when restricted or disabled. Fail when broad access is allowed. Review when absent. |
+| `ORGSEC-API-001` | API policy | `organization settings > API policy > API access` | `disabled`, `restricted`, or `admins_only` | Pass when the value is `disabled`, `restricted`, or `admins_only`. Fail when the value is `enabled`, `unrestricted`, or `all_admins`. Review when absent or unrecognized. |
 | `ORGSEC-API-002` | API policy | `organization settings > API policy > token expiration` | API tokens expire within 365 days or less | Pass when all visible tokens expire within 365 days. Fail when any token exceeds 365 days. Review when expiration is absent. |
 | `ORGSEC-API-003` | API policy | `organization settings > API policy > webhook URLs` | Every configured webhook URL uses `https://` | Pass when every URL starts with `https://`. Fail when any URL is non-HTTPS. Review when no URL exists. |
 | `ORGSEC-REMOTE-001` | Remote shell | `organization settings > remote shell` | Disabled unless there is a documented break-glass exception | Pass when disabled. Fail when enabled. Review when absent or exception evidence is required. |

@@ -12,15 +12,15 @@
 
 ### User Story 1 - Generate an organization security checklist (Priority: P1)
 
-A MistHelper operator running menu 276 can review the organization's security posture from one command instead of manually opening each organization settings area. The operation evaluates the password policy, session policy, API policy, remote shell switch, packet capture switch, and stale configuration cleanup switch and produces a checklist with a pass, fail, or review verdict for each check.
+A MistHelper operator running the menu 276 handler can review the organization's security posture from one command instead of manually opening each organization settings area. This branch delivers the importable handler and the wiring manifest. The integration pull request registers the handler as menu 276. The operation evaluates the password policy, session policy, API policy, remote shell switch, packet capture switch, and stale configuration cleanup switch and produces a checklist with a pass, fail, or review verdict for each check.
 
 **Why this priority**: This delivers the core security-review value: one repeatable checklist replaces manual inspection of multiple organization settings.
 
-**Independent Test**: Run menu 276 in test mode with representative organization settings and confirm the operation completes without prompts, writes `data/OrgSecurityPosture.csv`, and includes at least twelve check rows with stable check IDs and verdicts.
+**Independent Test**: Run the menu 276 handler in test mode with representative organization settings and confirm the operation completes without prompts, writes `data/OrgSecurityPosture.csv`, and includes at least twelve check rows with stable check IDs and verdicts.
 
 **Acceptance Scenarios**:
 
-1. **Given** representative organization settings are available in test mode, **When** the operator runs menu 276 with `--test`, **Then** the run completes without prompting and writes `data/OrgSecurityPosture.csv`.
+1. **Given** representative organization settings are available in test mode, **When** the operator runs the menu 276 handler with `--test`, **Then** the run completes without prompting and writes `data/OrgSecurityPosture.csv`.
 2. **Given** the CSV is opened after the run, **When** the reviewer inspects the rows, **Then** each row contains check id, area, setting path, current value, recommended value, verdict, and a one-sentence reason.
 3. **Given** the checklist evaluates all configured security areas, **When** the reviewer counts the rows, **Then** at least twelve checks are present and every check id remains stable across repeated runs.
 
@@ -32,11 +32,11 @@ A security reviewer can see a console summary of how many checks passed, failed,
 
 **Why this priority**: Security reviews need a fast verdict summary before detailed evidence is reviewed or attached to an audit packet.
 
-**Independent Test**: Run menu 276 against test data containing known pass, fail, and review outcomes and confirm the console summary prints the correct count for each verdict category.
+**Independent Test**: Run the menu 276 handler against test data containing known pass, fail, and review outcomes and confirm the console summary prints the correct count for each verdict category.
 
 **Acceptance Scenarios**:
 
-1. **Given** the checklist contains passing, failing, and review rows, **When** menu 276 completes, **Then** the console summary prints the pass, fail, and review counts that match the CSV.
+1. **Given** the checklist contains passing, failing, and review rows, **When** the menu 276 handler completes, **Then** the console summary prints the pass, fail, and review counts that match the CSV.
 2. **Given** all checks pass, **When** the operation completes, **Then** the console summary clearly shows zero failures and zero review items.
 
 ---
@@ -68,7 +68,7 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 
 ### Functional Requirements
 
-- **FR-001**: System MUST provide the menu 276 handler and wiring manifest for the organization security posture checklist operation.
+- **FR-001**: System MUST provide the importable menu 276 handler and the wiring manifest for the organization security posture checklist operation.
 - **FR-002**: System MUST evaluate the organization settings page areas for password policy, session policy, API policy, remote shell, packet capture, and stale configuration cleanup as one checklist.
 - **FR-003**: System MUST write `OrgSecurityPosture.csv` under `data/` for every successful run.
 - **FR-004**: System MUST write one CSV row per check with columns `check id`, `area`, `setting path`, `current value`, `recommended value`, `verdict`, and `reason`.
@@ -82,7 +82,7 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 - **FR-012**: System MUST give absent API settings a `review` verdict with a reason containing `absent`.
 - **FR-013**: System MUST give any non-HTTPS webhook URL a `fail` verdict.
 - **FR-014**: System MUST list each check's recommended value and source page in this specification.
-- **FR-015**: System MUST include a feature-owned wiring manifest so implementation and review can confirm the menu, operation, export, and test wiring are complete.
+- **FR-015**: System MUST include a feature-owned wiring manifest so implementation and review can confirm the deferred menu, operation, export, and test wiring.
 - **FR-016**: System MUST include a changelog fragment describing the new menu 276 organization security posture checklist.
 - **FR-017**: System MUST not mark a check as passing when the required setting is absent, unreadable, or ambiguous.
 - **FR-018**: System MUST make the CSV sufficient for a reviewer to identify which setting needs remediation without re-running the operation.
@@ -102,7 +102,7 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 | ORGSEC-PASSWORD-009 | Password policy | `organization settings > password policy > two-factor required` | Required | Mist Organization Settings > Password Policy |
 | ORGSEC-SESSION-001 | Session policy | `organization settings > session policy > idle timeout` | 30 minutes or less | Mist Organization Settings > Session Policy |
 | ORGSEC-SESSION-002 | Session policy | `organization settings > session policy > maximum session lifetime` | 12 hours or less | Mist Organization Settings > Session Policy |
-| ORGSEC-API-001 | API policy | `organization settings > API policy > API access` | Restricted to authorized administrators, or disabled when not required | Mist Organization Settings > API Policy |
+| ORGSEC-API-001 | API policy | `organization settings > API policy > API access` | `disabled`, `restricted`, or `admins_only` | Mist Organization Settings > API Policy |
 | ORGSEC-API-002 | API policy | `organization settings > API policy > token expiration` | API tokens expire within 365 days or less | Mist Organization Settings > API Policy |
 | ORGSEC-API-003 | API policy | `organization settings > API policy > webhook URLs` | Every configured webhook URL uses `https://` | Mist Organization Settings > API Policy |
 | ORGSEC-REMOTE-001 | Remote shell | `organization settings > remote shell` | Disabled unless there is a documented break-glass exception | Mist Organization Settings > Remote Shell |
@@ -122,7 +122,7 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 
 ### Measurable Outcomes
 
-- **SC-001**: A reviewer can generate the organization security posture CSV through the menu 276 handler without manually checking more than one settings page.
+- **SC-001**: A reviewer can generate the organization security posture CSV through the importable menu 276 handler without manually checking more than one settings page.
 - **SC-002**: In `--test` mode, the operation completes without prompts and produces `data/OrgSecurityPosture.csv` in 100% of successful test runs.
 - **SC-003**: The CSV contains at least twelve checklist rows and 100% of rows include all required columns with non-empty check id, area, recommended value, verdict, and reason fields.
 - **SC-004**: The console summary's pass, fail, and review counts match the CSV verdict counts in 100% of validation runs.
@@ -137,4 +137,4 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 - Recommended values reflect conservative enterprise security defaults suitable for a security review; documented compensating controls may justify a `review` outcome rather than an automatic pass.
 - `--test` mode uses representative fixture data and must not require network access, operator prompts, or live organization credentials.
 - Existing CSV export behavior may be reused as long as the exported evidence file has the required name, location, rows, and columns.
-- The integration pull request registers menu 276 in `MistHelper.py`, `src/utils/operation_registry.py`, and generated menu references.
+- The integration pull request registers menu 276 in `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, generated menu references, and user-facing menu documentation.

@@ -27,7 +27,7 @@
 - [X] T001 Create the report package directories in `src/reports/org_security_posture/`, `src/reports/org_security_posture/checks/`, and `src/reports/org_security_posture/io/`
 - [X] T002 [P] Create the unit test package directories in `tests/unit/reports/org_security_posture/` and `tests/unit/reports/org_security_posture/fixtures/`
 - [X] T003 [P] Add the release note fragment for menu 276 in `changelog.d/issue-3557-org-security-posture.md`
-- [X] T004 Update the deferred wiring manifest in `specs/3557-org-security-posture/wiring.md` to state that `MistHelper.py` registration stays deferred to the integration pull request
+- [X] T004 Update the deferred wiring manifest in `specs/3557-org-security-posture/wiring.md` to define the primary key strategy and state that `MistHelper.py` registration stays deferred to the integration pull request
 
 ---
 
@@ -39,11 +39,11 @@
 
 - [X] T005 [P] Add unit tests for source operation verification in `tests/unit/reports/org_security_posture/test_mist_api_sources.py`
 - [X] T006 [P] Add unit tests for safe display values and one-sentence reasons in `tests/unit/reports/org_security_posture/test_result_formatting.py`
-- [X] T007 Define `SecurityPostureCheck`, `SecurityPostureCheckResult`, and `OrganizationSecuritySourceData` in `src/reports/org_security_posture/models.py`
+- [X] T007 Define `SecurityPostureCheck`, `SecurityPostureCheckResult`, and `OrganizationSecuritySourceData` in `src/reports/org_security_posture/models.py`, and define shared check helpers in `src/reports/org_security_posture/checks/base.py`
 - [X] T008 Implement source operation verification for `getOrgSettings`, `listOrgSsos`, `listOrgAdmins`, `listOrgApiTokens`, and `listOrgWebhooks` in `src/reports/org_security_posture/io/sources.py`
 - [X] T009 Implement safe display value formatting and reason validation in `src/reports/org_security_posture/io/formatting.py`
 - [X] T010 Implement `OrgSecurityPostureCheckRegistry` with stable order and duplicate ID rejection in `src/reports/org_security_posture/checks/registry.py`
-- [X] T011 Add package exports for the runner and data model in `src/reports/org_security_posture/__init__.py`
+- [X] T011 Add package exports for `OrgSecurityPostureChecklist.run` and the data model in `src/reports/org_security_posture/__init__.py`
 
 **Checkpoint**: The source, model, formatting, and registry foundation is ready.
 
@@ -67,10 +67,10 @@
 ### Implementation for User Story 1
 
 - [X] T018 [P] [US1] Implement password policy check classes in `src/reports/org_security_posture/checks/password.py`
-- [X] T019 [P] [US1] Implement session policy check classes in `src/reports/org_security_posture/checks/access.py`
-- [X] T020 [P] [US1] Implement remote shell, packet capture, and stale cleanup check classes in `src/reports/org_security_posture/checks/access.py`
+- [X] T019 [US1] Implement session policy check classes in `src/reports/org_security_posture/checks/access.py`
+- [X] T020 [US1] Implement remote shell, packet capture, and stale cleanup check classes in `src/reports/org_security_posture/checks/access.py`
 - [X] T021 [US1] Register all P1 check classes in stable order in `src/reports/org_security_posture/checks/registry.py`
-- [X] T022 [US1] Implement checklist evaluation in `src/reports/org_security_posture/runner.py`
+- [X] T022 [US1] Implement checklist evaluation and the importable `OrgSecurityPostureChecklist.run` handler in `src/reports/org_security_posture/runner.py`
 - [X] T023 [US1] Implement CSV export to `data/OrgSecurityPosture.csv` in `src/reports/org_security_posture/io/exporter.py`
 - [X] T024 [US1] Connect representative fixture data to the test-mode runner path in `src/reports/org_security_posture/runner.py`
 
@@ -86,8 +86,8 @@
 
 ### Tests for User Story 2
 
-- [X] T025 [P] [US2] Add console summary count tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
-- [X] T026 [P] [US2] Add all-pass summary tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
+- [X] T025 [US2] Add console summary count tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
+- [X] T026 [US2] Add all-pass summary tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
 
 ### Implementation for User Story 2
 
@@ -107,9 +107,9 @@
 
 ### Tests for User Story 3
 
-- [X] T030 [P] [US3] Add absent API setting tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
-- [X] T031 [P] [US3] Add non-HTTPS webhook URL failure tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
-- [X] T032 [P] [US3] Add API token expiration tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
+- [X] T030 [US3] Add absent, pass, and fail API access setting tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
+- [X] T031 [US3] Add non-HTTPS webhook URL failure tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
+- [X] T032 [US3] Add API token expiration tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
 - [X] T033 [P] [US3] Add API posture fixture data in `tests/unit/reports/org_security_posture/fixtures/api_posture_cases.py`
 
 ### Implementation for User Story 3
@@ -146,7 +146,7 @@ run after reviewer approval and integration wiring.
 
 - [X] T044 Create or update the implementation manifest in `specs/3557-org-security-posture/wiring.md`
 - [ ] T045 Stage only owned files with explicit `git add` paths
-- [ ] T046 Commit implementation and analysis repair groups with Conventional Commits messages as required by `FLEET_CONTRACT.md`
+- [ ] T046 Commit implementation and analysis repair groups with issue #3557 in each commit message
 - [ ] T047 Push branch `feat/3557-org-security-posture` to `origin`
 - [ ] T048 Open a draft pull request with `Closes #3557`
 - [ ] T049 Run pull request CI and repair branch-owned failures
@@ -191,9 +191,9 @@ run after reviewer approval and integration wiring.
 - T002 and T003 can run in parallel after T001 starts.
 - T005 and T006 can run in parallel because they test different files.
 - T012 through T017 can run in parallel because each test file is separate.
-- T018 through T020 can run in parallel because each check module is separate.
-- T025 and T026 can run in parallel because they use separate summary cases.
-- T030 through T033 can run in parallel because they are independent API posture test cases and fixtures.
+- T018 can run before T019 and T020 because password checks live in a separate module.
+- T025 and T026 run sequentially because they use the same summary test file.
+- T033 can run before T030 through T032 because the fixture file differs from the API check test file.
 - T038 and T039 can run in parallel during polish because they cover different verification surfaces.
 
 ## Parallel Example: User Story 1
@@ -203,17 +203,14 @@ Task: "Add password policy check tests in tests/unit/reports/org_security_postur
 Task: "Add session policy check tests in tests/unit/reports/org_security_posture/test_session_checks.py"
 Task: "Add remote shell, packet capture, and stale cleanup check tests in tests/unit/reports/org_security_posture/test_setting_switch_checks.py"
 Task: "Implement password policy check classes in src/reports/org_security_posture/checks/password.py"
-Task: "Implement session policy check classes in src/reports/org_security_posture/checks/access.py"
-Task: "Implement remote shell, packet capture, and stale cleanup check classes in src/reports/org_security_posture/checks/access.py"
+Task: "Implement session policy check classes in src/reports/org_security_posture/checks/access.py, then implement remote shell, packet capture, and stale cleanup check classes in the same file"
 ```
 
 ## Parallel Example: User Story 3
 
 ```text
-Task: "Add absent API setting tests in tests/unit/reports/org_security_posture/test_api_checks.py"
-Task: "Add non-HTTPS webhook URL failure tests in tests/unit/reports/org_security_posture/test_api_checks.py"
-Task: "Add API token expiration tests in tests/unit/reports/org_security_posture/test_api_checks.py"
 Task: "Add API posture fixture data in tests/unit/reports/org_security_posture/fixtures/api_posture_cases.py"
+Task: "Add absent, pass, and fail API access tests, non-HTTPS webhook tests, and token expiration tests in tests/unit/reports/org_security_posture/test_api_checks.py"
 ```
 
 ---
@@ -242,6 +239,7 @@ The integration pull request owns these deferred surfaces:
 
 - `MistHelper.py`
 - `src/utils/operation_registry.py`
+- `src/refactors/endpoint_primary_key_strategies.py`
 - `README.md`
 - `documentation/menu_reference.md`
 - Generated menu reference artifacts

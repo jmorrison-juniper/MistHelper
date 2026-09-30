@@ -78,7 +78,7 @@
 - `password_policy.requires_uppercase`, `password_policy.requires_lowercase`, `password_policy.requires_number`, and `password_policy.reuse_history` are treated as review when absent because the current OpenAPI schema does not prove them.
 - `ui_idle_timeout` is an integer where `0` disables idle timeout, so the idle timeout check fails `0`.
 - `disable_remote_shell` and `disable_pcap` are Boolean organization switches; the recommended value is `true`.
-- `junos_shell_access` role values are `admin`, `viewer`, or `none`; the recommended value is `none` for each visible role.
+- `junos_shell_access` is a mapping of visible role names to shell access values. Known role keys include `admin`, `helpdesk`, `read`, and `write`. A role passes only when its value is `none`. A role fails when its value is a non-empty value other than `none`. The check returns `review` when the setting is absent, is not a mapping, or contains an empty role value.
 - `switch_mgmt.remove_existing_configs` controls stale configuration cleanup; the recommended value is `true`.
 - `pcap_bucket_verified` is read-only evidence that the packet capture bucket is verified.
 
@@ -90,7 +90,7 @@
 
 ## Decision: Defer menu wiring and primary key strategy changes
 
-**Rationale**: This step is a planning step with a strict edit boundary. Menu 276 wiring, generated menu references, and primary key strategy changes are implementation work.
+**Rationale**: This fleet branch has a strict edit boundary. It delivers the importable handler, CSV evidence export through `DataExporter`, tests, and the exact wiring manifest. Menu 276 registration, generated menu references, README menu documentation, database routing, and the primary key strategy update are owned by the integration pull request.
 
 **Alternatives considered**:
 

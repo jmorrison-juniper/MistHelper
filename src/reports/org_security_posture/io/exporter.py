@@ -16,11 +16,10 @@ class OrgSecurityPostureExporter:
 
     FILENAME = "OrgSecurityPosture.csv"
     FIELDNAMES = ["check id", "area", "setting path", "current value", "recommended value", "verdict", "reason"]
-    API_FUNCTION_NAME = "orgSecurityPostureChecklist"
 
     def __init__(self, write_fn: Callable[..., bool] | None = None) -> None:
         """Store the export function dependency."""
-        self.write_fn = write_fn or DataExporter.write_with_format_selection  # Allow tests to avoid file writes.
+        self.write_fn = write_fn or DataExporter._dispatch_format_write  # Keep this fleet branch CSV-only.
 
     def export(self, rows: list[dict[str, Any]]) -> bool:
         """Write rows to the standard CSV output path."""
@@ -28,8 +27,9 @@ class OrgSecurityPostureExporter:
         result = self.write_fn(  # Delegate output backend behavior to the existing exporter.
             rows,
             self.FILENAME,
-            api_function_name=self.API_FUNCTION_NAME,
+            output_format="csv",
             fieldnames=self.FIELDNAMES,
+            api_function_name=None,
         )
         logging.debug("Organization security posture CSV write status: %s", result)  # Log the exporter result.
         return bool(result)  # Normalize mock or exporter return values to a bool.

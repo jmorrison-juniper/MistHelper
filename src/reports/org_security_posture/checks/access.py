@@ -75,6 +75,8 @@ class JunosShellRoleAccessDisabledCheck(BaseSecurityPostureCheck):
             return self.result(None, "review", "The setting is absent and needs manual review.")
         if not isinstance(value, dict):  # Non-object evidence cannot prove that each role is disabled.
             return self.result(value, "review", "The setting value could not be interpreted.")
+        if any(role_value in (None, "") for role_value in value.values()):  # Empty role values do not prove posture.
+            return self.result(value, "review", "At least one shell role value could not be interpreted.")
         if all(role_value == "none" for role_value in value.values()):  # Each role must explicitly disable access.
             return self.result(value, "pass", "Every visible shell role is disabled.")
         return self.result(value, "fail", "At least one shell role allows access.")

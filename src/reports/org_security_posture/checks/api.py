@@ -15,7 +15,7 @@ class ApiAccessRestrictionCheck(BaseSecurityPostureCheck):
     check_id = "ORGSEC-API-001"
     area = "API policy"
     setting_path = "organization settings > API policy > API access"
-    recommended_value = "Restricted to authorized administrators, or disabled when not required"
+    recommended_value = "`disabled`, `restricted`, or `admins_only`"
     source_page = "Mist Organization Settings > API Policy"
 
     def run(self, source_data: OrganizationSecuritySourceData) -> SecurityPostureCheckResult:
