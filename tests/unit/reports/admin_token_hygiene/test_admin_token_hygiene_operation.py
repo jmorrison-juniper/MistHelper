@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,12 @@ class FakeDataExporter:
     ) -> bool:
         """Capture rows passed to the shared exporter."""
         cls.calls.append((rows, filename, api_function_name, fieldnames))
+        path = Path("data") / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", newline="", encoding="utf-8") as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
         return True
 
 
@@ -79,7 +86,9 @@ def test_operation_exports_both_reports_without_prompt(tmp_path: Path, monkeypat
     filenames = {call[1] for call in FakeDataExporter.calls}
     assert filenames == {"AdminHygiene.csv", "TokenHygiene.csv"}
     token_rows = [call[0] for call in FakeDataExporter.calls if call[1] == "TokenHygiene.csv"][0]
+    token_file = (tmp_path / "data" / "TokenHygiene.csv").read_text(encoding="utf-8")
     assert "SECRET-SENTINEL" not in str(token_rows)
+    assert "SECRET-SENTINEL" not in token_file
 
 
 def test_operation_writes_empty_headers_when_sources_are_empty(tmp_path: Path, monkeypatch: Any) -> None:

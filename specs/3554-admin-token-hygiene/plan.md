@@ -62,7 +62,7 @@ Never write token keys to logs, console output, files, or exceptions.
 | Action Logging | PASS | Implementation tasks must log each API read, transform, and export. |
 | Technology and Compatibility | PASS | The installed SDK has the required functions. No direct Mist HTTP call is needed. |
 | Output Backends | PASS | The reports must use `DataExporter.write_with_format_selection()`. |
-| Database Keys | PASS | Register primary key strategy before implementation. Use `admin_id` or email for admin rows, and `id` for token rows. |
+| Database Keys | PASS | Record primary key strategy entries in `wiring.md` before implementation. Use `row_id` for admin rows, and `id` for token rows. |
 
 No violation needs a waiver.
 
@@ -122,7 +122,8 @@ Research is complete in `research.md`.
 Resolved decisions:
 
 1. Use the installed `mistapi` functions for all three Mist API reads.
-2. Reuse the existing exporter pattern from menu 47 and menu 48.
+2. Reuse the existing exporter pattern from menu 47 and menu 48 for populated
+   rows, and write header-only CSV files when source data is empty.
 3. Use `SourceDependencyResolver.apisession` and the existing organization ID
    resolver inside the operation package.
 4. Treat token keys as forbidden data at the model boundary.
@@ -147,7 +148,7 @@ Design artifacts are complete.
 | Missing optional API fields | Keep the row and write `unknown` or a blank value per the contract. |
 | Conflicting role scope data | Score the highest effective privilege, because Mist applies the highest privilege when API-created scopes conflict. |
 | Invalid idle threshold | Validate `TOKEN_IDLE_DAYS` at startup and report the problem explicitly. |
-| Menu wiring drift | Keep the wiring checklist in `wiring.md` until implementation starts. |
+| Menu wiring drift | Keep the wiring checklist in `wiring.md` until the integration pull request applies shared file changes. |
 
 ## Post-Design Constitution Check
 
@@ -157,6 +158,6 @@ Design artifacts are complete.
 | Class-Based Architecture | PASS | The data model and operation design use classes. |
 | Safety-First | PASS | The feature is read-only and redacts secrets. |
 | Output Backends | PASS | The contract requires `DataExporter.write_with_format_selection()`. |
-| Database Keys | PASS | The plan names required primary key strategy entries before implementation. |
+| Database Keys | PASS | The wiring manifest names required primary key strategy entries for the integration pull request. |
 
 No unresolved clarification remains.
