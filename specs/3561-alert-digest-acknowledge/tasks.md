@@ -39,12 +39,12 @@ The implementation branch must not edit these files. The integration pull reques
 
 - [X] T005 [P] Write model tests for `AlarmDefinition`, `AlarmRecord`, `AlarmGroup`, `AcknowledgementCandidate`, and `AcknowledgementResult` in `tests/unit/reports/alert_digest/test_alert_digest_model.py`.
 - [X] T006 [P] Write client tests for `listAlarmDefinitions`, paged `searchOrgAlarms`, `ackOrgMultipleAlarms`, and `unackOrgMultipleAlarms` in `tests/unit/reports/alert_digest/test_alert_digest_client.py`.
-- [X] T007 [P] Write prompt tests for `ALERT_DIGEST_HOURS`, the 24-hour default, invalid values, and `ACK <count>` parsing in `tests/unit/reports/alert_digest/test_alert_digest_prompts.py`.
+- [X] T007 [P] Write operation prompt tests for `ALERT_DIGEST_HOURS`, the 24-hour default, invalid values, and `ACK <count>` parsing in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
 - [X] T008 Implement alert digest dataclasses and pure grouping helpers in `src/reports/alert_digest/model.py`.
 - [X] T009 Implement the Mist API client class and paged alarm search in `src/reports/alert_digest/client.py`.
-- [X] T010 Implement lookback and confirmation helpers in `src/reports/alert_digest/prompts.py`.
+- [X] T010 Implement lookback and confirmation helpers in `src/reports/alert_digest/operation.py`.
 
-**Commit group G2**: Commit after T005 through T010 pass `pytest tests\unit\reports\alert_digest\test_alert_digest_model.py tests\unit\reports\alert_digest\test_alert_digest_client.py tests\unit\reports\alert_digest\test_alert_digest_prompts.py`.
+**Commit group G2**: Commit after T005 through T010 pass `pytest tests\unit\reports\alert_digest\test_alert_digest_model.py tests\unit\reports\alert_digest\test_alert_digest_client.py tests\unit\reports\alert_digest\test_alert_digest_operation.py`.
 
 **Checkpoint**: Foundation ready. User story work can start.
 
@@ -60,7 +60,7 @@ The implementation branch must not edit these files. The integration pull reques
 
 - [X] T011 [P] [US1] Add digest grouping, unknown category, empty-state, and Markdown section tests in `tests/unit/reports/alert_digest/test_alert_digest_model.py`.
 - [X] T012 [P] [US1] Add digest operation tests for no prompt, output creation, and write failure handling in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
-- [X] T012A [P] [US1] Add writer tests for `AlertDigest.csv`, `AlertDigest.md`, and ASCII-only Markdown output in `tests/unit/reports/alert_digest/test_alert_digest_writer.py`.
+- [X] T012A [P] [US1] Add writer tests for `AlertDigest.csv`, `AlertDigest.md`, and ASCII-only Markdown output in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
 
 ### Implementation for User Story 1
 
@@ -108,7 +108,7 @@ The implementation branch must not edit these files. The integration pull reques
 ### Tests for User Story 3
 
 - [X] T023 [P] [US3] Add shared lookback tests for default, override, and invalid `ALERT_DIGEST_HOURS` in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
-- [X] T024 [P] [US3] Add prompt helper edge-case tests for blank, zero, negative, and non-integer hour values in `tests/unit/reports/alert_digest/test_alert_digest_prompts.py`.
+- [X] T024 [P] [US3] Add prompt helper edge-case tests for blank, zero, negative, and non-integer hour values in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
 
 ### Implementation for User Story 3
 
@@ -125,7 +125,7 @@ The implementation branch must not edit these files. The integration pull reques
 
 **Purpose**: Prove the feature package and tests meet the local quality gates before integration wiring starts.
 
-- [X] T027 [P] Run `python -m py_compile` for `src/reports/alert_digest/__init__.py`, `src/reports/alert_digest/client.py`, `src/reports/alert_digest/model.py`, `src/reports/alert_digest/operation.py`, `src/reports/alert_digest/prompts.py`, and `src/reports/alert_digest/writer.py`.
+- [X] T027 [P] Run `python -m py_compile MistHelper.py` and run `python -m py_compile` for `src/reports/alert_digest/__init__.py`, `src/reports/alert_digest/client.py`, `src/reports/alert_digest/model.py`, `src/reports/alert_digest/operation.py`, and `src/reports/alert_digest/writer.py`.
 - [X] T028 [P] Run `python -m ruff check src\reports\alert_digest tests\unit\reports\alert_digest`.
 - [X] T029 [P] Run `python -m black --check src\reports\alert_digest tests\unit\reports\alert_digest`.
 - [X] T030 [P] Run `python -m mypy src\reports\alert_digest --config-file pyproject.toml`.
@@ -179,7 +179,7 @@ The integration pull request starts after this branch validates the package, tes
 ```text
 Task: T011 Add digest grouping, unknown category, empty-state, and Markdown section tests in tests/unit/reports/alert_digest/test_alert_digest_model.py
 Task: T012 Add digest operation tests for no prompt, output creation, and write failure handling in tests/unit/reports/alert_digest/test_alert_digest_operation.py
-Task: T012A Add writer tests for AlertDigest.csv, AlertDigest.md, and ASCII-only Markdown output in tests/unit/reports/alert_digest/test_alert_digest_writer.py
+Task: T012A Add writer tests for AlertDigest.csv, AlertDigest.md, and ASCII-only Markdown output in tests/unit/reports/alert_digest/test_alert_digest_operation.py
 ```
 
 ### User Story 2
@@ -194,7 +194,7 @@ Task: T018 Add acknowledgement client success and failure tests in tests/unit/re
 
 ```text
 Task: T023 Add shared lookback tests for default, override, and invalid ALERT_DIGEST_HOURS in tests/unit/reports/alert_digest/test_alert_digest_operation.py
-Task: T024 Add prompt helper edge-case tests for blank, zero, negative, and non-integer hour values in tests/unit/reports/alert_digest/test_alert_digest_prompts.py
+Task: T024 Add prompt helper edge-case tests for blank, zero, negative, and non-integer hour values in tests/unit/reports/alert_digest/test_alert_digest_operation.py
 ```
 
 ---

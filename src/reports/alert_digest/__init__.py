@@ -9,8 +9,10 @@ from src.reports.alert_digest.model import (  # Expose the feature data objects 
     AlarmRecord,
     AlertDigestModel,
 )
-from src.reports.alert_digest.operation import AlertDigestOperation  # Expose the menu operation entry point.
-from src.reports.alert_digest.prompts import AlertDigestPromptResolver  # Expose prompt and lookback helpers.
+from src.reports.alert_digest.operation import (  # Expose the menu operation and prompt helper entry points.
+    AlertDigestOperation,
+    AlertDigestPromptResolver,
+)
 from src.reports.alert_digest.writer import AlertDigestWriter  # Expose file output helpers.
 
 __all__ = [  # Keep the package surface explicit for integration code.

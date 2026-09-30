@@ -3,12 +3,20 @@
 from __future__ import annotations  # Enable modern annotations without runtime imports.
 
 from dataclasses import dataclass, field  # Build small fake client and writer objects.
+from pathlib import Path  # Validate files through pytest temporary directories.
 from time import perf_counter  # Measure the local full digest path for the performance criterion.
 from typing import Any  # Accept raw rows in fake clients.
 from unittest.mock import MagicMock  # Provide fake input helpers.
 
+import pytest  # Assert validation failures without network calls.
+
 from src.reports.alert_digest.client import AlertDigestListResult  # Return client search results.
-from src.reports.alert_digest.operation import AlertDigestOperation  # Test the operation class.
+from src.reports.alert_digest.model import AlertDigestModel  # Build realistic digest groups for writer tests.
+from src.reports.alert_digest.operation import (  # Test the operation class and prompt resolver.
+    AlertDigestOperation,
+    AlertDigestPromptResolver,
+)
+from src.reports.alert_digest.writer import AlertDigestWriter  # Test output writing through the operation seam.
 
 from .conftest import alarm, definition  # Reuse synthetic row factories.
 
@@ -57,6 +65,31 @@ class FakeWriter:
         return True  # Simulate a successful write.
 
 
+@dataclass
+class FakeExporter:
+    """Fake DataExporter that records requested CSV writes."""
+
+    writes: list[dict[str, Any]] = field(default_factory=list)  # Keep each write for assertions.
+
+    def write_with_format_selection(
+        self,
+        data: list[dict[str, Any]],
+        filename_or_table: str,
+        api_function_name: str,
+        fieldnames: list[str] | None = None,
+    ) -> bool:
+        """Record one CSV write request."""
+        self.writes.append(  # Preserve the export request without touching shared data files.
+            {
+                "data": data,
+                "filename": filename_or_table,
+                "api_function_name": api_function_name,
+                "fieldnames": fieldnames,
+            }
+        )
+        return True  # Simulate a successful DataExporter write.
+
+
 def operation(client: FakeClient, writer: FakeWriter, answer: str = "") -> AlertDigestOperation:
     """Return an operation with fake dependencies."""
     input_utils = MagicMock()  # Fake the safe input helper.
@@ -81,6 +114,20 @@ def test_run_digest_keeps_unknown_category(monkeypatch: Any) -> None:
     writer = FakeWriter()  # Capture output rows.
     operation(client, writer).execute_digest()  # Run the digest path.
     assert writer.digest_groups[0].category == "unknown"  # Confirm unknown category.
+
+
+def test_writer_creates_csv_request_and_ascii_markdown(tmp_path: Path) -> None:
+    """Digest writing creates the required CSV target and ASCII Markdown."""
+    definitions = AlertDigestModel.definitions_by_key([definition()])  # Build category lookup.
+    records = AlertDigestModel.records_from_rows([alarm(1)], definitions)  # Build one realistic alarm row.
+    groups = AlertDigestModel.group_records(records)  # Group data as menu 280 does.
+    exporter = FakeExporter()  # Capture the CSV write request.
+    writer = AlertDigestWriter(exporter=exporter, data_dir=tmp_path)  # Direct Markdown into a safe temp path.
+    assert writer.write_digest(groups) is True  # Write both digest outputs.
+    assert exporter.writes[0]["filename"] == "AlertDigest.csv"  # Confirm required CSV file name.
+    markdown = (tmp_path / "AlertDigest.md").read_text(encoding="utf-8")  # Read the handover summary.
+    assert "## infrastructure" in markdown  # Confirm the category section exists.
+    assert all(ord(character) < 128 for character in markdown)  # Confirm ASCII-only operator output.
 
 
 def test_run_digest_handles_normal_volume_under_local_budget(monkeypatch: Any) -> None:
@@ -155,3 +202,39 @@ def test_invalid_lookback_sends_no_destructive_request(monkeypatch: Any) -> None
     writer = FakeWriter()  # Capture outputs.
     assert operation(client, writer, "ACK 1").execute_acknowledge() is False  # Invalid lookback fails.
     assert client.ack_requests == []  # Confirm no destructive request.
+
+
+def test_default_lookback_is_24_hours() -> None:
+    """The shared lookback default is one day."""
+    assert AlertDigestPromptResolver.resolve_lookback_hours({}) == 24  # Confirm the default contract.
+
+
+def test_env_override_sets_lookback_hours() -> None:
+    """A valid environment value overrides the default."""
+    assert AlertDigestPromptResolver.resolve_lookback_hours({"ALERT_DIGEST_HOURS": "8"}) == 8  # Confirm override.
+
+
+@pytest.mark.parametrize("value", ["", "0", "-1", "abc"])
+def test_invalid_lookback_values_fail_closed(value: str) -> None:
+    """Blank uses default, and invalid explicit values fail closed."""
+    env = {"ALERT_DIGEST_HOURS": value}  # Build the injected environment.
+    if value == "":  # Blank is equivalent to unset.
+        assert AlertDigestPromptResolver.resolve_lookback_hours(env) == 24  # Confirm blank default.
+    else:
+        with pytest.raises(ValueError):  # Invalid explicit values must stop the operation.
+            AlertDigestPromptResolver.resolve_lookback_hours(env)  # Exercise the validation path.
+
+
+@pytest.mark.parametrize(
+    ("text", "count", "expected"),
+    [("ACK 3", 3, True), ("ACK 2", 3, False), ("ack 3", 3, False), ("ACK", 3, False), ("ACK three", 3, False)],
+)
+def test_confirmation_requires_ack_and_exact_count(text: str, count: int, expected: bool) -> None:
+    """Only ACK followed by the exact count authorizes menu 281."""
+    assert AlertDigestPromptResolver.confirmation_matches(text, count) is expected  # Confirm exact parsing.
+
+
+@pytest.mark.parametrize(("arguments", "expected"), [(["--dry-run"], True), (["--menu", "281"], False)])
+def test_dry_run_requested_reads_shared_flag(arguments: list[str], expected: bool) -> None:
+    """Only --dry-run enables the acknowledgement preview mode."""
+    assert AlertDigestPromptResolver.dry_run_requested(arguments) is expected  # Confirm dry-run flag parsing.

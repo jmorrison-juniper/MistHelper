@@ -32,7 +32,7 @@ Add menu 280 as a safe alert digest and menu 281 as a destructive alarm acknowle
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Five-Item Rule: Pass. The new package adds at most five modules: `client.py`, `model.py`, `operation.py`, `prompts.py`, and `writer.py`.
+- Five-Item Rule: Pass. The new package has five direct files: `__init__.py`, `client.py`, `model.py`, `operation.py`, and `writer.py`.
 - Class-Based Architecture: Pass. The entry point is `AlertDigestOperation`, and supporting logic lives in classes or dataclasses.
 - Safety-First: Pass. Menu 281 requires typed `ACK <count>` and supports `--dry-run`.
 - Full Deployment Pipeline: Pass for the fleet scope. The branch records integration changes in `wiring.md` and opens a draft pull request.
@@ -66,7 +66,6 @@ src/reports/alert_digest/
 ├── client.py
 ├── model.py
 ├── operation.py
-├── prompts.py
 └── writer.py
 
 tests/unit/reports/alert_digest/
@@ -74,9 +73,7 @@ tests/unit/reports/alert_digest/
 ├── conftest.py
 ├── test_alert_digest_client.py
 ├── test_alert_digest_model.py
-├── test_alert_digest_operation.py
-├── test_alert_digest_prompts.py
-└── test_alert_digest_writer.py
+└── test_alert_digest_operation.py
 ```
 
 **Structure Decision**: Use one new nested package under `src/reports/alert_digest/` and one new matching test package. The fleet contract forbids this branch from editing integration-owned files. Menu registration, registry category changes, primary key strategies, generated menu reference changes, and README changes are deferred to the integration pull request and recorded in `wiring.md`.

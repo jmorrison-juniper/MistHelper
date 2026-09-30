@@ -90,6 +90,7 @@ A NOC lead changes the lookback window for special handovers by setting `ALERT_D
 - **FR-017**: The release note fragment at `changelog.d/issue-3561-alert-digest-acknowledge.md` MUST exist before implementation is complete.
 - **FR-018**: Menu 281 MUST be treated as destructive and MUST require human review before it is used against live alarms.
 - **FR-019**: Unit tests MUST cover missing sample, missing acknowledgement state, missing timing values, ASCII-only Markdown output, and local grouping performance.
+- **FR-020**: The client MUST verify `unackOrgMultipleAlarms` for SDK compatibility, but no menu in this feature MUST call it.
 
 ### Required Acceptance Criteria
 

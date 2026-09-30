@@ -3,16 +3,78 @@
 from __future__ import annotations  # Enable modern annotations without runtime imports.
 
 import logging  # Record each operator action before and after it.
+import os  # Read ALERT_DIGEST_HOURS from the process environment.
+import sys  # Read --dry-run from the process arguments for menu 281.
 from typing import Any  # Accept resolver, client, and writer test doubles.
 
 from src.config.source_dependency_resolver import SourceDependencyResolver  # Resolve MistHelper shared dependencies.
 from src.reports.alert_digest.client import AlertDigestClient  # Use the feature-owned Mist API wrapper.
 from src.reports.alert_digest.model import AlertDigestModel  # Use pure grouping and result helpers.
-from src.reports.alert_digest.prompts import AlertDigestPromptResolver  # Use shared lookback and confirmation logic.
 from src.reports.alert_digest.writer import AlertDigestWriter  # Write CSV and Markdown outputs.
 from src.utils.console import echo  # Show operator messages without warning-level logs.
 
 logger = logging.getLogger(__name__)  # Keep log records tied to this module.
+
+DEFAULT_LOOKBACK_HOURS = 24  # Default to one day for a shift handover.
+LOOKBACK_ENV_VAR = "ALERT_DIGEST_HOURS"  # Name the shared override for both menus.
+
+
+class AlertDigestPromptResolver:
+    """Resolve lookback values and destructive acknowledgement confirmation text."""
+
+    @staticmethod
+    def resolve_lookback_hours(env: dict[str, str] | None = None) -> int:
+        """Return the validated alert digest lookback window."""
+        logger.info("Resolving the alert digest lookback window")  # Log before reading the environment.
+        source = os.environ if env is None else env  # Use the real process env unless a test injects one.
+        raw_value = source.get(LOOKBACK_ENV_VAR, "").strip()  # Read and trim the optional override.
+        if not raw_value:  # No override means the default applies.
+            logger.debug("Using the default alert digest lookback of %d hours", DEFAULT_LOOKBACK_HOURS)  # Log result.
+            return DEFAULT_LOOKBACK_HOURS  # Return the default window.
+        return AlertDigestPromptResolver._parse_lookback_hours(raw_value)  # Validate explicit operator input.
+
+    @staticmethod
+    def confirmation_matches(text: str, expected_count: int) -> bool:
+        """Return true when the confirmation exactly matches ACK and the count."""
+        logger.info("Checking alert acknowledgement confirmation text")  # Log before parsing destructive input.
+        parts = text.strip().split()  # Split the answer into word and count.
+        if len(parts) != 2 or parts[0] != "ACK":  # The operator must type exactly ACK and one count.
+            logger.debug("The acknowledgement confirmation shape did not match")  # Log reject reason.
+            return False  # Reject malformed input.
+        count = AlertDigestPromptResolver._parse_confirmation_count(parts[1])  # Parse the displayed alarm count.
+        matched = count == expected_count  # Require the exact displayed count.
+        logger.debug("The acknowledgement confirmation matched=%s", matched)  # Log the decision.
+        return matched  # Return the final safety decision.
+
+    @staticmethod
+    def dry_run_requested(arguments: list[str] | None = None) -> bool:
+        """Return true when the operator requested acknowledgement dry run."""
+        logger.info("Checking alert acknowledgement dry-run arguments")  # Log before reading process arguments.
+        source = sys.argv[1:] if arguments is None else arguments  # Use process arguments unless a test injects them.
+        requested = "--dry-run" in source  # Honor the shared destructive preview flag.
+        logger.debug("Alert acknowledgement dry-run requested=%s", requested)  # Log the decision.
+        return requested  # Return the dry-run mode for menu 281.
+
+    @staticmethod
+    def _parse_lookback_hours(raw_value: str) -> int:
+        """Return parsed positive lookback hours."""
+        try:
+            hours = int(raw_value)  # Parse whole hours only.
+        except ValueError as error:
+            raise ValueError(f"{LOOKBACK_ENV_VAR} must be a positive integer hour count.") from error  # Fail closed.
+        if hours <= 0:  # Zero and negative windows do not make operational sense.
+            raise ValueError(f"{LOOKBACK_ENV_VAR} must be a positive integer hour count.")  # Fail closed.
+        logger.debug("Using the alert digest lookback override of %d hours", hours)  # Log result.
+        return hours  # Return the validated override.
+
+    @staticmethod
+    def _parse_confirmation_count(raw_value: str) -> int | None:
+        """Return a parsed confirmation count, or None."""
+        try:
+            return int(raw_value)  # Parse the displayed alarm count.
+        except ValueError:
+            logger.debug("The acknowledgement confirmation count was not an integer")  # Log reject reason.
+            return None  # Reject a malformed count.
 
 
 class AlertDigestOperation:

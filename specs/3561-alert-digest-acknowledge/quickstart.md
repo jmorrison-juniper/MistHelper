@@ -35,7 +35,8 @@
 ## Run local gates
 
 ```powershell
-C:\Users\jmorrison\mh-fleet\3561-alert-digest-acknowledge\.venv\Scripts\python.exe -m py_compile src\reports\alert_digest\__init__.py src\reports\alert_digest\client.py src\reports\alert_digest\model.py src\reports\alert_digest\operation.py src\reports\alert_digest\prompts.py src\reports\alert_digest\writer.py
+C:\Users\jmorrison\mh-fleet\3561-alert-digest-acknowledge\.venv\Scripts\python.exe -m py_compile MistHelper.py
+C:\Users\jmorrison\mh-fleet\3561-alert-digest-acknowledge\.venv\Scripts\python.exe -m py_compile src\reports\alert_digest\__init__.py src\reports\alert_digest\client.py src\reports\alert_digest\model.py src\reports\alert_digest\operation.py src\reports\alert_digest\writer.py
 C:\Users\jmorrison\mh-fleet\3561-alert-digest-acknowledge\.venv\Scripts\python.exe -m ruff check src\reports\alert_digest tests\unit\reports\alert_digest
 C:\Users\jmorrison\mh-fleet\3561-alert-digest-acknowledge\.venv\Scripts\python.exe -m black --check src\reports\alert_digest tests\unit\reports\alert_digest
 C:\Users\jmorrison\mh-fleet\3561-alert-digest-acknowledge\.venv\Scripts\python.exe -m mypy src\reports\alert_digest --config-file pyproject.toml
