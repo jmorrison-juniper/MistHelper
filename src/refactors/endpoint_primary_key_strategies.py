@@ -3195,6 +3195,53 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_fields": ["check id", "setting path", "recommended value"],
         "indexes": ["area", "verdict", "check id"],
     },
+    "switch_scorecard": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["org_id", "site_id", "switch_mac", "model", "version"],
+        "indexes": ["org_id", "site_id", "model", "version_compliant", "config_success"],
+    },
+    "switch_scorecard_by_site": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["site_id", "site_name"],
+        "indexes": ["site_id", "switch_count", "version_compliance_percent"],
+    },
+    "ap_scorecard": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["org_id", "site_id", "mac", "version", "status"],
+        "indexes": ["org_id", "site_id", "mac", "model", "status"],
+    },
+    "ap_scorecard_by_site": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["org_id", "site_id"],
+        "indexes": ["org_id", "site_id", "site"],
+    },
+    "rogue_pci_evidence_pack": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": [
+            "org_id",
+            "site_id",
+            "bssid",
+            "ssid",
+            "first_seen",
+            "last_seen",
+            "channel",
+            "band",
+            "rssi",
+            "client_count",
+        ],
+        "indexes": ["org_id", "site_id", "classification", "bssid", "ssid"],
+    },
+    "rogue_pci_site_settings": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["org_id", "site_id", "run_started_at"],
+        "indexes": ["org_id", "site_id", "rogue_enabled"],
+    },
 }
 
 # Stage two endpoint family entries from issue #1807.

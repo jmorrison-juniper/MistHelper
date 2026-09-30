@@ -2,7 +2,7 @@
 
 # Menu API endpoints: safe
 
-This page lists the Mist API endpoints of the 79 menu options in the `safe` category.
+This page lists the Mist API endpoints of the 83 menu options in the `safe` category.
 A menu option in this category reads data and exports it. The --test run executes this category.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -16,19 +16,19 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["safe: 79 menu<br/>options"]
-    root --> f_orgs_sites["orgs/sites<br/>19 menu options"]
+    root["safe: 83 menu<br/>options"]
+    root --> f_orgs_sites["orgs/sites<br/>20 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>5 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>5 menu options"]
-    root --> f_orgs_stats["orgs/stats<br/>5 menu options"]
     root --> f_sites_devices["sites/devices<br/>5 menu options"]
     root --> f_orgs_jsi["orgs/jsi<br/>4 menu options"]
     root --> f_orgs_networktemplates["orgs/networktemplates<br/>4 menu options"]
+    root --> f_sites_insights["sites/insights<br/>4 menu options"]
     root --> f_orgs_admins["orgs/admins<br/>3 menu options"]
     root --> f_orgs_apitokens["orgs/apitokens<br/>3 menu options"]
     root --> f_orgs_clients["orgs/clients<br/>3 menu options"]
-    root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>3 menu options"]
     root --> more["71 more families"]
 ```
 
@@ -1269,3 +1269,62 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`OrgSecurityPostureSourceClient.collect`](../../src/reports/org_security_posture/io/sources.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`OrgSecurityPostureSourceClient.collect`](../../src/reports/org_security_posture/io/sources.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/webhooks` | [`orgs.webhooks.listOrgWebhooks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/webhooks/list-org-webhooks) | [`OrgSecurityPostureSourceClient.collect`](../../src/reports/org_security_posture/io/sources.py) | Call |
+
+## Menu 277
+
+- Title: Export the organization switch scorecard
+- Handler: `SwitchScorecard.run`
+- Shared helpers: [`APIDataFetcher`](README.md#apidatafetcher), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter)
+- Endpoints: 1
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`SwitchScorecardClient.list_switch_stats`](../../src/reports/switch_scorecard/client.py) | Reference |
+
+## Menu 278
+
+- Title: Export the organization access point scorecard
+- Handler: `ApScorecard.run`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter)
+- Endpoints: 1
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ApScorecardClient.list_ap_stats`](../../src/reports/ap_scorecard/client.py) | Call |
+
+## Menu 279
+
+- Title: Organization WAN Edge Scorecard
+- Handler: `WanEdgeScorecard.run`
+- Shared helpers: [`APIDataFetcher`](README.md#apidatafetcher), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 1
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`WanEdgeGatewayStatsClient.fetch_gateway_stats`](../../src/reports/wan_edge_scorecard/client.py) | Reference |
+
+## Menu 282
+
+- Title: Export the rogue and PCI evidence pack
+- Handler: `RoguePciEvidencePack.run`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`RateLimitingUtils`](README.md#ratelimitingutils)
+- Endpoints: 5
+
+```mermaid
+flowchart LR
+    menu["Menu 282: Export the<br/>rogue and PCI<br/>evidence pack"]
+    menu --> c1["RoguePciEvidence<br/>Client"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/events<br/>/search"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/wlans"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/rogues"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/events/search` | [`orgs.events.searchOrgEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/events/search-org-events) | [`RoguePciEvidenceClient.list_org_rogue_events`](../../src/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`RoguePciEvidenceClient.list_org_sites`](../../src/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`RoguePciEvidenceClient.list_org_wlans`](../../src/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`RoguePciEvidenceClient.list_site_rogue_aps`](../../src/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`RoguePciEvidenceClient.list_site_settings`](../../src/reports/rogue_pci_evidence/client.py) | Call |
