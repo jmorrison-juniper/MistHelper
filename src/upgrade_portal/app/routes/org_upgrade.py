@@ -11,8 +11,9 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import time
 from collections.abc import Mapping, MutableMapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from functools import partial  # Issue #3243: bind the adopter seam to the pre-check reader.
 from typing import Any
@@ -29,6 +30,7 @@ from ....firmware.aggregate_upgrade_service import (  # Issue #3225: the final s
 )
 from ....firmware.org_upgrade_body import OrgUpgradeBody
 from ....firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
+from ....firmware.upgrade_service import UpgradeOptions
 from ...api.run_controls.views import RunStalePolicy  # Issue #3249: the age rule of the single-site page.
 from ...runtime import identity, lock
 from ...upgrade.options import (
@@ -217,6 +219,36 @@ class OrgUpgradeScheduleReader:
         """Return the reboot delay text that the options page and confirmation page show."""
         reboot_at = options.get("reboot_at")  # Read the raw duration saved by the organization route.
         return str(reboot_at) if reboot_at is not None else ""  # Preserve the operator text without a unit change.
+
+    @staticmethod
+    def anchored_options(options: UpgradeOptions, anchor: int | None = None) -> UpgradeOptions:
+        """Resolve the reboot delay from the scheduled start or the supplied action moment."""
+        delay = options.schedule.reboot_at_after  # Keep the duration that states the operator intent.
+        if delay is None:  # A plan with no reboot delay needs no clock.
+            return options  # Preserve the immediate reboot behavior.
+        base = options.start_time if options.start_time is not None else anchor  # Prefer the scheduled start.
+        reboot_at = base + delay if base is not None else None  # Defer an immediate plan until submission.
+        logger.info("Resolve the organization upgrade reboot delay from its action moment")  # Log before replacement.
+        resolved = replace(options, reboot_at=reboot_at)  # Keep every other confirmed option unchanged.
+        logger.debug("The organization upgrade reboot moment is resolved: %s", reboot_at is not None)  # Log after.
+        return resolved  # Give the planner the correct absolute cloud moment.
+
+    @staticmethod
+    def current_epoch() -> int:
+        """Return the current epoch second for an immediate submission."""
+        return int(time.time())  # Read the clock only when an action needs an absolute moment.
+
+    @staticmethod
+    def reboot_moment_text(operation: Mapping[str, Any] | None) -> str:
+        """Return the first planned reboot moment as UTC text."""
+        children = operation.get("children") if operation is not None else None  # Read the durable child plans.
+        rows = children if isinstance(children, list) else []  # A damaged plan shows no absolute moment.
+        moments = [row.get("reboot_at") for row in rows if isinstance(row, Mapping)]  # Read each child copy.
+        reboot_at = next((value for value in moments if type(value) is int and value >= 0), None)  # First moment.
+        if reboot_at is None:  # An immediate plan resolves its moment only when the operator submits it.
+            return "The portal calculates this moment when you submit the upgrade."  # State the exact rule.
+        text = datetime.fromtimestamp(reboot_at, UTC).strftime("%Y-%m-%d %H:%M UTC")  # Use one UTC display.
+        return text  # Show the cloud moment that each non-access-point child holds.
 
 
 class OrgSubmissionScheduleGuard:
@@ -1017,7 +1049,8 @@ def _aggregate_saved_options(
     """Build and persist one confirmed aggregate operation."""
     aggregate = _aggregate_option_record(org_id, site_ids, options)  # Validate each explicit target.
     rows = selected_rows(org_id, site_ids)  # Preserve approved site names with the operation.
-    choices = build_options(aggregate["options"], now=None)  # Reuse the proven option mapping.
+    mapped = build_options(aggregate["options"], now=None)  # Reuse the proven option mapping.
+    choices = OrgUpgradeScheduleReader.anchored_options(mapped)  # Count the reboot delay from the scheduled start.
     OrgAdvancedRules.refuse_stable_access_points(choices, aggregate["targets"])  # Issue #3383: no stable AP build.
     OrgAdvancedRules.refuse_large_failure_counts(choices)  # Issue #3383: each count fits the organization body.
     request_data = AggregateBuildInput(  # Group the confirmed build values below the parameter limit.
@@ -1080,6 +1113,7 @@ def confirm_page() -> str | tuple[Response, int]:
         options=view,  # Show the confirmed choices.
         firmware_summary=firmware_summary(view, families),  # Name the target version of each family.
         advanced_summary=OrgAdvancedSummary.lines(view, _mapping_children(operation)),  # Each stored child body.
+        reboot_moment=OrgUpgradeScheduleReader.reboot_moment_text(operation),  # Show the absolute or submit rule.
         writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.
         schedule=OrgScheduleView.build(operation, view["start_time"]),  # Issue #3247: the start line and form.
         prechecks=prechecks,  # Issue #3243: the card and the gate of the confirmation field.
@@ -1455,6 +1489,9 @@ def _submit_aggregate(
     prechecks: OrgPrecheckState,
 ) -> Response | tuple[Response, int]:
     """Submit every child through the aggregate boundary."""
+    refusal = _anchor_submission_reboot(operation)  # Resolve an immediate plan from the submit clock.
+    if refusal is not None:  # A damaged delay or durable write stops before any cloud action.
+        return refusal  # Preserve the explicit failure response.
     if not _record_operator(operation):  # FR-009: the record names the operator before any lock or cloud write.
         return json_error(
             SERVICE_UNAVAILABLE_STATUS,
@@ -1475,6 +1512,28 @@ def _submit_aggregate(
     _start_phase_watch(cloud_session, operation)  # Issue #3245: follow each phase after the cloud accepts a job.
     session.pop(ORG_UPGRADE_RETRY_KEY, None)  # Issue #3247: the retry ends when its new plan reaches the cloud.
     return next_page_answer(f"/upgrade/org/jobs/{operation['operation_id']}")  # Show one seamless operation.
+
+
+def _anchor_submission_reboot(operation: MutableMapping[str, Any]) -> tuple[Response, int] | None:
+    """Resolve a reboot delay from the submit clock when the plan has no start time."""
+    stored = operation.get("plan_options")  # Read the operator choices beside the durable plan.
+    options = stored if isinstance(stored, Mapping) else {}  # A legacy plan has no delay to resolve.
+    delay = options.get("reboot_at")  # The duration text that the options page stored.
+    if not isinstance(delay, str) or not delay.strip() or type(options.get("start_time")) is int:
+        return None  # A plan without a delay or with a scheduled start needs no submit anchor.
+    anchor = OrgUpgradeScheduleReader.current_epoch()  # Read the clock at the destructive submit action.
+    mapped = build_options({"reboot_at": delay}, now=lambda: anchor)  # Parse and guard the stored duration.
+    reboot_at = mapped.reboot_at  # Read the absolute moment that follows from the submit clock.
+    if reboot_at is None:  # A valid nonempty delay must always produce an absolute moment.
+        return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, "The reboot delay has no submit moment.")
+    logger.info("Anchor the reboot delay of aggregate upgrade %s", operation.get("operation_id", ""))  # Before.
+    try:  # The compare-and-set must finish before any child reaches the cloud.
+        aggregate_service().anchor_reboot(operation, upgrade_routes.run_store(), reboot_at)  # Store every child.
+    except (TypeError, ValueError, RuntimeError) as error:  # A stale or damaged plan fails closed.
+        logger.warning("The aggregate reboot anchor failed with %s", type(error).__name__)  # Name no option value.
+        return json_error(CONFLICT_STATUS, OPTIONS_INVALID, str(error))  # Tell the operator that nothing started.
+    logger.debug("Aggregate upgrade %s holds its submit reboot moment", operation.get("operation_id", ""))  # After.
+    return None  # Continue to the operator record, the locks, and the cloud writes.
 
 
 def _send_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) -> tuple[Response, int] | None:

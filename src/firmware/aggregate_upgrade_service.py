@@ -366,6 +366,24 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         logger.debug("Aggregate upgrade %s now starts at %s", record.get("operation_id", ""), change.start_time)
         return record  # The route answers with the confirmation page.
 
+    def anchor_reboot(
+        self,
+        record: MutableMapping[str, Any],
+        store: RunStore,
+        reboot_at: int,
+    ) -> MutableMapping[str, Any]:
+        """Store the submit-relative reboot moment of every applicable planned child."""
+
+        def update(candidate: MutableMapping[str, Any]) -> None:
+            self._check_reschedule(candidate)  # Require the same untouched plan as a schedule move.
+            for child in candidate.get("children", []):  # Apply one submit clock to every child.
+                self._anchor_child_reboot(child, reboot_at)  # Keep access points and disabled routers unchanged.
+
+        logger.info("Anchor the reboot moment of aggregate upgrade %s", record.get("operation_id", ""))  # Before.
+        self._cas(record, store, update)  # Persist the moment before the first cloud write.
+        logger.debug("Aggregate upgrade %s holds reboot moment %s", record.get("operation_id", ""), reboot_at)  # After.
+        return record  # Keep the caller snapshot on the accepted durable version.
+
     @staticmethod
     def _check_reschedule(candidate: Mapping[str, Any]) -> None:
         """Refuse a reschedule after any child job left the plan."""
@@ -392,6 +410,19 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             raise ValueError(REBOOT_REFUSED_TEXT)  # A stale reboot moment can reboot a device before its upgrade.
         body["reboot_at"] = change.reboot_at  # Move the reboot moment with the start.
         child["reboot_at"] = change.reboot_at  # Keep the child copy in step with the body.
+
+    @staticmethod
+    def _anchor_child_reboot(child: MutableMapping[str, Any], reboot_at: int) -> None:
+        """Store a submit-relative reboot moment on a non-access-point child."""
+        if child.get("device_family") == "ap":  # The access point cloud route has no reboot_at field.
+            return  # Keep the organization access point body unchanged.
+        body = child.get("body")  # The body that the confirmation sends to the cloud.
+        if not isinstance(body, MutableMapping):  # A damaged child cannot receive a safe schedule.
+            raise ValueError("The aggregate child record holds no request body.")  # Stop before any write.
+        if body.get("reboot_at") == -1:  # The negative value disables the session smart router reboot.
+            return  # Preserve the confirmed disable choice.
+        body["reboot_at"] = reboot_at  # Send the submit-relative epoch second to the cloud.
+        child["reboot_at"] = reboot_at  # Keep the durable child summary in step with its body.
 
     @staticmethod
     def _reschedule_options(candidate: MutableMapping[str, Any], start_time: int | None) -> None:
