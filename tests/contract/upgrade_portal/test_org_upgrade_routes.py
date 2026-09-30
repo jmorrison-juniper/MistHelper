@@ -952,7 +952,10 @@ def test_multidevice_operation_is_durable_transparent_and_replay_safe(
     held = lock.read_lock(fake_org_id, fake_site_id, select.lock_client())  # The lock of the running operation.
     assert isinstance(held, lock.LockRecord) and held.run_id == "org-run-contract"  # No new work can start.
     boundary.final_state = "cancelled"  # The next read finds every child past any write.
-    org_upgrade_client.get("/api/org-upgrades/org-run-contract")  # The status read releases the sites.
+    org_upgrade_client.get("/api/org-upgrades/org-run-contract")  # The status read finds the final child states.
+    assert store.records["org-run-contract"]["site_locks"] != {}  # The phase watch still protects its post-check.
+    store.records["org-run-contract"]["phase_watch"]["state"] = "stopped"  # The post-check stage now ended.
+    org_upgrade_client.get("/api/org-upgrades/org-run-contract")  # A recovery poll performs any missed release.
     assert store.records["org-run-contract"]["site_locks"] == {}  # A settled operation blocks no later work.
     assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # The site accepts new work.
 
@@ -1125,13 +1128,13 @@ def test_aggregate_service_applies_reboot_delay_to_each_selected_site() -> None:
     assert {child["reboot_at"] for child in site_children} == {moment}  # The durable child stores the same field.
 
 
-def test_settled_operation_releases_every_site_lock(
+def test_settled_operation_keeps_locks_until_the_phase_watch_finishes(
     org_upgrade_client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
     fake_org_id: str,
     fake_site_id: str,
 ) -> None:
-    """A completed operation frees each site it locked."""
+    """Issue #3333: a completed child keeps its site until the phase watch and post-check stage finish."""
     store = AggregateStoreStandIn()
     boundary = AggregateBoundaryStandIn()
     org_upgrade_client.application.config["RUN_STORE"] = store
@@ -1157,6 +1160,10 @@ def test_settled_operation_releases_every_site_lock(
     boundary.final_state = "completed"  # The next read finds every child finished.
     status = org_upgrade_client.get("/api/org-upgrades/org-run-contract")
     assert status.get_json()["status"] == "completed"
+    assert store.records["org-run-contract"]["site_locks"] != {}  # The post-check stage still needs the site.
+    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is not None  # The site stays protected.
+    store.records["org-run-contract"]["phase_watch"]["state"] = "finished"  # The post-check stage now ended.
+    org_upgrade_client.get("/api/org-upgrades/org-run-contract")  # A recovery poll performs any missed release.
     assert store.records["org-run-contract"]["site_locks"] == {}  # The durable record holds no site.
     assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # The site is free again.
 
