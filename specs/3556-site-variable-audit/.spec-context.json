@@ -1,0 +1,19 @@
+{
+  "feature": "3556-site-variable-audit",
+  "issue": 3556,
+  "branch": "3556-site-variable-audit",
+  "currentStep": "plan",
+  "status": "planned",
+  "artifacts": [
+    "spec.md",
+    "research.md",
+    "plan.md",
+    "data-model.md",
+    "quickstart.md",
+    "contracts/report-contract.md",
+    "wiring.md"
+  ],
+  "workflow": "speckit",
+  "specName": "Site Variable Audit",
+  "history": []
+}
