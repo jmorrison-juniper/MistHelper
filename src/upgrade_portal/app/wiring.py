@@ -316,12 +316,16 @@ class DocumentRunStore:
         if store is None:  # No store module means no scan, and the route continues without one.
             return mirrored_site_runs(site_id)  # The runs of this process still guard FR-037.
         try:  # The scan is one query on a network store.
+            logger.info("wiring: scan stored runs for site %s", site_id)  # Log before the document store query.
             page: Any = store.list_runs(store.RunQuery(site_id=site_id, limit=SITE_SCAN_LIMIT))
         except Exception as fault:  # A create call must survive an unreachable store.
             logger.warning("wiring: the site scan of %s failed with %s", site_id, type(fault).__name__)
             return mirrored_site_runs(site_id)  # The lock check of the route still guards a second operator.
-        rows = [dict(row) for row in getattr(page, "rows", ())]  # The row holds the run key and the state.
-        return rows or mirrored_site_runs(site_id)  # An empty answer may mean a database with nothing in it.
+        if not page.database_available:  # An unavailable database gives the mirror authority for this process.
+            return mirrored_site_runs(site_id)  # The local runs still guard FR-037 in standalone mode.
+        rows = [dict(row) for row in page.runs]  # The page contract holds its stored run records in `runs`.
+        logger.debug("wiring: the site scan of %s found %d stored runs", site_id, len(rows))  # Log the result count.
+        return rows  # An available empty page proves that the database holds no matching run.
 
 
 def precheck_tier_number(raw: Any) -> int:
