@@ -13,11 +13,9 @@ from scripts.benchmarks import bench_capture_concurrency as benchmark_module  # 
 class TestCaptureConcurrencyBenchmark:
     """Verify the benchmark contract without a live Mist API."""
 
-    def test_benchmark_writes_scrubbed_artifacts(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        output_path = Path("data") / "test-artifacts" / "issue1988-benchmark.jsonl"  # Keep test output in data.
+    def test_benchmark_writes_scrubbed_artifacts(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        output_path = tmp_path / "issue1988-benchmark.jsonl"  # Keep the output outside production data.
         event_path = output_path.with_suffix(".events.jsonl")  # The recorder writes scrubbed spans beside rows.
-        output_path.unlink(missing_ok=True)  # Remove a stale artifact before the test starts.
-        event_path.unlink(missing_ok=True)  # Remove stale recorder events from an earlier run.
         monkeypatch.setattr(benchmark_module.CaptureConcurrencyBenchmark, "ITERATIONS", 1)  # Keep the unit test fast.
         monkeypatch.setattr(
             benchmark_module.CaptureConcurrencyBenchmark, "CAPTURE_LATENCIES", {"devices": 0.001}

@@ -63,7 +63,7 @@ FETCH_SCRIPT = """async (path) => {
 OK_STATUS = 200  # A site list read answers 200, also when a read lost a page.
 ROW_FIELDS = {"site_id", "name", "device_count", "locked_by", "lock_state"}  # The five fields of one site row.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of these journeys.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "lost-site-page"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "lost-site-page"
 )
 
 

@@ -49,7 +49,7 @@ ONE_SITE_NOTE = (  # The whole note of the page of one site, which does not chan
 EVERY_SITE_CAPTION = "The stored captures of every site. "  # The first sentence of the caption with no site.
 ONE_SITE_CAPTION = "The stored captures of the site. "  # The first sentence of the caption of one site.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "history-scope"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "history-scope"
 )
 
 

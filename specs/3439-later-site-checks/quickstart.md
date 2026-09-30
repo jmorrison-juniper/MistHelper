@@ -29,7 +29,7 @@ python -m pytest tests/e2e/upgrade_portal/test_later_site_checks.py -q -p no:cac
 ```
 
 Expected result: every journey passes. Each journey writes screenshots under
-`data/test-artifacts/upgrade-portal-journeys/later-site-checks/`. Read each
+`test-artifacts/upgrade-portal-journeys/later-site-checks/`. Read each
 screenshot.
 
 1. The single-site mode: the inventory page of the site of page two shows the
