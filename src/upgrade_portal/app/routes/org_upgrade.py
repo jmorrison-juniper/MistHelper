@@ -674,16 +674,8 @@ def _selected_target_rows(
     """Return explicit targets for selected families that have a version."""
     explicit = options.get("targets")  # Issue #3204: the current page sends one choice for each device.
     if isinstance(explicit, list):  # A current request must preserve the selected version by device address.
-        versions = {  # Index only complete mapping entries from the untrusted request.
-            str(row.get("mac", "")): str(row.get("version_target", ""))
-            for row in explicit  # Inspect each submitted device choice.
-            if isinstance(row, Mapping) and row.get("mac") and row.get("version_target")  # Require both fields.
-        }
-        rows = [  # Keep the inventory order and keep devices of this site only.
-            {"mac": str(row["mac"]), "version_target": versions[str(row["mac"])]}
-            for row in view.get("targets", [])  # Inspect each device in the selected site.
-            if str(row.get("device_type", "")) in selected and str(row.get("mac", "")) in versions  # Selected here.
-        ]
+        versions = _explicit_target_versions(explicit)  # Index complete entries from the untrusted request.
+        rows = _site_explicit_target_rows(view.get("targets", []), selected, versions)  # Keep this site's devices.
         logger.debug("The site keeps %s explicit target choice(s)", len(rows))  # Log after the site filter.
         return rows  # The shared builder validates each version against the device model.
     return [  # Keep the inventory order from the existing option view.
@@ -691,6 +683,32 @@ def _selected_target_rows(
         for row in view.get("targets", [])  # Inspect each device in the selected site.
         if str(row.get("device_type", "")) in selected  # Keep only checked families.
         and options.get(f"version_{row['device_type']}")  # Require a target version for the family.
+    ]
+
+
+def _explicit_target_versions(explicit: Sequence[object]) -> dict[str, str]:
+    """Index complete explicit target entries by device address."""
+    return {
+        str(row.get("mac", "")): str(row.get("version_target", ""))
+        for row in explicit
+        if isinstance(row, Mapping) and row.get("mac") and row.get("version_target")
+    }
+
+
+def _site_explicit_target_rows(
+    targets: object,
+    selected: tuple[str, ...],
+    versions: Mapping[str, str],
+) -> list[dict[str, str]]:
+    """Keep explicit choices for selected devices in one site."""
+    if not isinstance(targets, list):
+        return []
+    return [
+        {"mac": str(row["mac"]), "version_target": versions[str(row["mac"])]}
+        for row in targets
+        if isinstance(row, Mapping)
+        and str(row.get("device_type", "")) in selected
+        and str(row.get("mac", "")) in versions
     ]
 
 
