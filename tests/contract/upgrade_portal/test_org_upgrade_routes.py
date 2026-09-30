@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from copy import deepcopy
+from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
@@ -456,6 +457,34 @@ def test_confirmed_submission_calls_the_service_once(
     assert body["site_ids"] == [fake_site_id]
     assert body["device_type"] == "ap"
     assert body["all_sites"] is False
+
+
+@pytest.mark.parametrize(
+    ("start_offset", "expected_status", "expected_calls"),
+    ((-1, 409, 0), (0, 200, 1)),
+)
+def test_submit_rechecks_the_saved_start_time_at_the_clock_boundary(
+    org_upgrade_client: FlaskClient,
+    org_service: OrgUpgradeServiceStandIn,
+    start_offset: int,
+    expected_status: int,
+    expected_calls: int,
+) -> None:
+    """Issue #3324: submit refuses a past start and accepts the exact clock boundary."""
+    fixed_now = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)  # Fix the clock at one exact UTC second.
+    org_upgrade_client.application.config[org_upgrade.SUBMISSION_CLOCK_CONFIG_KEY] = lambda: fixed_now  # Fix submit.
+    save_valid_options(org_upgrade_client)  # Store a valid multi-site plan before the confirmation wait.
+    with org_upgrade_client.session_transaction() as browser_session:  # Model time passing after the options save.
+        options = dict(browser_session[org_upgrade.OPTIONS_SESSION_KEY])  # Keep the validated plan fields.
+        options["start_time"] = int(fixed_now.timestamp()) + start_offset  # Put the schedule at the test boundary.
+        browser_session[org_upgrade.OPTIONS_SESSION_KEY] = options  # Save the absolute time for submit to recheck.
+    answer = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})  # Confirm the stored plan.
+    assert answer.status_code == expected_status  # Only the value before the fixed clock must fail.
+    assert len(org_service.calls) == expected_calls  # A refused schedule must start no Mist cloud request.
+    if start_offset < 0:  # The past case must tell the operator how to repair the plan.
+        error = answer.get_json()["error"]  # Read the structured refusal shown by the confirmation page.
+        assert error["code"] == org_upgrade.START_TIME_PASSED  # Keep a stable code for the browser contract.
+        assert error["message"] == org_upgrade.START_TIME_PASSED_MESSAGE  # Name the reschedule form and next action.
 
 
 def test_repeated_confirmation_submits_only_one_job(
