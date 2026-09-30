@@ -51,7 +51,7 @@ KNOWN_TEMPORARY_MENU_GAPS: frozenset[str] = frozenset(
     }
 )
 
-KNOWN_MENU_GAPS = RETIRED_MENU_NUMBERS | KNOWN_TEMPORARY_MENU_GAPS  # WHY: keep temporary gaps distinct from retired numbers.
+KNOWN_MENU_GAPS = RETIRED_MENU_NUMBERS | KNOWN_TEMPORARY_MENU_GAPS  # WHY: keep temporary gaps distinct.
 
 
 class TestMenuNumbersAreUnique:
