@@ -33,9 +33,9 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 **Purpose**: Create the package tree and the configuration entries.
 
-- [ ] T001 Create the package tree in `src/websocket_streams/`. Put a docstring in each `__init__.py`. The folders are `catalog/`, `intake/`, `live/`, `live/sessions/`, `live/runners/`, and `web/`.
-- [ ] T002 [P] Create the test tree in `tests/unit/websocket_streams/`. Put an `__init__.py` in each folder. The folders are `catalog/`, `intake/`, `live/`, `live/sessions/`, `live/runners/`, and `web/`. Also create `tests/contract/websocket_streams/__init__.py`.
-- [ ] T003 [P] Add the 7 `PORTAL_WS_*` variables to `deploy/.env.example`. Give each variable its default, its range, and one plain comment.
+- [X] T001 Create the package tree in `src/websocket_streams/`. Put a docstring in each `__init__.py`. The folders are `catalog/`, `intake/`, `live/`, `live/sessions/`, `live/runners/`, and `web/`.
+- [X] T002 [P] Create the test tree in `tests/unit/websocket_streams/`. Put an `__init__.py` in each folder. The folders are `catalog/`, `intake/`, `live/`, `live/sessions/`, `live/runners/`, and `web/`. Also create `tests/contract/websocket_streams/__init__.py`.
+- [X] T003 [P] Add the 7 `PORTAL_WS_*` variables to `deploy/.env.example`. Give each variable its default, its range, and one plain comment.
 
 ---
 
@@ -45,7 +45,7 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 **Checkpoint**: The foundational unit tests pass. Story work starts only after this point.
 
-- [ ] T004 Define the `FieldKind` and `Safety` enums in `src/websocket_streams/catalog/model.py`. Also define the `FieldSpec`, `ChannelDefinition`, and `UtilityDefinition` dataclasses. Follow data-model.md.
+- [X] T004 Define the `FieldKind` and `Safety` enums in `src/websocket_streams/catalog/model.py`. Also define the `FieldSpec`, `ChannelDefinition`, and `UtilityDefinition` dataclasses. Follow data-model.md.
 - [ ] T005 [P] Implement `StreamSettings` in `src/websocket_streams/live/sessions/settings.py`. Read the 7 variables. A bad value gives the default and one warning with the variable name.
 - [ ] T006 [P] Implement `MessageBuffer` in `src/websocket_streams/live/sessions/buffer.py`. Enforce the message cap and the byte cap. Drop the oldest messages first and count them. Shorten a message above 256 KB and mark it.
 - [ ] T007 Implement `SessionState`, `SessionCounters`, and `StreamSession` in `src/websocket_streams/live/sessions/record.py`. Enforce the state machine of data-model.md. Give a page payload that holds no path and no token.
