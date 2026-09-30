@@ -30,7 +30,7 @@ VERSION_FIELD_IDS = ("org-upgrade-version", "org-upgrade-switch-version", "org-u
 CHOSEN_STRATEGY = "serial"  # Neither the form default nor the service default, so a reset shows on the page.
 UNREAD_TEXT = f"The portal read no device at this site: {EMPTY_SITE_NAME}."  # Issue #3462: one site, one noun.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "org-empty-site"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "org-empty-site"
 )
 
 

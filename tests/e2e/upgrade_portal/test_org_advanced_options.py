@@ -26,7 +26,7 @@ SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second stand-in s
 TARGET_VERSION = "0.15.1"  # The newer version that the stand-in cloud offers for every model.
 OPTIONS_SAVE_PATH = "/api/org-upgrades/options"  # The save route of the multi-site options.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of these journeys.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "org-advanced-options"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "org-advanced-options"
 )
 RADIO_FIELD_IDS = (  # The five radio batch controls, which only a radio plan with access points reads.
     "org-upgrade-rrm-first-batch-percentage-field",

@@ -85,7 +85,7 @@ table => [...table.querySelectorAll('thead th')].map(header => {
 })
 """  # A range measures the header text and its sort arrow, and the cell width does not change the measure.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "history-site-column"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "history-site-column"
 )
 
 

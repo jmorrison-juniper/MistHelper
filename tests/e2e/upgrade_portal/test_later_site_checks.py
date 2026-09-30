@@ -79,7 +79,7 @@ RELEASED_MESSAGE = "You released this site. Another operator may take it now."  
 SEED_TRIES = 20  # The server writes the seeds on a thread, so the first read can come too early.
 SEED_PAUSE_MS = 500  # The pause between two reads of a seeded page.
 EVIDENCE_DIRECTORY = (  # The evidence folder of these journeys.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "later-site-checks"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "later-site-checks"
 )
 TIMING_FILE = EVIDENCE_DIRECTORY / "timings.json"  # The time of each refusal, in milliseconds.
 

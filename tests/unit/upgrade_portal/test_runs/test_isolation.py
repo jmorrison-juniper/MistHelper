@@ -9,11 +9,9 @@ Why:
 
 from __future__ import annotations  # Keep annotations independent from import order.
 
-import shutil  # Remove the test-owned artifact root after allocation.
 from collections.abc import Callable  # Type one deliberate missing callable value.
-from pathlib import Path  # Build an approved repository data path.
+from pathlib import Path  # Build an isolated temporary artifact path.
 from typing import cast  # Type one deliberate invalid runtime value.
-from uuid import uuid4  # Keep parallel unit test artifact roots distinct.
 
 import pytest  # Check the fail-closed exceptions.
 
@@ -141,21 +139,20 @@ def test_child_environment_scrubs_credentials_paths_and_uses_sentinels() -> None
     assert not any(value.startswith("production") for value in child.values())  # Leak no production value.
 
 
-def test_resource_allocation_uses_unique_ports_paths_and_identifiers() -> None:  # Prove unique resources.
+def test_resource_allocation_uses_unique_ports_paths_and_identifiers(tmp_path: Path) -> None:  # Prove isolation.
     """Two allocations share no server resource."""
-    root = Path.cwd() / "data" / "test-artifacts" / f"unit-{uuid4().hex}"  # Use approved repository output.
+    root = tmp_path / "resources"  # Keep each allocation outside the mounted repository data directory.
     first = allocate_resources(root)  # Allocate the first isolated server resources.
     second = allocate_resources(root)  # Allocate the second isolated server resources.
-    try:  # Release both reservations and remove only this test-owned root.
+    try:  # Release both reservations after the assertions.
         assert first.test_run_id != second.test_run_id  # Give each record graph a different owner.
         assert first.port != second.port  # Give each child a different loopback port.
         assert first.artifact_directory != second.artifact_directory  # Separate every server artifact.
         assert first.log_path != second.log_path  # Separate every server log.
         assert first.process_owner_path != second.process_owner_path  # Separate every process owner file.
-    finally:  # A failed assertion must not leave a reserved socket or an artifact directory.
+    finally:  # A failed assertion must not leave a reserved socket.
         first.release_port()  # Release the first loopback reservation.
         second.release_port()  # Release the second loopback reservation.
-        shutil.rmtree(root, ignore_errors=True)  # Remove only the unique unit test artifact root.
 
 
 def test_each_record_store_rejects_a_different_owner() -> None:  # Prove record ownership enforcement.

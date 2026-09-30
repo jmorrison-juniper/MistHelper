@@ -45,7 +45,7 @@ TWO_SITES_SCOPE = (  # Issue #3452: the same three texts of a plan of two sites.
     "Take the missing pre-checks",
 )
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "selected-site-count"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "selected-site-count"
 )
 
 

@@ -41,7 +41,7 @@
   page, goes Back, and takes a screenshot of each page. The file holds four
   journeys, and all four passed in 20 seconds with the Edge channel. The
   screenshots are in
-  `data/test-artifacts/upgrade-portal-journeys/org-advanced-options/`.
+  `test-artifacts/upgrade-portal-journeys/org-advanced-options/`.
 
 ## Phase 4: Finish
 

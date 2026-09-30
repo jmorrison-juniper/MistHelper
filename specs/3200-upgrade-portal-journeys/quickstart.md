@@ -67,8 +67,8 @@ run in the default CI pytest selection.
 ## Troubleshooting
 
 - If the server does not get ready, increase
-  `UPGRADE_PORTAL_E2E_READY_SECONDS`. Then read the server log under
-  `data/test-artifacts/upgrade-portal/`.
+  `UPGRADE_PORTAL_E2E_READY_SECONDS`. Then read the path of the server log in
+  the failure message.
 - If a step fails, open `index.html`. Then open the screenshot link and
   `journey.json` for the failed journey.
 - If a strict `xfail` passes, the fix of its issue is on the branch. Remove the

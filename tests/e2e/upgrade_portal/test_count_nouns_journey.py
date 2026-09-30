@@ -42,7 +42,7 @@ ONE_ROW_NOTE = (  # The whole history note for one capture and a page size of on
     f"{HISTORY_START} The site holds 1 capture. This page starts after 0 captures, and one page holds 1 row."
 )
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
-    Path(__file__).parents[3] / "data" / "test-artifacts" / "upgrade-portal-journeys" / "count-nouns"
+    Path(__file__).parents[3] / "test-artifacts" / "upgrade-portal-journeys" / "count-nouns"
 )
 
 

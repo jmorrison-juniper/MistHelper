@@ -161,7 +161,7 @@ each later step while the site read loses page two.
     "starting". Issue #3446 tracks that defect.
   - The options page says "1 selected sites". Issue #3447 tracks that text.
   - Each refusal answered in less than 200 ms. The file
-    `data/test-artifacts/upgrade-portal-journeys/later-site-checks/timings.json`
+    `test-artifacts/upgrade-portal-journeys/later-site-checks/timings.json`
     holds the times.
 
 ## Phase 6: Polish
