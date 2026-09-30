@@ -2,7 +2,7 @@
 
 # Menu API endpoints: interactive_safe
 
-This page lists the Mist API endpoints of the 93 menu options in the `interactive_safe` category.
+This page lists the Mist API endpoints of the 95 menu options in the `interactive_safe` category.
 A menu option in this category asks the operator for input, and it reads data only.
 
 The index page explains how to read the map: [Menu API endpoint map](Menu-API-Endpoints).
@@ -16,14 +16,14 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["interactive_safe: 93<br/>menu options"]
-    root --> f_orgs_sites["orgs/sites<br/>60 menu options"]
+    root["interactive_safe: 95<br/>menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>61 menu options"]
     root --> f_sites_stats["sites/stats<br/>27 menu options"]
     root --> f_sites_devices["sites/devices<br/>14 menu options"]
     root --> f_sites_sites["sites/sites<br/>7 menu options"]
+    root --> f_sites_insights["sites/insights<br/>6 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>5 menu options"]
     root --> f_sites_clients["sites/clients<br/>5 menu options"]
-    root --> f_sites_insights["sites/insights<br/>5 menu options"]
     root --> f_sites_mxedges["sites/mxedges<br/>5 menu options"]
     root --> f_const_alarm_defs["const/alarm_defs<br/>4 menu options"]
     root --> f_const_ap_channels["const/ap_channels<br/>4 menu options"]
@@ -1948,3 +1948,24 @@ flowchart LR
 | Unknown | `/api/v1/labs/suggestions_schema` | None (raw request) | [`SCHEMA_PATH`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/marvis/actions/client.py) | Path |
 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`MarvisActionsClient._read_first_alarm_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/marvis/actions/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`MarvisActionsClient.read_site_names`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/marvis/actions/client.py) | Call |
+
+## Menu 288
+
+- Title: Show the SSR registration commands
+- Handler: `SsrRegistrationCommands.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`InputUtils`](Menu-API-Endpoints#inpututils)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 289
+
+- Title: Export the client fingerprint census for a site
+- Handler: `ClientFingerprintCensus.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
+- Endpoints: 2
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/insights/fingerprints/count` | [`sites.insights.countSiteClientFingerprints`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/nac-fingerprints/count-site-client-fingerprints) | [`ClientFingerprintCensusClient.count`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/client_fingerprint_census/client.py) | Call |
