@@ -14,7 +14,7 @@ Add menu 280 as a safe alert digest and menu 281 as a destructive alarm acknowle
 
 **Primary Dependencies**: Existing `mistapi>=0.64.0,<0.65`, `SourceDependencyResolver`, `DataExporter`, and standard-library modules.
 
-**Storage**: CSV and Markdown files under `data/` through `DataExporter` for CSV. No database schema change in this feature branch.
+**Storage**: CSV files under `data/` through `DataExporter`. `AlertDigest.md` is a handover document, so the writer creates it directly under `data/`.
 
 **Testing**: `pytest`, `ruff`, `black`, `mypy`, `pydocstyle`, `vulture`, and `interrogate` through the assigned virtual environment.
 
@@ -22,7 +22,7 @@ Add menu 280 as a safe alert digest and menu 281 as a destructive alarm acknowle
 
 **Project Type**: MistHelper CLI menu operation package.
 
-**Performance Goals**: Complete a normal 24-hour alert digest in under 60 seconds.
+**Performance Goals**: Complete a normal 24-hour alert digest in under 60 seconds. Unit tests measure local grouping of 500 alarm rows in under 1 second.
 
 **Constraints**: Menu 281 sends no destructive request without `ACK <count>`. `--dry-run` sends no request. All output uses ASCII text.
 
@@ -76,7 +76,7 @@ tests/unit/reports/alert_digest/
 └── test_alert_digest_operation.py
 ```
 
-**Structure Decision**: Use one new nested package under `src/reports/alert_digest/` and one new matching test package. Menu registration, registry category changes, primary key strategies, generated menu reference changes, and README changes are deferred to the integration pull request and recorded in `wiring.md`.
+**Structure Decision**: Use one new nested package under `src/reports/alert_digest/` and one new matching test package. The fleet contract forbids this branch from editing integration-owned files. Menu registration, registry category changes, primary key strategies, generated menu reference changes, and README changes are deferred to the integration pull request and recorded in `wiring.md`.
 
 ## Phase 0 Research Summary
 
@@ -91,7 +91,8 @@ The data model is recorded in `data-model.md`. The menu contract is recorded in 
 - Five-Item Rule: Pass. Each new module has one responsibility, and the package contains five implementation modules.
 - Safety-First: Pass. The destructive path is isolated in `AlertDigestOperation.run_acknowledge` and confirmation logic is testable without a network call.
 - Output Backends: Pass. CSV exports use `DataExporter.write_with_format_selection`. Markdown output uses a direct file write because it is an operator handover document, not collected API data.
-- Database Keys: Pass by deferral. The required primary key strategies are listed in `wiring.md` for the integration pull request.
+- Database Keys: Pass for the fleet branch. The required primary key strategies are listed in `wiring.md`, and the integration pull request applies them in `endpoint_primary_key_strategies.py`.
+- README and menu references: Pass for the fleet branch. The exact integration work is listed in `wiring.md`, and the integration pull request owns the forbidden files.
 
 ## Complexity Tracking
 

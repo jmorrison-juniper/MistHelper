@@ -2,6 +2,8 @@
 
 from __future__ import annotations  # Enable modern annotations without runtime imports.
 
+from time import perf_counter  # Measure pure grouping speed for the performance acceptance criterion.
+
 from src.reports.alert_digest.model import AlertDigestModel  # Test pure model helpers.
 
 from .conftest import alarm, definition  # Reuse synthetic alarm factories.
@@ -45,3 +47,25 @@ def test_result_rows_hold_one_row_per_candidate() -> None:
     candidates = AlertDigestModel.acknowledgement_candidates(records)  # Select both unacknowledged rows.
     results = AlertDigestModel.result_rows(candidates, "dry_run", None, "No request sent.")  # Build results.
     assert [result.outcome for result in results] == ["dry_run", "dry_run"]  # Confirm one outcome per row.
+
+
+def test_missing_sample_ack_state_and_times_use_safe_defaults() -> None:
+    """Missing optional alarm fields keep the digest readable."""
+    definitions = AlertDigestModel.definitions_by_key([definition()])  # Build the category map.
+    row = alarm(1, hostname="", acked=None, timestamp=None, last_seen=None)  # Remove optional evidence fields.
+    groups = AlertDigestModel.group_records(AlertDigestModel.records_from_rows([row], definitions))  # Normalize.
+    assert groups[0].sample_device_or_client == ""  # Confirm a missing sample stays blank.
+    assert groups[0].acknowledged_state == "unknown"  # Confirm a missing ack state stays explicit.
+    assert groups[0].first_seen == ""  # Confirm a missing first seen value stays blank.
+    assert groups[0].last_seen == ""  # Confirm a missing last seen value stays blank.
+
+
+def test_grouping_performance_budget_for_local_rows() -> None:
+    """Pure grouping stays well below the feature performance budget."""
+    definitions = AlertDigestModel.definitions_by_key([definition()])  # Build the category map.
+    rows = [alarm(number, site_name=f"Site {number % 5}") for number in range(1, 501)]  # Build local rows.
+    started = perf_counter()  # Start a small local timing guard.
+    groups = AlertDigestModel.group_records(AlertDigestModel.records_from_rows(rows, definitions))  # Group rows.
+    elapsed = perf_counter() - started  # Stop the local timing guard.
+    assert len(groups) == 5  # Confirm grouping worked while measuring speed.
+    assert elapsed < 1.0  # Confirm pure processing cannot consume the 60 second operation budget.

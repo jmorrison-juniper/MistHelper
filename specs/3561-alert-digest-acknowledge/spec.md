@@ -63,7 +63,7 @@ A NOC lead changes the lookback window for special handovers by setting `ALERT_D
 - If there are no alarms in the lookback window, menu 280 still writes the CSV and Markdown files with clear empty-state content.
 - If an alarm has no device or client name, the sample device or client field is blank or uses a clear placeholder.
 - If an alarm has no acknowledgement state, the acknowledged state field uses a clear unknown value instead of failing.
-- If multiple alarm rows have missing first seen or last seen values, the digest keeps the available values and flags incomplete timing in the handover summary.
+- If multiple alarm rows have missing first seen or last seen values, the digest keeps the available values and leaves unavailable cells blank.
 - If the bulk acknowledgement returns mixed results, the acknowledgement log records the result for each alarm id and reports the failed ids to the operator.
 - If the output directory is not writable, the operation reports failure and does not report success.
 
@@ -89,6 +89,7 @@ A NOC lead changes the lookback window for special handovers by setting `ALERT_D
 - **FR-016**: The wiring manifest at `specs/3561-alert-digest-acknowledge/wiring.md` MUST exist and MUST include every section of the contract.
 - **FR-017**: The release note fragment at `changelog.d/issue-3561-alert-digest-acknowledge.md` MUST exist before implementation is complete.
 - **FR-018**: Menu 281 MUST be treated as destructive and MUST require human review before it is used against live alarms.
+- **FR-019**: Unit tests MUST cover missing sample, missing acknowledgement state, missing timing values, ASCII-only Markdown output, and local grouping performance.
 
 ### Required Acceptance Criteria
 
@@ -113,6 +114,7 @@ A NOC lead changes the lookback window for special handovers by setting `ALERT_D
 - **IC-001**: There MUST be two menu entries: menu 280 for safe digest and menu 281 for destructive acknowledgement.
 - **IC-002**: Required integration changes MUST be recorded in `specs/3561-alert-digest-acknowledge/wiring.md` before implementation.
 - **IC-003**: The implementation MUST NOT edit `MistHelper.py`, `operation_registry.py`, `endpoint_primary_key_strategies.py`, `README.md`, copilot instructions, `menu_reference.md`, `web_portal`, `scripts`, guardrails, or existing `src/tests` owned by other work.
+- **IC-004**: The wiring manifest MUST carry the exact primary key, README, registry, and menu registration changes for the integration pull request because the fleet contract owns those files outside this branch.
 
 ### Key Entities
 
@@ -133,6 +135,7 @@ A NOC lead changes the lookback window for special handovers by setting `ALERT_D
 - **SC-005**: Menu 281 dry runs send zero acknowledgement requests and show 100% of alarm ids that would be acknowledged.
 - **SC-006**: The acknowledgement log contains one result row for 100% of alarm ids included in a confirmed bulk acknowledgement attempt.
 - **SC-007**: Both menu 280 and menu 281 use the same lookback window in 100% of runs.
+- **SC-008**: Local grouping of 500 alarm rows completes in under 1 second, which preserves the 60 second operation budget for normal volumes.
 
 ## Assumptions
 
