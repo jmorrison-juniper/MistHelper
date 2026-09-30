@@ -85,8 +85,8 @@ if ($LASTEXITCODE -ne 0) {
 # "up-corporate-ca" merges the certificate overlay only when requested.
 #
 # "check-revision" reads the commit label of the running container and
-# compares it against origin/main. An empty label names a local build,
-# because only the CI build writes the label.
+# compares the image inputs against origin/main. An empty label names a local
+# build, because only the CI build writes the label.
 if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "build") {
     $BuildFile = Join-Path $RepositoryRoot "compose.build.yml"  # The file that holds the build section.
     if (-not (Test-Path $BuildFile)) {
@@ -123,19 +123,57 @@ if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "check-revision"
     if ($LASTEXITCODE -ne 0) {
         throw "The container misthelper-app is absent, so its revision cannot be read."
     }
-    $OriginHead = (git -C $RepositoryRoot rev-parse --short origin/main)  # The tested commit that CI published.
-    if ($LASTEXITCODE -ne 0) {
-        throw "The repository has no origin/main, so the revision cannot be compared."
-    }
     if ([string]::IsNullOrWhiteSpace($RevisionLabel)) {
         Write-Host "The container holds no revision label. It runs a local build, not the CI image." -ForegroundColor Red
         exit 1
     }
-    if ($RevisionLabel -like "$OriginHead*") {
-        Write-Host "The container runs commit $RevisionLabel, and origin/main is $OriginHead. The image is current." -ForegroundColor Green
+    $RevisionCommit = (git -C $RepositoryRoot rev-parse "$RevisionLabel^{commit}").Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "The container revision label '$RevisionLabel' does not name a commit in this repository."
+    }
+    $OriginHead = (git -C $RepositoryRoot rev-parse origin/main).Trim()  # The tested commit that CI published.
+    if ($LASTEXITCODE -ne 0) {
+        throw "The repository has no origin/main, so the revision cannot be compared."
+    }
+    if ($RevisionCommit -eq $OriginHead) {
+        Write-Host "The container runs commit $RevisionLabel, and origin/main is $($OriginHead.Substring(0, 8)). The image is current." -ForegroundColor Green
         exit 0
     }
-    Write-Host "The container runs commit $RevisionLabel, but origin/main is $OriginHead. The image is not current." -ForegroundColor Red
+
+    # Keep this list aligned with the source paths in Containerfile COPY lines.
+    # Changes outside these inputs cannot change the published application image.
+    $ImageInputPaths = @(
+        "Containerfile",
+        ".dockerignore",
+        "container/scripts/misthelper-session.sh",
+        "container/scripts/welcome.sh",
+        "container/scripts/start.sh",
+        "container/scripts/write-session-env.sh",
+        "zscaler-root-ca.crt",
+        "requirements.txt",
+        "pyproject.toml",
+        "MistHelper.py",
+        "__init__.py",
+        "wsgi.py",
+        "wsgi_capture.py",
+        "src/",
+        "web_portal/",
+        "documentation/mist-api-openapi31json.json"
+    )
+    $ChangedImageInputs = @(git -C $RepositoryRoot diff --name-only --diff-filter=ACDMRTUXB $RevisionCommit $OriginHead -- $ImageInputPaths)
+    if ($LASTEXITCODE -ne 0) {
+        throw "The image inputs could not be compared between the container revision and origin/main."
+    }
+    $LaterCommitCount = (git -C $RepositoryRoot rev-list --count "$RevisionCommit..$OriginHead").Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "The commits between the container revision and origin/main could not be counted."
+    }
+    if ($ChangedImageInputs.Count -eq 0) {
+        Write-Host "The container runs commit $RevisionLabel, and origin/main is $($OriginHead.Substring(0, 8)). There are $LaterCommitCount later commit(s), but none changes an image input. The image is current." -ForegroundColor Green
+        exit 0
+    }
+    $ChangedInputList = $ChangedImageInputs -join ", "
+    Write-Host "The container runs commit $RevisionLabel, but origin/main is $($OriginHead.Substring(0, 8)). The image is not current. Changed image inputs: $ChangedInputList." -ForegroundColor Red
     exit 1
 }
 
