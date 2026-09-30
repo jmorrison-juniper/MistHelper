@@ -672,6 +672,9 @@ from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main e
 
 MainEntrypoint.bind_host_module(sys.modules[__name__])  # Give source packages a bound host without root imports.
 
+from src.gateway.ssr_registration.operation import (
+    SsrRegistrationCommands,  # Menu 288 (issue #3568) -- show SSR registration commands.
+)
 from src.marvis.actions.operation import (
     MarvisActionsOperation,  # Menu 270 (issue #3299) -- Marvis Actions export and bulk resolve.
 )
@@ -714,6 +717,9 @@ from src.reports.ap_scorecard.operation import (
     ApScorecard,  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.
 )
 from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- cert expiry.
+from src.reports.client_fingerprint_census.operation import (
+    ClientFingerprintCensus,  # Menu 289 (issue #3569) -- export a site client fingerprint census.
+)
 from src.reports.e911_bssid import (
     E911BSSIDReportGenerator,  # Module-level for tests + lazy-import re-export for src.export.org_export_utils
 )
@@ -731,7 +737,6 @@ from src.reports.rogue_pci_evidence.operation import (
 from src.reports.sfp_transceiver_data_processor import (
     SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
 )
-from src.reports.client_fingerprint_census.operation import ClientFingerprintCensus  # Menu 289 (issue #3569) -- export a site client fingerprint census.
 from src.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 275 (issue #3556) -- site variables.
 from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport  # Menu 242 SSID coverage report.
 from src.reports.subscription_expiry.operation import SubscriptionExpiryReport  # Menu 271 (issue #3552) -- expiry.
@@ -747,7 +752,6 @@ from src.reports.wired_client_manufacturer_report_generator import (
 from src.security.rogue_dhcp import (
     RogueDhcpScanOperation,  # Menu 269 (issue #2985) -- org-wide rogue DHCP server scan.
 )
-from src.gateway.ssr_registration.operation import SsrRegistrationCommands  # Menu 288 (issue #3568) -- show SSR registration commands.
 from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
 from src.site.bulk_radius_wlan_config_manager import (
     BulkRadiusWLANConfigManager,  # Cat B (1013 SC-001 position 15) -- re-export
@@ -765,10 +769,6 @@ from src.ssh.cli_shell_manager import CLIShellManager  # Preserve the existing b
 from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
 from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps  # Cat A canonical (1014 P15)
 from src.time.time_utils import TimeUtils  # Cat E canonical (1014 P6)
-from src.troubleshooting.nac_idp_credential_test.operation import NacIdpCredentialTest  # Menu 285 (issue #3565) -- validate one NAC identity provider credential without exporting the password.
-from src.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.
-from src.troubleshooting.sms_provider_test.operation import SmsProviderTest  # Menu 284 (issue #3564) -- Test guest portal SMS provider setup.
-from src.troubleshooting.synthetic_test_trigger.operation import SyntheticTestTrigger  # Menu 283 (issue #3563) -- trigger one synthetic test on demand.
 from src.troubleshooting.interactive_test_runner import (
     InteractiveTestRunner,
 )  # Import interactive diagnostic test runner
@@ -777,6 +777,18 @@ from src.troubleshooting.marvis_troubleshoot_utils import (
 )
 from src.troubleshooting.marvis_troubleshoot_utils import (
     MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export
+)
+from src.troubleshooting.nac_idp_credential_test.operation import (
+    NacIdpCredentialTest,  # Menu 285 (issue #3565) -- validate one NAC identity provider credential safely.
+)
+from src.troubleshooting.rf_diagnostics.operation import (
+    RfDiagnosticsOperation,  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.
+)
+from src.troubleshooting.sms_provider_test.operation import (
+    SmsProviderTest,  # Menu 284 (issue #3564) -- Test guest portal SMS provider setup.
+)
+from src.troubleshooting.synthetic_test_trigger.operation import (
+    SyntheticTestTrigger,  # Menu 283 (issue #3563) -- trigger one synthetic test on demand.
 )
 from src.troubleshooting.troubleshoot_utils import (
     TroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
