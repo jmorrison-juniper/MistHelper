@@ -22,6 +22,7 @@ Fixtures:
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
 
 import json  # The stored lock value is JSON text, so a seeded record is built the same way.
+import logging  # Check the level of each route record without reading formatted prefixes.
 from collections.abc import Iterator  # The signed-in fixtures yield and then clean up.
 from datetime import UTC, datetime, timedelta  # A quiet lock needs a timestamp in the past.
 from pathlib import Path  # The audit trail of a takeover needs a directory of its own.
@@ -940,3 +941,122 @@ def age_the_lock(store: FakeLockStore, age_seconds: int = QUIET_AGE_SECONDS) -> 
     stamp = (datetime.now(UTC) - timedelta(seconds=age_seconds)).isoformat()  # Past the cooldown.
     stored["refreshed_at"] = stamp  # `is_quiet` reads this field alone.
     store.values[SITE_KEY] = json.dumps(stored)  # The store now holds a quiet lock.
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        ("site_locked", CONFLICT_STATUS, ACTIVE_AGE_SECONDS),
+        ("confirmation_required", BAD_REQUEST_STATUS, QUIET_AGE_SECONDS),
+        ("lock_store_unreachable", UNAVAILABLE_STATUS, None),
+    ],
+)
+def test_take_refusal_logs_code_status_site_and_safe_owner(
+    lock_client: FlaskClient,
+    lock_store: FakeLockStore,
+    other_owner: identity.SessionOwner,
+    caplog: pytest.LogCaptureFixture,
+    scenario: tuple[str, int, int | None],
+) -> None:
+    """Each take refusal logs its cause and preserves the HTTP response."""
+    code, status, age = scenario  # Each case binds its refusal to the unchanged HTTP status.
+    if age is None:  # The unreachable store must refuse without a fallback.
+        lock_store.fail = True  # Make the real lock rule encounter a store failure.
+    else:  # A real stored holder selects the active or quiet refusal.
+        seed_lock(lock_store, other_owner, age)  # Use the real rule rather than replace its answer.
+    with caplog.at_level(logging.DEBUG, logger="src.upgrade_portal.app.routes.select"):  # Enable route result records.
+        response = take_lock(lock_client)  # Exercise the public HTTP path.
+    assert response.status_code == status  # Logging must not change the HTTP status.
+    assert read_error_code(response) == code  # Logging must not change the refusal code.
+    records = [
+        record for record in caplog.records if record.name.endswith(".routes.select")
+    ]  # Isolate route observability.
+    assert [record.levelno for record in records] == [logging.INFO, logging.WARNING]  # A refusal has no success record.
+    assert (
+        records[0].getMessage() == f"select: take site lock site={SITE_ID} owner={identity.email_digest(PROBE_EMAIL)}"
+    )  # Log the existing digest.
+    assert (
+        records[1].getMessage() == f"select: lock refused code={code} status={status} site={SITE_ID}"
+    )  # Identify the refusal for support.
+    assert all(
+        secret not in caplog.text
+        for secret in (PROBE_EMAIL, OTHER_EMAIL, "seeded-token", "fake-api-token-for-tests-only")
+    )  # Keep credentials out of every record.
+
+
+@pytest.mark.parametrize("method", ["post", "delete"])
+@pytest.mark.parametrize("cause", ["missing", "wrong_token", "expired", "unreachable"])
+def test_beat_and_release_refusals_log_without_credentials(
+    lock_client: FlaskClient,
+    lock_store: FakeLockStore,
+    caplog: pytest.LogCaptureFixture,
+    method: str,
+    cause: str,
+) -> None:
+    """A missing, moved, or unreadable lock produces one warning."""
+    token = (
+        take_lock(lock_client).get_json()["lock_token"] if cause != "missing" else "absent-token"
+    )  # Reach both session and store checks.
+    if cause == "expired":  # A store compare must refuse an expired lock.
+        lock_store.values.clear()  # Simulate expiry without a clock delay.
+    lock_store.fail = cause == "unreachable"  # Exercise each route's store failure handler.
+    submitted = "wrong-token" if cause == "wrong_token" else token  # The wrong token must fail the session check.
+    caplog.clear()  # Measure only the refused action, not the setup grant.
+    with caplog.at_level(logging.DEBUG, logger="src.upgrade_portal.app.routes.select"):  # Enable route result records.
+        response = lock_client.open(
+            BEAT_PATH if method == "post" else LOCK_PATH, method=method.upper(), json={"lock_token": submitted}
+        )  # Drive the unchanged HTTP endpoint.
+    code = (
+        "lock_store_unreachable" if cause == "unreachable" else "lock_lost"
+    )  # Both lost-lock checks answer the same code.
+    status = UNAVAILABLE_STATUS if cause == "unreachable" else CONFLICT_STATUS  # Preserve the contract status.
+    assert (response.status_code, read_error_code(response)) == (status, code)  # Logging must not alter the refusal.
+    records = [
+        record for record in caplog.records if record.name.endswith(".routes.select")
+    ]  # Read only the route records.
+    action = "beat" if method == "post" else "free"  # Each endpoint names its own action.
+    assert [
+        (record.levelno, record.getMessage()) for record in records
+    ] == [  # Require exactly one attempt and one warning.
+        (logging.INFO, f"select: {action} site lock site={SITE_ID} owner={identity.email_digest(PROBE_EMAIL)}"),
+        (logging.WARNING, f"select: lock refused code={code} status={status} site={SITE_ID}"),
+    ]
+    assert all(
+        secret not in caplog.text for secret in (PROBE_EMAIL, token, submitted, "fake-api-token-for-tests-only")
+    )  # Neither path may expose a credential.
+
+
+def test_successful_lock_actions_log_attempt_and_result(
+    lock_client: FlaskClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A successful lock life logs each attempt before its safe result."""
+    with caplog.at_level(logging.DEBUG, logger="src.upgrade_portal.app.routes.select"):  # Enable route result records.
+        response = take_lock(lock_client)  # Take a free site through the real lock rule.
+        token = response.get_json()["lock_token"]  # Use the response credential without logging it.
+        beat = lock_client.post(BEAT_PATH, json={"lock_token": token})  # Extend the held lock.
+        released = lock_client.delete(LOCK_PATH, json={"lock_token": token})  # Free the held lock.
+    assert [answer.status_code for answer in (response, beat, released)] == [
+        OK_STATUS
+    ] * 3  # Preserve every success status.
+    assert released.get_json() == {"released": True}  # Preserve the release body.
+    records = [
+        record for record in caplog.records if record.name.endswith(".routes.select")
+    ]  # Exclude runtime and factory records.
+    digest = identity.email_digest(PROBE_EMAIL)  # Reuse the existing credential-safe identity.
+    assert [
+        (record.levelno, record.getMessage()) for record in records
+    ] == [  # Prove the action order and result summaries.
+        (logging.INFO, f"select: take site lock site={SITE_ID} owner={digest}"),
+        (
+            logging.DEBUG,
+            f"select: site lock taken site={SITE_ID} state=acquired expires_in={response.get_json()['expires_in']}",
+        ),
+        (logging.INFO, f"select: beat site lock site={SITE_ID} owner={digest}"),
+        (logging.DEBUG, f"select: site lock beat site={SITE_ID} expires_in={beat.get_json()['expires_in']}"),
+        (logging.INFO, f"select: free site lock site={SITE_ID} owner={digest}"),
+        (logging.DEBUG, f"select: site lock freed site={SITE_ID} released=True"),
+    ]
+    assert all(
+        secret not in caplog.text for secret in (PROBE_EMAIL, token, "fake-api-token-for-tests-only")
+    )  # Success records must also protect credentials.
