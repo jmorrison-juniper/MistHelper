@@ -18,11 +18,11 @@
 
 ## Phase 2: Wiring Manifest
 
-- [ ] T006 Update `specs/3566-client-coa-disconnect/wiring.md` to include every exact section from the fleet contract.
-- [ ] T007 Add menu 286 with category `destructive`, handler import, handler attribute, skip reason, destructive flag, and `supports_fast` value.
-- [ ] T008 State that `MistHelper.py` registration is deferred to the integration pull request.
-- [ ] T009 Describe the `--dry-run` handler lambda pattern that passes `dry_run` to `ClientSessionControl.run()`.
-- [ ] T010 Commit the wiring manifest update.
+- [X] T006 Update `specs/3566-client-coa-disconnect/wiring.md` to include every exact section from the fleet contract.
+- [X] T007 Add menu 286 with category `destructive`, handler import, handler attribute, skip reason, destructive flag, and `supports_fast` value.
+- [X] T008 State that `MistHelper.py` registration is deferred to the integration pull request.
+- [X] T009 Describe the `--dry-run` handler lambda pattern that passes `dry_run` to `ClientSessionControl.run()`.
+- [X] T010 Commit the wiring manifest update.
 
 ## Phase 3: Test Scaffolding
 

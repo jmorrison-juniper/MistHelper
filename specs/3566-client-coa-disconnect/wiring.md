@@ -4,36 +4,50 @@
 
 Menu 286 adds a destructive client session control operation for helpdesk use.
 The operation covers wireless reauthenticate, wired reauthenticate, disconnect, unauthorize guest, and deauth rogue clients.
+Repository wiring is deferred to the integration pull request.
 
 ## Owned Paths
 
 - `specs/3566-client-coa-disconnect/**`
-- Planned implementation package: `src/device/client_session_control/`
-- Planned tests: `tests/unit/device/client_session_control/`
-- Planned release note fragment: `changelog.d/issue-3566-client-coa-disconnect.md`
+- `src/device/client_session_control/**`
+- `tests/unit/device/client_session_control/**`
+- `changelog.d/issue-3566-client-coa-disconnect.md`
 
 ## Deferred Repository Wiring
 
-Registration is deferred.
-This planning step must not edit repository wiring files.
+Registration is deferred to the integration pull request.
+This feature branch must not edit repository wiring files.
 
 Deferred files named by the contract:
 
 - `MistHelper.py`
-- `operation_registry.py`
-- `endpoint_primary_key_strategies.py`
+- `src/utils/operation_registry.py`
+- `src/refactors/endpoint_primary_key_strategies.py`
 - `README.md`
-- `copilot-instructions.md`
-- `menu_reference.md`
-- `web_portal`
+- `.github/copilot-instructions.md`
+- `agents.md`
+- `documentation/menu_reference.md`
+- `documentation/wiki/**`
+- `documentation/operator-guide.md`
+- `web_portal/**`
+- `scripts/**`
+- `tests/guardrails/**`
+- `CHANGELOG.md`
+- `.specify/feature.json`
 
 ## Menu Registration
 
 - Menu number: 286
-- Category: destructive
+- Name: Client CoA, reauthentication, and disconnect
+- Category: `destructive`
+- Destructive flag: `true`
+- Supports fast: `false`
+- Handler import: `from src.device.client_session_control.handler import ClientSessionControl`
+- Handler attribute: `ClientSessionControl.run`
 - Handler package: `src/device/client_session_control/`
 - Handler class: `ClientSessionControl`
 - Entry point: static `run()`
+- Skip reason: Destructive client session control requires typed target confirmation and must not run in automated safe or fast tests.
 
 ## Dry Run Wiring Contract
 
@@ -41,7 +55,7 @@ The menu handler lambda must pass the global CLI dry run value to the handler.
 This follows the menu 161 pattern that accepts `dry_run=False` in the lambda.
 It also keeps the menu 207 destructive confirmation pattern.
 
-Required wiring shape for implementation:
+Required handler lambda pattern:
 
 ```text
 handler=lambda dry_run=False: ClientSessionControl.run(
@@ -53,6 +67,7 @@ handler=lambda dry_run=False: ClientSessionControl.run(
 
 Implementation must adjust imports and dependency names to match the final package.
 The handler must not read MistHelper global arguments directly.
+The dry run value must reach `ClientSessionControl.run()` as the `dry_run` argument.
 
 ## Operation Contract
 
@@ -81,7 +96,7 @@ Supported actions:
 | Unauthorize guest | `unauthorizeSiteWirelessClient` | `mistapi.api.v1.sites.clients` |
 | Deauth rogue clients | `deauthSiteWirelessClientsConnectedToARogue` | `mistapi.api.v1.sites.rogues` |
 
-The implementation must verify these organization operation IDs before code uses client control helpers:
+The implementation verified these organization operation IDs before code used client control helpers:
 
 - `reauthOrgDot1xWirelessClient`
 - `reauthOrgDot1xWiredClient`
@@ -97,15 +112,15 @@ The implementation must verify these organization operation IDs before code uses
 ## Normalization Contract
 
 - MAC and BSSID values normalize to lowercase colon-free form.
-- Tests must cover colon separated, hyphen separated, and dotted input forms.
+- Tests must cover colon separated, hyphen separated, dotted, and bare input forms.
 - Invalid target input must stop before confirmation.
 
 ## Existing Helper Review Contract
 
-Implementation must read `src/device/prompt_utils.py` before coding.
+Implementation read `src/device/prompt_utils.py` before coding.
 That file contains `_normalize_mac()` and device lookup patterns that compare normalized MAC values.
-The feature normalizer must add dotted input support because the existing helper does not remove dots.
-Implementation must search `src/device/` for any newer client lookup helper before coding.
+The feature normalizer adds dotted input support because the existing helper does not remove dots.
+Implementation searched `src/device/` for any newer client lookup helper before coding.
 
 ## Logging Contract
 
@@ -121,17 +136,17 @@ Required proof:
 - No request is sent before exact confirmation.
 - Dry run sends no request and prints the request preview.
 - Three common MAC input forms normalize to lowercase colon-free form.
+- Bare MAC input normalizes to lowercase colon-free form.
 - One CSV row is written per request attempt.
 - Destructive registration is excluded from every automated test pass.
 
 ## Release Note Contract
 
 Implementation must add `changelog.d/issue-3566-client-coa-disconnect.md`.
-This planning step must not create it because it is outside the owned path.
+The release note fragment must use one `### Added` heading and one bullet that names issue #3566.
 
-## Out of Scope For This Planning Step
+## Out of Scope For This Feature Branch
 
 - Editing repository wiring files
 - Editing `.specify/feature.json`
-- Creating the release note fragment outside the owned specification path
 - Running destructive Mist requests
