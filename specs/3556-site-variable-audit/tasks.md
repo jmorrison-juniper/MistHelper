@@ -43,9 +43,9 @@ Record the required values for these files in
 
 **Purpose**: Create the package and test package that all stories use.
 
-- [ ] T001 Create the report package marker in `src/reports/site_variable_audit/__init__.py`
-- [ ] T002 [P] Create the test package marker in `tests/unit/reports/site_variable_audit/__init__.py`
-- [ ] T003 [P] Create shared offline fixture builders in `tests/unit/reports/site_variable_audit/site_variable_audit_fixtures_test.py`
+- [X] T001 Create the report package marker in `src/reports/site_variable_audit/__init__.py` (delivered: src/reports/site_variable_audit/__init__.py)
+- [X] T002 [P] Create the test package marker in `tests/unit/reports/site_variable_audit/__init__.py` (delivered: tests/unit/reports/site_variable_audit/__init__.py)
+- [X] T003 [P] Create shared offline fixture builders in `tests/unit/reports/site_variable_audit/site_variable_audit_fixtures_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_fixtures_test.py)
 
 **Commit checkpoint**: Commit the package scaffold and offline fixture scaffold.
 
