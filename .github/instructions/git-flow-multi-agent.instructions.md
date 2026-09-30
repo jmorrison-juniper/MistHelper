@@ -482,6 +482,60 @@ Closes #<issue>
 Use one of these types: `fix`, `feat`, `chore`, `refactor`, `test`, `docs`,
 `ci`, `style`, or `perf`.
 
+### Pull request titles
+
+The `Pull request title` workflow reports the `Conventional Commits PR title` check.
+The check reads one exact title from `GITHUB_EVENT_PATH`.
+It applies the same rule to contributors, bots, drafts, forks, and documentation-only changes.
+The check does not change the supplied title.
+
+The check accepts these four forms.
+
+```text
+type: description
+type(scope): description
+type!: description
+type(scope)!: description
+```
+
+The type must use lowercase.
+If you use a scope, give it a nonblank value without parentheses.
+The optional `!` marker goes immediately before the colon.
+Use a colon followed by an ASCII space.
+Use a nonblank one-line description.
+Additional description spaces and Unicode text are valid.
+Do not use control characters U+0000 through U+001F or U+007F through U+009F.
+Do not use the Unicode line separator U+2028 or the Unicode paragraph separator U+2029.
+
+### Correct a title
+
+If the title fails, correct the pull request title.
+A title edit starts another check through the `edited` event.
+A title decision prints the exact title through reversible ASCII JSON escapes.
+It prints `Checked 1 pull request title`.
+If the input is unavailable or invalid, the check fails.
+It prints `Checked 0 pull request titles`.
+The check sends ASCII key/value action logs to stderr.
+The logs record before and after states with checked counts.
+
+### Dependency update titles
+
+New pip updates use `chore`.
+New npm updates in `/ops-portal` use `chore(ops-portal)`.
+GitHub Actions updates keep `ci`.
+Existing `deps` and `deps(ops-portal)` titles fail.
+A maintainer must rename each existing invalid title.
+Do not close update pull requests or disable update streams.
+
+### Required check approval
+
+The `Conventional Commits PR title` check is not a required status check.
+Require separate owner approval before anyone makes this check required.
+This feature changes no repository settings, branch protection, or required statuses.
+The `squash_merge_commit_title=PR_TITLE` setting stays unchanged.
+
+### Merge rules
+
 Obey these merge rules.
 
 1. Squash the merge. One pull request becomes one commit on `main`.

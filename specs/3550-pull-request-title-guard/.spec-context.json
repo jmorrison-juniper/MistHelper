@@ -1,0 +1,818 @@
+{
+  "workflow": "speckit",
+  "specName": "Pull request title guard",
+  "feature": "3550-pull-request-title-guard",
+  "issue": 3550,
+  "repository": "jmorrison-juniper/MistHelper",
+  "feature_directory": "specs/3550-pull-request-title-guard",
+  "spec_file": "specs/3550-pull-request-title-guard/spec.md",
+  "tasks_file": "specs/3550-pull-request-title-guard/tasks.md",
+  "branch": "jmorrison-juniper-pull-request-title-guard",
+  "owner": "jmorrison-juniper",
+  "sessionId": "dc0c00d5-a429-416a-9549-ccfa49bb688c",
+  "currentStep": "analyze",
+  "status": "validated-awaiting-publication",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "plan.md",
+    "research.md",
+    "data-model.md",
+    "quickstart.md",
+    "contracts/title-check.md",
+    "contracts/workflow-policy.md",
+    "tasks.md"
+  ],
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-30T18:54:47Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-30T19:16:27Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-09-30T19:35:07Z"
+    },
+    {
+      "step": "implement",
+      "substep": "T001-T026",
+      "kind": "handoff",
+      "by": "agent",
+      "at": "2026-09-30T20:52:43Z"
+    }
+  ],
+  "template": {
+    "path": ".specify/templates/tasks-template.md",
+    "layer": "core"
+  },
+  "specificationTemplate": ".specify/templates/spec-template.md",
+  "planningTemplate": ".specify/templates/plan-template.md",
+  "constitution": ".specify/memory/constitution.md",
+  "directoryResolution": "explicit",
+  "sharedFeaturePointer": "unchanged",
+  "hooks": {
+    "beforeSpecify": {
+      "command": "speckit.git.feature",
+      "attempt": "PowerShell dry-run",
+      "attemptResult": "unavailable",
+      "status": "satisfied-by-existing-app-branch",
+      "reason": "PowerShell is unavailable. The existing app branch replaces branch creation."
+    },
+    "afterSpecify": {
+      "command": "speckit.companion.after-specify",
+      "attemptResult": "unavailable",
+      "status": "completed-by-manual-equivalent",
+      "reason": "The local companion command is unavailable. This issue-owned context records specify completion."
+    },
+    "optionalCommit": {
+      "command": "speckit.git.commit",
+      "status": "skipped",
+      "reason": "The user requested no commit during specification."
+    },
+    "beforePlan": {
+      "command": "speckit.git.commit",
+      "optional": true,
+      "status": "skipped",
+      "reason": "The user requested planning only and no commit."
+    },
+    "afterPlanOptionalCommit": {
+      "command": "speckit.git.commit",
+      "optional": true,
+      "status": "skipped",
+      "reason": "The user requested planning only and no commit."
+    },
+    "afterPlan": {
+      "command": "speckit.companion.after-plan",
+      "attempt": "Local command with the explicit feature-directory override",
+      "attemptResult": "unavailable-exit-127",
+      "status": "completed-by-manual-equivalent",
+      "reason": "The native companion command is unavailable. This issue-owned context records plan completion."
+    },
+    "beforeTasks": {
+      "command": "speckit.git.commit",
+      "optional": true,
+      "status": "skipped",
+      "reason": "The user requested the tasks step only and no commit."
+    },
+    "afterTasksOptionalCommit": {
+      "command": "speckit.git.commit",
+      "optional": true,
+      "status": "skipped",
+      "reason": "The user requested the tasks step only and no commit."
+    },
+    "afterTasks": {
+      "command": "speckit.companion.after-tasks",
+      "optional": false,
+      "nativeAvailability": "unavailable",
+      "attempt": "The user confirmed that the native command is unavailable. The agent did not invoke the native command.",
+      "status": "completed-by-manual-equivalent",
+      "reason": "PowerShell and companion commands are unavailable. This feature-owned context records the authorized tasks completion equivalent."
+    },
+    "beforeImplement": {
+      "command": "speckit.git.commit",
+      "optional": true,
+      "status": "skipped",
+      "reason": "The user prohibits commits and requests that optional commit hooks remain skipped."
+    },
+    "afterImplementOptionalCommit": {
+      "command": "speckit.git.commit",
+      "optional": true,
+      "status": "skipped",
+      "reason": "The user prohibits commits and requests that optional commit hooks remain skipped."
+    },
+    "afterImplement": {
+      "command": "speckit.companion.after-implement",
+      "optional": false,
+      "nativeAvailability": "unavailable",
+      "status": "completed-by-manual-equivalent",
+      "method": "Record each implemented task and its evidence in this feature-owned context.",
+      "featureDirectoryOverride": "specs/3550-pull-request-title-guard",
+      "completedTasks": 26,
+      "totalTasks": 42,
+      "allTasksChecked": false,
+      "reason": "The user assigns T027-T042 to the parent. This journal records T001-T026 without declaring full feature completion."
+    }
+  },
+  "qualityChecklist": {
+    "path": "checklists/requirements.md",
+    "passed": 16,
+    "total": 16,
+    "validationIterations": 2,
+    "unresolvedClarifications": 0
+  },
+  "ownedImplementationPaths": [
+    ".github/workflows/pull-request-title.yml",
+    "scripts/pr_title_guard/__init__.py",
+    "scripts/pr_title_guard/__main__.py",
+    "tests/unit/scripts/test_pr_title_guard.py",
+    "tests/guardrails/test_pr_title_workflow.py",
+    ".github/dependabot.yml",
+    ".github/instructions/git-flow-multi-agent.instructions.md",
+    "changelog.d/issue-3550-pull-request-title-guard.md",
+    "specs/3550-pull-request-title-guard/**"
+  ],
+  "planning": {
+    "featureDirectoryOverride": "specs/3550-pull-request-title-guard",
+    "setupPlan": {
+      "script": ".specify/scripts/powershell/setup-plan.ps1",
+      "nativeAvailability": "unavailable",
+      "status": "completed-by-manual-equivalent",
+      "method": "Resolve explicit environment paths and fill the repository plan template.",
+      "featureSpec": "specs/3550-pull-request-title-guard/spec.md",
+      "implementationPlan": "specs/3550-pull-request-title-guard/plan.md",
+      "specsDirectory": "specs/3550-pull-request-title-guard",
+      "branch": "jmorrison-juniper-pull-request-title-guard",
+      "branchHook": "satisfied-by-existing-app-branch"
+    },
+    "agentContextUpdate": {
+      "script": ".specify/scripts/powershell/update-agent-context.ps1",
+      "status": "completed-by-issue-owned-equivalent",
+      "artifact": "specs/3550-pull-request-title-guard/.spec-context.json",
+      "reason": "PowerShell is unavailable. The user requires shared agent instructions to remain unchanged."
+    },
+    "technicalContext": {
+      "languageVersion": "Python 3.13",
+      "checkerDependencies": "Python standard library only",
+      "storage": "Read one event file. Keep results in memory. Write no runtime data.",
+      "projectType": "Repository CI checker with a class interface and module CLI",
+      "class": "PullRequestTitleGuard",
+      "memberBudget": 5,
+      "methods": [
+        "is_valid_title",
+        "read_title",
+        "check",
+        "main"
+      ],
+      "testFiles": [
+        "tests/unit/scripts/test_pr_title_guard.py",
+        "tests/guardrails/test_pr_title_workflow.py"
+      ],
+      "testQualityConfig": ".github/test-quality-config.toml",
+      "testQualityBaseline": ".github/test-quality-baseline.json"
+    },
+    "resolvedRefinements": {
+      "workflowName": "Pull request title",
+      "checkName": "Conventional Commits PR title",
+      "pullRequestActivityTypes": [
+        "opened",
+        "edited",
+        "reopened",
+        "synchronize",
+        "ready_for_review"
+      ],
+      "specificationFile": "unchanged"
+    },
+    "constitutionCheck": {
+      "version": "1.5.0",
+      "beforeResearch": "pass-with-explicit-narrow-exceptions",
+      "afterDesign": "pass-with-explicit-narrow-exceptions",
+      "unjustifiedViolations": 0,
+      "record": "plan.md",
+      "existingDebt": "Parent counts and separate incremental remediation are recorded in plan.md.",
+      "narrowExceptions": [
+        "Approved nested package under the oversized scripts parent",
+        "Owned test under the oversized guardrails parent",
+        "GitHub workflow discovery location",
+        "Unique release-fragment location",
+        "Mandatory issue-owned SpecKit artifact layout",
+        "Conventional Commits instead of older timestamp subjects",
+        "Metadata-only delivery without production container deployment"
+      ],
+      "newCodeLimits": "Package and test classes must remain compliant during implementation."
+    },
+    "validation": {
+      "planningArtifactsCreated": 6,
+      "requiredTemplateSections": "passed",
+      "localArtifactLinks": "passed",
+      "unresolvedClarifications": 0,
+      "ste": {
+        "status": "passed-with-partial-coverage",
+        "minimumScore": 80,
+        "scores": {
+          "plan.md": 97,
+          "research.md": 97,
+          "data-model.md": 97,
+          "quickstart.md": 97,
+          "contracts/title-check.md": 98,
+          "contracts/workflow-policy.md": 98
+        },
+        "coverageLimit": "The local STE dictionary is unavailable. No package was installed."
+      },
+      "protectedFileHashes": "Nine protected files remain byte-identical.",
+      "executableTests": "Not run. This step creates no implementation.",
+      "testQualityRatchet": "Documented only. The repository config, baseline, and exclusions remain unchanged.",
+      "tasksArtifact": "Not created.",
+      "implementation": "Not started."
+    },
+    "completionMethod": "Repository templates and issue-owned context",
+    "agentsInvoked": 0,
+    "packagesInstalled": 0,
+    "mainCheckoutAccess": "none"
+  },
+  "taskGeneration": {
+    "featureDirectoryOverride": "specs/3550-pull-request-title-guard",
+    "setupTasks": {
+      "script": ".specify/scripts/powershell/setup-tasks.ps1",
+      "nativeAvailability": "unavailable",
+      "status": "completed-by-manual-equivalent",
+      "method": "Resolve the explicit feature directory and use the repository task template.",
+      "FEATURE_DIR": "/Users/jmorrison/GitHub/copilot-worktrees/MistHelper/jmorrison-juniper-cautious-bassoon/specs/3550-pull-request-title-guard",
+      "TASKS_TEMPLATE": "/Users/jmorrison/GitHub/copilot-worktrees/MistHelper/jmorrison-juniper-cautious-bassoon/.specify/templates/tasks-template.md",
+      "AVAILABLE_DOCS": [
+        "checklists/requirements.md",
+        "contracts/title-check.md",
+        "contracts/workflow-policy.md",
+        "data-model.md",
+        "plan.md",
+        "quickstart.md",
+        "research.md",
+        "spec.md"
+      ]
+    },
+    "artifact": "specs/3550-pull-request-title-guard/tasks.md",
+    "totalTasks": 42,
+    "preparationImplementationAndAnalysisTasks": 27,
+    "parentValidationTasks": 7,
+    "parentDeliveryTasks": 8,
+    "userStories": {
+      "US1": {
+        "priority": "P1",
+        "taskRange": "T005-T011",
+        "count": 7,
+        "independentProof": "Direct grammar and result tests prove exact title decisions, ASCII escapes, and count one."
+      },
+      "US2": {
+        "priority": "P1",
+        "taskRange": "T012-T016",
+        "count": 5,
+        "independentProof": "Offline event and CLI tests prove each input failure, count zero, logging, and exit codes."
+      },
+      "US3": {
+        "priority": "P2",
+        "taskRange": "T017-T019",
+        "count": 3,
+        "independentProof": "Bot cases and fixed policy contracts prove common decisions and preservation after only two prefix changes."
+      },
+      "US4": {
+        "priority": "P2",
+        "taskRange": "T020-T024",
+        "count": 5,
+        "independentProof": "Parsed workflow and Part 6 contracts prove events, concurrency, read-only execution, exact names, and owner approval."
+      }
+    },
+    "parallelPairs": [
+      [
+        "T003",
+        "T004"
+      ],
+      [
+        "T008",
+        "T009"
+      ],
+      [
+        "T013",
+        "T014"
+      ],
+      [
+        "T022",
+        "T023"
+      ]
+    ],
+    "dependencyOrder": [
+      "setup",
+      "foundational",
+      "US1",
+      "US2",
+      "US3",
+      "US4",
+      "polish-and-analyze",
+      "parent-validation",
+      "parent-delivery"
+    ],
+    "dependencyEdges": 45,
+    "sharedFileSerialization": [
+      "tests/unit/scripts/test_pr_title_guard.py",
+      "tests/guardrails/test_pr_title_workflow.py"
+    ],
+    "requiredPostImplementationStep": "speckit.analyze",
+    "mvp": {
+      "story": "US1",
+      "taskRange": "T001-T011",
+      "mergeReady": false
+    },
+    "deliveryOwnerSession": "dc0c00d5-a429-416a-9549-ccfa49bb688c",
+    "mergeCoordinatorSession": "6d71fd26-57c2-48c0-abc8-607af98f75d0",
+    "validation": {
+      "checklistFormat": "passed",
+      "sequentialIds": "passed",
+      "storyLabels": "passed",
+      "exactPaths": "passed",
+      "dependencyOrder": "passed",
+      "dependencyRows": 42,
+      "parallelFileSeparation": "passed",
+      "localArtifactLinks": "passed",
+      "taskInstructionSentenceLimit": "passed",
+      "asciiArtifact": "passed",
+      "shellCommandsWithRtk": 7,
+      "protectedFilesUnchanged": 21,
+      "ste": "The agent reviewed the writing rules and measured task sentence lengths. The agent did not run dictionary grading.",
+      "executableTests": "Not run. This step creates no implementation.",
+      "implementation": "Not started.",
+      "parentValidation": "Not started.",
+      "parentDelivery": "Not started."
+    },
+    "completionMethod": "Repository templates and feature-owned context",
+    "agentsInvoked": 0,
+    "packagesInstalled": 0,
+    "commitsCreated": 0,
+    "pushes": 0,
+    "pullRequestsCreated": 0,
+    "mainCheckoutAccess": "none"
+  },
+  "implementation": {
+    "featureDirectoryOverride": "specs/3550-pull-request-title-guard",
+    "prerequisites": {
+      "template": ".github/agents/speckit.implement.agent.md",
+      "script": ".specify/scripts/powershell/check-prerequisites.ps1",
+      "nativeAvailability": "unavailable",
+      "status": "completed-by-manual-equivalent",
+      "FEATURE_DIR": "/Users/jmorrison/GitHub/copilot-worktrees/MistHelper/jmorrison-juniper-cautious-bassoon/specs/3550-pull-request-title-guard",
+      "AVAILABLE_DOCS": [
+        "spec.md",
+        "plan.md",
+        "tasks.md",
+        "research.md",
+        "data-model.md",
+        "quickstart.md",
+        "contracts/title-check.md",
+        "contracts/workflow-policy.md",
+        "checklists/requirements.md"
+      ],
+      "requiredDocumentsRead": true,
+      "checklist": {
+        "path": "checklists/requirements.md",
+        "total": 16,
+        "completed": 16,
+        "incomplete": 0,
+        "status": "passed"
+      }
+    },
+    "ownership": {
+      "issue": 3550,
+      "branch": "jmorrison-juniper-pull-request-title-guard",
+      "ownerSession": "dc0c00d5-a429-416a-9549-ccfa49bb688c",
+      "claimComment": 5917439042,
+      "manifestComment": 5917485500,
+      "baseRevision": "415b2f83da1c91f680be5f06e17fb30ee1ce00f3",
+      "initialTrackedChanges": 0,
+      "initialFeatureArtifacts": 10,
+      "parentOverlapEvidence": "The parent read 18 open pull requests and found zero overlapping files."
+    },
+    "tools": {
+      "python": "3.13.13",
+      "verifiedPackages": 9,
+      "verifiedRequirementEntries": 10,
+      "developmentToolCommit": "0b969be7f60599f9a19ebc3069161f9353a1d830",
+      "packagesInstalled": 0
+    },
+    "policyEvidence": {
+      "dependabot": "Use the fixed complete pre-change parsed mapping in the owned guardrail test.",
+      "instructionPreservation": "Use one-time git proof outside Part 6. Do not store a permanent hash in a test."
+    },
+    "beforeImplementOptionalCommit": {
+      "command": "speckit.git.commit",
+      "status": "skipped",
+      "reason": "The user prohibits commits and requests that optional commit hooks remain skipped."
+    },
+    "completedTaskIds": ["T001", "T002", "T003", "T004", "T005", "T006", "T007", "T008", "T009", "T010", "T011", "T012", "T013", "T014", "T015", "T016", "T017", "T018", "T019", "T020", "T021", "T022", "T023", "T024", "T025", "T026"],
+    "validation": [
+      {
+        "phase": "US1-before-implementation",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py::TestTitleGrammar tests/unit/scripts/test_pr_title_guard.py::TestTitleOutput -q --timeout=120 --maxfail=1",
+        "exitCode": 1,
+        "collected": 622,
+        "failed": 1,
+        "result": "The first valid grammar case failed on the unimplemented decision. This expected failure proves that the tests preceded behavior."
+      },
+      {
+        "phase": "US1",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py::TestTitleGrammar tests/unit/scripts/test_pr_title_guard.py::TestTitleOutput -q --timeout=120",
+        "exitCode": 0,
+        "passed": 622,
+        "skipped": 0,
+        "result": "All direct grammar, exact output, large-value, and decision-log cases passed."
+      },
+      {
+        "phase": "US1-negative-example",
+        "command": "rtk proxy .venv/bin/python -c \"from scripts.pr_title_guard import PullRequestTitleGuard; raise SystemExit(PullRequestTitleGuard().check('wip: model prompts'))\"",
+        "exitCode": 1,
+        "checked": 1,
+        "result": "The exact invalid title failed with the full contracted correction guidance."
+      },
+      {
+        "phase": "US1-positive-example",
+        "command": "rtk proxy .venv/bin/python -c \"from scripts.pr_title_guard import PullRequestTitleGuard; raise SystemExit(PullRequestTitleGuard().check('fix(web-portal): model prompts'))\"",
+        "exitCode": 0,
+        "checked": 1,
+        "result": "The exact valid title passed with the contracted stdout."
+      },
+      {
+        "phase": "US2-before-implementation",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py::TestEventInput tests/unit/scripts/test_pr_title_guard.py::TestTitleCli -q --timeout=120 --maxfail=1",
+        "exitCode": 1,
+        "collected": 63,
+        "failed": 1,
+        "result": "The exact event-title test failed on the unimplemented reader. This expected failure proves that the tests preceded behavior."
+      },
+      {
+        "phase": "US2",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py -q --timeout=120",
+        "exitCode": 0,
+        "passed": 685,
+        "skipped": 0,
+        "result": "All four unit classes passed. The process cases also passed with Python -S."
+      },
+      {
+        "phase": "US2-missing-input-proof",
+        "command": "rtk proxy env -u GITHUB_EVENT_PATH .venv/bin/python -m scripts.pr_title_guard",
+        "exitCode": 1,
+        "checked": 0,
+        "result": "The CLI reported the fixed missing-input reason, failed-read logs, and escaped diagnostic frames."
+      },
+      {
+        "phase": "US2-type-proof",
+        "command": "rtk proxy .venv/bin/python -m mypy --config-file pyproject.toml scripts/pr_title_guard/__init__.py scripts/pr_title_guard/__main__.py",
+        "exitCode": 0,
+        "checkedSourceFiles": 2,
+        "result": "Strict mypy found no issue in either checker file."
+      },
+      {
+        "phase": "US3-before-prefix-change",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py::TestTitleCli::test_metadata_uses_one_policy tests/guardrails/test_pr_title_workflow.py::TestDependabotPolicy -q --timeout=120 --maxfail=1",
+        "exitCode": 1,
+        "collected": 57,
+        "passed": 42,
+        "failed": 1,
+        "result": "All author and state cases passed. The real policy assertion rejected the two old prefixes before the edit."
+      },
+      {
+        "phase": "US3",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py::TestTitleCli::test_metadata_uses_one_policy tests/guardrails/test_pr_title_workflow.py::TestDependabotPolicy -q --timeout=120",
+        "exitCode": 0,
+        "passed": 57,
+        "skipped": 0,
+        "result": "All author cases and complete policy comparisons passed. Fourteen unrelated policy mutations failed the real assertions."
+      },
+      {
+        "phase": "US3-prefix-only-diff",
+        "command": "rtk proxy git --no-pager diff -- .github/dependabot.yml",
+        "exitCode": 0,
+        "result": "The diff contains only deps to chore and deps(ops-portal) to chore(ops-portal). Every comment remains unchanged."
+      },
+      {
+        "phase": "US4-before-workflow",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/guardrails/test_pr_title_workflow.py::TestWorkflowPolicy -q --timeout=120 --maxfail=1",
+        "exitCode": 1,
+        "collected": 48,
+        "errors": 1,
+        "result": "The test failed on the missing workflow instead of skipping its input."
+      },
+      {
+        "phase": "US4-before-Part-6",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/guardrails/test_pr_title_workflow.py::TestPartSixPolicy -q --timeout=120 --maxfail=1",
+        "exitCode": 1,
+        "collected": 35,
+        "failed": 1,
+        "result": "The real Part 6 assertion rejected the absent four title forms before the edit."
+      },
+      {
+        "phase": "US4",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py tests/guardrails/test_pr_title_workflow.py tests/guardrails/test_ci_gate_triggers.py -q --timeout=120 --cov=scripts.pr_title_guard --cov-report=term-missing --cov-fail-under=90",
+        "exitCode": 0,
+        "passed": 837,
+        "skipped": 0,
+        "coveragePercent": 96.61,
+        "guardrailTests": 98,
+        "policyFailureProofs": 90,
+        "result": "All owned behavior and policy tests passed. The 12 existing trigger tests also passed."
+      },
+      {
+        "phase": "US4-Part-6-only-diff",
+        "command": "rtk proxy git --no-pager diff -- .github/instructions/git-flow-multi-agent.instructions.md",
+        "exitCode": 0,
+        "result": "One diff hunk adds 54 lines inside Part 6. Every other Part and all five existing merge rules remain unchanged."
+      },
+      {
+        "phase": "all-input-review-negative-proof",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py::TestTitleGrammar::test_nonstring_arguments -q --timeout=120 --maxfail=1",
+        "exitCode": 1,
+        "collected": 12,
+        "failed": 1,
+        "result": "A non-string with a reported string __class__ exposed a real matcher TypeError. The guard now checks the real type first."
+      },
+      {
+        "phase": "all-input-review",
+        "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py::TestTitleGrammar::test_nonstring_arguments tests/unit/scripts/test_pr_title_guard.py::TestTitleGrammar::test_allowed_types_and_forms -q --timeout=120",
+        "exitCode": 0,
+        "passed": 228,
+        "skipped": 0,
+        "result": "All real string forms and string subclasses passed. Every non-string and reported-class case returned exact false."
+      }
+    ],
+    "status": "ready-for-parent-analysis",
+    "taskJournal": [
+      {"id": "T001", "status": "done", "path": ".spec-context.json", "evidence": "The explicit feature directory, app branch, and live ownership comments match issue #3550."},
+      {"id": "T002", "status": "done", "path": ".spec-context.json", "evidence": "Python 3.13.13, nine required tools, and the pinned development-tool commit match the requirements."},
+      {"id": "T003", "status": "done", "path": "scripts/pr_title_guard", "evidence": "The package imports and contains one compiled pattern, four methods, and the direct module exit."},
+      {"id": "T004", "status": "done", "path": "tests/guardrails/test_pr_title_workflow.py", "evidence": "The fixed pre-change Dependabot mapping matched the original file before either prefix changed."},
+      {"id": "T005", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "All nine types and all four forms pass direct decisions with real strings and string subclasses."},
+      {"id": "T006", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "Invalid grammar and every tested non-string return exact false, including a reported string __class__."},
+      {"id": "T007", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "Unicode, every forbidden character, punctuation, and large valid and invalid titles reach the expected decisions."},
+      {"id": "T008", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "Exact stdout, reversible ASCII titles, counts, correction guidance, and decision log order pass."},
+      {"id": "T009", "status": "done", "path": "scripts/pr_title_guard/__init__.py", "evidence": "The full-match rule preserves the supplied value and records the real Boolean decision and count."},
+      {"id": "T010", "status": "done", "path": "scripts/pr_title_guard/__init__.py", "evidence": "The check prints the exact contracted result and returns zero only for a valid title."},
+      {"id": "T011", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "The exact wip example exits one. The exact fix(web-portal) example exits zero. Both report count one."},
+      {"id": "T012", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "Every input problem produces its fixed reason, count zero, safe diagnostics, and no title decision."},
+      {"id": "T013", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "Real main and CLI cases assert stdout, stderr, log order, counts, and exit codes. Python -S cases pass."},
+      {"id": "T014", "status": "done", "path": "scripts/pr_title_guard/__init__.py", "evidence": "The reader uses only GITHUB_EVENT_PATH, UTF-8, and JSON. It validates the root, record, and exact title type."},
+      {"id": "T015", "status": "done", "path": "scripts/pr_title_guard", "evidence": "Input failures exit one with count zero. Exception categories and complete frames use ASCII JSON escapes."},
+      {"id": "T016", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "All four unit classes pass. Available blank titles report count one, not count zero."},
+      {"id": "T017", "status": "done", "path": "tests/unit/scripts/test_pr_title_guard.py", "evidence": "Contributor, bot, draft, fork, and documentation fixtures use identical real decisions. Fixed policy contracts pass."},
+      {"id": "T018", "status": "done", "path": ".github/dependabot.yml", "evidence": "Only pip deps becomes chore and npm deps(ops-portal) becomes chore(ops-portal). Actions keeps ci."},
+      {"id": "T019", "status": "done", "path": ".github/dependabot.yml", "evidence": "All 57 bot and policy cases pass. Git and byte comparisons prove prefix-only preservation, including every comment."},
+      {"id": "T020", "status": "done", "path": "tests/guardrails/test_pr_title_workflow.py", "evidence": "Parsed workflow assertions pass. Forty-two unsafe mutations fail those same assertions offline."},
+      {"id": "T021", "status": "done", "path": "tests/guardrails/test_pr_title_workflow.py", "evidence": "Part 6 semantic assertions pass. Thirty-four missing-meaning mutations fail. No test freezes another Part."},
+      {"id": "T022", "status": "done", "path": ".github/workflows/pull-request-title.yml", "evidence": "One read-only Linux job uses five PR activities, exact concurrency, Python 3.13, and the static module command."},
+      {"id": "T023", "status": "done", "path": ".github/instructions/git-flow-multi-agent.instructions.md", "evidence": "Part 6 states the names, grammar, correction, bot policy, counts, and separate owner approval boundary."},
+      {"id": "T024", "status": "done", "path": "tests/guardrails/test_pr_title_workflow.py", "evidence": "All 98 guardrail cases pass with 90 real negative policy proofs. The combined offline run passes."},
+      {"id": "T025", "status": "done", "path": "changelog.d/issue-3550-pull-request-title-guard.md", "evidence": "The owned fragment uses ### Added and one issue-linked bullet. No other fragment changed."},
+      {"id": "T026", "status": "done", "path": ".spec-context.json", "evidence": "Local source gates, coverage, test quality, structural limits, logging, and protected-file preservation all pass."}
+    ],
+    "localValidation": {
+      "authority": "Implementation evidence only. The parent must repeat the final gates after T027.",
+      "revision": "415b2f83da1c91f680be5f06e17fb30ee1ce00f3",
+      "commands": [
+        {
+          "id": "V1",
+          "command": "rtk proxy .venv/bin/python -m py_compile MistHelper.py scripts/pr_title_guard/__init__.py scripts/pr_title_guard/__main__.py tests/unit/scripts/test_pr_title_guard.py tests/guardrails/test_pr_title_workflow.py",
+          "exitCode": 0,
+          "checkedFiles": 5,
+          "result": "All five files compile."
+        },
+        {
+          "id": "V2",
+          "command": "rtk proxy .venv/bin/python -m ruff check scripts/pr_title_guard/__init__.py scripts/pr_title_guard/__main__.py tests/unit/scripts/test_pr_title_guard.py tests/guardrails/test_pr_title_workflow.py",
+          "exitCode": 0,
+          "checkedFiles": 4,
+          "result": "All checks pass. The owned test line-length error is fixed without a suppression."
+        },
+        {
+          "id": "V3",
+          "command": "rtk proxy .venv/bin/python -m black --check scripts/pr_title_guard/__init__.py scripts/pr_title_guard/__main__.py tests/unit/scripts/test_pr_title_guard.py tests/guardrails/test_pr_title_workflow.py",
+          "exitCode": 0,
+          "checkedFiles": 4,
+          "result": "All four files remain unchanged."
+        },
+        {
+          "id": "V4",
+          "command": "rtk proxy .venv/bin/python -m mypy --config-file pyproject.toml scripts/pr_title_guard/__init__.py scripts/pr_title_guard/__main__.py",
+          "exitCode": 0,
+          "checkedFiles": 2,
+          "result": "Strict mypy finds no issue in either source file."
+        },
+        {
+          "id": "V5",
+          "command": "rtk proxy .venv/bin/python -m bandit scripts/pr_title_guard/__init__.py scripts/pr_title_guard/__main__.py",
+          "exitCode": 0,
+          "checkedFiles": 2,
+          "scannedLines": 87,
+          "skippedLines": 0,
+          "findings": 0,
+          "result": "Every default check runs. No issue or skipped file exists."
+        },
+        {
+          "id": "V6",
+          "command": "rtk proxy .venv/bin/python -m pytest tests/unit/scripts/test_pr_title_guard.py tests/guardrails/test_pr_title_workflow.py tests/guardrails/test_ci_gate_triggers.py -q --timeout=120 --cov=scripts.pr_title_guard --cov-report=term-missing --cov-fail-under=90",
+          "exitCode": 0,
+          "passed": 844,
+          "skipped": 0,
+          "ownedUnitTests": 734,
+          "ownedGuardrailTests": 98,
+          "existingTriggerTests": 12,
+          "packageCoveragePercent": 96.67,
+          "checkerCoveragePercent": 100,
+          "result": "Every selected test passes. Real CLI subprocess cases prove the module entry point."
+        },
+        {
+          "id": "V7",
+          "command": "rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --roots tests/unit/scripts tests/guardrails",
+          "exitCode": 0,
+          "checkedFiles": 42,
+          "ownedTestFilesMeasured": 2,
+          "newFindings": 0,
+          "ownedFindings": 0,
+          "parseErrors": 0,
+          "existingBaselineFindings": 1,
+          "omittedRoots": 2,
+          "result": "Both new modules receive analysis. The omitted roots reflect the explicit scope, not an environment skip."
+        }
+      ],
+      "structuralProof": {
+        "checkedMethods": 36,
+        "checkedClasses": 10,
+        "violations": 0,
+        "guardClassMembers": 5,
+        "guardCompiledPatterns": 1,
+        "guardMethods": {
+          "is_valid_title": {"lines": 7, "parameters": 2, "logicalBlocks": 0},
+          "read_title": {"lines": 25, "parameters": 1, "logicalBlocks": 4},
+          "check": {"lines": 17, "parameters": 2, "logicalBlocks": 1},
+          "main": {"lines": 20, "parameters": 1, "logicalBlocks": 2}
+        },
+        "lazyActionLogCalls": 5,
+        "automaticExceptionFormatters": 0
+      },
+      "preservationProof": {
+        "ownedFiles": 18,
+        "protectedFilesUnchanged": 16,
+        "partSixOnlyDiffCommand": "rtk proxy git --no-pager diff -- .github/instructions/git-flow-multi-agent.instructions.md",
+        "partSixOnlyDiff": "One hunk adds 54 lines inside Part 6.",
+        "partSixOnlyByteComparison": "Git show supplies the HEAD version. The complete bytes before Part 6 and after Part 6 remain equal.",
+        "permanentOutsidePartSixHash": false,
+        "dependabotPrefixOnlyDiffCommand": "rtk proxy git --no-pager diff -- .github/dependabot.yml",
+        "dependabotByteComparison": "The complete file equals HEAD after only the two approved scalar replacements. Every comment remains equal.",
+        "sharedFeaturePointer": "unchanged",
+        "sharedAgentContext": "unchanged outside the owned Part 6 edit",
+        "testQualityConfig": "unchanged",
+        "testQualityBaseline": "unchanged",
+        "exclusions": "unchanged",
+        "repositorySettings": "not altered",
+        "stagedFiles": 0
+      },
+      "failureProofs": {
+        "invalidExample": {"title": "wip: model prompts", "exitCode": 1, "checked": 1},
+        "validExample": {"title": "fix(web-portal): model prompts", "exitCode": 0, "checked": 1},
+        "missingInput": {"exitCode": 1, "checked": 0},
+        "workflowMutations": 42,
+        "dependabotMutations": 14,
+        "partSixMutations": 34,
+        "forbiddenCharacters": 67,
+        "sanitizedFrameProof": "A permission-error frame contains Unicode and a newline. Its log record remains one reversible ASCII JSON line.",
+        "decisionMocks": 0
+      }
+    },
+    "remainingTaskIds": ["T027", "T028", "T029", "T030", "T031", "T032", "T033", "T034", "T035", "T036", "T037", "T038", "T039", "T040", "T041", "T042"],
+    "deliveryBoundary": {
+      "ownerSession": "dc0c00d5-a429-416a-9549-ccfa49bb688c",
+      "mergeCoordinatorSession": "6d71fd26-57c2-48c0-abc8-607af98f75d0",
+      "userDirectedOrder": [3647, 3365, 3550],
+      "initialPushGate": "The parent must receive the coordinator's stable main SHA before the initial push.",
+      "titleCheckRequired": false,
+      "requiredCheckApproval": "Separate owner approval remains necessary.",
+      "agentsInvoked": 0,
+      "issuesCreated": 0,
+      "branchesCreated": 0,
+      "packagesInstalled": 0,
+      "commitsCreated": 0,
+      "stagingOperations": 0,
+      "pushes": 0,
+      "pullRequestsCreated": 0,
+      "merges": 0,
+      "settingsAltered": 0
+    },
+    "parentAnalysis": "Complete. The coordinator confirmed the bounded scope after the reader-block correction.",
+    "parentFinalValidation": "V1-V7 passed after the reader-block correction. Full Ruff and Black also passed.",
+    "parentDelivery": "pending",
+    "mainCheckoutAccess": "none"
+  },
+  "analysis": {
+    "command": "speckit.analyze",
+    "requirementsCovered": 26,
+    "requirementsCounted": 26,
+    "functionalFindings": 0,
+    "readerBlockCorrection": "Use a file context to separate file reading and JSON decoding.",
+    "dependencyUpdateCorrection": "An offline probe found that the exact workflow snapshot blocked a normal Actions update. Tests now accept newer approved-action major versions without changing the execution boundary.",
+    "structuralProof": {
+      "classesChecked": 1,
+      "members": 5,
+      "methodsChecked": 4,
+      "statementBlocksChecked": 24,
+      "violations": 0
+    },
+    "scopeConfirmation": {
+      "coordinatorSession": "6d71fd26-57c2-48c0-abc8-607af98f75d0",
+      "confirmed": true,
+      "reason": "The coordinator confirmed the bounded issue scope. No constitution, production deployment, protection, or required-check change applies.",
+      "publicationReleased": false
+    }
+  },
+  "parentValidation": {
+    "baseRevision": "026a80db6e00a4d592a800d99a1e8708d7f88b49",
+    "sourceState": "Owned follow-up changes on the preserved initial local commit.",
+    "compileFiles": 5,
+    "targetedLintFiles": 5,
+    "targetedFormatFiles": 5,
+    "fullRuff": "passed",
+    "fullBlackUnchangedFiles": 1879,
+    "mypySourceFiles": 2,
+    "banditSourceLines": 87,
+    "banditFindings": 0,
+    "banditSkippedFiles": 0,
+    "pytestPassed": 853,
+    "pytestSkipped": 0,
+    "packageCoveragePercent": 96.67,
+    "ratchetFilesChecked": 42,
+    "ratchetOwnedFilesChecked": 2,
+    "ratchetNewFindings": 0,
+    "ratchetExistingBaselineFindings": 1,
+    "ratchetConfig": ".github/test-quality-config.toml",
+    "ratchetBaseline": ".github/test-quality-baseline.json",
+    "whitespaceCheck": "passed",
+    "ciScopeMypy": {
+      "command": "rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py scripts/pr_title_guard/__init__.py scripts/pr_title_guard/__main__.py --config-file pyproject.toml",
+      "sourceFiles": 610,
+      "result": "passed"
+    },
+    "repositoryBandit": {
+      "command": "rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r .",
+      "sourceLines": 206617,
+      "findings": 0,
+      "skippedFiles": 0,
+      "result": "passed"
+    },
+    "dependencyAudit": {
+      "requirementsCommand": "rtk proxy .venv/bin/pip-audit -r requirements.txt",
+      "requirementsResult": "Blocked by the known uv-managed macOS temporary-interpreter loader error.",
+      "relatedIssue": 3612,
+      "workaroundCommand": "rtk proxy .venv/bin/pip-audit --local --skip-editable",
+      "workaroundSource": "Existing documentation pull request #3613.",
+      "workaroundResult": "No known vulnerabilities found in the fresh resolved environment.",
+      "unauditedPackage": "misthelper-devtools 0.5.2 is not on PyPI.",
+      "ciCommand": "The required Linux pip-audit requirements check remains unchanged and must pass."
+    },
+    "writingCheck": {
+      "gradedFiles": 15,
+      "minimumScore": 92,
+      "maximumScore": 100,
+      "threshold": 80,
+      "result": "passed",
+      "dictionaryCoverage": "Unavailable because data/ste_dictionary.json is absent."
+    }
+  },
+  "nextStep": "commit-and-wait-for-stable-main",
+  "blockers": [
+    "The coordinator must release a verified full main SHA after Maps PR #3651 merges and exact-main local tests pass."
+  ]
+}
