@@ -60,7 +60,22 @@ class SyntheticTestClient:
     def _poll_by_scope(self, request: SyntheticTestRequest) -> object:
         """Dispatch one result read to the correct SDK function."""
         if request.scope == "site":  # WHY: site tests are discovered through the search endpoint.
+            query = request.poll_query  # WHY: explicit SDK arguments keep the compatibility guard measurable.
             return site_synthetic_test.searchSiteSyntheticTest(
-                self._session, request.site_id, limit=1, **request.poll_query
+                self._session,
+                request.site_id,
+                mac=query.get("mac"),
+                port_id=query.get("port_id"),
+                vlan_id=query.get("vlan_id"),
+                by=query.get("by"),
+                reason=query.get("reason"),
+                type=query.get("type"),
+                protocol=query.get("protocol"),
+                tenant=query.get("tenant"),
+                limit=1,
+                start=query.get("start"),
+                end=query.get("end"),
+                duration=query.get("duration"),
+                search_after=query.get("search_after"),
             )
         return site_devices.getSiteDeviceSyntheticTest(self._session, request.site_id, str(request.device_id))

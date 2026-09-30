@@ -25,7 +25,7 @@ This pull request adds the feature-owned package for menu `283`, which triggers 
 ## Security
 
 - [x] No hardcoded secrets, tokens, or passwords.
-- [ ] Bandit passes with no new findings. Not run because the contract required targeted feature gates.
+- [x] Bandit passes with no new findings for the feature package.
 - [ ] pip-audit clean. Not run because no dependency changed.
 - [x] Sensitive data stays out of logs and export rows.
 
@@ -70,6 +70,11 @@ This pull request adds the feature-owned package for menu `283`, which triggers 
 - `pytest`: `7 passed`.
 - `vulture`: no findings at `--min-confidence 70`.
 - `interrogate`: `100.0%` package docstring coverage.
+- `radon` plus `complexity-gate`: all functions within threshold 10.
+- `test-quality-analyzer`: scanned one changed test file with 0 new findings.
+- `mistapi` SDK compatibility: `8 passed` with 366 unverifiable call signatures.
+- `output scan`: `27 passed`.
+- `bandit`: no findings for the feature package.
 
 ## Deferred integration wiring
 
