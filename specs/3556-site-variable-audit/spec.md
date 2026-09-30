@@ -70,7 +70,7 @@ A NOC engineer receives one summary row per site. The row shows assigned templat
 
 ### Functional Requirements
 
-- **FR-001**: Menu 275 MUST audit site variable coverage for assigned gateway templates, assigned network templates, and assigned WLANs.
+- **FR-001**: Menu 275 MUST audit site variable coverage for assigned gateway templates, assigned network templates, site templates, WLANs, and device profiles.
 - **FR-002**: The operation MUST run in `--test` with no prompt and write both output files under `data/`.
 - **FR-003**: The operation MUST write `data/SiteVariableAudit.csv` with one row per site and missing variable use.
 - **FR-004**: Each `SiteVariableAudit.csv` row MUST include site name, template type, template name, variable name, and the JSON field path where the assigned template uses the variable.
@@ -101,7 +101,7 @@ A NOC engineer receives one summary row per site. The row shows assigned templat
 ### Key Entities *(include if feature involves data)*
 
 - **Site**: A Mist site that can have assigned templates and site variables. Key attributes are site name, assigned template references, and defined site variable names.
-- **Assigned Template**: A gateway template, network template, or WLAN that applies to a site. Key attributes are template type, template name, template body, and site assignments.
+- **Assigned Template**: A gateway template, network template, site template, WLAN, or device profile that applies to a site. Key attributes are template type, template name, template body, and site assignments.
 - **Variable Token**: A `{{name}}` reference found inside a template body. Key attributes are normalized variable name and JSON field path.
 - **Missing Variable Finding**: Evidence that a site lacks a variable required by an assigned template. Key attributes are site name, template type, template name, variable name, and field path.
 - **Site Variable Summary**: Per-site aggregate data. Key attributes are assigned templates, required variable count, defined variable count, missing count, unused variable count, and unused variable names.
@@ -121,7 +121,7 @@ A NOC engineer receives one summary row per site. The row shows assigned templat
 ## Assumptions
 
 - Menu 275 is the new menu entry for this audit.
-- The audit scope is limited to gateway templates, network templates, and WLANs assigned to sites.
+- The audit scope is limited to gateway templates, network templates, site templates, WLANs, and device profiles assigned to sites.
 - The audit does not change Mist configuration. It only reads data, writes CSV reports, and prints a console summary.
 - Site variables returned for a site are the source of truth for defined variables.
 - Required variable count is the count of unique variable names required by all templates assigned to a site.

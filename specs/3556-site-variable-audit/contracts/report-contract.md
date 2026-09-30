@@ -29,9 +29,9 @@ Required columns:
 | - | - |
 | `site_name` | Mist site name. |
 | `site_id` | Mist site ID. |
-| `template_type` | `gateway_template`, `network_template`, or `wlan`. |
-| `template_name` | Assigned template or WLAN name. |
-| `template_id` | Assigned template or WLAN ID. |
+| `template_type` | `gateway_template`, `network_template`, `template`, `wlan`, or `device_profile`. |
+| `template_name` | Assigned template, WLAN, or device profile name. |
+| `template_id` | Assigned template, WLAN, or device profile ID. |
 | `variable_name` | Missing variable name after normalization. |
 | `field_path` | JSON path for the field that contains the token. |
 

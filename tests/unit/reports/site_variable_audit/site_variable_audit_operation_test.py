@@ -48,6 +48,24 @@ class _FakeResolver:
     IS_TEST_MODE = True  # Prove run does not prompt in test mode.
 
 
+class _MissingOrgConfigUtils:
+    """Return no organization ID for validation tests."""
+
+    @staticmethod
+    def get_cached_or_prompted_org_id() -> str:
+        """Return an empty organization ID."""
+        return ""  # Force the operation to stop before any Mist read.
+
+
+class _MissingOrgResolver:
+    """Provide dependencies with no organization ID."""
+
+    apisession = "session"  # Keep the session valid so only org validation fails.
+    ConfigUtils = _MissingOrgConfigUtils  # Supply the missing organization helper.
+    DataExporter = _FakeDataExporter  # Supply the export capture helper.
+    IS_TEST_MODE = True  # Keep test mode visible to operation logging.
+
+
 class _FakeClient:
     """Return offline records for operation tests."""
 
@@ -60,6 +78,21 @@ class _FakeClient:
         """Return the missing-variable fixture records."""
         fixture = SiteVariableAuditFixtures.missing_gateway_variable()  # Build offline records for the operation.
         return fixture.to_records()  # Return the exact client output shape.
+
+
+class _FailingClient:
+    """Raise a Mist read error before any report is written."""
+
+    def __init__(self, apisession: Any, org_id: str) -> None:
+        """Accept the same constructor shape as the real client."""
+        assert apisession == "session"  # Prove the operation passes the resolver session.
+        assert org_id == "org-1"  # Prove the operation passes the resolved organization.
+
+    def fetch(self) -> dict[str, list[dict[str, Any]]]:
+        """Raise the clear read error used by the real client."""
+        raise operation_module.SiteVariableAuditReadError(
+            "Site variable audit could not read listOrgSites."
+        )  # Stop before any success-shaped output.
 
 
 def test_run_writes_both_reports_without_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,3 +123,22 @@ def test_console_summary_counts_distinct_sites_with_findings(monkeypatch: pytest
     )  # Capture echo.
     SiteVariableAudit.run()  # Run the operation with no positional argument.
     assert "1 site(s) with missing variables" in messages[0]  # Prove the distinct missing-site count is shown.
+
+
+def test_missing_organization_data_stops_before_export(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prove missing organization data reports a clear error and writes nothing."""
+    _FakeDataExporter.calls = []  # Clear prior export calls for deterministic assertions.
+    monkeypatch.setattr(operation_module, "SourceDependencyResolver", _MissingOrgResolver)  # Use missing org data.
+    with pytest.raises(RuntimeError, match="organization ID is unavailable"):  # Prove the operator-facing error.
+        SiteVariableAudit.run()  # Run the operation with no prompt or network call.
+    assert _FakeDataExporter.calls == []  # Prove no success-shaped output is written.
+
+
+def test_failed_mist_read_stops_before_export(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prove a failed Mist read reports a clear error and writes nothing."""
+    _FakeDataExporter.calls = []  # Clear prior export calls for deterministic assertions.
+    monkeypatch.setattr(operation_module, "SourceDependencyResolver", _FakeResolver)  # Use valid resolver data.
+    monkeypatch.setattr(operation_module, "SiteVariableAuditClient", _FailingClient)  # Force a read failure.
+    with pytest.raises(operation_module.SiteVariableAuditReadError, match="listOrgSites"):  # Prove read error text.
+        SiteVariableAudit.run()  # Run the operation with no report output.
+    assert _FakeDataExporter.calls == []  # Prove the failed read writes no reports.

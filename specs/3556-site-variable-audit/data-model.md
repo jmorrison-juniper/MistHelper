@@ -30,7 +30,7 @@ site variable values.
 | Field | Type | Required | Rule |
 | - | - | - | - |
 | `template_id` | string | Yes | Use the Mist record `id` when present. |
-| `template_type` | string | Yes | Use `gateway_template`, `network_template`, or `wlan`. |
+| `template_type` | string | Yes | Use `gateway_template`, `network_template`, `template`, `wlan`, or `device_profile`. |
 | `template_name` | string | Yes | Use the Mist name field, or a clear fallback if absent. |
 | `body` | mapping or list | Yes | Preserve nested data for token scanning. |
 | `site_ids` | set of strings | Yes | Hold all sites that receive the template. |
