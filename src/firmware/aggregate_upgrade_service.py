@@ -65,6 +65,7 @@ FINAL_OPERATION_STATES = frozenset(
     {"cancelled", "completed", "failed"}
 )  # Operation states that a cancel cannot change.
 FINAL_CANCEL_TEXT = "The operation is final: {state}. The portal sent no cancel request."  # The refusal text.
+CANCEL_REQUEST_TEXT = "This aggregate upgrade has a cancellation request."  # Refuse every later submission claim.
 # WHY: Issue #3367. A cancel of a running operation sent one cloud cancel call
 # to each child job with an upgrade identifier, also to a child job that already
 # ended. The cancel sort then listed each upgraded access point as a cancelled
@@ -83,6 +84,10 @@ class FinalOperationError(ValueError):
         of a cancel conflict still catches it. The cancel route catches it
         first and answers with its own error code.
     """
+
+
+class CancellationRequestedError(ValueError):  # Distinguish a safe cancel stop from a submission conflict.
+    """Stop a submission after the durable operation records a cancellation request."""
 
 
 class RunStore(Protocol):
@@ -233,6 +238,8 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             if candidate.get("state") == "submission_claimed" and not self._claim_is_stale(candidate, "submission"):
                 raise ValueError("This aggregate upgrade has an active submission claim.")  # Refuse the race.
             self._recover_submission_claims(candidate, for_status=False)  # Preserve uncertain earlier calls.
+            if self._cancellation_requested(candidate):  # A cancel owns the operation before any later cloud write.
+                raise CancellationRequestedError(CANCEL_REQUEST_TEXT)  # Refuse a new parent submission claim.
             if not any(child.get("status") == "planned" for child in candidate.get("children", [])):
                 raise ValueError("This aggregate upgrade has no untouched child.")  # Never repeat a claimed call.
             candidate["state"] = "submission_claimed"  # Mark the parent before a child cloud write.
@@ -516,6 +523,12 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         self._cas(record, store, update)  # Store the marker atomically.
         logger.debug("Aggregate upgrade %s records cancellation", record.get("operation_id", ""))  # Log after CAS.
 
+    @staticmethod
+    def _cancellation_requested(record: Mapping[str, Any]) -> bool:
+        """Return true when the durable aggregate marker blocks child submission."""
+        cancellation = record.get("cancellation")  # Read the marker from the same CAS candidate as the claim.
+        return isinstance(cancellation, Mapping) and cancellation.get("requested") is True  # Require explicit true.
+
     def _children(self, request: AggregateBuildInput) -> list[dict[str, Any]]:
         """Build the AP organization child and the proven non-AP plans."""
         site_names = self._site_names(request.sites)  # Preserve the approved site order.
@@ -747,7 +760,12 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             self._mark_lock_failure(record, resources.store, child_id, fault)  # Mark this and untouched children.
             return False  # Stop all later destructive writes.
         claim_id = uuid.uuid4().hex  # Give the child cloud call one durable identity.
-        self._claim_child(record, resources.store, child_id, claim_id)  # Claim this child atomically.
+        try:  # A concurrent cancel can win after the lock check and before this child claim.
+            self._claim_child(record, resources.store, child_id, claim_id)  # Claim this child atomically.
+        except CancellationRequestedError:  # Treat the durable cancellation marker as a normal safe stop.
+            logger.info("Stop aggregate child %s because the operation has a cancellation request", child_id)
+            logger.debug("Aggregate child %s sent no cloud write after the cancellation request", child_id)
+            return False  # Stop every later child before another lock check or cloud write.
         claimed = self._find_child(record, child_id)  # Read the child state installed by the claim.
         if claimed is None:  # A damaged record cannot reach a cloud boundary.
             raise RuntimeError("The claimed aggregate child is absent.")  # Fail closed.
@@ -771,6 +789,8 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         """Claim one planned child before its cloud write."""
 
         def update(candidate: MutableMapping[str, Any]) -> None:
+            if self._cancellation_requested(candidate):  # The marker and child claim share one atomic decision.
+                raise CancellationRequestedError(CANCEL_REQUEST_TEXT)  # Give the cancel priority over the write.
             child = self._required_child(candidate, child_id)  # Select the child from this CAS candidate.
             if child.get("status") != "planned":  # A concurrent claim must not repeat the write.
                 raise ValueError("This aggregate child already has a submission claim.")  # Report the conflict.
@@ -1037,7 +1057,8 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             if self._claim_is_stale(cancellation, "cancel"):  # Recover a stale uncertain cancel.
                 self._mark_cancel_unknown(record, store, child_id)  # Never repeat that cloud call.
             return  # Continue with untouched children.
-        if cancellation is not None:  # A final result prevents a second cancel write.
+        replace_unavailable = self._can_replace_unavailable_cancel(child, cancellation)  # Check the narrow retry.
+        if cancellation is not None and not replace_unavailable:  # Keep a final result.
             return  # Do not call the cloud again.
         claim_id = uuid.uuid4().hex  # Give this cancel call one durable identity.
         self._claim_cancel(record, store, child_id, claim_id)  # Claim before the destructive call.
@@ -1061,7 +1082,9 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
 
         def update(candidate: MutableMapping[str, Any]) -> None:
             child = self._required_child(candidate, child_id)  # Select the child in this CAS candidate.
-            if child.get("cancellation") is not None:  # Another request already claimed or finished it.
+            cancellation = child.get("cancellation")  # Read the result that another cancel request stored.
+            replace_unavailable = self._can_replace_unavailable_cancel(child, cancellation)  # Check the retry.
+            if cancellation is not None and not replace_unavailable:  # Refuse a duplicate result.
                 raise ValueError("This aggregate child already has a cancellation claim.")  # Refuse a duplicate.
             child["cancellation"] = {  # Persist the uncertain action before the cloud call.
                 "status": "cancel_claimed",  # Mark an in-flight destructive cancellation.
@@ -1071,6 +1094,15 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             }
 
         self._cas(record, store, update)  # Install the cancel barrier atomically.
+
+    @staticmethod
+    def _can_replace_unavailable_cancel(child: Mapping[str, Any], cancellation: object) -> bool:
+        """Return true when a later submission supplied the missing cloud identifier."""
+        return (  # Permit only the result that proved no identifier existed during the first cancel.
+            isinstance(cancellation, Mapping)  # Require the supported stored result shape.
+            and cancellation.get("status") == "unavailable"  # Keep every claimed or completed cancel final.
+            and bool(child.get("upgrade_id"))  # Retry only when the second request can reach a known cloud job.
+        )
 
     def _finish_cancel(
         self,

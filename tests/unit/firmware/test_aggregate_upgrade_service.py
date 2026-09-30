@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
-from threading import Lock, Thread
+from threading import Event, Lock, Thread  # Coordinate deterministic concurrency tests.
 from types import SimpleNamespace
 from typing import Any
 
@@ -201,6 +201,76 @@ def test_concurrent_parent_claim_allows_one_submitter() -> None:
         thread.join()  # Complete the concurrency test.
     assert len(errors) == 1  # Exactly one request lost the atomic parent claim.
     assert org.calls.count("submit") == 1  # The AP cloud write ran once.
+
+
+def test_cancel_before_child_claim_blocks_every_cloud_write() -> None:
+    """A cancellation marker blocks a planned child after the parent claim."""
+    org = OrgServiceStandIn()  # Record any unsafe AP submission.
+    devices = DeviceServiceStandIn()  # Record any unsafe site or SSR submission.
+    service = AggregateUpgradeService(org, devices)  # Exercise the complete aggregate boundary.
+    initial = build_record(service)  # Build the planned children before either request starts.
+    store = CasStore(initial)  # Coordinate the live submission and the cancellation.
+    refresh_started = Event()  # Signal when the submission holds the parent claim.
+    continue_submission = Event()  # Hold the child claim until the cancellation marker exists.
+    errors: list[Exception] = []  # Preserve any unexpected submission failure for the assertion.
+
+    def pause_before_child_claim(operation: Mapping[str, Any], child: Mapping[str, Any]) -> None:
+        """Pause after the parent claim and before the first child claim."""
+        del operation, child  # The synchronization events provide the complete test behavior.
+        refresh_started.set()  # Tell the cancel request that the parent submission is live.
+        if not continue_submission.wait(timeout=5):  # Bound the test if the cancel path stops unexpectedly.
+            raise TimeoutError("The cancellation did not release the child claim.")  # Fail with a clear cause.
+
+    def submit_copy() -> None:
+        """Run the live submission from its own request snapshot."""
+        snapshot = deepcopy(initial)  # Model the record copy held by the submission request.
+        try:  # Capture an unexpected service error without hiding the thread result.
+            service.submit(SAFE_SESSION, snapshot, store, pause_before_child_claim)  # Start the live submission.
+        except Exception as fault:  # Keep the failure for the main test thread.
+            errors.append(fault)  # Let the final assertion report the unexpected fault.
+
+    thread = Thread(target=submit_copy)  # Run the live submission beside the cancel request.
+    thread.start()  # Let the submission claim the parent and reach the child boundary.
+    assert refresh_started.wait(timeout=5)  # Prove that the parent claim exists before the cancel.
+    cancel_record = deepcopy(store.record)  # Model the record copy held by the cancel request.
+    service.cancel(SAFE_SESSION, cancel_record, store)  # Persist cancellation before the child claim.
+    continue_submission.set()  # Let the submission try to claim the planned child.
+    thread.join(timeout=5)  # Wait for the submission to finish its safe stop.
+    assert not thread.is_alive()  # Prove that the two requests did not deadlock.
+    assert errors == []  # The safe cancellation stop is a normal submission outcome.
+    assert org.calls == []  # No AP cloud write can start after the cancellation marker.
+    assert not [call for call in devices.calls if call[0] == "submit"]  # No other child write can start.
+
+
+def test_second_cancel_retries_unavailable_result_after_job_identifier_appears() -> None:
+    """A second cancel reaches a child job that became known after the first cancel."""
+    org = OrgServiceStandIn()  # Record the cloud cancel that the second request must send.
+    service = AggregateUpgradeService(org, DeviceServiceStandIn())  # Exercise the aggregate cancel boundary.
+    record = build_record(service)  # Start with planned children that hold no cloud identifiers.
+    store = CasStore(record)  # Coordinate both cancellation requests.
+    service.cancel(SAFE_SESSION, record, store)  # Store unavailable results for every planned child.
+    first = store.record["children"][0]  # Select the AP child that the live submission later resolved.
+    first["status"] = "accepted"  # Model the submission result that arrived after the first cancel.
+    first["upgrade_id"] = "ap-job"  # Give the second cancel the new cloud job identifier.
+    store.record["state"] = "running"  # Keep the operation eligible for another cancel request.
+    record = deepcopy(store.record)  # Model the fresh record read by the second request.
+    service.cancel(SAFE_SESSION, record, store)  # Cancel the cloud job that is now known.
+    assert org.calls.count("cancel") == 1  # The second request reaches the new AP cloud job once.
+    assert record["children"][0]["cancellation"]["status"] == "requested"  # Replace the unavailable result.
+
+
+def test_cancellation_marker_refuses_a_new_parent_submission_claim() -> None:
+    """A completed cancel request prevents a later parent submission claim."""
+    org = OrgServiceStandIn()  # Record any unsafe AP submission.
+    devices = DeviceServiceStandIn()  # Record any unsafe site or SSR submission.
+    service = AggregateUpgradeService(org, devices)  # Exercise the complete aggregate boundary.
+    record = build_record(service)  # Build planned children with no cloud identifiers.
+    store = CasStore(record)  # Coordinate the cancellation and later submission.
+    service.cancel(SAFE_SESSION, record, store)  # Store the durable cancellation marker first.
+    with pytest.raises(ValueError, match="has a cancellation request"):  # Refuse the later parent claim.
+        service.submit(SAFE_SESSION, record, store, permit_lock)  # Attempt a submission after the cancel.
+    assert org.calls == []  # The refused parent claim sends no AP cloud write.
+    assert not [call for call in devices.calls if call[0] == "submit"]  # No other child write can start.
 
 
 def test_stale_submission_claim_becomes_unknown_without_replay() -> None:
