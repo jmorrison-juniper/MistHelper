@@ -5,7 +5,7 @@ from __future__ import annotations  # WHY: postpone annotations for Python 3.13 
 import logging  # WHY: record threshold fallback decisions for operators.
 import os  # WHY: read the operator-configured AP affinity limit.
 from collections import Counter, defaultdict  # WHY: compute predominant versions and per-site groups.
-from collections.abc import Mapping, Sequence  # WHY: type JSON-like inputs without concrete containers.
+from collections.abc import Callable, Mapping, Sequence  # WHY: type JSON-like inputs and tile predicates.
 from dataclasses import dataclass  # WHY: group report settings and computed outputs.
 from typing import Any  # WHY: Mist API rows are dynamic JSON dictionaries.
 
@@ -290,32 +290,33 @@ class SwitchScorecardBuilder:
         return [cls._summary_row(site_id, site_name, rows) for (site_id, site_name), rows in sorted(grouped.items())]
 
     @classmethod
+    def _tile_counts(cls, rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+        """Return the compliant switch count for each scorecard tile."""
+        predicates: dict[str, Callable[[Mapping[str, Any]], bool]] = {  # WHY: one predicate per Mist tile.
+            "switch_ap_affinity": lambda row: not row.get("affinity_exceeded"),  # WHY: not exceeded means compliant.
+            "poe_compliance": cls._poe_compliant,  # WHY: PoE compliance needs power draw within budget.
+            "version_compliance": lambda row: bool(row.get("version_compliant")),  # WHY: predominant version per model.
+            "switch_uptime": cls._has_positive_uptime,  # WHY: positive uptime means seen as up.
+            "config_success": lambda row: bool(row.get("config_success")),  # WHY: count successful config states.
+            "potential_anomalies": lambda row: not row.get("last_trouble"),  # WHY: no trouble means no anomaly signal.
+        }
+        return {
+            name: sum(1 for row in rows if check(row)) for name, check in predicates.items()
+        }  # WHY: one count per tile.
+
+    @classmethod
     def _summary_row(cls, site_id: str, site_name: str, rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         """Return one site or organization summary row."""
         total = len(rows)  # WHY: every percentage needs the denominator beside it.
-        affinity = sum(1 for row in rows if not row.get("affinity_exceeded"))  # WHY: not exceeded means compliant.
-        poe = sum(1 for row in rows if cls._poe_compliant(row))  # WHY: PoE compliance needs power draw within budget.
-        version = sum(1 for row in rows if row.get("version_compliant"))  # WHY: count switches on predominant version.
-        uptime = sum(1 for row in rows if cls._has_positive_uptime(row))  # WHY: positive uptime means seen as up.
-        config = sum(1 for row in rows if row.get("config_success"))  # WHY: count successful config states.
-        anomalies = sum(1 for row in rows if not row.get("last_trouble"))  # WHY: no trouble means no anomaly signal.
-        return {
+        summary: dict[str, Any] = {
             "site_id": site_id,
             "site_name": site_name,
             "switch_count": total,
-            "switch_ap_affinity_percent": cls._percent(affinity, total),
-            "switch_ap_affinity_count": affinity,
-            "poe_compliance_percent": cls._percent(poe, total),
-            "poe_compliance_count": poe,
-            "version_compliance_percent": cls._percent(version, total),
-            "version_compliance_count": version,
-            "switch_uptime_percent": cls._percent(uptime, total),
-            "switch_uptime_count": uptime,
-            "config_success_percent": cls._percent(config, total),
-            "config_success_count": config,
-            "potential_anomalies_percent": cls._percent(anomalies, total),
-            "potential_anomalies_count": anomalies,
-        }
+        }  # WHY: identity first.
+        for name, count in cls._tile_counts(rows).items():  # WHY: each tile gets a percent column and a count column.
+            summary[f"{name}_percent"] = cls._percent(count, total)  # WHY: the percent matches the Mist tile value.
+            summary[f"{name}_count"] = count  # WHY: the count behind the percent lets an operator check the math.
+        return summary  # WHY: the caller writes this row to the per-site file.
 
     @staticmethod
     def _poe_compliant(row: Mapping[str, Any]) -> bool:

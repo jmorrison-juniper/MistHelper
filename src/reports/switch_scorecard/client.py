@@ -47,6 +47,10 @@ class SwitchScorecardClient:
         )
         fetcher.org_id = org_id  # WHY: call the raw fetch path after the shared org resolution.
         success = fetcher._fetch_api_data()  # WHY: reuse the existing paginated fetch without exporting source rows.
-        rows = [row for row in fetcher.rawdata if isinstance(row, dict)] if success else []  # WHY: keep valid rows.
+        if not success:  # WHY: a refused or failed Mist call must leave a visible trace, not a silent empty report.
+            status = getattr(fetcher, "last_status_code", None)  # WHY: name the HTTP status when the fetcher kept it.
+            logger.warning("Switch scorecard fetch failed for %s (status=%s)", SWITCH_STATS_ENDPOINT, status)
+            return []  # WHY: the model then reports zero switches instead of stale rows.
+        rows = [row for row in fetcher.rawdata if isinstance(row, dict)]  # WHY: keep valid rows only.
         logger.debug("Switch scorecard fetched switch stats rows=%s", len(rows))  # WHY: log API result count.
         return rows  # WHY: the model consumes raw switch dictionaries.
