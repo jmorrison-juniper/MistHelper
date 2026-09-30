@@ -372,6 +372,22 @@ class OperationRegistry:
         # WHY: Menu 276 is a read-only organization settings audit that writes
         # OrgSecurityPosture.csv and uses fixture data in --test.
         "276": {"category": "safe"},
+        # WHY: menu 277 gives NOC engineers one organization-wide switch scorecard without
+        # repeated site-page checks.
+        "277": {"category": "safe"},
+        # WHY: Menu 278 is a read-only organization AP health export. It mirrors the Mist
+        # Access Points page tiles across all sites, writes operator evidence to
+        # data/ApScorecard.csv and data/ApScorecardBySite.csv, and uses the existing org
+        # device statistics pagination seam instead of a custom loop.
+        "278": {"category": "safe"},
+        # WHY: menu 279 is safe because it reads organization gateway statistics only, writes
+        # report files under data/, and makes no Mist configuration change.
+        "279": {"category": "safe"},
+        # WHY: Menu 282 is safe because it reads Mist rogue, WLAN, and site setting evidence,
+        # then writes local evidence files only. PCI DSS 4.0 requires evidence of rogue and
+        # unknown wireless access point detection, so this operation packages detection rows,
+        # site detection settings, and a short evidence summary for review.
+        "282": {"category": "safe"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",
