@@ -709,6 +709,12 @@ from src.refactors.wanprobe_config_manager import (
 from src.refactors.wlanradius_timer_manager import (
     WLANRadiusTimerManager,  # Extracted WLAN RADIUS timer manager (SC-014)
 )
+from src.reports.admin_token_hygiene.operation import (
+    AdminTokenHygieneReport,  # Menu 273 (issue #3554) -- Export admin and API token hygiene reports.
+)
+from src.reports.certificate_expiry.operation import (
+    CertificateExpiryReport,  # Menu 272 (issue #3553) -- export certificate expiry risk.
+)
 from src.reports.e911_bssid import (
     E911BSSIDReportGenerator,  # Module-level for tests + lazy-import re-export for src.export.org_export_utils
 )
@@ -718,16 +724,20 @@ from src.reports.global_wired_client_report_generator import (
 from src.reports.offline_device_reporter import (
     OfflineDeviceReporter,  # Cat B (1013 SC-001 position 44) -- re-export for MistHelper.OfflineDeviceReporter callers
 )
-from src.reports.admin_token_hygiene.operation import AdminTokenHygieneReport  # Menu 273 (issue #3554) -- Export admin and API token hygiene reports.
-from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- export certificate expiry risk.
-from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist  # Menu 276 (issue #3557) -- organization security posture checklist.
+from src.reports.org_security_posture.runner import (
+    OrgSecurityPostureChecklist,  # Menu 276 (issue #3557) -- organization security posture checklist.
+)
 from src.reports.psk_hygiene.operation import PskHygieneReport  # Menu 274 (issue #3555) -- PSK hygiene report.
 from src.reports.sfp_transceiver_data_processor import (
     SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
 )
-from src.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 275 (issue #3556) -- audit missing and unused site variables.
+from src.reports.site_variable_audit.operation import (
+    SiteVariableAudit,  # Menu 275 (issue #3556) -- audit missing and unused site variables.
+)
 from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport  # Menu 242 SSID coverage report.
-from src.reports.subscription_expiry.operation import SubscriptionExpiryReport  # Menu 271 (issue #3552) -- subscription and contract expiry report.
+from src.reports.subscription_expiry.operation import (
+    SubscriptionExpiryReport,  # Menu 271 (issue #3552) -- subscription and contract expiry report.
+)
 from src.reports.wired_client_manufacturer_report_generator import (
     WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
 )
