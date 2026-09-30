@@ -1,4 +1,4 @@
-# Pinned versions for the CI gate tools.
+# Pinned development tools for worktree setup and CI gates.
 #
 # Why this file exists:
 #   The workflow installed the gate tools with no version constraint, so a new
@@ -20,9 +20,14 @@
 #   Let Dependabot raise it. If you raise one by hand, run the matching gate
 #   first and record the result in the pull request.
 #
-# Runtime dependencies stay in requirements.txt. This file holds only the tools
-# that grade the code. Every version below is the version CI already resolved, so
-# these pins do not change any gate result.
+# Runtime dependencies stay in requirements.txt. This file holds the tools
+# that prepare a worktree or grade the code. The gate pins below use the
+# versions that CI already resolved, so those pins do not change a gate result.
+
+# Container development
+# scripts/compose.ps1 uses the native provider to accept Windows bind mounts.
+# The bootstrap installs this file in every worktree. See issue #3398.
+podman-compose==1.6.0
 
 # Lint and format
 ruff==0.16.9
