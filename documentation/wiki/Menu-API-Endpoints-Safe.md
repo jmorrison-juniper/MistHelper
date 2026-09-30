@@ -2,7 +2,7 @@
 
 # Menu API endpoints: safe
 
-This page lists the Mist API endpoints of the 73 menu options in the `safe` category.
+This page lists the Mist API endpoints of the 79 menu options in the `safe` category.
 A menu option in this category reads data and exports it. The --test run executes this category.
 
 The index page explains how to read the map: [Menu API endpoint map](Menu-API-Endpoints).
@@ -16,20 +16,20 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["safe: 73 menu<br/>options"]
-    root --> f_orgs_sites["orgs/sites<br/>18 menu options"]
+    root["safe: 79 menu<br/>options"]
+    root --> f_orgs_sites["orgs/sites<br/>19 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>5 menu options"]
+    root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>5 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>5 menu options"]
     root --> f_sites_devices["sites/devices<br/>5 menu options"]
-    root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>4 menu options"]
-    root --> f_orgs_stats["orgs/stats<br/>4 menu options"]
+    root --> f_orgs_jsi["orgs/jsi<br/>4 menu options"]
+    root --> f_orgs_networktemplates["orgs/networktemplates<br/>4 menu options"]
+    root --> f_orgs_admins["orgs/admins<br/>3 menu options"]
+    root --> f_orgs_apitokens["orgs/apitokens<br/>3 menu options"]
     root --> f_orgs_clients["orgs/clients<br/>3 menu options"]
-    root --> f_orgs_insights["orgs/insights<br/>3 menu options"]
-    root --> f_orgs_jsi["orgs/jsi<br/>3 menu options"]
-    root --> f_orgs_mxedges["orgs/mxedges<br/>3 menu options"]
-    root --> f_orgs_networktemplates["orgs/networktemplates<br/>3 menu options"]
-    root --> f_orgs_orgs["orgs/orgs<br/>3 menu options"]
-    root --> more["67 more families"]
+    root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>3 menu options"]
+    root --> more["71 more families"]
 ```
 
 ## Menu 1
@@ -1130,3 +1130,142 @@ flowchart LR
 | GET | `/api/v1/sites/{site_id}/alarms/search` | [`sites.alarms.searchSiteAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/alarms/search-site-alarms) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
 | GET | `/api/v1/sites/{site_id}/devices/events/search` | [`sites.devices.searchSiteDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/search-site-device-events) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
 | GET | `/api/v1/sites/{site_id}/marvis_configs/search` | [`sites.marvis_configs.searchSiteMarvisConfigActions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/marvis-configs/search-site-marvis-config-actions) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
+
+## Menu 271
+
+- Title: Export the subscription and contract expiry report
+- Handler: `SubscriptionExpiryReport.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 271: Export the<br/>subscription and<br/>contract..."]
+    menu --> c1["SubscriptionExpiry<br/>Client"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/jsi<br/>/inventory/search"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/licenses"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/licenses<br/>/usages"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/jsi/inventory/search` | [`orgs.jsi.searchOrgJsiAssetsAndContracts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-assets-and-contracts) | [`SubscriptionExpiryClient.search_jsi_assets_and_contracts`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/licenses` | [`orgs.licenses.getOrgLicensesSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-summary) | [`SubscriptionExpiryClient.fetch_license_summary`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/licenses/usages` | [`orgs.licenses.getOrgLicensesBySite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site) | [`SubscriptionExpiryClient.fetch_license_usage_by_site`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/subscription_expiry/client.py) | Call |
+
+## Menu 272
+
+- Title: Export the certificate expiry report
+- Handler: `CertificateExpiryReport.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter)
+- Endpoints: 7
+
+```mermaid
+flowchart LR
+    menu["Menu 272: Export the<br/>certificate expiry<br/>report"]
+    menu --> c1["CertificateExpiry<br/>Client"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/cert"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/crl"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/pskportals"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/setting<br/>/mist_nac_crls"]
+    c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/ssos"]
+    c1 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/cert` | [`orgs.cert.listOrgCertificates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/cert/list-org-certificates) | [`CertificateExpiryClient.read_org_certificates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/crl` | [`orgs.crl.getOrgCrlFile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/crl/get-org-crl-file) | [`CertificateExpiryClient.read_crl_metadata`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/pskportals` | [`orgs.pskportals.listOrgPskPortals`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psk-portals/list-org-psk-portals) | [`CertificateExpiryClient._read_org_psk_portals_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`CertificateExpiryClient.read_org_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/setting/mist_nac_crls` | [`orgs.setting.getOrgNacCrl`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-crl/get-org-nac-crl) | [`CertificateExpiryClient.read_crl_metadata`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`CertificateExpiryClient._read_org_ssos_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`CertificateExpiryClient._read_device_stats_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Call |
+
+## Menu 273
+
+- Title: Admin and API Token Hygiene Report
+- Handler: `AdminTokenHygieneReport.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter)
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 273: Admin and<br/>API Token Hygiene<br/>Report"]
+    menu --> c1["AdminTokenHygiene<br/>Client"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/admins"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/apitokens"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`AdminTokenHygieneClient.list_admins`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/admin_token_hygiene/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`AdminTokenHygieneClient.list_tokens`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/admin_token_hygiene/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`AdminTokenHygieneClient.get_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/admin_token_hygiene/client.py) | Call |
+
+## Menu 274
+
+- Title: Export the PSK hygiene report
+- Handler: `PskHygieneReport.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 275
+
+- Title: Audit site variable coverage
+- Handler: `SiteVariableAudit.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
+- Endpoints: 7
+
+```mermaid
+flowchart LR
+    menu["Menu 275: Audit site<br/>variable coverage"]
+    menu --> c1["SiteVariableAudit<br/>Client"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/gatewaytemplates"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/networktemplates"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/templates"]
+    c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/vars<br/>/search"]
+    c1 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/wlans"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/templates` | [`orgs.templates.listOrgTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlan-templates/list-org-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/vars/search` | [`orgs.vars.searchOrgVars`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vars/search-org-vars) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+
+## Menu 276
+
+- Title: Export the organization security posture checklist
+- Handler: `OrgSecurityPostureChecklist.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter)
+- Endpoints: 5
+
+```mermaid
+flowchart LR
+    menu["Menu 276: Export the<br/>organization<br/>security post..."]
+    menu --> c1["OrgSecurityPosture<br/>SourceClient"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/admins"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/apitokens"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/ssos"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/webhooks"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/webhooks` | [`orgs.webhooks.listOrgWebhooks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/webhooks/list-org-webhooks) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |

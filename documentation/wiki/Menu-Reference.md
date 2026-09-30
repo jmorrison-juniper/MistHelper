@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **269 actionable menu entries**, numbered
-1 to 270 with gaps at 152.
-Menu 0 is Exit, so the registry holds 270 entries in total.
+MistHelper defines **275 actionable menu entries**, numbered
+1 to 276 with gaps at 152.
+Menu 0 is Exit, so the registry holds 276 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -23,7 +23,7 @@ never runs in an automated test pass.
 | Menu numbers | Category | Summary |
 |---|---|---|
 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270 | Interactive safe | 93 operations. They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. An operation that can change Mist data first asks for a typed value, such as a token or a count. The --testinteractive run includes them. |
-| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269 | Safe org exports | 73 operations. Read-only org exports. The --test run includes them. |
+| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-276 | Safe org exports | 79 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -304,6 +304,12 @@ never runs in an automated test pass.
 | 268 | Run any remaining endpoint with identifier prompts (6 operations) | Interactive safe | `EndpointFamilyExporter.other_endpoints` |
 | 269 | Scan the organization for rogue DHCP servers on switches (30 days) | Safe org exports | `RogueDhcpScanOperation.run` |
 | 270 | Export or resolve Marvis Actions by category and subcategory | Interactive safe | `MarvisActionsOperation.run` |
+| 271 | Export the subscription and contract expiry report | Safe org exports | `SubscriptionExpiryReport.run` |
+| 272 | Export the certificate expiry report | Safe org exports | `CertificateExpiryReport.run` |
+| 273 | Admin and API Token Hygiene Report | Safe org exports | `AdminTokenHygieneReport.run` |
+| 274 | Export the PSK hygiene report | Safe org exports | `PskHygieneReport.run` |
+| 275 | Audit site variable coverage | Safe org exports | `SiteVariableAudit.run` |
+| 276 | Export the organization security posture checklist | Safe org exports | `OrgSecurityPostureChecklist.run` |
 
 ### Endpoint family sub-menus (259-268)
 
