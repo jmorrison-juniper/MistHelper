@@ -40,7 +40,7 @@ Menus 286, 287, 291, 292, 293, 280, and 281 follow after their human reviews.
 - [x] Each criterion has a corresponding test or verification
 
 ## Quality
-- [x] Tests added or updated for all changed functionality
+- [ ] Tests added or updated for all changed functionality
 - [x] Coverage meets or exceeds 80% threshold
 - [x] New or changed guards state the measured count and prove one failing path
 - [x] No new Ruff lint violations (`ruff check .`)
@@ -75,6 +75,6 @@ Menus 286, 287, 291, 292, 293, 280, and 281 follow after their human reviews.
 - `ruff check .` passed.
 - `black --check MistHelper.py src/utils/operation_registry.py src/refactors/endpoint_primary_key_strategies.py web_portal/services/operation.py web_portal/menu_registry.py` passed.
 - `mypy src/ MistHelper.py wsgi.py --config-file pyproject.toml` passed.
-- `pytest tests/unit/test_menu_entry_metadata.py tests/guardrails tests/unit/utils tests/unit/web_portal -q --timeout=120` passed.
+- `pytest tests/unit/test_menu_entry_metadata.py tests/guardrails tests/unit/utils tests/unit/web_portal -q --timeout=120` timed out in `tests/guardrails/test_guard_proof_audit.py::TestRepositoryGuardProofAudit::test_analyzer_scope_metrics_cover_registered_detectors`.
 - `MistHelper.py --help` passed.
 - `symbol-diff --base origin/main MistHelper.py` reported no lost names. Added names are expected.
