@@ -18,6 +18,7 @@ from __future__ import annotations
 import json  # Build the fulfilled status answers.
 import re  # Match the page addresses of the multi-site flow.
 from collections.abc import Callable, Sequence  # Type the helpers.
+from datetime import UTC, datetime, timedelta  # Build a start time inside the site lock window.
 from typing import Any  # Playwright objects carry no stub types here.
 
 import pytest
@@ -61,6 +62,12 @@ IN_VIEW_SCRIPT = (  # True when the whole element box sits inside the viewport.
 )
 
 pytestmark = pytest.mark.journey  # Every test of this file is an operator journey.
+
+
+def future_utc_field(hours: int) -> str:
+    """Return a future UTC value for a browser date and time control."""
+    moment = datetime.now(UTC) + timedelta(hours=hours)  # Keep the schedule inside the site lock window.
+    return moment.replace(second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M")  # Match the browser control.
 
 
 class MultiSiteJourney:
@@ -390,19 +397,24 @@ class TestMultiSiteOptionsJourneys:
 class TestMultiSiteConfirmJourneys:
     """The confirm page shows the whole plan and guards the start."""
 
-    @pytest.mark.xfail(strict=True, reason="#3222: the confirm page shows counts only, not the sites or the schedule")
     def test_confirm_page_names_the_sites_and_the_schedule(self, reader: MultiSiteJourney) -> None:
-        """The plan names each site, the start time, and the failure limit."""
+        """The plan names each site, option, family, and child job."""
         reader.open_options()  # Both sites.
         reader.choose_families(("ap", "switch"))  # Two families.
-        reader.page.get_by_test_id("org-upgrade-start-time").fill("2030-01-01T02:00")  # A future start.
+        start_time = future_utc_field(2)  # Use a valid future time that does not expire as the calendar changes.
+        reader.page.get_by_test_id("org-upgrade-start-time").fill(start_time)  # Set the future schedule.
         reader.page.get_by_test_id("org-upgrade-max-failures").fill("10")  # A custom failure limit.
         reader.review()  # The confirm page.
         plan = reader.page.get_by_test_id("org-upgrade-confirm")  # The plan card.
         for name in SITE_NAMES:  # The operator must read each site name.
             expect(plan).to_contain_text(name)  # One site name.
-        expect(plan).to_contain_text("2030")  # The start time.
+        expect(plan).to_contain_text(start_time[:4])  # The start time.
         expect(plan).to_contain_text("10")  # The failure limit.
+        expect(reader.page.get_by_test_id("org-upgrade-family-plan")).to_contain_text("AP")  # Plain AP label.
+        expect(reader.page.get_by_test_id("org-upgrade-family-plan")).to_contain_text("switch")  # Plain family label.
+        expect(reader.page.get_by_test_id("org-upgrade-option-plan")).to_contain_text("Canary phases")  # Phases.
+        expect(reader.page.get_by_test_id("org-upgrade-child-plan")).to_contain_text("Organization AP upgrade")
+        expect(reader.page.get_by_test_id("org-upgrade-child-plan")).to_contain_text("Site device upgrade")
         assert all(name in plan.inner_text() for name in SITE_NAMES)  # Every site name as a plain check.
 
     @pytest.mark.parametrize("word", ["confirm", "CONFIRM ", " CONFIRM", "CONFIRMED", "", "C0NFIRM"])

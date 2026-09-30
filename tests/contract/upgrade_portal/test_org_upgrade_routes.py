@@ -353,6 +353,13 @@ def test_valid_options_reach_the_confirmation_page(org_upgrade_client: FlaskClie
     assert b'data-testid="org-upgrade-start"' in answer.data
     assert b"disabled" in answer.data
     assert b"0.14.29411" in answer.data
+    assert b'data-testid="org-upgrade-site-plan"' in answer.data  # The page names the selected sites.
+    assert b'data-testid="org-upgrade-family-plan"' in answer.data  # The page names each firmware target.
+    assert b'data-testid="org-upgrade-option-plan"' in answer.data  # The page names the rollout choices.
+    assert b'data-testid="org-upgrade-child-plan"' in answer.data  # The page reserves the durable child plan.
+    assert answer.data.count(b"<caption") >= 2  # Each visible confirmation table has an accessible description.
+    assert answer.data.count(b'scope="col"') >= 4  # Each visible table header states its column relationship.
+    assert b'aria-labelledby="org-upgrade-sites-heading"' in answer.data  # The site section has a name.
 
 
 def test_big_bang_options_do_not_send_a_failure_limit(org_upgrade_client: FlaskClient) -> None:

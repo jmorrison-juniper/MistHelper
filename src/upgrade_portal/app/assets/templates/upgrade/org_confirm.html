@@ -18,9 +18,44 @@
   <p><strong>Organization:</strong> {{ org_name }}</p>
   <p><strong>Sites:</strong> {{ site_count }}</p>
   <p><strong>Devices:</strong> {{ device_count }}</p>
-  <p><strong>Device families:</strong> {{ device_families | join(', ') if device_families else 'Access points' }}</p>
-  <p data-testid="org-upgrade-firmware"><strong>Firmware:</strong> {{ firmware_summary }}</p>
-  <p><strong>Strategy:</strong> {{ options.strategy }}</p>
+
+  <section aria-labelledby="org-upgrade-sites-heading" data-testid="org-upgrade-site-plan">
+    <h3 class="portal-card-title" id="org-upgrade-sites-heading">Selected sites</h3>
+    <table class="portal-table">
+      <caption class="visually-hidden">The selected sites and their inventory counts.</caption>
+      <thead><tr><th scope="col">Site</th><th scope="col">Devices in inventory</th></tr></thead>
+      <tbody>
+        {% for site in confirm.sites %}
+          <tr data-testid="org-upgrade-site-row"><th scope="row">{{ site.name }}</th><td>{{ site.device_count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section aria-labelledby="org-upgrade-family-heading" data-testid="org-upgrade-family-plan">
+    <h3 class="portal-card-title" id="org-upgrade-family-heading">Device families and firmware</h3>
+    <table class="portal-table">
+      <caption class="visually-hidden">Each device family and its target firmware version.</caption>
+      <thead><tr><th scope="col">Device family</th><th scope="col">Target firmware</th></tr></thead>
+      <tbody>
+        {% for family in confirm.families %}
+          <tr data-testid="org-upgrade-family-row"><th scope="row">{{ family.label }}</th><td>{{ family.version }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="visually-hidden" data-testid="org-upgrade-firmware">{{ firmware_summary }}</p>
+  </section>
+
+  <section aria-labelledby="org-upgrade-options-heading" data-testid="org-upgrade-option-plan">
+    <h3 class="portal-card-title" id="org-upgrade-options-heading">Rollout options</h3>
+    <dl class="row mb-0">
+      {% for line in confirm.options %}
+        <dt class="col-sm-4">{{ line.label }}</dt>
+        <dd class="col-sm-8" data-testid="org-upgrade-option-row">{{ line.text }}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+
   {% if options.reboot_at %}
     <p data-testid="org-upgrade-reboot-at"><strong>Reboot each switch and each gateway after this much time:</strong> {{ options.reboot_at }}</p>
   {% endif %}
@@ -45,29 +80,56 @@
     and it sends nothing to the Mist cloud.
   #}
   {% if schedule is defined %}
-    <p data-testid="org-upgrade-start-line"><strong>Start time:</strong> {{ schedule.start_text }}</p>
-    {% if schedule.available %}
-      <form method="post"
-            action="/api/org-upgrades/{{ schedule.operation_id }}/reschedule"
-            class="mb-3"
-            data-testid="org-upgrade-reschedule-form">
-        <input type="hidden"
-               name="csrf_token"
-               value="{{ csrf_token() if csrf_token is defined else '' }}">
-        <label class="form-label" for="org-upgrade-reschedule-start">Move the start time (UTC)</label>
-        <input class="form-control"
-               type="datetime-local"
-               id="org-upgrade-reschedule-start"
-               name="start_time"
-               data-testid="org-upgrade-reschedule-start"
-               value="{{ schedule.start_value }}">
-        <p class="portal-card-note">Leave the field empty to start the upgrade at once after you confirm.</p>
-        <button type="submit"
-                class="portal-button"
-                data-testid="org-upgrade-reschedule">Move the start time</button>
-      </form>
-    {% endif %}
+    <section aria-labelledby="org-upgrade-schedule-heading" data-testid="org-upgrade-schedule">
+      <h3 class="portal-card-title" id="org-upgrade-schedule-heading">Schedule</h3>
+      <p data-testid="org-upgrade-start-line"><strong>Start time:</strong> {{ schedule.start_text }}</p>
+      {% if schedule.available %}
+        <form method="post"
+              action="/api/org-upgrades/{{ schedule.operation_id }}/reschedule"
+              class="mb-3"
+              data-testid="org-upgrade-reschedule-form">
+          <input type="hidden"
+                 name="csrf_token"
+                 value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <label class="form-label" for="org-upgrade-reschedule-start">Move the start time (UTC)</label>
+          <input class="form-control"
+                 type="datetime-local"
+                 id="org-upgrade-reschedule-start"
+                 name="start_time"
+                 data-testid="org-upgrade-reschedule-start"
+                 value="{{ schedule.start_value }}">
+          <p class="portal-card-note">Leave the field empty to start the upgrade at once after you confirm.</p>
+          <button type="submit"
+                  class="portal-button"
+                  data-testid="org-upgrade-reschedule">Move the start time</button>
+        </form>
+      {% endif %}
+    </section>
   {% endif %}
+
+  <section aria-labelledby="org-upgrade-child-heading" data-testid="org-upgrade-child-plan">
+    <h3 class="portal-card-title" id="org-upgrade-child-heading">Child plan</h3>
+    {% if confirm.children %}
+      <table class="portal-table">
+        <caption class="visually-hidden">Each child job that the confirmed plan sends.</caption>
+        <thead>
+          <tr><th scope="col">Site scope</th><th scope="col">Device family</th><th scope="col">Route</th><th scope="col">Targets</th></tr>
+        </thead>
+        <tbody>
+          {% for child in confirm.children %}
+            <tr data-testid="org-upgrade-child-row">
+              <th scope="row">{{ child.site }}</th>
+              <td>{{ child.family }}</td>
+              <td>{{ child.route }}</td>
+              <td>{{ child.target_count }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="portal-card-note">This older plan has no saved child details.</p>
+    {% endif %}
+  </section>
 
   <div class="alert alert-danger" role="alert" data-testid="org-upgrade-scope-warning">
     Warning: the upgrade can interrupt network service at {{ 'the selected site' if one_site else 'each selected site' }}. Cancellation does not restore upgraded devices.

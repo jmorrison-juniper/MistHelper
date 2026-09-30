@@ -51,6 +51,7 @@ from ...upgrade.org_cascade.record import WATCH_KEY, OrgPhaseEntries, OrgPhaseWa
 from ...upgrade.org_cascade.view import OrgPhaseView  # Issue #3245: the phase card of the page and the poll.
 from ...upgrade.org_cascade.walk import OrgCascadeDeps, OrgCascadeRegistry  # Issue #3245: one watch thread.
 from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
+from ...upgrade.org_confirm_view import OrgConfirmView  # Issue #3222: the complete confirmation plan.
 from ...upgrade.org_devices import (  # Issue #3249: one row for each device of the operation.
     OrgChildDevices,  # Issue #3457: the counts of a child job that the check proved.
     OrgDeviceRows,
@@ -1046,6 +1047,7 @@ def confirm_page() -> str | tuple[Response, int]:
     view = options_view(options)  # Build the display values one time.
     names = {str(row["site_id"]): str(row["name"]) for row in rows}  # The approved name of each site.
     prechecks = precheck_gate().read(site_ids, names)  # Issue #3243: the pre-check capture of each site.
+    confirm = OrgConfirmView.build(rows, view, operation, families)  # Issue #3222: every planned detail.
     return render_page(  # Render the existing typed confirmation page.
         CONFIRM_TEMPLATE,  # Keep the existing template.
         org_name=org_display_name(org_id),  # Show the selected organization.
@@ -1058,6 +1060,7 @@ def confirm_page() -> str | tuple[Response, int]:
         writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.
         schedule=OrgScheduleView.build(operation, view["start_time"]),  # Issue #3247: the start line and form.
         prechecks=prechecks,  # Issue #3243: the card and the gate of the confirmation field.
+        confirm=confirm,  # Issue #3222: the sites, options, families, and child jobs.
     )
 
 
