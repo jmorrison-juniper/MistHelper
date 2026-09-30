@@ -29,7 +29,7 @@ from importlib import import_module  # Imports each collaborator late, at the fi
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # A late import answers with untyped objects.
 
-from flask import Flask  # The configuration that carries every seam lives on this object.
+from flask import Flask, current_app  # The configuration and context carry every seam.
 
 from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
 from ..persistence.actions import ActionRepository  # Keep run actions in the authoritative document store.
@@ -107,6 +107,7 @@ EMAIL_FIELD = "actor_email"  # The bindings key that carries the operator addres
 RUNNER_FIELD = "runner"  # The bindings key that carries the bound capture runner.
 LOCK_FIELD = "lock"  # The bindings key that carries the decoded site lock record.
 STORE_FIELD = "store"  # The bindings key that carries the run store of the seam.
+APP_CONTEXT_FIELD = "app_context"  # The bindings key that rebuilds a context in the driver thread.
 
 # WHY: `capture/store.connect_database` answers None whenever ArangoDB is
 # unreachable, and `capture/store.write_run` still reports success because it
@@ -441,15 +442,22 @@ class CaptureBridge:
         job as a whole.
     """
 
-    def __init__(self, runner: Callable[..., Any] | None, context: Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        runner: Callable[..., Any] | None,
+        context: Mapping[str, Any],
+        app_context: Callable[[], Any] | None = None,
+    ) -> None:
         """Hold the bound runner and the fields that every capture of one run shares.
 
         Args:
             runner: The callable that reads the whole site. None when no runner bound.
             context: The seven job fields that the request thread already read.
+            app_context: The factory for a fresh Flask application context.
         """
         self._runner = runner  # Bound inside the request, so this object needs no application.
         self._context = dict(context)  # A copy, because the caller may edit its own record.
+        self._app_context = app_context  # The stored-status fallback needs an application context.
 
     def start(self, request: Mapping[str, Any]) -> str | None:
         """Take one capture and return its key.
@@ -466,12 +474,39 @@ class CaptureBridge:
         if self._runner is None or not capture_id:  # No runner, or no key builder, means no capture.
             logger.error("wiring: the run %s could not take the post-check capture", run_id)  # Name the gap.
             return None  # The driver writes the reason into the run record.
+        routes = load_module(CAPTURE_ROUTES)  # The route owns the progress and stored-status seams.
+        if routes is None:  # A missing route cannot open or verify the capture.
+            logger.error("wiring: the capture route is absent for run %s", run_id)  # Name the missing seam.
+            return None  # The driver writes the failure into the run record.
+        job = {**self._context, **self._identity(request, capture_id)}  # Build the complete collector job.
+        routes.open_progress(capture_id, routes.opening_record(job))  # Make progress visible before the runner.
         try:  # The read of a whole site holds this thread for minutes and touches a network.
-            self._runner({**self._context, **self._identity(request, capture_id)})  # Blocks until the read ends.
+            self._runner(job)  # Blocks until the read ends.
         except Exception as fault:  # The driver thread must write the reason, never die.
             logger.warning("wiring: the capture of the run %s stopped: %s", run_id, type(fault).__name__)
+            routes.record_status(  # Keep the failed state visible after a runner fault.
+                capture_id,
+                state=routes.STATE_FAILED,
+                message=routes.FAILED_MESSAGE,
+            )
             return None  # The driver then fails the run at the post-capture stage.
-        return capture_id  # The run record now points at the second capture of the pair.
+        final = self._final_status(routes, capture_id)  # Read the last live or stored capture status.
+        if final.get("state") != routes.STATE_VERIFIED or final.get("verified") is not True:  # Require both proofs.
+            logger.warning("wiring: the post-check capture of run %s did not verify", run_id)  # Name the failed proof.
+            return None  # The driver must not point at unverified evidence.
+        logger.debug("wiring: the post-check capture of run %s verified", run_id)  # Confirm the returned key.
+        return capture_id  # The run record now points at verified evidence.
+
+    def _final_status(self, routes: Any, capture_id: str) -> dict[str, Any]:
+        """Read the final live status, or the stored status after progress trim."""
+        live = routes.read_progress(capture_id)  # The live record is the normal completion path.
+        if live is not None:  # A live record answers without a database context.
+            return live  # Keep the final state and its reason unchanged.
+        if self._app_context is None:  # Tests and detached callers may have no stored-status context.
+            return {}  # No proof means no capture key.
+        with self._app_context():  # The stored reader needs the Flask configuration.
+            stored = routes.stored_body(capture_id)  # The durable capture is the fallback proof.
+        return stored or {}  # A missing stored record cannot verify the capture.
 
     def _identity(self, request: Mapping[str, Any], capture_id: str) -> dict[str, Any]:
         """Build the four job fields that name one capture inside its run.
@@ -733,7 +768,7 @@ def request_bindings(record: Mapping[str, Any]) -> dict[str, Any]:
         record: The run record, which names the site of the lock.
 
     Returns:
-        The session, the operator address, the runner, the lock, and the store.
+        The session, the operator address, the runner, the lock, the store, and the context factory.
     """
     operator: Any = current_operator()  # The one accessor of the signed session of the operator.
     routes = load_module(CAPTURE_ROUTES)  # Owns the capture runner seam.
@@ -743,6 +778,7 @@ def request_bindings(record: Mapping[str, Any]) -> dict[str, Any]:
         RUNNER_FIELD: None if routes is None else read_safely(routes.capture_runner, "the capture runner seam"),
         LOCK_FIELD: read_lock_record(str(record.get("site_id", ""))),  # The lock that the heartbeat renews.
         STORE_FIELD: bound_store(DocumentRunStore()),  # The same store that the poll route reads.
+        APP_CONTEXT_FIELD: current_app.app_context,  # The driver rebuilds this context for stored-status reads.
     }
 
 
@@ -923,7 +959,11 @@ def build_driver_deps(driver: ModuleType, record: Mapping[str, Any], bindings: M
     return driver.RunDriverDeps(  # Every field carries its name, so no positional order can drift.
         store=bindings.get(STORE_FIELD),  # The same store that the routes read through the `RUN_STORE` seam.
         gate=gate,  # Blocks for up to 1800 seconds in each phase.
-        capture=CaptureBridge(bindings.get(RUNNER_FIELD), capture_context(record, bindings)),
+        capture=CaptureBridge(
+            bindings.get(RUNNER_FIELD),
+            capture_context(record, bindings),
+            bindings.get(APP_CONTEXT_FIELD),
+        ),
         submit=CloudUpgradeSubmitter(bindings.get(SESSION_FIELD)),  # Without this the run sends no firmware.
         heartbeat=heartbeat,  # The second seat of the same object. The first seat is the gate progress.
         post_check_mode=read_post_check_mode(),  # The default keeps the automatic second capture of today.

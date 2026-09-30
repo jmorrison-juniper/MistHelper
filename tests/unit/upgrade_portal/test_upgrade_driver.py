@@ -658,6 +658,7 @@ class TestAutomaticPostCheck:
         final = parts["driver"].run(make_record())
         assert final["state"] == RunState.FAILED.value
         assert final["error"]["stage"] == "post_capture"
+        assert final["error"]["message"] == "The portal could not start the post-check capture."
 
 
 class TestTrackerPath:
