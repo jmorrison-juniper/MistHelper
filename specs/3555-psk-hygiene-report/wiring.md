@@ -39,5 +39,12 @@ Add menu `274` to the `safe` row. The operation is read-only and not destructive
 - `python -m black --check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
 - `python -m mypy src\reports\psk_hygiene --config-file pyproject.toml` passed.
 - `python -m pydocstyle src\reports\psk_hygiene` passed.
-- `python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120` passed with 26 tests.
+- `python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120` passed with 28 tests.
+- `python -m vulture src\reports\psk_hygiene --min-confidence 70` passed.
+- `python -m interrogate -v src\reports\psk_hygiene` passed.
+- `python -m radon cc src\reports\psk_hygiene -j | complexity-gate --max 10` passed.
+- `test-quality-analyzer --gate --changed-from origin/main` passed.
+- `python -m pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120` passed.
+- `python -m pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120` passed.
+- `python -m bandit -c pyproject.toml -r src\reports\psk_hygiene -q` passed.
 - Menu wiring stays deferred to the integration pull request.

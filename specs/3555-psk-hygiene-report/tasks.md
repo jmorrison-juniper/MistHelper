@@ -70,7 +70,7 @@ These edits are not implementation edits for this feature branch. The integratio
 ### Implementation for User Story 1
 
 - [X] T014 [US1] Implement PskHygieneReport.run orchestration in src/reports/psk_hygiene/operation.py
-- [X] T015 [US1] Connect PskHygieneReport.run to DataExporter.write_with_format_selection in src/reports/psk_hygiene/operation.py
+- [X] T015 [US1] Connect PskHygieneReport.run to DataExporter.write_with_format_selection with `PskHygiene.csv` so the approved export path writes under `data/`
 - [X] T016 [US1] Return a menu-test success value from PskHygieneReport.run in src/reports/psk_hygiene/operation.py
 
 **Commit checkpoint**: Commit Phase 3 after the P1 tests pass with fake dependencies.
@@ -160,6 +160,20 @@ These edits are not implementation edits for this feature branch. The integratio
 - [X] T044 Record local validation evidence in specs/3555-psk-hygiene-report/wiring.md
 
 **Commit checkpoint**: Commit Phase 7 after all local validation commands pass.
+
+---
+
+## Phase 8: Pull request and deployment-pipeline evidence
+
+**Purpose**: Show that the branch entered the repository deployment pipeline and that CI findings were handled.
+
+- [X] T045 Verify draft pull request #3636 exists for branch `feat/3555-psk-hygiene-report`
+- [X] T046 Run `gh pr checks 3636` and identify the Test quality ratchet failure before final repair
+- [X] T047 Repair the Test quality ratchet failure with explicit HTTP 4xx and 5xx client tests
+- [X] T048 Run the local contract gates, including complexity, test quality, SDK compatibility, output scan, and Bandit
+- [X] T049 Refresh pull request #3636 from `specs/3555-psk-hygiene-report/pr-body.md` before final report
+
+**Commit checkpoint**: Commit Phase 8 before the final push. Capture post-push CI status in the agent report.
 
 ---
 

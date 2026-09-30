@@ -40,7 +40,7 @@ A NOC operator reviews the report and sees a clear finding for each PSK that nee
 2. **Given** a PSK expires in 30 days or less and is not expired, **When** the report is created, **Then** the findings column includes `expires_soon`.
 3. **Given** a PSK has no `mac`, no `macs`, and no `max_usage`, **When** the report is created, **Then** the findings column includes `uncapped_multi_use`.
 4. **Given** a PSK has `old_passphrase` present, **When** the report is created, **Then** the findings column includes `rotation_pending` and the report records only that the old passphrase is present.
-5. **Given** a PSK SSID matches no organization WLAN SSID, **When** the report is created, **Then** the findings column includes `orphan_ssid`.
+5. **Given** a PSK SSID matches no organization WLAN or template WLAN SSID, **When** the report is created, **Then** the findings column includes `orphan_ssid`.
 
 ---
 
@@ -96,7 +96,7 @@ A reviewer checks that the feature has the required planning and release artifac
 - **FR-007**: The report MUST NOT include `old_passphrase` values in any output file.
 - **FR-008**: Log lines and console output MUST NOT include `passphrase` or `old_passphrase` values.
 - **FR-009**: The report MUST record only whether `old_passphrase` is present.
-- **FR-010**: A PSK whose SSID matches no organization WLAN SSID MUST receive the finding `orphan_ssid`.
+- **FR-010**: A PSK whose SSID matches no organization WLAN or template WLAN SSID MUST receive the finding `orphan_ssid`.
 - **FR-011**: The report MUST state that site-level WLANs are outside its scope.
 - **FR-012**: A PSK with no `mac`, no `macs`, and no `max_usage` MUST receive the finding `uncapped_multi_use`.
 - **FR-013**: A PSK whose expire time is in the past MUST receive the finding `expired`.
@@ -111,7 +111,7 @@ A reviewer checks that the feature has the required planning and release artifac
 ### Key Entities
 
 - **PSK**: A pre-shared key record. Key attributes are name, SSID, role, VLAN, usage, max usage, expire time, `mac`, `macs`, and old passphrase presence.
-- **Organization WLAN**: A WLAN configured at the organization level. Key attribute is SSID. It is the only WLAN source used for orphan SSID matching.
+- **Organization WLAN reference**: A WLAN configured at the organization level or in an organization template. Key attribute is SSID. These references are the only WLAN sources used for orphan SSID matching.
 - **Hygiene Finding**: A report label that marks a PSK risk. Values are `expired`, `expires_soon`, `uncapped_multi_use`, `rotation_pending`, and `orphan_ssid`.
 - **Console Summary**: A user-facing count of PSKs in each finding category.
 - **Wiring Manifest**: A traceability file for issue, branch, artifacts, overlap checks, hot files, gates, release note, and deployment evidence.
@@ -130,7 +130,7 @@ A reviewer checks that the feature has the required planning and release artifac
 ## Assumptions
 
 - Menu 44 remains the source of PSK export behavior. Menu 274 wiring is deferred to the integration pull request.
-- Organization WLAN SSIDs are the scope for WLAN matching. Site-level WLANs are out of scope for this report.
+- Organization WLAN SSIDs and organization template WLAN SSIDs are the scope for WLAN matching. Site-level WLANs are out of scope for this report.
 - The findings column can contain more than one finding for a PSK.
 - Empty, missing, or null `mac`, `macs`, and `max_usage` values count as absent for uncapped multi-use detection.
 - The report uses local run time to decide whether a key is expired or expires within 30 days.

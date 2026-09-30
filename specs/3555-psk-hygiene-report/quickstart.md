@@ -72,6 +72,12 @@ Run the smallest gates that cover the implementation.
 python -m py_compile MistHelper.py
 python -m ruff check MistHelper.py src\reports\psk_hygiene tests\unit\reports\psk_hygiene
 python -m black --check MistHelper.py src\reports\psk_hygiene tests\unit\reports\psk_hygiene
+python -m mypy src\reports\psk_hygiene --config-file pyproject.toml
+python -m pydocstyle src\reports\psk_hygiene
+python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120
+python -m vulture src\reports\psk_hygiene --min-confidence 70
+python -m interrogate -v src\reports\psk_hygiene
+python -m bandit -c pyproject.toml -r src\reports\psk_hygiene -q
 ```
 
 Expected result:
@@ -79,3 +85,9 @@ Expected result:
 - Syntax validation passes.
 - Ruff reports no violations.
 - Black reports no files to reformat.
+- mypy reports no issues in the package.
+- pydocstyle reports no package docstring violations.
+- pytest passes all PSK hygiene tests.
+- vulture reports no dead code.
+- interrogate reports full package docstring coverage.
+- Bandit reports no package security findings.

@@ -37,7 +37,7 @@ Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` 
 | Gate | Status | Evidence |
 | - | - | - |
 | Five-Item Rule | Pass | New code enters `src/reports/psk_hygiene/`, a nested feature package. The planned package has at most five modules: `__init__`, `client`, `model`, `operation`, and optional package metadata. |
-| Class-Based Architecture | Pass | The public entry point is the class `PskHygieneReport` with static `run()`. Helper behavior belongs to feature classes or pure model functions where specified by this issue. No wrapper function is planned. |
+| Class-Based Architecture | Pass | The public entry point is the class `PskHygieneReport` with static `run()`. Helper behavior belongs to semantically named feature classes. No wrapper function is planned. |
 | Safety-First | Pass | `run()` has no prompt. The operation uses existing session and organization resolvers and exports only sanitized rows. |
 | Full Deployment Pipeline | Deferred | This plan step edits only `specs/3555-psk-hygiene-report/**`. Implementation must add the release note, run local gates, open the pull request, and pass CI. |
 | Observability and Logging | Pass | The operation logs before and after fetch, model, and export actions. It logs counts only and never logs PSK values. |
@@ -57,6 +57,7 @@ specs/3555-psk-hygiene-report/
 ├── research.md
 ├── data-model.md
 ├── quickstart.md
+├── wiring.md
 ├── contracts/
 │   ├── operation-contract.md
 │   └── report-schema.md
@@ -107,7 +108,7 @@ Design artifacts are complete:
 | Gate | Status | Evidence |
 | - | - | - |
 | Five-Item Rule | Pass | The design keeps the new package to four planned modules and keeps the public class in `operation.py`. |
-| Class-Based Architecture | Pass | `PskHygieneReport.run()` owns operation orchestration. Pure model functions stay in `model.py` because the required architecture explicitly asks for pure functions and dataclasses. |
+| Class-Based Architecture | Pass | `PskHygieneReport.run()` owns operation orchestration. `PskHygieneScorer` owns model helper behavior with private static methods. |
 | Safety-First | Pass | Contracts prohibit prompts, direct network access in tests, and secret fields in rows. |
 | Output Backends | Pass | The operation contract requires `DataExporter.write_with_format_selection`. |
 | Observability | Pass | The operation contract requires sanitized summary logging only. |

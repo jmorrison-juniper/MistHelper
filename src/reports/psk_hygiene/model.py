@@ -38,17 +38,23 @@ class PskInput:
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> PskInput:
         """Build a sanitized PSK input from a Mist record."""
-        old_passphrase_present = _has_value(record.get("old_passphrase"))  # Keep only old-secret presence.
-        macs = tuple(str(mac) for mac in record.get("macs", []) if _has_value(mac))  # Normalize MAC list values.
+        old_passphrase_present = PskHygieneScorer._has_value(
+            record.get("old_passphrase")
+        )  # Keep only old-secret presence.
+        macs = tuple(
+            str(mac) for mac in record.get("macs", []) if PskHygieneScorer._has_value(mac)
+        )  # Normalize MAC list values.
         return cls(  # Return only fields that the scoring model can safely use.
-            name=_text(record.get("name")),  # Use an empty name when Mist omits it.
+            name=PskHygieneScorer._text(record.get("name")),  # Use an empty name when Mist omits it.
             ssid=PskHygieneScorer.normalize_ssid(record.get("ssid")),  # Trim SSID text for matching.
-            role=_text(record.get("role")),  # Use an empty role when Mist omits it.
+            role=PskHygieneScorer._text(record.get("role")),  # Use an empty role when Mist omits it.
             vlan=record.get("vlan_id", record.get("vlan")),  # Prefer the Mist PSK vlan_id field when present.
-            usage=_optional_int(record.get("usage")),  # Normalize empty usage to None.
-            max_usage=_optional_int(record.get("max_usage")),  # Normalize empty maximum usage to None.
-            expire_time=_optional_text(record.get("expire_time")),  # Preserve the visible expire value.
-            mac=_optional_text(record.get("mac")),  # Preserve only the binding indicator.
+            usage=PskHygieneScorer._optional_int(record.get("usage")),  # Normalize empty usage to None.
+            max_usage=PskHygieneScorer._optional_int(record.get("max_usage")),  # Normalize empty maximum usage to None.
+            expire_time=PskHygieneScorer._optional_text(
+                record.get("expire_time")
+            ),  # Preserve the visible expire value.
+            mac=PskHygieneScorer._optional_text(record.get("mac")),  # Preserve only the binding indicator.
             macs=macs,  # Preserve only normalized binding indicators.
             old_passphrase_present=old_passphrase_present,  # Preserve old secret presence only.
         )
@@ -155,8 +161,12 @@ class PskHygieneScorer:
         wlans: list[dict[str, Any]], templates: list[dict[str, Any]]
     ) -> list[WlanReference]:
         """Build organization WLAN references from WLAN and template records."""
-        org_references = _org_wlan_references(wlans)  # Convert organization WLAN rows into match sources.
-        template_references = _template_wlan_references(templates)  # Convert template WLAN rows into match sources.
+        org_references = PskHygieneScorer._org_wlan_references(
+            wlans
+        )  # Convert organization WLAN rows into match sources.
+        template_references = PskHygieneScorer._template_wlan_references(
+            templates
+        )  # Convert template WLAN rows into match sources.
         return org_references + template_references  # Preserve source order for deterministic diagnostics.
 
     @staticmethod
@@ -166,7 +176,7 @@ class PskHygieneScorer:
         if expire_at is None:  # Blank or malformed values cannot produce a safe count.
             return None  # Use a blank output value for unknown remaining days.
         current_time = now or datetime.now(UTC)  # Use injected time for tests or current UTC time for runtime.
-        current_time = _ensure_utc(current_time)  # Compare aware datetimes consistently.
+        current_time = PskHygieneScorer._ensure_utc(current_time)  # Compare aware datetimes consistently.
         total_seconds = (expire_at - current_time).total_seconds()  # Convert the interval into whole-day math.
         return int(total_seconds // 86400)  # Use whole days so a same-day future expiry returns zero.
 
@@ -180,147 +190,153 @@ class PskHygieneScorer:
             parsed_time = datetime.fromisoformat(candidate)  # Parse ISO date or date-time values.
         except ValueError:  # Treat unexpected formats as unknown rather than risky.
             return None  # Keep unknown dates as blank days remaining.
-        return _ensure_utc(parsed_time)  # Normalize naive or offset-aware values to UTC.
+        return PskHygieneScorer._ensure_utc(parsed_time)  # Normalize naive or offset-aware values to UTC.
 
     @staticmethod
     def build_hygiene_rows(
         psks: list[PskInput], wlan_references: list[WlanReference] | None, now: datetime | None = None
     ) -> list[PskHygieneRow]:
         """Build safe report rows from sanitized PSKs."""
-        wlan_match_set = _wlan_match_set(wlan_references)  # Precompute SSID matches for linear scoring.
+        wlan_match_set = PskHygieneScorer._wlan_match_set(
+            wlan_references
+        )  # Precompute SSID matches for linear scoring.
         wlan_known = wlan_references is not None  # Track whether orphan SSID scoring is possible.
-        return [_build_hygiene_row(psk, wlan_match_set, wlan_known, now) for psk in psks]  # Score each PSK once.
+        return [  # Score each PSK once through the scorer-owned row helper.
+            PskHygieneScorer._build_hygiene_row(psk, wlan_match_set, wlan_known, now) for psk in psks
+        ]
 
+    @staticmethod
+    def _build_hygiene_row(
+        psk: PskInput, wlan_match_set: set[str], wlan_known: bool, now: datetime | None
+    ) -> PskHygieneRow:
+        """Build one safe report row."""
+        remaining_days = PskHygieneScorer.days_remaining(psk.expire_time, now)  # Calculate the time input once.
+        wlan_match = PskHygieneScorer._wlan_match(
+            psk.ssid, wlan_match_set, wlan_known
+        )  # Calculate WLAN match state once.
+        findings = PskHygieneScorer._finding_labels(psk, remaining_days, wlan_match)  # Build stable labels.
+        return PskHygieneRow(  # Return only report-safe fields.
+            name=psk.name,
+            ssid=psk.ssid,
+            role=psk.role,
+            vlan="" if psk.vlan is None else str(psk.vlan),
+            usage="" if psk.usage is None else psk.usage,
+            max_usage="" if psk.max_usage is None else psk.max_usage,
+            expire_time="" if psk.expire_time is None else psk.expire_time,
+            days_remaining="" if remaining_days is None else remaining_days,
+            rotation_pending=psk.old_passphrase_present,
+            old_passphrase_present=psk.old_passphrase_present,
+            wlan_match=wlan_match,
+            findings=",".join(findings),
+        )
 
-def _build_hygiene_row(
-    psk: PskInput, wlan_match_set: set[str], wlan_known: bool, now: datetime | None
-) -> PskHygieneRow:
-    """Build one safe report row."""
-    remaining_days = PskHygieneScorer.days_remaining(psk.expire_time, now)  # Calculate the time input once.
-    wlan_match = _wlan_match(psk.ssid, wlan_match_set, wlan_known)  # Calculate WLAN match state once.
-    findings = _finding_labels(psk, remaining_days, wlan_match)  # Build stable labels without secrets.
-    return PskHygieneRow(  # Return only report-safe fields.
-        name=psk.name,
-        ssid=psk.ssid,
-        role=psk.role,
-        vlan="" if psk.vlan is None else str(psk.vlan),
-        usage="" if psk.usage is None else psk.usage,
-        max_usage="" if psk.max_usage is None else psk.max_usage,
-        expire_time="" if psk.expire_time is None else psk.expire_time,
-        days_remaining="" if remaining_days is None else remaining_days,
-        rotation_pending=psk.old_passphrase_present,
-        old_passphrase_present=psk.old_passphrase_present,
-        wlan_match=wlan_match,
-        findings=",".join(findings),
-    )
+    @staticmethod
+    def _finding_labels(psk: PskInput, remaining_days: int | None, wlan_match: bool | str) -> tuple[str, ...]:
+        """Return stable finding labels for one PSK."""
+        finding_map = {  # Build each rule once so the stable order controls output.
+            "expired": remaining_days is not None and remaining_days < 0,
+            "expires_soon": remaining_days is not None and 0 <= remaining_days <= EXPIRING_SOON_DAYS,
+            "uncapped_multi_use": PskHygieneScorer._is_uncapped_multi_use(psk),
+            "rotation_pending": psk.old_passphrase_present,
+            "orphan_ssid": wlan_match is False,
+        }
+        return tuple(label for label in FINDING_ORDER if finding_map[label])  # Filter labels in contract order.
 
+    @staticmethod
+    def _is_uncapped_multi_use(psk: PskInput) -> bool:
+        """Return true when a PSK has no binding and no usage cap."""
+        has_mac_binding = PskHygieneScorer._has_value(psk.mac) or bool(psk.macs)  # Treat either MAC field as bound.
+        return not has_mac_binding and psk.max_usage is None  # Flag only when no binding and no cap exist.
 
-def _finding_labels(psk: PskInput, remaining_days: int | None, wlan_match: bool | str) -> tuple[str, ...]:
-    """Return stable finding labels for one PSK."""
-    finding_map = {  # Build each rule once so the stable order controls output.
-        "expired": remaining_days is not None and remaining_days < 0,
-        "expires_soon": remaining_days is not None and 0 <= remaining_days <= EXPIRING_SOON_DAYS,
-        "uncapped_multi_use": _is_uncapped_multi_use(psk),
-        "rotation_pending": psk.old_passphrase_present,
-        "orphan_ssid": wlan_match is False,
-    }
-    return tuple(label for label in FINDING_ORDER if finding_map[label])  # Filter labels in contract order.
+    @staticmethod
+    def _wlan_match(ssid: str, wlan_match_set: set[str], wlan_known: bool) -> bool | str:
+        """Return the WLAN match state for a normalized SSID."""
+        if not wlan_known:  # The client could not supply a trustworthy WLAN scope.
+            return "unknown"  # Avoid false orphan findings when scope is unavailable.
+        return bool(ssid and ssid in wlan_match_set)  # Empty SSIDs cannot match an organization WLAN.
 
+    @staticmethod
+    def _wlan_match_set(wlan_references: list[WlanReference] | None) -> set[str]:
+        """Return normalized SSIDs for known WLAN references."""
+        if wlan_references is None:  # Unknown WLAN scope must remain unknown.
+            return set()  # Return an empty set because matching is disabled by the caller.
+        return {reference.ssid for reference in wlan_references if reference.ssid}  # Ignore blank references.
 
-def _is_uncapped_multi_use(psk: PskInput) -> bool:
-    """Return true when a PSK has no binding and no usage cap."""
-    has_mac_binding = _has_value(psk.mac) or bool(psk.macs)  # Treat either MAC field as a binding.
-    return not has_mac_binding and psk.max_usage is None  # Flag only when no binding and no cap exist.
+    @staticmethod
+    def _org_wlan_references(wlans: list[dict[str, Any]]) -> list[WlanReference]:
+        """Return references from organization WLAN records."""
+        return [  # Build one reference per WLAN that has a usable SSID.
+            WlanReference(ssid=ssid, source="org_wlan", source_name=PskHygieneScorer._text(wlan.get("name")))
+            for wlan in wlans
+            if (ssid := PskHygieneScorer.normalize_ssid(wlan.get("ssid")))
+        ]
 
+    @staticmethod
+    def _template_wlan_references(templates: list[dict[str, Any]]) -> list[WlanReference]:
+        """Return references from organization template WLAN records."""
+        references: list[WlanReference] = []  # Accumulate template WLAN references in template order.
+        for template in templates:  # Inspect each organization template once.
+            references.extend(PskHygieneScorer._references_for_template(template))  # Add WLAN definitions.
+        return references  # Return all template references for SSID matching.
 
-def _wlan_match(ssid: str, wlan_match_set: set[str], wlan_known: bool) -> bool | str:
-    """Return the WLAN match state for a normalized SSID."""
-    if not wlan_known:  # The client could not supply a trustworthy WLAN scope.
-        return "unknown"  # Avoid false orphan findings when scope is unavailable.
-    return bool(ssid and ssid in wlan_match_set)  # Empty SSIDs cannot match an organization WLAN.
+    @staticmethod
+    def _references_for_template(template: dict[str, Any]) -> list[WlanReference]:
+        """Return WLAN references for one template."""
+        template_name = PskHygieneScorer._text(template.get("name"))  # Use the template name as the source label.
+        return [  # Build references only for WLAN definitions that expose an SSID.
+            WlanReference(ssid=ssid, source="template", source_name=template_name)
+            for wlan in PskHygieneScorer._template_wlan_records(template)
+            if (ssid := PskHygieneScorer.normalize_ssid(wlan.get("ssid")))
+        ]
 
+    @staticmethod
+    def _template_wlan_records(template: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return WLAN-like dictionaries from a template."""
+        raw_wlans = template.get("wlans", [])  # Mist templates store WLAN definitions under wlans.
+        if isinstance(raw_wlans, dict):  # Some API shapes use a map of WLAN names to definitions.
+            return [value for value in raw_wlans.values() if isinstance(value, dict)]  # Keep only dict definitions.
+        if isinstance(raw_wlans, list):  # Most API shapes use a list of WLAN definitions.
+            return [value for value in raw_wlans if isinstance(value, dict)]  # Keep only dict definitions.
+        return []  # Unknown template WLAN shapes are ignored safely.
 
-def _wlan_match_set(wlan_references: list[WlanReference] | None) -> set[str]:
-    """Return normalized SSIDs for known WLAN references."""
-    if wlan_references is None:  # Unknown WLAN scope must remain unknown.
-        return set()  # Return an empty set because matching is disabled by the caller.
-    return {reference.ssid for reference in wlan_references if reference.ssid}  # Ignore blank references.
+    @staticmethod
+    def _optional_int(value: Any) -> int | None:
+        """Return an integer value or None for absent input."""
+        if value is None or value == "":  # Treat missing and empty values as absent.
+            return None  # Preserve absence for cap and usage scoring.
+        if isinstance(value, bool):  # Avoid treating booleans as integer counts.
+            return None  # Preserve invalid count values as absent.
+        try:  # Convert numeric strings from API rows when present.
+            return int(value)  # Return the normalized integer count.
+        except (TypeError, ValueError):  # Treat malformed API values as absent.
+            return None  # Keep scoring deterministic for malformed counts.
 
+    @staticmethod
+    def _optional_text(value: Any) -> str | None:
+        """Return text or None for absent input."""
+        if not PskHygieneScorer._has_value(value):  # Empty values must remain absent.
+            return None  # Preserve absence for output blanks and cap scoring.
+        return str(value)  # Preserve visible non-empty values as strings.
 
-def _org_wlan_references(wlans: list[dict[str, Any]]) -> list[WlanReference]:
-    """Return references from organization WLAN records."""
-    return [  # Build one reference per WLAN that has a usable SSID.
-        WlanReference(ssid=ssid, source="org_wlan", source_name=_text(wlan.get("name")))
-        for wlan in wlans
-        if (ssid := PskHygieneScorer.normalize_ssid(wlan.get("ssid")))
-    ]
+    @staticmethod
+    def _text(value: Any) -> str:
+        """Return text or an empty string for absent input."""
+        return "" if value is None else str(value)  # Keep output values simple and non-null.
 
+    @staticmethod
+    def _has_value(value: Any) -> bool:
+        """Return true when a value is present."""
+        if value is None:  # None means the API omitted the value.
+            return False  # Treat None as absent for scoring.
+        if isinstance(value, str):  # Strings need whitespace-aware absence handling.
+            return bool(value.strip())  # Treat whitespace-only strings as absent.
+        if isinstance(value, (list, tuple, set, dict)):  # Containers need empty-aware absence handling.
+            return bool(value)  # Treat empty containers as absent.
+        return True  # Treat other scalar values as present.
 
-def _template_wlan_references(templates: list[dict[str, Any]]) -> list[WlanReference]:
-    """Return references from organization template WLAN records."""
-    references: list[WlanReference] = []  # Accumulate template WLAN references in template order.
-    for template in templates:  # Inspect each organization template once.
-        references.extend(_references_for_template(template))  # Add each WLAN definition in this template.
-    return references  # Return all template references for SSID matching.
-
-
-def _references_for_template(template: dict[str, Any]) -> list[WlanReference]:
-    """Return WLAN references for one template."""
-    template_name = _text(template.get("name"))  # Use the template name as the source label.
-    return [  # Build references only for WLAN definitions that expose an SSID.
-        WlanReference(ssid=ssid, source="template", source_name=template_name)
-        for wlan in _template_wlan_records(template)
-        if (ssid := PskHygieneScorer.normalize_ssid(wlan.get("ssid")))
-    ]
-
-
-def _template_wlan_records(template: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return WLAN-like dictionaries from a template."""
-    raw_wlans = template.get("wlans", [])  # Mist templates store WLAN definitions under wlans.
-    if isinstance(raw_wlans, dict):  # Some API shapes use a map of WLAN names to definitions.
-        return [value for value in raw_wlans.values() if isinstance(value, dict)]  # Keep only dict definitions.
-    if isinstance(raw_wlans, list):  # Most API shapes use a list of WLAN definitions.
-        return [value for value in raw_wlans if isinstance(value, dict)]  # Keep only dict definitions.
-    return []  # Unknown template WLAN shapes are ignored safely.
-
-
-def _optional_int(value: Any) -> int | None:
-    """Return an integer value or None for absent input."""
-    if value is None or value == "":  # Treat missing and empty values as absent.
-        return None  # Preserve absence for cap and usage scoring.
-    if isinstance(value, bool):  # Avoid treating booleans as integer counts.
-        return None  # Preserve invalid count values as absent.
-    try:  # Convert numeric strings from API rows when present.
-        return int(value)  # Return the normalized integer count.
-    except (TypeError, ValueError):  # Treat malformed API values as absent.
-        return None  # Keep scoring deterministic for malformed counts.
-
-
-def _optional_text(value: Any) -> str | None:
-    """Return text or None for absent input."""
-    if not _has_value(value):  # Empty values must remain absent.
-        return None  # Preserve absence for output blanks and cap scoring.
-    return str(value)  # Preserve visible non-empty values as strings.
-
-
-def _text(value: Any) -> str:
-    """Return text or an empty string for absent input."""
-    return "" if value is None else str(value)  # Keep output values simple and non-null.
-
-
-def _has_value(value: Any) -> bool:
-    """Return true when a value is present."""
-    if value is None:  # None means the API omitted the value.
-        return False  # Treat None as absent for scoring.
-    if isinstance(value, str):  # Strings need whitespace-aware absence handling.
-        return bool(value.strip())  # Treat whitespace-only strings as absent.
-    if isinstance(value, (list, tuple, set, dict)):  # Containers need empty-aware absence handling.
-        return bool(value)  # Treat empty containers as absent.
-    return True  # Treat other scalar values as present.
-
-
-def _ensure_utc(value: datetime) -> datetime:
-    """Return a timezone-aware UTC datetime."""
-    if value.tzinfo is None:  # Naive API values need a timezone for safe comparison.
-        return value.replace(tzinfo=UTC)  # Treat naive values as UTC.
-    return value.astimezone(UTC)  # Normalize aware values to UTC.
+    @staticmethod
+    def _ensure_utc(value: datetime) -> datetime:
+        """Return a timezone-aware UTC datetime."""
+        if value.tzinfo is None:  # Naive API values need a timezone for safe comparison.
+            return value.replace(tzinfo=UTC)  # Treat naive values as UTC.
+        return value.astimezone(UTC)  # Normalize aware values to UTC.

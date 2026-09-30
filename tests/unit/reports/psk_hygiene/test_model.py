@@ -149,7 +149,7 @@ def test_zero_finding_summary() -> None:
 def test_model_has_no_forbidden_dependency_imports() -> None:
     """The model module stays independent from operation dependencies."""
     source = model.__loader__.get_source(model.__name__)  # Read the loaded model source text.
-    assert source is not None  # The source loader should provide text for this project module.
+    assert isinstance(source, str) and "Pure scoring model" in source  # Prove the project source loaded correctly.
     assert "mistapi" not in source  # The model must not import the Mist SDK.
     assert "DataExporter" not in source  # The model must not import the exporter.
     assert "ConfigUtils" not in source  # The model must not import organization prompts.
