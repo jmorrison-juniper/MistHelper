@@ -27,7 +27,7 @@ A NOC engineer runs the report for a quiet site and receives a header-only expor
 
 **Why this priority**: An empty site is a valid result. The run must still leave an auditable file.
 
-**Independent Test**: Mock an empty Mist count response. Verify that the exporter receives an empty row list with explicit field names and that the log message says the census is empty.
+**Independent Test**: Mock an empty Mist count response. Verify that the exporter receives an empty row list with explicit field names and that the printed message says the census is empty.
 
 **Acceptance Scenarios**:
 
@@ -51,6 +51,7 @@ The feature branch delivers the package, tests, specification, and wiring manife
 - **FR-003**: A test MUST assert the OpenAPI distinct list used by the operation.
 - **FR-004**: The operation MUST write `ClientFingerprintCensus.csv` under `data/` through the shared exporter.
 - **FR-005**: The export MUST include the selected distinct field value and `count` for each result row.
+- **FR-005A**: The export MUST use SDK pagination so it includes every count result page.
 - **FR-006**: A response with no `results` MUST write a header-only file and print a message that says the census is empty.
 - **FR-007**: The console table MUST print the top 20 rows sorted by count descending.
 - **FR-008**: The operation MUST be registered in the wiring manifest as menu `289`, category `interactive_safe`.
@@ -76,10 +77,13 @@ The feature branch delivers the package, tests, specification, and wiring manife
 - The OpenAPI enum is authoritative. It does not include `mfg`, even though the issue text names it.
 - The installed SDK exposes site-scoped aliases for the OpenAPI operation IDs.
 - The integration pull request will apply the menu row and shared-file changes from `wiring.md`.
+- The integration pull request will apply the README menu table update from `wiring.md`.
+- The primary key strategy will use `site_id`, `distinct`, and `value` because the endpoint returns no Mist identifier.
 
 ## Success Criteria
 
 - **SC-001**: A unit test proves that a populated response writes rows and prints the top 20 limit.
-- **SC-002**: A unit test proves that an empty response writes a header-only file and logs the empty message.
+- **SC-002**: A unit test proves that an empty response writes a header-only file and prints the empty message.
 - **SC-003**: A unit test proves that the distinct choices match the OpenAPI enum.
 - **SC-004**: The package quality gates pass for compile, Ruff, Black, mypy, pydocstyle, pytest, vulture, and interrogate.
+- **SC-005**: The client unit test proves that the SDK response passes through `mistapi.get_all`.

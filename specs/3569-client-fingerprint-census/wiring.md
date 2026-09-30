@@ -15,15 +15,19 @@ One `# WHY:` paragraph for the registry entry, in the style of the menu 269 and 
 ## Primary key strategies
 ```python
 "countOrgClientFingerprints": {
-    "type": "auto_increment_with_unique",
-    "primary_key": ["misthelper_internal_id"],
-    "unique_fields": ["site_id", "distinct", "value"],
+    "type": "composite_pk",
+    "primary_key": ["site_id", "distinct", "value"],
     "indexes": ["site_id", "site_name", "distinct", "value"],
 },
 ```
 
 ## copilot-instructions category table
 Add menu `289` to the `interactive_safe` row. Increase the `interactive_safe` count by one. Increase the full menu range upper bound as needed after integration.
+
+## README update
+Add menu `289` to the README menu table during the integration pull request. The shared README file is deferred by the fleet contract.
+
+The menu operation is not complete until the integration pull request updates README, shared menu files, generated references, and the primary key table.
 
 ## Import line for MistHelper.py
 `from src.reports.client_fingerprint_census.operation import ClientFingerprintCensus  # Menu 289 (issue #3569) -- export a site client fingerprint census.`

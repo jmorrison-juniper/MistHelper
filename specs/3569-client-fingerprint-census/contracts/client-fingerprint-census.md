@@ -14,6 +14,8 @@
 
 Call `mistapi.api.v1.sites.insights.countSiteClientFingerprints` with `site_id`, `distinct`, and `limit=100`.
 
+Use `mistapi.get_all` on the SDK response so the CSV export receives all pages.
+
 ## Export
 
 Write `ClientFingerprintCensus.csv` through `SourceDependencyResolver.DataExporter.write_with_format_selection` with `api_function_name="countOrgClientFingerprints"` and explicit field names.

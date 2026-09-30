@@ -32,6 +32,22 @@ It also defines `searchSiteClientFingerprints` with filters `family`, `client_ty
 
 **Alternatives considered**: Call `apisession.mist_get` directly. Rejected because the SDK provides the site-scoped count function.
 
+## Decision: Paginate the count response before export
+
+The SDK call sends `limit=100` to the count endpoint. The client then calls `mistapi.get_all(response=response, mist_session=mist_session)` so the CSV receives all result pages.
+
+**Rationale**: The report is a census. The console table is capped at 20 rows, but the export must contain all groups returned by pagination.
+
+**Alternatives considered**: Treat the first page as the complete result. Rejected because a large site can have more than 100 fingerprint groups.
+
+## Decision: Use a composite business key in the wiring manifest
+
+The count endpoint returns grouped rows with no stable Mist identifier. The wiring manifest uses `site_id`, `distinct`, and `value` as the composite primary key.
+
+**Rationale**: The key identifies one grouped count for one site and one fingerprint field without an artificial identifier.
+
+**Alternatives considered**: Use `misthelper_internal_id`. Rejected because the project constitution prefers natural business keys when the row has enough stable fields.
+
 ## Decision: Reuse the count exporter prompt pattern
 
 `src/export/count_exporter.py` menus `235`, `236`, and `237` list count operations, ask the operator to select one, resolve the identifier, call the SDK, flatten rows, and pass rows to `DataExporter.write_with_format_selection`.

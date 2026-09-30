@@ -32,7 +32,7 @@ This pull request adds the menu `289` client fingerprint census package. The men
 ## Security
 
 - [x] No hardcoded secrets, tokens, or passwords
-- [ ] Bandit passes with no new findings (`bandit -c pyproject.toml -r .`)
+- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src\reports\client_fingerprint_census`)
 - [ ] pip-audit clean (`pip-audit -r requirements.txt`)
 - [x] Sensitive data handled via `.env` / environment variables only
 
@@ -68,6 +68,10 @@ This pull request adds the menu `289` client fingerprint census package. The men
 - `python -m interrogate -v src\reports\client_fingerprint_census`: 100 percent
 - `python -m radon cc src\reports\client_fingerprint_census -j | complexity-gate --max 10`: passed
 - `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main`: passed
+- `python -m bandit -c pyproject.toml -r src\reports\client_fingerprint_census -q`: passed
+- `python -m pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120`: passed
+- `python -m pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120`: passed
+- `speckit.analyze`: remaining findings are fleet-scope deferrals. `wiring.md` carries the README and shared-file integration path.
 
 ## Deferred wiring
 

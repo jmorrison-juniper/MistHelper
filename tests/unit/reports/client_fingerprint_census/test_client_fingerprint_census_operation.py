@@ -107,4 +107,7 @@ def test_wiring_manifest_defers_shared_file_registration() -> None:
     assert "interactive_safe" in wiring_text  # WHY: category must match the site prompt behavior.
     assert "site prompt" in wiring_text  # WHY: skip reason must name the site prompt.
     assert "countOrgClientFingerprints" in wiring_text  # WHY: primary key strategy uses the OpenAPI operation ID.
+    assert '"type": "composite_pk"' in wiring_text  # WHY: integration must use a natural business key.
+    assert '"primary_key": ["site_id", "distinct", "value"]' in wiring_text  # WHY: avoid artificial IDs.
+    assert "README update" in wiring_text  # WHY: integration owns the shared README menu table.
     assert "ClientFingerprintCensus.run" in wiring_text  # WHY: integration needs the handler attribute.
