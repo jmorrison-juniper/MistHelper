@@ -6,16 +6,21 @@ import logging  # WHY: caplog validates secret redaction.
 from typing import Any  # WHY: fake response stores dynamic JSON.
 
 import mistapi  # WHY: monkeypatch SDK methods used by the client.
+import pytest  # WHY: failure-mode tests assert raised client errors.
 
-from src.org.mxedge_lifecycle.client import MxEdgeLifecycleClient  # WHY: system under test.
+from src.org.mxedge_lifecycle.client import (  # WHY: system under test and error contract.
+    MxEdgeLifecycleApiError,
+    MxEdgeLifecycleClient,
+)
 
 
 class FakeResponse:
     """Small response wrapper that matches `mistapi` response shape."""
 
-    def __init__(self, data: Any) -> None:
-        """Store fake response data."""
+    def __init__(self, data: Any, status_code: int = 200) -> None:
+        """Store fake response data and HTTP status."""
         self.data = data  # WHY: client reads the `.data` attribute.
+        self.status_code = status_code  # WHY: client checks HTTP failure modes before normalization.
 
 
 def test_mxedge_lifecycle_client_claim_does_not_log_claim_code(monkeypatch: Any, caplog: Any) -> None:
@@ -57,3 +62,33 @@ def test_mxedge_lifecycle_client_methods_call_expected_sdk_functions(monkeypatch
     assert client.upgrade({"mxedge_ids": ["mx-1"]})["status"] == "upgrade"
     assert client.get_upgrade("upgrade-1")["status"] == "get"
     assert calls == ["assign", "unassign", "bounce", "upgrade", "get"]  # WHY: all operation SDK paths ran.
+
+
+def test_mxedge_lifecycle_client_raises_for_http_4xx(monkeypatch: Any) -> None:
+    """A 4xx response must raise an API error with the status code."""
+
+    def fake_assign(session: object, org_id: str, body: dict[str, Any]) -> FakeResponse:
+        """Return a fake authorization failure."""
+        return FakeResponse({"message": "forbidden"}, status_code=403)  # WHY: simulate a Mist client error.
+
+    monkeypatch.setattr(mistapi.api.v1.orgs.mxedges, "assignOrgMxEdgeToSite", fake_assign)  # WHY: block network.
+    client = MxEdgeLifecycleClient(object(), "org-1")  # WHY: fake session avoids network.
+    with pytest.raises(MxEdgeLifecycleApiError) as error_info:  # WHY: 4xx must not look successful.
+        client.assign({"mxedge_ids": ["mx-1"], "site_id": "site-1"})  # WHY: exercise API client path.
+    assert error_info.value.status_code == 403  # WHY: caller can identify client-side HTTP failure.
+    assert "forbidden" in str(error_info.value)  # WHY: safe API message reaches the operator.
+
+
+def test_mxedge_lifecycle_client_raises_for_http_5xx(monkeypatch: Any) -> None:
+    """A 5xx response must raise an API error with the status code."""
+
+    def fake_list_upgrades(session: object, org_id: str) -> FakeResponse:
+        """Return a fake service failure."""
+        return FakeResponse({"error": "service unavailable"}, status_code=503)  # WHY: simulate a Mist server error.
+
+    monkeypatch.setattr(mistapi.api.v1.orgs.mxedges, "listOrgMxEdgeUpgrades", fake_list_upgrades)  # WHY: no network.
+    client = MxEdgeLifecycleClient(object(), "org-1")  # WHY: fake session avoids network.
+    with pytest.raises(MxEdgeLifecycleApiError) as error_info:  # WHY: 5xx must not return an empty list.
+        client.list_upgrades()  # WHY: exercise list response path.
+    assert error_info.value.status_code == 503  # WHY: caller can identify server-side HTTP failure.
+    assert "service unavailable" in str(error_info.value)  # WHY: safe API message reaches the operator.

@@ -15,6 +15,20 @@ import mistapi  # WHY: direct SDK calls are available for every required operati
 logger = logging.getLogger(__name__)  # WHY: module logger lets operators filter lifecycle API calls.
 
 
+class MxEdgeLifecycleApiError(RuntimeError):
+    """Raised when Mist returns an HTTP client or server error.
+
+    Why:
+        The operation writes one CSV error row when the client raises this
+        exception, and tests can verify 4xx and 5xx behavior without network.
+    """
+
+    def __init__(self, status_code: int, message: str) -> None:
+        """Store the HTTP status code and safe message."""
+        super().__init__(f"Mist API returned HTTP {status_code}: {message}")  # WHY: operator sees status.
+        self.status_code = status_code  # WHY: tests and callers can branch on class of failure.
+
+
 class MxEdgeLifecycleClient:
     """Call Mist Edge lifecycle endpoints through `mistapi`.
 
@@ -89,6 +103,7 @@ class MxEdgeLifecycleClient:
     @staticmethod
     def _data(response: Any) -> dict[str, Any]:
         """Return a dictionary from a Mist SDK response."""
+        MxEdgeLifecycleClient._raise_for_http_error(response)  # WHY: 4xx and 5xx responses must fail loudly.
         data = getattr(response, "data", response)  # WHY: SDK responses wrap JSON in `.data`.
         if isinstance(data, dict):  # WHY: most lifecycle responses are dictionaries.
             return data  # WHY: caller expects a mapping.
@@ -97,9 +112,36 @@ class MxEdgeLifecycleClient:
     @staticmethod
     def _rows(response: Any) -> list[dict[str, Any]]:
         """Return a list of dictionaries from a Mist SDK response."""
+        MxEdgeLifecycleClient._raise_for_http_error(response)  # WHY: list reads must fail on HTTP errors.
         data = getattr(response, "data", response)  # WHY: SDK responses wrap JSON in `.data`.
         if isinstance(data, list):  # WHY: list endpoints usually return a list.
             return [row for row in data if isinstance(row, dict)]  # WHY: keep only JSON objects.
         if isinstance(data, dict) and isinstance(data.get("results"), list):  # WHY: some endpoints wrap rows.
             return [row for row in data["results"] if isinstance(row, dict)]  # WHY: keep only JSON objects.
         return []  # WHY: unknown shapes become an empty list for safe polling fallback.
+
+    @staticmethod
+    def _raise_for_http_error(response: Any) -> None:
+        """Raise an API error when the response carries HTTP 4xx or 5xx."""
+        status_code = MxEdgeLifecycleClient._status_code(response)  # WHY: SDK versions expose status differently.
+        if status_code < 400:  # WHY: only client and server errors should raise.
+            return  # WHY: 2xx and 3xx responses continue to normalization.
+        message = MxEdgeLifecycleClient._error_message(response)  # WHY: include a safe failure detail.
+        raise MxEdgeLifecycleApiError(status_code, message)  # WHY: operation records this as an error row.
+
+    @staticmethod
+    def _status_code(response: Any) -> int:
+        """Return the HTTP status code from common SDK fields."""
+        value = getattr(response, "status_code", None)  # WHY: requests-like responses use this field.
+        if isinstance(value, int):  # WHY: integer values are valid HTTP codes.
+            return value  # WHY: caller compares numeric ranges.
+        value = getattr(response, "status", None)  # WHY: some SDK responses use status.
+        return value if isinstance(value, int) else 200  # WHY: missing status means the SDK accepted the call.
+
+    @staticmethod
+    def _error_message(response: Any) -> str:
+        """Return a safe error message from an SDK response."""
+        data = getattr(response, "data", {})  # WHY: API errors usually place detail in data.
+        if isinstance(data, dict):  # WHY: structured errors can name the reason.
+            return str(data.get("message") or data.get("error") or data)[:200]  # WHY: keep detail bounded.
+        return str(data)[:200]  # WHY: preserve non-dict error detail safely.
