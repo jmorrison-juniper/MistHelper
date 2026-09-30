@@ -388,6 +388,56 @@ class OperationRegistry:
         # unknown wireless access point detection, so this operation packages detection rows,
         # site detection settings, and a short evidence summary for review.
         "282": {"category": "safe"},
+        # WHY: menu 283 starts one Mist synthetic test only after an explicit y/N confirmation.
+        # It is interactive because it prompts for a site, scope, optional device, and test
+        # parameters. The operation masks RADIUS secrets and writes only a safe request summary
+        # and result.
+        "283": {
+            "category": "interactive",
+            "skip_reason": "Requires a site, an optional device, and a y/N confirmation",
+        },
+        # WHY: menu 284 tests one guest portal SMS provider setup. It is interactive because it
+        # asks for hidden credentials, confirms before it sends a test message, calls one
+        # /api/v1/utils/ provider test endpoint, and writes a credential-free result row.
+        "284": {
+            "category": "interactive",
+            "skip_reason": "Requires hidden provider credentials and a y/N confirmation",
+        },
+        # WHY: menu 285 validates one Access Assurance identity provider credential before a
+        # cutover. It is interactive because it asks for a provider, a username, a hidden
+        # password, and a final y/N confirmation before it sends the credential to Mist. The
+        # operation writes only the safe verdict and returned attributes, so the password never
+        # enters the export path.
+        "285": {
+            "category": "interactive",
+            "skip_reason": "Requires a provider, a username, a hidden password, and a y/N confirmation",
+        },
+        # WHY: Menu 288 prints SSR registration commands for a NOC engineer who must manually
+        # onboard a Session Smart Router. The read is safe and has no prompt, but the optional
+        # file write asks y/N because the command text can include a live registration code.
+        # Keep the row in `interactive_safe` so `--testinteractive` can skip it with the
+        # write-prompt reason.
+        "288": {
+            "category": "interactive_safe",
+            "skip_reason": (
+                "Prompts before writing `data/SsrRegistrationCommands.txt` with "
+                "`Write registration commands to data/SsrRegistrationCommands.txt? (y/N):`"
+            ),
+        },
+        # WHY: A NOC engineer needs a site-scoped client fingerprint census before NAC policy
+        # design and capacity planning. The operation prompts for one site and one OpenAPI
+        # distinct field, then exports a read-only count report.
+        "289": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires a site prompt and a distinct-field prompt.",
+        },
+        # WHY: Menu 290 starts bounded RF diagnostics only after an operator confirmation. The
+        # operation can run AP spectrum analysis or client RF diagnostic recording, and it stops
+        # a recording in a finally block so Ctrl+C does not leave cloud work running.
+        "290": {
+            "category": "interactive",
+            "skip_reason": "Requires a mode, a site, target values, and a y/N confirmation",
+        },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",

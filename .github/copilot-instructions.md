@@ -436,7 +436,7 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ## Menu System & Operations
 
-### Menu Categories (Full Range: 0-282)
+### Menu Categories (Full Range: 0-290)
 
 `src/utils/operation_registry.py` is the single source of truth. Read it before
 you trust this table. Counts were measured on 2026-09-30. Run
@@ -446,10 +446,10 @@ the registry, so a stale count now fails the gate.
 
 | Category | Count | Menu numbers |
 | - | - | - |
-| `interactive_safe` | 93 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270 |
+| `interactive_safe` | 95 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289 |
 | `safe` | 83 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-279, 282 |
 | `destructive` | 42 | 154-187, 189-191, 194, 206-208, 239 |
-| `interactive` | 29 | 0, 124-150, 192 |
+| `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
 | `websocket` | 22 | 102-123 |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
 | `continuous_loop` | 1 | 151 |

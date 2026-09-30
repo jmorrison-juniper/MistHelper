@@ -47,6 +47,7 @@ CATEGORY_RANGES = [
     (270, 270, "Marvis Actions"),  # Issue #3299: the Marvis Actions export and bulk resolve.
     (271, 276, "Hygiene Reports"),  # Issue #3616 groups Tier 1 read-only hygiene reports.
     (277, 282, "Health Scorecards"),  # Issue #3617 groups Tier 2 read-only scorecard reports.
+    (283, 290, "Diagnostic Utilities"),  # Issue #3618 groups Tier 3 diagnostics and safe reports.
 ]
 
 # Menu numbers whose range gives the wrong category name. Issue #3153.
@@ -601,6 +602,38 @@ def _build_registry() -> dict:
                     "Type RESOLVE and the count, for example RESOLVE 12. "  # The exact form that the check accepts.
                     "Leave it blank to see the count."  # A blank answer logs the preview and the count.
                 ),
+            ),
+        ],
+    }
+
+    registry["288"] = {  # Menu 288 asks whether to write SSR registration commands to a file.
+        "category": "interactive",  # The portal must send the y/N answer before Run.
+        "parameters": [
+            _choice_param(  # Answer the file-write prompt exactly as the console prompt expects.
+                "ssr_registration_write",  # Name the control for the optional file write.
+                "Write registration commands to data/SsrRegistrationCommands.txt?",  # Show the protected action.
+                [
+                    {"value": "N", "label": "No"},  # Keep the safe default from the console prompt.
+                    {"value": "y", "label": "Yes"},  # Send the only answer that approves the file write.
+                ],
+                default="N",  # Preselect the safe answer because the text can include a live code.
+            ),
+        ],
+    }
+
+    from src.reports.client_fingerprint_census.model import DISTINCT_FIELDS  # Read the OpenAPI field list.
+
+    registry["289"] = {  # Menu 289 asks for one site and one distinct field.
+        "category": "interactive",  # The portal must collect both answers before Run.
+        "parameters": [
+            _site_param(),  # Answer the site prompt the handler reads first.
+            _choice_param(  # Answer the distinct-field prompt with the one-based menu number.
+                "client_fingerprint_distinct",  # Name the control for the grouping field.
+                "Distinct Field",  # Show the OpenAPI field purpose to the operator.
+                [
+                    {"value": str(position), "label": field_name}  # Match the console prompt numbering.
+                    for position, field_name in enumerate(DISTINCT_FIELDS, start=1)  # Preserve prompt order.
+                ],
             ),
         ],
     }

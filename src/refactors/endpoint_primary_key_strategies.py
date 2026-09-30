@@ -3242,6 +3242,35 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_fields": ["org_id", "site_id", "run_started_at"],
         "indexes": ["org_id", "site_id", "rogue_enabled"],
     },
+    "SyntheticTestTrigger": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["site_id", "device_id", "scope", "test_type", "triggered_at"],
+        "indexes": ["site_id", "device_id", "scope", "test_type", "status"],
+    },
+    "testSmsProviderSetup": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["provider", "destination", "tested_at"],
+        "indexes": ["provider", "destination", "verdict", "http_status", "tested_at"],
+    },
+    "nacIdpCredentialTest": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["tested_at", "idp_id", "username"],
+        "indexes": ["idp_id", "idp_name", "username", "verdict", "tested_at"],
+    },
+    "countOrgClientFingerprints": {
+        "type": "composite_pk",
+        "primary_key": ["site_id", "distinct", "value"],
+        "indexes": ["site_id", "site_name", "distinct", "value"],
+    },
+    "rf_diagnostics_runs": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["mode", "site_id", "target", "started_at"],
+        "indexes": ["mode", "site_id", "target", "status", "started_at"],
+    },
 }
 
 # Stage two endpoint family entries from issue #1807.
