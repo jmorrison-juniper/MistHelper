@@ -16,10 +16,10 @@ organizations, your sites, your devices, and your clients, and it writes what it
 finds to a file or to a database. It also runs a small set of change operations,
 such as a firmware upgrade.
 
-The tool holds **279 operations**, numbered 1 to 282 with gaps at 152, 280, and
-281. It also serves a web portal, an upgrade capture portal, and a metrics
-gateway. Read [the operator guide](documentation/operator-guide.md) for what
-each part does.
+The tool holds **279 operations**, numbered 1 to 282 with gaps at 152, 280-281.
+It also serves a web portal, an upgrade capture portal, and a metrics gateway.
+Read [the operator guide](documentation/operator-guide.md) for what each part
+does.
 
 Menu 271 exports subscription and contract expiry reports. Use it to find
 license and support renewal risk.

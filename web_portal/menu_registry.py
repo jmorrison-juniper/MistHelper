@@ -188,6 +188,10 @@ MENU_DESCRIPTIONS = {
     "274": "Export the PSK hygiene report",
     "275": "Audit site variable coverage",
     "276": "Export the organization security posture checklist",
+    "277": "Export the organization switch scorecard",
+    "278": "Export the organization access point scorecard",
+    "279": "Organization WAN Edge Scorecard",
+    "282": "Export the rogue and PCI evidence pack",
 }
 
 

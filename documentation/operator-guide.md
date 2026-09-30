@@ -10,9 +10,9 @@ does not start.
 
 ## The menu
 
-The tool holds **279 operations**, numbered 1 to 282 with gaps at 152, 280, and
-281. Menu 0 is Exit. Read [the menu reference](menu_reference.md) for the full
-list, which is generated from the code.
+The tool holds **279 operations**, numbered 1 to 282 with gaps at 152, 280-281.
+Menu 0 is Exit. Read [the menu reference](menu_reference.md) for the full list,
+which is generated from the code.
 
 Menu 259 runs no-identifier Mist get and list endpoints from a prompt. Menu
 260 runs org-scoped endpoints. Menu 261 runs site-scoped endpoints. Menu 262

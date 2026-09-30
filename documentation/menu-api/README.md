@@ -2,7 +2,7 @@
 
 # Menu API endpoint map
 
-This map shows the Mist API endpoints that each of the 276 MistHelper menu options can call.
+This map shows the Mist API endpoints that each of the 280 MistHelper menu options can call.
 The count includes menu 0, which closes MistHelper.
 The menu reference does not count menu 0 as an actionable entry.
 Use the map to find the endpoint that does a task, and to find the code that sends the request.
@@ -61,7 +61,7 @@ flowchart TB
 ```mermaid
 pie showData
     title Menu options in each category
-    "safe" : 79
+    "safe" : 83
     "interactive_safe" : 93
     "destructive" : 42
     "interactive" : 29
@@ -74,7 +74,7 @@ pie showData
 
 | Category | Menu options | With an endpoint | Page |
 | - | - | - | - |
-| `safe` | 79 | 77 | [safe](safe.md) |
+| `safe` | 83 | 81 | [safe](safe.md) |
 | `interactive_safe` | 93 | 93 | [interactive_safe](interactive-safe.md) |
 | `destructive` | 42 | 40 | [destructive](destructive.md) |
 | `interactive` | 29 | 27 | [interactive](interactive.md) |
@@ -362,6 +362,10 @@ pie showData
 | [274](safe.md#menu-274) | Export the PSK hygiene report | `safe` | 0 |
 | [275](safe.md#menu-275) | Audit site variable coverage | `safe` | 7 |
 | [276](safe.md#menu-276) | Export the organization security posture checklist | `safe` | 5 |
+| [277](safe.md#menu-277) | Export the organization switch scorecard | `safe` | 1 |
+| [278](safe.md#menu-278) | Export the organization access point scorecard | `safe` | 1 |
+| [279](safe.md#menu-279) | Organization WAN Edge Scorecard | `safe` | 1 |
+| [282](safe.md#menu-282) | Export the rogue and PCI evidence pack | `safe` | 5 |
 
 ## Menu options with no endpoint
 
@@ -378,23 +382,23 @@ The map finds no Mist API request for 6 menu options.
 
 | Menu options | Method | Path | SDK function |
 | - | - | - | - |
-| 112 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) |
+| 113 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) |
 | 41 | GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) |
 | 34 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) |
 | 28 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) |
 | 22 | GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) |
+| 15 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) |
 | 14 | GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) |
-| 12 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) |
 | 12 | GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) |
 | 10 | GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) |
 | 9 | GET | `/api/v1/sites/{site_id}` | [`sites.sites.getSiteInfo`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/get-site-info) |
 | 8 | GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) |
 | 8 | GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) |
+| 8 | GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) |
+| 8 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) |
 | 8 | GET | `/api/v1/sites/{site_id}/stats/devices` | [`sites.stats.listSiteDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats) |
 | 7 | GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) |
 | 7 | GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) |
-| 7 | GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) |
-| 7 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) |
 | 6 | GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) |
 | 6 | GET | `/api/v1/const/ap_channels` | [`const.ap_channels.listApChannels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-channels) |
 | 6 | GET | `/api/v1/const/ap_esl_versions` | [`const.ap_esl_versions.listApLEslVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-l-esl-versions) |
@@ -407,6 +411,14 @@ The map finds no Mist API request for 6 menu options.
 ## Shared helpers
 
 The walk of a menu option stops at these helpers.
+
+### APIDataFetcher
+
+Calls one Mist API list endpoint, retries after a rate limit, and writes the rows to the selected output.
+
+This helper also uses: `DataExporter`, `RateLimitingUtils`, `SourceDependencyResolver`.
+
+The map finds no Mist API request for this helper.
 
 ### CacheUtils
 
