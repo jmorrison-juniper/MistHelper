@@ -1161,7 +1161,8 @@ def test_settled_operation_keeps_locks_until_the_phase_watch_finishes(
     status = org_upgrade_client.get("/api/org-upgrades/org-run-contract")
     assert status.get_json()["status"] == "completed"
     assert store.records["org-run-contract"]["site_locks"] != {}  # The post-check stage still needs the site.
-    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is not None  # The site stays protected.
+    held = lock.read_lock(fake_org_id, fake_site_id, select.lock_client())  # Read the lock during the post-check.
+    assert isinstance(held, lock.LockRecord) and held.run_id == "org-run-contract"  # The same operation holds it.
     store.records["org-run-contract"]["phase_watch"]["state"] = "finished"  # The post-check stage now ended.
     org_upgrade_client.get("/api/org-upgrades/org-run-contract")  # A recovery poll performs any missed release.
     assert store.records["org-run-contract"]["site_locks"] == {}  # The durable record holds no site.
