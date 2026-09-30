@@ -6,7 +6,11 @@ import logging  # WHY: caplog checks that passwords do not reach logs.
 from typing import Any  # WHY: fake classes accept dynamic runtime values.
 
 from src.troubleshooting.nac_idp_credential_test import operation as operation_module  # WHY: patch operation seams.
-from src.troubleshooting.nac_idp_credential_test.model import CredentialTestResult, IdentityProviderChoice
+from src.troubleshooting.nac_idp_credential_test.model import (
+    CredentialTestRequest,
+    CredentialTestResult,
+    IdentityProviderChoice,
+)
 from src.troubleshooting.nac_idp_credential_test.prompts import NacIdpCredentialPrompts
 
 
@@ -159,9 +163,12 @@ def test_nac_idp_credential_test_operation_writes_safe_csv(monkeypatch: Any, cap
 
     operation_module.NacIdpCredentialTest.run()  # WHY: exercise the menu handler.
 
-    assert FakeClient.last_instance is not None  # WHY: operation must create the client.
-    assert len(FakeClient.last_instance.requests) == 1  # WHY: confirmed flow sends one credential.
+    client = FakeClient.last_instance
+    assert isinstance(client, FakeClient)
+    assert (client.session, client.org_id) == ("session", "org-1")  # WHY: use the active API scope.
+    assert client.requests == [CredentialTestRequest("idp-1", "user@example.net", "hidden-value")]
     assert FakeDataExporter.calls[0]["filename"] == "NacIdpCredentialTest.csv"  # WHY: required output file.
+    assert FakeDataExporter.calls[0]["rows"][0]["verdict"] == "success"  # WHY: export the confirmed result.
     assert "hidden-value" not in caplog.text  # WHY: password must not reach logs.
     assert "hidden-value" not in str(FakeDataExporter.calls)  # WHY: password must not reach exports.
 
@@ -198,8 +205,10 @@ def test_nac_idp_credential_test_decline_sends_no_credential(monkeypatch: Any) -
 
     operation_module.NacIdpCredentialTest.run()  # WHY: exercise the declined confirmation path.
 
-    assert FakeClient.last_instance is not None  # WHY: operation still reads providers before confirmation.
-    assert FakeClient.last_instance.requests == []  # WHY: declined confirmation sends no credential.
+    client = FakeClient.last_instance
+    assert isinstance(client, FakeClient)
+    assert (client.session, client.org_id) == ("session", "org-1")  # WHY: read providers in the active API scope.
+    assert client.requests == []  # WHY: declined confirmation sends no credential.
     assert FakeDataExporter.calls == []  # WHY: no API result means no export row.
 
 
@@ -210,9 +219,12 @@ def test_nac_idp_credential_test_export_failure_logs_error(monkeypatch: Any, cap
 
     operation_module.NacIdpCredentialTest.run()  # WHY: exercise validation followed by export failure.
 
-    assert FakeClient.last_instance is not None  # WHY: operation must still create the client.
-    assert len(FakeClient.last_instance.requests) == 1  # WHY: export failure happens after validation.
+    client = FakeClient.last_instance
+    assert isinstance(client, FakeClient)
+    assert (client.session, client.org_id) == ("session", "org-1")  # WHY: validate in the active API scope.
+    assert client.requests == [CredentialTestRequest("idp-1", "user@example.net", "hidden-value")]
     assert FailingDataExporter.calls[0]["filename"] == "NacIdpCredentialTest.csv"  # WHY: required output name.
+    assert FailingDataExporter.calls[0]["rows"][0]["verdict"] == "success"  # WHY: only the export must fail.
     assert "MistHelper could not write NacIdpCredentialTest.csv" in caplog.text  # WHY: operator sees failure.
     assert "Traceback" not in caplog.text  # WHY: export failure must not create an unhandled exception.
     assert "hidden-value" not in caplog.text  # WHY: export failure logs must not expose the password.
