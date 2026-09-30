@@ -78,17 +78,17 @@ that the audit row names the site, template, variable, and field path.
 
 ### Tests for User Story 1
 
-- [ ] T009 [P] [US1] Add a failing test for a missing gateway template variable in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py`
-- [ ] T010 [P] [US1] Add a failing test for `SiteVariableAudit.run()` fixture output with no prompt in `tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py`
-- [ ] T011 [P] [US1] Add a failing test that the console summary counts distinct sites with findings in `tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py`
+- [X] T009 [P] [US1] Add a failing test for a missing gateway template variable in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py)
+- [X] T010 [P] [US1] Add a failing test for `SiteVariableAudit.run()` fixture output with no prompt in `tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py)
+- [X] T011 [P] [US1] Add a failing test that the console summary counts distinct sites with findings in `tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py)
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Implement site and template normalization for assigned gateway templates, network templates, templates, WLANs, and device profiles in `src/reports/site_variable_audit/model.py`
-- [ ] T013 [US1] Implement missing-variable finding creation with deterministic ordering in `src/reports/site_variable_audit/model.py`
-- [ ] T014 [US1] Implement organization reads for sites, templates, WLANs, device profiles, and site variables through installed `mistapi` functions in `src/reports/site_variable_audit/client.py`
-- [ ] T015 [US1] Implement `DataExporter.write_with_format_selection` calls for `SiteVariableAudit.csv` and `SiteVariableSummary.csv` in `src/reports/site_variable_audit/operation.py`
-- [ ] T016 [US1] Implement the console summary for the distinct missing-site count in `src/reports/site_variable_audit/operation.py`
+- [X] T012 [US1] Implement site and template normalization for assigned gateway templates, network templates, templates, WLANs, and device profiles in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T013 [US1] Implement missing-variable finding creation with deterministic ordering in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T014 [US1] Implement organization reads for sites, templates, WLANs, device profiles, and site variables through installed `mistapi` functions in `src/reports/site_variable_audit/client.py` (delivered: src/reports/site_variable_audit/client.py)
+- [X] T015 [US1] Implement `DataExporter.write_with_format_selection` calls for `SiteVariableAudit.csv` and `SiteVariableSummary.csv` in `src/reports/site_variable_audit/operation.py` (delivered: src/reports/site_variable_audit/operation.py)
+- [X] T016 [US1] Implement the console summary for the distinct missing-site count in `src/reports/site_variable_audit/operation.py` (delivered: src/reports/site_variable_audit/operation.py)
 
 **Commit checkpoint**: Commit the MVP missing-variable report and its proof tests.
 
@@ -104,15 +104,15 @@ multiple fields, and malformed brace text.
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Add failing tests for nested mapping paths and list index paths in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py`
-- [ ] T018 [P] [US2] Add failing tests for multiple tokens in one string and repeated variable evidence in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py`
-- [ ] T019 [P] [US2] Add failing tests for `{{ name }}` normalization and malformed brace rejection in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py`
+- [X] T017 [P] [US2] Add failing tests for nested mapping paths and list index paths in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py)
+- [X] T018 [P] [US2] Add failing tests for multiple tokens in one string and repeated variable evidence in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py)
+- [X] T019 [P] [US2] Add failing tests for `{{ name }}` normalization and malformed brace rejection in `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py)
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Implement recursive token scanning for dictionaries, lists, and strings in `src/reports/site_variable_audit/model.py`
-- [ ] T021 [US2] Implement variable-name normalization, empty-token rejection, and token names with underscores in `src/reports/site_variable_audit/model.py`
-- [ ] T022 [US2] Implement stable JSON field path formatting with list indexes in `src/reports/site_variable_audit/model.py`
+- [X] T020 [US2] Implement recursive token scanning for dictionaries, lists, and strings in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T021 [US2] Implement variable-name normalization, empty-token rejection, and token names with underscores in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T022 [US2] Implement stable JSON field path formatting with list indexes in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
 
 **Commit checkpoint**: Commit the token scanner and path evidence tests.
 
@@ -128,16 +128,16 @@ a site with all variables defined, and a site with no assigned templates.
 
 ### Tests for User Story 3
 
-- [ ] T023 [P] [US3] Add failing tests for unused variable counts and names in `tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py`
-- [ ] T024 [P] [US3] Add failing tests for a site with all variables defined and zero audit rows in `tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py`
-- [ ] T025 [P] [US3] Add failing tests for a site with no assigned templates and all defined variables unused in `tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py`
+- [X] T023 [P] [US3] Add failing tests for unused variable counts and names in `tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py)
+- [X] T024 [P] [US3] Add failing tests for a site with all variables defined and zero audit rows in `tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py)
+- [X] T025 [P] [US3] Add failing tests for a site with no assigned templates and all defined variables unused in `tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py)
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] Implement `SiteVariableSummary` row creation with deterministic ordering in `src/reports/site_variable_audit/model.py`
-- [ ] T027 [US3] Implement required, defined, missing, and unused variable count logic in `src/reports/site_variable_audit/model.py`
-- [ ] T028 [US3] Implement sorted assigned-template display names and unused variable names in `src/reports/site_variable_audit/model.py`
-- [ ] T029 [US3] Connect summary rows to the operation export path in `src/reports/site_variable_audit/operation.py`
+- [X] T026 [US3] Implement `SiteVariableSummary` row creation with deterministic ordering in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T027 [US3] Implement required, defined, missing, and unused variable count logic in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T028 [US3] Implement sorted assigned-template display names and unused variable names in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T029 [US3] Connect summary rows to the operation export path in `src/reports/site_variable_audit/operation.py` (delivered: src/reports/site_variable_audit/operation.py)
 
 **Commit checkpoint**: Commit the summary report and its proof tests.
 
@@ -148,13 +148,13 @@ a site with all variables defined, and a site with no assigned templates.
 **Purpose**: Prove the operation is read-only, bounded, observable, and clear
 when required data is unavailable.
 
-- [ ] T030 [P] Add a failing client test that each unique template source is read one time per run in `tests/unit/reports/site_variable_audit/site_variable_audit_client_test.py`
-- [ ] T031 [P] Add a failing client test that no `getSiteSetting` or per-site settings callable is used in `tests/unit/reports/site_variable_audit/site_variable_audit_client_test.py`
-- [ ] T032 [P] Add failing operation tests for missing organization data and failed Mist reads in `tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py`
-- [ ] T033 Implement one-read-per-endpoint behavior and no per-site settings retrieval in `src/reports/site_variable_audit/client.py`
-- [ ] T034 Implement clear user-facing errors for missing organization data and failed Mist reads in `src/reports/site_variable_audit/operation.py`
-- [ ] T035 Add ASCII-only `%s` formatted logging before and after each API read, transform, and export in `src/reports/site_variable_audit/client.py`
-- [ ] T036 Add ASCII-only `%s` formatted logging before and after each resolver read, model transform, and export in `src/reports/site_variable_audit/operation.py`
+- [X] T030 [P] Add a failing client test that each unique template source is read one time per run in `tests/unit/reports/site_variable_audit/site_variable_audit_client_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_client_test.py)
+- [X] T031 [P] Add a failing client test that no `getSiteSetting` or per-site settings callable is used in `tests/unit/reports/site_variable_audit/site_variable_audit_client_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_client_test.py)
+- [X] T032 [P] Add failing operation tests for missing organization data and failed Mist reads in `tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py)
+- [X] T033 Implement one-read-per-endpoint behavior and no per-site settings retrieval in `src/reports/site_variable_audit/client.py` (delivered: src/reports/site_variable_audit/client.py)
+- [X] T034 Implement clear user-facing errors for missing organization data and failed Mist reads in `src/reports/site_variable_audit/operation.py` (delivered: src/reports/site_variable_audit/operation.py)
+- [X] T035 Add ASCII-only `%s` formatted logging before and after each API read, transform, and export in `src/reports/site_variable_audit/client.py` (delivered: src/reports/site_variable_audit/client.py)
+- [X] T036 Add ASCII-only `%s` formatted logging before and after each resolver read, model transform, and export in `src/reports/site_variable_audit/operation.py` (delivered: src/reports/site_variable_audit/operation.py)
 
 **Commit checkpoint**: Commit the safety, performance, and error behavior proofs.
 
@@ -165,8 +165,8 @@ when required data is unavailable.
 **Purpose**: Add the non-shared artifacts that issue #3556 requires on this
 branch.
 
-- [ ] T037 Update the final wiring manifest with source files, test files, Menu 275 registration values, OperationRegistry values, endpoint primary key strategy values, generated reference commands, validation commands, and deferred integration status in `specs/3556-site-variable-audit/wiring.md`
-- [ ] T038 Add the release note fragment for issue #3556 in `changelog.d/issue-3556-site-variable-audit.md`
+- [X] T037 Update the final wiring manifest with source files, test files, Menu 275 registration values, OperationRegistry values, endpoint primary key strategy values, generated reference commands, validation commands, and deferred integration status in `specs/3556-site-variable-audit/wiring.md` (delivered: specs/3556-site-variable-audit/wiring.md)
+- [X] T038 Add the release note fragment for issue #3556 in `changelog.d/issue-3556-site-variable-audit.md` (delivered: changelog.d/issue-3556-site-variable-audit.md)
 
 **Commit checkpoint**: Commit the wiring manifest and release note fragment.
 
@@ -177,15 +177,15 @@ branch.
 **Purpose**: Run the smallest gates that prove issue #3556 and the feature
 specification. Use only the worktree virtual environment.
 
-- [ ] T039 Run syntax validation for the new package with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m py_compile src\reports\site_variable_audit\client.py src\reports\site_variable_audit\model.py src\reports\site_variable_audit\operation.py`
-- [ ] T040 Run unit tests with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pytest tests\unit\reports\site_variable_audit`
-- [ ] T041 Run Ruff with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m ruff check src\reports\site_variable_audit tests\unit\reports\site_variable_audit`
-- [ ] T042 Run Black check with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m black --check src\reports\site_variable_audit tests\unit\reports\site_variable_audit`
-- [ ] T043 Run mypy for the new package with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m mypy src\reports\site_variable_audit --config-file pyproject.toml`
-- [ ] T044 Run pydocstyle for the new package with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pydocstyle src\reports\site_variable_audit`
-- [ ] T045 Prove no per-site settings retrieval by searching for `getSiteSetting` in `src/reports/site_variable_audit` and `tests/unit/reports/site_variable_audit`
-- [ ] T046 Prove the spec directory contains `spec.md`, `plan.md`, `tasks.md`, and `wiring.md` in `specs/3556-site-variable-audit/`
-- [ ] T047 Record that the live `MistHelper.py --test` Menu 275 proof is deferred to the integration pull request in `specs/3556-site-variable-audit/wiring.md`
+- [X] T039 Run syntax validation for the new package with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m py_compile src\reports\site_variable_audit\client.py src\reports\site_variable_audit\model.py src\reports\site_variable_audit\operation.py` (passed)
+- [X] T040 Run unit tests with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pytest tests\unit\reports\site_variable_audit` (13 passed)
+- [X] T041 Run Ruff with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m ruff check src\reports\site_variable_audit tests\unit\reports\site_variable_audit` (passed)
+- [X] T042 Run Black check with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m black --check src\reports\site_variable_audit tests\unit\reports\site_variable_audit` (passed)
+- [X] T043 Run mypy for the new package with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m mypy src\reports\site_variable_audit --config-file pyproject.toml` (passed)
+- [X] T044 Run pydocstyle for the new package with `C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pydocstyle src\reports\site_variable_audit` (passed)
+- [X] T045 Prove no per-site settings retrieval by searching for `getSiteSetting` in `src/reports/site_variable_audit` and `tests/unit/reports/site_variable_audit` (passed: no `getSiteSetting(` call)
+- [X] T046 Prove the spec directory contains `spec.md`, `plan.md`, `tasks.md`, and `wiring.md` in `specs/3556-site-variable-audit/` (delivered)
+- [X] T047 Record that the live `MistHelper.py --test` Menu 275 proof is deferred to the integration pull request in `specs/3556-site-variable-audit/wiring.md` (delivered: specs/3556-site-variable-audit/wiring.md)
 
 **Commit checkpoint**: Commit only after all applicable validation tasks pass.
 

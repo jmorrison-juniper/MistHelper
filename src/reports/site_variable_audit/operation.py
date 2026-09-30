@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)  # Keep log records tied to this module.
 class SiteVariableAudit:
     """Run the read-only site variable coverage audit."""
 
-    API_NAME = "siteVariableAudit"  # Use one stable DataExporter API function name.
+    AUDIT_API_NAME = "siteVariableAudit"  # Use one stable DataExporter API function name for audit rows.
+    SUMMARY_API_NAME = "siteVariableSummary"  # Use one stable DataExporter API function name for summary rows.
     AUDIT_FILENAME = "SiteVariableAudit.csv"  # Match the required audit CSV name.
     SUMMARY_FILENAME = "SiteVariableSummary.csv"  # Match the required summary CSV name.
 
@@ -45,6 +46,7 @@ class SiteVariableAudit:
 
     @staticmethod
     def _resolve_org_id(config_utils: Any) -> str:
+        """Return the selected organization ID through the shared helper."""
         logger.info("Resolving organization ID for site variable audit")  # Log before organization lookup.
         org_id = str(config_utils.get_cached_or_prompted_org_id() or "")  # Use the repository standard org helper.
         logger.debug(
@@ -54,6 +56,7 @@ class SiteVariableAudit:
 
     @staticmethod
     def _validate_inputs(apisession: Any, org_id: str) -> None:
+        """Stop the audit when the required Mist context is absent."""
         logger.info("Validating site variable audit organization context")  # Log before validation.
         if apisession is None:  # A Mist read cannot run without a session.
             raise RuntimeError(
@@ -67,6 +70,7 @@ class SiteVariableAudit:
 
     @staticmethod
     def _fetch_records(client: SiteVariableAuditClient) -> dict[str, list[dict[str, Any]]]:
+        """Return all organization records required by the audit."""
         logger.info("Fetching site variable audit records")  # Log before the client reads.
         try:  # Stop the operation when one required dataset fails.
             records = client.fetch()  # Fetch all required datasets one time.
@@ -78,6 +82,7 @@ class SiteVariableAudit:
 
     @staticmethod
     def _build_result(records: dict[str, list[dict[str, Any]]]) -> Any:
+        """Return report rows built from already loaded records."""
         logger.info("Building site variable audit report rows")  # Log before model transform.
         result = SiteVariableAuditModel.build_result(records)  # Build findings and summaries.
         logger.debug("Built audit result with %s findings", len(result.findings))  # Log finding count.
@@ -85,21 +90,23 @@ class SiteVariableAudit:
 
     @staticmethod
     def _export_reports(data_exporter: Any, result: Any) -> None:
+        """Write the audit and summary reports through DataExporter."""
         logger.info("Writing site variable audit report")  # Log before the audit export.
         audit_rows = [finding.to_row() for finding in result.findings]  # Convert findings to exporter rows.
         data_exporter.write_with_format_selection(
-            audit_rows, SiteVariableAudit.AUDIT_FILENAME, api_function_name=SiteVariableAudit.API_NAME
+            audit_rows, SiteVariableAudit.AUDIT_FILENAME, api_function_name=SiteVariableAudit.AUDIT_API_NAME
         )  # Write audit rows through DataExporter.
         logger.debug("Wrote %s site variable audit rows", len(audit_rows))  # Log audit export count.
         logger.info("Writing site variable summary report")  # Log before the summary export.
         summary_rows = [summary.to_row() for summary in result.summaries]  # Convert summaries to exporter rows.
         data_exporter.write_with_format_selection(
-            summary_rows, SiteVariableAudit.SUMMARY_FILENAME, api_function_name=SiteVariableAudit.API_NAME
+            summary_rows, SiteVariableAudit.SUMMARY_FILENAME, api_function_name=SiteVariableAudit.SUMMARY_API_NAME
         )  # Write summary rows through DataExporter.
         logger.debug("Wrote %s site variable summary rows", len(summary_rows))  # Log summary export count.
 
     @staticmethod
     def _print_summary(missing_site_count: int) -> None:
+        """Print the required missing-site count summary."""
         logger.info("Printing site variable audit summary")  # Log before console output.
         echo(  # Print the required operator-facing summary.
             "Site variable audit found %s site(s) with missing variables. Wrote %s and %s.",

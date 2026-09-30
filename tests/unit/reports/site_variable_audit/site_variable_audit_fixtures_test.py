@@ -18,6 +18,18 @@ class SiteVariableAuditFixture:
     device_profiles: list[dict[str, Any]]  # Store device profile records for assignment tests.
     site_variables: list[dict[str, Any]]  # Store searchOrgVars records for definition tests.
 
+    def to_records(self) -> dict[str, list[dict[str, Any]]]:
+        """Return the model input shape used by the operation."""
+        return {  # Build the exact dataset keys that the client returns.
+            "sites": self.sites,  # Include site records for assignment and row names.
+            "gateway_templates": self.gateway_templates,  # Include gateway template records for scans.
+            "network_templates": self.network_templates,  # Include network template records for scans.
+            "templates": self.templates,  # Include generic template records for scans.
+            "wlans": self.wlans,  # Include WLAN records for scans.
+            "device_profiles": self.device_profiles,  # Include device profile records for scans.
+            "site_variables": self.site_variables,  # Include site variable definitions for comparisons.
+        }
+
 
 class SiteVariableAuditFixtures:
     """Create deterministic offline Mist records."""

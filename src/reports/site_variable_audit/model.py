@@ -155,6 +155,7 @@ class SiteVariableAuditModel:
 
     @classmethod
     def _site_lookup(cls, sites: list[dict[str, Any]]) -> dict[str, str]:
+        """Return a site ID to site name map."""
         logger.info("Normalizing %s sites", len(sites))  # Log before site normalization.
         lookup = {
             str(site["id"]): str(site.get("name") or site["id"]) for site in sites if site.get("id")
@@ -166,6 +167,7 @@ class SiteVariableAuditModel:
     def _template_references(
         cls, records: dict[str, list[dict[str, Any]]], sites: dict[str, str]
     ) -> list[TemplateReference]:
+        """Return assigned templates from each supported Mist source."""
         logger.info("Normalizing assigned templates")  # Log before template normalization.
         site_records = records.get("sites", [])  # Keep full site records so site-level assignments are visible.
         sources = (  # Define each Mist source and its normalized type.
@@ -192,6 +194,7 @@ class SiteVariableAuditModel:
         sites: dict[str, str],
         site_records: list[dict[str, Any]],
     ) -> list[TemplateReference]:
+        """Return assigned template references for one source type."""
         references: list[TemplateReference] = []  # Collect references for one source type.
         for index, record in enumerate(records):  # Walk records once for this source.
             template_id = str(record.get("id") or f"{template_type}-{index}")  # Use a stable fallback ID.
@@ -208,6 +211,7 @@ class SiteVariableAuditModel:
 
     @classmethod
     def _record_site_ids(cls, record: dict[str, Any]) -> set[str]:
+        """Return site IDs embedded directly in one template record."""
         site_ids = set()  # Collect site IDs from record-level assignment fields.
         for field in ("site_id", "site_ids"):  # Support singular and plural Mist fields.
             value = record.get(field)  # Read the candidate assignment field.
@@ -222,6 +226,7 @@ class SiteVariableAuditModel:
         record: dict[str, Any],
         template_type: str,
     ) -> set[str]:
+        """Return site IDs that reference the template through site fields."""
         template_id = str(record.get("id", ""))  # Read the template ID for site reference matching.
         reference_fields = cls._SITE_TEMPLATE_FIELDS.get(template_type, ())  # Read common fields for this type.
         return {
@@ -236,6 +241,7 @@ class SiteVariableAuditModel:
         template_id: str,
         reference_fields: tuple[str, ...],
     ) -> bool:
+        """Return whether one site record references one template ID."""
         site_record = next(
             (record for record in records if record.get("id") == site_id), {}
         )  # Support sources that are sites.
@@ -245,6 +251,7 @@ class SiteVariableAuditModel:
 
     @classmethod
     def _ids_from_value(cls, value: Any) -> set[str]:
+        """Return string IDs found inside common Mist reference shapes."""
         if isinstance(value, str):  # A direct string value can hold one ID.
             return {value} if value else set()  # Return a single non-empty ID.
         if isinstance(value, dict):  # A dictionary can hold an ID or nested values.
@@ -256,6 +263,7 @@ class SiteVariableAuditModel:
 
     @classmethod
     def _definitions_by_site(cls, variables: list[dict[str, Any]]) -> dict[str, set[str]]:
+        """Return defined variable names grouped by site ID."""
         logger.info("Normalizing %s site variable definitions", len(variables))  # Log before variable normalization.
         definitions: dict[str, set[str]] = {}  # Build site_id to defined variable names.
         for variable in variables:  # Walk each searchOrgVars record once.
@@ -270,6 +278,7 @@ class SiteVariableAuditModel:
 
     @classmethod
     def _tokens_by_template(cls, templates: list[TemplateReference]) -> dict[str, list[VariableTokenUse]]:
+        """Return token evidence for each assigned template ID."""
         return {
             template.template_id: cls.scan_template(template) for template in templates
         }  # Scan each assigned template once.
@@ -282,6 +291,7 @@ class SiteVariableAuditModel:
         definitions: dict[str, set[str]],
         token_map: dict[str, list[VariableTokenUse]],
     ) -> list[MissingVariableFinding]:
+        """Return one finding for each missing variable use."""
         findings: list[MissingVariableFinding] = []  # Collect missing variable rows.
         for template in templates:  # Walk each assigned template.
             for site_id in sorted(template.site_ids):  # Build rows in deterministic site order.
@@ -300,6 +310,7 @@ class SiteVariableAuditModel:
         defined: set[str],
         uses: list[VariableTokenUse],
     ) -> list[MissingVariableFinding]:
+        """Return missing variable findings for one site and template."""
         return [  # Build one row for each missing token use.
             MissingVariableFinding(
                 sites.get(site_id, site_id),
@@ -322,6 +333,7 @@ class SiteVariableAuditModel:
         definitions: dict[str, set[str]],
         token_map: dict[str, list[VariableTokenUse]],
     ) -> list[SiteVariableSummary]:
+        """Return deterministic summary rows for all sites."""
         summaries = [
             cls._summary_for_site(site_id, site_name, templates, definitions, token_map)
             for site_id, site_name in sites.items()
@@ -338,6 +350,7 @@ class SiteVariableAuditModel:
         definitions: dict[str, set[str]],
         token_map: dict[str, list[VariableTokenUse]],
     ) -> SiteVariableSummary:
+        """Return one summary row for one site."""
         assigned = [
             template for template in templates if site_id in template.site_ids
         ]  # Select templates assigned to this site.
@@ -363,6 +376,7 @@ class SiteVariableAuditModel:
 
     @classmethod
     def _scan_value(cls, value: Any, path: str, template: TemplateReference, uses: list[VariableTokenUse]) -> None:
+        """Scan one nested value and append token evidence."""
         if isinstance(value, str):  # Strings are the only values that can contain tokens.
             uses.extend(cls._uses_from_string(value, path, template))  # Extract each valid token from this field.
             return  # Stop recursion at the string leaf.
@@ -376,6 +390,7 @@ class SiteVariableAuditModel:
 
     @classmethod
     def _uses_from_string(cls, value: str, path: str, template: TemplateReference) -> list[VariableTokenUse]:
+        """Return valid token uses found in one string field."""
         uses = []  # Collect valid tokens from one string field.
         for match in _TOKEN_PATTERN.finditer(value):  # Find each complete valid token.
             name = cls.normalize_variable_name(match.group(1))  # Normalize the token name before comparing.
@@ -387,10 +402,12 @@ class SiteVariableAuditModel:
 
     @staticmethod
     def _child_path(parent: str, key: str) -> str:
+        """Return a readable JSON-like child path."""
         return f"{parent}.{key}" if key.isidentifier() else f"{parent}[{key!r}]"  # Use readable JSON-like paths.
 
     @staticmethod
     def _template_sort_key(template: TemplateReference) -> tuple[str, str, str]:
+        """Return the deterministic sort key for a template."""
         return (
             template.template_type,
             template.template_name,
@@ -399,10 +416,12 @@ class SiteVariableAuditModel:
 
     @staticmethod
     def _token_sort_key(use: VariableTokenUse) -> tuple[str, str, str, str]:
+        """Return the deterministic sort key for token evidence."""
         return (use.template_type, use.template_name, use.variable_name, use.field_path)  # Sort token evidence.
 
     @staticmethod
     def _finding_sort_key(finding: MissingVariableFinding) -> tuple[str, str, str, str, str, str]:
+        """Return the deterministic sort key for findings."""
         return (
             finding.site_name,
             finding.site_id,

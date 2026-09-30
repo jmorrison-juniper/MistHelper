@@ -58,6 +58,7 @@ class SiteVariableAuditClient:
         return records  # Return all raw records to the model layer.
 
     def _read_all(self, operation_name: str, **query: Any) -> list[dict[str, Any]]:
+        """Read one SDK operation and return all paginated rows."""
         logger.info("Reading Mist operation %s", operation_name)  # Log before the SDK call.
         operation = self._operations[operation_name]  # Resolve the injected or default SDK operation.
         try:  # Convert SDK errors into one user-facing audit error type.
@@ -73,6 +74,7 @@ class SiteVariableAuditClient:
 
     @staticmethod
     def _default_operations(mistapi_module: Any) -> dict[str, MistOperation]:
+        """Return the installed SDK callables for all required operation IDs."""
         return {  # Resolve installed SDK callables by OpenAPI operation ID.
             "listOrgSites": mistapi_module.api.v1.orgs.sites.listOrgSites,
             "listOrgGatewayTemplates": mistapi_module.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
