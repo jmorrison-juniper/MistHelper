@@ -8,7 +8,7 @@ updates:
     labels:
       - "dependencies"
     commit-message:
-      prefix: "deps"
+      prefix: "chore"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -29,7 +29,7 @@ updates:
     labels:
       - "dependencies"
     commit-message:
-      prefix: "deps(ops-portal)"
+      prefix: "chore(ops-portal)"
     groups:
       # React and react-dom must carry the exact same version. React refuses to
       # start when the two differ, and the ops-portal job then fails with
