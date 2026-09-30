@@ -39,6 +39,7 @@ Fields:
 | Field | Type | Required | Rule |
 | - | - | - | - |
 | `org_id` | string | Yes | Organization identifier used by the report. |
+| `source_name` | string | Yes | Non-sensitive source key used to keep database rows distinct. |
 | `scope` | string | Yes | One supported scope value. |
 | `owner_name` | string | Yes | Device name, portal name, SSO name, or source label. |
 | `subject` | string | No | Subject from the parsed certificate, when available. |
@@ -57,6 +58,7 @@ Validation rules:
 - `31-90` applies when the certificate has 31 through 90 full days remaining.
 - `more than 90` applies when the certificate has more than 90 full days remaining.
 - A failed PEM parse must produce exactly one row with note `unparsable`.
+- A failed PEM parse uses band `expired` as a fail-safe risk category when no expiry date is available.
 - A row must not contain `BEGIN CERTIFICATE`, `END CERTIFICATE`, `BEGIN PRIVATE KEY`, or raw PEM text.
 
 ## Entity: CertificateReport
@@ -89,7 +91,7 @@ Validation rules:
 | `parsed` | A PEM value parsed successfully. | Write subject, issuer, serial, and `not_after`. |
 | `epoch` | The source supplied an epoch expiry value. | Write `not_after`, `days_remaining`, and band. |
 | `pending_epoch` | The source supplied a pending certificate epoch value. | Write the pending expiry row with a source note. |
-| `unparsable` | The value existed but could not be parsed. | Write one row with note `unparsable`. |
+| `unparsable` | The value existed but could not be parsed. | Write one row with note `unparsable` and band `expired`. |
 
 ## Source mapping
 

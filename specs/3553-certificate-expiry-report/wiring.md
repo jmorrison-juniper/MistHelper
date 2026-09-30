@@ -18,6 +18,7 @@
     "primary_key": ["misthelper_internal_id"],
     "unique_fields": [
         "org_id",
+        "source_name",
         "scope",
         "owner_name",
         "serial",
@@ -25,6 +26,7 @@
     ],
     "indexes": [
         "org_id",
+        "source_name",
         "scope",
         "band",
         "not_after",

@@ -57,11 +57,13 @@ class CertificateExpiryReport:
         """Print the band and failed-source summary."""
         logger.info("Certificate expiry report prints band summary")  # Log before summary output.
         for band in BANDS:  # Print all bands, including zero-count bands.
-            logger.info("Certificate expiry band %s: %d", band, report.band_counts[band])  # Contract summary line.
+            message = f"Certificate expiry band {band}: {report.band_counts[band]}"  # Build the console line.
+            print(message)  # Print the summary for menu users.
+            logger.info("%s", message)  # Log the summary for session evidence.
         if report.failed_sources:  # Failed sources are different from empty sources.
-            logger.warning(
-                "Certificate expiry failed sources: %s", ", ".join(report.failed_sources)
-            )  # Name sources only.
+            message = f"Certificate expiry failed sources: {', '.join(report.failed_sources)}"  # Build a safe list.
+            print(message)  # Print failed sources for menu users.
+            logger.warning("%s", message)  # Name sources only.
         logger.debug(
             "Certificate expiry report summary printed rows=%d failed=%d",
             len(report.records),

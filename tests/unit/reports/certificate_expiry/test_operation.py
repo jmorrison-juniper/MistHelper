@@ -93,6 +93,7 @@ def test_operation_runs_without_prompt_and_exports_contract() -> None:
     assert call["api_function_name"] == "certificate_expiry_report"  # Verify the required endpoint name.
     assert call["fieldnames"] == [
         "org_id",
+        "source_name",
         "scope",
         "owner_name",
         "subject",
@@ -143,7 +144,7 @@ def test_privacy_logs_and_rows_do_not_expose_certificate_text(caplog) -> None:
     assert "BEGIN PRIVATE KEY" not in log_text  # Verify no private-key marker in logs.
 
 
-def test_console_summary_counts_match_export_rows(caplog) -> None:
+def test_console_summary_counts_match_export_rows(capsys) -> None:
     """Band summary counts match exported rows."""
     generated_at = datetime.now(tz=UTC)  # Build a current fixture expiry window.
     ClientStub.payloads = {
@@ -154,14 +155,14 @@ def test_console_summary_counts_match_export_rows(caplog) -> None:
             {"name": "later", "cert_expiry": int((generated_at + timedelta(days=120)).timestamp())},
         ]
     }  # Cover all bands.
-    caplog.set_level(logging.INFO)  # Capture summary lines.
     CertificateExpiryReport.run()  # Run the operation with fakes.
     rows = ExporterStub.calls[0]["rows"]  # Read exported rows.
+    console_text = capsys.readouterr().out  # Capture console summary lines.
     expected_counts = {
         band: sum(1 for row in rows if row["band"] == band) for band in ("expired", "0-30", "31-90", "more than 90")
     }  # Count exported rows by band.
     for band, count in expected_counts.items():  # Verify each summary line.
-        assert f"Certificate expiry band {band}: {count}" in caplog.text  # Match the console contract.
+        assert f"Certificate expiry band {band}: {count}" in console_text  # Match the console contract.
 
 
 def test_failed_source_summary_is_separate_from_empty_sources(caplog) -> None:

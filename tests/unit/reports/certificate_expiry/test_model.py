@@ -128,6 +128,7 @@ def test_pem_parse_failure_creates_unparsable_row() -> None:
     assert len(report.records) == 1  # Verify exactly one fallback row.
     assert row["note"] == NOTE_UNPARSABLE  # Verify the required note.
     assert row["not_after"] == ""  # Verify unavailable dates stay blank.
+    assert row["band"] == BAND_EXPIRED  # Verify unparsable rows use the fail-safe risk band.
 
 
 def test_privacy_rejects_pem_and_private_key_markers() -> None:

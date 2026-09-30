@@ -4,7 +4,7 @@ from __future__ import annotations  # Keep annotations import-safe during startu
 
 import logging  # Log parse failures without logging certificate values.
 from collections import Counter  # Count output rows by band and source.
-from dataclasses import dataclass, fields  # Declare stable row and source shapes.
+from dataclasses import dataclass  # Declare stable row and source shapes.
 from datetime import UTC, datetime  # Normalize every report time to UTC.
 from typing import Any  # Type decoded Mist payload values without unsafe casts.
 
@@ -40,6 +40,7 @@ NOTE_UNPARSABLE = "unparsable"  # Required note for values that cannot parse.
 
 OUTPUT_COLUMNS = (  # Keep the export column order under one source of truth.
     "org_id",
+    "source_name",
     "scope",
     "owner_name",
     "subject",
@@ -98,9 +99,7 @@ class CertificateExpiryRecord:
 
     def as_row(self) -> dict[str, Any]:
         """Return one export-safe row."""
-        row = {
-            field.name: getattr(self, field.name) for field in fields(self) if field.name in OUTPUT_COLUMNS
-        }  # Exclude internal aggregation fields.
+        row = {column: getattr(self, column) for column in OUTPUT_COLUMNS}  # Serialize in contract order.
         CertificatePrivacyGuard.assert_safe_row(row)  # Fail before export if sensitive text escaped.
         return row  # Return only metadata that the contract allows.
 
@@ -237,10 +236,6 @@ class CertificateSourceCatalog:
                 VALUE_PEM,
             ),
             CertificateSource("org_sso", "listOrgSsos", SCOPE_SSO_IDP, "name", "idp_cert", VALUE_PEM),
-            CertificateSource("org_sso_ldap_ca", "listOrgSsos", SCOPE_CA_CERT, "name", "ldap_cacerts", VALUE_PEM),
-            CertificateSource(
-                "org_sso_ldap_client", "listOrgSsos", SCOPE_SSO_IDP, "name", "ldap_client_cert", VALUE_PEM
-            ),
             CertificateSource(
                 "psk_portal_sso", "listOrgPskPortals", SCOPE_PSK_PORTAL_IDP, "name", "sso.idp_cert", VALUE_PEM
             ),
@@ -292,7 +287,7 @@ class CertificateExpiryNormalizer:
         )  # Name no value.
         return CertificateExpiryRecord(
             self.org_id, source.scope, owner_name, "", "", "", "", "", BAND_EXPIRED, NOTE_UNPARSABLE, source.source_name
-        )  # Make the failure visible.
+        )  # Use expired as a fail-safe band when no expiry date is available.
 
     def _record_from_pem(self, source: CertificateSource, owner_name: str, value: str) -> CertificateExpiryRecord:
         """Return one record from a PEM value."""

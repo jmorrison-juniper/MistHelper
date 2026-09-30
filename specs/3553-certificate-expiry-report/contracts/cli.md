@@ -64,6 +64,7 @@ Required columns:
 | Column | Required | Meaning |
 | - | - | - |
 | `org_id` | Yes | Organization identifier. |
+| `source_name` | Yes | Non-sensitive source key used to keep database rows distinct. |
 | `scope` | Yes | Certificate scope. |
 | `owner_name` | Yes | Device, portal, SSO, or source name. |
 | `subject` | No | Parsed certificate subject. |
@@ -76,7 +77,7 @@ Required columns:
 
 ## Console contract
 
-The operation must print or log one summary line for each band:
+The operation must print one console summary line for each band and log the same line:
 
 ```text
 Certificate expiry band expired: <count>

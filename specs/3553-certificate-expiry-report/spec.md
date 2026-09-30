@@ -55,7 +55,7 @@ A NOC operator receives a report even when one certificate value cannot be parse
 **Acceptance Scenarios**:
 
 1. **Given** a PEM certificate string is valid, **When** the parser reads it, **Then** the report records the certificate `not_after` date produced by the `cryptography` package.
-2. **Given** a certificate value is unparsable, **When** the report is created, **Then** the report includes one row with note `unparsable`, leaves unavailable date fields blank, and completes without an exception.
+2. **Given** a certificate value is unparsable, **When** the report is created, **Then** the report includes one row with note `unparsable`, leaves unavailable date fields blank, uses band `expired` as a fail-safe category, and completes without an exception.
 
 ---
 
@@ -110,7 +110,7 @@ A reviewer checks that the feature has the required planning and release artifac
 - A certificate has no available subject or issuer. The report leaves the missing metadata blank while still writing the row.
 - Multiple certificates share the same subject or issuer. The report writes each certificate as a separate row under its own scope and owner.
 - A certificate source is absent for a scope. The report writes no row for that absent source and does not fail the run.
-- A certificate value is unparsable. The report writes exactly one row with note `unparsable` and does not raise an exception.
+- A certificate value is unparsable. The report writes exactly one row with note `unparsable`, uses band `expired` as a fail-safe category, and does not raise an exception.
 - A source contains private key text or a full PEM body. The report and logs omit the sensitive body and key material.
 - A device certificate has `cert_expiry` as an epoch value. The report converts it into the shared date, days remaining, and band columns.
 

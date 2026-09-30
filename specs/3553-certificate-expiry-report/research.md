@@ -143,8 +143,8 @@ Decision: Use one metadata-only row per certificate and export with endpoint nam
 `certificate_expiry_report`.
 
 Rationale: `wiring.md` defines an `auto_increment_with_unique` primary key strategy with unique fields
-`org_id`, `scope`, `owner_name`, `serial`, and `not_after`. This allows duplicate subjects from
-different owners while preventing duplicate rows for the same certificate.
+`org_id`, `source_name`, `scope`, `owner_name`, `serial`, and `not_after`. This allows duplicate
+subjects from different owners while preventing duplicate rows for the same certificate.
 
 Alternatives considered: Use subject and issuer as the unique key. Rejected because multiple
 certificates can share those fields.
@@ -162,7 +162,7 @@ Rationale: The implementation inspection found these callable names:
 - `mistapi.api.v1.orgs.ssos.listOrgSsos(mist_session, org_id, limit=None, page=None)`
 - `mistapi.api.v1.orgs.pskportals.listOrgPskPortals(mist_session, org_id, limit=None, page=None)`
 - `mistapi.api.v1.orgs.crl.getOrgCrlFile(mist_session, org_id)`
-- `mistapi.api.v1.orgs.setting.getOrgNacCrl(mist_session, org_id)`
+- `getOrgNacCrl` has no installed SDK callable. The client uses `apisession.mist_get()`.
 
 Implementation adjustments:
 
