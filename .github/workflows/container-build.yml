@@ -9,9 +9,13 @@ on:
       - 'Containerfile'
       - 'Dockerfile'
       - '__init__.py'
+      - 'pyproject.toml'
+      - 'wsgi.py'
+      - 'wsgi_capture.py'
       - 'src/**'
       - 'web_portal/**'
-      - 'tests/**'
+      - 'container/scripts/**'
+      - 'documentation/mist-api-openapi31json.json'
   # GitHub starts no push run for a merge that GITHUB_TOKEN performs, so the
   # image on the registry went stale. Issue #1851 records the effect. The
   # Auto-merge workflow calls this trigger after every merge into main.
