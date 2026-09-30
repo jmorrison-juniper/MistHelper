@@ -13,7 +13,7 @@ def test_runner_exports_required_columns_and_minimum_rows() -> None:
         captured_rows.extend(rows)  # Store rows for assertions.
         assert filename == "OrgSecurityPosture.csv"  # The output file name is fixed by the contract.
         assert kwargs["output_format"] == "csv"  # The branch stays CSV-only until integration applies the PK.
-        assert kwargs["api_function_name"] is None  # Database routing stays deferred to integration wiring.
+        assert kwargs["api_function_name"] == "orgSecurityPostureChecklist"  # Use the registered primary key strategy.
         assert kwargs["fieldnames"] == [
             "check id",
             "area",

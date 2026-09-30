@@ -347,6 +347,31 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires a mode, a category, and a subcategory choice",
         },
+        # WHY: Menu 271 reads only organization subscription, license usage, and JSI contract data,
+        # then writes two local reports. It changes no Mist object, sends no update request, and
+        # needs no operator prompt, because it resolves the organization from the cache or the
+        # environment.
+        "271": {"category": "safe"},
+        # WHY: Menu 272 gives operators one read-only certificate expiry report across device
+        # certificates, RadSec, NAC, SSO, PSK portal, and CA sources. Mist raises certificate
+        # alerts on a fixed expiry calendar, but the portal does not show one renewal worklist.
+        # The entry stays `safe` because it only reads Mist API data and writes CertificateExpiry.csv.
+        "272": {"category": "safe"},
+        # WHY: Admin and API token hygiene is read-only and safe for automated tests because it
+        # reads administrator, organization token, and organization setting metadata. It writes
+        # reports only under `data/`, and it never prints or stores token key values.
+        "273": {"category": "safe"},
+        # WHY: Menu 274 is safe because it only reads organization PSKs, WLANs, and WLAN templates.
+        # It writes PskHygiene.csv through the normal export path, and it never writes passphrase
+        # or old_passphrase values. The report states that site-level WLANs are outside scope.
+        "274": {"category": "safe"},
+        # WHY: Menu 275 only reads organization templates, WLANs, device profiles, sites, and site
+        # variables, then writes CSV reports. It is safe for --test because it prompts for nothing
+        # and does not change Mist configuration.
+        "275": {"category": "safe"},
+        # WHY: Menu 276 is a read-only organization settings audit that writes
+        # OrgSecurityPosture.csv and uses fixture data in --test.
+        "276": {"category": "safe"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",

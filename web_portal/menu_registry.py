@@ -182,6 +182,12 @@ MENU_DESCRIPTIONS = {
     "268": "Run any remaining endpoint with identifier prompts (6 operations)",
     "269": "Scan the organization for rogue DHCP servers on switches (30 days)",
     "270": "Export or resolve Marvis Actions by category and subcategory",
+    "271": "Export the subscription and contract expiry report",
+    "272": "Export the certificate expiry report",
+    "273": "Admin and API Token Hygiene Report",
+    "274": "Export the PSK hygiene report",
+    "275": "Audit site variable coverage",
+    "276": "Export the organization security posture checklist",
 }
 
 

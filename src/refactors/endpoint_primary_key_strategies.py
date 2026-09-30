@@ -3130,6 +3130,71 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Simple endpoint export for listMspTickets",
     },
+    "SubscriptionExpiryReport": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["subscription_type", "status", "band"],
+        "unique_constraints": [],
+        "description": "Subscription expiry score report rows",
+    },
+    "ContractExpiryReport": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["serial", "model", "contract_status", "contract_state", "bucket"],
+        "unique_constraints": [],
+        "description": "Contract expiry score report rows",
+    },
+    "certificate_expiry_report": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": [
+            "org_id",
+            "source_name",
+            "scope",
+            "owner_name",
+            "serial",
+            "not_after",
+        ],
+        "indexes": [
+            "org_id",
+            "source_name",
+            "scope",
+            "band",
+            "not_after",
+        ],
+    },
+    "adminTokenHygieneAdmins": {
+        "type": "natural_pk",
+        "primary_key": ["row_id"],
+        "indexes": ["email", "role_summary", "site_scope"],
+    },
+    "adminTokenHygieneTokens": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["name", "created_by", "last_used"],
+    },
+    "psk_hygiene_report": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["name", "ssid", "role", "vlan", "expire_time"],
+        "indexes": ["ssid", "role", "wlan_match", "findings"],
+    },
+    "siteVariableAudit": {
+        "type": "natural_pk",
+        "primary_key": ["site_id", "template_id", "variable_name", "field_path"],
+        "indexes": ["site_name", "template_type", "template_name", "variable_name"],
+    },
+    "siteVariableSummary": {
+        "type": "natural_pk",
+        "primary_key": ["site_id"],
+        "indexes": ["site_name", "missing_count", "unused_variable_count"],
+    },
+    "orgSecurityPostureChecklist": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["check id", "setting path", "recommended value"],
+        "indexes": ["area", "verdict", "check id"],
+    },
 }
 
 # Stage two endpoint family entries from issue #1807.

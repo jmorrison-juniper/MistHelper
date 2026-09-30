@@ -9,6 +9,7 @@ from typing import Any
 from src.export.data_exporter import DataExporter
 
 logger = logging.getLogger(__name__)
+POSTURE_API_FUNCTION_NAME = "orgSecurityPostureChecklist"
 
 
 class OrgSecurityPostureExporter:
@@ -29,7 +30,7 @@ class OrgSecurityPostureExporter:
             self.FILENAME,
             output_format="csv",
             fieldnames=self.FIELDNAMES,
-            api_function_name=None,
+            api_function_name=POSTURE_API_FUNCTION_NAME,
         )
         logging.debug("Organization security posture CSV write status: %s", result)  # Log the exporter result.
         return bool(result)  # Normalize mock or exporter return values to a bool.
