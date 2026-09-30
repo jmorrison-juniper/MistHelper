@@ -184,3 +184,12 @@ def test_unavailable_wlan_scope_marks_wlan_match_unknown() -> None:
     assert result is True  # The PSK report should still export with unknown WLAN scope.
     assert row["wlan_match"] == "unknown"  # The match state must show incomplete scope.
     assert "orphan_ssid" not in str(row["findings"])  # Unknown scope must not create a false orphan finding.
+
+
+def test_unavailable_wlan_scope_summary_states_unknown_orphan_findings() -> None:
+    """Unavailable organization WLAN data must change the summary scope note."""
+    output_lines: list[str] = []  # Capture console summary lines.
+    PskHygieneReport.CLIENT_CLASS = _UnavailableWlanClient  # Simulate a WLAN endpoint failure.
+    PskHygieneReport.OUTPUT = output_lines.append  # Capture the summary.
+    PskHygieneReport.run()  # Run the no-argument menu handler.
+    assert "Organization WLAN data was unavailable" in "\n".join(output_lines)  # Explain unknown orphan findings.

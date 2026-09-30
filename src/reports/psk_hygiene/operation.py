@@ -10,6 +10,8 @@ from typing import Any, ClassVar, Protocol
 from src.config.source_dependency_resolver import SourceDependencyResolver
 from src.reports.psk_hygiene.client import PskHygieneClient
 from src.reports.psk_hygiene.model import (
+    SITE_WLAN_SCOPE_MESSAGE,
+    UNKNOWN_WLAN_SCOPE_MESSAGE,
     HygieneSummary,
     PskHygieneRow,
     build_hygiene_rows,
@@ -87,7 +89,8 @@ class PskHygieneReport:
         wlan_references = None if raw_wlans is None else wlan_references_from_records(raw_wlans, raw_templates or [])
         hygiene_rows = build_hygiene_rows(psks, wlan_references)  # Score each sanitized PSK.
         output_rows = [row.as_output_row() for row in hygiene_rows]  # Convert rows to exporter dictionaries.
-        summary = HygieneSummary.from_rows(hygiene_rows)  # Build summary counts from the finding labels.
+        wlan_scope = UNKNOWN_WLAN_SCOPE_MESSAGE if raw_wlans is None else SITE_WLAN_SCOPE_MESSAGE  # Explain scope.
+        summary = HygieneSummary.from_rows(hygiene_rows, wlan_scope=wlan_scope)  # Build summary counts.
         logger.debug("Scored %d sanitized PSK hygiene rows", len(output_rows))  # Log only safe row count.
         return output_rows, summary  # Return sanitized rows and summary.
 
