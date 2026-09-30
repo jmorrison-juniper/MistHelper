@@ -2,10 +2,16 @@
 
 from __future__ import annotations  # WHY: keep annotations lazy for pytest collection.
 
+import csv  # WHY: one operation test proves the exported CSV content on disk.
 import logging  # WHY: caplog validates that secrets do not reach log text.
 from dataclasses import dataclass, field  # WHY: fakes need small state containers.
+from pathlib import Path  # WHY: tmp_path uses Path objects for isolated export files.
 from typing import Any  # WHY: fake responses carry heterogeneous JSON values.
 
+import pytest  # WHY: monkeypatch and tmp_path typing keep operation seams isolated.
+
+from src.troubleshooting.synthetic_test_trigger import client as synthetic_client_module
+from src.troubleshooting.synthetic_test_trigger.client import SyntheticTestClient
 from src.troubleshooting.synthetic_test_trigger.models import (
     EXPORT_ENDPOINT_NAME,
     EXPORT_FILENAME,
@@ -14,7 +20,12 @@ from src.troubleshooting.synthetic_test_trigger.models import (
     SyntheticTestRequest,
     SyntheticTestResult,
 )
-from src.troubleshooting.synthetic_test_trigger.operation import SyntheticTestRuntime, SyntheticTestTriggerRunner
+from src.troubleshooting.synthetic_test_trigger.operation import (
+    RuntimePromptReader,
+    SyntheticTestRuntime,
+    SyntheticTestTrigger,
+    SyntheticTestTriggerRunner,
+)
 
 
 @dataclass
@@ -170,6 +181,184 @@ def test_radius_secret_never_reaches_logs_or_export(caplog: Any) -> None:
     assert result is not None and result.status == "success"  # WHY: workflow completed.
     assert "shared-secret" not in caplog.text  # WHY: logs must not reveal the password.
     assert "shared-secret" not in str(capture.calls)  # WHY: export rows must not reveal the password.
+
+
+def test_device_result_writes_csv_into_tmp_path(tmp_path: Path) -> None:
+    """The device workflow can write the export row to an isolated CSV file."""
+    response = FakeResponse({"status": "success", "type": "ping", "latency": 12})  # WHY: device poll result.
+    client = FakeClient(response)  # WHY: fake client avoids all network calls.
+    prompts = PromptAnswers(["2", "ping", "host=8.8.8.8,ping_count=3", "y"])  # WHY: drive the device prompts.
+    csv_calls: list[Path] = []  # WHY: assertions need the exact file path that was written.
+
+    def write_csv(
+        rows: list[dict[str, object]],
+        filename: str,
+        api_name: str,
+        fieldnames: list[str],
+    ) -> bool:
+        """Write rows to tmp_path through the exporter seam."""
+        assert filename == EXPORT_FILENAME  # WHY: the operation must request the required CSV name.
+        assert api_name == EXPORT_ENDPOINT_NAME  # WHY: the operation must use the registered export key.
+        output_file = tmp_path / filename  # WHY: tmp_path keeps the test out of repository data folders.
+        with output_file.open("w", newline="", encoding="utf-8") as handle:  # WHY: CSV needs newline control.
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")  # WHY: exporter filters.
+            writer.writeheader()  # WHY: operators need column names in the CSV file.
+            writer.writerows(rows)  # WHY: write the operation export row for verification.
+        csv_calls.append(output_file)  # WHY: test proves that exactly one CSV file was written.
+        return True  # WHY: the operation treats the export as successful.
+
+    runtime = SyntheticTestRuntime(  # WHY: tests inject each side effect through the runtime seam.
+        client=client,
+        site_selector=lambda: "site-1",
+        device_selector=lambda site_id, device_type: "device-1",
+        input_reader=prompts.read,
+        exporter=write_csv,
+        sleep_fn=lambda seconds: None,
+        monotonic_fn=_monotonic_counter(),
+    )
+    runner = SyntheticTestTriggerRunner(runtime, timeout_seconds=5)  # WHY: execute the operation workflow.
+    result = runner.run()  # WHY: drive trigger, poll, report, and export.
+    with csv_calls[0].open(newline="", encoding="utf-8") as handle:  # WHY: read back the created CSV.
+        row = next(csv.DictReader(handle))  # WHY: one completed result writes one row.
+    assert result is not None and result.status == "success"  # WHY: the device result completed.
+    assert row["device_id"] == "device-1"  # WHY: device scope must include the selected device.
+    assert row["latency"] == "12"  # WHY: result values must reach the CSV export.
+
+
+def test_invalid_scope_and_missing_device_stop_before_trigger(caplog: Any) -> None:
+    """Invalid selections stop before the client receives a trigger request."""
+    caplog.set_level(logging.ERROR)  # WHY: the operation logs clear stop reasons.
+    client = FakeClient(FakeResponse({"status": "success"}))  # WHY: fake client captures any mistaken trigger.
+    capture = ExportCapture()  # WHY: export should not run for invalid prompt paths.
+    invalid_prompts = PromptAnswers(["9"])  # WHY: unknown scope must stop the workflow.
+    invalid_runner = SyntheticTestTriggerRunner(build_runtime(client, invalid_prompts, capture), timeout_seconds=1)
+    missing_device_prompts = PromptAnswers(["2"])  # WHY: device scope with no selected device must stop.
+    missing_runtime = build_runtime(client, missing_device_prompts, capture, device_id="")  # WHY: no device.
+    missing_runner = SyntheticTestTriggerRunner(missing_runtime, timeout_seconds=1)  # WHY: run the second path.
+    assert invalid_runner.run() is None  # WHY: unknown scope cannot send a trigger.
+    assert missing_runner.run() is None  # WHY: missing device cannot send a trigger.
+    assert client.triggers == []  # WHY: neither invalid path may call the Mist API.
+    assert "Unknown synthetic test scope answer" in caplog.text  # WHY: log explains the invalid scope.
+    assert "No device selected" in caplog.text  # WHY: log explains the missing device.
+
+
+def test_no_site_and_failed_export_paths(caplog: Any) -> None:
+    """Missing site and failed export paths produce operator-visible logs."""
+    caplog.set_level(logging.DEBUG)  # WHY: capture error logs and export result details.
+    client = FakeClient(FakeResponse({"results": [{"status": "success"}]}))  # WHY: successful poll reaches export.
+    no_site_runtime = build_runtime(client, PromptAnswers([]), ExportCapture())  # WHY: reuse standard fakes.
+    no_site_runtime = SyntheticTestRuntime(  # WHY: replace only the site selector with a missing selection.
+        client=no_site_runtime.client,
+        site_selector=lambda: None,
+        device_selector=no_site_runtime.device_selector,
+        input_reader=no_site_runtime.input_reader,
+        exporter=no_site_runtime.exporter,
+        sleep_fn=no_site_runtime.sleep_fn,
+        monotonic_fn=no_site_runtime.monotonic_fn,
+    )
+    failed_runtime = SyntheticTestRuntime(  # WHY: replace exporter to cover the failed write branch.
+        client=client,
+        site_selector=lambda: "site-1",
+        device_selector=lambda site_id, device_type: "device-1",
+        input_reader=PromptAnswers(["1", "", "y"]).read,
+        exporter=lambda rows, filename, api_name, fieldnames: False,
+        sleep_fn=lambda seconds: None,
+        monotonic_fn=_monotonic_counter(),
+    )
+    no_site_result = SyntheticTestTriggerRunner(no_site_runtime).run()  # WHY: no site stops before prompts.
+    failed_result = SyntheticTestTriggerRunner(failed_runtime, timeout_seconds=5).run()  # WHY: export is last.
+    assert no_site_result is None  # WHY: no site must stop without a result.
+    assert failed_result and failed_result.status == "success"  # WHY: failed export does not change result status.
+    assert "No site selected" in caplog.text  # WHY: missing site has a clear log message.
+    assert "could not write" in caplog.text  # WHY: failed export has a clear log message.
+
+
+def test_runtime_prompt_reader_and_menu_handler_are_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The public menu handler builds a runtime and delegates to the runner."""
+    prompts: list[tuple[str, str]] = []  # WHY: capture PromptReader calls without real console input.
+    runs: list[bool] = []  # WHY: prove the public handler invokes the runner once.
+
+    def fake_input(prompt: str, context: str) -> str:
+        """Return one sanitized input value."""
+        prompts.append((prompt, context))  # WHY: the reader must pass through both prompt and context.
+        return "  y  "  # WHY: RuntimePromptReader strips surrounding spaces.
+
+    class FakeRunner:
+        """Small runner double for the public menu handler."""
+
+        def __init__(self, runtime: SyntheticTestRuntime) -> None:
+            """Accept the runtime built by the menu handler."""
+            assert isinstance(runtime, SyntheticTestRuntime)  # WHY: handler must bind runtime dependencies first.
+
+        def run(self) -> None:
+            """Capture the menu delegation."""
+            runs.append(True)  # WHY: the public handler should delegate exactly once.
+
+    runtime = build_runtime(FakeClient(FakeResponse({"status": "success"})), PromptAnswers([]), ExportCapture())
+    monkeypatch.setattr("src.troubleshooting.synthetic_test_trigger.operation.InputUtils.safe_input", fake_input)
+    monkeypatch.setattr(SyntheticTestRuntime, "from_runtime", classmethod(lambda cls: runtime))
+    monkeypatch.setattr("src.troubleshooting.synthetic_test_trigger.operation.SyntheticTestTriggerRunner", FakeRunner)
+    assert RuntimePromptReader.read("Continue? ", "context_name") == "y"  # WHY: input reader strips whitespace.
+    SyntheticTestTrigger.run()  # WHY: public menu handler must remain callable.
+    assert prompts == [("Continue? ", "context_name")]  # WHY: reader passed prompt context to InputUtils.
+    assert runs == [True]  # WHY: handler delegated to the runner once.
+
+
+def test_client_dispatches_each_sdk_function_with_explicit_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The client sends each scope through its SDK function without generic forwarding."""
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []  # WHY: inspect SDK call shapes.
+
+    def capture_site_trigger(*args: object, **kwargs: object) -> FakeResponse:
+        """Capture a site trigger SDK call."""
+        calls.append(("site_trigger", args, kwargs))  # WHY: prove the client passed explicit positional args.
+        return FakeResponse({"status": "started"})  # WHY: client returns the SDK response.
+
+    def capture_device_trigger(*args: object, **kwargs: object) -> FakeResponse:
+        """Capture a device trigger SDK call."""
+        calls.append(("device_trigger", args, kwargs))  # WHY: prove the device endpoint was selected.
+        return FakeResponse({"status": "started"})  # WHY: client returns the SDK response.
+
+    def capture_radius_trigger(*args: object, **kwargs: object) -> FakeResponse:
+        """Capture a RADIUS trigger SDK call."""
+        calls.append(("radius_trigger", args, kwargs))  # WHY: prove the RADIUS endpoint was selected.
+        return FakeResponse({"status": "started"})  # WHY: client returns the SDK response.
+
+    def capture_site_poll(*args: object, **kwargs: object) -> FakeResponse:
+        """Capture a site poll SDK call."""
+        calls.append(("site_poll", args, kwargs))  # WHY: prove query fields are named kwargs.
+        return FakeResponse({"results": []})  # WHY: client returns the SDK response.
+
+    def capture_device_poll(*args: object, **kwargs: object) -> FakeResponse:
+        """Capture a device poll SDK call."""
+        calls.append(("device_poll", args, kwargs))  # WHY: prove non-site poll endpoint was selected.
+        return FakeResponse({"status": "success"})  # WHY: client returns the SDK response.
+
+    monkeypatch.setattr(synthetic_client_module.site_synthetic_test, "triggerSiteSyntheticTest", capture_site_trigger)
+    monkeypatch.setattr(synthetic_client_module.site_devices, "triggerSiteDeviceSyntheticTest", capture_device_trigger)
+    monkeypatch.setattr(
+        synthetic_client_module.site_devices,
+        "startSiteSwitchRadiusSyntheticTest",
+        capture_radius_trigger,
+    )
+    monkeypatch.setattr(synthetic_client_module.site_synthetic_test, "searchSiteSyntheticTest", capture_site_poll)
+    monkeypatch.setattr(synthetic_client_module.site_devices, "getSiteDeviceSyntheticTest", capture_device_poll)
+    api_client = SyntheticTestClient("session")  # WHY: SDK functions receive the shared session object.
+    site_request = SyntheticTestRequest("site", "site-1", {}, {"scope": "site"}, poll_query={"by": "user"})
+    device_request = SyntheticTestRequest("device", "site-1", {"type": "ping"}, {}, device_id="device-1")
+    radius_request = SyntheticTestRequest("radius", "site-1", {"user": "u"}, {}, device_id="switch-1")
+    assert api_client.trigger(site_request).data["status"] == "started"  # WHY: site trigger returns SDK data.
+    assert api_client.trigger(device_request).data["status"] == "started"  # WHY: device trigger returns SDK data.
+    assert api_client.trigger(radius_request).data["status"] == "started"  # WHY: RADIUS trigger returns SDK data.
+    assert api_client.poll_once(site_request).data == {"results": []}  # WHY: site poll returns search data.
+    assert api_client.poll_once(device_request).data["status"] == "success"  # WHY: device poll returns result data.
+    assert calls[3][2]["by"] == "user" and calls[3][2]["limit"] == 1  # WHY: poll query used named kwargs.
+    assert [call[0] for call in calls] == [  # WHY: all five operation IDs are routed.
+        "site_trigger",
+        "device_trigger",
+        "radius_trigger",
+        "site_poll",
+        "device_poll",
+    ]
 
 
 def request_result(status: str) -> SyntheticTestResult:
