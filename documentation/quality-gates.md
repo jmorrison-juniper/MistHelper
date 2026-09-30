@@ -191,6 +191,27 @@ Read the type check scope from the `MYPY_PATHS` value in
 `.github/workflows/ci.yml`. This page does not repeat that value, because a
 repeated value drifts when the scope moves.
 
+### Audit dependencies on macOS with uv
+
+On macOS, `pip-audit -r requirements.txt` can stop with a uv-managed Python
+installation. `pip-audit` copies the Python executable into a temporary
+environment. The copied executable cannot load `@rpath/libpython3.13.dylib`.
+This loader error stops the local audit before it scans a dependency.
+
+Run this workaround after `scripts/bootstrap_worktree.py` creates a clean
+environment.
+
+```bash
+.venv/bin/pip-audit --local --skip-editable
+```
+
+This command audits the resolved packages in the current environment.
+
+Caution: a stale environment can omit a current dependency from the result.
+
+GitHub Actions uses `actions/setup-python`, so CI does not have this loader
+error. Keep `pip-audit -r requirements.txt` in `.github/workflows/ci.yml`.
+
 ## The writing gate
 
 The repository writes every document in Simplified Technical English. The linter
