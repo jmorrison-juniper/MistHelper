@@ -840,6 +840,46 @@ def test_the_site_scan_falls_back_to_the_mirrored_runs(monkeypatch: pytest.Monke
     assert adapter.runs_for_site("site-b") == []  # A second site still holds none.
 
 
+def test_the_site_scan_returns_the_stored_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A database page must replace the process mirror in the site scan.
+
+    Why:
+        FR-037 must find a run that another worker created or that survived a
+        restart. Only the document store can hold either run.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    stored = {"run_id": "stored-run", "site_id": SITE_ID, "state": "upgrade_running"}  # Another worker wrote it.
+    mirrored = {"run_id": "mirrored-run", "site_id": SITE_ID, "state": "created"}  # This worker wrote this copy.
+    page = store.RunListPage((stored,), 1, wiring.SITE_SCAN_LIMIT, 0, True)  # The store contract puts rows in `runs`.
+    monkeypatch.setattr(store, "list_runs", lambda query: page)  # Return the stored page without a database call.
+    wiring.mirror_run(mirrored)  # Prove that a nonempty mirror cannot hide the stored answer.
+    rows = wiring.DocumentRunStore().runs_for_site(SITE_ID)  # Run the FR-037 scan through the production adapter.
+    assert rows == [stored]  # The stored run must guard this site across workers and restarts.
+
+
+def test_an_empty_stored_site_scan_does_not_return_a_stale_mirror(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An available empty page must replace the process mirror.
+
+    Why:
+        A second worker can finish or remove the stored run while this process
+        still holds an old copy. The database answer must remain authoritative.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    page = store.RunListPage((), 0, wiring.SITE_SCAN_LIMIT, 0, True)  # The database answered with no matching run.
+    monkeypatch.setattr(store, "list_runs", lambda query: page)  # Return the available page without a database call.
+    wiring.mirror_run({"run_id": RUN_ID, "site_id": SITE_ID, "state": "completed"})  # Hold one stale local copy.
+    rows = wiring.DocumentRunStore().runs_for_site(SITE_ID)  # Run the same scan that guards run creation.
+    assert rows == []  # The available database answer must not revive the stale local copy.
+
+
 def test_the_run_mirror_holds_a_bounded_number_of_runs() -> None:
     """The mirror must drop its oldest run once it reaches the limit.
 
