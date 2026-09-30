@@ -34,10 +34,10 @@ Do not change the shared files below in this feature implementation. Record thei
 
 **Purpose**: Prepare the package, test package, and support file placeholders.
 
-- [ ] T001 Create the AP scorecard package directory with `src/reports/ap_scorecard/__init__.py`
-- [ ] T002 Create the AP scorecard test package directory with `tests/unit/reports/ap_scorecard/__init__.py`
-- [ ] T003 [P] Create shared pytest fixtures for AP statistics payloads in `tests/unit/reports/ap_scorecard/conftest.py`
-- [ ] T004 [P] Verify the integration wiring manifest contains every fleet contract section in `specs/3559-ap-scorecard/wiring.md`
+- [X] T001 Create the AP scorecard package directory with `src/reports/ap_scorecard/__init__.py`
+- [X] T002 Create the AP scorecard test package directory with `tests/unit/reports/ap_scorecard/__init__.py`
+- [X] T003 [P] Create shared pytest fixtures for AP statistics payloads in `tests/unit/reports/ap_scorecard/conftest.py`
+- [X] T004 [P] Verify the integration wiring manifest contains every fleet contract section in `specs/3559-ap-scorecard/wiring.md`
 
 ---
 
@@ -47,12 +47,12 @@ Do not change the shared files below in this feature implementation. Record thei
 
 **Critical**: No user story work can start until this phase is complete.
 
-- [ ] T005 Create scorecard dataclasses and constants in `src/reports/ap_scorecard/model.py`
-- [ ] T006 [P] Create the Mist AP statistics client class in `src/reports/ap_scorecard/client.py`
-- [ ] T007 [P] Create the operation orchestrator class `ApScorecard` in `src/reports/ap_scorecard/operation.py`
-- [ ] T008 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/model.py`
-- [ ] T009 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/client.py`
-- [ ] T010 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/operation.py`
+- [X] T005 Create scorecard dataclasses and constants in `src/reports/ap_scorecard/model.py`
+- [X] T006 [P] Create the Mist AP statistics client class in `src/reports/ap_scorecard/client.py`
+- [X] T007 [P] Create the operation orchestrator class `ApScorecard` in `src/reports/ap_scorecard/operation.py`
+- [X] T008 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/model.py`
+- [X] T009 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/client.py`
+- [X] T010 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: The feature has a package, a client seam, model objects, and an operation class.
 
@@ -66,19 +66,19 @@ Do not change the shared files below in this feature implementation. Record thei
 
 ### Tests for User Story 1
 
-- [ ] T011 [P] [US1] Add a client test that proves `listOrgDevicesStats` is called with `type="ap"` and `limit=1000` in `tests/unit/reports/ap_scorecard/test_ap_scorecard_client.py`
-- [ ] T012 [P] [US1] Add a client test that proves the existing pagination seam is used in `tests/unit/reports/ap_scorecard/test_ap_scorecard_client.py`
-- [ ] T013 [P] [US1] Add a detail export test that proves one `ApScorecard.csv` row is created for each AP in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T014 [P] [US1] Add a detail column test for all required `ApScorecard.csv` fields in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T015 [P] [US1] Add a VLAN failure test for non-empty `inactive_wired_vlans` in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T016 [P] [US1] Add a missing `lldp_stat` test that expects empty LLDP power values and no exception in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T011 [P] [US1] Add a client test that proves `listOrgDevicesStats` is called with `type="ap"` and `limit=1000` in `tests/unit/reports/ap_scorecard/test_ap_scorecard_client.py`
+- [X] T012 [P] [US1] Add a client test that proves the existing pagination seam is used in `tests/unit/reports/ap_scorecard/test_ap_scorecard_client.py`
+- [X] T013 [P] [US1] Add a detail export test that proves one `ApScorecard.csv` row is created for each AP in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T014 [P] [US1] Add a detail column test for all required `ApScorecard.csv` fields in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T015 [P] [US1] Add a VLAN failure test for non-empty `inactive_wired_vlans` in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T016 [P] [US1] Add a missing `lldp_stat` test that expects empty LLDP power values and no exception in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Implement AP statistics fetch and response normalization in `src/reports/ap_scorecard/client.py`
-- [ ] T018 [US1] Implement predominant version calculation per model in `src/reports/ap_scorecard/model.py`
-- [ ] T019 [US1] Implement AP detail row creation for `ApScorecard.csv` in `src/reports/ap_scorecard/model.py`
-- [ ] T020 [US1] Implement detail export through `DataExporter.write_with_format_selection()` in `src/reports/ap_scorecard/operation.py`
+- [X] T017 [US1] Implement AP statistics fetch and response normalization in `src/reports/ap_scorecard/client.py`
+- [X] T018 [US1] Implement predominant version calculation per model in `src/reports/ap_scorecard/model.py`
+- [X] T019 [US1] Implement AP detail row creation for `ApScorecard.csv` in `src/reports/ap_scorecard/model.py`
+- [X] T020 [US1] Implement detail export through `DataExporter.write_with_format_selection()` in `src/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: User Story 1 can create AP detail rows and export `ApScorecard.csv`.
 
@@ -92,18 +92,18 @@ Do not change the shared files below in this feature implementation. Record thei
 
 ### Tests for User Story 2
 
-- [ ] T021 [P] [US2] Add color band boundary tests for `98.5`, a value between `80` and `98.5`, and `80` in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T022 [P] [US2] Add a multi-site summary test that proves one `ApScorecardBySite.csv` row per site in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T023 [P] [US2] Add a redundancy classification test for values `1`, `2`, and `3` or more in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T024 [P] [US2] Add a site redundancy count test for none, good, and excellent counts in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T025 [P] [US2] Add a site summary column test for all five tile percentages and bands in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T021 [P] [US2] Add color band boundary tests for `98.5`, a value between `80` and `98.5`, and `80` in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T022 [P] [US2] Add a multi-site summary test that proves one `ApScorecardBySite.csv` row per site in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T023 [P] [US2] Add a redundancy classification test for values `1`, `2`, and `3` or more in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T024 [P] [US2] Add a site redundancy count test for none, good, and excellent counts in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T025 [P] [US2] Add a site summary column test for all five tile percentages and bands in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Implement tile color band calculation with AP thresholds in `src/reports/ap_scorecard/model.py`
-- [ ] T027 [US2] Implement switch redundancy normalization and classification in `src/reports/ap_scorecard/model.py`
-- [ ] T028 [US2] Implement site scorecard aggregation in `src/reports/ap_scorecard/model.py`
-- [ ] T029 [US2] Implement site summary export through `DataExporter.write_with_format_selection()` in `src/reports/ap_scorecard/operation.py`
+- [X] T026 [US2] Implement tile color band calculation with AP thresholds in `src/reports/ap_scorecard/model.py`
+- [X] T027 [US2] Implement switch redundancy normalization and classification in `src/reports/ap_scorecard/model.py`
+- [X] T028 [US2] Implement site scorecard aggregation in `src/reports/ap_scorecard/model.py`
+- [X] T029 [US2] Implement site summary export through `DataExporter.write_with_format_selection()` in `src/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: User Stories 1 and 2 can create both CSV exports without menu wiring.
 
@@ -117,16 +117,16 @@ Do not change the shared files below in this feature implementation. Record thei
 
 ### Tests for User Story 3
 
-- [ ] T030 [P] [US3] Add an organization summary calculation test for all five tile percentages in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
-- [ ] T031 [P] [US3] Add a console summary test for all five tile names in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
-- [ ] T032 [P] [US3] Add a test-safe operation test that proves no prompt occurs and both output file names are used in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
-- [ ] T033 [P] [US3] Add a no-AP payload test that expects a clear log message and no misleading success summary in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
+- [X] T030 [P] [US3] Add an organization summary calculation test for all five tile percentages in `tests/unit/reports/ap_scorecard/test_ap_scorecard_model.py`
+- [X] T031 [P] [US3] Add a console summary test for all five tile names in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
+- [X] T032 [P] [US3] Add a test-safe operation test that proves no prompt occurs and both output file names are used in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
+- [X] T033 [P] [US3] Add a no-AP payload test that expects a clear log message and no misleading success summary in `tests/unit/reports/ap_scorecard/test_ap_scorecard_operation.py`
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] Implement organization summary aggregation in `src/reports/ap_scorecard/model.py`
-- [ ] T035 [US3] Implement console summary printing in `src/reports/ap_scorecard/operation.py`
-- [ ] T036 [US3] Implement no-AP handling with a clear log message in `src/reports/ap_scorecard/operation.py`
+- [X] T034 [US3] Implement organization summary aggregation in `src/reports/ap_scorecard/model.py`
+- [X] T035 [US3] Implement console summary printing in `src/reports/ap_scorecard/operation.py`
+- [X] T036 [US3] Implement no-AP handling with a clear log message in `src/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: User Stories 1, 2, and 3 can run through the operation class with no live Mist API call in tests.
 
@@ -140,13 +140,13 @@ Do not change the shared files below in this feature implementation. Record thei
 
 ### Tests for User Story 4
 
-- [ ] T037 [P] [US4] Add a support file test for every required `wiring.md` section in `tests/unit/reports/ap_scorecard/test_ap_scorecard_support_files.py`
-- [ ] T038 [P] [US4] Add a release note fragment test for one `### Added` heading and one `#3559` bullet in `tests/unit/reports/ap_scorecard/test_ap_scorecard_support_files.py`
+- [X] T037 [P] [US4] Add a support file test for every required `wiring.md` section in `tests/unit/reports/ap_scorecard/test_ap_scorecard_support_files.py`
+- [X] T038 [P] [US4] Add a release note fragment test for one `### Added` heading and one `#3559` bullet in `tests/unit/reports/ap_scorecard/test_ap_scorecard_support_files.py`
 
 ### Implementation for User Story 4
 
-- [ ] T039 [US4] Update the integration manifest if a required section is missing in `specs/3559-ap-scorecard/wiring.md`
-- [ ] T040 [US4] Create the release note fragment in `changelog.d/issue-3559-ap-scorecard.md`
+- [X] T039 [US4] Update the integration manifest if a required section is missing in `specs/3559-ap-scorecard/wiring.md`
+- [X] T040 [US4] Create the release note fragment in `changelog.d/issue-3559-ap-scorecard.md`
 
 **Checkpoint**: The support evidence exists, and shared file edits remain deferred.
 
@@ -156,15 +156,15 @@ Do not change the shared files below in this feature implementation. Record thei
 
 **Purpose**: Validate the feature-owned files and keep shared changes deferred.
 
-- [ ] T041 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m py_compile src\reports\ap_scorecard\__init__.py src\reports\ap_scorecard\client.py src\reports\ap_scorecard\model.py src\reports\ap_scorecard\operation.py`
-- [ ] T042 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m ruff check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`
-- [ ] T043 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m black --check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`
-- [ ] T044 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m mypy src\reports\ap_scorecard --config-file pyproject.toml`
-- [ ] T045 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pydocstyle src\reports\ap_scorecard`
-- [ ] T046 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pytest tests\unit\reports\ap_scorecard -q --timeout=120`
-- [ ] T047 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m vulture src\reports\ap_scorecard --min-confidence 70`
-- [ ] T048 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m interrogate -v src\reports\ap_scorecard`
-- [ ] T049 Verify that `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated docs, and copilot instructions changed only through `specs/3559-ap-scorecard/wiring.md`
+- [X] T041 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m py_compile src\reports\ap_scorecard\__init__.py src\reports\ap_scorecard\client.py src\reports\ap_scorecard\model.py src\reports\ap_scorecard\operation.py`
+- [X] T042 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m ruff check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`
+- [X] T043 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m black --check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`
+- [X] T044 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m mypy src\reports\ap_scorecard --config-file pyproject.toml`
+- [X] T045 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pydocstyle src\reports\ap_scorecard`
+- [X] T046 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pytest tests\unit\reports\ap_scorecard -q --timeout=120`
+- [X] T047 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m vulture src\reports\ap_scorecard --min-confidence 70`
+- [X] T048 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m interrogate -v src\reports\ap_scorecard`
+- [X] T049 Verify that `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated docs, and copilot instructions changed only through `specs/3559-ap-scorecard/wiring.md`
 
 ---
 
@@ -273,3 +273,4 @@ Task: "T038 Add a release note fragment test for one ### Added heading and one #
 - The implementation must not add a custom pagination loop.
 - The implementation must use `DataExporter.write_with_format_selection()` for both exports.
 - The implementation must not edit shared integration files outside `specs/3559-ap-scorecard/wiring.md`.
+
