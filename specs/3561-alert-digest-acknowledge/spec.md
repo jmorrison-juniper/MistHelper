@@ -128,19 +128,19 @@ A NOC lead changes the lookback window for special handovers by setting `ALERT_D
 
 ### Measurable Outcomes
 
-- **SC-001**: A shift operator can run menu 280 and receive both digest files in under 60 seconds for a normal 24-hour alarm volume.
+- **SC-001**: A shift operator can run menu 280 and receive both digest files in under 60 seconds for a normal volume of 500 alarm rows.
 - **SC-002**: The digest reduces handover review to one grouped row per alarm type and site, with recurrence and time range visible for 100% of grouped alarms that have source timing data.
 - **SC-003**: 100% of unknown alarm types are still included in the digest with category `unknown`.
 - **SC-004**: Menu 281 sends zero acknowledgement requests when the operator gives no confirmation, a wrong word, or a wrong count.
 - **SC-005**: Menu 281 dry runs send zero acknowledgement requests and show 100% of alarm ids that would be acknowledged.
 - **SC-006**: The acknowledgement log contains one result row for 100% of alarm ids included in a confirmed bulk acknowledgement attempt.
 - **SC-007**: Both menu 280 and menu 281 use the same lookback window in 100% of runs.
-- **SC-008**: Local grouping of 500 alarm rows completes in under 1 second, which preserves the 60 second operation budget for normal volumes.
+- **SC-008**: Local grouping and the local full digest path of 500 alarm rows complete in under 1 second, which preserves the 60 second operation budget for normal volumes.
 
 ## Assumptions
 
 - Operators are NOC staff who already have valid Mist access through the existing application session.
-- The existing alarm export used by menu 20 provides enough alarm fields to build the digest and acknowledgement candidate list.
+- Menu 20 is the source precedent for the operator need, but menus 280 and 281 read runtime data directly from `searchOrgAlarms`.
 - The alarm definitions constant is the source of truth for known category mapping.
 - The default 24-hour window means the 24 hours before the operation starts.
 - `ALERT_DIGEST_HOURS` is an integer hour count when it is valid.

@@ -41,4 +41,8 @@ Add menu `280` to the `safe` category row. Add menu `281` to the `destructive` c
 - Register menu 280 to call `AlertDigestOperation.run_digest`.
 - Register menu 281 to call `AlertDigestOperation.run_acknowledge`.
 - Keep menu 281 destructive in `src/utils/operation_registry.py`.
-- Keep generated menu documentation and menu API map changes in the integration pull request.
+- In `README.md`, add menu 280 to the safe report operations as `280 - Export the alert digest handover report`.
+- In `README.md`, add menu 281 to the destructive operations as `281 - Acknowledge recent unacknowledged alarms`.
+- Run `python scripts/generate_menu_wiki.py` after integration wiring.
+- Run `python -m scripts.menu_api_map` after integration wiring.
+- Commit the generated updates in `documentation/menu_reference.md` and the menu API map output that `scripts.menu_api_map` reports.

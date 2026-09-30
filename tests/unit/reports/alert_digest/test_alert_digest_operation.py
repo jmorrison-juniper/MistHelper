@@ -3,6 +3,7 @@
 from __future__ import annotations  # Enable modern annotations without runtime imports.
 
 from dataclasses import dataclass, field  # Build small fake client and writer objects.
+from time import perf_counter  # Measure the local full digest path for the performance criterion.
 from typing import Any  # Accept raw rows in fake clients.
 from unittest.mock import MagicMock  # Provide fake input helpers.
 
@@ -80,6 +81,19 @@ def test_run_digest_keeps_unknown_category(monkeypatch: Any) -> None:
     writer = FakeWriter()  # Capture output rows.
     operation(client, writer).execute_digest()  # Run the digest path.
     assert writer.digest_groups[0].category == "unknown"  # Confirm unknown category.
+
+
+def test_run_digest_handles_normal_volume_under_local_budget(monkeypatch: Any) -> None:
+    """Menu 280 processes a normal local alarm volume quickly."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    rows = [alarm(number, site_name=f"Site {number % 5}") for number in range(1, 501)]  # Build normal volume.
+    client = FakeClient(alarms=rows)  # Provide the bounded normal volume.
+    writer = FakeWriter()  # Capture output rows without file I/O.
+    started = perf_counter()  # Start a local end-to-end timing guard.
+    assert operation(client, writer).execute_digest() is True  # Run the digest workflow.
+    elapsed = perf_counter() - started  # Stop the local timing guard.
+    assert len(writer.digest_groups) == 5  # Confirm the full digest path grouped the volume.
+    assert elapsed < 1.0  # Confirm local work preserves the 60 second operation budget.
 
 
 def test_wrong_confirmation_cancels_without_request(monkeypatch: Any, caplog: Any) -> None:

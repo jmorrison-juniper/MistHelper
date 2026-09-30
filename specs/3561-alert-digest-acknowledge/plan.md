@@ -22,11 +22,11 @@ Add menu 280 as a safe alert digest and menu 281 as a destructive alarm acknowle
 
 **Project Type**: MistHelper CLI menu operation package.
 
-**Performance Goals**: Complete a normal 24-hour alert digest in under 60 seconds. Unit tests measure local grouping of 500 alarm rows in under 1 second.
+**Performance Goals**: Complete a normal 24-hour alert digest in under 60 seconds. This branch defines normal volume as 500 alarm rows, which is half of one API page. Unit tests measure the full local digest path and pure grouping of 500 alarm rows in under 1 second.
 
 **Constraints**: Menu 281 sends no destructive request without `ACK <count>`. `--dry-run` sends no request. All output uses ASCII text.
 
-**Scale/Scope**: One organization, one lookback window, all alarm rows returned by paged `searchOrgAlarms`.
+**Scale/Scope**: One organization, one lookback window, all alarm rows returned by paged `searchOrgAlarms`. Menu 20 is a reference for the operator need only, not the runtime data source.
 
 ## Constitution Check
 
@@ -71,9 +71,12 @@ src/reports/alert_digest/
 
 tests/unit/reports/alert_digest/
 ├── __init__.py
+├── conftest.py
 ├── test_alert_digest_client.py
 ├── test_alert_digest_model.py
-└── test_alert_digest_operation.py
+├── test_alert_digest_operation.py
+├── test_alert_digest_prompts.py
+└── test_alert_digest_writer.py
 ```
 
 **Structure Decision**: Use one new nested package under `src/reports/alert_digest/` and one new matching test package. The fleet contract forbids this branch from editing integration-owned files. Menu registration, registry category changes, primary key strategies, generated menu reference changes, and README changes are deferred to the integration pull request and recorded in `wiring.md`.

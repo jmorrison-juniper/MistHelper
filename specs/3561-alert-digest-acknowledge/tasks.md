@@ -133,7 +133,7 @@ The implementation branch must not edit these files. The integration pull reques
 - [X] T032 [P] Run `python -m vulture src\reports\alert_digest --min-confidence 70`.
 - [X] T033 [P] Run `python -m interrogate -v src\reports\alert_digest`.
 - [X] T034 Run the quickstart validation commands in `specs/3561-alert-digest-acknowledge/quickstart.md`.
-- [X] T035 [P] Add model tests for missing sample, missing acknowledgement state, missing timing values, and local grouping performance in `tests/unit/reports/alert_digest/test_alert_digest_model.py`.
+- [X] T035 [P] Add tests for missing sample, missing acknowledgement state, missing timing values, local grouping performance, and local full digest path performance in `tests/unit/reports/alert_digest/test_alert_digest_model.py` and `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
 - [X] T036 [P] Confirm the fleet deferral for primary key, README, registry, and generated reference files in `specs/3561-alert-digest-acknowledge/wiring.md`.
 
 **Commit group G6**: Commit after T027 through T036 pass, or record any environment-only skip reason in the pull request.
@@ -179,6 +179,7 @@ The integration pull request starts after this branch validates the package, tes
 ```text
 Task: T011 Add digest grouping, unknown category, empty-state, and Markdown section tests in tests/unit/reports/alert_digest/test_alert_digest_model.py
 Task: T012 Add digest operation tests for no prompt, output creation, and write failure handling in tests/unit/reports/alert_digest/test_alert_digest_operation.py
+Task: T012A Add writer tests for AlertDigest.csv, AlertDigest.md, and ASCII-only Markdown output in tests/unit/reports/alert_digest/test_alert_digest_writer.py
 ```
 
 ### User Story 2
