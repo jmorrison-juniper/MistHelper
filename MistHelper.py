@@ -718,10 +718,16 @@ from src.reports.global_wired_client_report_generator import (
 from src.reports.offline_device_reporter import (
     OfflineDeviceReporter,  # Cat B (1013 SC-001 position 44) -- re-export for MistHelper.OfflineDeviceReporter callers
 )
+from src.reports.admin_token_hygiene.operation import AdminTokenHygieneReport  # Menu 273 (issue #3554) -- Export admin and API token hygiene reports.
+from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- export certificate expiry risk.
+from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist  # Menu 276 (issue #3557) -- organization security posture checklist.
+from src.reports.psk_hygiene.operation import PskHygieneReport  # Menu 274 (issue #3555) -- PSK hygiene report.
 from src.reports.sfp_transceiver_data_processor import (
     SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
 )
+from src.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 275 (issue #3556) -- audit missing and unused site variables.
 from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport  # Menu 242 SSID coverage report.
+from src.reports.subscription_expiry.operation import SubscriptionExpiryReport  # Menu 271 (issue #3552) -- subscription and contract expiry report.
 from src.reports.wired_client_manufacturer_report_generator import (
     WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
 )
@@ -4506,6 +4512,54 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("270"),  # Read the safety class.
         destructive=False,  # Mode 3 writes an action status only, never a device configuration.
         supports_fast=False,  # The resolve paces its own requests with AdaptivePacer.
+    ),
+    "271": GlobalImportManager.MenuEntry(  # Use named fields for menu 271.
+        menu_id="271",  # Store key for drift checks.
+        handler=SubscriptionExpiryReport.run,
+        title="Export the subscription and contract expiry report",
+        category=OperationRegistry.skip_category("271"),  # Read the safety class.
+        destructive=False,  # The report reads Mist data and writes local files only.
+        supports_fast=False,  # Keep report pacing under the handler.
+    ),
+    "272": GlobalImportManager.MenuEntry(  # Use named fields for menu 272.
+        menu_id="272",  # Store key for drift checks.
+        handler=CertificateExpiryReport.run,
+        title="Export the certificate expiry report",
+        category=OperationRegistry.skip_category("272"),  # Read the safety class.
+        destructive=False,  # The report reads Mist data and writes local files only.
+        supports_fast=False,  # Keep report pacing under the handler.
+    ),
+    "273": GlobalImportManager.MenuEntry(  # Use named fields for menu 273.
+        menu_id="273",  # Store key for drift checks.
+        handler=AdminTokenHygieneReport.run,
+        title="Admin and API Token Hygiene Report",
+        category=OperationRegistry.skip_category("273"),  # Read the safety class.
+        destructive=False,  # The report reads Mist data and writes local files only.
+        supports_fast=False,  # Keep report pacing under the handler.
+    ),
+    "274": GlobalImportManager.MenuEntry(  # Use named fields for menu 274.
+        menu_id="274",  # Store key for drift checks.
+        handler=PskHygieneReport.run,
+        title="Export the PSK hygiene report",
+        category=OperationRegistry.skip_category("274"),  # Read the safety class.
+        destructive=False,  # The report reads Mist data and writes local files only.
+        supports_fast=False,  # Keep report pacing under the handler.
+    ),
+    "275": GlobalImportManager.MenuEntry(  # Use named fields for menu 275.
+        menu_id="275",  # Store key for drift checks.
+        handler=SiteVariableAudit.run,
+        title="Audit site variable coverage",
+        category=OperationRegistry.skip_category("275"),  # Read the safety class.
+        destructive=False,  # The audit reads Mist data and writes local files only.
+        supports_fast=False,  # Keep report pacing under the handler.
+    ),
+    "276": GlobalImportManager.MenuEntry(  # Use named fields for menu 276.
+        menu_id="276",  # Store key for drift checks.
+        handler=OrgSecurityPostureChecklist.run,
+        title="Export the organization security posture checklist",
+        category=OperationRegistry.skip_category("276"),  # Read the safety class.
+        destructive=False,  # The checklist reads Mist data and writes local files only.
+        supports_fast=False,  # Keep report pacing under the handler.
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.
