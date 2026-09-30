@@ -113,6 +113,14 @@ def test_recording_start_body_matches_openapi_shape() -> None:
     assert body == {"name": "name1", "type": "client", "mac": "aabbccddeeff", "duration": 30}  # WHY: exact.
 
 
+def test_recording_body_clamps_duration_to_openapi_range() -> None:
+    """Recording body clamps duration to the OpenAPI range."""
+    high = RfDiagnosticsClient.recording_body("name1", "aabbccddeeff", 999)  # WHY: operator input can exceed schema.
+    low = RfDiagnosticsClient.recording_body("name1", "aabbccddeeff", 0)  # WHY: operator Ctrl+C mode sends zero.
+    assert high["duration"] == 180  # WHY: OpenAPI maximum is 180 seconds.
+    assert low["duration"] == 1  # WHY: OpenAPI request still needs a positive duration.
+
+
 def test_recording_stop_download_and_list_use_expected_operations() -> None:
     """Stop, download, and list use the OpenAPI operation names."""
     sdk = FakeSdk()  # WHY: isolate the client from the real SDK.
@@ -155,3 +163,29 @@ def test_wiring_manifest_lists_deferred_integration_files() -> None:
     ]
     for item in required:  # WHY: check each deferred file explicitly.
         assert item in text  # WHY: integration agent must find the deferred file name.
+
+
+class FakeAuditFailure:
+    """Fake audit writer that reports a failed write."""
+
+    def __init__(self) -> None:
+        """Create call capture storage."""
+        self.rows: list[Any] = []  # WHY: test verifies that one write was attempted.
+
+    def append(self, run: Any) -> bool:
+        """Record the attempted row and report failure."""
+        self.rows.append(run)  # WHY: the operation must attempt one audit write.
+        return False  # WHY: simulate disk failure without touching the file system.
+
+
+def test_operation_reports_audit_write_failure(caplog) -> None:
+    """Operation audit helper logs when persistence fails."""
+    from src.troubleshooting.rf_diagnostics.models import RfDiagnosticRun  # WHY: build one audit row.
+    from src.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # WHY: test helper method.
+
+    operation = RfDiagnosticsOperation.__new__(RfDiagnosticsOperation)  # WHY: bypass resolver-backed constructor.
+    operation._audit = FakeAuditFailure()  # WHY: inject failing audit writer.
+    row = RfDiagnosticRun("spectrum", "site1", "ap1", "t1", "success", "ok")  # WHY: one audit attempt.
+    operation._write_audit(row)  # WHY: exercise visible failure path.
+    assert len(operation._audit.rows) == 1  # WHY: exactly one write attempt was made.
+    assert "was not written" in caplog.text  # WHY: failed persistence is visible.

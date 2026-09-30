@@ -62,3 +62,14 @@ def test_spectrum_runner_times_out_after_poll_limit() -> None:
     assert session.status == STATUS_TIMEOUT  # WHY: session result states timeout.
     assert run.status == STATUS_TIMEOUT  # WHY: audit row states timeout.
     assert len(client.poll_calls) == 2  # WHY: runner honors the poll limit.
+
+
+def test_spectrum_runner_marks_failed_final_payload() -> None:
+    """Spectrum runner audits a failed final payload as failed."""
+    client = FakeSpectrumClient([{"status": "failed", "band": "5"}])  # WHY: Mist can return a final failed state.
+    runner = SpectrumAnalysisRunner(
+        client, sleep_fn=lambda seconds: None, clock=lambda: datetime(2026, 9, 29, tzinfo=UTC)
+    )
+    session, run = runner.run("site1", "ap1", "5", 300, poll_limit=1)  # WHY: exercise final failure state.
+    assert session.status == "failed"  # WHY: session must not claim success.
+    assert run.status == "failed"  # WHY: audit row must not claim success.

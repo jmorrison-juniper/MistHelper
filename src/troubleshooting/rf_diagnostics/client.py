@@ -31,11 +31,12 @@ class RfDiagnosticsClient:
     @staticmethod
     def recording_body(name: str, client_mac: str, duration: int) -> dict[str, Any]:
         """Return the OpenAPI-shaped RF diagnostic recording body."""
+        bounded_duration = min(max(duration, 1), 180)  # WHY: OpenAPI limits recordings to 1 through 180 seconds.
         return {  # WHY: OpenAPI requires name and type, and client type uses mac.
             "name": name,  # WHY: Mist stores a visible recording name.
             "type": "client",  # WHY: issue 3570 records a client RF diagnostic.
             "mac": client_mac,  # WHY: the client MAC selects the RF target.
-            "duration": duration,  # WHY: max 180 seconds per OpenAPI.
+            "duration": bounded_duration,  # WHY: clamp operator input to the OpenAPI maximum.
         }
 
     @staticmethod

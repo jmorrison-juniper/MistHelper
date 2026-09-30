@@ -20,6 +20,7 @@ from src.troubleshooting.rf_diagnostics.models import (  # WHY: outcomes.  # WHY
 logger = logging.getLogger(__name__)  # WHY: make spectrum runner logs easy to filter.
 
 _RUNNING_VALUES = {"running", "started", "in_progress", "active"}  # WHY: Mist states can vary by payload.
+_FAILURE_VALUES = {"failed", "failure", "error"}  # WHY: failed states must not be audited as success.
 
 
 class SpectrumAnalysisRunner:
@@ -64,14 +65,22 @@ class SpectrumAnalysisRunner:
             start_response = self._client.start_spectrum(site_id, device_id, band, duration)  # WHY: begin analysis.
             start_payload = self._payload(start_response)  # WHY: normalize SDK response shape.
             final_payload = self._poll(site_id, start_payload, poll_limit, poll_interval)  # WHY: wait for result.
-            session = SpectrumAnalysisSession(site_id, device_id, STATUS_SUCCESS, final_payload)  # WHY: caller prints.
-            run = RfDiagnosticRun(MODE, site_id, device_id, started_at, STATUS_SUCCESS, self._summary(final_payload))
+            final_status = self._final_status(final_payload)  # WHY: Mist can return a failed final state.
+            session = SpectrumAnalysisSession(site_id, device_id, final_status, final_payload)  # WHY: caller prints.
+            run = RfDiagnosticRun(MODE, site_id, device_id, started_at, final_status, self._summary(final_payload))
             return session, run  # WHY: caller writes audit exactly once.
         except TimeoutError as error:  # WHY: poll timeout is a controlled outcome.
             return self._failed(site_id, device_id, started_at, STATUS_TIMEOUT, str(error))  # WHY: audit timeout.
         except Exception as error:  # pylint: disable=broad-exception-caught
             logger.exception("Spectrum analysis failed: %s", error)  # WHY: preserve stack trace for troubleshooting.
             return self._failed(site_id, device_id, started_at, STATUS_FAILED, str(error))  # WHY: audit failure.
+
+    @staticmethod
+    def _final_status(payload: dict[str, Any]) -> str:
+        """Return success or failure for a final spectrum payload."""
+        if SpectrumAnalysisRunner._status(payload) in _FAILURE_VALUES:  # WHY: failed states must not audit success.
+            return STATUS_FAILED  # WHY: record the Mist final state as a failure.
+        return STATUS_SUCCESS  # WHY: any non-failed final payload is a successful collection.
 
     def _poll(
         self, site_id: str, first_payload: dict[str, Any], poll_limit: int, poll_interval: float

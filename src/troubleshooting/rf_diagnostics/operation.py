@@ -68,7 +68,7 @@ class RfDiagnosticsOperation:
             self._write_cancel("spectrum", site_id, device_id)  # WHY: cancelled attempt still gets one audit row.
             return  # WHY: no remote call after decline.
         session, run = SpectrumAnalysisRunner(self._client).run(site_id, device_id, band, duration)  # WHY: run mode.
-        self._audit.append(run)  # WHY: one audit row per attempt.
+        self._write_audit(run)  # WHY: one audit row per attempt, with visible failure handling.
         logger.info("Spectrum analysis result: %s", session.payload)  # WHY: operator sees the final result.
 
     def _run_recording(self) -> None:
@@ -83,7 +83,7 @@ class RfDiagnosticsOperation:
         recording, diagnostic_file, run = RfDiagnosticRecordingRunner(self._client).run(
             site_id, client_mac, duration, name
         )
-        self._audit.append(run)  # WHY: one audit row per attempt.
+        self._write_audit(run)  # WHY: one audit row per attempt, with visible failure handling.
         self._report_recording(recording.rfdiag_id, diagnostic_file)  # WHY: operator gets the file path or failure.
 
     @staticmethod
@@ -136,8 +136,15 @@ class RfDiagnosticsOperation:
         """Write one cancellation audit row."""
         started_at = datetime.now(UTC).isoformat(timespec="seconds")  # WHY: cancellation rows need an order time.
         run = RfDiagnosticRun(mode, site_id, target, started_at, STATUS_CANCELLED, "operator declined")
-        self._audit.append(run)  # WHY: acceptance requires one row per run attempt.
+        self._write_audit(run)  # WHY: acceptance requires one row per run attempt.
         logger.info("RF diagnostics %s cancelled before start", mode)  # WHY: operator-visible cancellation.
+
+    def _write_audit(self, run: RfDiagnosticRun) -> None:
+        """Write one audit row or report the failed persistence."""
+        if self._audit.append(run):  # WHY: normal path confirms persistence.
+            logger.debug("RF diagnostics audit row persisted status=%s", run.status)  # WHY: result summary.
+            return  # WHY: no error to report.
+        logger.error("RF diagnostics audit row was not written for mode %s", run.mode)  # WHY: visible failure path.
 
     @staticmethod
     def _recording_name(client_mac: str) -> str:
