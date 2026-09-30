@@ -710,7 +710,9 @@ from src.refactors.wlanradius_timer_manager import (
     WLANRadiusTimerManager,  # Extracted WLAN RADIUS timer manager (SC-014)
 )
 from src.reports.admin_token_hygiene.operation import AdminTokenHygieneReport  # Menu 273 (issue #3554) -- tokens.
-from src.reports.ap_scorecard.operation import ApScorecard  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.
+from src.reports.ap_scorecard.operation import (
+    ApScorecard,  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.
+)
 from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- cert expiry.
 from src.reports.e911_bssid import (
     E911BSSIDReportGenerator,  # Module-level for tests + lazy-import re-export for src.export.org_export_utils
@@ -723,15 +725,21 @@ from src.reports.offline_device_reporter import (
 )
 from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist  # Menu 276 (issue #3557) -- posture.
 from src.reports.psk_hygiene.operation import PskHygieneReport  # Menu 274 (issue #3555) -- PSK hygiene report.
-from src.reports.rogue_pci_evidence.operation import RoguePciEvidencePack  # Menu 282 (issue #3562) -- export rogue and PCI evidence files.
+from src.reports.rogue_pci_evidence.operation import (
+    RoguePciEvidencePack,  # Menu 282 (issue #3562) -- export rogue and PCI evidence files.
+)
 from src.reports.sfp_transceiver_data_processor import (
     SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
 )
 from src.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 275 (issue #3556) -- site variables.
 from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport  # Menu 242 SSID coverage report.
 from src.reports.subscription_expiry.operation import SubscriptionExpiryReport  # Menu 271 (issue #3552) -- expiry.
-from src.reports.switch_scorecard.operation import SwitchScorecard  # Menu 277 (issue #3558) -- organization switch scorecard report.
-from src.reports.wan_edge_scorecard.scorecard import WanEdgeScorecard  # Menu 279 (issue #3560) -- export the organization WAN edge scorecard.
+from src.reports.switch_scorecard.operation import (
+    SwitchScorecard,  # Menu 277 (issue #3558) -- organization switch scorecard report.
+)
+from src.reports.wan_edge_scorecard.scorecard import (
+    WanEdgeScorecard,  # Menu 279 (issue #3560) -- export the organization WAN edge scorecard.
+)
 from src.reports.wired_client_manufacturer_report_generator import (
     WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
 )
