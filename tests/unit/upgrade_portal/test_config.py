@@ -30,14 +30,17 @@ from src.upgrade_portal.app.config import (
     RedisSettings,
     SettingsError,
     WebSettings,
+    WriteSettings,
     load_arango_settings,
     load_proxy_settings,
     load_redis_settings,
     load_settings,
     load_web_settings,
+    load_write_settings,
     read_allowed_networks,
     read_integer,
     read_network,
+    read_org_upgrade_writes_enabled,
     read_poll_interval,
     read_port,
     read_post_check_mode,
@@ -45,6 +48,7 @@ from src.upgrade_portal.app.config import (
     read_secret_key,
     read_themes,
 )
+from src.upgrade_portal.app.factory import build_application
 
 # WHY: Every variable the module reads. The clearing fixture walks this list, so
 # a leftover shell variable cannot turn a default test into a false pass.
@@ -56,6 +60,7 @@ PORTAL_VARIABLES = (
     "CAPTURE_ALLOWED_IPS",
     "CAPTURE_PROXY_HOPS",
     "CAPTURE_POST_CHECK_MODE",
+    "ORG_UPGRADE_WRITES_ENABLED",
     "MIST_APITOKEN",
     "MIST_API_TOKEN",
     "ARANGO_HOST",
@@ -248,6 +253,24 @@ def test_allow_list_default_is_empty() -> None:
         portal. The security layer registers no address hook for an empty list.
     """
     assert load_settings().web.allowed_networks == ()
+
+
+def test_organization_upgrade_writes_default_to_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The portal keeps every multi-site firmware write closed by default."""
+    monkeypatch.delenv("ORG_UPGRADE_WRITES_ENABLED", raising=False)  # Prove the production path with no setting.
+    assert load_settings().writes == WriteSettings(org_upgrade_enabled=False)  # Keep submit and cancel disabled.
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("", False), ("true", True)])
+def test_the_application_factory_applies_both_write_gate_states(
+    monkeypatch: pytest.MonkeyPatch,
+    raw: str,
+    expected: bool,
+) -> None:
+    """The production settings tree supplies the existing Flask write gate."""
+    monkeypatch.setenv("ORG_UPGRADE_WRITES_ENABLED", raw)  # Select the closed or open deployment state.
+    application = build_application(load_settings())  # Build the same configured Flask object as production.
+    assert application.config["ORG_UPGRADE_WRITES_ENABLED"] is expected  # Drive submit and cancel from the setting.
 
 
 def test_arango_defaults_name_the_container_service() -> None:
@@ -964,8 +987,8 @@ def test_the_settings_records_are_frozen(group_name: str, field_name: str) -> No
         setattr(record, field_name, "changed")  # WHY: The name sits in a variable, so ruff sees no fixed attribute.
 
 
-def test_load_settings_matches_the_four_group_loaders() -> None:
-    """The whole loader gives the same values as the four group loaders.
+def test_load_settings_matches_the_five_group_loaders() -> None:
+    """The whole loader gives the same values as the five group loaders.
 
     Why:
         A caller may load one group alone. The two paths must agree, or a route
@@ -975,6 +998,7 @@ def test_load_settings_matches_the_four_group_loaders() -> None:
     assert settings.arango == load_arango_settings()
     assert settings.redis == load_redis_settings()
     assert settings.proxy == load_proxy_settings()
+    assert settings.writes == load_write_settings()
     web = load_web_settings()
     # WHY: The session key differs at each read when the operator sets none, so
     # this check leaves that one field out.
@@ -984,8 +1008,8 @@ def test_load_settings_matches_the_four_group_loaders() -> None:
     assert settings.web.allowed_networks == web.allowed_networks
 
 
-def test_load_settings_returns_the_four_groups() -> None:
-    """The loader returns one record that holds the four groups.
+def test_load_settings_returns_the_five_groups() -> None:
+    """The loader returns one record that holds the five groups.
 
     Why:
         The factory passes one object to the security layer and to each route
@@ -997,6 +1021,7 @@ def test_load_settings_returns_the_four_groups() -> None:
     assert isinstance(settings.arango, ArangoSettings)
     assert isinstance(settings.redis, RedisSettings)
     assert isinstance(settings.proxy, ProxySettings)
+    assert isinstance(settings.writes, WriteSettings)
 
 
 def test_the_proxy_record_holds_exactly_one_field() -> None:
@@ -1010,15 +1035,15 @@ def test_the_proxy_record_holds_exactly_one_field() -> None:
     assert [field.name for field in fields(ProxySettings)] == ["trusted_hops"]
 
 
-def test_the_portal_record_holds_exactly_four_groups() -> None:
-    """The whole settings record holds the four documented groups.
+def test_the_portal_record_holds_exactly_five_groups() -> None:
+    """The whole settings record holds the five documented groups.
 
     Why:
         The Five-Item Rule caps this record at five groups. The list is fixed
         here so a new group is a deliberate change and not a silent one, and so
         the credential search in ``collect_stored_text`` covers every field.
     """
-    assert [field.name for field in fields(PortalSettings)] == ["web", "arango", "redis", "proxy"]
+    assert [field.name for field in fields(PortalSettings)] == ["web", "arango", "redis", "proxy", "writes"]
 
 
 def test_the_proxy_hop_default_is_zero(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1108,6 +1133,41 @@ def test_the_post_check_mode_default_is_automatic(monkeypatch: pytest.MonkeyPatc
     """
     monkeypatch.delenv("CAPTURE_POST_CHECK_MODE", raising=False)  # WHY: The default path needs an absent variable.
     assert read_post_check_mode() == "automatic"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("", False),
+        ("false", False),
+        ("FALSE", False),
+        ("true", True),
+        (" TRUE ", True),
+        ("1", False),
+        ("yes", False),
+    ],
+)
+def test_the_organization_upgrade_write_reader_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    raw: str,
+    expected: bool,
+) -> None:
+    """Only the documented true value enables multi-site firmware writes."""
+    monkeypatch.setenv("ORG_UPGRADE_WRITES_ENABLED", raw)  # Supply one deployment value to the settings reader.
+    assert read_org_upgrade_writes_enabled() is expected  # Keep every unknown value closed.
+    assert load_write_settings().org_upgrade_enabled is expected  # Keep the frozen settings group aligned.
+
+
+def test_an_unknown_organization_upgrade_write_value_warns(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unknown write gate value stays false and names the setting."""
+    monkeypatch.setenv("ORG_UPGRADE_WRITES_ENABLED", "enabled")  # Model a plausible but unsupported value.
+    with caplog.at_level(logging.WARNING):  # Capture the repair text that the operator needs.
+        assert read_org_upgrade_writes_enabled() is False  # Refuse the destructive operation.
+    assert "ORG_UPGRADE_WRITES_ENABLED" in caplog.text  # Name the deployment setting that needs repair.
+    assert "enabled" in caplog.text  # Name the refused value without exposing a credential.
 
 
 @pytest.mark.parametrize(

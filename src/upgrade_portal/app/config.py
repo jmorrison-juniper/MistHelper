@@ -44,6 +44,7 @@ POLL_VARIABLE = "CAPTURE_POLL_SECONDS"  # The wait between two browser status ca
 ALLOWED_ADDRESSES_VARIABLE = "CAPTURE_ALLOWED_IPS"  # A comma list of networks.
 PROXY_HOPS_VARIABLE = "CAPTURE_PROXY_HOPS"  # The count of trusted reverse proxies in front of the portal.
 POST_CHECK_MODE_VARIABLE = "CAPTURE_POST_CHECK_MODE"  # Names who starts the second capture of a run.
+ORG_UPGRADE_WRITES_ENABLED_VARIABLE = "ORG_UPGRADE_WRITES_ENABLED"  # Opens the destructive multi-site write routes.
 MIST_TOKEN_VARIABLES = ("MIST_APITOKEN", "MIST_API_TOKEN")  # The names of the cloud token variables.
 
 ARANGO_HOST_VARIABLE = "ARANGO_HOST"  # The full URL of the primary store.
@@ -186,8 +187,20 @@ class ProxySettings:
 
 
 @dataclass(frozen=True, slots=True)  # Frozen stops a request handler from changing a setting.
+class WriteSettings:
+    """The deployment gates for destructive portal operations.
+
+    Attributes:
+        org_upgrade_enabled: True only when the operator enables multi-site
+            firmware writes with the documented environment variable.
+    """
+
+    org_upgrade_enabled: bool  # False keeps every multi-site submit and cancel route closed.
+
+
+@dataclass(frozen=True, slots=True)  # Frozen stops a request handler from changing a setting.
 class PortalSettings:
-    """Every setting the portal needs, in four groups.
+    """Every setting the portal needs, in five groups.
 
     Why:
         The factory passes one object to the security layer and to each route
@@ -198,12 +211,14 @@ class PortalSettings:
         arango: The primary store settings.
         redis: The lock store settings.
         proxy: The count of reverse proxies in front of the portal.
+        writes: The deployment gates for destructive operations.
     """
 
     web: WebSettings  # The listener and the browser group.
     arango: ArangoSettings  # The primary store group.
     redis: RedisSettings  # The lock store group.
     proxy: ProxySettings  # The deployment topology group.
+    writes: WriteSettings  # The destructive operation gate group.
 
 
 def load_settings() -> PortalSettings:
@@ -214,13 +229,14 @@ def load_settings() -> PortalSettings:
         a setting. One entry point also gives the unit tests one place to patch.
 
     Returns:
-        The four settings groups in one frozen record.
+        The five settings groups in one frozen record.
     """
     return PortalSettings(  # One call builds the whole tree, so no half-built record exists.
         web=load_web_settings(),  # The listener and the browser group.
         arango=load_arango_settings(),  # The primary store group.
         redis=load_redis_settings(),  # The lock store group.
         proxy=load_proxy_settings(),  # The deployment topology group.
+        writes=load_write_settings(),  # The destructive operation gate group.
     )
 
 
@@ -275,6 +291,17 @@ def load_proxy_settings() -> ProxySettings:
     """
     return ProxySettings(
         trusted_hops=read_proxy_hops(),  # A bad value falls back to zero, which trusts no header.
+    )
+
+
+def load_write_settings() -> WriteSettings:
+    """Read the deployment gates for destructive portal operations.
+
+    Returns:
+        The destructive operation gate group.
+    """
+    return WriteSettings(
+        org_upgrade_enabled=read_org_upgrade_writes_enabled(),  # Keep the multi-site write gate closed by default.
     )
 
 
@@ -453,6 +480,21 @@ def read_post_check_mode() -> str:
         DEFAULT_POST_CHECK_MODE,
     )
     return DEFAULT_POST_CHECK_MODE  # Continue with the capture that proves the upgrade worked.
+
+
+def read_org_upgrade_writes_enabled() -> bool:
+    """Return true only when the deployment explicitly enables multi-site writes."""
+    logger.info("Read the organization upgrade write gate")  # Record the safety setting read before its decision.
+    raw = os.environ.get(ORG_UPGRADE_WRITES_ENABLED_VARIABLE, "").strip().lower()  # Blank text keeps writes closed.
+    enabled = raw == "true"  # Only the documented value opens a destructive route.
+    if raw and raw not in {"true", "false"}:  # An unknown value must fail closed and name the repair.
+        logger.warning(
+            "The value %s in %s is not true or false. The portal disables organization upgrade writes.",
+            raw,
+            ORG_UPGRADE_WRITES_ENABLED_VARIABLE,
+        )
+    logger.debug("Organization upgrade writes are enabled: %s", enabled)  # Report the decision without a secret.
+    return enabled  # Give the frozen settings tree the fail-closed decision.
 
 
 def read_themes() -> tuple[str, ...]:

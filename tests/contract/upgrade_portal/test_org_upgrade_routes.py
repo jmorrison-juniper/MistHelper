@@ -363,6 +363,21 @@ def test_valid_options_reach_the_confirmation_page(org_upgrade_client: FlaskClie
     assert b"0.14.29411" in answer.data
 
 
+@pytest.mark.parametrize("writes_enabled", [False, True])
+def test_the_confirmation_page_reports_both_write_gate_states(
+    org_upgrade_client: FlaskClient,
+    writes_enabled: bool,
+) -> None:
+    """The confirmation page names the setting only while the write gate is closed."""
+    org_upgrade_client.application.config["ORG_UPGRADE_WRITES_ENABLED"] = writes_enabled  # Select one gate state.
+    save_valid_options(org_upgrade_client)  # Reach the page that controls the destructive submit route.
+    page = org_upgrade_client.get(ORG_CONFIRM_PAGE).get_data(as_text=True)  # Read the operator warning.
+    setting_named = "ORG_UPGRADE_WRITES_ENABLED=true" in page  # Detect the documented repair text.
+    warning_present = 'data-testid="org-upgrade-write-disabled"' in page  # Detect the closed-gate warning.
+    assert setting_named is (not writes_enabled)  # Name the setting only when the deployment must change it.
+    assert warning_present is (not writes_enabled)  # Hide the warning when the gate is open.
+
+
 def test_big_bang_options_do_not_send_a_failure_limit(org_upgrade_client: FlaskClient) -> None:
     """The big-bang request omits the field that its Mist schema does not use."""
     answer = org_upgrade_client.post(
