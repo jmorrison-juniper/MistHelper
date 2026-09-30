@@ -78,13 +78,16 @@ Coordinates one checklist run.
 | `ORGSEC-PASSWORD-006` | `PasswordSpecialCharacterRequiredCheck` | Password policy | `organization settings > password policy > special character required` |
 | `ORGSEC-PASSWORD-007` | `PasswordReuseHistoryCheck` | Password policy | `organization settings > password policy > password reuse history` |
 | `ORGSEC-PASSWORD-008` | `PasswordMaximumAgeCheck` | Password policy | `organization settings > password policy > maximum password age` |
+| `ORGSEC-PASSWORD-009` | `PasswordTwoFactorRequiredCheck` | Password policy | `organization settings > password policy > two-factor required` |
 | `ORGSEC-SESSION-001` | `SessionIdleTimeoutCheck` | Session policy | `organization settings > session policy > idle timeout` |
 | `ORGSEC-SESSION-002` | `SessionMaximumLifetimeCheck` | Session policy | `organization settings > session policy > maximum session lifetime` |
 | `ORGSEC-API-001` | `ApiAccessRestrictionCheck` | API policy | `organization settings > API policy > API access` |
 | `ORGSEC-API-002` | `ApiTokenExpirationCheck` | API policy | `organization settings > API policy > token expiration` |
 | `ORGSEC-API-003` | `ApiWebhookHttpsCheck` | API policy | `organization settings > API policy > webhook URLs` |
 | `ORGSEC-REMOTE-001` | `RemoteShellDisabledCheck` | Remote shell | `organization settings > remote shell` |
+| `ORGSEC-REMOTE-002` | `JunosShellRoleAccessDisabledCheck` | Remote shell | `organization settings > Junos shell role access` |
 | `ORGSEC-CAPTURE-001` | `PacketCaptureDisabledCheck` | Packet capture | `organization settings > packet capture` |
+| `ORGSEC-CAPTURE-002` | `PacketCaptureBucketVerifiedCheck` | Packet capture | `organization settings > packet capture bucket verified` |
 | `ORGSEC-CLEANUP-001` | `StaleCleanupEnabledCheck` | Stale configuration cleanup | `organization settings > stale configuration cleanup` |
 
 ## State Rules

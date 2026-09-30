@@ -27,3 +27,19 @@ Verification sources:
 ## Source collection contract
 
 The source collector returns one `OrganizationSecuritySourceData` object. Checks must read only that object. Checks must not make their own Mist API calls.
+
+## Verified response keys
+
+| Check area | Source operation ID | Response keys |
+|------------|---------------------|---------------|
+| Password policy | `getOrgSettings` | `password_policy.enabled`, `password_policy.min_length`, `password_policy.requires_special_char`, `password_policy.requires_two_factor_auth`, `password_policy.expiry_in_days` |
+| Password policy legacy evidence | `getOrgSettings` | `password_policy.requires_uppercase`, `password_policy.requires_lowercase`, `password_policy.requires_number`, `password_policy.reuse_history` return `review` when absent. |
+| Session policy | `getOrgSettings` | `ui_idle_timeout`, `session_policy.max_lifetime_hours` |
+| API policy | `getOrgSettings` | `api_policy.access` |
+| Remote shell | `getOrgSettings` | `disable_remote_shell`, `junos_shell_access.admin`, `junos_shell_access.helpdesk`, `junos_shell_access.read`, `junos_shell_access.write` |
+| Packet capture | `getOrgSettings` | `disable_pcap`, `pcap_bucket_verified` |
+| Stale cleanup | `getOrgSettings` | `switch_mgmt.remove_existing_configs` |
+| SSO evidence | `listOrgSsos` | `enabled`, `id`, `name`, `domain` when present |
+| Administrator evidence | `listOrgAdmins` | `role`, `privileges`, `email` when present |
+| API token evidence | `listOrgApiTokens` | `created_time`, `created_at`, `expire_time`, `expires_at` |
+| Webhook evidence | `listOrgWebhooks` | `url`, `urls`, `webhook_url` |

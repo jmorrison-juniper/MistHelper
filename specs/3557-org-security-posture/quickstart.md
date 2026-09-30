@@ -11,10 +11,10 @@ This guide validates the planned feature after implementation.
 
 ## Validate the test-mode checklist
 
-Run the safe test mode after implementation:
+Run the feature handler in test mode after implementation:
 
 ```powershell
-python MistHelper.py --test
+python -c "from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist; OrgSecurityPostureChecklist.run(test_mode=True)"
 ```
 
 Expected result:
@@ -24,6 +24,19 @@ Expected result:
 - The CSV has the required columns from `contracts/checklist-output.md`.
 - The CSV contains at least twelve rows.
 - The console summary prints pass, fail, and review counts.
+
+## Validate the integrated menu
+
+Run the normal safe test mode after the integration pull request wires menu 276:
+
+```powershell
+python MistHelper.py --test
+```
+
+Expected result:
+
+- Menu 276 runs as part of the safe test path.
+- The run writes `data/OrgSecurityPosture.csv`.
 
 ## Validate absent API settings
 

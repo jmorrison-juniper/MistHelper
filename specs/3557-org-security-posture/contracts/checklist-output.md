@@ -2,7 +2,7 @@
 
 ## Command behavior
 
-Menu 276 generates the organization security posture checklist.
+The menu 276 handler generates the organization security posture checklist.
 
 Required behavior:
 
@@ -62,4 +62,4 @@ The counts must match the CSV verdict counts.
 
 ## Minimum checklist size
 
-The registry must contain at least twelve checks. The planned registry contains sixteen checks.
+The registry must contain at least twelve checks. The planned registry contains nineteen checks.

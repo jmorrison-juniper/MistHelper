@@ -1,45 +1,49 @@
-# Deferred Wiring: Organization Security Posture Checklist
+# Wiring manifest
 
-This planning step may edit only `specs/3557-org-security-posture/**`. Implementation must complete the wiring in a later step.
+Menu 276 wiring is deferred to the integration pull request.
 
-## Deferred menu wiring
+## Menu entries
 
-Menu 276 wiring is deferred.
+| menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
+|------|-------|----------------|-------------------|----------|-------------|-------------|---------------|
+| 276 | Export the organization security posture checklist | src.reports.org_security_posture.runner | OrgSecurityPostureChecklist.run | safe |  | False | False |
 
-Implementation must update the required menu and registry surfaces after the edit boundary allows it:
+## OperationRegistry comment
+
+One `# WHY:` paragraph for the registry entry:
+
+```python
+# WHY: menu 276 is a read-only organization settings audit that writes OrgSecurityPosture.csv and uses fixture data in --test.
+```
+
+## Primary key strategies
+
+```python
+"orgSecurityPostureChecklist": {
+    "type": "auto_increment_with_unique",
+    "primary_key": ["misthelper_internal_id"],
+    "unique_fields": ["check id", "setting path", "recommended value"],
+    "indexes": ["area", "verdict", "check id"],
+},
+```
+
+## copilot-instructions category table
+
+Add menu `276` to the `safe` category row.
+
+## Import line for MistHelper.py
+
+```python
+from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist  # Menu 276 (issue #3557) -- organization security posture checklist.
+```
+
+## Deferred integration files
+
+The integration pull request owns these files:
 
 - `MistHelper.py`
 - `src/utils/operation_registry.py`
+- `src/refactors/endpoint_primary_key_strategies.py`
 - `README.md`
 - `documentation/menu_reference.md`
 - generated menu reference artifacts
-
-## Deferred primary key strategy
-
-Primary key strategy changes are deferred.
-
-Implementation must decide whether this CSV-only checklist needs an entry in `ENDPOINT_PRIMARY_KEY_STRATEGIES`. If a database export path stores checklist rows, use `check id` plus organization identity and collection time as the stable key. If the feature remains CSV-only, record why no primary key strategy is necessary.
-
-The implementation must not change `src/refactors/endpoint_primary_key_strategies.py` during this planning step.
-
-## Required implementation wiring
-
-| Surface | Required result |
-|---------|-----------------|
-| Menu | Menu 276 starts the organization security posture checklist. |
-| Operation registry | Menu 276 is classified as safe and works in `--test`. |
-| Export | The run writes `data/OrgSecurityPosture.csv`. |
-| Checks | The registry contains at least twelve checks. |
-| Test mode | The safe test path uses fixture data and no prompt. |
-| Documentation | User-facing references describe menu 276 and the CSV output. |
-| Release note | The feature-owned changelog fragment moves to the normal release-note location when implementation is allowed to edit it. |
-
-## Source verification before wiring
-
-Before client code is written, implementation must verify these OpenAPI operation IDs in `documentation/mist-api-openapi3json.json` and `mistapi`:
-
-- `getOrgSettings`
-- `listOrgSsos`
-- `listOrgAdmins`
-- `listOrgApiTokens`
-- `listOrgWebhooks`

@@ -1,6 +1,6 @@
 # Implementation Plan: Organization Security Posture Checklist
 
-**Branch**: `3557-org-security-posture` | **Date**: 2026-09-29 | **Spec**: `specs/3557-org-security-posture/spec.md`
+**Branch**: `feat/3557-org-security-posture` | **Date**: 2026-09-29 | **Spec**: `specs/3557-org-security-posture/spec.md`
 
 **Input**: Feature specification from `specs/3557-org-security-posture/spec.md`
 
@@ -66,25 +66,29 @@ specs/3557-org-security-posture/
 
 ```text
 src/
-+-- org_security_posture/
++-- reports/
+    +-- org_security_posture/
     +-- checks/
-    |   +-- access.py
     |   +-- api.py
+    |   +-- base.py
     |   +-- password.py
-    |   +-- session.py
-    +-- exporter.py
+    |   +-- registry.py
+    |   +-- access.py
+    +-- io/
+    |   +-- exporter.py
+    |   +-- formatting.py
+    |   +-- sources.py
     +-- models.py
-    +-- registry.py
     +-- runner.py
 
 tests/
-+-- contract/
-|   +-- test_org_security_posture_contract.py
 +-- unit/
-    +-- test_org_security_posture_checks.py
+    +-- reports/
+        +-- org_security_posture/
+            +-- test_org_security_posture_checks.py
 ```
 
-**Structure Decision**: Put new implementation code in `src/org_security_posture/`. This keeps the feature in a nested package and avoids adding more direct children to a large existing package.
+**Structure Decision**: Put new implementation code in `src/reports/org_security_posture/`. This keeps the feature with other reports and preserves the fleet ownership boundary.
 
 ## Design Overview
 
@@ -101,7 +105,8 @@ Each class returns a `SecurityPostureCheckResult` with these fields:
 - `recommended_value`
 - `verdict`
 - `reason`
-- `source_page`
+
+The `source_page` value stays check metadata. The CSV does not export it.
 
 The only allowed verdict values are `pass`, `fail`, and `review`.
 
@@ -139,13 +144,16 @@ Before client code is written, implementation must verify these operation IDs an
 | `ORGSEC-PASSWORD-006` | Password policy | `organization settings > password policy > special character required` | Required | Pass when required. Fail when not required. Review when absent. |
 | `ORGSEC-PASSWORD-007` | Password policy | `organization settings > password policy > password reuse history` | Reuse blocked for at least the last 5 passwords | Pass when history is at least 5. Fail when lower. Review when absent or unclear. |
 | `ORGSEC-PASSWORD-008` | Password policy | `organization settings > password policy > maximum password age` | 90 days or less, or review with federated identity evidence | Pass when age is 90 days or less. Review when SSO evidence must decide. Fail when age is higher with no SSO evidence. |
+| `ORGSEC-PASSWORD-009` | Password policy | `organization settings > password policy > two-factor required` | Required | Pass when required. Fail when not required. Review when absent. |
 | `ORGSEC-SESSION-001` | Session policy | `organization settings > session policy > idle timeout` | 30 minutes or less | Pass when timeout is 30 minutes or less. Fail when higher. Review when absent. |
 | `ORGSEC-SESSION-002` | Session policy | `organization settings > session policy > maximum session lifetime` | 12 hours or less | Pass when lifetime is 12 hours or less. Fail when higher. Review when absent. |
 | `ORGSEC-API-001` | API policy | `organization settings > API policy > API access` | Restricted to authorized administrators, or disabled when not required | Pass when restricted or disabled. Fail when broad access is allowed. Review when absent. |
 | `ORGSEC-API-002` | API policy | `organization settings > API policy > token expiration` | API tokens expire within 365 days or less | Pass when all visible tokens expire within 365 days. Fail when any token exceeds 365 days. Review when expiration is absent. |
 | `ORGSEC-API-003` | API policy | `organization settings > API policy > webhook URLs` | Every configured webhook URL uses `https://` | Pass when every URL starts with `https://`. Fail when any URL is non-HTTPS. Review when no URL exists. |
 | `ORGSEC-REMOTE-001` | Remote shell | `organization settings > remote shell` | Disabled unless there is a documented break-glass exception | Pass when disabled. Fail when enabled. Review when absent or exception evidence is required. |
+| `ORGSEC-REMOTE-002` | Remote shell | `organization settings > Junos shell role access` | Every role is set to none | Pass when every visible role is `none`. Fail when any role allows access. Review when absent. |
 | `ORGSEC-CAPTURE-001` | Packet capture | `organization settings > packet capture` | Disabled unless there is an active troubleshooting exception | Pass when disabled. Fail when enabled. Review when absent or exception evidence is required. |
+| `ORGSEC-CAPTURE-002` | Packet capture | `organization settings > packet capture bucket verified` | Verified | Pass when verified. Fail when unverified. Review when absent. |
 | `ORGSEC-CLEANUP-001` | Stale configuration cleanup | `organization settings > stale configuration cleanup` | Enabled | Pass when enabled. Fail when disabled. Review when absent. |
 
 ## Phase 0 Research Output

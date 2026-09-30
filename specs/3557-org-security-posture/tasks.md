@@ -24,10 +24,10 @@
 
 **Purpose**: Create the feature structure, release artifact, and feature-owned wiring record.
 
-- [ ] T001 Create the report package directories in `src/reports/org_security_posture/`, `src/reports/org_security_posture/checks/`, and `src/reports/org_security_posture/io/`
-- [ ] T002 [P] Create the unit test package directories in `tests/unit/reports/org_security_posture/` and `tests/unit/reports/org_security_posture/fixtures/`
-- [ ] T003 [P] Add the release note fragment for menu 276 in `changelog.d/issue-3557-org-security-posture.md`
-- [ ] T004 Update the deferred wiring manifest in `specs/3557-org-security-posture/wiring.md` to state that `MistHelper.py` registration stays deferred to the integration pull request
+- [X] T001 Create the report package directories in `src/reports/org_security_posture/`, `src/reports/org_security_posture/checks/`, and `src/reports/org_security_posture/io/`
+- [X] T002 [P] Create the unit test package directories in `tests/unit/reports/org_security_posture/` and `tests/unit/reports/org_security_posture/fixtures/`
+- [X] T003 [P] Add the release note fragment for menu 276 in `changelog.d/issue-3557-org-security-posture.md`
+- [X] T004 Update the deferred wiring manifest in `specs/3557-org-security-posture/wiring.md` to state that `MistHelper.py` registration stays deferred to the integration pull request
 
 ---
 
@@ -37,13 +37,13 @@
 
 **Critical**: Complete this phase before any user story implementation starts.
 
-- [ ] T005 [P] Add unit tests for source operation verification in `tests/unit/reports/org_security_posture/test_mist_api_sources.py`
-- [ ] T006 [P] Add unit tests for safe display values and one-sentence reasons in `tests/unit/reports/org_security_posture/test_result_formatting.py`
-- [ ] T007 Define `SecurityPostureCheck`, `SecurityPostureCheckResult`, and `OrganizationSecuritySourceData` in `src/reports/org_security_posture/models.py`
-- [ ] T008 Implement source operation verification for `getOrgSettings`, `listOrgSsos`, `listOrgAdmins`, `listOrgApiTokens`, and `listOrgWebhooks` in `src/reports/org_security_posture/io/sources.py`
-- [ ] T009 Implement safe display value formatting and reason validation in `src/reports/org_security_posture/io/formatting.py`
-- [ ] T010 Implement `OrgSecurityPostureCheckRegistry` with stable order and duplicate ID rejection in `src/reports/org_security_posture/checks/registry.py`
-- [ ] T011 Add package exports for the runner and data model in `src/reports/org_security_posture/__init__.py`
+- [X] T005 [P] Add unit tests for source operation verification in `tests/unit/reports/org_security_posture/test_mist_api_sources.py`
+- [X] T006 [P] Add unit tests for safe display values and one-sentence reasons in `tests/unit/reports/org_security_posture/test_result_formatting.py`
+- [X] T007 Define `SecurityPostureCheck`, `SecurityPostureCheckResult`, and `OrganizationSecuritySourceData` in `src/reports/org_security_posture/models.py`
+- [X] T008 Implement source operation verification for `getOrgSettings`, `listOrgSsos`, `listOrgAdmins`, `listOrgApiTokens`, and `listOrgWebhooks` in `src/reports/org_security_posture/io/sources.py`
+- [X] T009 Implement safe display value formatting and reason validation in `src/reports/org_security_posture/io/formatting.py`
+- [X] T010 Implement `OrgSecurityPostureCheckRegistry` with stable order and duplicate ID rejection in `src/reports/org_security_posture/checks/registry.py`
+- [X] T011 Add package exports for the runner and data model in `src/reports/org_security_posture/__init__.py`
 
 **Checkpoint**: The source, model, formatting, and registry foundation is ready.
 
@@ -57,22 +57,22 @@
 
 ### Tests for User Story 1
 
-- [ ] T012 [P] [US1] Add CSV column and minimum row count tests in `tests/unit/reports/org_security_posture/test_output_contract.py`
-- [ ] T013 [P] [US1] Add stable registry order and duplicate check ID tests in `tests/unit/reports/org_security_posture/test_registry.py`
-- [ ] T014 [P] [US1] Add password policy check tests in `tests/unit/reports/org_security_posture/test_password_checks.py`
-- [ ] T015 [P] [US1] Add session policy check tests in `tests/unit/reports/org_security_posture/test_session_checks.py`
-- [ ] T016 [P] [US1] Add remote shell, packet capture, and stale cleanup check tests in `tests/unit/reports/org_security_posture/test_setting_switch_checks.py`
-- [ ] T017 [P] [US1] Add representative fixture data in `tests/unit/reports/org_security_posture/fixtures/representative_org_security_posture.py`
+- [X] T012 [P] [US1] Add CSV column and minimum row count tests in `tests/unit/reports/org_security_posture/test_output_contract.py`
+- [X] T013 [P] [US1] Add stable registry order and duplicate check ID tests in `tests/unit/reports/org_security_posture/test_registry.py`
+- [X] T014 [P] [US1] Add password policy check tests in `tests/unit/reports/org_security_posture/test_password_checks.py`
+- [X] T015 [P] [US1] Add session policy check tests in `tests/unit/reports/org_security_posture/test_session_checks.py`
+- [X] T016 [P] [US1] Add remote shell, packet capture, and stale cleanup check tests in `tests/unit/reports/org_security_posture/test_setting_switch_checks.py`
+- [X] T017 [P] [US1] Add representative fixture data in `tests/unit/reports/org_security_posture/fixtures/representative_org_security_posture.py`
 
 ### Implementation for User Story 1
 
-- [ ] T018 [P] [US1] Implement password policy check classes in `src/reports/org_security_posture/checks/password.py`
-- [ ] T019 [P] [US1] Implement session policy check classes in `src/reports/org_security_posture/checks/session.py`
-- [ ] T020 [P] [US1] Implement remote shell, packet capture, and stale cleanup check classes in `src/reports/org_security_posture/checks/settings.py`
-- [ ] T021 [US1] Register all P1 check classes in stable order in `src/reports/org_security_posture/checks/registry.py`
-- [ ] T022 [US1] Implement checklist evaluation in `src/reports/org_security_posture/runner.py`
-- [ ] T023 [US1] Implement CSV export to `data/OrgSecurityPosture.csv` in `src/reports/org_security_posture/io/exporter.py`
-- [ ] T024 [US1] Connect representative fixture data to the test-mode runner path in `src/reports/org_security_posture/runner.py`
+- [X] T018 [P] [US1] Implement password policy check classes in `src/reports/org_security_posture/checks/password.py`
+- [X] T019 [P] [US1] Implement session policy check classes in `src/reports/org_security_posture/checks/access.py`
+- [X] T020 [P] [US1] Implement remote shell, packet capture, and stale cleanup check classes in `src/reports/org_security_posture/checks/access.py`
+- [X] T021 [US1] Register all P1 check classes in stable order in `src/reports/org_security_posture/checks/registry.py`
+- [X] T022 [US1] Implement checklist evaluation in `src/reports/org_security_posture/runner.py`
+- [X] T023 [US1] Implement CSV export to `data/OrgSecurityPosture.csv` in `src/reports/org_security_posture/io/exporter.py`
+- [X] T024 [US1] Connect representative fixture data to the test-mode runner path in `src/reports/org_security_posture/runner.py`
 
 **Checkpoint**: User Story 1 is complete when the CSV is produced with stable rows and required columns.
 
@@ -86,14 +86,14 @@
 
 ### Tests for User Story 2
 
-- [ ] T025 [P] [US2] Add console summary count tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
-- [ ] T026 [P] [US2] Add all-pass summary tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
+- [X] T025 [P] [US2] Add console summary count tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
+- [X] T026 [P] [US2] Add all-pass summary tests in `tests/unit/reports/org_security_posture/test_console_summary.py`
 
 ### Implementation for User Story 2
 
-- [ ] T027 [US2] Implement pass, fail, and review count aggregation in `src/reports/org_security_posture/runner.py`
-- [ ] T028 [US2] Implement operator-facing console summary output in `src/reports/org_security_posture/runner.py`
-- [ ] T029 [US2] Verify exported verdict counts match summary counts in `src/reports/org_security_posture/runner.py`
+- [X] T027 [US2] Implement pass, fail, and review count aggregation in `src/reports/org_security_posture/runner.py`
+- [X] T028 [US2] Implement operator-facing console summary output in `src/reports/org_security_posture/runner.py`
+- [X] T029 [US2] Verify exported verdict counts match summary counts in `src/reports/org_security_posture/runner.py`
 
 **Checkpoint**: User Story 2 is complete when the console summary matches the CSV verdict counts.
 
@@ -107,17 +107,17 @@
 
 ### Tests for User Story 3
 
-- [ ] T030 [P] [US3] Add absent API setting tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
-- [ ] T031 [P] [US3] Add non-HTTPS webhook URL failure tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
-- [ ] T032 [P] [US3] Add API token expiration tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
-- [ ] T033 [P] [US3] Add API posture fixture data in `tests/unit/reports/org_security_posture/fixtures/api_posture_cases.py`
+- [X] T030 [P] [US3] Add absent API setting tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
+- [X] T031 [P] [US3] Add non-HTTPS webhook URL failure tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
+- [X] T032 [P] [US3] Add API token expiration tests in `tests/unit/reports/org_security_posture/test_api_checks.py`
+- [X] T033 [P] [US3] Add API posture fixture data in `tests/unit/reports/org_security_posture/fixtures/api_posture_cases.py`
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] Implement API access, token expiration, and webhook HTTPS check classes in `src/reports/org_security_posture/checks/api.py`
-- [ ] T035 [US3] Add API source data extraction for tokens, webhooks, administrators, and SSO evidence in `src/reports/org_security_posture/io/sources.py`
-- [ ] T036 [US3] Register API posture checks in stable order in `src/reports/org_security_posture/checks/registry.py`
-- [ ] T037 [US3] Ensure absent, unreadable, and ambiguous API values return `review` in `src/reports/org_security_posture/checks/api.py`
+- [X] T034 [US3] Implement API access, token expiration, and webhook HTTPS check classes in `src/reports/org_security_posture/checks/api.py`
+- [X] T035 [US3] Add API source data extraction for tokens, webhooks, administrators, and SSO evidence in `src/reports/org_security_posture/io/sources.py`
+- [X] T036 [US3] Register API posture checks in stable order in `src/reports/org_security_posture/checks/registry.py`
+- [X] T037 [US3] Ensure absent, unreadable, and ambiguous API values return `review` in `src/reports/org_security_posture/checks/api.py`
 
 **Checkpoint**: User Story 3 is complete when API posture fixtures produce the required `review` and `fail` verdicts.
 
@@ -127,12 +127,35 @@
 
 **Purpose**: Validate the feature and prepare it for the later integration pull request.
 
-- [ ] T038 [P] Add quickstart validation coverage for `--test` behavior in `tests/unit/reports/org_security_posture/test_quickstart_contract.py`
-- [ ] T039 [P] Add import and package smoke tests in `tests/unit/reports/org_security_posture/test_package_imports.py`
-- [ ] T040 Run `python -m py_compile` on `src/reports/org_security_posture/runner.py` and all touched Python files
-- [ ] T041 Run `python -m ruff check` on `src/reports/org_security_posture/` and `tests/unit/reports/org_security_posture/`
-- [ ] T042 Run `python -m black --check` on `src/reports/org_security_posture/` and `tests/unit/reports/org_security_posture/`
-- [ ] T043 Run `python -m pytest tests/unit/reports/org_security_posture/`
+- [X] T038 [P] Add quickstart validation coverage for `--test` behavior in `tests/unit/reports/org_security_posture/test_quickstart_contract.py`
+- [X] T039 [P] Add import and package smoke tests in `tests/unit/reports/org_security_posture/test_package_imports.py`
+- [X] T040 Run `python -m py_compile` on `src/reports/org_security_posture/runner.py` and all touched Python files
+- [X] T041 Run `python -m ruff check` on `src/reports/org_security_posture/` and `tests/unit/reports/org_security_posture/`
+- [X] T042 Run `python -m black --check` on `src/reports/org_security_posture/` and `tests/unit/reports/org_security_posture/`
+- [X] T043 Run `python -m pytest tests/unit/reports/org_security_posture/`
+
+---
+
+## Phase 7: Pull Request Pipeline
+
+**Purpose**: Record the constitution-required pipeline steps that happen after local implementation.
+
+**Fleet boundary**: This branch opens a draft pull request. CI, squash merge,
+main build verification, revision verification, deployment, and health check
+run after reviewer approval and integration wiring.
+
+- [X] T044 Create or update the implementation manifest in `specs/3557-org-security-posture/wiring.md`
+- [ ] T045 Stage only owned files with explicit `git add` paths
+- [ ] T046 Commit implementation and analysis repair groups with Conventional Commits messages as required by `FLEET_CONTRACT.md`
+- [ ] T047 Push branch `feat/3557-org-security-posture` to `origin`
+- [ ] T048 Open a draft pull request with `Closes #3557`
+- [ ] T049 Run pull request CI and repair branch-owned failures
+- [ ] T050 Request review after CI passes
+- [ ] T051 Squash merge after approval and required checks
+- [ ] T052 Verify the main branch build after merge
+- [ ] T053 Verify the released revision that contains menu 276
+- [ ] T054 Deploy through the normal release process
+- [ ] T055 Complete the post-deploy health check for menu 276 output
 
 ---
 
@@ -180,8 +203,8 @@ Task: "Add password policy check tests in tests/unit/reports/org_security_postur
 Task: "Add session policy check tests in tests/unit/reports/org_security_posture/test_session_checks.py"
 Task: "Add remote shell, packet capture, and stale cleanup check tests in tests/unit/reports/org_security_posture/test_setting_switch_checks.py"
 Task: "Implement password policy check classes in src/reports/org_security_posture/checks/password.py"
-Task: "Implement session policy check classes in src/reports/org_security_posture/checks/session.py"
-Task: "Implement remote shell, packet capture, and stale cleanup check classes in src/reports/org_security_posture/checks/settings.py"
+Task: "Implement session policy check classes in src/reports/org_security_posture/checks/access.py"
+Task: "Implement remote shell, packet capture, and stale cleanup check classes in src/reports/org_security_posture/checks/access.py"
 ```
 
 ## Parallel Example: User Story 3

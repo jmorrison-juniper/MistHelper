@@ -68,7 +68,7 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 
 ### Functional Requirements
 
-- **FR-001**: System MUST provide menu 276 as an organization security posture checklist operation.
+- **FR-001**: System MUST provide the menu 276 handler and wiring manifest for the organization security posture checklist operation.
 - **FR-002**: System MUST evaluate the organization settings page areas for password policy, session policy, API policy, remote shell, packet capture, and stale configuration cleanup as one checklist.
 - **FR-003**: System MUST write `OrgSecurityPosture.csv` under `data/` for every successful run.
 - **FR-004**: System MUST write one CSV row per check with columns `check id`, `area`, `setting path`, `current value`, `recommended value`, `verdict`, and `reason`.
@@ -99,13 +99,16 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 | ORGSEC-PASSWORD-006 | Password policy | `organization settings > password policy > special character required` | Required | Mist Organization Settings > Password Policy |
 | ORGSEC-PASSWORD-007 | Password policy | `organization settings > password policy > password reuse history` | Reuse blocked for at least the last 5 passwords | Mist Organization Settings > Password Policy |
 | ORGSEC-PASSWORD-008 | Password policy | `organization settings > password policy > maximum password age` | 90 days or less, or review if the tenant uses federated identity with stronger policy evidence | Mist Organization Settings > Password Policy |
+| ORGSEC-PASSWORD-009 | Password policy | `organization settings > password policy > two-factor required` | Required | Mist Organization Settings > Password Policy |
 | ORGSEC-SESSION-001 | Session policy | `organization settings > session policy > idle timeout` | 30 minutes or less | Mist Organization Settings > Session Policy |
 | ORGSEC-SESSION-002 | Session policy | `organization settings > session policy > maximum session lifetime` | 12 hours or less | Mist Organization Settings > Session Policy |
 | ORGSEC-API-001 | API policy | `organization settings > API policy > API access` | Restricted to authorized administrators, or disabled when not required | Mist Organization Settings > API Policy |
 | ORGSEC-API-002 | API policy | `organization settings > API policy > token expiration` | API tokens expire within 365 days or less | Mist Organization Settings > API Policy |
 | ORGSEC-API-003 | API policy | `organization settings > API policy > webhook URLs` | Every configured webhook URL uses `https://` | Mist Organization Settings > API Policy |
 | ORGSEC-REMOTE-001 | Remote shell | `organization settings > remote shell` | Disabled unless there is a documented break-glass exception | Mist Organization Settings > Remote Shell |
+| ORGSEC-REMOTE-002 | Remote shell | `organization settings > Junos shell role access` | Every role is set to none | Mist Organization Settings > Remote Shell |
 | ORGSEC-CAPTURE-001 | Packet capture | `organization settings > packet capture` | Disabled unless there is an active troubleshooting exception | Mist Organization Settings > Packet Capture |
+| ORGSEC-CAPTURE-002 | Packet capture | `organization settings > packet capture bucket verified` | Verified | Mist Organization Settings > Packet Capture |
 | ORGSEC-CLEANUP-001 | Stale configuration cleanup | `organization settings > stale configuration cleanup` | Enabled | Mist Organization Settings > Stale Configuration Cleanup |
 
 ### Key Entities *(include if feature involves data)*
@@ -119,7 +122,7 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 
 ### Measurable Outcomes
 
-- **SC-001**: A reviewer can generate the organization security posture CSV in one menu 276 run without manually checking more than one settings page.
+- **SC-001**: A reviewer can generate the organization security posture CSV through the menu 276 handler without manually checking more than one settings page.
 - **SC-002**: In `--test` mode, the operation completes without prompts and produces `data/OrgSecurityPosture.csv` in 100% of successful test runs.
 - **SC-003**: The CSV contains at least twelve checklist rows and 100% of rows include all required columns with non-empty check id, area, recommended value, verdict, and reason fields.
 - **SC-004**: The console summary's pass, fail, and review counts match the CSV verdict counts in 100% of validation runs.
@@ -134,4 +137,4 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 - Recommended values reflect conservative enterprise security defaults suitable for a security review; documented compensating controls may justify a `review` outcome rather than an automatic pass.
 - `--test` mode uses representative fixture data and must not require network access, operator prompts, or live organization credentials.
 - Existing CSV export behavior may be reused as long as the exported evidence file has the required name, location, rows, and columns.
-- The feature-owned wiring manifest and changelog fragment are delivery artifacts for implementation review and release tracking.
+- The integration pull request registers menu 276 in `MistHelper.py`, `src/utils/operation_registry.py`, and generated menu references.
