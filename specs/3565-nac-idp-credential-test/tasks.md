@@ -40,13 +40,13 @@
 
 ### Tests for User Story 1
 
-- [ ] T009 [US1] Add operation success test in `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_operation.py`.
+- [x] T009 [US1] Add operation success test in `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_operation.py`. (delivered: `test_nac_idp_credential_test_operation_writes_safe_csv`)
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Create `src/troubleshooting/nac_idp_credential_test/prompts.py` with numbered provider selection and username prompts.
-- [ ] T011 [US1] Create `src/troubleshooting/nac_idp_credential_test/operation.py` with class `NacIdpCredentialTest` and static `run()`.
-- [ ] T012 [US1] Export `NacIdpCredentialTest` from `src/troubleshooting/nac_idp_credential_test/__init__.py`.
+- [x] T010 [US1] Create `src/troubleshooting/nac_idp_credential_test/prompts.py` with numbered provider selection and username prompts. (delivered: `NacIdpCredentialPrompts`)
+- [x] T011 [US1] Create `src/troubleshooting/nac_idp_credential_test/operation.py` with class `NacIdpCredentialTest` and static `run()`. (delivered: `NacIdpCredentialTest.run`)
+- [x] T012 [US1] Export `NacIdpCredentialTest` from `src/troubleshooting/nac_idp_credential_test/__init__.py`. (delivered: package `__all__`)
 
 **Checkpoint**: User Story 1 is functional and testable.
 
@@ -60,12 +60,12 @@
 
 ### Tests for User Story 2
 
-- [ ] T013 [US2] Add password protection test in `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_operation.py`.
+- [x] T013 [US2] Add password protection test in `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_operation.py`. (delivered: hidden prompt and no-secret assertions)
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Add hidden password prompt and `y` or `N` confirmation in `src/troubleshooting/nac_idp_credential_test/prompts.py`.
-- [ ] T015 [US2] Ensure operation logging and export rows never include the password in `src/troubleshooting/nac_idp_credential_test/operation.py`.
+- [x] T014 [US2] Add hidden password prompt and `y` or `N` confirmation in `src/troubleshooting/nac_idp_credential_test/prompts.py`. (delivered: `ask_password` and `ask_confirmation`)
+- [x] T015 [US2] Ensure operation logging and export rows never include the password in `src/troubleshooting/nac_idp_credential_test/operation.py`. (delivered: result export uses password-free rows)
 
 **Checkpoint**: User Story 2 is functional and testable.
 
@@ -79,12 +79,12 @@
 
 ### Tests for User Story 3
 
-- [ ] T016 [US3] Add failed validation test in `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_operation.py`.
+- [x] T016 [US3] Add failed validation test in `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_operation.py`. (delivered: `test_nac_idp_credential_test_failure_prints_reason`)
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Add failure reason formatting in `src/troubleshooting/nac_idp_credential_test/model.py` and `operation.py`.
-- [ ] T018 [US3] Add no-provider and declined-confirmation paths in `src/troubleshooting/nac_idp_credential_test/operation.py`.
+- [x] T017 [US3] Add failure reason formatting in `src/troubleshooting/nac_idp_credential_test/model.py` and `operation.py`. (delivered: `read_reason` and `_log_result`)
+- [x] T018 [US3] Add no-provider and declined-confirmation paths in `src/troubleshooting/nac_idp_credential_test/operation.py`. (delivered: no-provider and declined-confirmation returns)
 
 **Checkpoint**: All user stories are functional and testable.
 
@@ -94,10 +94,15 @@
 
 **Purpose**: Finish validation, documentation, and final SpecKit analysis repairs.
 
-- [ ] T019 Run quickstart validation gates for `src/troubleshooting/nac_idp_credential_test` and `tests/unit/troubleshooting/nac_idp_credential_test`.
-- [ ] T020 Run `vulture` and `interrogate` on `src/troubleshooting/nac_idp_credential_test`.
-- [ ] T021 Run `speckit.analyze` equivalent checks across `spec.md`, `plan.md`, and `tasks.md`, then repair findings.
-- [ ] T022 Write draft pull request body in `specs/3565-nac-idp-credential-test/pr-body.md`.
+- [x] T019 Run quickstart validation gates for `src/troubleshooting/nac_idp_credential_test` and `tests/unit/troubleshooting/nac_idp_credential_test`. (delivered: compile, Ruff, Black, mypy, pydocstyle, and pytest pass)
+- [x] T020 Run `vulture` and `interrogate` on `src/troubleshooting/nac_idp_credential_test`. (delivered: vulture passed and interrogate reported 100.0 percent)
+- [x] T021 Verify inline comment coverage and action logging across the owned package. (delivered: each executable source line has a `WHY` comment, and prompts, API calls, transforms, validation results, and exports have safe action logs)
+- [x] T022 Add an operation test for export-backend failure handling without password leakage. (delivered: `test_nac_idp_credential_test_export_failure_logs_error`)
+- [x] T023 Add an operation test for the five-prompt acceptance limit. (delivered: `test_nac_idp_credential_test_happy_path_uses_five_or_fewer_prompts`)
+- [x] T024 Record that README and menu reference changes are deferred to the integration pull request. (delivered: `wiring.md` and `pr-body.md` both state the deferred registration work)
+- [x] T025 Record that the full deployment pipeline continues after this feature branch. (delivered: `plan.md` and `pr-body.md` state the CI, integration, merge, image, deploy, and health-check handoff)
+- [x] T026 Run `speckit.analyze` equivalent checks across `spec.md`, `plan.md`, and `tasks.md`, then repair findings. (delivered: re-run reported no findings remain)
+- [x] T027 Write draft pull request body in `specs/3565-nac-idp-credential-test/pr-body.md`. (delivered: PR body with issue closure, files, deferred wiring, and gate results)
 
 ---
 
@@ -132,5 +137,3 @@
 2. Add failure-path tests and clean failure output.
 3. Run all owned quality gates.
 4. Update tasks as delivered with evidence notes.
-
-

@@ -33,9 +33,11 @@ Add menu 285 through deferred wiring to validate one Mist Access Assurance ident
 - **Five-Item Rule**: Pass. The new package uses five module files or fewer, and each method stays small.
 - **Class-Based Architecture**: Pass. Client, model, prompt, and operation logic live in classes.
 - **Safety-First**: Pass. Text prompts use the existing safe input path. The password prompt uses hidden input.
-- **Full Deployment Pipeline**: Pass for the feature branch scope. Local gates run for the owned package before each code commit.
+- **Full Deployment Pipeline**: Deferred after local gates. This branch completes local gates, branch push, draft pull request creation, and CI handoff. The integration and release pipeline completes README, menu registration, CI, squash merge, main build, image verification, deployment, and health checks.
 - **Observability & Logging**: Pass. The client logs before and after each API call with `%s` formatting and no secrets.
 - **Output Backends**: Pass. The result uses `DataExporter.write_with_format_selection`.
+- **Inline Comments**: Pass. Each executable line in the owned package includes an inline `WHY` comment.
+- **Action Logging**: Pass. Prompts, API calls, data transforms, validation results, and exports log before and after actions without secrets.
 
 ## Project Structure
 
