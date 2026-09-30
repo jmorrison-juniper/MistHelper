@@ -529,6 +529,21 @@ def test_a_phase_that_hits_the_deadline_names_each_device_that_stayed_out() -> N
     assert harness.clock() == START_TIME + float(phase_gate.PHASE_DEADLINE_SECONDS)
 
 
+def test_a_future_start_extends_the_access_point_deadline() -> None:
+    """A scheduled upgrade cannot fail before its access point settle window."""
+    start_time = START_TIME + float(
+        phase_gate.PHASE_DEADLINE_SECONDS * 2
+    )  # WHY: The schedule sits after the old limit.
+    target = target_entry(SWITCH_MAC, "ap")  # WHY: The start schedule applies to every device family.
+    target["start_time"] = start_time  # WHY: The driver copies the run schedule onto each phase target.
+    harness = Harness(FakeReconnectReader(), FakeStatisticsReader())  # WHY: No cloud signal arrives in this case.
+    outcome = harness.adapter.settle(RUN_ID, "aps", [target])  # WHY: The phase must wait to the scheduled window.
+    assert outcome.state == PhaseState.FAILED.value  # WHY: The test proves the deadline, not a false success.
+    assert harness.clock() == start_time + float(phase_gate.PHASE_DEADLINE_SECONDS)  # WHY: Failure follows the start.
+    assert harness.events.calls == phase_gate.polls_per_phase()  # WHY: The pre-start wait makes no event calls.
+    assert harness.statistics.calls == phase_gate.polls_per_phase()  # WHY: The pre-start wait makes no stats calls.
+
+
 def test_a_future_reboot_time_extends_the_gateway_deadline() -> None:
     """A gateway with a future reboot schedule cannot fail before that time."""
     reboot_at = START_TIME + float(phase_gate.PHASE_DEADLINE_SECONDS * 2)  # WHY: The schedule sits after the old limit.
