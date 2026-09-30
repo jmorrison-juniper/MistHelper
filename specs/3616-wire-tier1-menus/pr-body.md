@@ -17,7 +17,7 @@ Closes #3616
 
 The merged feature pull requests are #3594, #3640, #3589, #3636, #3607, and #3639.
 
-Manifest note: menu 276 names `orgSecurityPostureChecklist` as the primary key strategy. Its exporter currently passes `api_function_name=None`, so the strategy is present but not used by the handler.
+Menu 276 now passes `api_function_name="orgSecurityPostureChecklist"`, so the report uses its primary key strategy.
 
 ## Acceptance Criteria
 - [x] All acceptance criteria from the linked Spec Issue are met
@@ -62,5 +62,5 @@ Manifest note: menu 276 names `orgSecurityPostureChecklist` as the primary key s
 - `python -m mypy src/ MistHelper.py wsgi.py --config-file pyproject.toml` passed.
 - `python -m pytest tests/unit/test_menu_entry_metadata.py tests/guardrails tests/unit/utils tests/unit/web_portal -q --timeout=120` passed.
 - `python MistHelper.py --help` passed.
-- `symbol-diff --base origin/main MistHelper.py` reported no lost names. It reported the six added private handler imports.
+- `symbol-diff --base origin/main MistHelper.py` reported no lost names. It reported the six added public handler imports.
 - `python -m radon cc MistHelper.py src/utils/operation_registry.py web_portal/services/operation.py -j | complexity-gate --max 10` passed.
