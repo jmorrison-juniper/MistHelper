@@ -10,9 +10,9 @@ does not start.
 
 ## The menu
 
-The tool holds **275 operations**, numbered 1 to 276 with one gap at 152. Menu 0
-is Exit. Read [the menu reference](menu_reference.md) for the full list, which is
-generated from the code.
+The tool holds **279 operations**, numbered 1 to 282 with gaps at 152, 280, and
+281. Menu 0 is Exit. Read [the menu reference](menu_reference.md) for the full
+list, which is generated from the code.
 
 Menu 259 runs no-identifier Mist get and list endpoints from a prompt. Menu
 260 runs org-scoped endpoints. Menu 261 runs site-scoped endpoints. Menu 262
@@ -53,6 +53,18 @@ variables before a template change.
 
 Menu 276 exports an organization security posture checklist. Use it to compare
 key organization settings with recommended values.
+
+Menu 277 exports an organization switch scorecard. Use it to find switch health
+and configuration risks across sites.
+
+Menu 278 exports an organization access point scorecard. Use it to review AP
+health and version status across sites.
+
+Menu 279 exports an organization WAN Edge scorecard. Use it to review gateway
+health, VPN peers, BGP peers, and DHCP pool status.
+
+Menu 282 exports a rogue and PCI evidence pack. Use it to collect rogue AP
+detection evidence for a PCI DSS review.
 
 ## What MistHelper does
 
