@@ -3260,13 +3260,18 @@
         var hasSwitch = orgFamilySelected(form, "switch");  /* Switch fields apply only to switches. */
         var hasGateway = orgFamilySelected(form, "gateway");  /* Gateway fields apply only to gateways. */
         var hasJunosDevice = hasSwitch || hasGateway;  /* Reboot and Junos action apply to Junos devices. */
-        setOrgGroupVisibility(byTestId("org-upgrade-ap-version-group", form), hasAp);  /* Hide unused AP version. */
-        setOrgGroupVisibility(byTestId("org-upgrade-switch-version-group", form), hasSwitch);  /* Hide switch version. */
-        setOrgGroupVisibility(byTestId("org-upgrade-gateway-version-group", form), hasGateway);  /* Hide gateway version. */
         setOrgGroupVisibility(byTestId("org-upgrade-reboot-group", form), hasJunosDevice);  /* Hide reboot choices. */
         setOrgGroupVisibility(byTestId("org-upgrade-reboot-at-field", form), hasJunosDevice);  /* Hide reboot delay. */
         setOrgGroupVisibility(byTestId("org-upgrade-junos-file-action-group", form), hasJunosDevice);  /* Hide action. */
         setOrgGroupVisibility(byTestId("org-upgrade-canary-phases-field", form), orgSelectedStrategy(form) === "canary");  /* Hide non-canary phases. */
+        document.querySelectorAll("[data-org-version-for]").forEach(function (control) {
+            var visible = orgFamilySelected(form, control.getAttribute("data-device-type"));  /* Match the row family. */
+            control.disabled = !visible;  /* A cleared family must not send an explicit device choice. */
+            var row = control.closest("tr");  /* Find the device row that belongs to this control. */
+            if (row) {  /* A malformed page can omit the expected table row. */
+                row.hidden = !visible;  /* Show only devices of the selected families. */
+            }
+        });
         updateOrgAdvancedVisibility(form);  /* Issue #3383: repaint each advanced control from its own rules. */
     }
 
@@ -3291,6 +3296,14 @@
                 return;
             }
             body[key] = String(value);  /* Every other control sends one text value. */
+        });
+        body.targets = [];  /* Issue #3204: keep one version choice for each selected device. */
+        document.querySelectorAll("[data-org-version-for]").forEach(function (control) {
+            var version = String(control.value || "").trim();  /* Read the selected model-compatible version. */
+            var mac = String(control.getAttribute("data-org-version-for") || "").trim();  /* Read the device address. */
+            if (!control.disabled && version && mac) {  /* Send only selected families with a real version. */
+                body.targets.push({ mac: mac, version_target: version });  /* Keep the choice bound to the device. */
+            }
         });
         return body;  /* The caller sends this object as JSON. */
     }

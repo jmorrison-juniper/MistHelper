@@ -87,7 +87,7 @@
     </div>
   {% endif %}
 
-  <form method="post" action="/api/org-upgrades/options">
+  <form id="org-upgrade-options-form" method="post" action="/api/org-upgrades/options">
     <input type="hidden"
            name="csrf_token"
            value="{{ csrf_token() if csrf_token is defined else '' }}">
@@ -108,38 +108,10 @@
       {% endfor %}
     </fieldset>
 
-    <div class="mb-3" data-testid="org-upgrade-ap-version-group" {{ '' if has_ap else 'hidden' }}>
-      <label class="form-label" for="firmware-version">Access point target version</label>
-      <input class="form-control"
-             id="firmware-version"
-             name="version_ap"
-             data-testid="org-upgrade-version"
-             value="{{ options.version | default('', true) }}"
-             placeholder="For example, 0.15.1"
-             {{ '' if has_ap else 'disabled' }}>
-    </div>
-
-    <div class="mb-3" data-testid="org-upgrade-switch-version-group" {{ '' if has_switch else 'hidden' }}>
-      <label class="form-label" for="switch-firmware-version">Switch target version</label>
-      <input class="form-control"
-             id="switch-firmware-version"
-             name="version_switch"
-             data-testid="org-upgrade-switch-version"
-             value="{{ options.version_switch | default('', true) }}"
-             placeholder="For example, 23.4R1.9"
-             {{ '' if has_switch else 'disabled' }}>
-    </div>
-
-    <div class="mb-3" data-testid="org-upgrade-gateway-version-group" {{ '' if has_gateway else 'hidden' }}>
-      <label class="form-label" for="gateway-firmware-version">Gateway target version</label>
-      <input class="form-control"
-             id="gateway-firmware-version"
-             name="version_gateway"
-             data-testid="org-upgrade-gateway-version"
-             value="{{ options.version_gateway | default('', true) }}"
-             placeholder="For example, 23.4R1.9"
-             {{ '' if has_gateway else 'disabled' }}>
-    </div>
+    <p class="portal-card-note" data-testid="org-upgrade-version-guidance">
+      Select a target version for each device in the device table.
+      Each list shows only versions that the device model supports.
+    </p>
 
     <fieldset class="bubble-group mb-3">
       <legend class="bubble-group-legend">Upgrade strategy</legend>
@@ -345,11 +317,11 @@
           <label class="bubble-option-label" for="org-upgrade-stable-version-yes">Use the vendor stable build</label>
         </span>
         <p class="bubble-option-hint" id="org-upgrade-stable-version-note">
-          Warning: the second choice ignores the versions that you typed for the
-          switches and the gateways. The cloud picks the build, and this page
+          Warning: the second choice ignores the versions that you selected for
+          the switches and the gateways. The cloud picks the build, and this page
           cannot name it before the run. The save refuses the second choice for
-          a plan that holds an access point. Each device type still needs a
-          typed version, because the portal selects the devices with it.
+          a plan that holds an access point. Each device still needs a selected
+          version, because the portal selects the devices with it.
         </p>
       </fieldset>
 
@@ -582,24 +554,56 @@
   </form>
 </div>
 
+<h2 class="portal-section-title">Device target versions</h2>
 <div class="portal-table-scroll">
   <table class="portal-table" data-testid="org-upgrade-device-summary">
     <caption class="visually-hidden">The devices available to this operation.</caption>
     <thead>
-      <tr><th scope="col">Site</th><th scope="col">Device</th><th scope="col">Type</th><th scope="col">Model</th></tr>
+      <tr>
+        <th scope="col">Site</th>
+        <th scope="col">Device</th>
+        <th scope="col">Type</th>
+        <th scope="col">Model</th>
+        <th scope="col">Version now</th>
+        <th scope="col">Target version</th>
+      </tr>
     </thead>
     <tbody>
       {% for view in device_views | default([], true) %}
         {% for target in view.targets | default([], true) %}
-          <tr>
+          {% set mac = target.mac | default('', true) %}
+          {% set family_version = options.get('version_' ~ target.device_type, '') %}
+          {% set chosen_version = options.target_versions.get(mac, family_version or target.version_target) %}
+          {% set offered_versions = target.versions | default([], true) %}
+          <tr data-testid="org-upgrade-target-row-{{ mac }}">
             <td>{{ view.site.name }}</td>
             <th scope="row">{{ target.name }}</th>
             <td>{{ target.device_type }}</td>
             <td>{{ target.model }}</td>
+            <td class="cell-mono">{{ target.version_before | default('unknown', true) }}</td>
+            <td>
+              <select class="form-select form-select-sm"
+                      id="org-upgrade-version-{{ mac }}"
+                      form="org-upgrade-options-form"
+                      data-testid="org-upgrade-version-{{ mac }}"
+                      data-org-version-for="{{ mac }}"
+                      data-device-type="{{ target.device_type }}"
+                      data-gateway-family="{{ target.gateway_family | default('', true) }}"
+                      aria-label="Target version for {{ target.name | default('Unnamed device', true) }}">
+                <option value="">Do not upgrade this device</option>
+                {% if chosen_version and chosen_version not in offered_versions %}
+                  <option value="{{ chosen_version }}" selected>{{ chosen_version }}</option>
+                {% endif %}
+                {% for version in offered_versions %}
+                  <option value="{{ version }}"
+                          {{ 'selected' if version == chosen_version else '' }}>{{ version }}</option>
+                {% endfor %}
+              </select>
+            </td>
           </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="4">The portal found no supported device.</td></tr>
+        <tr><td colspan="6">The portal found no supported device.</td></tr>
       {% endfor %}
     </tbody>
   </table>
