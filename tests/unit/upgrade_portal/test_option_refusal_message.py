@@ -182,7 +182,7 @@ def test_every_posted_multisite_field_has_a_label() -> None:
         field. Issue #3206 forbids that text on the multi-site page.
     """
     posted = posted_org_fields()  # Read the option fields from the template.
-    assert "version_switch" in posted  # Prove that the parse reads the real form, not an empty file.
+    assert "selected_types" in posted  # Prove that the parse reads the real form, not an empty file.
     missing = sorted(posted - set(options.ORG_OPTION_HELP))  # Find each posted field with no label.
     assert not missing, f"The form posts {len(posted)} fields. These fields have no label: {missing}"
 

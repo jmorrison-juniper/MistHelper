@@ -279,7 +279,7 @@ def test_no_planned_device_at_any_site_keeps_the_old_refusal(site_app: SiteApp) 
     plan = {**CANARY_PLAN, "selected_types": ["gateway"], "version_gateway": "23.4R1.9"}  # Neither site has one.
     with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Two sites with no gateway.
         message = refused_message(client, plan)  # The save must stop before the confirm page.
-    assert '"Device types to upgrade"' in message  # The old refusal names the device type control.
+    assert '"Device target versions"' in message  # The refusal names the explicit device version controls.
     assert not message.startswith((UNREAD_START, UNPLANNED_START))  # No site refusal replaces the old refusal.
 
 

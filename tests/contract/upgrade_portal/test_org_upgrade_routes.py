@@ -43,6 +43,93 @@ AP_TWO = "001122334466"  # The access point at the second site.
 SWITCH_ONE = "001122334477"  # The switch at the first site.
 
 
+def test_selected_target_rows_keep_each_device_version() -> None:
+    """Issue #3204: each model must keep the version that the operator selected."""
+    view = {  # Model one site that holds two access point models.
+        "targets": [
+            {"mac": AP_ONE, "device_type": "ap", "model": "AP12"},  # The first model uses the first version.
+            {"mac": AP_TWO, "device_type": "ap", "model": "AP45"},  # The second model uses another version.
+        ]
+    }
+    options = {  # Model the explicit target list that the browser must send.
+        "targets": [
+            {"mac": AP_ONE, "version_target": "0.14.1"},  # Keep the supported AP12 release.
+            {"mac": AP_TWO, "version_target": "0.15.1"},  # Keep the supported AP45 release.
+        ]
+    }
+    rows = org_upgrade._selected_target_rows(view, options, ("ap",))  # Select only targets of this site.
+    assert rows == options["targets"]  # No family-wide version can replace either model choice.
+
+
+def test_confirmation_summary_names_each_model_version() -> None:
+    """Issue #3204: confirmation must show every distinct model choice."""
+    operation = {  # Model two children that hold three explicit target records.
+        "children": [
+            {
+                "targets": [
+                    {"model": "AP12", "version_target": "0.14.1"},
+                    {"model": "AP45", "version_target": "0.15.1"},
+                ]
+            },
+            {"targets": [{"model": "SSR120", "version_target": "6.3.0"}]},
+        ]
+    }
+    summary = org_upgrade.operation_firmware_summary(operation)  # Build the text shown before confirmation.
+    assert summary == "AP12 0.14.1, AP45 0.15.1, SSR120 6.3.0"  # Keep each model and selected version.
+
+
+def test_four_ap_models_and_both_gateway_families_reach_confirmation(
+    org_upgrade_client: FlaskClient,
+) -> None:
+    """Issue #3204: a mixed-model plan must reach the confirmation page."""
+    devices = [  # Model the fleet from the issue with explicit model-compatible choices.
+        {"mac": "001122334451", "name": "ap12", "device_type": "ap", "model": "AP12"},
+        {"mac": "001122334452", "name": "ap24", "device_type": "ap", "model": "AP24"},
+        {"mac": "001122334453", "name": "ap37", "device_type": "ap", "model": "AP37"},
+        {"mac": "001122334454", "name": "ap45", "device_type": "ap", "model": "AP45"},
+        {"mac": "001122334455", "name": "srx", "device_type": "gateway", "model": "SRX1500"},
+        {"mac": "001122334456", "name": "ssr", "device_type": "gateway", "model": "SSR120"},
+    ]
+    versions = {device["mac"]: f"target-{index}" for index, device in enumerate(devices, start=1)}  # One each.
+    view = {"targets": devices}  # The page and the site filter read the same complete inventory.
+
+    def build_record(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Build full target rows from the explicit choices of the route."""
+        del session, org_id  # The contract reads no cloud service.
+        choices = {row["mac"]: row["version_target"] for row in body["targets"]}  # Index submitted choices.
+        targets = [  # Add the fields that the aggregate request reads.
+            {
+                **device,
+                "version_before": "old",
+                "version_target": choices[device["mac"]],
+                "site_id": site_id,
+            }
+            for device in devices  # Keep the inventory order.
+        ]
+        return {"targets": targets, "options": {"strategy": "big_bang"}, "warnings": []}  # Valid site record.
+
+    boundary = AggregateBoundaryStandIn()  # Record the validated aggregate request without a cloud write.
+    store = AggregateStoreStandIn()  # Persist the planned operation for the confirmation route.
+    org_upgrade_client.application.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = lambda *_args: view  # Offline view.
+    org_upgrade_client.application.config[org_upgrade.OPTIONS_BUILDER_CONFIG_KEY] = build_record  # Offline save.
+    org_upgrade_client.application.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = boundary  # Offline planner.
+    org_upgrade_client.application.config["RUN_STORE"] = store  # Keep the operation for the next page.
+    answer = org_upgrade_client.post(  # Save the six explicit model choices.
+        ORG_OPTIONS_API,
+        json={
+            "selected_types": ["ap", "gateway"],
+            "strategy": "big_bang",
+            "targets": [{"mac": mac, "version_target": version} for mac, version in versions.items()],
+        },
+    )
+    assert answer.status_code == 200  # The mixed-model fleet must pass the options route.
+    assert answer.get_json() == {"next": ORG_CONFIRM_PAGE}  # The route must open confirmation.
+    assert org_upgrade_client.get(ORG_CONFIRM_PAGE).status_code == 200  # The planned operation must render.
+    assert [target.version_target for target in boundary.requests[0].targets] == list(versions.values())  # Keep all.
+    with org_upgrade_client.session_transaction() as browser_session:  # Read the signed browser state.
+        assert "targets" not in browser_session["org_upgrade_options"]  # The device list stays in durable storage.
+
+
 def test_request_source_empty_body_uses_form_mapping() -> None:
     """A zero-byte options body must fall back to the form mapping."""
     app = Flask(__name__)  # WHY: request parsing needs an application context.
@@ -657,7 +744,7 @@ def test_a_refused_switch_version_names_the_switch_control(
         org_upgrade_client,
         {"selected_types": ["ap", "switch"], "version_ap": "0.15.1", "version_switch": "23.4R1.9"},
     )
-    assert '"Switch target version"' in message  # The multi-site page paints this label.
+    assert '"Device target versions"' in message  # The multi-site page paints this heading.
     assert "EX4400" in message  # The operator needs the model that refused the version.
     assert '"Target version"' not in message  # The multi-site page paints no control with this label.
     assert "version_target" not in message  # An internal field name does not help the operator.
@@ -756,7 +843,7 @@ def test_no_typed_target_names_a_multisite_control(
         org_upgrade_client,
         {"selected_types": ["switch"], "version_switch": "", "strategy": "big_bang"},
     )
-    assert '"Device types to upgrade"' in message  # The multi-site page paints this legend.
+    assert '"Device target versions"' in message  # The multi-site page paints this heading.
     assert "Target version control" not in message  # The multi-site page paints no control with this label.
 
 

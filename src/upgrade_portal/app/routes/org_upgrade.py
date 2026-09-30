@@ -321,9 +321,8 @@ class OrgOptionRefusal:
         """
         if error.field != "version_target":  # Every other field keeps its name on both pages.
             return error.field
-        families = {str(row.get("device_type", "")) for row in rows if str(row.get("model", "")) == error.model}
-        field = f"version_{families.pop()}" if len(families) == 1 else "targets"  # One model has one family.
-        return field if field in ORG_OPTION_HELP else "targets"  # An unknown family names the device type legend.
+        del rows  # Issue #3204: every model now uses the shared device target versions table.
+        return "targets"  # The refusal names the table that holds the refused model control.
 
     @staticmethod
     def whole_number(text: str, field: str) -> int:
@@ -481,12 +480,29 @@ def _add_device_options(body: dict[str, Any], source: Mapping[str, Any], selecte
     """Add fields that the multi-device workflow supports."""
     legacy_version = str(body["versions"][0]["version"])  # Preserve the AP fallback for old forms.
     body["selected_types"] = selected  # Keep every checked device family.
+    explicit_targets = _explicit_targets(source)  # Issue #3204: read one selected version for each device.
+    if explicit_targets is not None:  # A legacy client sends family-wide version fields and no target list.
+        body["targets"] = explicit_targets  # Keep an explicit empty list, because it means select no device.
     body["version_ap"] = str(source.get("version_ap", legacy_version)).strip()  # Read the AP target.
     body["version_switch"] = str(source.get("version_switch", "")).strip()  # Read the switch target.
     body["version_gateway"] = str(source.get("version_gateway", "")).strip()  # Read the gateway target.
     body["reboot"] = _yes_value(source.get("reboot", "yes"))  # Preserve the reboot choice.
     body["junos_file_action"] = _yes_value(source.get("junos_file_action", "yes"))  # Preserve the Junos action.
     body["force"] = str(source.get("force", "")).lower() in ("1", "true", "yes", "on")  # Preserve force.
+
+
+def _explicit_targets(source: Mapping[str, Any]) -> list[dict[str, str]] | None:
+    """Return the explicit device version choices of the current page."""
+    raw_targets = source.get("targets")  # JSON sends the device choices as one list.
+    if not isinstance(raw_targets, list):  # A legacy form sends family-wide version fields only.
+        return None  # Keep the existing family-wide fallback for an older client.
+    targets = [  # Keep only mapping entries with the two fields that the shared builder validates.
+        {"mac": str(row.get("mac", "")), "version_target": str(row.get("version_target", ""))}
+        for row in raw_targets  # Inspect each untrusted JSON list entry.
+        if isinstance(row, Mapping)  # Ignore a malformed scalar before the shared validator reads the list.
+    ]
+    logger.debug("The organization options request holds %s explicit target choice(s)", len(targets))  # Log result.
+    return targets  # The site filter selects only choices that belong to its inventory.
 
 
 def _yes_value(value: object) -> bool:
@@ -656,6 +672,20 @@ def _selected_target_rows(
     selected: tuple[str, ...],
 ) -> list[dict[str, str]]:
     """Return explicit targets for selected families that have a version."""
+    explicit = options.get("targets")  # Issue #3204: the current page sends one choice for each device.
+    if isinstance(explicit, list):  # A current request must preserve the selected version by device address.
+        versions = {  # Index only complete mapping entries from the untrusted request.
+            str(row.get("mac", "")): str(row.get("version_target", ""))
+            for row in explicit  # Inspect each submitted device choice.
+            if isinstance(row, Mapping) and row.get("mac") and row.get("version_target")  # Require both fields.
+        }
+        rows = [  # Keep the inventory order and keep devices of this site only.
+            {"mac": str(row["mac"]), "version_target": versions[str(row["mac"])]}
+            for row in view.get("targets", [])  # Inspect each device in the selected site.
+            if str(row.get("device_type", "")) in selected and str(row.get("mac", "")) in versions  # Selected here.
+        ]
+        logger.debug("The site keeps %s explicit target choice(s)", len(rows))  # Log after the site filter.
+        return rows  # The shared builder validates each version against the device model.
     return [  # Keep the inventory order from the existing option view.
         {"mac": str(row["mac"]), "version_target": str(options.get(f"version_{row['device_type']}", ""))}
         for row in view.get("targets", [])  # Inspect each device in the selected site.
@@ -740,11 +770,17 @@ def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
     """Return form values from the validated service option shape."""
     first = _first_version(options.get("versions"))  # Read the legacy AP version record.
     selected_types = list(options.get("selected_types", ["ap", "switch", "gateway"]))  # Restore chosen families.
+    target_versions = {  # Issue #3204: restore each device choice after a return from confirmation.
+        str(row.get("mac", "")): str(row.get("version_target", ""))
+        for row in options.get("targets", [])  # Read the small explicit choices stored in the signed session.
+        if isinstance(row, Mapping) and row.get("mac")  # Ignore a malformed optional entry.
+    }
     return {  # Return the existing template field names.
         "version": options.get("version_ap", first.get("version", "")),  # The legacy AP version field.
         "version_ap": str(options.get("version_ap", first.get("version", ""))),  # Keep the AP target visible.
         "version_switch": str(options.get("version_switch", "")),  # Keep the switch target visible.
         "version_gateway": str(options.get("version_gateway", "")),  # Keep the gateway target visible.
+        "target_versions": target_versions,  # Keep each model choice stable after Back.
         "selected_types": selected_types,  # Keep the selected family boxes stable after Back.
         "reboot": options.get("reboot", True),  # Keep the reboot radio group stable after Back.
         "junos_file_action": options.get("junos_file_action", True),  # Keep the Junos radio group stable.
@@ -780,6 +816,22 @@ def firmware_summary(view: Mapping[str, Any], families: Sequence[str]) -> str:
     ]
     logger.debug("The firmware summary names %s device families", len(parts))  # Log after the build.
     return ", ".join(parts) if parts else str(view.get("version") or "Not selected")  # Keep the AP fallback.
+
+
+def operation_firmware_summary(operation: Mapping[str, Any] | None) -> str:
+    """Return each model and target version from the durable plan."""
+    if operation is None:  # A legacy AP-only confirmation holds no aggregate operation.
+        return ""  # Let the caller use the family-wide fallback.
+    logger.info("Build the firmware summary from the durable aggregate plan")  # Log before the transformation.
+    pairs = [  # Keep the child and target order that the operator confirmed.
+        (str(target.get("model", "")).strip(), str(target.get("version_target", "")).strip())
+        for child in _mapping_children(operation)  # Inspect every planned cloud child.
+        for target in child.get("targets", [])  # Read the explicit device records of the child.
+        if isinstance(target, Mapping)  # Ignore a malformed optional target entry.
+    ]
+    parts = list(dict.fromkeys(f"{model} {version}" for model, version in pairs if model and version))  # Unique models.
+    logger.debug("The aggregate firmware summary names %s model version(s)", len(parts))  # Log after the build.
+    return ", ".join(parts)  # An older child with no target records uses the caller fallback.
 
 
 def _summary_version(view: Mapping[str, Any], field: str) -> str:
@@ -969,12 +1021,13 @@ def options_page() -> str | tuple[Response, int]:
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
     retry = current_retry_plan()  # Issue #3247: a retry keeps only the devices that need a second attempt.
     prefill = retry.options if retry is not None else {}  # A retry shows the earlier choices first.
+    display_options = _display_options(stored_options() or prefill)  # Restore device choices from durable storage.
     device_views = _option_device_views(org_id, rows)  # One device list for each selected site.
     return render_page(  # Render the options form with one device list for each site.
         OPTIONS_TEMPLATE,
         sites=rows,
         device_views=device_views,
-        options=options_view(stored_options() or prefill),
+        options=options_view(display_options),
         retry=retry,
         ssr_present=OrgAdvancedRules.holds_router(device_views),  # Issue #3383: the release train control.
         partial_sites=_partial_site_names(device_views),  # Issue #3424: the sites that the Caution banner names.
@@ -1073,6 +1126,7 @@ def _aggregate_saved_options(
     logger.debug("The aggregate plan holds %s child job(s)", len(operation["children"]))  # Log after the build.
     _attach_plan_options(operation, options)  # Issue #3247: a later retry reads the choices of this plan.
     _write_operation(operation)  # Persist the complete plan before confirmation.
+    options.pop("targets", None)  # Issue #3204: a large device list must not enter the signed browser cookie.
     options["operation_id"] = operation["operation_id"]  # Keep only the durable identity in the browser.
     options["target_count"] = len(aggregate["targets"])  # Keep a small confirmation value.
     return options, str(operation["request_nonce"])  # Return the durable replay nonce.
@@ -1094,6 +1148,19 @@ def _attach_plan_options(operation: MutableMapping[str, Any], options: Mapping[s
         logger.debug("The new plan repeats aggregate upgrade %s", retry.operation_id)  # Log the link.
 
 
+def _display_options(options: Mapping[str, Any]) -> dict[str, Any]:
+    """Restore explicit device choices for the options page."""
+    restored = dict(options)  # Keep the signed session and retry plan unchanged.
+    if isinstance(restored.get("targets"), list):  # A retry can already hold its explicit device choices.
+        return restored  # No durable read is necessary.
+    operation = _saved_operation(restored)  # A return from confirmation names the durable plan.
+    plan_options = operation.get("plan_options") if isinstance(operation, Mapping) else None  # Read stored choices.
+    targets = plan_options.get("targets") if isinstance(plan_options, Mapping) else None  # The explicit choices.
+    if isinstance(targets, list):  # A current durable plan stores the device list outside the cookie.
+        restored["targets"] = [dict(row) for row in targets if isinstance(row, Mapping)]  # Detach valid entries.
+    return restored  # An older plan keeps the family-wide fallback.
+
+
 @org_upgrade_bp.get(CONFIRM_PAGE_PATH)
 @identity.require_session
 def confirm_page() -> str | tuple[Response, int]:
@@ -1109,6 +1176,9 @@ def confirm_page() -> str | tuple[Response, int]:
     operation = _saved_operation(options)  # Read the durable plan one time for every value of the page.
     target_count, families = _confirmation_targets(operation)  # Read only the durable aggregate child summary.
     view = options_view(options)  # Build the display values one time.
+    family_summary = firmware_summary(view, families)  # Keep the stable-build wording for that special choice.
+    model_summary = operation_firmware_summary(operation)  # Issue #3204: name each explicit model version.
+    firmware_line = family_summary if view.get("stable_version") is True else model_summary or family_summary  # Safe.
     names = {str(row["site_id"]): str(row["name"]) for row in rows}  # The approved name of each site.
     prechecks = precheck_gate().read(site_ids, names)  # Issue #3243: the pre-check capture of each site.
     return render_page(  # Render the existing typed confirmation page.
@@ -1118,7 +1188,7 @@ def confirm_page() -> str | tuple[Response, int]:
         device_count=target_count or _site_device_count(rows),  # Keep the AP-only count fallback.
         device_families=families,  # Show each planned family.
         options=view,  # Show the confirmed choices.
-        firmware_summary=firmware_summary(view, families),  # Name the target version of each family.
+        firmware_summary=firmware_line,  # Name each model, unless the cloud selects the vendor stable build.
         advanced_summary=OrgAdvancedSummary.lines(view, _mapping_children(operation)),  # Each stored child body.
         reboot_moment=OrgUpgradeScheduleReader.reboot_moment_text(operation),  # Show the absolute or submit rule.
         writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.

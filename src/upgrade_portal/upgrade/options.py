@@ -250,9 +250,9 @@ OPTION_HELP: Mapping[str, tuple[str, str]] = {
 YES_OR_NO_RULE = "Choose Yes or No."
 
 # The label of each control that `upgrade/org_options.html` paints, and its
-# rule. Issue #3273 records the cause. The multi-site page names three controls
-# differently from the single-site page. It also holds one target version
-# control for each device type, and a date and time control for the start. A
+# rule. Issue #3273 records the cause. The multi-site page names its controls
+# differently from the single-site page. It holds one target version control
+# for each device, and a date and time control for the start. A
 # refusal on that page must name the control that the operator sees there.
 #
 # The label must match the text that `upgrade/org_options.html` paints. The
@@ -261,27 +261,12 @@ YES_OR_NO_RULE = "Choose Yes or No."
 ORG_OPTION_HELP: Mapping[str, tuple[str, str]] = {
     "selected_types": OPTION_HELP["selected_types"],
     "targets": (
-        "Device types to upgrade",
-        (
-            "Type a target version for at least one selected device type. "
-            "At least one selected site must hold a device of that type."
-        ),
+        "Device target versions",
+        ("Select a target version for at least one device. " "The version must appear in the list for that device."),
     ),
     "mac": (
-        "Device types to upgrade",
+        "Device target versions",
         "A device left a selected site while the portal read the site. Choose Review again.",
-    ),
-    "version_ap": (
-        "Access point target version",
-        "Type a version that each selected access point model offers.",
-    ),
-    "version_switch": (
-        "Switch target version",
-        "Type a version that each selected switch model offers.",
-    ),
-    "version_gateway": (
-        "Gateway target version",
-        "Type a version that each selected gateway model offers.",
     ),
     "strategy": (
         "Upgrade strategy",
