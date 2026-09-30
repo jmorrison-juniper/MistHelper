@@ -45,7 +45,7 @@ Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` 
 | Action Logging | Pass | Implementation tasks must add `info` before and `debug` after each meaningful action. |
 | Output Backends | Pass | The operation exports with `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`. |
 | Mist API Access | Pass | The client uses installed `mistapi` methods where they exist. No direct HTTP call is planned. |
-| Primary Key Strategy | Not applicable | This feature exports a report and does not add a database collection or endpoint persistence. |
+| Primary Key Strategy | Deferred | The integration pull request must add `psk_hygiene_report` before non-CSV backends are release-ready. |
 
 ## Project Structure
 

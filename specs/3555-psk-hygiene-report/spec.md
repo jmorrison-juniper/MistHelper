@@ -16,7 +16,7 @@ A NOC operator runs menu 274 in test mode and receives a PSK hygiene report with
 
 **Why this priority**: This is the main value of the feature. It changes manual review into one repeatable operation.
 
-**Independent Test**: Run the operation with `--test`. Confirm that it completes without a prompt and writes `data/PskHygiene.csv`.
+**Independent Test**: Run the operation after the integration pull request wires menu 274 into MistHelper. Confirm that it completes without a prompt and writes `data/PskHygiene.csv`.
 
 **Acceptance Scenarios**:
 
@@ -87,8 +87,8 @@ A reviewer checks that the feature has the required planning and release artifac
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST add menu 274 as the PSK hygiene report operation.
-- **FR-002**: The operation MUST run in `--test` with no prompt.
+- **FR-001**: The integration pull request MUST add menu 274 as the PSK hygiene report operation.
+- **FR-002**: The operation MUST run with no prompt when `org_id` or `ORG_ID` is already configured.
 - **FR-003**: The operation MUST write `PskHygiene.csv` under `data/`.
 - **FR-004**: The CSV MUST contain one row per PSK reviewed.
 - **FR-005**: Each CSV row MUST include name, SSID, role, VLAN, usage, max usage, expire time, days remaining, rotation pending, WLAN match, and findings.
@@ -120,7 +120,7 @@ A reviewer checks that the feature has the required planning and release artifac
 
 ### Measurable Outcomes
 
-- **SC-001**: In test mode, menu 274 completes without prompts in 100% of automated test runs.
+- **SC-001**: After integration wiring exists, menu 274 completes without prompts in 100% of automated test runs.
 - **SC-002**: For a controlled test set, 100% of PSKs receive the expected finding labels.
 - **SC-003**: The console summary counts match the CSV findings counts exactly for all finding categories.
 - **SC-004**: No passphrase or old passphrase value appears in logs, console output, or `PskHygiene.csv` during validation.
@@ -129,7 +129,7 @@ A reviewer checks that the feature has the required planning and release artifac
 
 ## Assumptions
 
-- Menu 44 remains the source of PSK export behavior. Menu 274 adds scoring and reporting.
+- Menu 44 remains the source of PSK export behavior. Menu 274 wiring is deferred to the integration pull request.
 - Organization WLAN SSIDs are the scope for WLAN matching. Site-level WLANs are out of scope for this report.
 - The findings column can contain more than one finding for a PSK.
 - Empty, missing, or null `mac`, `macs`, and `max_usage` values count as absent for uncapped multi-use detection.

@@ -16,7 +16,7 @@ class _FakeConfigUtils:
     """Resolve a fixed organization ID without prompts."""
 
     @staticmethod
-    def get_cached_or_prompted_org_id() -> str:
+    def get_cached_org_id() -> str:
         """Return a fixed organization ID."""
         return "org-1"  # Keep operation tests deterministic.
 
@@ -84,6 +84,14 @@ class _FakeClient:
         return []  # Keep the operation test focused on direct WLAN matching.
 
 
+class _UnavailableWlanClient(_FakeClient):
+    """Provide PSK inputs while making WLAN scope unavailable."""
+
+    def fetch_wlans(self) -> list[dict[str, Any]]:
+        """Raise the same way an unavailable WLAN endpoint can fail."""
+        raise RuntimeError("wlan read failed")  # Force the operation to mark WLAN match as unknown.
+
+
 @pytest.fixture(autouse=True)
 def _operation_seams() -> Iterator[None]:
     """Replace operation seams without changing the no-argument handler."""
@@ -113,6 +121,7 @@ def test_export_contract_columns() -> None:
     row = _FakeDataExporter.rows[0]  # Read the captured export row.
     assert _FakeDataExporter.filename == "PskHygiene.csv"  # The output file name must match the contract.
     assert _FakeDataExporter.api_function_name == "psk_hygiene_report"  # The source name must be stable.
+    assert _FakeDataExporter.fieldnames == list(row)  # The CSV field order must match the exported row order.
     assert set(row) == {  # The exported row must contain exactly the required safe columns.
         "name",
         "ssid",
@@ -165,3 +174,13 @@ def test_console_summary_redacts_secrets() -> None:
     summary = "\n".join(output_lines)  # Combine summary lines for a redaction check.
     assert "secret-value" not in summary  # The current passphrase must not reach the summary.
     assert "old-secret-value" not in summary  # The old passphrase must not reach the summary.
+
+
+def test_unavailable_wlan_scope_marks_wlan_match_unknown() -> None:
+    """Unavailable organization WLAN data must not create a false orphan finding."""
+    PskHygieneReport.CLIENT_CLASS = _UnavailableWlanClient  # Simulate a WLAN endpoint failure.
+    result = PskHygieneReport.run()  # Run the no-argument menu handler.
+    row = _FakeDataExporter.rows[0]  # Read the captured export row.
+    assert result is True  # The PSK report should still export with unknown WLAN scope.
+    assert row["wlan_match"] == "unknown"  # The match state must show incomplete scope.
+    assert "orphan_ssid" not in str(row["findings"])  # Unknown scope must not create a false orphan finding.

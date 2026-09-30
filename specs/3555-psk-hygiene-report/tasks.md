@@ -24,6 +24,7 @@ These edits are not implementation edits for this feature branch. The integratio
 - `README.md` menu table and operation count edits are deferred to the integration pull request.
 - Generated menu reference edits from `scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map` are deferred to the integration pull request.
 - `src/refactors/endpoint_primary_key_strategies.py` edits are deferred to the integration pull request.
+- After those edits exist, the integration pull request must run `python MistHelper.py --test --menu 274`.
 
 ## Phase 1: Setup and traceability
 

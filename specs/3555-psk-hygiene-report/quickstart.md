@@ -30,9 +30,9 @@ Expected result:
 - Tests cover each finding: `expired`, `expires_soon`, `uncapped_multi_use`, `rotation_pending`, and `orphan_ssid`.
 - Tests prove that `passphrase` and `old_passphrase` do not appear in rows, logs, or console text.
 
-## CLI validation
+## CLI validation after the integration pull request
 
-Run menu `274` in test mode after implementation.
+Run menu `274` in test mode after the integration pull request registers the menu.
 
 ```powershell
 python MistHelper.py --test --menu 274
@@ -48,14 +48,18 @@ Expected result:
 
 ## Safety validation
 
-Search generated output for secret field names and known fake secret values.
+Search generated output for exact forbidden column names and known fake secret values. Permit `old_passphrase_present`.
 
 ```powershell
-Select-String -Path "data\PskHygiene.csv" -Pattern "passphrase","old_passphrase","fake-secret-value"
+$csv = Import-Csv "data\PskHygiene.csv"
+$csv[0].PSObject.Properties.Name -contains "passphrase"
+$csv[0].PSObject.Properties.Name -contains "old_passphrase"
+Select-String -Path "data\PskHygiene.csv" -Pattern "fake-secret-value","old-secret-value"
 ```
 
 Expected result:
 
+- Both column-name checks return `False`.
 - No passphrase value appears.
 - No old passphrase value appears.
 - The report includes only `old_passphrase_present`.
