@@ -92,3 +92,35 @@ def test_mxedge_lifecycle_client_raises_for_http_5xx(monkeypatch: Any) -> None:
         client.list_upgrades()  # WHY: exercise list response path.
     assert error_info.value.status_code == 503  # WHY: caller can identify server-side HTTP failure.
     assert "service unavailable" in str(error_info.value)  # WHY: safe API message reaches the operator.
+
+
+def test_mxedge_lifecycle_client_list_upgrades_accepts_results_wrapper(monkeypatch: Any) -> None:
+    """The list client must read a wrapped `results` list."""
+
+    def fake_list_upgrades(session: object, org_id: str) -> FakeResponse:
+        """Return a wrapped list response."""
+        return FakeResponse({"results": [{"id": "upgrade-1"}, "ignored"]})  # WHY: mixed rows test filtering.
+
+    monkeypatch.setattr(mistapi.api.v1.orgs.mxedges, "listOrgMxEdgeUpgrades", fake_list_upgrades)
+    rows = MxEdgeLifecycleClient(object(), "org-1").list_upgrades()  # WHY: exercise `_rows` wrapper path.
+    assert rows == [{"id": "upgrade-1"}]  # WHY: only dictionary rows are kept.
+
+
+def test_mxedge_lifecycle_client_preserves_non_dict_response(monkeypatch: Any) -> None:
+    """The client must preserve accepted non-dictionary response data."""
+
+    def fake_bounce(session: object, org_id: str, mxedge_id: str, body: dict[str, Any]) -> FakeResponse:
+        """Return a non-dictionary accepted response."""
+        return FakeResponse(["accepted"])  # WHY: exercise `_data` fallback path.
+
+    monkeypatch.setattr(mistapi.api.v1.orgs.mxedges, "bounceOrgMxEdgeDataPorts", fake_bounce)
+    result = MxEdgeLifecycleClient(object(), "org-1").bounce("mx-1", {"ports": ["0"]})
+    assert result == {"data": ["accepted"]}  # WHY: non-dict data stays available to callers.
+
+
+def test_mxedge_lifecycle_client_status_field_http_error() -> None:
+    """The HTTP error checker must also read the `status` field."""
+    response = type("Response", (), {"status": 500, "data": "failed"})()  # WHY: SDK variants can use status.
+    with pytest.raises(MxEdgeLifecycleApiError) as error_info:
+        MxEdgeLifecycleClient._data(response)  # WHY: exercise the status-field failure path.
+    assert error_info.value.status_code == 500  # WHY: status field becomes the API error code.

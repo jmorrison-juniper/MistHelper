@@ -165,9 +165,11 @@ class MxEdgeLifecycleOperation:
     def _execute(self, request: LifecycleRequest, sender: Any) -> None:
         """Confirm, optionally send, and write one lifecycle log row."""
         if not self._confirmed(request):  # WHY: wrong word blocks destructive API call.
+            logger.info("Mist Edge lifecycle step %s cancelled by confirmation", request.step)  # WHY: audit cancel.
             self._write_row(request.as_row(self.org_id, STATUS_CANCELLED, "confirmation mismatch"))  # WHY: evidence.
             return  # WHY: do not send.
         if request.dry_run:  # WHY: dry-run must send no request.
+            print(f"Dry run request: {request.step} {self._safe_body(request)}")  # WHY: operator previews request.
             self._write_row(request.as_row(self.org_id, STATUS_DRY_RUN, "dry-run only"))  # WHY: evidence.
             return  # WHY: do not send.
         try:  # WHY: API failures need one CSV row.
@@ -181,9 +183,11 @@ class MxEdgeLifecycleOperation:
     def _execute_upgrade(self, request: LifecycleRequest, mxedge_ids: list[str]) -> None:
         """Confirm, start upgrade, and poll when not a dry-run."""
         if not self._confirmed(request):  # WHY: wrong word blocks destructive API call.
+            logger.info("Mist Edge lifecycle step %s cancelled by confirmation", request.step)  # WHY: audit cancel.
             self._write_row(request.as_row(self.org_id, STATUS_CANCELLED, "confirmation mismatch"))  # WHY: evidence.
             return  # WHY: do not send.
         if request.dry_run:  # WHY: dry-run must send no request.
+            print(f"Dry run request: {request.step} {self._safe_body(request)}")  # WHY: operator previews request.
             self._write_row(request.as_row(self.org_id, STATUS_DRY_RUN, "dry-run only"))  # WHY: evidence.
             return  # WHY: do not send.
         try:  # WHY: upgrade and polling can each fail.
@@ -279,6 +283,15 @@ class MxEdgeLifecycleOperation:
                 writer.writeheader()  # WHY: header row documents the schema.
             writer.writerow(row)  # WHY: persist the lifecycle evidence.
         logger.debug("Mist Edge lifecycle row write finished for step=%s", row.get("step"))  # WHY: result summary.
+
+    @staticmethod
+    def _safe_body(request: LifecycleRequest) -> dict[str, Any]:
+        """Return a request body that is safe to print."""
+        if request.step != "claim":  # WHY: only the claim body contains a secret.
+            return dict(request.body)  # WHY: copy prevents accidental mutation.
+        safe = dict(request.body)  # WHY: redact a copy for display.
+        safe["code"] = "REDACTED"  # WHY: claim codes must never appear in output.
+        return safe  # WHY: dry-run can show body shape safely.
 
     @staticmethod
     def _detail(data: dict[str, Any]) -> str:
