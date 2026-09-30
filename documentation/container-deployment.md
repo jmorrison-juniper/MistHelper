@@ -76,9 +76,13 @@ compose_providers = ["podman-compose.exe"]
 ### The optional helper script
 
 `scripts\compose.ps1` selects the provider for you, merges the build overlay,
-merges the corporate-certificate overlay, and reads the image revision label.
-It is in-house development tooling, so a deployment must not depend on it. Every
-command in this document runs without it.
+merges the corporate-certificate overlay, and checks the image revision label.
+When `check-revision` reports that no later commit changes an image input, the
+running image is current even if `main` has advanced through documentation,
+specification, workflow, or other non-image changes. When it names changed
+image inputs, pull the image before restarting the application. It is in-house
+development tooling, so a deployment must not depend on it. Every command in
+this document runs without it.
 
 ## Docker deployment parity status
 
