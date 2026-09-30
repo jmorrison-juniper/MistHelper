@@ -18,6 +18,14 @@
 
 **Alternatives considered**: Inferring field names from samples was rejected. Mist can omit optional fields, and schema review reduces unsafe assumptions.
 
+**Verified OpenAPI operation**: `listOrgDevicesStats` is `GET /api/v1/orgs/{org_id}/stats/devices`. The required path parameter is `org_id`. The query parameters include `type`, `status`, `site_id`, and `fields`. The implementation uses `type="gateway"` and `fields="*"`.
+
+**Verified response shape**: The `stats_gateway` schema contains `config_status`, `version`, `model`, `is_ha`, `cluster_stat`, `service_status`, `dhcpd_stat`, `vpn_peers`, `bgp_peers`, `uptime`, `route_summary_stats`, and `arp_table_stats`. `dhcpd_stat` is an object keyed by network name, and each value uses the `dhcpd_stat_lan` schema with `num_leased` and `num_ips`.
+
+**Verified peer fields**: `bgp_peer` contains `state`, `up`, `neighbor`, `node`, `rx_routes`, `tx_routes`, and `vrf_name`. `stats_gateway_vpn_peer` contains `up`, `peer_router_name`, `peer_mac`, `peer_site_id`, `port_id`, `type`, and `uptime`.
+
+**Verified SDK function**: The installed SDK exposes `mistapi.api.v1.orgs.stats.listOrgDevicesStats`.
+
 ## Decision: Match Mist WAN edge tile concepts
 
 **Rationale**: The WAN edge skill states that `WAN Edges > WAN Edges` shows `Config Success`, `Version Compliance`, `WAN Edge Uptime`, and `Potential Anomalies`. It states that `Potential Anomalies` is `100%` when no WAN edge has anomalies, and that two anomalous WAN edges in ten gives `80%`. It also states that the WAN edge detail page includes `DHCP Statistics`, with `Usage`, `Pool Name`, `Leased IPs`, and `Total IPs`.

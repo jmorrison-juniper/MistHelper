@@ -1,139 +1,71 @@
-# Wiring Manifest: Organization WAN Edge Scorecard
+# Wiring manifest
 
-**Issue**: #3560
-**Feature directory**: `specs/3560-wan-edge-scorecard/`
-**Operation**: Menu 279, organization WAN edge scorecard
+## Menu entries
 
-## 1. Scope
+| menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
+| - | - | - | - | - | - | - | - |
+| 279 | Organization WAN Edge Scorecard | src.reports.wan_edge_scorecard.scorecard | WanEdgeScorecard.run | safe |  | False | False |
 
-Build one organization-level WAN edge scorecard operation. The operation reports every WAN gateway in the organization and adds site and organization summaries.
+## OperationRegistry comment
 
-## 2. Menu Wiring
+One `# WHY:` paragraph for menu 279:
 
-- Add menu 279 with the label "Organization WAN Edge Scorecard".
-- Register menu 279 as `safe`.
-- Use handler class `WanEdgeScorecard` with static `run()`.
-- The operation must run in `--test` without a prompt.
-- The operation must write outputs under `data/`.
+```python
+# WHY: menu 279 is safe because it reads organization gateway statistics only, writes report files under data/, and makes no Mist configuration change.
+```
 
-## 3. Data Source Contract
+## Primary key strategies
 
-- Use `listOrgDevicesStats` with `type=gateway`.
-- Reuse the gateway statistics fetch that menu 18 or menu 15 already holds.
-- Do not add a second pagination implementation for gateway statistics.
-- Read gateway statistics once for the organization data set when possible.
-- Before coding, read `src/export/org_device_stats_exporter.py`.
-- Before coding, read the menu 18 gateway stats path named `_dispatch_gateway_stats_device_stats_with_freshness`.
-- Before coding, read `stats_gateway`, `dhcpd_stat_lan`, `vpn_peers`, and `bgp_peers` in `documentation/mist-api-openapi3json.json`.
+No persistent endpoint primary key entry is required for this feature package.
+The scorecard is a report that writes derived rows through the existing
+`listOrgDevicesStats` output path. If the integration pull request elects to
+store derived rows in a separate table, use this strategy:
 
-## 4. Gateway Scorecard Output Contract
+```python
+"wan_edge_scorecard_report": {
+    "type": "auto_increment_with_unique",
+    "primary_key": ["misthelper_internal_id"],
+    "unique_fields": ["gateway_id", "site_id"],
+    "indexes": ["site_id", "gateway_name", "version", "config_status"],
+},
+```
 
-Write `data/WanEdgeScorecard.csv`.
+## copilot-instructions category table
 
-Required row grain: one row per gateway.
+Add menu `279` to the `safe` category row.
 
-Required columns:
+## Import line for MistHelper.py
 
-- Site
-- Name
-- Model
-- Version
-- Predominant version
-- Version compliant
-- Config status
-- HA state
-- Cluster peer state
-- Service status summary
-- DHCP pool count
-- Worst pool utilization percent
-- VPN peers up
-- VPN peers down
-- BGP peers established
-- BGP peers not established
-- Uptime days
-- Last trouble
+```python
+from src.reports.wan_edge_scorecard.scorecard import WanEdgeScorecard  # Menu 279 (issue #3560) -- export the organization WAN edge scorecard.
+```
 
-## 5. DHCP Pool Output Contract
+## Deferred integration notes
 
-Write `data/WanEdgeDhcpPools.csv`.
+- Register menu `279` in `MistHelper.py` with the title `Organization WAN Edge Scorecard`.
+- Register menu `279` as `safe` in `src/utils/operation_registry.py`.
+- Update the operation count and menu table in `README.md`.
+- Regenerate the menu reference and the menu API endpoint map in the integration pull request.
+- Confirm the generated references include menu `279`.
 
-Required row grain: one row per gateway and DHCP pool.
+## Verified data source
 
-Required values:
+- `src/export/org_device_stats_exporter.py` uses `listOrgDevicesStats` through the shared `APIDataFetcher` seam.
+- `MistHelper.py` dispatches menu `18` through `_dispatch_gateway_stats_device_stats_with_freshness`.
+- `listOrgDevicesStats` maps to `GET /api/v1/orgs/{org_id}/stats/devices`.
+- The query parameters include `type`, `status`, `site_id`, and `fields`.
+- The installed `mistapi` SDK exposes `mistapi.api.v1.orgs.stats.listOrgDevicesStats`.
+- The implementation uses `type="gateway"` and `fields="*"`.
 
-- Gateway identity
-- Pool identity
-- Leased address count
-- Total address count
-- Utilization percent
+## Verified schema fields
 
-## 6. Site Scorecard Output Contract
+- `stats_gateway` contains `config_status`, `version`, `model`, `is_ha`, `cluster_stat`, `service_status`, `dhcpd_stat`, `vpn_peers`, `bgp_peers`, `uptime`, `route_summary_stats`, and `arp_table_stats`.
+- `dhcpd_stat_lan` contains `num_leased` and `num_ips`.
+- `bgp_peer` contains `state`, `up`, `neighbor`, `node`, `rx_routes`, `tx_routes`, and `vrf_name`.
+- `stats_gateway_vpn_peer` contains `up`, `peer_router_name`, `peer_mac`, `peer_site_id`, `port_id`, `type`, and `uptime`.
 
-Write `data/WanEdgeScorecardBySite.csv`.
+## Output files
 
-Required row grain: one row per site.
-
-Required tile percentages:
-
-- Config Success
-- Version Compliance
-- WAN Edge Uptime
-- Potential Anomalies
-
-## 7. Console Summary Contract
-
-Print organization-wide values for these tile percentages:
-
-- Config Success
-- Version Compliance
-- WAN Edge Uptime
-- Potential Anomalies
-
-## 8. DHCP Threshold Contract
-
-- Default DHCP warning threshold: 80 percent.
-- If `DHCP_POOL_WARN_PERCENT` is set to a valid percent, use that value.
-- Invalid threshold values must not stop the run. Use the default and report a clear warning.
-
-## 9. Peer State Contract
-
-- A VPN peer with `up` false counts as down.
-- The gateway row must name the down peer count.
-- BGP established peers count as established.
-- BGP peers that are not established count as not established.
-
-## 10. Missing Data Contract
-
-- If `dhcpd_stat` is absent, write the gateway row with DHCP pool count `0`.
-- Missing optional gateway fields must not cause an exception.
-- Use empty values or clear unknown values for missing optional fields.
-
-## 11. Test Contract
-
-Acceptance tests must prove these results:
-
-- The operation runs in `--test` with no prompt and writes the three files under `data/`.
-- The DHCP warning threshold defaults to 80 percent.
-- The DHCP warning threshold reads `DHCP_POOL_WARN_PERCENT` from the environment when set.
-- A gateway with `dhcpd_stat` absent produces a row with pool count `0` and no exception.
-- A VPN peer with `up` false counts as down, and the row names the down peer count.
-- The scorecard reuses the gateway statistics fetch that menu 18 or menu 15 already holds.
-- This wiring manifest exists with every section of the contract.
-- The release note fragment `changelog.d/issue-3560-wan-edge-scorecard.md` exists before release.
-
-## 12. Output Safety Contract
-
-- All output files must be written under `data/`.
-- Collected API data must use the project output behavior for configured backends.
-- No secrets or credentials may be written to output or logs.
-
-## 13. Release Note Contract
-
-Add `changelog.d/issue-3560-wan-edge-scorecard.md` during implementation. This specify step does not create it because the fleet contract allows edits only under `specs/3560-wan-edge-scorecard/**`.
-
-## 14. Out of Scope
-
-- Site-only operation mode.
-- Changes to the Mist UI.
-- Manual edits to the generated output files.
-- A second gateway statistics pagination path.
+- `WanEdgeScorecard.csv`
+- `WanEdgeDhcpPools.csv`
+- `WanEdgeScorecardBySite.csv`
