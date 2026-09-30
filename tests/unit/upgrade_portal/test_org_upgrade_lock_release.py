@@ -43,6 +43,27 @@ def test_every_final_child_releases_the_sites() -> None:
     assert org_upgrade._operation_is_settled(record) is True  # No firmware write can follow.
 
 
+def test_a_running_phase_watch_keeps_the_sites_after_every_child_settles() -> None:
+    """Issue #3333: the phase watch and its post-check stage keep every selected site lock."""
+    record = operation("completed", state="completed")  # The child firmware write reached a final state.
+    record["phase_watch"] = {"state": "running"}  # The watch can still read the site for a post-check capture.
+    assert org_upgrade._operation_is_settled(record) is False  # The release waits for the post-check stage.
+
+
+def test_a_finished_phase_watch_releases_the_sites() -> None:
+    """Issue #3333: the operation releases each site after the post-check stage ends."""
+    record = operation("completed", state="completed")  # The child firmware write reached a final state.
+    record["phase_watch"] = {"state": "finished"}  # The phase watch and the post-check stage ended.
+    assert org_upgrade._operation_is_settled(record) is True  # No operation step needs the site now.
+
+
+def test_a_plan_with_no_accepted_child_needs_no_phase_watch_release_gate() -> None:
+    """Issue #3333: a refused plan releases its locks because no watch thread can start."""
+    record = operation("rejected", "not_submitted", state="failed")  # The cloud accepted no child job.
+    record["phase_watch"] = {"state": "not_started"}  # The prepared watch has no accepted target.
+    assert org_upgrade._operation_is_settled(record) is True  # No phase or post-check stage can run.
+
+
 @pytest.mark.parametrize(("state", "settled"), [("completed", True), ("failed", True), ("attention_required", False)])
 def test_a_record_without_children_keeps_the_conservative_state_rule(state: str, settled: bool) -> None:
     """A damaged record with no child releases the sites only for a final aggregate state."""
