@@ -16,9 +16,27 @@ organizations, your sites, your devices, and your clients, and it writes what it
 finds to a file or to a database. It also runs a small set of change operations,
 such as a firmware upgrade.
 
-The tool holds 269 operations. It also serves a web portal, an upgrade capture
-portal, and a metrics gateway. Read [the operator
-guide](documentation/operator-guide.md) for what each part does.
+The tool holds **275 operations**, numbered 1 to 276 with one gap at 152. It
+also serves a web portal, an upgrade capture portal, and a metrics gateway. Read
+[the operator guide](documentation/operator-guide.md) for what each part does.
+
+Menu 271 exports subscription and contract expiry reports. Use it to find
+license and support renewal risk.
+
+Menu 272 exports a certificate expiry report. Use it to plan certificate renewal
+work across Mist sources.
+
+Menu 273 exports admin and API token hygiene reports. Use it to review broad
+admin access and idle tokens.
+
+Menu 274 exports a PSK hygiene report. Use it to find expired, weak, and
+unmatched organization PSKs.
+
+Menu 275 audits site variable coverage. Use it to find missing and unused site
+variables before a template change.
+
+Menu 276 exports an organization security posture checklist. Use it to compare
+key organization settings with recommended values.
 
 ## Why
 
