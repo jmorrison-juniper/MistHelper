@@ -7,7 +7,11 @@ from types import SimpleNamespace  # Build small SDK response doubles.
 import pytest  # Assert exceptions and test outcomes.
 
 from src.reports.subscription_expiry import client as client_module  # Patch the module SDK seams.
-from src.reports.subscription_expiry.client import JsiAccountNotLinkedError, SubscriptionExpiryClient
+from src.reports.subscription_expiry.client import (
+    JsiAccountNotLinkedError,
+    SubscriptionExpiryClient,
+    SubscriptionExpiryClientError,
+)
 
 
 class FakeLicensesApi:
@@ -82,3 +86,16 @@ def test_client_raises_clear_error_for_jsi_400(monkeypatch: pytest.MonkeyPatch) 
     client = SubscriptionExpiryClient(object())  # Build the client with a fake session.
     with pytest.raises(JsiAccountNotLinkedError):  # The operation layer handles this one expected case.
         client.search_jsi_assets_and_contracts("org-1")  # Trigger the fake 400 path.
+
+
+def test_client_raises_clear_error_for_jsi_500(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The client stops pagination when the JSI endpoint returns HTTP 500."""
+    fake_sdk = FakeMistApi()  # Build a fake SDK tree.
+    fake_sdk.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts = lambda apisession, org_id, limit: SimpleNamespace(
+        status_code=500,
+        data={"detail": "server error"},
+    )  # Return the expected 500 response.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace the SDK so no network call can occur.
+    client = SubscriptionExpiryClient(object())  # Build the client with a fake session.
+    with pytest.raises(SubscriptionExpiryClientError, match="HTTP 500"):  # The caller receives the HTTP failure.
+        client.search_jsi_assets_and_contracts("org-1")  # Trigger the fake 500 path.

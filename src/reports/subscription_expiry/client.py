@@ -22,6 +22,10 @@ class JsiAccountNotLinkedError(RuntimeError):
     """Raised when the JSI endpoint reports no linked Juniper account."""
 
 
+class SubscriptionExpiryClientError(RuntimeError):
+    """Raised when a Mist API response reports an unexpected failure."""
+
+
 class SubscriptionExpiryClient:
     """Wrap the Mist SDK calls used by the subscription expiry report."""
 
@@ -112,6 +116,12 @@ class SubscriptionExpiryClient:
     def _raise_for_jsi_error(response: Any) -> None:
         """Raise a clear exception for the expected no-linked-account response."""
         status_code = getattr(response, "status_code", None)  # Read SDK status without requiring SDK class types.
+        if status_code is None or status_code < HTTP_BAD_REQUEST:  # Successful SDK responses need no conversion.
+            return  # Leave successful and plain test responses alone.
         if status_code == HTTP_BAD_REQUEST:  # Mist returns 400 when no Juniper account is linked.
             logger.warning("The JSI account is not linked for the selected organization")  # Explain the condition.
             raise JsiAccountNotLinkedError("No linked Juniper account is available for JSI contracts.")  # Signal path.
+        logger.error("The JSI contract search failed with HTTP %s", status_code)  # Surface unexpected HTTP errors.
+        raise SubscriptionExpiryClientError(  # Stop before pagination can hide a failed API response.
+            f"The JSI contract search failed with HTTP {status_code}."
+        )

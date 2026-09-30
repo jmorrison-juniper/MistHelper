@@ -35,7 +35,9 @@ Closes #3552
 - `python -m pydocstyle src\reports\subscription_expiry`: passed.
 - `python -m vulture src\reports\subscription_expiry --min-confidence 70`: passed.
 - `python -m interrogate -v src\reports\subscription_expiry`: passed at 100 percent.
-- `python -m pytest tests\unit\reports\subscription_expiry -q --timeout=120`: 10 passed.
+- `python -m radon cc src\reports\subscription_expiry -j | complexity-gate --max 10`: passed.
+- `test-quality-analyzer --gate --changed-from origin/main`: passed with 3 files checked and 0 new findings.
+- `python -m pytest tests\unit\reports\subscription_expiry -q --timeout=120`: 11 passed.
 
 ## Acceptance Criteria
 - [x] All acceptance criteria from the linked Spec Issue are met
