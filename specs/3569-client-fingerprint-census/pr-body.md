@@ -63,9 +63,11 @@ This pull request adds the menu `289` client fingerprint census package. The men
 - `python -m black --check src\reports\client_fingerprint_census tests\unit\reports\client_fingerprint_census`: passed
 - `python -m mypy src\reports\client_fingerprint_census --config-file pyproject.toml`: passed
 - `python -m pydocstyle src\reports\client_fingerprint_census`: passed
-- `python -m pytest tests\unit\reports\client_fingerprint_census -q --timeout=120`: 8 passed
+- `python -m pytest tests\unit\reports\client_fingerprint_census -q --timeout=120`: 12 passed
 - `python -m vulture src\reports\client_fingerprint_census --min-confidence 70`: passed
 - `python -m interrogate -v src\reports\client_fingerprint_census`: 100 percent
+- `python -m radon cc src\reports\client_fingerprint_census -j | complexity-gate --max 10`: passed
+- `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main`: passed
 
 ## Deferred wiring
 
