@@ -1042,41 +1042,53 @@ def phase_targets(record: Mapping[str, Any], phase: str) -> tuple[Mapping[str, A
     matched = tuple(
         entry for entry in entries if str(entry.get("device_type", "")) == wanted
     )  # WHY: One phase holds one family.
-    return _copy_phase_reboot(record, matched)  # WHY: The gate needs the scheduled reboot stored with run options.
+    return _copy_phase_schedule(record, matched)  # WHY: The gate needs each cloud schedule stored with run options.
 
 
-def _copy_phase_reboot(
+def _copy_phase_schedule(
     record: Mapping[str, Any],
     entries: Sequence[Mapping[str, Any]],
 ) -> tuple[Mapping[str, Any], ...]:
-    """Copy the run reboot schedule onto phase targets.
+    """Copy the run schedules onto phase targets.
 
     Args:
         record: The run record that carries the upgrade options.
         entries: The target entries of one phase.
 
     Returns:
-        The target entries with the delayed reboot time attached.
+        The target entries with the scheduled start and reboot times attached.
     """
     options = record.get("options", {})  # WHY: The run stores reboot settings outside target rows.
-    if not isinstance(options, Mapping) or not options.get("reboot"):
-        return tuple(entries)  # WHY: A disabled reboot must not extend a wait.
-    reboot_at = options.get("reboot_at")  # WHY: The phase gate reads the schedule from each target.
-    return tuple(_copy_target_reboot(entry, reboot_at) for entry in entries)  # WHY: The run record stays unchanged.
+    if not isinstance(options, Mapping):
+        return tuple(entries)  # WHY: A damaged options value cannot supply a valid schedule.
+    start_time = options.get("start_time")  # WHY: The cloud can hold every device family until this moment.
+    reboot_at = options.get("reboot_at") if options.get("reboot") else None  # WHY: Disabled reboots add no delay.
+    if start_time is None and reboot_at is None:
+        return tuple(entries)  # WHY: An immediate run keeps the original target objects.
+    logger.info("Copying the run schedule to %s phase target(s)", len(entries))  # WHY: The log marks the transform.
+    scheduled = tuple(
+        _copy_target_schedule(entry, start_time, reboot_at) for entry in entries
+    )  # WHY: The store owns each source row.
+    logger.debug("Run schedule added start %s and reboot %s to %s target(s)", start_time, reboot_at, len(scheduled))
+    return scheduled  # WHY: The phase gate receives an immutable target collection.
 
 
-def _copy_target_reboot(entry: Mapping[str, Any], reboot_at: Any) -> Mapping[str, Any]:
-    """Return one target with a delayed reboot time.
+def _copy_target_schedule(entry: Mapping[str, Any], start_time: Any, reboot_at: Any) -> Mapping[str, Any]:
+    """Return one target with the run schedule.
 
     Args:
         entry: One target entry from the run record.
+        start_time: The scheduled upgrade start from the run options.
         reboot_at: The delayed reboot epoch seconds from the run options.
 
     Returns:
-        A copy of the target with ``reboot_at`` when it was absent.
+        A copy of the target with absent schedule values added.
     """
     copied = dict(entry)  # WHY: The phase gate may read this value, but the store owns the source row.
-    copied.setdefault("reboot_at", reboot_at)  # WHY: A target-specific value should keep priority.
+    if start_time is not None:
+        copied.setdefault("start_time", start_time)  # WHY: A target-specific value should keep priority.
+    if reboot_at is not None:
+        copied.setdefault("reboot_at", reboot_at)  # WHY: A target-specific value should keep priority.
     return copied
 
 

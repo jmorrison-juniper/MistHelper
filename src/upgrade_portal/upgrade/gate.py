@@ -156,6 +156,7 @@ class GateTarget:
         uptime_before: The uptime in seconds read before the upgrade. None
             when the pre-check read no uptime for this device.
         version_target: The firmware version that the operator requested.
+        start_time: The scheduled upgrade start in epoch seconds, when set.
         reboot_at: The delayed reboot epoch seconds, when the operator set one.
         last_seen_before: The moment that the cloud last heard from the device
             before the upgrade, in epoch seconds of the cloud. None when the
@@ -167,6 +168,7 @@ class GateTarget:
     version_before: str
     uptime_before: int | None
     version_target: str = ""  # WHY: Timeout reconciliation must compare against the requested firmware.
+    start_time: float | None = None  # WHY: The phase deadline must not start before the scheduled upgrade.
     reboot_at: float | None = None  # WHY: The phase deadline must honor a scheduled reboot.
     last_seen_before: int | None = None
 

@@ -542,16 +542,17 @@ def _build_target(entry: Mapping[str, Any]) -> gate.GateTarget | None:
         version_before=str(entry.get("version_before", "")),
         uptime_before=_uptime_before(mac, entry.get("uptime_before")),
         version_target=str(entry.get("version_target", "")),  # WHY: Reconciliation must prove the requested version.
-        reboot_at=_read_reboot_at(entry.get("reboot_at")),  # WHY: Future reboots move the phase deadline.
+        start_time=_read_schedule_time(entry.get("start_time")),  # WHY: Future starts move every phase deadline.
+        reboot_at=_read_schedule_time(entry.get("reboot_at")),  # WHY: Future reboots move wired phase deadlines.
         last_seen_before=gate.reading_last_seen(entry.get("last_seen_before")),  # The absolute anchor.
     )
 
 
-def _read_reboot_at(value: Any) -> float | None:
-    """Return one scheduled reboot time as epoch seconds.
+def _read_schedule_time(value: Any) -> float | None:
+    """Return one schedule time as epoch seconds.
 
     Args:
-        value: The raw ``reboot_at`` value from the run record.
+        value: A raw schedule value from the run record.
 
     Returns:
         The epoch seconds, or None when the value is absent or unreadable.
@@ -563,33 +564,34 @@ def _read_reboot_at(value: Any) -> float | None:
     return when if when > 0 else None  # WHY: Zero and negative sentinels are not future schedules.
 
 
-class ScheduledRebootWindow:
-    """Compute the quiet wait and the deadline for a scheduled reboot phase."""
+class ScheduledSettleWindow:
+    """Compute the quiet wait and the deadline for a scheduled settle phase."""
 
     @staticmethod
     def poll_start(now: float, entries: Sequence[gate.GateTarget]) -> float:
         """Return the first time that a scheduled phase should poll the cloud."""
-        schedules = [
+        starts = [target.start_time for target in entries]  # WHY: A scheduled start applies to every device family.
+        reboots = [
             target.reboot_at for target in entries if target.device_type in SCHEDULED_REBOOT_TYPES
         ]  # WHY: Only wired infrastructure has a delayed reboot field.
         future = [
-            moment for moment in schedules if moment is not None and moment > now
+            moment for moment in (*starts, *reboots) if moment is not None and moment > now
         ]  # WHY: A stale schedule cannot delay a gate.
         if not future:
             return now  # WHY: An unscheduled phase must keep the current poll behavior.
         poll_after = max(future)  # WHY: The last scheduled device controls the useful poll window.
         logger.info("Upgrade phase gate waits without cloud polling until %s", poll_after)  # Log the wait boundary.
-        logger.debug("Upgrade phase gate found %s future reboot schedule(s)", len(future))  # Log the schedule count.
+        logger.debug("Upgrade phase gate found %s future schedule(s)", len(future))  # Log the schedule count.
         return poll_after  # WHY: No device can prove a return before this moment.
 
     @staticmethod
     def deadline(now: float, poll_after: float, deadline_seconds: int) -> float:
-        """Return the deadline that honors a future scheduled reboot."""
+        """Return the deadline that honors a future schedule."""
         base = now + float(deadline_seconds)  # WHY: Unscheduled runs keep the documented thirty-minute window.
         if poll_after <= now:
-            return base  # WHY: No future reboot means the legacy deadline is correct.
+            return base  # WHY: No future schedule means the legacy deadline is correct.
         scheduled = poll_after + float(deadline_seconds)  # WHY: The slowest scheduled device controls the phase.
-        logger.info("Upgrade phase gate honors a scheduled reboot until %s", scheduled)  # Log the extended deadline.
+        logger.info("Upgrade phase gate honors a schedule until %s", scheduled)  # Log the extended deadline.
         result = max(base, scheduled)  # WHY: The wait must never shrink below the normal settle window.
         logger.debug("Upgrade phase gate chose deadline %s from base %s and schedule %s", result, base, scheduled)
         return result  # WHY: The caller uses one deadline for the clock and the round cap.
@@ -717,12 +719,12 @@ class PhaseSettleGate:
         family = phase_family(entries)
         logger.info("Run %s waits for %s %s device(s) of phase %s", run_id, len(entries), family, phase)
         now = self._deps.settle_gate.now()  # WHY: One clock anchors both the deadline and the round limit.
-        poll_after = ScheduledRebootWindow.poll_start(now, entries)  # WHY: Polling before reboot proves nothing.
-        deadline = ScheduledRebootWindow.deadline(
+        poll_after = ScheduledSettleWindow.poll_start(now, entries)  # WHY: Polling before a schedule proves nothing.
+        deadline = ScheduledSettleWindow.deadline(
             now,
             poll_after,
             self._deadline_seconds,
-        )  # WHY: Delayed reboots move the window.
+        )  # WHY: A delayed start or reboot moves the settle window.
         limit = polls_per_phase(self._deadline_seconds)  # WHY: The cloud poll budget starts at the reboot window.
         progress = {target.mac: gate.GateProgress() for target in entries}  # WHY: Each device starts with no signal.
         return _PhaseWatch(run_id, phase, entries, deadline, limit, progress, poll_after)

@@ -1304,6 +1304,16 @@ def test_phase_targets_copy_the_run_reboot_schedule() -> None:
     assert targets[0]["reboot_at"] == 1789291623  # WHY: The gate must not fail before the scheduled reboot.
 
 
+def test_phase_targets_copy_the_run_start_schedule() -> None:
+    """The settle gate receives the scheduled start from run options."""
+    record = make_record(
+        [{"mac": "aa0000000003", "device_type": "ap", "name": "ap1"}]
+    )  # WHY: Access points prove that the schedule is not limited to wired devices.
+    record["options"] = {"start_time": 1789291623}  # WHY: The cloud holds the upgrade until this moment.
+    targets = driver.phase_targets(record, "aps")  # WHY: The driver adapts run records for the phase gate.
+    assert targets[0]["start_time"] == 1789291623  # WHY: The gate must not fail before the scheduled start.
+
+
 class TestPartlySettledPhase:
     """A phase that lost one device is not a phase that lost every device."""
 
