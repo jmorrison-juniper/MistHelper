@@ -148,7 +148,9 @@ class OrgCancelOutcomes:
             "child_id": str(child.get("child_id") or ""),  # The test identifiers of the panel use this value.
             "label": str(child.get("site_name") or child.get("site_id") or cls.MULTIPLE_SITES),  # The site words.
             "device_family": str(child.get("device_family") or ""),  # The family word of the site table.
-            "status": str(cancellation.get("status") or ""),  # The status word of the cancel.
+            "status": (
+                cancellation.get("status") if cancellation.get("status") is not None else ""
+            ),  # Preserve the stored status for tools and tests.
             "message": str(cancellation.get("message") or ""),  # The exact sentence of the cancel, or no text.
             "note": note,  # The sentence that explains the lists, or no text.
             "ended": cancellation.get("status") == ENDED_CHILD_STATUS,  # Issue #3367: the panel hides the lists.

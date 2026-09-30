@@ -156,7 +156,7 @@ class TestOrganizationUpgradeBrowserFlow:
                         "total": 2,
                         "upgraded": 2,
                         "failed": 0,
-                        "cancellation_text": "Status: requested. The cancel was accepted. Cancelled: 001122334455.",
+                        "cancellation_text": "Status: Sent. The cancel was accepted. Cancelled: 001122334455.",
                     },
                     {
                         "site_id": SECOND_SITE_ID,
@@ -165,7 +165,7 @@ class TestOrganizationUpgradeBrowserFlow:
                         "total": 2,
                         "upgraded": 1,
                         "failed": 1,
-                        "cancellation_text": "Status: unavailable. No cancellation is available.",
+                        "cancellation_text": "Status: Not possible. No cancellation is available.",
                     },
                 ],
             }  # Issue #3225: the server builds each Cancellation text, and the page prints it as sent.

@@ -697,9 +697,23 @@ An organization job of an earlier release has no stored record. For that job,
 the portal reads the state that the last page view or the last poll stored.
 
 The Cancellation column of the site table shows one text for each child job.
-The text holds the cancel status, the cloud message, and three device lists:
-`Cancelled`, `Writing firmware`, and `No cancel available`. The first render
-and each poll show the same text.
+The text holds the plain cancel label, the cloud message, and three device
+lists: `Cancelled`, `Writing firmware`, and `No cancel available`. The first
+render and each poll show the same text.
+
+The cancellation result card uses these labels:
+
+| Stored word | Operator label | Meaning |
+| --- | --- | --- |
+| `cancel_claimed` | `In progress` | The portal waits for the cancel answer. |
+| `requested` | `Sent` | The portal sent the cancel request. |
+| `failed` | `Failed` | The cloud refused or damaged the cancel answer. |
+| `unavailable` | `Not possible` | The portal has no cloud job to cancel. |
+| `unknown` or `cancel_unknown` | `Result not known` | The portal cannot confirm the result. |
+| `already_ended` | `Not sent` | The child ended before the cancel request. |
+
+An empty status shows `Not recorded`. An unknown status shows `Not recognized`.
+The page keeps the stored word in `data-cancel-status` for tests and tools.
 
 A child job can end before the cancel of a running upgrade. The final child
 states are `cancelled`, `completed`, `failed`, and `rejected`. The portal sends

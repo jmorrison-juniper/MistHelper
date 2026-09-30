@@ -309,9 +309,9 @@ def test_the_cancellation_cell_shows_one_text_in_the_page_and_the_poll(harness: 
     operation_id = seed(harness, "running", "running")  # A live operation.
     result = {"status": "requested", "message": STOPPED, "cancelled": [SWITCH_TWO], "already_writing": []}
     change_child(harness, operation_id, "switch", {"cancellation": {**result, "no_cancel_available": []}})
-    expected = f"Status: requested. {STOPPED} Cancelled: {SWITCH_TWO}."  # The one text of the cell.
+    expected = f"Status: Sent. {STOPPED} Cancelled: {SWITCH_TWO}."  # The one text of the cell.
     page = page_of(harness, operation_id)  # The progress page.
-    assert site_cells(page, "Site Two")[8] == expected  # The Cancellation cell of the site table.
+    assert site_cells(page, "Site Two")[8] == expected  # The Cancellation cell uses the shared label.
     assert "Already writing:" not in page and "No cancellation:" not in page  # The old labels are gone.
     rows = poll_of(harness, operation_id)["site_upgrades"]  # The poll rows.
     assert [row["cancellation_text"] for row in rows] == ["", expected]  # The same text for the repaint.

@@ -29,7 +29,7 @@ SEED_TRIES = 20  # The server writes the seeds on a thread, so the first read ca
 SEED_PAUSE_MS = 500  # The pause between two reads of the seeded page.
 ENDED_MESSAGE = "The child job already ended: completed. The portal sent no cancel request."  # The result sentence.
 ENDED_NOTE = "This child job ended before the cancel, so the cancel changed no device of it."  # The panel note.
-ENDED_CELL = f"Status: already_ended. {ENDED_MESSAGE}"  # The Cancellation cell of the site table.
+ENDED_CELL = f"Status: Not sent. {ENDED_MESSAGE}"  # The Cancellation cell of the site table.
 AP_ID = ENDED_CHILD_IDS["ap"]  # The completed access point job.
 SWITCH_ID = ENDED_CHILD_IDS["switch"]  # The running switch job.
 
@@ -54,7 +54,7 @@ def check_ended_result(page: Any) -> None:
     Args:
         page: The browser page after the cancel.
     """
-    sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-status-{AP_ID}")).to_have_text("already_ended")
+    sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-status-{AP_ID}")).to_have_text("Not sent")
     sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-message-{AP_ID}")).to_have_text(ENDED_MESSAGE)
     sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-note-{AP_ID}")).to_have_text(ENDED_NOTE)
     sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-cancelled-{AP_ID}")).to_have_count(0)  # No list.

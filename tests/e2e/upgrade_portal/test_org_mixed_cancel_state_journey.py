@@ -57,8 +57,8 @@ def check_cancelled_state(page: Any) -> None:
     closed = page.get_by_test_id("org-upgrade-cancel-closed")  # The note that replaces the cancel form.
     sync_api.expect(closed).to_be_visible()
     sync_api.expect(closed).to_have_text(FINAL_NOTE)
-    sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-status-{AP_ID}")).to_have_text("already_ended")
-    sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-status-{SWITCH_ID}")).to_have_text("requested")
+    sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-status-{AP_ID}")).to_have_text("Not sent")
+    sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-status-{SWITCH_ID}")).to_have_text("Sent")
 
 
 class TestMixedCancelState:
