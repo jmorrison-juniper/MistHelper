@@ -56,6 +56,12 @@ The workflow needs no package-install step or application import.
 Untrusted PR code must never receive trusted permissions through this workflow.
 The module CLI must fail on unreadable input with count zero.
 
+Use `actions/checkout@v7` and `actions/setup-python@v7` in this change.
+The policy tests must also accept newer major versions of these two actions.
+Dependabot must update these actions without an unrelated test failure.
+Keep action names, permissions, credentials, events, and all other settings fixed.
+Reject action downgrades below version 7, different action names, and unversioned references.
+
 ## Dependabot changes
 
 Only two scalar prefix values may change in `.github/dependabot.yml`.

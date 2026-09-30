@@ -743,6 +743,7 @@
     "requirementsCounted": 26,
     "functionalFindings": 0,
     "readerBlockCorrection": "Use a file context to separate file reading and JSON decoding.",
+    "dependencyUpdateCorrection": "An offline probe found that the exact workflow snapshot blocked a normal Actions update. Tests now accept newer approved-action major versions without changing the execution boundary.",
     "structuralProof": {
       "classesChecked": 1,
       "members": 5,
@@ -758,8 +759,8 @@
     }
   },
   "parentValidation": {
-    "baseRevision": "415b2f83da1c91f680be5f06e17fb30ee1ce00f3",
-    "sourceState": "Owned worktree changes before the initial commit.",
+    "baseRevision": "026a80db6e00a4d592a800d99a1e8708d7f88b49",
+    "sourceState": "Owned follow-up changes on the preserved initial local commit.",
     "compileFiles": 5,
     "targetedLintFiles": 5,
     "targetedFormatFiles": 5,
@@ -769,7 +770,7 @@
     "banditSourceLines": 87,
     "banditFindings": 0,
     "banditSkippedFiles": 0,
-    "pytestPassed": 844,
+    "pytestPassed": 853,
     "pytestSkipped": 0,
     "packageCoveragePercent": 96.67,
     "ratchetFilesChecked": 42,

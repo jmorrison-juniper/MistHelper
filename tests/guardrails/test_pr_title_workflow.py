@@ -136,15 +136,33 @@ class TestWorkflowPolicy:
 
     @staticmethod
     def assert_policy(workflow: dict[str, Any]) -> None:
-        """Assert the complete parsed contract used by both real and mutation cases."""
-        assert (
-            workflow == POLICY_SNAPSHOTS["workflow"]
-        ), "The Pull request title workflow must match its read-only contract."
+        """Keep the execution boundary fixed while approved action versions advance."""
+        message = "The Pull request title workflow must match its read-only contract."
+        normalized = deepcopy(workflow)
+        steps = normalized.get("jobs", {}).get("title", {}).get("steps", [])
+        assert isinstance(steps, list) and len(steps) == 3, message
+        # Dependabot must update approved actions without changing the execution boundary.
+        for step, action in zip(steps[:2], ("actions/checkout", "actions/setup-python"), strict=True):
+            reference = step.get("uses", "")
+            assert isinstance(reference, str), message
+            version = re.fullmatch(rf"{re.escape(action)}@v([1-9]\d*)", reference)
+            assert version is not None and int(version[1]) >= 7, message
+            step["uses"] = f"{action}@v7"
+        assert normalized == POLICY_SNAPSHOTS["workflow"], message
 
-    def test_complete_workflow(self, workflow: dict[str, Any]) -> None:
-        """Measure all five activities and every execution setting."""
-        assert len(workflow["on"]["pull_request"]["types"]) == 5
-        self.assert_policy(workflow)
+    @pytest.mark.parametrize(
+        "references",
+        [None, ("v7", "v7"), ("v8", "v7"), ("v7", "v8"), ("v8", "v8"), ("v10", "v12")],
+        ids=["current", "current-majors", "checkout-update", "python-update", "both-updates", "later-updates"],
+    )
+    def test_complete_workflow(self, workflow: dict[str, Any], references: tuple[str, str] | None) -> None:
+        """Measure the boundary without blocking normal Actions dependency updates."""
+        candidate = deepcopy(workflow)
+        if references is not None:
+            for step, reference in zip(candidate["jobs"]["title"]["steps"][:2], references, strict=True):
+                step["uses"] = step["uses"].partition("@")[0] + "@" + reference
+        assert len(candidate["on"]["pull_request"]["types"]) == 5
+        self.assert_policy(candidate)
 
     @pytest.mark.parametrize(
         ("path", "value"),
@@ -187,8 +205,12 @@ class TestWorkflowPolicy:
             (("jobs", "title", "continue-on-error"), True),
             (("jobs", "title", "env"), {"GITHUB_EVENT_PATH": "${{ github.event.pull_request.title }}"}),
             (("jobs", "title", "steps", 0, "uses"), "actions/checkout@v6"),
+            (("jobs", "title", "steps", 0, "uses"), "actions/checkout@main"),
+            (("jobs", "title", "steps", 0, "uses"), "actions/third-party@v8"),
             (("jobs", "title", "steps", 0, "with", "persist-credentials"), True),
             (("jobs", "title", "steps", 1, "uses"), "actions/setup-python@v6"),
+            (("jobs", "title", "steps", 1, "uses"), "actions/setup-python@v07"),
+            (("jobs", "title", "steps", 1, "uses"), "actions/setup-python@v0"),
             (("jobs", "title", "steps", 1, "with", "python-version"), "3.12"),
             (("jobs", "title", "steps", 2, "run"), 'python -c "${{ github.event.pull_request.title }}"'),
             (("jobs", "title", "steps", 2, "run"), "python -m scripts.pr_title_guard || true"),

@@ -276,6 +276,9 @@ The reference provides the fallback.
 
 Grant only `contents: read`.
 Use a standard Linux runner, `actions/checkout@v7`, and `actions/setup-python@v7`.
+Accept newer major versions of these same actions in the policy tests.
+Keep every other workflow setting fixed.
+Prove that normal Actions updates pass and that downgrades and different action names fail.
 Set `persist-credentials: false`, Python `3.13`, and `timeout-minutes: 5`.
 Run exactly `python -m scripts.pr_title_guard`.
 Use the runner-provided `GITHUB_EVENT_PATH`.
@@ -329,7 +332,7 @@ Do not replace a missing capability with a passing skip.
 - [x] T030 Run targeted Black command V3 for `scripts/pr_title_guard/__init__.py`, `scripts/pr_title_guard/__main__.py`, and both owned test files. (delivered: The targeted check passes. The full check reports 1,879 unchanged files.)
 - [x] T031 Run targeted mypy command V4 for `scripts/pr_title_guard/__init__.py` and `scripts/pr_title_guard/__main__.py`. Verify that both files receive analysis. (delivered: Two source files pass.)
 - [x] T032 Run targeted Bandit command V5 for `scripts/pr_title_guard/__init__.py` and `scripts/pr_title_guard/__main__.py`. Require a nonzero measured source scope. (delivered: 87 source lines, zero findings, and zero skipped files.)
-- [x] T033 Run pytest and coverage command V6 for both owned tests and `tests/guardrails/test_ci_gate_triggers.py`. Require positive collection and no successful environmental skip. (delivered: 844 passed, zero skipped, and 96.67 percent package coverage.)
+- [x] T033 Run pytest and coverage command V6 for both owned tests and `tests/guardrails/test_ci_gate_triggers.py`. Require positive collection and no successful environmental skip. (delivered: 853 passed, zero skipped, and 96.67 percent package coverage.)
 - [x] T034 Run test quality command V7 on the new tests in `tests/unit/scripts/` and `tests/guardrails/`. Keep `.github/test-quality-config.toml` and `.github/test-quality-baseline.json` unchanged. (delivered: 42 files checked, including both new modules, with zero new findings.)
 
 ### Exact local commands

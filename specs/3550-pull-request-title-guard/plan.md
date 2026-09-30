@@ -141,6 +141,12 @@ It identified eight operations in the original event-reader block.
 The reader now separates file reading and JSON decoding through a file context.
 All four methods meet the structural limits.
 
+An offline probe also found that an exact workflow snapshot blocked normal Actions updates.
+The policy tests now accept newer major versions of the two approved actions.
+They still reject downgrades, different action names, and changes to the execution boundary.
+The combined local run reports 853 passing tests and no skips.
+The repository test quality ratchet reports zero new findings.
+
 The analysis also identified existing constitution conflicts with this task's bounded scope.
 The coordinator confirmed the scope after the analysis.
 Keep the documented location exceptions, concise intent comments, Conventional Commits, and metadata-only delivery.
