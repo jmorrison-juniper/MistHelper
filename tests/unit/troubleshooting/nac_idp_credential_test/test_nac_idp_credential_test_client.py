@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # WHY: keep annotation behavior the same as source modules.
 
+import logging  # WHY: failure-mode tests verify safe client warnings.
 from dataclasses import dataclass  # WHY: fake responses need a tiny response object.
 from typing import Any  # WHY: fake SDK functions accept dynamic session objects.
 
@@ -89,3 +90,45 @@ def test_nac_idp_credential_test_client_sends_request_body(monkeypatch: Any) -> 
         "password": "hidden-value",
     }
     assert result.status == "success"  # WHY: client must normalize the response.
+
+
+def test_nac_idp_credential_test_client_handles_http_4xx(monkeypatch: Any, caplog: Any) -> None:
+    """Return a safe failure result when the API rejects the request."""
+
+    def fake_validate(session: Any, org_id: str, body: dict[str, str]) -> FakeResponse:
+        """Return one client-side API failure response."""
+        return FakeResponse(status_code=400, data={"error": "Bad Request"})  # WHY: cover the HTTP 4xx response.
+
+    monkeypatch.setattr(client_module.mist_nac, "validateOrgIdpCredential", fake_validate)  # WHY: no network.
+    caplog.set_level(logging.WARNING)  # WHY: test quality gate requires a checked failure behavior.
+    test_client = NacIdpCredentialClient("session", "org-1")  # WHY: bind fake session and org.
+    provider = IdentityProviderChoice("idp-1", "Corp LDAP", "ldap")  # WHY: result needs provider context.
+    request = CredentialTestRequest("idp-1", "user@example.net", "hidden-value")  # WHY: representative request.
+
+    result = test_client.validate_credential(request, provider)  # WHY: exercise the HTTP 4xx path.
+
+    assert result.status == "failure"  # WHY: HTTP 4xx is a failed credential validation call.
+    assert result.reason == "Bad Request"  # WHY: operator needs the API reason.
+    assert "HTTP 400" in caplog.text  # WHY: client logs the transport failure without the password.
+    assert "hidden-value" not in caplog.text  # WHY: logs must not expose the password.
+
+
+def test_nac_idp_credential_test_client_handles_http_5xx(monkeypatch: Any, caplog: Any) -> None:
+    """Return a safe failure result when the API service fails."""
+
+    def fake_validate(session: Any, org_id: str, body: dict[str, str]) -> FakeResponse:
+        """Return one service-side API failure response."""
+        return FakeResponse(status_code=503, data={"message": "Service Unavailable"})  # WHY: cover HTTP 5xx behavior.
+
+    monkeypatch.setattr(client_module.mist_nac, "validateOrgIdpCredential", fake_validate)  # WHY: no network.
+    caplog.set_level(logging.WARNING)  # WHY: test quality gate requires a checked failure behavior.
+    test_client = NacIdpCredentialClient("session", "org-1")  # WHY: bind fake session and org.
+    provider = IdentityProviderChoice("idp-1", "Corp LDAP", "ldap")  # WHY: result needs provider context.
+    request = CredentialTestRequest("idp-1", "user@example.net", "hidden-value")  # WHY: representative request.
+
+    result = test_client.validate_credential(request, provider)  # WHY: exercise the HTTP 5xx path.
+
+    assert result.status == "failure"  # WHY: HTTP 5xx is a failed credential validation call.
+    assert result.reason == "Service Unavailable"  # WHY: operator needs the API reason.
+    assert "HTTP 503" in caplog.text  # WHY: client logs the transport failure without the password.
+    assert "hidden-value" not in caplog.text  # WHY: logs must not expose the password.

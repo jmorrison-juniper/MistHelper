@@ -18,6 +18,7 @@ from src.troubleshooting.nac_idp_credential_test.model import (
 logger = logging.getLogger(__name__)  # WHY: module logger lets operators filter this feature.
 
 HTTP_OK = 200  # WHY: mistapi returns 200 for a successful read or validation request.
+HTTP_ERROR_START = 400  # WHY: HTTP 4xx and 5xx responses need a safe operator warning.
 SSO_PAGE_LIMIT = 1000  # WHY: use the normal maximum page size for organization lists.
 SOURCE_NAC_SETTINGS = "mist_nac.idps"  # WHY: label the primary provider source.
 SOURCE_ORG_SSOS = "listOrgSsos"  # WHY: label the fallback provider source.
@@ -52,6 +53,8 @@ class NacIdpCredentialClient:
         )
         status_code = self._status_code(response)  # WHY: status drives failure normalization.
         payload = self._payload_mapping(response)  # WHY: result model only accepts mappings.
+        if status_code >= HTTP_ERROR_START:  # WHY: transport errors need evidence beyond the final verdict.
+            logger.warning("NAC identity provider credential validation returned HTTP %s", status_code)  # WHY: safe.
         logger.debug("NAC identity provider credential validation returned HTTP %s", status_code)  # WHY: summary.
         return CredentialTestResult.from_response(provider, request.username, status_code, payload)  # WHY: safe result.
 
