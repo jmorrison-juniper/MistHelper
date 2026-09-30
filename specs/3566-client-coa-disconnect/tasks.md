@@ -36,14 +36,14 @@
 
 ## Phase 4: Package Implementation
 
-- [ ] T018 Create `src/device/client_session_control/__init__.py`.
-- [ ] T019 Create `src/device/client_session_control/models.py` with dataclasses and pure functions for target normalization, confirmation, request records, and log rows.
-- [ ] T020 Create `src/device/client_session_control/actions.py` with the action catalog and Mist API client class.
-- [ ] T021 Create `src/device/client_session_control/audit.py` with the CSV audit writer.
-- [ ] T022 Create `src/device/client_session_control/handler.py` with class `ClientSessionControl` and static `run()`.
-- [ ] T023 Ensure each executable line of new code has an inline comment.
-- [ ] T024 Ensure the package logs before and after prompts, validation, API calls, dry runs, and CSV writes.
-- [ ] T025 Commit the package implementation after the focused tests pass.
+- [X] T018 Create `src/device/client_session_control/__init__.py`.
+- [X] T019 Create `src/device/client_session_control/models.py` with dataclasses and pure functions for target normalization, confirmation, request records, and log rows.
+- [X] T020 Create `src/device/client_session_control/actions.py` with the action catalog and Mist API client class.
+- [X] T021 Create `src/device/client_session_control/audit.py` with the CSV audit writer.
+- [X] T022 Create `src/device/client_session_control/handler.py` with class `ClientSessionControl` and static `run()`.
+- [X] T023 Ensure each executable line of new code has an inline comment.
+- [X] T024 Ensure the package logs before and after prompts, validation, API calls, dry runs, and CSV writes.
+- [X] T025 Commit the package implementation after the focused tests pass.
 
 ## Phase 5: Release Note
 

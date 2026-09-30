@@ -4,7 +4,8 @@ from pathlib import Path  # WHY: read the owned wiring manifest without importin
 
 
 def test_wiring_manifest_defers_registration_and_marks_destructive() -> None:  # WHY: wiring stays out of this PR.
-    wiring_path = Path("specs/3566-client-coa-disconnect/wiring.md")  # WHY: owned manifest records the contract.
+    repo_root = Path(__file__).parents[4]  # WHY: guards can change cwd during test collection.
+    wiring_path = repo_root / "specs/3566-client-coa-disconnect/wiring.md"  # WHY: owned manifest records contract.
     wiring_text = wiring_path.read_text(encoding="utf-8")  # WHY: inspect the exact handoff text.
     assert "Menu number: 286" in wiring_text  # WHY: menu number must be explicit.
     assert "Category: `destructive`" in wiring_text  # WHY: automated safe tests must exclude it.
