@@ -47,8 +47,8 @@
 
 ## Phase 5: Release Note
 
-- [ ] T026 Add `changelog.d/issue-3566-client-coa-disconnect.md` with one `### Added` heading and one bullet that names issue #3566.
-- [ ] T027 Commit the release note.
+- [X] T026 Add `changelog.d/issue-3566-client-coa-disconnect.md` with one `### Added` heading and one bullet that names issue #3566.
+- [X] T027 Commit the release note.
 
 ## Phase 6: Quality Gates
 
