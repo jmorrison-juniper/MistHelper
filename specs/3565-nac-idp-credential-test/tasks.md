@@ -23,10 +23,10 @@
 
 **Purpose**: Build the pure model and client contracts that every story uses.
 
-- [ ] T005 [P] Create `src/troubleshooting/nac_idp_credential_test/model.py` with dataclasses for provider choices, requests, results, and export rows.
-- [ ] T006 [P] Create `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_model.py` for request body shape, response normalization, and password-free export rows.
-- [ ] T007 Create `src/troubleshooting/nac_idp_credential_test/client.py` with SDK-backed `getOrgSettings`, `listOrgSsos`, and `validateOrgIdpCredential` calls.
-- [ ] T008 Create `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_client.py` with fixtures that prove provider source selection and request dispatch without network access.
+- [x] T005 [P] Create `src/troubleshooting/nac_idp_credential_test/model.py` with dataclasses for provider choices, requests, results, and export rows. (delivered: src/troubleshooting/nac_idp_credential_test/model.py)
+- [x] T006 [P] Create `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_model.py` for request body shape, response normalization, and password-free export rows. (delivered: tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_model.py)
+- [x] T007 Create `src/troubleshooting/nac_idp_credential_test/client.py` with SDK-backed `getOrgSettings`, `listOrgSsos`, and `validateOrgIdpCredential` calls. (delivered: src/troubleshooting/nac_idp_credential_test/client.py)
+- [x] T008 Create `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_client.py` with fixtures that prove provider source selection and request dispatch without network access. (delivered: tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_client.py)
 
 **Checkpoint**: Foundation ready. User story work can start.
 
@@ -132,4 +132,5 @@
 2. Add failure-path tests and clean failure output.
 3. Run all owned quality gates.
 4. Update tasks as delivered with evidence notes.
+
 
