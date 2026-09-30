@@ -26,6 +26,9 @@ Add menu `290` to the `interactive` category row. Do not mark menu `290` as dest
 ## Import line for MistHelper.py
 `from src.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.`
 
+## Changelog ownership
+The fleet contract allows this package pull request to add `changelog.d/issue-3570-spectrum-rfdiag.md`. The integration pull request must not duplicate that fragment.
+
 ## Deferred integration files
 The integration pull request owns these files and generated references:
 

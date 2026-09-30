@@ -25,27 +25,27 @@
 
 ### Client group
 
-- [ ] T001 Create RF diagnostics package directory and public export scaffold in src/troubleshooting/rf_diagnostics/__init__.py
-- [ ] T002 [P] Create RF diagnostics client module scaffold in src/troubleshooting/rf_diagnostics/client.py
+- [x] T001 Create RF diagnostics package directory and public export scaffold in src/troubleshooting/rf_diagnostics/__init__.py
+- [x] T002 [P] Create RF diagnostics client module scaffold in src/troubleshooting/rf_diagnostics/client.py
 
 ### Model group
 
-- [ ] T003 [P] Create RF diagnostics model module scaffold in src/troubleshooting/rf_diagnostics/models.py
+- [x] T003 [P] Create RF diagnostics model module scaffold in src/troubleshooting/rf_diagnostics/models.py
 
 ### Operation group
 
-- [ ] T004 [P] Create operation module scaffold in src/troubleshooting/rf_diagnostics/operation.py
-- [ ] T005 [P] Create spectrum module scaffold in src/troubleshooting/rf_diagnostics/spectrum.py
-- [ ] T006 [P] Create recording module scaffold in src/troubleshooting/rf_diagnostics/recording.py
+- [x] T004 [P] Create operation module scaffold in src/troubleshooting/rf_diagnostics/operation.py
+- [x] T005 [P] Create spectrum module scaffold in src/troubleshooting/rf_diagnostics/spectrum.py
+- [x] T006 [P] Create recording module scaffold in src/troubleshooting/rf_diagnostics/recording.py
 
 ### Release note group
 
-- [ ] T007 [P] Create issue 3570 release note fragment in changelog.d/issue-3570-spectrum-rfdiag.md
+- [x] T007 [P] Create issue 3570 release note fragment in changelog.d/issue-3570-spectrum-rfdiag.md
 
 ### Validation group
 
-- [ ] T008 [P] Create RF diagnostics unit test package marker in tests/unit/troubleshooting/rf_diagnostics/__init__.py
-- [ ] T009 [P] Update specs/3570-spectrum-rfdiag/wiring.md to state that MistHelper.py registration, operation_registry.py registration, endpoint_primary_key_strategies.py registration, README, generated menu reference, and copilot-instructions category updates are deferred to the integration pull request and documented in wiring.md
+- [x] T008 [P] Create RF diagnostics unit test package marker in tests/unit/troubleshooting/rf_diagnostics/__init__.py
+- [x] T009 [P] Update specs/3570-spectrum-rfdiag/wiring.md to state that MistHelper.py registration, operation_registry.py registration, endpoint_primary_key_strategies.py registration, README, generated menu reference, and copilot-instructions category updates are deferred to the integration pull request and documented in wiring.md
 
 ---
 
@@ -55,24 +55,24 @@
 
 ### Model group
 
-- [ ] T010 [P] Define RfDiagnosticRun, SpectrumAnalysisSession, RfDiagnosticRecording, RfDiagnosticFile, and status constants in src/troubleshooting/rf_diagnostics/models.py
-- [ ] T011 [P] Implement safe site, AP, client MAC, and timestamp file-name token helpers in src/troubleshooting/rf_diagnostics/file_naming.py
+- [x] T010 [P] Define RfDiagnosticRun, SpectrumAnalysisSession, RfDiagnosticRecording, RfDiagnosticFile, and status constants in src/troubleshooting/rf_diagnostics/models.py
+- [x] T011 [P] Implement safe site, AP, client MAC, and timestamp file-name token helpers in src/troubleshooting/rf_diagnostics/file_naming.py
 
 ### Client group
 
-- [ ] T012 Implement RfDiagnosticsClient constructor with injected Mist session, SDK callables, and logging in src/troubleshooting/rf_diagnostics/client.py
-- [ ] T013 Add spectrum start, spectrum state, recording start, recording stop, recording download, and recording get methods in src/troubleshooting/rf_diagnostics/client.py
+- [x] T012 Implement RfDiagnosticsClient constructor with injected Mist session, SDK callables, and logging in src/troubleshooting/rf_diagnostics/client.py
+- [x] T013 Add spectrum start, spectrum state, recording start, recording stop, recording download, and recording get methods in src/troubleshooting/rf_diagnostics/client.py
 
 ### Operation group
 
-- [ ] T014 [P] Implement audit CSV writer with one-row append behavior in src/troubleshooting/rf_diagnostics/audit.py
-- [ ] T015 Implement shared confirmation, cancellation, safe prompt, and ASCII output helpers in src/troubleshooting/rf_diagnostics/operation.py
+- [x] T014 [P] Implement audit CSV writer with one-row append behavior in src/troubleshooting/rf_diagnostics/audit.py
+- [x] T015 Implement shared confirmation, cancellation, safe prompt, and ASCII output helpers in src/troubleshooting/rf_diagnostics/operation.py
 
 ### Tests group
 
-- [ ] T016 [P] Add model and file-name helper tests in tests/unit/troubleshooting/rf_diagnostics/test_file_naming.py
-- [ ] T017 [P] Add RF diagnostics client request-shape tests in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
-- [ ] T018 [P] Add audit CSV writer tests in tests/unit/troubleshooting/rf_diagnostics/test_audit.py
+- [x] T016 [P] Add model and file-name helper tests in tests/unit/troubleshooting/rf_diagnostics/test_file_naming.py
+- [x] T017 [P] Add RF diagnostics client request-shape tests in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
+- [x] T018 [P] Add audit CSV writer tests in tests/unit/troubleshooting/rf_diagnostics/test_audit.py
 
 **Checkpoint**: Foundation is ready when the shared model, client, prompt, file-name, and audit tests fail for the missing behavior or pass after implementation.
 
@@ -86,17 +86,17 @@
 
 ### Tests group
 
-- [ ] T019 [P] [US1] Add spectrum success, decline, poll-running, poll-timeout, and failure tests in tests/unit/troubleshooting/rf_diagnostics/test_spectrum_flow.py
-- [ ] T020 [P] [US1] Add spectrum start body and body-free state call assertions in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
+- [x] T019 [P] [US1] Add spectrum success, decline, poll-running, poll-timeout, and failure tests in tests/unit/troubleshooting/rf_diagnostics/test_spectrum_flow.py
+- [x] T020 [P] [US1] Add spectrum start body and body-free state call assertions in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
 
 ### Operation group
 
-- [ ] T021 [US1] Implement SpectrumAnalysisRunner start, bounded polling, final result, timeout, and failure handling in src/troubleshooting/rf_diagnostics/spectrum.py
-- [ ] T022 [US1] Connect spectrum mode selection, site selection, AP selection, confirmation, runner call, output, and audit write in src/troubleshooting/rf_diagnostics/operation.py
+- [x] T021 [US1] Implement SpectrumAnalysisRunner start, bounded polling, final result, timeout, and failure handling in src/troubleshooting/rf_diagnostics/spectrum.py
+- [x] T022 [US1] Connect spectrum mode selection, site selection, AP selection, confirmation, runner call, output, and audit write in src/troubleshooting/rf_diagnostics/operation.py
 
 ### Validation group
 
-- [ ] T023 [US1] Run pytest for spectrum flow and client request tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_spectrum_flow.py tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py -q
+- [x] T023 [US1] Run pytest for spectrum flow and client request tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_spectrum_flow.py tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py -q
 
 **Checkpoint**: User Story 1 is complete when the spectrum path works without recording mode and writes one audit row per attempt.
 
@@ -110,17 +110,17 @@
 
 ### Tests group
 
-- [ ] T024 [P] [US2] Add recording success, decline, Ctrl+C stop, stop failure, download failure, and empty download tests in tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py
-- [ ] T025 [P] [US2] Add recording start, stop, download, and normalized MAC request assertions in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
+- [x] T024 [P] [US2] Add recording success, decline, Ctrl+C stop, stop failure, download failure, and empty download tests in tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py
+- [x] T025 [P] [US2] Add recording start, stop, download, and normalized MAC request assertions in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
 
 ### Operation group
 
-- [ ] T026 [US2] Implement RfDiagnosticRecordingRunner start, wait, interrupt stop, stop failure, download, and output handling in src/troubleshooting/rf_diagnostics/recording.py
-- [ ] T027 [US2] Connect recording mode selection, site selection, client MAC prompt, duration or operator wait, confirmation, runner call, output, and audit write in src/troubleshooting/rf_diagnostics/operation.py
+- [x] T026 [US2] Implement RfDiagnosticRecordingRunner start, wait, interrupt stop, stop failure, download, and output handling in src/troubleshooting/rf_diagnostics/recording.py
+- [x] T027 [US2] Connect recording mode selection, site selection, client MAC prompt, duration or operator wait, confirmation, runner call, output, and audit write in src/troubleshooting/rf_diagnostics/operation.py
 
 ### Validation group
 
-- [ ] T028 [US2] Run pytest for recording flow, file naming, and client request tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py tests/unit/troubleshooting/rf_diagnostics/test_file_naming.py tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py -q
+- [x] T028 [US2] Run pytest for recording flow, file naming, and client request tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py tests/unit/troubleshooting/rf_diagnostics/test_file_naming.py tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py -q
 
 **Checkpoint**: User Story 2 is complete when recording mode works without spectrum mode and handles normal waits, interrupts, and failed downloads safely.
 
@@ -134,17 +134,17 @@
 
 ### Tests group
 
-- [ ] T029 [P] [US3] Add cross-mode one-row-per-attempt tests in tests/unit/troubleshooting/rf_diagnostics/test_audit.py
-- [ ] T030 [P] [US3] Add operation-level audit row tests for cancelled and failed outcomes in tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py
+- [x] T029 [P] [US3] Add cross-mode one-row-per-attempt tests in tests/unit/troubleshooting/rf_diagnostics/test_audit.py
+- [x] T030 [P] [US3] Add operation-level audit row tests for cancelled and failed outcomes in tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py
 
 ### Operation group
 
-- [ ] T031 [US3] Enforce exactly one audit write for each final spectrum and recording outcome in src/troubleshooting/rf_diagnostics/operation.py
-- [ ] T032 [US3] Add audit failure handling that reports a failed run without printing secrets in src/troubleshooting/rf_diagnostics/audit.py
+- [x] T031 [US3] Enforce exactly one audit write for each final spectrum and recording outcome in src/troubleshooting/rf_diagnostics/operation.py
+- [x] T032 [US3] Add audit failure handling that reports a failed run without printing secrets in src/troubleshooting/rf_diagnostics/audit.py
 
 ### Validation group
 
-- [ ] T033 [US3] Run pytest for audit and operation flow tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_audit.py tests/unit/troubleshooting/rf_diagnostics/test_spectrum_flow.py tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py -q
+- [x] T033 [US3] Run pytest for audit and operation flow tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_audit.py tests/unit/troubleshooting/rf_diagnostics/test_spectrum_flow.py tests/unit/troubleshooting/rf_diagnostics/test_recording_flow.py -q
 
 **Checkpoint**: User Story 3 is complete when each tested outcome writes one audit row and no secret text appears in output or CSV rows.
 
@@ -158,13 +158,13 @@
 
 ### Tests group
 
-- [ ] T034 [P] [US4] Add strict no-extra-fields assertions for spectrum and recording request bodies in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
-- [ ] T035 [P] [US4] Add wiring manifest content test or review note in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
+- [x] T034 [P] [US4] Add strict no-extra-fields assertions for spectrum and recording request bodies in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
+- [x] T035 [P] [US4] Add wiring manifest content test or review note in tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py
 
 ### Validation group
 
-- [ ] T036 [US4] Verify specs/3570-spectrum-rfdiag/wiring.md lists deferred MistHelper.py registration, operation_registry.py registration, endpoint_primary_key_strategies.py registration, README, generated menu reference, and copilot-instructions category updates
-- [ ] T037 [US4] Run pytest for request-shape evidence with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py -q
+- [x] T036 [US4] Verify specs/3570-spectrum-rfdiag/wiring.md lists deferred MistHelper.py registration, operation_registry.py registration, endpoint_primary_key_strategies.py registration, README, generated menu reference, and copilot-instructions category updates
+- [x] T037 [US4] Run pytest for request-shape evidence with python -m pytest tests/unit/troubleshooting/rf_diagnostics/test_client_requests.py -q
 
 **Checkpoint**: User Story 4 is complete when request-shape tests and `wiring.md` make integration readiness clear.
 
@@ -176,17 +176,28 @@
 
 ### Release note group
 
-- [ ] T038 [P] Fill issue 3570 release note fragment with operator-facing summary and validation notes in changelog.d/issue-3570-spectrum-rfdiag.md
+- [x] T038 [P] Fill issue 3570 release note fragment with operator-facing summary and validation notes in changelog.d/issue-3570-spectrum-rfdiag.md
+
+
+### Analysis repair group
+
+- [x] T043 Record the fleet-contract exception for the required test package path in specs/3570-spectrum-rfdiag/plan.md
+- [x] T044 Define spectrum polling terminal states in specs/3570-spectrum-rfdiag/contracts/rf-diagnostics.md
+- [x] T045 Record prompt-count validation evidence for SC-006 in specs/3570-spectrum-rfdiag/tasks.md
+- [x] T046 Record operation and runner dependency-injection boundaries in specs/3570-spectrum-rfdiag/contracts/rf-diagnostics.md
+- [x] T047 Record changelog ownership in specs/3570-spectrum-rfdiag/wiring.md
+
+**Prompt-count validation evidence**: Spectrum mode uses four required prompts after menu 290: mode, site, AP, and confirmation. Band and duration have defaults. Recording mode uses five required prompts after menu 290: mode, site, client MAC, duration, and confirmation. The duration prompt has a default, but it remains visible so the operator can choose bounded or Ctrl+C stop behavior.
 
 ### Validation group
 
-- [ ] T039 Run full RF diagnostics unit tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics -q
-- [ ] T040 Run syntax validation for the integration-safe package with python -m py_compile src/troubleshooting/rf_diagnostics/*.py
-- [ ] T041 Review implementation against specs/3570-spectrum-rfdiag/quickstart.md and record validation evidence in the pull request notes
+- [x] T039 Run full RF diagnostics unit tests with python -m pytest tests/unit/troubleshooting/rf_diagnostics -q
+- [x] T040 Run syntax validation for the integration-safe package with python -m py_compile src/troubleshooting/rf_diagnostics/*.py
+- [x] T041 Review implementation against specs/3570-spectrum-rfdiag/quickstart.md and record validation evidence in the pull request notes
 
 ### Operation group
 
-- [ ] T042 Confirm src/troubleshooting/rf_diagnostics/operation.py does not edit MistHelper.py, operation_registry.py, endpoint_primary_key_strategies.py, README, generated menu reference, or copilot-instructions category files during the core package pull request
+- [x] T042 Confirm src/troubleshooting/rf_diagnostics/operation.py does not edit MistHelper.py, operation_registry.py, endpoint_primary_key_strategies.py, README, generated menu reference, or copilot-instructions category files during the core package pull request
 
 ---
 

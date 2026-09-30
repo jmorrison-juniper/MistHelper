@@ -7,7 +7,11 @@ from datetime import UTC, datetime  # WHY: make file names and audit times deter
 from typing import Any  # WHY: fake responses carry dynamic payloads.
 
 from src.troubleshooting.rf_diagnostics.file_naming import RfDiagnosticFileNamer  # WHY: inject temp download path.
-from src.troubleshooting.rf_diagnostics.models import STATUS_FAILED, STATUS_SUCCESS  # WHY: assert outcomes.
+from src.troubleshooting.rf_diagnostics.models import (  # WHY: assert typed outcomes and files.
+    STATUS_FAILED,
+    STATUS_SUCCESS,
+    RfDiagnosticFile,
+)
 from src.troubleshooting.rf_diagnostics.recording import RfDiagnosticRecordingRunner  # WHY: test target.
 
 
@@ -48,9 +52,10 @@ def test_recording_runner_stops_then_downloads_file(tmp_path) -> None:
     namer = RfDiagnosticFileNamer(tmp_path / "data" / "rfdiags")  # WHY: isolate download output.
     runner = RfDiagnosticRecordingRunner(client, namer=namer, wait_fn=lambda seconds: None, clock=_fixed_clock)
     recording, diagnostic_file, run = runner.run("site1", "aabbccddeeff", 30, "name1")  # WHY: happy path.
+    expected_path = namer.build_recording_path("site1", "aabbccddeeff", _fixed_clock())  # WHY: prove exact file.
     assert [call[0] for call in client.calls] == ["start", "stop", "download"]  # WHY: stop before download.
     assert recording.status == STATUS_SUCCESS  # WHY: recording result marks success.
-    assert diagnostic_file is not None  # WHY: success returns a file object.
+    assert diagnostic_file == RfDiagnosticFile(expected_path, 4)  # WHY: success returns the expected file object.
     assert diagnostic_file.path.read_bytes() == b"pcap"  # WHY: downloaded bytes reach disk.
     assert "site1" in diagnostic_file.path.name  # WHY: file name includes the site.
     assert "aabbccddeeff" in diagnostic_file.path.name  # WHY: file name includes the client MAC.
@@ -89,3 +94,17 @@ def _fixed_clock() -> datetime:
 def _raise_keyboard_interrupt(seconds: float) -> None:
     """Raise Ctrl+C from a fake wait function."""
     raise KeyboardInterrupt  # WHY: prove the runner stops in a finally block.
+
+
+def test_recording_runner_zero_duration_waits_cloud_maximum(tmp_path) -> None:
+    """Zero duration waits for the cloud maximum unless Ctrl+C interrupts it."""
+    waits: list[float] = []  # WHY: capture the local wait length without real sleeping.
+    client = FakeRecordingClient()  # WHY: fake remote calls.
+    namer = RfDiagnosticFileNamer(tmp_path / "data" / "rfdiags")  # WHY: isolate download output.
+    runner = RfDiagnosticRecordingRunner(client, namer=namer, wait_fn=waits.append, clock=_fixed_clock)
+    recording, diagnostic_file, run = runner.run("site1", "aabbccddeeff", 0, "name1")  # WHY: operator-stop mode.
+    expected_path = namer.build_recording_path("site1", "aabbccddeeff", _fixed_clock())  # WHY: prove exact file.
+    assert waits == [180.0]  # WHY: zero uses the OpenAPI maximum instead of an endless local wait.
+    assert recording.status == STATUS_SUCCESS  # WHY: bounded zero-duration mode can finish successfully.
+    assert diagnostic_file == RfDiagnosticFile(expected_path, 4)  # WHY: successful bounded mode downloads evidence.
+    assert run.status == STATUS_SUCCESS  # WHY: audit row marks success.

@@ -75,12 +75,9 @@ class RfDiagnosticRecordingRunner:
     def _wait_for_operator(self, duration: int) -> None:
         """Wait for a duration, or until the operator interrupts an open wait."""
         logger.info("Waiting for RF diagnostic recording duration=%s", duration)  # WHY: action log before wait.
-        if duration > 0:  # WHY: positive duration gives an automatic stop.
-            self._wait(float(duration))  # WHY: injected wait makes tests fast.
-            logger.debug("Finished timed RF diagnostic wait duration=%s", duration)  # WHY: result summary.
-            return  # WHY: stop happens in the caller finally block.
-        while True:  # WHY: zero duration means the operator stops with Ctrl+C.
-            self._wait(1.0)  # WHY: short sleep keeps the loop responsive to Ctrl+C.
+        wait_seconds = duration if duration > 0 else 180  # WHY: zero means Ctrl+C stop, bounded by cloud maximum.
+        self._wait(float(wait_seconds))  # WHY: injected wait makes tests fast and Ctrl+C can interrupt it.
+        logger.debug("Finished RF diagnostic wait duration=%s", wait_seconds)  # WHY: result summary.
 
     def _download(self, site_id: str, client_mac: str, rfdiag_id: str) -> RfDiagnosticFile:
         """Download and save one RF diagnostic recording."""

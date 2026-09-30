@@ -33,6 +33,7 @@ RfDiagnosticsOperation.run()
 - A failed stop produces a failed run and no success message.
 - Empty download bytes produce a failed run and no saved-path success message.
 - Secret values must not appear in output, logs, or audit rows.
+- Action logs must include stable fields in the message or arguments, such as mode, site, target, status, byte count, or attempt count.
 
 ## Spectrum start contract
 
@@ -73,6 +74,13 @@ RfDiagnosticsOperation.run()
 **Success response**: HTTP 200 with `response_running_spectrum_analysis` schema. Fields can include `band`, `device_id`, `duration`, `format`, and `started_time`.
 
 **SDK note**: The SDK lacks this function. Use `apisession.mist_get('/api/v1/sites/{site_id}/analyze_spectrum')` or an equivalent API-session method inside the RF diagnostics client.
+
+**Terminal states**:
+
+- `running`, `started`, `in_progress`, and `active` mean the scan is still running.
+- `failed`, `failure`, and `error` mean the scan finished with failure.
+- A payload with another status, a missing status, or a result object means the scan is final.
+- Poll exhaustion means timeout.
 
 **Unit test obligations**:
 

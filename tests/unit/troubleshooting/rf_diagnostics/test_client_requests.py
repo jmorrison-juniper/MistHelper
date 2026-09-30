@@ -118,7 +118,7 @@ def test_recording_body_clamps_duration_to_openapi_range() -> None:
     high = RfDiagnosticsClient.recording_body("name1", "aabbccddeeff", 999)  # WHY: operator input can exceed schema.
     low = RfDiagnosticsClient.recording_body("name1", "aabbccddeeff", 0)  # WHY: operator Ctrl+C mode sends zero.
     assert high["duration"] == 180  # WHY: OpenAPI maximum is 180 seconds.
-    assert low["duration"] == 1  # WHY: OpenAPI request still needs a positive duration.
+    assert low["duration"] == 180  # WHY: zero uses operator-stop mode bounded by cloud maximum.
 
 
 def test_recording_stop_download_and_list_use_expected_operations() -> None:

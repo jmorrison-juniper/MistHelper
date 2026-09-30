@@ -107,12 +107,12 @@ A maintainer can review tests and the wiring manifest before integration. The ev
 
 ### Functional Requirements
 
-- **FR-001**: The operation MUST present menu 290 as one RF diagnostics operation with spectrum and recording modes.
+- **FR-001**: The package MUST expose `RfDiagnosticsOperation.run()` for deferred menu 290 wiring with spectrum and recording modes.
 - **FR-002**: Spectrum mode MUST ask the operator for a site and an AP before it can start analysis.
 - **FR-003**: Recording mode MUST ask the operator for a site and client MAC before it can start recording.
 - **FR-004**: Before spectrum analysis starts, the operation MUST ask a `y` or `N` confirmation question and MUST treat Enter or any answer other than `y` as `N`.
 - **FR-005**: Before RF diagnostic recording starts, the operation MUST ask a `y` or `N` confirmation question and MUST treat Enter or any answer other than `y` as `N`.
-- **FR-006**: Spectrum mode MUST start analysis only after confirmation, poll the running state, and print the final result or a clear failure message.
+- **FR-006**: Spectrum mode MUST start analysis only after confirmation, poll until a non-running state or the poll limit, and print the final result or a clear failure message.
 - **FR-007**: Recording mode MUST start recording only after confirmation, wait for operator stop or a chosen duration, request stop, download the recording, and print the saved file path.
 - **FR-008**: Recording mode MUST request stop when Ctrl+C interrupts the wait after recording starts.
 - **FR-009**: Recording downloads MUST be saved under `data/rfdiags/`.
@@ -121,9 +121,9 @@ A maintainer can review tests and the wiring manifest before integration. The ev
 - **FR-012**: Each audit row MUST include the mode, site, selected AP or client MAC, start time, final status, and result reference when one exists.
 - **FR-013**: Request bodies for spectrum analysis, recording start, and recording stop MUST follow the OpenAPI schema for the matching Mist action.
 - **FR-014**: Unit tests MUST assert the shape of each request body used by spectrum analysis, recording start, and recording stop.
-- **FR-015**: A wiring manifest MUST exist at `specs/3570-spectrum-rfdiag/wiring.md` and MUST list deferred menu, registry, endpoint catalog, and changelog work.
+- **FR-015**: A wiring manifest MUST exist at `specs/3570-spectrum-rfdiag/wiring.md` and MUST list deferred menu, registry, endpoint catalog, and completed changelog work.
 - **FR-016**: A changelog fragment MUST exist before implementation is complete.
-- **FR-017**: The feature scope MUST stay bounded to package `src/troubleshooting/rf_diagnostics` and tests under `tests/unit/troubleshooting/rf_diagnostics`, except for deferred integration files listed in `wiring.md`.
+- **FR-017**: The feature scope MUST stay bounded to package `src/troubleshooting/rf_diagnostics`, tests under `tests/unit/troubleshooting/rf_diagnostics`, `specs/3570-spectrum-rfdiag`, and `changelog.d/issue-3570-spectrum-rfdiag.md`, except for deferred integration files listed in `wiring.md`.
 - **FR-018**: The operation MUST use safe prompts with clear cancellation behavior for all operator input.
 - **FR-019**: The operation MUST never print secrets, tokens, or raw credentials in run output, audit rows, or failure messages.
 
@@ -132,8 +132,8 @@ A maintainer can review tests and the wiring manifest before integration. The ev
 - In scope: RF diagnostic flow design for `src/troubleshooting/rf_diagnostics`.
 - In scope: Unit test design for `tests/unit/troubleshooting/rf_diagnostics`.
 - In scope: The `data/RfDiagnostics.csv` audit output and `data/rfdiags/` recording output behavior.
-- Deferred: Menu, operation registry, endpoint catalog, and changelog integration. The deferred work is listed in `wiring.md`.
-- Out of scope for this specification step: Edits to source files, tests, README, root feature state, and commits.
+- In scope by fleet contract exception: the release-note fragment at `changelog.d/issue-3570-spectrum-rfdiag.md`.
+- Deferred: Menu, operation registry, endpoint catalog, README, generated reference, and category table integration. The deferred work is listed in `wiring.md`.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -152,7 +152,7 @@ A maintainer can review tests and the wiring manifest before integration. The ev
 - **SC-003**: 100% of successful recording downloads are saved under `data/rfdiags/` with site, client MAC, and run time in the name.
 - **SC-004**: 100% of run attempts write exactly one row to `data/RfDiagnostics.csv`.
 - **SC-005**: Unit tests cover spectrum success, spectrum decline, recording success, recording decline, Ctrl+C stop, download naming, request body shape, and audit row output.
-- **SC-006**: An operator can complete the happy path for either mode with no more than five required prompts after choosing menu 290.
+- **SC-006**: Prompt-count review confirms that each happy path needs no more than five required prompts after choosing menu 290.
 - **SC-007**: A maintainer can identify all deferred integration files from `wiring.md` in less than two minutes.
 - **SC-008**: The operation gives a clear printed outcome for 100% of success, cancel, stop failure, poll failure, and download failure cases.
 

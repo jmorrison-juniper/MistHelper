@@ -75,7 +75,9 @@ class RfDiagnosticsOperation:
         """Prompt and run client RF diagnostic recording."""
         site_id = self._select_site()  # WHY: every Mist call needs a site.
         client_mac = self._ask_mac()  # WHY: request body requires a client MAC for type client.
-        duration = self._ask_int("Enter duration seconds, 0 for Ctrl+C stop [30]: ", 30, "rf_diagnostics.duration")
+        duration = self._ask_int(
+            "Enter duration seconds, 0 for Ctrl+C stop within 180 seconds [30]: ", 30, "rf_diagnostics.duration"
+        )
         if not self._confirm("Start RF diagnostic recording now? [y/N]: "):  # WHY: acceptance requires confirmation.
             self._write_cancel("recording", site_id, client_mac)  # WHY: cancelled attempt still gets one audit row.
             return  # WHY: no remote call after decline.
