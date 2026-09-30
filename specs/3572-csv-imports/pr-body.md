@@ -33,7 +33,9 @@ Menu wiring is deferred to the tier integration pull request. The integration pu
 - `black --check`: passed for `src/inventory/csv_imports` and `tests/unit/inventory/csv_imports`.
 - `mypy`: passed for `src/inventory/csv_imports`.
 - `pydocstyle`: passed for `src/inventory/csv_imports`.
-- `pytest`: passed, 8 tests.
+- `pytest`: passed, 15 tests.
+- `vulture`: passed for `src/inventory/csv_imports`.
+- `interrogate`: passed with 100 percent docstring coverage.
 
 ## Checklist
 
