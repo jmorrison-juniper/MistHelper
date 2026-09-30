@@ -49,7 +49,7 @@
 ## Phase 7: Validation
 
 - [x] T017 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, and `pytest` for the package and test directory. (delivered: local gate output)
-- [x] T018 Run `vulture` and `interrogate` once before the final commit. (delivered: local gate output)
+- [x] T018 Run `vulture`, `interrogate`, `complexity-gate`, and `test-quality-analyzer` before the final commit. (delivered: local gate output)
 - [x] T019 Run manual `speckit.analyze` consistency review and repair findings. (delivered: this task evidence update)
 
 ## Dependencies & Execution Order

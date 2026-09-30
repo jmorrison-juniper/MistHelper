@@ -23,7 +23,14 @@ class FakeResponse:
 def test_list_inventory_normalizes_rows(monkeypatch: Any) -> None:
     """Inventory reads return normalized devices."""
     response = FakeResponse([{"id": "one", "mac": "AA:BB", "type": "ap"}])  # WHY: fake first page.
-    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", lambda *args, **kwargs: response)  # WHY.
+
+    def fake_inventory(session: Any, org_id: str, limit: int) -> FakeResponse:
+        _ = session  # WHY: keep the fake signature aligned with the SDK call.
+        _ = org_id  # WHY: keep the fake signature aligned with the SDK call.
+        _ = limit  # WHY: keep the fake signature aligned with the SDK call.
+        return response  # WHY: return the controlled first page.
+
+    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", fake_inventory)  # WHY: no network call.
     monkeypatch.setattr(mistapi, "get_all", lambda response, mist_session: response.data)  # WHY: avoid paging.
     devices = DeviceReplaceClient(object(), "org-1").list_inventory()  # WHY: exercise client normalization.
     assert devices[0].mac == "aabb"  # WHY: MAC normalization is required for selectors and request body.
@@ -62,7 +69,14 @@ def test_get_old_configuration_reads_site_device(monkeypatch: Any) -> None:
 def test_list_inventory_raises_for_4xx_response(monkeypatch: Any) -> None:
     """Inventory reads fail clearly when Mist returns a 4xx status."""
     response = FakeResponse({"message": "forbidden"}, status_code=403)  # WHY: simulate a Mist privilege failure.
-    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", lambda *args, **kwargs: response)  # WHY.
+
+    def fake_inventory(session: Any, org_id: str, limit: int) -> FakeResponse:
+        _ = session  # WHY: keep the fake signature aligned with the SDK call.
+        _ = org_id  # WHY: keep the fake signature aligned with the SDK call.
+        _ = limit  # WHY: keep the fake signature aligned with the SDK call.
+        return response  # WHY: return the controlled failure response.
+
+    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", fake_inventory)  # WHY: no network call.
     client = DeviceReplaceClient(object(), "org-1")  # WHY: exercise the real client guard.
     with pytest.raises(RuntimeError, match="getOrgInventory returned HTTP 403: forbidden"):
         client.list_inventory()  # WHY: a failed inventory read must stop before paging.
