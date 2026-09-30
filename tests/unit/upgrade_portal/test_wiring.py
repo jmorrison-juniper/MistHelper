@@ -17,8 +17,10 @@ from collections.abc import Iterator  # The shape of the fixture that empties th
 from typing import Any  # The stand-ins hold free-form records.
 
 import pytest  # The test framework of the project.
+from flask import Flask, has_app_context  # The fallback test checks the stored-status context.
 
 from src.upgrade_portal.app import factory, wiring  # The units under test.
+from src.upgrade_portal.app.routes import capture as capture_routes  # The progress seam under test.
 from src.upgrade_portal.upgrade import driver, phase_gate  # The two seats of the shared heartbeat.
 
 SITE_ID = "site-a"  # One site name for every test of this module.
@@ -128,6 +130,12 @@ class StubRunner:
             job: The eleven field job that the collector reads.
         """
         self.jobs.append(dict(job))  # A copy, because the caller may edit its own record.
+        capture_routes.record_status(  # A normal runner must finish with verified evidence.
+            str(job["capture_id"]),
+            state=capture_routes.STATE_VERIFIED,
+            verified=True,
+            message="",
+        )
 
 
 class RefusingRunner:
@@ -339,11 +347,68 @@ def test_the_capture_bridge_calls_the_runner_on_this_thread() -> None:
         lock on each side of that call. A second thread would break both.
     """
     runner = StubRunner()  # Records the job that the bridge sends.
-    bridge = wiring.CaptureBridge(runner, {"org_id": ORG_ID, "site_id": SITE_ID})  # The shared job fields.
+    bridge = wiring.CaptureBridge(
+        runner,
+        {"org_id": ORG_ID, "site_id": SITE_ID, "tier": 2},
+    )  # The shared job fields.
     answer = bridge.start(driver.post_check_request(RUN_ID, 2))  # The second capture of the run.
     assert answer == wiring.build_capture_key(RUN_ID, 2)  # The one true form of the capture key.
     assert runner.jobs[0]["ordinal"] == 2  # The post-check is always the second capture.
     assert runner.jobs[0]["role"] == "post"  # The role that the comparison reads.
+
+
+def test_the_capture_bridge_opens_progress_before_the_runner() -> None:
+    """The runner must see a pending progress record before it starts."""
+    seen: list[str] = []  # The states that the runner reads.
+
+    def runner(job: dict[str, Any]) -> None:
+        seen.append(str((capture_routes.read_progress(str(job["capture_id"])) or {})["state"]))
+        capture_routes.record_status(str(job["capture_id"]), state=capture_routes.STATE_VERIFIED, verified=True)
+
+    bridge = wiring.CaptureBridge(
+        runner,
+        {"org_id": ORG_ID, "site_id": SITE_ID, "tier": 2},
+    )  # The shared job fields.
+    assert bridge.start(driver.post_check_request(RUN_ID, 2)) == wiring.build_capture_key(RUN_ID, 2)
+    assert seen == [capture_routes.STATE_PENDING]
+
+
+def test_the_capture_bridge_rejects_a_failed_final_status() -> None:
+    """A failed post-check must return no key to the driver."""
+
+    def runner(job: dict[str, Any]) -> None:
+        capture_routes.record_status(
+            str(job["capture_id"]),
+            state=capture_routes.STATE_FAILED,
+            verified=False,
+            message="The portal could not read the capture back.",
+        )
+
+    bridge = wiring.CaptureBridge(
+        runner,
+        {"org_id": ORG_ID, "site_id": SITE_ID, "tier": 2},
+    )  # The shared job fields.
+    assert bridge.start(driver.post_check_request(RUN_ID, 2)) is None
+
+
+def test_the_capture_bridge_accepts_verified_stored_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A trimmed progress record can verify through the stored capture."""
+    stored = {"state": capture_routes.STATE_VERIFIED, "verified": True, "message": ""}
+    monkeypatch.setattr(capture_routes, "read_progress", lambda capture_id: None)
+    monkeypatch.setattr(
+        capture_routes,
+        "stored_body",
+        lambda capture_id: dict(stored) if has_app_context() else None,
+    )
+
+    app = Flask("capture-bridge-stored-status")  # The stored reader needs Flask configuration.
+    runner = StubRunner()  # The runner writes verified progress before the trim.
+    bridge = wiring.CaptureBridge(
+        runner,
+        {"org_id": ORG_ID, "site_id": SITE_ID, "tier": 2},
+        app.app_context,
+    )  # The bridge can rebuild the stored-status context.
+    assert bridge.start(driver.post_check_request(RUN_ID, 2)) == wiring.build_capture_key(RUN_ID, 2)
 
 
 def test_the_capture_bridge_holds_a_fault_of_the_runner() -> None:
@@ -353,7 +418,10 @@ def test_the_capture_bridge_holds_a_fault_of_the_runner() -> None:
         The bridge runs on the driver thread. A fault that escaped would end the
         thread with no state change, so the run would look frozen forever.
     """
-    bridge = wiring.CaptureBridge(RefusingRunner(), {})  # The runner raises on every call.
+    bridge = wiring.CaptureBridge(
+        RefusingRunner(),
+        {"org_id": ORG_ID, "site_id": SITE_ID, "tier": 2},
+    )  # The runner raises on every call.
     assert bridge.start(driver.post_check_request(RUN_ID, 2)) is None  # The driver then fails the run.
 
 
