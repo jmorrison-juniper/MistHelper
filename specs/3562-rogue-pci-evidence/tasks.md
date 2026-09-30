@@ -46,7 +46,7 @@
 **Independent Test**: Use fixture settings with one `rogue.enabled` false site. Confirm CSV and summary counts.
 
 - [x] T016 [P] [US3] Add site settings and detection-off summary tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
-- [x] T017 [US3] Implement paced `getSiteSetting` reads in `src/reports/rogue_pci_evidence/client.py`.
+- [x] T017 [US3] Implement paced `getSiteSetting` reads and request cost evidence in `src/reports/rogue_pci_evidence/client.py`.
 - [x] T018 [US3] Implement site settings row mapping in `src/reports/rogue_pci_evidence/model.py`.
 
 ## Phase 6: Polish and Cross-Cutting
@@ -62,6 +62,7 @@
 - [ ] D002 Register menu 282 in `src/utils/operation_registry.py` during the integration pull request only.
 - [ ] D003 Add primary key strategies to `src/refactors/endpoint_primary_key_strategies.py` during the integration pull request only.
 - [ ] D004 Update generated menu references during the integration pull request only.
+- [ ] D005 Update README operation counts and menu documentation during the integration pull request only.
 
 ## Dependencies
 

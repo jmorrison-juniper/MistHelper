@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add menu 282 as a safe operation that writes a rogue wireless PCI evidence pack. The implementation uses a new package under `src/reports/rogue_pci_evidence/` with a Mist API client, pure model builders, and one operation entry point. Menu wiring and database key registration stay deferred to [wiring.md](./wiring.md).
+Add the package for menu 282 as a safe operation that writes a rogue wireless PCI evidence pack. This branch is a package-only precursor. The implementation uses a new package under `src/reports/rogue_pci_evidence/` with a Mist API client, pure model builders, and one operation entry point. Menu wiring, README updates, and database key registration stay deferred to [wiring.md](./wiring.md). The operation is not integration-complete until the integration pull request applies those deferred tasks.
 
 ## Technical Context
 
@@ -14,7 +14,7 @@ Add menu 282 as a safe operation that writes a rogue wireless PCI evidence pack.
 
 **Primary Dependencies**: `mistapi>=0.64.0,<0.65`, standard library `csv`, `dataclasses`, `datetime`, `logging`, `pathlib`, and existing MistHelper helpers.
 
-**Storage**: Local files under `data/` through `DataExporter.write_with_format_selection()` for CSV output. The Markdown summary uses `FilePathUtils.get_data_path()` and `pathlib.Path`.
+**Storage**: Local files under `data/` through `DataExporter.write_with_format_selection()` for CSV output. The Markdown summary uses `FilePathUtils.get_csv_path()` and `pathlib.Path`.
 
 **Testing**: `pytest` unit tests under `tests/unit/reports/rogue_pci_evidence/`. Tests use fixtures and no network.
 
@@ -22,7 +22,7 @@ Add menu 282 as a safe operation that writes a rogue wireless PCI evidence pack.
 
 **Project Type**: Menu-driven CLI operation with shared export backends.
 
-**Performance Goals**: The site setting pass makes one `getSiteSetting` request per site. The shared adaptive pacer runs before each site setting request.
+**Performance Goals**: The site setting pass makes one `getSiteSetting` request per site. The shared adaptive pacer runs before each site setting request. The client test and pull request evidence record this cost.
 
 **Constraints**: The operation is read-only against Mist. It does not prompt in `--test` mode. It must not log secrets. It must write all evidence under `data/`.
 
@@ -32,7 +32,7 @@ Add menu 282 as a safe operation that writes a rogue wireless PCI evidence pack.
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Five-Item Rule: Pass. The feature adds a compliant nested package with four module files.
+- Five-Item Rule: Pass for the new package. Existing parent directories `src/reports` and `tests/unit/reports` exceed five children before this branch. Incremental remediation is tracked for a later package taxonomy change, because this fleet contract owns only `src/reports/rogue_pci_evidence` and `tests/unit/reports/rogue_pci_evidence`.
 - Class-Based Architecture: Pass. `RoguePciEvidencePack`, `RoguePciEvidenceClient`, and model dataclasses own behavior.
 - Safety-First: Pass. The operation is read-only and uses the existing organization resolver.
 - Full Deployment Pipeline: Pass by fleet contract. Local gates run before each implementation commit.
@@ -88,10 +88,9 @@ See [data-model.md](./data-model.md), [contracts/evidence-pack.md](./contracts/e
 
 ## Post-Design Constitution Check
 
-- Five-Item Rule: Pass. The package has four files, and tests have four files.
+- Five-Item Rule: Pass for files added by this branch. The touched parent directory debt is recorded above and remains outside this scoped package-only precursor.
 - Class-Based Architecture: Pass. No standalone wrappers are planned.
 - Safety-First: Pass. The operation reads only Mist data and writes local files.
 - Observability and Logging: Pass. Each API call and file write has before and after logs.
 - Inline Comments: Pass. Tasks require inline comments for all new executable lines.
 - Action Logging: Pass. Tasks require logs around meaningful actions.
-

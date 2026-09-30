@@ -25,6 +25,27 @@ def test_honeypot_classification_names_impersonated_ssid():
     assert evidence["impersonated_org_ssid"] == "CorpWiFi"  # Verify the copied SSID is named.
 
 
+def test_approved_org_ap_bssid_prevents_honeypot_classification():
+    """A known org AP BSSID prevents a matching SSID from becoming a honeypot."""
+    row = {"site_id": "site-1", "ssid": "CorpWiFi", "bssid": "aa:bb:cc:dd:ee:ff"}  # Build an approved AP row.
+    evidence = RoguePciEvidenceModel.detection_row(row, _context())  # Classify the approved AP detection.
+    assert evidence["classification"] == CLASS_ROGUE  # Verify the honeypot rule excludes known org AP BSSIDs.
+    assert evidence["impersonated_org_ssid"] == ""  # Verify approved AP rows do not name an impersonated SSID.
+
+
+def test_honeypot_classification_takes_precedence_over_neighbor_signal():
+    """A copied org SSID with an unknown BSSID remains a honeypot when off LAN."""
+    row = {
+        "site_id": "site-1",
+        "ssid": "CorpWiFi",
+        "bssid": "11:22:33:44:55:66",
+        "seen_on_lan": False,
+    }  # Build a row with both honeypot and neighbor signals.
+    evidence = RoguePciEvidenceModel.detection_row(row, _context())  # Classify the precedence case.
+    assert evidence["classification"] == CLASS_HONEYPOT  # Verify honeypot takes precedence.
+    assert evidence["impersonated_org_ssid"] == "CorpWiFi"  # Verify the copied SSID remains named.
+
+
 def test_neighbor_classification_uses_off_lan_signal():
     """An off-LAN row is a neighbor when it is not a honeypot."""
     row = {
