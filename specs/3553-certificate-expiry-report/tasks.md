@@ -59,7 +59,7 @@ Do not edit these files on this feature branch. The integration pull request wil
 - [ ] T007 Define certificate band constants, supported scope constants, and output column order in `src\reports\certificate_expiry\model.py`.
 - [ ] T008 Define `CertificateSource`, `CertificateRecord`, and `CertificateReport` dataclasses in `src\reports\certificate_expiry\model.py`.
 - [ ] T009 Implement `CertificateExpiryRecord.column_names()` and row serialization in `src\reports\certificate_expiry\model.py`.
-- [ ] T010 Implement source mapping for device stats, organization settings, organization certificates, SSO, NAC portals, PSK portals, and SCEP client certificates in `src\reports\certificate_expiry\model.py`.
+- [ ] T010 Implement source mapping for device stats, organization settings, organization certificates, SSO, PSK portals, and CRL metadata notes in `src\reports\certificate_expiry\model.py`.
 - [ ] T011 Implement `CertificateExpiryClient` with constructor dependencies for the Mist API session and organization identifier in `src\reports\certificate_expiry\client.py`.
 - [ ] T012 Implement client source-read methods for each operation in `src\reports\certificate_expiry\client.py`.
 - [ ] T013 Implement client pagination support for endpoints that expose `limit` and `page` parameters in `src\reports\certificate_expiry\client.py`.
@@ -102,16 +102,16 @@ Do not edit these files on this feature branch. The integration pull request wil
 
 - [ ] T022 [P] [US2] Add band boundary tests for `expired`, `0-30`, `31-90`, and `more than 90` in `tests\unit\reports\certificate_expiry\test_model.py`.
 - [ ] T023 [P] [US2] Add epoch `cert_expiry` normalization tests for device rows in `tests\unit\reports\certificate_expiry\test_model.py`.
-- [ ] T024 [P] [US2] Add date text `expire_time` normalization tests for SCEP client certificate rows in `tests\unit\reports\certificate_expiry\test_model.py`.
+- [ ] T024 [P] [US2] Add pending certificate expiry normalization tests for organization certificate rows in `tests\unit\reports\certificate_expiry\test_model.py`.
 - [ ] T025 [P] [US2] Add source coverage tests for all supported scope values in `tests\unit\reports\certificate_expiry\test_client.py`.
 
 ### Implementation for User Story 2
 
 - [ ] T026 [US2] Implement UTC date normalization, day calculation, and band selection in `src\reports\certificate_expiry\model.py`.
 - [ ] T027 [US2] Implement device epoch normalization for `listOrgDevicesStats` rows in `src\reports\certificate_expiry\model.py`.
-- [ ] T028 [US2] Implement date text normalization for `expire_time` rows in `src\reports\certificate_expiry\model.py`.
+- [ ] T028 [US2] Implement pending certificate expiry normalization for organization certificate rows in `src\reports\certificate_expiry\model.py`.
 - [ ] T029 [US2] Implement source-to-scope normalization for device, organization, NAC, SSO, PSK portal, and CA certificate sources in `src\reports\certificate_expiry\model.py`.
-- [ ] T030 [US2] Implement client reads for `listOrgDevicesStats`, `getOrgSettings`, `listOrgCertificates`, `listOrgSsos`, `listOrgNacPortals`, `listOrgPskPortals`, and `listOrgIssuedClientCertificates` in `src\reports\certificate_expiry\client.py`.
+- [ ] T030 [US2] Implement client reads for `listOrgDevicesStats`, `getOrgSettings`, `listOrgCertificates`, `listOrgSsos`, `listOrgPskPortals`, `getOrgCrlFile`, and `getOrgNacCrl` in `src\reports\certificate_expiry\client.py`.
 
 **Checkpoint**: User Story 2 is complete when every supported scope has a normalized fixture row and expected band.
 
