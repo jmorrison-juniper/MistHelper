@@ -12,7 +12,6 @@ Why:
 from __future__ import annotations
 
 import re
-import time
 from collections.abc import Iterator, Mapping
 from copy import deepcopy
 from dataclasses import asdict, dataclass
@@ -444,7 +443,7 @@ def save_plan(harness: ControlsHarness, extra: Mapping[str, str] | None = None) 
 
 
 def save_scheduled_plan(harness: ControlsHarness) -> tuple[str, str]:
-    """Save one plan that starts in two hours and reboots one hour after the save."""
+    """Save one plan that starts in two hours and reboots one hour after the start."""
     start = utc_field(timedelta(hours=2))  # A start inside the window of the site lock.
     return save_plan(harness, {"start_time": start, "reboot_at": "1h"}), start  # The identity and the start.
 
@@ -854,7 +853,9 @@ def test_the_confirmation_page_names_the_start_time_and_offers_the_move(harness:
     """The confirmation page shows the start time and a form that moves it."""
     operation_id, start = save_scheduled_plan(harness)  # A plan that starts in two hours.
     page = harness.client.get(CONFIRM_PAGE).get_data(as_text=True)  # The confirmation page.
+    reboot_text = datetime.fromtimestamp(epoch_of(start) + 3600, UTC).strftime("%Y-%m-%d %H:%M UTC")  # Moment.
     assert start_line(start) in page  # The page names the start time.
+    assert f'<p data-testid="org-upgrade-reboot-moment"><strong>The reboot moment:</strong> {reboot_text}</p>' in page
     assert f'action="/api/org-upgrades/{operation_id}/reschedule"' in page  # The form moves this plan.
     assert f'value="{start}"' in page  # The field shows the saved start time.
 
@@ -863,15 +864,13 @@ def test_the_move_changes_every_child_job_and_the_saved_options(harness: Control
     """One move changes the start of every child job, the reboot moment, and the saved options."""
     operation_id, _ = save_scheduled_plan(harness)  # A plan that starts in two hours.
     moved = utc_field(timedelta(hours=3))  # The new start time.
-    before = int(time.time())  # The clock before the move.
     answer = post_json(harness, reschedule_path(operation_id), {"start_time": moved})  # The operator moves it.
-    after = int(time.time())  # The clock after the move.
     stored = harness.store.records[operation_id]  # The durable plan after the move.
     page = harness.client.get(CONFIRM_PAGE).get_data(as_text=True)  # The confirmation page after the move.
     reboots = switch_reboots(stored)  # The reboot moment of each switch child job.
     assert answer.status_code == 200 and answer.get_json() == {"next": CONFIRM_PAGE}, answer.get_json()
     assert {body["start_time"] for body in child_bodies(stored)} == {epoch_of(moved)}  # Every child job moves.
-    assert reboots and all(before + 3600 <= reboot <= after + 3600 for reboot in reboots)  # One hour from now.
+    assert reboots and set(reboots) == {epoch_of(moved) + 3600}  # The delay follows the moved start.
     assert stored["plan_options"]["start_time"] == epoch_of(moved)  # The stored choices stay in step.
     assert stored["rescheduled_by"] == identity.email_digest(OPERATOR_EMAIL)  # The digest, never the address.
     assert stored["state"] == "planned"  # The move writes no firmware.
