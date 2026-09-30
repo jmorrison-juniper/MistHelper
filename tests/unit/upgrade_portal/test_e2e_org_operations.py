@@ -175,9 +175,16 @@ class StandInRoute:
         self.steps.append(("fallback", None))  # The tap left the request alone.
 
 
-def _status_answer(operation_id: str, state: str, cancel_allowed: object) -> StandInAnswer:
+def _status_answer(
+    operation_id: str, state: str, cancel_allowed: object, phase_active: object = False
+) -> StandInAnswer:
     """Return one 200 answer of the status route."""
-    body = {"upgrade_id": operation_id, "status": state, "cancel_allowed": cancel_allowed}  # The fields of the route.
+    body = {  # The teardown reads the child state and the phase-watch state.
+        "upgrade_id": operation_id,  # The operation that the scripted answer describes.
+        "status": state,  # The aggregate child state for each failure message.
+        "cancel_allowed": cancel_allowed,  # True while a child job can accept a cancel.
+        "phase_active": phase_active,  # True while the phase watch or the post-check stage runs.
+    }
     return StandInAnswer.of(200, body)  # The owner of the operation gets 200.
 
 
@@ -502,6 +509,24 @@ class TestTheOperationRelease:
         expected = [("get", STATUS_PATH), ("post", CANCEL_PATH), ("get", STATUS_PATH), ("get", STATUS_PATH)]
         assert context.request.paths() == expected  # The read, the cancel, and two reads.
         assert context.pauses == [0.5]  # One pause between two reads.
+
+    def test_a_final_child_state_waits_for_the_phase_watch_and_lock_release(self) -> None:
+        """Issue #3333: the teardown waits until the post-check stage releases the site locks."""
+        watching = _status_answer(OPERATION_ID, "cancelled", False, True)  # The child ended, but the watch runs.
+        reads = [_live(), watching, _ended()]  # The cancel ends the child before the phase watch.
+        release, context = _release({("get", STATUS_PATH): reads, ("post", CANCEL_PATH): [_ended()]})
+        assert release.end_operations([OPERATION_ID]) == 1  # The live child needed one cancel.
+        expected = [("get", STATUS_PATH), ("post", CANCEL_PATH), ("get", STATUS_PATH), ("get", STATUS_PATH)]
+        assert context.request.paths() == expected  # The teardown waits for one watch read after the child ends.
+        assert context.pauses == [0.5]  # The active phase watch causes one bounded wait.
+
+    def test_an_active_phase_watch_gets_no_cancel_but_waits_for_release(self) -> None:
+        """A teardown that starts after child settlement waits without sending a refused cancel."""
+        watching = _status_answer(OPERATION_ID, "cancelled", False, True)  # Only the phase watch remains active.
+        release, context = _release({("get", STATUS_PATH): [watching, _ended()]})
+        assert release.end_operations([OPERATION_ID]) == 0  # A final child job accepts no cancel.
+        assert context.request.paths() == [("get", STATUS_PATH), ("get", STATUS_PATH)]  # Wait for lock release.
+        assert context.pauses == []  # The first watch read after entry is already final.
 
     def test_a_409_after_the_operation_ended_is_a_race(self) -> None:
         """The operation ended between the read and the cancel, so the teardown passes (FR-005)."""
