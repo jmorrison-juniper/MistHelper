@@ -3,7 +3,7 @@
 **Issue**: #3555
 **Branch**: `feat/3555-psk-hygiene-report`
 **Spec Directory**: `specs/3555-psk-hygiene-report/`
-**Status**: Specify complete
+**Status**: Implementation validated
 
 ## 1. Issue Claim
 
@@ -76,3 +76,14 @@
 - Reviewer can compare console counts to CSV findings.
 - Reviewer can inspect logs and output files for secret absence.
 - Reviewer can confirm this manifest and the release note fragment exist before release.
+
+## 12. Local Validation Evidence
+
+- `python -m py_compile` passed for all new PSK hygiene source and test Python files.
+- `python -m ruff check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
+- `python -m black --check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
+- `python -m mypy src\reports\psk_hygiene --config-file pyproject.toml` passed.
+- `python -m pydocstyle src\reports\psk_hygiene` passed.
+- `python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120` passed with 23 tests.
+- The validation proves passphrase and old passphrase values stay out of rows, logs, and console output.
+- Menu wiring stays deferred to the integration pull request.
