@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Draft
+**Status**: Implementation-ready
 
 **Input**: User description: "menu 274 PSK hygiene report. Menu 44 exports pre-shared keys, but no operation scores them. An expired key, a multi-use key with no usage cap, a rotation that still holds the old passphrase, and a key bound to an SSID that no WLAN carries are each a finding that an operator must compute by hand. PskHygiene.csv: one row per PSK with name, SSID, role, VLAN, usage, max usage, expire time, days remaining, rotation pending, WLAN match, and a findings column. A console summary counts expired keys, keys that expire in 30 days, uncapped multi-use keys, pending rotations, and orphan SSIDs."
 
@@ -22,7 +22,7 @@ A NOC operator runs menu 274 in test mode and receives a PSK hygiene report with
 
 1. **Given** test mode is active, **When** the operator runs menu 274, **Then** the operation completes without interactive input.
 2. **Given** PSK data exists, **When** the operation finishes, **Then** `data/PskHygiene.csv` contains one row for each PSK.
-3. **Given** a PSK row is written, **When** the operator opens the report, **Then** the row includes name, SSID, role, VLAN, usage, max usage, expire time, days remaining, rotation pending, WLAN match, and findings.
+3. **Given** a PSK row is written, **When** the operator opens the report, **Then** the row includes name, SSID, role, VLAN, usage, max usage, expire time, days remaining, rotation pending, old passphrase presence, WLAN match, and findings.
 
 ---
 
@@ -91,7 +91,7 @@ A reviewer checks that the feature has the required planning and release artifac
 - **FR-002**: The operation MUST run with no prompt when `org_id` or `ORG_ID` is already configured.
 - **FR-003**: The operation MUST write `PskHygiene.csv` under `data/`.
 - **FR-004**: The CSV MUST contain one row per PSK reviewed.
-- **FR-005**: Each CSV row MUST include name, SSID, role, VLAN, usage, max usage, expire time, days remaining, rotation pending, WLAN match, and findings.
+- **FR-005**: Each CSV row MUST include name, SSID, role, VLAN, usage, max usage, expire time, days remaining, rotation pending, old passphrase presence, WLAN match, and findings.
 - **FR-006**: The report MUST NOT include `passphrase` values in any output file.
 - **FR-007**: The report MUST NOT include `old_passphrase` values in any output file.
 - **FR-008**: Log lines and console output MUST NOT include `passphrase` or `old_passphrase` values.
@@ -124,7 +124,7 @@ A reviewer checks that the feature has the required planning and release artifac
 - **SC-002**: For a controlled test set, 100% of PSKs receive the expected finding labels.
 - **SC-003**: The console summary counts match the CSV findings counts exactly for all finding categories.
 - **SC-004**: No passphrase or old passphrase value appears in logs, console output, or `PskHygiene.csv` during validation.
-- **SC-005**: A reviewer can identify expired, soon-to-expire, uncapped multi-use, pending rotation, and orphan SSID PSKs from the CSV in less than 2 minutes.
+- **SC-005**: Feature tests verify stable CSV column order and stable finding labels for each risky PSK category.
 - **SC-006**: The feature has 100% of required traceability artifacts before planning moves to implementation.
 
 ## Assumptions

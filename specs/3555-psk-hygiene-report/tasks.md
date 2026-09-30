@@ -45,7 +45,7 @@ These edits are not implementation edits for this feature branch. The integratio
 
 - [X] T005 [P] Add failing model tests for sanitized PSK input in tests/unit/reports/psk_hygiene/test_model.py
 - [X] T006 [P] Add failing client tests for paginated PSK, WLAN, and template fetches in tests/unit/reports/psk_hygiene/test_client.py
-- [X] T007 Implement dataclasses, SSID normalization, and secret stripping in src/reports/psk_hygiene/model.py
+- [X] T007 Implement dataclasses, `PskHygieneScorer`, SSID normalization, and secret stripping in src/reports/psk_hygiene/model.py
 - [X] T008 Implement expire-time parsing and days remaining calculation in src/reports/psk_hygiene/model.py
 - [X] T009 Implement read-only mistapi client pagination in src/reports/psk_hygiene/client.py
 - [X] T010 Verify no model import references mistapi, DataExporter, ConfigUtils, or SourceDependencyResolver in src/reports/psk_hygiene/model.py
@@ -63,8 +63,9 @@ These edits are not implementation edits for this feature branch. The integratio
 ### Tests for User Story 1
 
 - [X] T011 [P] [US1] Add no-prompt operation test in tests/unit/reports/psk_hygiene/test_operation.py
-- [X] T012 [P] [US1] Add export contract test for required PskHygiene columns in tests/unit/reports/psk_hygiene/test_operation.py
+- [X] T012 [P] [US1] Add export contract test for required PskHygiene columns and column order in tests/unit/reports/psk_hygiene/test_operation.py
 - [X] T013 [P] [US1] Add output-row secret redaction test for passphrase and old_passphrase in tests/unit/reports/psk_hygiene/test_model.py
+- [X] T013A [P] [US1] Add missing organization fail-closed test in tests/unit/reports/psk_hygiene/test_operation.py
 
 ### Implementation for User Story 1
 
@@ -91,6 +92,7 @@ These edits are not implementation edits for this feature branch. The integratio
 - [X] T021 [P] [US2] Add orphan_ssid finding test in tests/unit/reports/psk_hygiene/test_model.py
 - [X] T022 [P] [US2] Add template WLAN matching test in tests/unit/reports/psk_hygiene/test_model.py
 - [X] T023 [P] [US2] Add log and console secret redaction test in tests/unit/reports/psk_hygiene/test_operation.py
+- [X] T023A [P] [US2] Add unavailable WLAN warning test in tests/unit/reports/psk_hygiene/test_operation.py
 
 ### Implementation for User Story 2
 
@@ -121,7 +123,7 @@ These edits are not implementation edits for this feature branch. The integratio
 - [X] T032 [US3] Implement HygieneSummary aggregation in src/reports/psk_hygiene/model.py
 - [X] T033 [US3] Print sanitized summary counts in src/reports/psk_hygiene/operation.py
 - [X] T034 [US3] Log sanitized summary counts only in src/reports/psk_hygiene/operation.py
-- [X] T035 [US3] State that site-level WLANs are outside scope in src/reports/psk_hygiene/operation.py
+- [X] T035 [US3] State and test that site-level WLANs are outside scope in src/reports/psk_hygiene/operation.py
 
 **Commit checkpoint**: Commit Phase 5 after the P3 summary tests pass.
 

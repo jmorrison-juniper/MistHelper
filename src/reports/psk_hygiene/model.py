@@ -42,7 +42,7 @@ class PskInput:
         macs = tuple(str(mac) for mac in record.get("macs", []) if _has_value(mac))  # Normalize MAC list values.
         return cls(  # Return only fields that the scoring model can safely use.
             name=_text(record.get("name")),  # Use an empty name when Mist omits it.
-            ssid=normalize_ssid(record.get("ssid")),  # Trim SSID text for matching.
+            ssid=PskHygieneScorer.normalize_ssid(record.get("ssid")),  # Trim SSID text for matching.
             role=_text(record.get("role")),  # Use an empty role when Mist omits it.
             vlan=record.get("vlan_id", record.get("vlan")),  # Prefer the Mist PSK vlan_id field when present.
             usage=_optional_int(record.get("usage")),  # Normalize empty usage to None.
@@ -137,60 +137,66 @@ class HygieneSummary:
         ]
 
 
-def normalize_ssid(value: Any) -> str:
-    """Return trimmed SSID text."""
-    return "" if value is None else str(value).strip()  # Normalize absent SSIDs to a matchable empty string.
+class PskHygieneScorer:
+    """Own PSK hygiene scoring behavior for the model layer."""
 
+    @staticmethod
+    def normalize_ssid(value: Any) -> str:
+        """Return trimmed SSID text."""
+        return "" if value is None else str(value).strip()  # Normalize absent SSIDs to a matchable empty string.
 
-def psk_inputs_from_records(records: list[dict[str, Any]]) -> list[PskInput]:
-    """Return sanitized PSK inputs from Mist records."""
-    return [PskInput.from_record(record) for record in records]  # Strip secrets before scoring begins.
+    @staticmethod
+    def psk_inputs_from_records(records: list[dict[str, Any]]) -> list[PskInput]:
+        """Return sanitized PSK inputs from Mist records."""
+        return [PskInput.from_record(record) for record in records]  # Strip secrets before scoring begins.
 
+    @staticmethod
+    def wlan_references_from_records(
+        wlans: list[dict[str, Any]], templates: list[dict[str, Any]]
+    ) -> list[WlanReference]:
+        """Build organization WLAN references from WLAN and template records."""
+        org_references = _org_wlan_references(wlans)  # Convert organization WLAN rows into match sources.
+        template_references = _template_wlan_references(templates)  # Convert template WLAN rows into match sources.
+        return org_references + template_references  # Preserve source order for deterministic diagnostics.
 
-def wlan_references_from_records(wlans: list[dict[str, Any]], templates: list[dict[str, Any]]) -> list[WlanReference]:
-    """Build organization WLAN references from WLAN and template records."""
-    org_references = _org_wlan_references(wlans)  # Convert organization WLAN rows into match sources.
-    template_references = _template_wlan_references(templates)  # Convert template WLAN rows into match sources.
-    return org_references + template_references  # Preserve source order for deterministic diagnostics.
+    @staticmethod
+    def days_remaining(expire_time: str | None, now: datetime | None = None) -> int | None:
+        """Return whole days remaining until the expire time."""
+        expire_at = PskHygieneScorer.parse_expire_time(expire_time)  # Parse the visible Mist value.
+        if expire_at is None:  # Blank or malformed values cannot produce a safe count.
+            return None  # Use a blank output value for unknown remaining days.
+        current_time = now or datetime.now(UTC)  # Use injected time for tests or current UTC time for runtime.
+        current_time = _ensure_utc(current_time)  # Compare aware datetimes consistently.
+        total_seconds = (expire_at - current_time).total_seconds()  # Convert the interval into whole-day math.
+        return int(total_seconds // 86400)  # Use whole days so a same-day future expiry returns zero.
 
+    @staticmethod
+    def parse_expire_time(expire_time: str | None) -> datetime | None:
+        """Parse a Mist expire time into UTC."""
+        if not expire_time:  # Empty values mean the PSK does not expire.
+            return None  # Keep non-expiring keys out of time-based findings.
+        candidate = expire_time.strip().replace("Z", "+00:00")  # Accept common UTC suffix values from APIs.
+        try:  # Keep malformed API values from stopping a safe report.
+            parsed_time = datetime.fromisoformat(candidate)  # Parse ISO date or date-time values.
+        except ValueError:  # Treat unexpected formats as unknown rather than risky.
+            return None  # Keep unknown dates as blank days remaining.
+        return _ensure_utc(parsed_time)  # Normalize naive or offset-aware values to UTC.
 
-def days_remaining(expire_time: str | None, now: datetime | None = None) -> int | None:
-    """Return whole days remaining until the expire time."""
-    expire_at = parse_expire_time(expire_time)  # Parse the visible Mist value into a comparable time.
-    if expire_at is None:  # Blank or malformed values cannot produce a safe count.
-        return None  # Use a blank output value for unknown remaining days.
-    current_time = now or datetime.now(UTC)  # Use injected time for tests or current UTC time for runtime.
-    current_time = _ensure_utc(current_time)  # Compare aware datetimes consistently.
-    total_seconds = (expire_at - current_time).total_seconds()  # Convert the interval into whole-day math.
-    return int(total_seconds // 86400)  # Use whole days so a same-day future expiry returns zero.
-
-
-def parse_expire_time(expire_time: str | None) -> datetime | None:
-    """Parse a Mist expire time into UTC."""
-    if not expire_time:  # Empty values mean the PSK does not expire.
-        return None  # Keep non-expiring keys out of time-based findings.
-    candidate = expire_time.strip().replace("Z", "+00:00")  # Accept common UTC suffix values from APIs.
-    try:  # Keep malformed API values from stopping a safe report.
-        parsed_time = datetime.fromisoformat(candidate)  # Parse ISO date or date-time values.
-    except ValueError:  # Treat unexpected formats as unknown rather than risky.
-        return None  # Keep unknown dates as blank days remaining.
-    return _ensure_utc(parsed_time)  # Normalize naive or offset-aware values to UTC.
-
-
-def build_hygiene_rows(
-    psks: list[PskInput], wlan_references: list[WlanReference] | None, now: datetime | None = None
-) -> list[PskHygieneRow]:
-    """Build safe report rows from sanitized PSKs."""
-    wlan_match_set = _wlan_match_set(wlan_references)  # Precompute SSID matches for linear scoring.
-    wlan_known = wlan_references is not None  # Track whether orphan SSID scoring is possible.
-    return [_build_hygiene_row(psk, wlan_match_set, wlan_known, now) for psk in psks]  # Score each PSK once.
+    @staticmethod
+    def build_hygiene_rows(
+        psks: list[PskInput], wlan_references: list[WlanReference] | None, now: datetime | None = None
+    ) -> list[PskHygieneRow]:
+        """Build safe report rows from sanitized PSKs."""
+        wlan_match_set = _wlan_match_set(wlan_references)  # Precompute SSID matches for linear scoring.
+        wlan_known = wlan_references is not None  # Track whether orphan SSID scoring is possible.
+        return [_build_hygiene_row(psk, wlan_match_set, wlan_known, now) for psk in psks]  # Score each PSK once.
 
 
 def _build_hygiene_row(
     psk: PskInput, wlan_match_set: set[str], wlan_known: bool, now: datetime | None
 ) -> PskHygieneRow:
     """Build one safe report row."""
-    remaining_days = days_remaining(psk.expire_time, now)  # Calculate the time finding input once.
+    remaining_days = PskHygieneScorer.days_remaining(psk.expire_time, now)  # Calculate the time input once.
     wlan_match = _wlan_match(psk.ssid, wlan_match_set, wlan_known)  # Calculate WLAN match state once.
     findings = _finding_labels(psk, remaining_days, wlan_match)  # Build stable labels without secrets.
     return PskHygieneRow(  # Return only report-safe fields.
@@ -246,7 +252,7 @@ def _org_wlan_references(wlans: list[dict[str, Any]]) -> list[WlanReference]:
     return [  # Build one reference per WLAN that has a usable SSID.
         WlanReference(ssid=ssid, source="org_wlan", source_name=_text(wlan.get("name")))
         for wlan in wlans
-        if (ssid := normalize_ssid(wlan.get("ssid")))
+        if (ssid := PskHygieneScorer.normalize_ssid(wlan.get("ssid")))
     ]
 
 
@@ -264,7 +270,7 @@ def _references_for_template(template: dict[str, Any]) -> list[WlanReference]:
     return [  # Build references only for WLAN definitions that expose an SSID.
         WlanReference(ssid=ssid, source="template", source_name=template_name)
         for wlan in _template_wlan_records(template)
-        if (ssid := normalize_ssid(wlan.get("ssid")))
+        if (ssid := PskHygieneScorer.normalize_ssid(wlan.get("ssid")))
     ]
 
 

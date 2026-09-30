@@ -7,7 +7,7 @@
 ## Required behavior
 
 1. Resolve the API session through `SourceDependencyResolver.apisession`.
-2. Resolve the organization ID through `ConfigUtils.get_cached_or_prompted_org_id`.
+2. Resolve the organization ID without a prompt from the cached runtime context or `org_id` or `ORG_ID`.
 3. Do not add a new prompt inside `run()`.
 4. Fetch PSKs, organization WLANs, and organization templates through the client module.
 5. Convert raw records into sanitized model entities.
@@ -32,6 +32,7 @@ The client module owns:
 The model module owns:
 
 - Dataclasses.
+- The `PskHygieneScorer` class.
 - SSID normalization.
 - Expire-time parsing.
 - Finding evaluation.
@@ -49,6 +50,7 @@ Unit tests must:
 - Verify summary counts.
 - Verify secret stripping.
 - Verify no prompt happens in `run()`.
+- Verify the missing organization ID path fails closed without a prompt.
 
 ## Secret contract
 

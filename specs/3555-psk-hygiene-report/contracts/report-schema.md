@@ -13,7 +13,7 @@ The operation must export through `DataExporter.write_with_format_selection(data
 | `name` | Yes | Must not contain passphrase data. |
 | `ssid` | Yes | Normalized from PSK data. |
 | `role` | Yes | Preserved from PSK data. |
-| `vlan` | Yes | Preserved from PSK data. |
+| `vlan` | Yes | Preserved from PSK data, or blank when absent. |
 | `usage` | Yes | Blank when unavailable. |
 | `max_usage` | Yes | Blank when unavailable. |
 | `expire_time` | Yes | Original expire time or blank. |

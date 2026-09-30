@@ -1,6 +1,6 @@
 # Implementation Plan: PSK Hygiene Report
 
-**Branch**: `3555-psk-hygiene-report` | **Date**: 2026-09-29 | **Spec**: [spec.md](./spec.md)
+**Branch**: `feat/3555-psk-hygiene-report` | **Date**: 2026-09-29 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/3555-psk-hygiene-report/spec.md`
 
@@ -8,7 +8,7 @@
 
 ## Summary
 
-Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` without prompts. Implement the feature later as `PskHygieneReport.run()` in `src/reports/psk_hygiene/`, with separate client, model, and operation modules. The client reads organization PSKs, organization WLANs, and organization templates through `mistapi`. The model scores each PSK with pure functions and dataclasses. The operation resolves the Mist session and organization ID, calls the client and model, logs only summary counts, and exports through `DataExporter.write_with_format_selection`.
+Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` without prompts. The feature is implemented as `PskHygieneReport.run()` in `src/reports/psk_hygiene/`, with separate client, model, and operation modules. The client reads organization PSKs, organization WLANs, and organization templates through `mistapi`. The model scores each PSK through `PskHygieneScorer` and dataclasses. The operation resolves the Mist session and organization ID, calls the client and model, logs only summary counts, and exports through `DataExporter.write_with_format_selection`.
 
 ## Technical Context
 
@@ -26,9 +26,9 @@ Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` 
 
 **Performance Goals**: Process one organization-wide PSK set in memory. Complete the model step in linear time relative to PSK and WLAN record count.
 
-**Constraints**: `run()` must not prompt. The operation must be safe for `--test`. Secrets must never reach logs, console output, or report rows. The report must record only `old_passphrase_present`.
+**Constraints**: `run()` must not prompt. If no organization ID is configured, the operation fails closed and logs a clear message. The operation must be safe for `--test`. Secrets must never reach logs, console output, or report rows. The report must record only `old_passphrase_present`.
 
-**Scale/Scope**: One new safe menu operation, one new report package, one unit test directory, and generated menu documentation during implementation.
+**Scale/Scope**: One new safe menu operation, one new report package, and one unit test directory. Generated menu documentation is deferred to the integration pull request.
 
 ## Constitution Check
 
@@ -78,8 +78,10 @@ tests/
 └── unit/
     └── reports/
         └── psk_hygiene/
+            ├── test_client.py
             ├── test_model.py
-            └── test_operation.py
+            ├── test_operation.py
+            └── test_traceability.py
 
 changelog.d/
 └── issue-3555-psk-hygiene-report.md

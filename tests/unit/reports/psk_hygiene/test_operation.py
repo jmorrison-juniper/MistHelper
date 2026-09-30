@@ -51,6 +51,23 @@ class _FakeResolver:
     DataExporter = _FakeDataExporter  # Provide the exporter seam.
 
 
+class _NoOrgConfigUtils:
+    """Resolve no organization ID without prompting."""
+
+    @staticmethod
+    def get_cached_org_id() -> None:
+        """Return no organization ID."""
+        return None  # Force the report to use the fail-closed path.
+
+
+class _NoOrgResolver:
+    """Provide dependencies with no configured organization ID."""
+
+    apisession = object()  # Provide a fake authenticated session.
+    ConfigUtils = _NoOrgConfigUtils  # Provide a no-org resolver seam.
+    DataExporter = _FakeDataExporter  # Provide the exporter seam.
+
+
 class _FakeClient:
     """Provide PSK hygiene inputs without network access."""
 
@@ -193,3 +210,13 @@ def test_unavailable_wlan_scope_summary_states_unknown_orphan_findings() -> None
     PskHygieneReport.OUTPUT = output_lines.append  # Capture the summary.
     PskHygieneReport.run()  # Run the no-argument menu handler.
     assert "Organization WLAN data was unavailable" in "\n".join(output_lines)  # Explain unknown orphan findings.
+
+
+def test_missing_org_id_fails_closed_without_prompt(monkeypatch: Any) -> None:
+    """Missing organization ID must fail without a prompt or export."""
+    monkeypatch.delenv("org_id", raising=False)  # Remove lowercase environment fallback.
+    monkeypatch.delenv("ORG_ID", raising=False)  # Remove uppercase environment fallback.
+    PskHygieneReport.DEPENDENCY_RESOLVER = _NoOrgResolver  # Use the no-org dependency seam.
+    result = PskHygieneReport.run()  # Run the no-argument handler.
+    assert result is False  # The operation must fail closed.
+    assert _FakeDataExporter.rows == []  # The operation must not export without an organization.

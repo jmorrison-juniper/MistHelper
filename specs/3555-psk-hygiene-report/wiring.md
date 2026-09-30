@@ -39,5 +39,5 @@ Add menu `274` to the `safe` row. The operation is read-only and not destructive
 - `python -m black --check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
 - `python -m mypy src\reports\psk_hygiene --config-file pyproject.toml` passed.
 - `python -m pydocstyle src\reports\psk_hygiene` passed.
-- `python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120` passed with 25 tests.
+- `python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120` passed with 26 tests.
 - Menu wiring stays deferred to the integration pull request.

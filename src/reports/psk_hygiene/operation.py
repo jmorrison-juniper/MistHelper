@@ -14,9 +14,7 @@ from src.reports.psk_hygiene.model import (
     UNKNOWN_WLAN_SCOPE_MESSAGE,
     HygieneSummary,
     PskHygieneRow,
-    build_hygiene_rows,
-    psk_inputs_from_records,
-    wlan_references_from_records,
+    PskHygieneScorer,
 )
 from src.utils.console import echo
 
@@ -85,9 +83,11 @@ class PskHygieneReport:
             -1 if raw_templates is None else len(raw_templates),
         )  # Log only safe counts.
         logger.info("Scoring sanitized PSK hygiene rows")  # Log before model transformations.
-        psks = psk_inputs_from_records(raw_psks)  # Strip secrets before scoring.
-        wlan_references = None if raw_wlans is None else wlan_references_from_records(raw_wlans, raw_templates or [])
-        hygiene_rows = build_hygiene_rows(psks, wlan_references)  # Score each sanitized PSK.
+        psks = PskHygieneScorer.psk_inputs_from_records(raw_psks)  # Strip secrets before scoring.
+        wlan_references = (
+            None if raw_wlans is None else PskHygieneScorer.wlan_references_from_records(raw_wlans, raw_templates or [])
+        )  # Build references only when WLAN scope is known.
+        hygiene_rows = PskHygieneScorer.build_hygiene_rows(psks, wlan_references)  # Score each sanitized PSK.
         output_rows = [row.as_output_row() for row in hygiene_rows]  # Convert rows to exporter dictionaries.
         wlan_scope = UNKNOWN_WLAN_SCOPE_MESSAGE if raw_wlans is None else SITE_WLAN_SCOPE_MESSAGE  # Explain scope.
         summary = HygieneSummary.from_rows(hygiene_rows, wlan_scope=wlan_scope)  # Build summary counts.

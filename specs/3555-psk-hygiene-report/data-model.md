@@ -9,7 +9,7 @@ Represents one sanitized PSK record from Mist.
 | `name` | `str` | Use an empty string when absent. |
 | `ssid` | `str` | Trim leading and trailing spaces before matching. |
 | `role` | `str` | Use an empty string when absent. |
-| `vlan` | `str | int | None` | Preserve the visible value. |
+| `vlan` | `str | int | None` | Preserve the visible value. Use a blank output cell when absent. |
 | `usage` | `int | None` | Use `None` when Mist does not provide usage. |
 | `max_usage` | `int | None` | Use `None` when absent or empty. |
 | `expire_time` | `str | None` | Preserve the original value for output. |
@@ -48,7 +48,7 @@ Represents one output row for `PskHygiene.csv`.
 | `name` | `str` | PSK name. |
 | `ssid` | `str` | Normalized SSID. |
 | `role` | `str` | Role value from the PSK. |
-| `vlan` | `str` | VLAN value from the PSK. |
+| `vlan` | `str` | VLAN value from the PSK, or blank when absent. |
 | `usage` | `int | str` | Usage value or blank. |
 | `max_usage` | `int | str` | Maximum usage value or blank. |
 | `expire_time` | `str` | Original expire time or blank. |

@@ -30,9 +30,9 @@ def _base_record(**overrides: object) -> dict[str, object]:
 
 def _row_for(record: dict[str, object], wlans: list[dict[str, object]] | None = None) -> model.PskHygieneRow:
     """Return the first hygiene row for one fake PSK."""
-    psks = model.psk_inputs_from_records([record])  # Sanitize the fake PSK input.
-    refs = None if wlans is None else model.wlan_references_from_records(wlans, [])  # Build known WLAN refs when given.
-    return model.build_hygiene_rows(psks, refs, now=_now())[0]  # Score the single PSK with stable time.
+    psks = model.PskHygieneScorer.psk_inputs_from_records([record])  # Sanitize the fake PSK input.
+    refs = None if wlans is None else model.PskHygieneScorer.wlan_references_from_records(wlans, [])
+    return model.PskHygieneScorer.build_hygiene_rows(psks, refs, now=_now())[0]  # Score the single PSK.
 
 
 def test_psk_input_strips_secret_values() -> None:
@@ -88,11 +88,11 @@ def test_orphan_ssid_finding() -> None:
 
 def test_template_wlan_matching() -> None:
     """Template WLANs participate in SSID matching."""
-    psks = model.psk_inputs_from_records([_base_record(ssid="TemplateSSID")])  # Build one template-scoped PSK.
-    refs = model.wlan_references_from_records(
+    psks = model.PskHygieneScorer.psk_inputs_from_records([_base_record(ssid="TemplateSSID")])
+    refs = model.PskHygieneScorer.wlan_references_from_records(
         [], [{"name": "Campus", "wlans": [{"ssid": "TemplateSSID"}]}]
     )  # Build refs.
-    row = model.build_hygiene_rows(psks, refs, now=_now())[0]  # Score with template references.
+    row = model.PskHygieneScorer.build_hygiene_rows(psks, refs, now=_now())[0]  # Score with template references.
     assert row.wlan_match is True  # The template SSID should count as an organization-scope match.
     assert row.findings == ""  # The row should have no orphan finding.
 
