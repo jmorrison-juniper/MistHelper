@@ -33,9 +33,14 @@ Menu wiring is deferred to the tier integration pull request. The integration pu
 - `black --check`: passed for `src/inventory/csv_imports` and `tests/unit/inventory/csv_imports`.
 - `mypy`: passed for `src/inventory/csv_imports`.
 - `pydocstyle`: passed for `src/inventory/csv_imports`.
-- `pytest`: passed, 15 tests.
+- `pytest`: passed, 17 tests.
 - `vulture`: passed for `src/inventory/csv_imports`.
 - `interrogate`: passed with 100 percent docstring coverage.
+- `radon` plus `complexity-gate`: passed with limit 10.
+- `test-quality-analyzer`: passed with zero new findings.
+- `SDK compatibility`: passed with no new `*args` or `**kwargs` Mist SDK calls.
+- `output scan`: passed with no new test data directory literal.
+- `bandit`: passed for `src/inventory/csv_imports`.
 
 ## Checklist
 

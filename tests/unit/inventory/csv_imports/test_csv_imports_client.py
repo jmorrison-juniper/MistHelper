@@ -7,7 +7,10 @@ from typing import Any  # WHY: response and session doubles are dynamic.
 
 import pytest  # WHY: parameterize one contract test per supported import type.
 
-from src.inventory.csv_imports.client import CsvImportClient  # WHY: test the request dispatch layer.
+from src.inventory.csv_imports.client import (  # WHY: test the request dispatch layer and status summaries.
+    CsvImportClient,
+    CsvImportResponseSummary,
+)
 from src.inventory.csv_imports.model import CsvImportCatalog  # WHY: use production import definitions.
 
 
@@ -15,6 +18,14 @@ class ResponseDouble:
     """Small SDK response double with a status code."""
 
     status_code = 200  # WHY: response summary can read this safe status value.
+
+
+class StatusResponseDouble:
+    """Small SDK response double with a configurable status code."""
+
+    def __init__(self, status_code: int) -> None:
+        """Store the HTTP status code for summary tests."""
+        self.status_code = status_code  # WHY: tests need explicit 4xx and 5xx statuses.
 
 
 @pytest.mark.parametrize("definition", CsvImportCatalog.DEFINITIONS)  # WHY: report one contract per import type.
@@ -40,3 +51,17 @@ def test_csv_imports_client_sends_multipart_shape_per_type(definition: Any) -> N
     assert calls_seen[0][0] == definition.operation_id  # WHY: dispatch must match the selected operation.
     assert {call[2] for call in calls_seen} == {"scope-id"}  # WHY: scope id passes through unchanged.
     assert {call[3] for call in calls_seen} == {str(file_path)}  # WHY: SDK receives a string file path.
+
+
+def test_csv_imports_client_summarizes_4xx_response_status() -> None:
+    """A client-side HTTP failure is preserved as a safe status summary."""
+    response = StatusResponseDouble(400)  # WHY: use a 4xx response without a live API call.
+    summary = CsvImportResponseSummary.summarize(response)  # WHY: operation logs this sanitized summary.
+    assert summary == "request_sent_status_400"  # WHY: preserve the 4xx status without response row data.
+
+
+def test_csv_imports_client_summarizes_5xx_response_status() -> None:
+    """A server-side HTTP failure is preserved as a safe status summary."""
+    response = StatusResponseDouble(500)  # WHY: use a 5xx response without a live API call.
+    summary = CsvImportResponseSummary.summarize(response)  # WHY: operation logs this sanitized summary.
+    assert summary == "request_sent_status_500"  # WHY: preserve the 5xx status without response row data.
