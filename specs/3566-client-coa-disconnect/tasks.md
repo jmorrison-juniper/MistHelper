@@ -26,13 +26,13 @@
 
 ## Phase 3: Test Scaffolding
 
-- [ ] T011 Create `tests/unit/device/client_session_control/__init__.py`.
-- [ ] T012 Create `tests/unit/device/client_session_control/test_client_session_control_confirmation.py` for exact confirmation tests.
-- [ ] T013 Create `tests/unit/device/client_session_control/test_client_session_control_dry_run.py` for dry run tests.
-- [ ] T014 Create `tests/unit/device/client_session_control/test_client_session_control_log.py` for CSV audit tests.
-- [ ] T015 Create `tests/unit/device/client_session_control/test_client_session_control_normalization.py` for colon, hyphen, dotted, bare, and invalid MAC tests.
-- [ ] T016 Create `tests/unit/device/client_session_control/test_client_session_control_wiring.py` for destructive registration and deferred wiring proof.
-- [ ] T017 Commit the failing test scaffold after confirming it fails for missing implementation.
+- [X] T011 Create `tests/unit/device/client_session_control/__init__.py`.
+- [X] T012 Create `tests/unit/device/client_session_control/test_client_session_control_confirmation.py` for exact confirmation tests.
+- [X] T013 Create `tests/unit/device/client_session_control/test_client_session_control_dry_run.py` for dry run tests.
+- [X] T014 Create `tests/unit/device/client_session_control/test_client_session_control_log.py` for CSV audit tests.
+- [X] T015 Create `tests/unit/device/client_session_control/test_client_session_control_normalization.py` for colon, hyphen, dotted, bare, and invalid MAC tests.
+- [X] T016 Create `tests/unit/device/client_session_control/test_client_session_control_wiring.py` for destructive registration and deferred wiring proof.
+- [X] T017 Commit the failing test scaffold after confirming it fails for missing implementation.
 
 ## Phase 4: Package Implementation
 
