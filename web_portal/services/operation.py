@@ -43,9 +43,9 @@ CATEGORY_RANGES = [
     (209, 234, "Site Operations"),
     (235, 247, "Counts & Summaries"),
     (248, 268, "Endpoint Explorer"),
-    (271, 276, "Hygiene Reports"),  # Issue #3616 groups Tier 1 read-only hygiene reports.
     (269, 269, "Network Security Scans"),
     (270, 270, "Marvis Actions"),  # Issue #3299: the Marvis Actions export and bulk resolve.
+    (271, 276, "Hygiene Reports"),  # Issue #3616 groups Tier 1 read-only hygiene reports.
 ]
 
 # Menu numbers whose range gives the wrong category name. Issue #3153.
