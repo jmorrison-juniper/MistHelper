@@ -66,11 +66,11 @@
 
 **Purpose**: Prove the implementation and repair findings.
 
-- [x] T020 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, and targeted `pytest` for this package and test directory.
+- [x] T020 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, targeted `pytest`, `radon` with `complexity-gate`, and `test-quality-analyzer` for this package and test directory.
 - [x] T021 Run `vulture` and `interrogate` for `src/troubleshooting/sms_provider_test`.
 - [x] T022 Run `speckit.analyze` and repair each finding.
-- [ ] T023 Push the implementation milestone.
-- [ ] T024 Open a draft pull request with `Closes #3564`.
+- [x] T023 Push the implementation milestone.
+- [x] T024 Open a draft pull request with `Closes #3564`.
 
 ---
 

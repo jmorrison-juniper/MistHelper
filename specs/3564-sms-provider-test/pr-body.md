@@ -36,7 +36,7 @@ Menu registration is deferred to the tier integration pull request. The exact in
 ## Security
 
 - [x] No hardcoded secrets, tokens, or passwords.
-- [ ] Bandit passes with no new findings. Not run because this branch changes only one scoped package and tests.
+- [x] Bandit passes with no new findings. Targeted `bandit` passed for the package.
 - [ ] pip-audit clean. Not run because no dependency changed.
 - [x] Sensitive data handled through hidden prompts and never persisted.
 
@@ -67,6 +67,11 @@ Menu registration is deferred to the tier integration pull request. The exact in
 - `black --check src\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test` passed.
 - `mypy src\troubleshooting\sms_provider_test --config-file pyproject.toml` passed.
 - `pydocstyle src\troubleshooting\sms_provider_test` passed.
-- `pytest tests\unit\troubleshooting\sms_provider_test -q --timeout=120` passed with 8 tests.
+- `pytest tests\unit\troubleshooting\sms_provider_test -q --timeout=120` passed with 9 tests.
 - `vulture src\troubleshooting\sms_provider_test --min-confidence 70` passed.
 - `interrogate -v src\troubleshooting\sms_provider_test` passed with 100.0% coverage.
+- `bandit -c pyproject.toml -r src\troubleshooting\sms_provider_test -q` passed.
+- `radon cc src\troubleshooting\sms_provider_test -j | complexity-gate --max 10` passed.
+- `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main` passed.
+- `pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120` passed.
+- `pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120` passed.

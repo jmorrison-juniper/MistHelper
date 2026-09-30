@@ -46,6 +46,7 @@ class FakeClient:
 
     def test_provider(self, _provider: object, body: dict[str, str]) -> SmsProviderApiResult:
         """Record the body and return the configured response."""
+        assert "to" in body  # WHY: every provider request must carry the destination field.
         self.calls.append(body)  # WHY: test can assert whether the request was sent.
         return self.response  # WHY: operation builds the result row from this value.
 
