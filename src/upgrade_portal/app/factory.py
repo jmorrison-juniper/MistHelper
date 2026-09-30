@@ -45,7 +45,12 @@ from werkzeug.exceptions import HTTPException  # The URL map raises this fault f
 
 from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
 from ..runtime import identity  # Tells the error page whether the request holds a live session.
-from .config import DEFAULT_THEMES, PortalSettings, load_settings  # The settings record and the environment reader.
+from .config import (  # Import the settings record, the gate key, and the environment reader.
+    DEFAULT_THEMES,
+    ORG_UPGRADE_WRITES_ENABLED_VARIABLE,
+    PortalSettings,
+    load_settings,
+)
 from .security import PortalSecurity  # The guards that arm the application.
 from .wiring import install_seams  # Joins the upgrade parts into the seams the routes read.
 
@@ -908,12 +913,15 @@ def apply_portal_config(app: Flask, settings: PortalSettings) -> None:
         app: The application to configure.
         settings: The settings read from the environment.
     """
+    logger.info("Apply the upgrade capture portal configuration")  # Record the startup action before it changes Flask.
     app.config["SECRET_KEY"] = settings.web.secret_key  # Flask signs the session cookie with this key.
     app.config["PORTAL_SETTINGS"] = settings  # The whole frozen record, for a route that needs more.
     app.config["POLL_INTERVAL_SECONDS"] = settings.web.poll_interval_seconds  # The page reads this value.
     app.config["THEMES"] = list(settings.web.themes)  # A list, because a template iterates it.
-    app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = not settings.web.environment_token_present
+    app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = not settings.web.environment_token_present  # Protect server tokens.
     app.config["WTF_CSRF_TIME_LIMIT"] = CSRF_TOKEN_SECONDS  # The beat must outlive the lock it renews.
+    app.config[ORG_UPGRADE_WRITES_ENABLED_VARIABLE] = settings.writes.org_upgrade_enabled  # Apply the fail-closed gate.
+    logger.debug("Applied the upgrade capture portal configuration")  # Confirm the startup action without secrets.
 
 
 def apply_cookie_config(app: Flask, settings: PortalSettings) -> None:
