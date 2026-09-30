@@ -234,14 +234,20 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         sites = self.mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate full list.
         return next((site["name"] for site in sites if site["id"] == site_id), site_id)  # WHY: fallback to id.
 
-    def _fetch_site_sle_metrics_payload(self, site_id: str) -> dict[str, Any]:  # WHY: SLE-metrics API fetch helper.
-        """Fetch SLE metric availability payload for a site (enabled + supported lists)."""
+    def _fetch_site_sle_metrics_payload(self, site_id: str) -> dict[str, Any] | None:
+        """Return the metric payload, or None when the cloud refuses the request."""
+        logger.info("Requesting listSiteSlesMetrics for site %s", site_id)
         response = self.mistapi.api.v1.sites.sle.listSiteSlesMetrics(
             self.apisession,
             site_id,
             scope=_INSIGHT_METRIC_SCOPE,
             scope_id=site_id,
         )  # WHY: SLE metric availability endpoint.
+        status_code = _response_status_code(response)
+        logger.debug("listSiteSlesMetrics returned HTTP %s for site %s", status_code, site_id)
+        if status_code >= _HTTP_ERROR_MIN:  # An error body cannot prove that metrics are unavailable.
+            logger.error("The cloud returned HTTP %s for %s at site %s", status_code, "listSiteSlesMetrics", site_id)
+            return None
         payload = getattr(response, "data", response) or {}  # WHY: tolerate dataclass or dict.
         return payload if isinstance(payload, dict) else {}  # WHY: guard non-dict shapes.
 
@@ -255,17 +261,19 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             self.DataExporter.write_with_format_selection(
                 rows, filename, api_function_name="listSiteSlesMetrics"
             )  # WHY: persist rows.
+            logger.debug("Wrote %s site SLE metric insight records for site %s", len(rows), site_name)
             logger.info("! %s records exported to %s", len(rows), display_path)  # WHY: operator record-count notice.
             logger.info(
                 "Exported %s site SLE metric insight records to %s", len(rows), filename
             )  # WHY: success audit log.
             return  # WHY: skip empty-file emission when rows exist.
-        logger.warning("! 0 records exported to %s (no metrics available)", display_path)  # WHY: operator notice.
-        logger.warning("No site SLE metric insight data available for site %s", site_name)  # WHY: warn empty.
+        logger.info("Writing 0 site SLE metric insight records")
         self.DataExporter.write_with_format_selection(
             [], filename, api_function_name="listSiteSlesMetrics"
         )  # WHY: still emit empty file for pipeline.
         logger.debug("Wrote an empty SLE metric insight file for site %s", site_name)  # WHY: confirm the write.
+        logger.warning("! 0 records exported to %s (no metrics available)", display_path)  # WHY: operator notice.
+        logger.warning("No site SLE metric insight data available for site %s", site_name)  # WHY: warn empty.
 
     def _resolve_insights_site_name(self, site_id: str) -> str:  # WHY: insights-flow name resolver with fallback.
         """Resolve site display name for insights export with fallback on API failure."""
@@ -346,20 +354,21 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         filename = f"SiteSleMetricsInsights_{_sanitize_for_filename(site_name)}.csv"  # WHY: legacy filename.
         try:
             payload = self._fetch_site_sle_metrics_payload(site_id)  # WHY: fetch enabled+supported lists.
-            rows = _build_insight_rows(  # WHY: assemble one row per metric.
-                site_id,
-                site_name,
-                payload.get("enabled", []),
-                payload.get("supported", []),
-            )
+            if payload is None:
+                return  # The fetch method already reports the refusal without an export write.
+            logger.info("Preparing SLE metric insight records for site %s", site_id)
+            rows = _build_insight_rows(site_id, site_name, payload.get("enabled", []), payload.get("supported", []))
+            logger.debug("Prepared %s SLE metric insight records for site %s", len(rows), site_id)
             self._write_insight_rows(rows, filename, site_name)  # WHY: persist and log.
         except Exception as exception:
-            # WHY: preserve legacy operator error notice verbatim.
-            logging.error("! Error exporting site SLE metric insights: %s", exception)
-            logging.error("Failed to export site SLE metric insights for site %s: %s", site_name, exception)
-            self.DataExporter.write_with_format_selection(
-                [], filename, api_function_name="listSiteSlesMetrics"
-            )  # WHY: empty file preserves pipeline.
+            # Retain the type name and stack without the original message or chained exceptions.
+            failure = Exception(f"{type(exception).__name__}: Exception details omitted to protect secrets")
+            logger.error(
+                "Failed to export site SLE metric insights for site %s from listSiteSlesMetrics. "
+                "No empty export was written.",
+                site_id,
+                exc_info=(Exception, failure, exception.__traceback__),
+            )
 
     def _system_events(self) -> None:
         """Export system events for a site to SiteSystemEvents.csv."""

@@ -470,16 +470,16 @@ def test_export_data_raises_and_logs_on_api_failure(caplog: pytest.LogCaptureFix
 
 
 def test_insights_happy_path_writes_rows(caplog: pytest.LogCaptureFixture) -> None:
-    """insights() resolves site, fetches SLE payload and writes rows."""
+    """The export retains its file name, metric order, flags, and endpoint metadata."""
     exporter, mocks = _build_exporter()
     with caplog.at_level(logging.INFO):
         exporter.insights()
-    # write_with_format_selection called once for the rows.
     mocks["exporter_mock"].assert_called_once()
-    args, _kwargs = mocks["exporter_mock"].call_args
-    written_rows, filename = args
-    assert filename.startswith("SiteSleMetricsInsights_")
-    assert len(written_rows) == 2  # WHY: enabled+supported union produces 2 rows.
+    written_rows, filename = mocks["exporter_mock"].call_args.args
+    assert filename == "SiteSleMetricsInsights_My_Site.csv"
+    assert [row["metric_name"] for row in written_rows] == ["m1", "m2"]
+    assert [row["enabled"] for row in written_rows] == [True, False]
+    assert mocks["exporter_mock"].call_args.kwargs == {"api_function_name": "listSiteSlesMetrics"}
 
 
 def test_insights_returns_when_no_site_selected() -> None:
@@ -489,18 +489,18 @@ def test_insights_returns_when_no_site_selected() -> None:
     mocks["exporter_mock"].assert_not_called()
 
 
-def test_insights_handles_api_error_by_writing_empty_file(caplog: pytest.LogCaptureFixture) -> None:
-    """insights() error branch writes empty file and logs operator message."""
+def test_insights_handles_api_error_without_an_empty_export(caplog: pytest.LogCaptureFixture) -> None:
+    """A retrieval exception reports its context without an empty export."""
     exporter, mocks = _build_exporter()
     mocks["sle_ns"].listSiteSlesMetrics.side_effect = RuntimeError("boom")
     with caplog.at_level(logging.ERROR, logger="root"):
         exporter.insights()
-    # writer should still be called once with empty rows.
-    mocks["exporter_mock"].assert_called_once()
-    args, _kwargs = mocks["exporter_mock"].call_args
-    assert args[0] == []  # WHY: empty file for pipeline continuity.
-    messages = " ".join(rec.getMessage() for rec in caplog.records)
-    assert "Error exporting site SLE metric insights" in messages
+    mocks["exporter_mock"].assert_not_called()
+    assert mocks["exporter_mock"].call_count == 0
+    errors = [(record.name, record.levelno) for record in caplog.records if record.levelno >= logging.ERROR]
+    assert errors == [("src.export.site_export_utils", logging.ERROR)]
+    assert "Failed to export site SLE metric insights for site site-1 from listSiteSlesMetrics" in caplog.text
+    assert "No empty export was written." in caplog.text
 
 
 # ---------------------------------------------------------------------------

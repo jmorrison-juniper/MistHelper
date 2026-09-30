@@ -9,8 +9,8 @@ no change.
 The Windows cases pass on the old code on purpose. They prove that each
 Windows notice stays the same byte for byte.
 
-Two strict ``xfail`` tests state the correct notice for a cloud refusal. Issue
-#3305 owns that repair. When the repair merges, remove the two markers.
+The refusal cases also prove that menu 73 names the HTTP status without an
+empty-result notice or an export write. Issue #3305 owns that behavior.
 """
 
 from __future__ import annotations  # Allow the modern annotations on Python 3.13.
@@ -20,6 +20,8 @@ import ntpath  # Simulate the path rules of Windows.
 import posixpath  # Simulate the path rules of the Linux container.
 import sys  # Install the fake host module that the dependency resolver reads.
 from dataclasses import dataclass  # Hold one test case in one small object.
+from json import JSONDecodeError
+from pathlib import Path
 from types import ModuleType, SimpleNamespace  # Build the fake host and the fake platform.
 from typing import Any  # Type the loose test doubles.
 from unittest.mock import MagicMock  # Record each write call.
@@ -116,14 +118,14 @@ def _build_insight_exporter(write: MagicMock) -> SiteExportUtils:
     return SiteExportUtils(DataExporter=data_exporter, **dependencies)  # Use the real constructor.
 
 
-def _build_refused_insight_exporter(status_code: int, write: MagicMock) -> SiteExportUtils:
-    """Build a menu 73 exporter whose cloud answers the SLE metrics request with one HTTP error."""
+def _build_response_insight_exporter(status_code: int, write: MagicMock) -> SiteExportUtils:
+    """Build a menu 73 exporter with one simulated HTTP response."""
     exporter = _build_insight_exporter(write)  # Start from the exporter with mock dependencies.
     exporter.PromptUtils.select_site.return_value = "site-1"  # The operator selects the site "site-1".
     exporter.mistapi.get_all.return_value = [{"id": "site-1", "name": "HQ"}]  # The organization holds "HQ".
-    refusal = SimpleNamespace(status_code=status_code, data={"detail": "refused"})  # The error answer.
-    exporter.mistapi.api.v1.sites.sle.listSiteSlesMetrics.return_value = refusal  # Refuse the SLE request.
-    return exporter  # Give the test an exporter that meets one cloud refusal.
+    response = SimpleNamespace(status_code=status_code, data={"enabled": ["coverage"], "supported": ["coverage"]})
+    exporter.mistapi.api.v1.sites.sle.listSiteSlesMetrics.return_value = response
+    return exporter
 
 
 def _snapshot_before_write(caplog: pytest.LogCaptureFixture, snapshot: list[str]) -> Any:
@@ -171,17 +173,52 @@ def test_the_wlan_write_keeps_the_file_name_and_the_endpoint(
     assert write.call_args.kwargs == {"api_function_name": "listSiteWlans"}  # The endpoint name stays the same.
 
 
-@pytest.mark.parametrize("rows", [pytest.param([], id="empty"), pytest.param(_INSIGHT_ROWS, id="rows")])
+@pytest.mark.parametrize(
+    ("payload", "expected_rows"),
+    [
+        pytest.param({}, [], id="empty-http-200"),
+        pytest.param({"enabled": [], "supported": []}, [], id="empty-lists-http-200"),
+        pytest.param(
+            {"enabled": ["m1"], "supported": ["m1", "m2"]},
+            [
+                {"site_id": "site-1", "site_name": "HQ", "metric_name": "m1", "enabled": True, "supported": True},
+                {"site_id": "site-1", "site_name": "HQ", "metric_name": "m2", "enabled": False, "supported": True},
+            ],
+            id="populated-http-200",
+        ),
+        pytest.param(
+            {"enabled": ["m2", "m1", "m1"], "supported": ["m3", "m1"]},
+            [
+                {"site_id": "site-1", "site_name": "HQ", "metric_name": "m1", "enabled": True, "supported": True},
+                {"site_id": "site-1", "site_name": "HQ", "metric_name": "m2", "enabled": True, "supported": False},
+                {"site_id": "site-1", "site_name": "HQ", "metric_name": "m3", "enabled": False, "supported": True},
+            ],
+            id="sorted-union-http-200",
+        ),
+    ],
+)
 def test_the_insight_write_keeps_the_file_name_and_the_endpoint(
-    monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, Any]]
+    caplog: pytest.LogCaptureFixture, payload: dict[str, Any], expected_rows: list[dict[str, Any]]
 ) -> None:
-    """FR-004: menu 73 still writes the bare file name with the endpoint name of the SLE metrics."""
-    _simulate_platform(monkeypatch, _INSIGHT_MODULE, posixpath)  # Run the export as the Linux container does.
-    write = MagicMock()  # Record the write call.
-    _build_insight_exporter(write)._write_insight_rows(list(rows), _INSIGHT_FILE, "HQ")  # Export the rows.
-    write.assert_called_once_with(  # One export writes one file with the same arguments as before.
-        list(rows), _INSIGHT_FILE, api_function_name="listSiteSlesMetrics"
+    """A valid HTTP 200 response writes the exact metric rows and retains its notice."""
+    caplog.set_level(logging.DEBUG)
+    seen_before_write: list[str] = []
+    write = MagicMock(side_effect=_snapshot_before_write(caplog, seen_before_write))
+    exporter = _build_response_insight_exporter(200, write)
+    exporter.mistapi.api.v1.sites.sle.listSiteSlesMetrics.return_value.data = payload
+    exporter.insights()
+    write.assert_called_once_with(expected_rows, _INSIGHT_FILE, api_function_name="listSiteSlesMetrics")
+    assert f"Writing {len(expected_rows)} site SLE metric insight records" in seen_before_write
+    exporter.mistapi.api.v1.sites.sle.listSiteSlesMetrics.assert_called_once_with(
+        exporter.apisession, "site-1", scope="site", scope_id="site-1"
     )
+    notice = f"! {len(expected_rows)} records exported to {Path('data') / _INSIGHT_FILE}"
+    expected_notice = notice if expected_rows else f"{notice} (no metrics available)"
+    notices = [
+        (record.levelno, record.getMessage()) for record in caplog.records if record.getMessage().startswith("! ")
+    ]
+    assert notices == [(logging.INFO if expected_rows else logging.WARNING, expected_notice)]
+    assert [(record.levelno, record.getMessage()) for record in caplog.records if record.levelno >= logging.ERROR] == []
 
 
 def test_the_wlan_export_logs_before_the_write(fake_host: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
@@ -194,13 +231,70 @@ def test_the_wlan_export_logs_before_the_write(fake_host: ModuleType, caplog: py
     assert "Writing 2 WLAN records for site HQ" in seen_before_write  # The info line comes before the write.
 
 
-def test_the_insight_export_logs_before_the_write(caplog: pytest.LogCaptureFixture) -> None:
-    """FR-005: menu 73 logs the record count at the info level before it writes the file."""
-    caplog.set_level(logging.DEBUG)  # Capture every level.
-    seen_before_write: list[str] = []  # The log messages that exist when the write starts.
-    write = MagicMock(side_effect=_snapshot_before_write(caplog, seen_before_write))  # Copy the log at the write.
-    _build_insight_exporter(write)._write_insight_rows(list(_INSIGHT_ROWS), _INSIGHT_FILE, "HQ")  # Export one row.
-    assert "Writing 1 site SLE metric insight records" in seen_before_write  # The info line comes first.
+@pytest.mark.parametrize("existing_output", [False, True], ids=["new-output", "existing-output"])
+@pytest.mark.parametrize(
+    "failure_case",
+    [
+        pytest.param(("api", TimeoutError("password=fake-secret-value"), "TimeoutError"), id="timeout"),
+        pytest.param(("api", ConnectionError("password=fake-secret-value"), "ConnectionError"), id="connection-error"),
+        pytest.param(("api", RuntimeError("password=fake-secret-value"), "RuntimeError"), id="runtime-error"),
+        pytest.param(
+            ("api", JSONDecodeError("password=fake-secret-value", "", 0), "JSONDecodeError"), id="malformed-json"
+        ),
+        pytest.param(("parse", {"enabled": None, "supported": []}, "TypeError"), id="invalid-metric-list"),
+        pytest.param(("writer", OSError("password=fake-secret-value"), "OSError"), id="writer-error"),
+        pytest.param(("writer-empty", OSError("password=fake-secret-value"), "OSError"), id="empty-writer-error"),
+    ],
+)
+def test_an_insight_exception_preserves_output_and_reports_the_failure(
+    caplog: pytest.LogCaptureFixture,
+    failure_case: tuple[str, Exception | dict[str, Any], str],
+    existing_output: bool,
+    tmp_path: Path,
+) -> None:
+    """An exception reports its context without secrets or an empty-export retry."""
+    stage, failure, exception_name = failure_case
+    caplog.set_level(logging.DEBUG)
+    output = tmp_path / "data" / _INSIGHT_FILE
+    output.parent.mkdir()
+    original = b"metric_name,enabled,supported\ncoverage,True,True\n"
+    if existing_output:
+        output.write_bytes(original)
+    writer_failure = stage.startswith("writer")
+    write = MagicMock(
+        side_effect=failure if writer_failure else lambda *_args, **_kwargs: output.write_bytes(b"changed")
+    )
+    exporter = _build_response_insight_exporter(200, write)
+    api_call = exporter.mistapi.api.v1.sites.sle.listSiteSlesMetrics
+    if stage == "api":
+        api_call.side_effect = failure
+    elif stage == "parse":
+        api_call.return_value.data = failure
+    elif stage == "writer-empty":
+        api_call.return_value.data = {}
+    exporter.insights()
+    errors = [
+        (record.name, record.levelno, record.getMessage())
+        for record in caplog.records
+        if record.levelno >= logging.ERROR
+    ]
+    assert errors == [
+        (
+            _INSIGHT_MODULE,
+            logging.ERROR,
+            "Failed to export site SLE metric insights for site site-1 from listSiteSlesMetrics. "
+            "No empty export was written.",
+        )
+    ]
+    assert "Traceback (most recent call last):" in caplog.text
+    assert f"{exception_name}: Exception details omitted to protect secrets" in caplog.text
+    assert "fake-secret-value" not in caplog.text
+    assert _notices(caplog, _INSIGHT_MODULE) == []
+    assert "Exported " not in caplog.text
+    assert write.call_count == (1 if writer_failure else 0)
+    api_call.assert_called_once_with(exporter.apisession, "site-1", scope="site", scope_id="site-1")
+    actual = output.read_bytes() if output.exists() else None
+    assert actual == (original if existing_output else None)
 
 
 def test_the_empty_insight_export_logs_after_the_write(caplog: pytest.LogCaptureFixture) -> None:
@@ -215,13 +309,55 @@ def test_the_empty_insight_export_logs_after_the_write(caplog: pytest.LogCapture
     assert expected not in seen_before_write  # The debug line comes after the write.
 
 
-@pytest.mark.xfail(strict=True, reason="Issue #3305: menu 73 reports an HTTP error as an empty export.")
-@pytest.mark.parametrize("status_code", [pytest.param(404, id="http-404"), pytest.param(503, id="http-503")])
-def test_a_refused_insight_request_names_the_http_status(caplog: pytest.LogCaptureFixture, status_code: int) -> None:
-    """Issue #3305: an HTTP error from the cloud must not read as "no metrics available"."""
-    caplog.set_level(logging.INFO)  # Capture the notices and the error lines.
-    _build_refused_insight_exporter(status_code, MagicMock()).insights()  # Run menu 73 against the refusal.
-    messages = [record.getMessage() for record in caplog.records if record.name == _INSIGHT_MODULE]  # Menu 73 only.
-    errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]  # Error lines.
-    assert not any("no metrics available" in message for message in messages)  # A refusal is not an empty result.
-    assert any(str(status_code) in message for message in errors)  # The operator reads the HTTP status.
+@pytest.mark.parametrize("status_code", [400, 401, 403, 404, 429, 500, 502, 503, 504])
+@pytest.mark.parametrize("existing_output", [False, True], ids=["new-output", "existing-output"])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({}, id="empty-error-body"),
+        pytest.param({"detail": "password=fake-secret-value"}, id="refusal-body"),
+        pytest.param(
+            {"enabled": ["coverage"], "supported": ["coverage"], "token": "fake-secret-value"},
+            id="metric-keys-in-error-body",
+        ),
+    ],
+)
+def test_a_refused_insight_request_names_the_http_status(
+    caplog: pytest.LogCaptureFixture,
+    status_code: int,
+    existing_output: bool,
+    payload: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    """Issue #3305: a refusal reports its status and preserves previous output."""
+    caplog.set_level(logging.DEBUG)
+    output = tmp_path / "data" / _INSIGHT_FILE
+    output.parent.mkdir()
+    original = b"metric_name,enabled,supported\ncoverage,True,True\n"
+    if existing_output:
+        output.write_bytes(original)
+    write = MagicMock(side_effect=lambda *_args, **_kwargs: output.write_bytes(b"unwanted replacement"))
+    exporter = _build_response_insight_exporter(status_code, write)
+    api_call = exporter.mistapi.api.v1.sites.sle.listSiteSlesMetrics
+    api_call.return_value.data = payload
+    exporter.insights()
+    errors = [
+        (record.name, record.levelno, record.getMessage())
+        for record in caplog.records
+        if record.levelno >= logging.ERROR
+    ]
+    assert errors == [
+        (
+            _INSIGHT_MODULE,
+            logging.ERROR,
+            f"The cloud returned HTTP {status_code} for listSiteSlesMetrics at site site-1",
+        )
+    ]
+    assert _notices(caplog, _INSIGHT_MODULE) == []
+    assert "No site SLE metric insight data available" not in caplog.text
+    assert "Exported " not in caplog.text
+    assert "fake-secret-value" not in caplog.text
+    assert write.call_count == 0
+    api_call.assert_called_once_with(exporter.apisession, "site-1", scope="site", scope_id="site-1")
+    actual = output.read_bytes() if output.exists() else None
+    assert actual == (original if existing_output else None)
