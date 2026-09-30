@@ -74,8 +74,8 @@ The exact menu, registry, documentation, and import changes are in
 
 ## Local validation
 
-- `python -m pytest tests\unit\reports\wan_edge_scorecard -q --timeout=120`: 16 passed.
-- `python -m pytest tests\unit\reports\wan_edge_scorecard -q --timeout=120 --cov=src.reports.wan_edge_scorecard --cov-report=term-missing`: 16 passed, 96% coverage.
+- `python -m pytest tests\unit\reports\wan_edge_scorecard -q --timeout=120`: 18 passed.
+- `python -m pytest tests\unit\reports\wan_edge_scorecard -q --timeout=120 --cov=src.reports.wan_edge_scorecard --cov-report=term-missing`: 18 passed, 96% coverage.
 - `python -m py_compile src\reports\wan_edge_scorecard\__init__.py src\reports\wan_edge_scorecard\client.py src\reports\wan_edge_scorecard\models.py src\reports\wan_edge_scorecard\scorecard.py src\reports\wan_edge_scorecard\scoring.py`: passed.
 - `python -m py_compile MistHelper.py`: passed.
 - `python -m ruff check MistHelper.py src\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard`: passed.
@@ -84,3 +84,5 @@ The exact menu, registry, documentation, and import changes are in
 - `python -m pydocstyle src\reports\wan_edge_scorecard`: passed.
 - `python -m vulture src\reports\wan_edge_scorecard --min-confidence 70`: passed.
 - `python -m interrogate -v src\reports\wan_edge_scorecard`: 100 percent.
+- `python -m radon cc src\reports\wan_edge_scorecard -j | complexity-gate --max 10`: passed.
+- `test-quality-analyzer --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main`: passed, 0 new findings.

@@ -144,6 +144,8 @@
 - [ ] T049 Deferred to the integration pull request: run `python MistHelper.py --test` and confirm menu 279 completes without an operator prompt
 - [X] T050 Confirm the implementation changes do not edit `.specify/feature.json`
 - [X] T051 Confirm the implementation pull request includes `src/reports/wan_edge_scorecard/`, `tests/unit/reports/wan_edge_scorecard/`, and `changelog.d/issue-3560-wan-edge-scorecard.md`
+- [X] T052 Run the complexity gate for `src\reports\wan_edge_scorecard` and keep every function at complexity `10` or lower
+- [X] T053 Run the test quality ratchet from `origin/main` and repair every new finding
 
 ---
 

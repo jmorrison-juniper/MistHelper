@@ -94,12 +94,9 @@ class WanEdgeScoring:
     ) -> SiteScorecardRow:
         """Build one site scorecard row from gateway rows."""
         gateway_count = len(rows)  # Count gateways used in this site score.
-        config_ok = sum(1 for row in rows if WanEdgeScoring.config_success(row.config_status))  # Count config success.
-        version_ok = sum(1 for row in rows if row.version_compliant)  # Count version-compliant gateways.
-        uptime_ok = sum(1 for row in rows if WanEdgeScoring.uptime_success(row.uptime_days))  # Count uptime success.
-        anomaly_ok = sum(
-            1 for row in rows if WanEdgeScoring.anomaly_free(row, dhcp_warn_percent)
-        )  # Count anomaly-free gateways.
+        config_ok, version_ok, uptime_ok, anomaly_ok = WanEdgeScoring._summary_counts(
+            rows, dhcp_warn_percent
+        )  # Count all tile inputs once.
         return SiteScorecardRow(  # Create the export model for this site.
             site=site,  # Preserve the site display name.
             site_id=site_id,  # Preserve the site identifier.
@@ -116,12 +113,9 @@ class WanEdgeScoring:
         site_ids = {row.site_id for row in rows if row.site_id}  # Count only sites with at least one gateway.
         site_count = len(site_ids)  # Store the organization site count.
         gateway_count = len(rows)  # Store the organization gateway count.
-        config_ok = sum(1 for row in rows if WanEdgeScoring.config_success(row.config_status))  # Count config success.
-        version_ok = sum(1 for row in rows if row.version_compliant)  # Count version compliance.
-        uptime_ok = sum(1 for row in rows if WanEdgeScoring.uptime_success(row.uptime_days))  # Count uptime success.
-        anomaly_ok = sum(
-            1 for row in rows if WanEdgeScoring.anomaly_free(row, dhcp_warn_percent)
-        )  # Count anomaly-free gateways.
+        config_ok, version_ok, uptime_ok, anomaly_ok = WanEdgeScoring._summary_counts(
+            rows, dhcp_warn_percent
+        )  # Count all tile inputs once.
         return OrganizationScorecard(  # Create the organization score model.
             gateway_count=gateway_count,  # Preserve the gateway count.
             site_count=site_count,  # Preserve the site count.
@@ -130,3 +124,14 @@ class WanEdgeScoring:
             wan_edge_uptime_percent=WanEdgeScoring.safe_percent(uptime_ok, gateway_count) or 0.0,  # Score uptime.
             potential_anomalies_percent=WanEdgeScoring.safe_percent(anomaly_ok, gateway_count) or 0.0,  # Score risk.
         )
+
+    @staticmethod
+    def _summary_counts(rows: list[GatewayScorecardRow], dhcp_warn_percent: float) -> tuple[int, int, int, int]:
+        """Return counts for the four tile inputs."""
+        config_ok = sum(1 for row in rows if WanEdgeScoring.config_success(row.config_status))  # Count configs.
+        version_ok = sum(1 for row in rows if row.version_compliant)  # Count gateways that match the baseline.
+        uptime_ok = sum(1 for row in rows if WanEdgeScoring.uptime_success(row.uptime_days))  # Count uptime.
+        anomaly_ok = sum(
+            1 for row in rows if WanEdgeScoring.anomaly_free(row, dhcp_warn_percent)
+        )  # Count anomaly-free gateways.
+        return config_ok, version_ok, uptime_ok, anomaly_ok  # Return counts in tile order.

@@ -3,10 +3,34 @@
 from __future__ import annotations  # Keep annotations import-safe in tests.
 
 from types import SimpleNamespace  # Build compact dependency doubles.
+from typing import Any  # Type the fake shared fetcher kwargs.
 from unittest.mock import MagicMock, patch  # Isolate the operation from network and disk.
 
 from src.reports.wan_edge_scorecard.client import WanEdgeGatewayStatsClient
 from src.reports.wan_edge_scorecard.scorecard import WanEdgeScorecard
+
+
+class _ResponseBackedFetcher:
+    """Minimal shared fetcher double for client HTTP status tests."""
+
+    def __init__(self, title: str, api_call: Any, filename: str, sort_key: str | None, **kwargs: Any) -> None:
+        """Store the API call and keyword arguments like APIDataFetcher."""
+        self.title = title  # Keep the title to match the shared fetcher constructor.
+        self.api_call = api_call  # Keep the callable so the test response drives the result.
+        self.filename = filename  # Keep the filename to match the shared fetcher constructor.
+        self.sort_key = sort_key  # Keep the sort key to match the shared fetcher constructor.
+        self.kwargs = kwargs  # Keep query parameters so assertions can inspect them.
+        self.org_id = ""  # Match the shared fetcher public attribute that the client sets.
+        self.rawdata: list[dict[str, str]] = []  # Match the shared fetcher output attribute.
+
+    def _fetch_api_data(self) -> bool:
+        """Fetch once and return false for an HTTP error response."""
+        response = self.api_call("session", self.org_id, **self.kwargs)  # Exercise the configured API callable.
+        if response.status_code >= 400:  # Match shared fetcher behavior for HTTP 4xx and 5xx failures.
+            self.rawdata = []  # Ensure the client sees no rows after a failed response.
+            return False  # Signal that the shared fetch failed.
+        self.rawdata = [{"id": "gw-ok"}]  # Provide one row for non-error tests if needed.
+        return True  # Signal that the shared fetch succeeded.
 
 
 def test_build_reports_outputs_one_row_per_gateway(gateway_stats_sample: list[dict[str, object]]) -> None:
@@ -136,6 +160,46 @@ def test_fetch_client_uses_list_org_devices_stats_gateway_type() -> None:
         fields="*",
         limit=1000,
     )  # Confirm the required endpoint and gateway filter.
+
+
+def test_fetch_client_returns_empty_rows_for_http_4xx_response() -> None:
+    """The client returns no rows when the shared fetch receives an HTTP 4xx response."""
+    api_call = MagicMock(return_value=SimpleNamespace(status_code=404))  # Return a concrete client error response.
+    fake_mistapi = SimpleNamespace(
+        api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(stats=SimpleNamespace())))
+    )
+    fake_mistapi.api.v1.orgs.stats.listOrgDevicesStats = api_call  # Attach the endpoint used by the client.
+    fake_host = SimpleNamespace(
+        apisession="session",
+        mistapi=fake_mistapi,
+        APIDataFetcher=lambda **kwargs: _ResponseBackedFetcher(**kwargs),
+    )  # Provide the resolver dependencies used by the client.
+    with patch("src.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
+        rows = WanEdgeGatewayStatsClient.fetch_gateway_stats("org-1")  # Fetch through the client seam.
+    assert rows == []  # The client must not return stale rows after an HTTP 4xx failure.
+    api_call.assert_called_once_with(
+        "session", "org-1", type="gateway", status="all", fields="*", limit=1000
+    )  # The error test proves the exact gateway query was sent.
+
+
+def test_fetch_client_returns_empty_rows_for_http_5xx_response() -> None:
+    """The client returns no rows when the shared fetch receives an HTTP 5xx response."""
+    api_call = MagicMock(return_value=SimpleNamespace(status_code=503))  # Return a concrete server error response.
+    fake_mistapi = SimpleNamespace(
+        api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(stats=SimpleNamespace())))
+    )
+    fake_mistapi.api.v1.orgs.stats.listOrgDevicesStats = api_call  # Attach the endpoint used by the client.
+    fake_host = SimpleNamespace(
+        apisession="session",
+        mistapi=fake_mistapi,
+        APIDataFetcher=lambda **kwargs: _ResponseBackedFetcher(**kwargs),
+    )  # Provide the resolver dependencies used by the client.
+    with patch("src.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
+        rows = WanEdgeGatewayStatsClient.fetch_gateway_stats("org-1")  # Fetch through the client seam.
+    assert rows == []  # The client must not return stale rows after an HTTP 5xx failure.
+    api_call.assert_called_once_with(
+        "session", "org-1", type="gateway", status="all", fields="*", limit=1000
+    )  # The error test proves the exact gateway query was sent.
 
 
 def test_run_exports_three_reports_and_prints_summary(gateway_stats_sample: list[dict[str, object]], capsys) -> None:
