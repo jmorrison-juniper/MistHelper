@@ -1,0 +1,9 @@
+{
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "featureDirectory": "specs/3555-psk-hygiene-report",
+  "specFile": "specs/3555-psk-hygiene-report/spec.md",
+  "issue": 3555,
+  "tasksFile": "specs/3555-psk-hygiene-report/tasks.md",
+  "updatedAt": "2026-09-29T17:18:12.705-05:00"
+}
