@@ -67,6 +67,37 @@ def test_ap_scorecard_redundancy_classification_values() -> None:
     assert classify_switch_redundancy(normalize_switch_redundancy(3)) == "excellent"
 
 
+def test_ap_scorecard_redundancy_rejects_none_zero_and_negative_values() -> None:
+    """Invalid redundancy inputs stay unknown and never count as healthy."""
+    assert normalize_switch_redundancy(None) is None
+    assert normalize_switch_redundancy(0) is None
+    assert normalize_switch_redundancy(-1) is None
+    assert classify_switch_redundancy(normalize_switch_redundancy(None)) == "unknown"
+    assert classify_switch_redundancy(normalize_switch_redundancy(0)) == "unknown"
+    assert classify_switch_redundancy(normalize_switch_redundancy(-1)) == "unknown"
+
+
+def test_ap_scorecard_model_handles_none_input() -> None:
+    """A missing redundancy value stays unknown."""
+    normalized = normalize_switch_redundancy(None)
+    assert normalized is None
+    assert classify_switch_redundancy(None) == "unknown"
+
+
+def test_ap_scorecard_model_handles_zero_value() -> None:
+    """A zero redundancy value stays unknown."""
+    normalized = normalize_switch_redundancy(0)
+    assert normalized is None
+    assert classify_switch_redundancy(0) == "unknown"
+
+
+def test_ap_scorecard_model_handles_negative_value() -> None:
+    """A negative redundancy value stays unknown."""
+    normalized = normalize_switch_redundancy(-1)
+    assert normalized is None
+    assert classify_switch_redundancy(-1) == "unknown"
+
+
 def test_ap_scorecard_site_redundancy_counts(ap_stats_payload: list[dict[str, object]]) -> None:
     """Site rows report no, good, and excellent redundancy counts."""
     rows = {row.site_id: row for row in build_site_rows(build_ap_rows(ap_stats_payload))}

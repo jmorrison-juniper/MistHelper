@@ -165,6 +165,8 @@ Do not change the shared files below in this feature implementation. Record thei
 - [X] T047 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m vulture src\reports\ap_scorecard --min-confidence 70`
 - [X] T048 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m interrogate -v src\reports\ap_scorecard`
 - [X] T049 Verify that `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated docs, and copilot instructions changed only through `specs/3559-ap-scorecard/wiring.md`
+- [X] T050 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m radon cc src\reports\ap_scorecard -j | C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\complexity-gate.exe --max 10`
+- [X] T051 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\test-quality-analyzer.exe --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main`
 
 ---
 
