@@ -93,7 +93,9 @@ class OrgControlsView:
         reconcile = cls._reconcile(record)  # The child jobs that a check can settle.
         child_ids = ",".join(str(child["child_id"]) for child in reconcile["children"])  # A stable order.
         cancel = OrgCancelOutcomes.signature(record)  # Issue #3246: the cancel status of each child job.
-        signature = f"retry={retry['count']};reconcile={child_ids};cancel={cancel}"  # The poll reloads on a change.
+        signature = (  # The poll reloads when a retry device enters or leaves the safety hold.
+            f"retry={retry['count']};held={retry['held_count']};reconcile={child_ids};cancel={cancel}"
+        )
         logger.debug("The recovery controls read %s", signature)  # The signature holds no secret.
         return {"retry": retry, "reconcile": reconcile, "signature": signature}  # The page reads each part.
 
@@ -101,7 +103,15 @@ class OrgControlsView:
     def _retry(retry_plan: OrgRetryPlan | None) -> dict[str, Any]:
         """Return the retry control values."""
         devices = [dict(device) for device in retry_plan.devices] if retry_plan is not None else []  # Copies.
-        return {"available": bool(devices), "count": len(devices), "devices": devices}  # The page lists each one.
+        held = [dict(device) for device in retry_plan.held_back] if retry_plan is not None else []  # Safety holds.
+        return {  # The page lists both groups but enables the button for safe retry devices only.
+            "visible": bool(devices or held),
+            "available": bool(devices),
+            "count": len(devices),
+            "devices": devices,
+            "held_count": len(held),
+            "held_back": held,
+        }
 
     @staticmethod
     def _reconcile(record: Mapping[str, Any]) -> dict[str, Any]:

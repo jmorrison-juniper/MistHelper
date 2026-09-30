@@ -81,8 +81,8 @@ OPERATION_NOT_FOUND = "org_upgrade_operation_not_found"  # No owned operation ho
 OPERATION_NOT_FOUND_MESSAGE = "The portal found no operation of this browser session with that identifier."
 RETRY_UNAVAILABLE = "org_upgrade_retry_unavailable"  # No device needs a retry now.
 RETRY_UNAVAILABLE_MESSAGE = (  # The operator learns both conditions of a retry.
-    "No device of this operation needs a retry now. "
-    "A retry opens after every child job ends, for each device that did not reach the target version."
+    "No device of this operation is available for a retry now. "
+    "The portal holds a device until a later state shows that its firmware write settled."
 )
 RECONCILE_UNAVAILABLE = "org_upgrade_reconcile_unavailable"  # No child job holds an uncertain outcome.
 RECONCILE_UNAVAILABLE_MESSAGE = "No child job of this operation holds an uncertain outcome, so no check is necessary."
@@ -151,7 +151,7 @@ def open_retry(upgrade_id: str) -> Response | tuple[Response, int]:
     if operation is None:  # No such operation, or another operator owns it.
         return json_error(NOT_FOUND_STATUS, OPERATION_NOT_FOUND, OPERATION_NOT_FOUND_MESSAGE)
     plan = retry_plan_of(operation)  # A child that can still write firmware blocks a retry.
-    if plan is None:  # A child job still runs, or every device runs the target version.
+    if plan is None or not plan.devices:  # A child runs, every device succeeded, or every failed device must wait.
         return json_error(CONFLICT_STATUS, RETRY_UNAVAILABLE, RETRY_UNAVAILABLE_MESSAGE)
     if not selected_rows(plan.org_id, list(plan.site_ids)):  # A site left the organization after the plan.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)

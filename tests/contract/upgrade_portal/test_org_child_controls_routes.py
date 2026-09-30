@@ -662,13 +662,41 @@ def test_the_progress_page_and_the_poll_show_the_retry_control(harness: Controls
     harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
     page = harness.client.get(f"/upgrade/org/jobs/{RETRY_ID}").get_data(as_text=True)  # The progress page.
     poll = harness.client.get(f"/api/org-upgrades/{RETRY_ID}").get_json()  # The status poll.
-    assert 'data-org-controls="retry=2;reconcile=;cancel="' in page  # The signature that the poll compares.
+    assert 'data-org-controls="retry=2;held=0;reconcile=;cancel="' in page  # The signature that the poll compares.
     assert f'data-testid="org-upgrade-retry-device-{AP_TWO}"' in page  # The failed access point.
     assert f'data-testid="org-upgrade-retry-device-{SWITCH_ONE}"' in page  # The failed switch.
     assert f'data-testid="org-upgrade-retry-device-{AP_ONE}"' not in page  # The healthy access point.
     assert f'action="/api/org-upgrades/{RETRY_ID}/retry"' in page  # The retry form names the operation.
-    assert poll["controls"]["signature"] == "retry=2;reconcile=;cancel="  # The poll carries the same signature.
+    assert poll["controls"]["signature"] == "retry=2;held=0;reconcile=;cancel="  # The same signature.
     assert poll["controls"]["retry"]["count"] == 2  # The poll counts the retry devices.
+
+
+def test_the_progress_page_holds_back_a_device_that_still_writes_firmware(harness: ControlsHarness) -> None:
+    """The recovery card explains why the cancellation writing device is absent from the retry plan."""
+    operation = settled_record(harness)  # Start with two devices that normally need a retry.
+    access_points = operation["children"][0]  # The second access point is the cancellation writing device.
+    access_points["status"] = "cancelled"  # The child job ended, but one device can still write firmware.
+    access_points["status_data"] = {  # The latest cloud state still names the second access point as rebooting.
+        "site_upgrades": [
+            {"site_id": harness.site_one, "upgrade": {"targets": {"upgraded": [AP_ONE]}}},
+            {"site_id": SITE_TWO, "upgrade": {"targets": {"reboot_in_progress": [AP_TWO]}}},
+        ]
+    }
+    access_points["cancellation"] = {  # The cancellation panel and the retry selection read the same list.
+        "status": "cancelled",
+        "message": "The cloud accepted the cancellation.",
+        "cancelled": [AP_ONE],
+        "already_writing": [AP_TWO],
+        "no_cancel_available": [],
+    }
+    harness.store.write_run(operation)  # Store the cancellation result before the progress-page read.
+    page = harness.client.get(f"/upgrade/org/jobs/{RETRY_ID}").get_data(as_text=True)  # The progress page.
+    poll = harness.client.get(f"/api/org-upgrades/{RETRY_ID}").get_json()  # The status poll.
+    assert f'data-testid="org-upgrade-retry-held-device-{AP_TWO}"' in page  # The card names the held device.
+    assert f'data-testid="org-upgrade-retry-device-{AP_TWO}"' not in page  # The retry list excludes the device.
+    assert "because it still writes firmware" in page  # The operator receives the safety reason.
+    assert poll["controls"]["retry"]["held_count"] == 1  # The poll carries the same safety hold.
+    assert poll["controls"]["retry"]["count"] == 1  # The independent failed switch can still retry.
 
 
 # ---------------------------------------------------------------------------
@@ -680,7 +708,8 @@ def test_the_progress_page_offers_the_check_of_each_uncertain_child(harness: Con
     """The progress page names each uncertain child job and the exact typed word."""
     harness.store.write_run(uncertain_record(harness))  # Two uncertain child jobs.
     page = harness.client.get(f"/upgrade/org/jobs/{RECONCILE_ID}").get_data(as_text=True)  # The progress page.
-    assert 'data-org-controls="retry=0;reconcile=child-switch-one,child-switch-two;cancel="' in page  # The signature.
+    signature = 'data-org-controls="retry=0;held=0;reconcile=child-switch-one,child-switch-two;cancel="'  # Expected.
+    assert signature in page  # The poll and the page use the same control signature.
     assert 'data-testid="org-upgrade-reconcile-child-child-switch-one"' in page  # The first uncertain job.
     assert 'data-testid="org-upgrade-reconcile-child-child-switch-two"' in page  # The second uncertain job.
     assert f'data-confirm-word="{RECONCILE_WORD}"' in page  # The typed word names this operation.
