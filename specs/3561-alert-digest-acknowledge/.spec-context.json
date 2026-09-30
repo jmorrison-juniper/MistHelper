@@ -2,8 +2,8 @@
   "workflow": "speckit",
   "specName": "Alert Digest Acknowledge",
   "branch": "3561-alert-digest-acknowledge",
-  "currentStep": "tasks",
-  "status": "ready-to-implement",
+  "currentStep": "implement",
+  "status": "implemented",
   "history": [
     {
       "step": "specify",
@@ -17,7 +17,7 @@
       "substep": null,
       "kind": "complete",
       "by": "extension",
-      "at": "2026-09-29T21:13:01.600Z"
+      "at": "2026-09-29T21:13:01.6Z"
     },
     {
       "step": "tasks",
@@ -25,6 +25,13 @@
       "kind": "complete",
       "by": "extension",
       "at": "2026-09-29T22:17:56.464Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-30T01:02:27.325Z"
     }
   ],
   "telemetryInstanceId": "b15b6e4d-a2bf-49e0-a6c3-03254b176e6e"
