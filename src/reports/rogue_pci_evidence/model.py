@@ -167,17 +167,30 @@ class RoguePciEvidenceModel:
         ]  # Keep every site.
 
     @staticmethod
-    def summary_counts(detections: list[dict[str, Any]], settings: list[dict[str, Any]]) -> dict[str, int]:
-        """Return summary counts for the Markdown evidence statement."""
-        return {  # Keep count names stable for tests and summary rendering.
-            "detection_count": len(detections),
-            "honeypot_count": sum(1 for row in detections if row["classification"] == CLASS_HONEYPOT),
-            "rogue_count": sum(1 for row in detections if row["classification"] == CLASS_ROGUE),
-            "neighbor_count": sum(1 for row in detections if row["classification"] == CLASS_NEIGHBOR),
+    def _classification_count(rows: list[dict[str, Any]], classification: str) -> int:
+        """Return how many detection rows use one classification."""
+        return sum(1 for row in rows if row["classification"] == classification)  # Count one classification value.
+
+    @staticmethod
+    def _settings_status_counts(settings: list[dict[str, Any]]) -> dict[str, int]:
+        """Return settings status counts for the summary."""
+        return {  # Keep site status counts grouped away from detection counts.
             "site_count": len(settings),
             "detection_off_site_count": sum(1 for row in settings if not row["rogue_enabled"]),
             "incomplete_site_count": sum(1 for row in settings if row["read_status"] != "ok"),
         }
+
+    @classmethod
+    def summary_counts(cls, detections: list[dict[str, Any]], settings: list[dict[str, Any]]) -> dict[str, int]:
+        """Return summary counts for the Markdown evidence statement."""
+        counts = {  # Keep detection count names stable for tests and summary rendering.
+            "detection_count": len(detections),
+            "honeypot_count": cls._classification_count(detections, CLASS_HONEYPOT),
+            "rogue_count": cls._classification_count(detections, CLASS_ROGUE),
+            "neighbor_count": cls._classification_count(detections, CLASS_NEIGHBOR),
+        }
+        counts.update(cls._settings_status_counts(settings))  # Add site counts without extra branches.
+        return counts  # Return all summary counts.
 
     @classmethod
     def summary_markdown(

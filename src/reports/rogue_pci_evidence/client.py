@@ -26,8 +26,27 @@ class RoguePciEvidenceClient:
         self.deps = deps  # Keep the dependency seam patchable in tests.
         self._smoothed_delay: float | None = None  # Keep pacer state across site setting calls.
 
+    @staticmethod
+    def _status_code(response: Any) -> int:
+        """Return the HTTP status code from a Mist SDK response."""
+        status_code = getattr(response, "status_code", 200)  # Treat older test doubles as successful responses.
+        if isinstance(status_code, int):  # Use integer codes directly when the SDK supplies one.
+            return status_code  # Return the numeric status for comparisons.
+        return 200  # Treat non-integer mock values as successful legacy doubles.
+
+    @classmethod
+    def _status_failed(cls, response: Any, subject: str) -> bool:
+        """Return True when a Mist SDK response has an HTTP error status."""
+        status_code = cls._status_code(response)  # Normalize the status code for one branch.
+        if status_code < 400:  # Successful statuses can continue to pagination or data reads.
+            return False  # Signal that the caller can use the response.
+        logger.error("The cloud returned HTTP %s for %s", status_code, subject)  # Surface the failed read.
+        return True  # Signal that the caller must not trust the response body.
+
     def _paged(self, response: Any) -> list[dict[str, Any]]:
         """Return all rows from one Mist SDK response."""
+        if self._status_failed(response, "a rogue PCI evidence list read"):  # Guard failed list responses.
+            return []  # Return no rows instead of using a failed response body.
         rows = mistapi.get_all(response=response, mist_session=self.apisession)  # Page through SDK responses.
         logger.debug("Mist API returned rows=%d", len(rows))  # Log the response row count.
         return list(rows)  # Return a mutable list for downstream tagging.
@@ -71,6 +90,8 @@ class RoguePciEvidenceClient:
             self._pace_site_setting()  # Use the shared pacer before the API call.
             logger.info("Reading rogue settings for site %s", site_id)  # Log before the API call.
             response = mistapi.api.v1.sites.setting.getSiteSetting(self.apisession, site_id)  # Read the site setting.
+            if self._status_failed(response, f"the site setting at site {site_id}"):  # Guard failed setting reads.
+                continue  # Keep the site in the final report as an error row.
             settings[site_id] = dict(getattr(response, "data", {}) or {})  # Store the setting payload by site id.
             logger.debug(
                 "Read rogue settings for site %s keys=%d", site_id, len(settings[site_id])

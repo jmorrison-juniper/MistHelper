@@ -51,7 +51,7 @@
 
 ## Phase 6: Polish and Cross-Cutting
 
-- [x] T019 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, and `pytest` on the new package and tests.
+- [x] T019 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, `pytest`, `radon` with `complexity-gate`, and `test-quality-analyzer` on the new package and tests.
 - [x] T020 Run `vulture` and `interrogate` on `src/reports/rogue_pci_evidence`.
 - [x] T021 Repair any `speckit.analyze` findings in `specs/3562-rogue-pci-evidence/`, `src/reports/rogue_pci_evidence/`, and `tests/unit/reports/rogue_pci_evidence/`.
 - [x] T022 Create the draft pull request body in `specs/3562-rogue-pci-evidence/pr-body.md`.
