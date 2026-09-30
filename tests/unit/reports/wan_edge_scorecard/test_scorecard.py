@@ -81,6 +81,27 @@ def test_site_scorecard_percentages(gateway_stats_sample: list[dict[str, object]
     assert alpha.wan_edge_uptime_percent == 50.0  # One Alpha gateway has at least one day of uptime.
 
 
+def test_cluster_state_problem_reduces_potential_anomalies() -> None:
+    """Cluster state problems reduce the Potential Anomalies score."""
+    gateway_rows, _dhcp_rows, site_rows, org_score = WanEdgeScorecard.build_reports(
+        [
+            {
+                "id": "gw-cluster",
+                "site_id": "site-cluster",
+                "site_name": "Cluster Site",
+                "name": "Cluster-WAN-1",
+                "version": "22.4R1",
+                "config_status": "success",
+                "uptime": 172800,
+                "cluster_peer_state": "peer_down",
+            }
+        ]
+    )  # Build one site with a clear cluster problem word.
+    assert gateway_rows[0].cluster_peer_state == "peer_down"  # Confirm the score input is present.
+    assert site_rows[0].potential_anomalies_percent == 0.0  # The site score shows the cluster anomaly.
+    assert org_score.potential_anomalies_percent == 0.0  # The organization score uses the same rule.
+
+
 def test_organization_summary_percentages(gateway_stats_sample: list[dict[str, object]]) -> None:
     """Organization percentages are calculated from all gateway rows."""
     _gateway_rows, _dhcp_rows, _site_rows, org_score = WanEdgeScorecard.build_reports(

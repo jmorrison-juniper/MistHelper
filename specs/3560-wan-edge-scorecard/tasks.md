@@ -36,7 +36,8 @@
 - [X] T006 Create package initializer in `src/reports/wan_edge_scorecard/__init__.py`
 - [X] T007 [P] Create gateway, DHCP pool, site scorecard, and organization scorecard models in `src/reports/wan_edge_scorecard/models.py`
 - [X] T008 [P] Create shared scoring helpers for percent math, predominant version, threshold parsing, and missing values in `src/reports/wan_edge_scorecard/scoring.py`
-- [X] T009 Create the `WanEdgeScorecard` class skeleton with static `run()` and dependency seams in `src/reports/wan_edge_scorecard/scorecard.py`
+- [X] T009 Create the `WanEdgeScorecard` class skeleton with static `run()` in `src/reports/wan_edge_scorecard/scorecard.py`
+- [X] T009A Create the shared gateway statistics client seam in `src/reports/wan_edge_scorecard/client.py`
 - [X] T010 [P] Create unit test fixture builders for gateway statistics samples in `tests/unit/reports/wan_edge_scorecard/conftest.py`
 - [X] T011 [P] Create package test initializer in `tests/unit/reports/wan_edge_scorecard/__init__.py`
 

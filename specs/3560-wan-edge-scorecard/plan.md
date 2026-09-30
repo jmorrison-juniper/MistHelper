@@ -68,6 +68,7 @@ src/
 └── reports/
     └── wan_edge_scorecard/
         ├── __init__.py
+        ├── client.py
         ├── scorecard.py
         ├── models.py
         └── scoring.py

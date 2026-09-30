@@ -79,10 +79,14 @@ class WanEdgeScoring:
             row.worst_pool_utilization_percent is not None and row.worst_pool_utilization_percent >= dhcp_warn_percent
         )
         has_peer_risk = row.vpn_peers_down > 0 or row.bgp_peers_not_established > 0  # Peer problems create risk.
+        cluster_state = row.cluster_peer_state.lower()  # Normalize cluster text before keyword checks.
+        has_cluster_risk = any(
+            keyword in cluster_state for keyword in ("down", "fail", "error", "degraded")
+        )  # Count clear cluster problem words as potential anomalies.
         has_status_risk = (
             bool(row.last_trouble) or "down" in row.service_status_summary.lower()
         )  # Trouble creates risk.
-        return not (has_dhcp_risk or has_peer_risk or has_status_risk)  # True means no known anomaly exists.
+        return not (has_dhcp_risk or has_peer_risk or has_cluster_risk or has_status_risk)  # True means no risk.
 
     @staticmethod
     def calculate_site_score(
