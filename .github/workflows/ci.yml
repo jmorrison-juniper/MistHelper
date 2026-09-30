@@ -1102,6 +1102,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - test_quality_gate
       - codeql_register_check
       - ops_portal
       - ops_platform_pytest
