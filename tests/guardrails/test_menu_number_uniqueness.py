@@ -44,6 +44,15 @@ RETIRED_MENU_NUMBERS: frozenset[str] = frozenset(
     }
 )
 
+KNOWN_TEMPORARY_MENU_GAPS: frozenset[str] = frozenset(
+    {
+        "280",  # Issue #3617: reserved until the menu 280 module passes human review in #3637.
+        "281",  # Issue #3617: reserved until the menu 281 module passes human review in #3637.
+    }
+)
+
+KNOWN_MENU_GAPS = RETIRED_MENU_NUMBERS | KNOWN_TEMPORARY_MENU_GAPS  # WHY: keep temporary gaps distinct from retired numbers.
+
 
 class TestMenuNumbersAreUnique:
     """No menu number is defined twice, and none is skipped."""
@@ -65,7 +74,7 @@ class TestMenuNumbersAreUnique:
         numbers = sorted(int(key) for key in MistHelper.menu_actions)
         expected = list(range(numbers[0], numbers[-1] + 1))
         missing = sorted(set(expected) - set(numbers))
-        unexplained = [number for number in missing if str(number) not in RETIRED_MENU_NUMBERS]
+        unexplained = [number for number in missing if str(number) not in KNOWN_MENU_GAPS]
         assert not unexplained, f"The menu numbering holds a gap at {unexplained}"
 
     def test_a_retired_number_never_returns_to_service(self) -> None:
