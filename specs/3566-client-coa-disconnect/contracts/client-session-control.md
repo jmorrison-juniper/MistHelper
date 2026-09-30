@@ -17,9 +17,11 @@ The method must not read MistHelper global arguments directly.
 
 ## Menu contract
 
-Menu 286 must be registered as destructive.
-The operation must be excluded from safe, interactive safe, and fast automated test passes.
-Repository registration is deferred to `wiring.md` until implementation.
+This branch supplies the handler package and wiring manifest for menu 286.
+Menu 286 must be registered as destructive in the integration pull request.
+The operation must be excluded from safe, interactive safe, and fast automated test passes after wiring lands.
+Repository registration is deferred to `wiring.md` for this branch.
+README, menu documentation, and primary-key strategy handling are also deferred to the integration pull request.
 
 ## Dry run contract
 
@@ -92,4 +94,4 @@ Unit tests must prove these rules:
 6. Dotted input normalizes correctly.
 7. Invalid input stops early.
 8. One CSV row is written per attempt.
-9. Menu 286 is destructive and excluded from automated safe tests.
+9. The wiring manifest marks menu 286 as destructive and excluded from automated safe tests.

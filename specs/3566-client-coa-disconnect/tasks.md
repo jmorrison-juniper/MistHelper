@@ -64,8 +64,12 @@
 
 ## Phase 7: Analyze, Push, and Pull Request
 
-- [ ] T037 Run the SpecKit analyze step against `specs/3566-client-coa-disconnect/`.
-- [ ] T038 Repair each analyze finding and commit the repairs.
+The pull request for this task list is a handoff implementation package.
+The issue fleet contract forbids hot-file edits in this branch.
+Actual menu registration, destructive test exclusion wiring, README updates, menu documentation, and primary-key strategy handling are integration pull request responsibilities recorded in `wiring.md`.
+
+- [X] T037 Run the SpecKit analyze step against `specs/3566-client-coa-disconnect/`.
+- [X] T038 Repair each analyze finding and commit the repairs.
 - [ ] T039 Push the branch after implementation gates pass.
 - [ ] T040 Push once more after analyze repairs land.
 - [ ] T041 Write `specs/3566-client-coa-disconnect/pr-body.md` with `Closes #3566`, the file list, the destructive operation warning, and the deferred wiring note.

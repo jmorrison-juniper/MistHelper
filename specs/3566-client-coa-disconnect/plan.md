@@ -1,14 +1,14 @@
 # Implementation Plan: Client CoA Disconnect
 
-**Branch**: `3566-client-coa-disconnect` | **Date**: 2026-09-29 | **Spec**: `specs/3566-client-coa-disconnect/spec.md`
+**Branch**: `feat/3566-client-coa-disconnect` | **Date**: 2026-09-29 | **Spec**: `specs/3566-client-coa-disconnect/spec.md`
 
 **Input**: Feature specification from `specs/3566-client-coa-disconnect/spec.md`
 
 ## Summary
 
-Add menu 286 as a destructive MistHelper operation for client session control.
+Add the implementation package and wiring manifest for menu 286 as a destructive MistHelper operation for client session control.
 The operation selects a site, selects an action, accepts a client MAC or rogue BSSID, shows the normalized target, requires exact typed confirmation, and then sends the Mist request.
-The operation supports `--dry-run`, which prints the request preview and sends no Mist request.
+The handler supports `--dry-run`, which prints the request preview and sends no Mist request.
 It writes one audit row to `data/ClientSessionControlLog.csv` for each request attempt.
 
 ## Technical Context
@@ -39,6 +39,7 @@ Do not send live destructive Mist requests from automated tests.
 - Do not edit `.specify/feature.json` during this step.
 - Do not edit repository wiring files during this step.
 - Menu 286 is destructive and must stay out of all automated test passes.
+- The fleet contract defers hot-file wiring, README edits, menu documentation edits, and primary-key strategy handling to the integration pull request.
 - `--dry-run` must print the request and send no Mist request.
 - Exact typed confirmation is required before each live Mist request.
 - Read existing MAC normalization and client lookup helpers under `src/device/` before implementation work starts.
@@ -83,16 +84,17 @@ specs/3566-client-coa-disconnect/
 src/device/client_session_control/
 ├── __init__.py
 ├── actions.py
+├── audit.py
 ├── handler.py
-├── logging.py
 └── models.py
 
 tests/unit/device/client_session_control/
 ├── __init__.py
-├── test_confirmation.py
-├── test_dry_run.py
-├── test_logging.py
-└── test_normalization.py
+├── test_client_session_control_confirmation.py
+├── test_client_session_control_dry_run.py
+├── test_client_session_control_log.py
+├── test_client_session_control_normalization.py
+└── test_client_session_control_wiring.py
 ```
 
 **Structure Decision**: Use a nested package at `src/device/client_session_control/` because the specification requires that package.
@@ -106,6 +108,8 @@ Defer repository registration to `specs/3566-client-coa-disconnect/wiring.md`.
 | - | - | - |
 | Add `src/device/client_session_control/` under noncompliant `src/device/` | The feature specification and user input require this exact package. | A different package would violate FR-016 and the current user contract. A loose file under `src/device/` would add less structure and more debt. |
 | Deferred repository wiring | The current step is limited to `specs/3566-client-coa-disconnect/**`. | Editing `MistHelper.py` or registry files now would violate the fleet contract. |
+| Deferred README and primary-key strategy handling | The operation is destructive control, not data export or data collection, and the user explicitly forbids these hot-file edits in this branch. | The integration pull request will own registration, menu documentation, and any primary-key strategy N/A record or registry policy update that reviewers require. |
+| Phase checkpoint commits | The fleet contract for issue #3566 explicitly requires a commit after each completed task group. | A single end-only commit would violate the issue-specific instruction for this worktree. |
 
 ## Phase 0 Research Output
 

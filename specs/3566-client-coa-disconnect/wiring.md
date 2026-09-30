@@ -17,6 +17,8 @@ Repository wiring is deferred to the integration pull request.
 
 Registration is deferred to the integration pull request.
 This feature branch must not edit repository wiring files.
+README, menu documentation, and primary-key strategy handling are also deferred to the integration pull request.
+The primary-key strategy item is expected to be recorded as not applicable unless the integration review requires a registry policy entry, because this feature sends destructive control requests and does not export or collect Mist API data.
 
 Deferred files named by the contract:
 
@@ -34,6 +36,14 @@ Deferred files named by the contract:
 - `tests/guardrails/**`
 - `CHANGELOG.md`
 - `.specify/feature.json`
+
+Integration pull request responsibilities:
+
+- Register menu 286 in the appropriate repository wiring file.
+- Mark menu 286 as destructive.
+- Exclude menu 286 from safe, interactive safe, and fast automated tests.
+- Update README and menu documentation.
+- Record primary-key strategy handling as not applicable or add the required registry policy entry.
 
 ## Menu Registration
 

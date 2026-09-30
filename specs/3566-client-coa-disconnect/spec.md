@@ -1,12 +1,12 @@
 # Feature Specification: Client CoA Disconnect
 
-**Feature Branch**: `3566-client-coa-disconnect`
+**Feature Branch**: `feat/3566-client-coa-disconnect`
 
 **Created**: 2026-09-29
 
 **Status**: Draft
 
-**Input**: User description: "menu 286 client CoA, reauthentication, and disconnect. A helpdesk operator who must force a client to reauthenticate, disconnect a client, deauthorize a guest, or drop the clients of a rogue AP must open the Mist UI. Mist offers one endpoint for each action, and no MistHelper operation calls them. The operation asks for a site, an action, and a client MAC or a rogue BSSID. It shows the target, asks the operator to type the MAC or BSSID again as the confirmation, sends the request, and writes ClientSessionControlLog.csv with the action, the target, and the result."
+**Input**: User description: "menu 286 client CoA, reauthentication, and disconnect. A helpdesk operator who must force a client to reauthenticate, disconnect a client, deauthorize a guest, or drop the clients of a rogue AP must open the Mist UI. Mist offers one endpoint for each action, and no MistHelper operation calls them. The operation asks for a site, an action, and a client MAC or a rogue BSSID. It shows the target, asks the operator to type the MAC or BSSID again as the confirmation, sends the request, and writes ClientSessionControlLog.csv with the action, the target, and the result. The fleet contract for this branch defers repository wiring and hot-file documentation to the integration pull request."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -65,7 +65,7 @@ A helpdesk lead can review a CSV log that records each requested client session 
 - If the operator confirms with a value that differs by any character after normalization, the operation sends no request.
 - If the operator enters a MAC with colons, hyphens, or dots, the operation normalizes it to lowercase colon-free form before it builds the request.
 - If the operator enters an invalid MAC or BSSID, the operation stops before confirmation and shows a clear validation message.
-- If the selected action requires a rogue BSSID but the operator enters a client MAC, the operation rejects the target before any request.
+- If the selected action requires a rogue BSSID, the operation labels the prompt and preview as rogue BSSID and validates the target format before any request.
 - If the Mist request fails or returns an error, the operation reports the failure and writes the failure result to the CSV log.
 - If the CSV log does not exist, the operation creates it under `data/` with headers before writing the row.
 
@@ -73,7 +73,7 @@ A helpdesk lead can review a CSV log that records each requested client session 
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST provide menu 286 as a destructive operation named for client CoA, reauthentication, and disconnect.
+- **FR-001**: This branch MUST provide the implementation package, tests, release note, and wiring manifest for future menu 286 named for client CoA, reauthentication, and disconnect.
 - **FR-002**: The operation MUST ask the operator to select a site before it asks for the action and target.
 - **FR-003**: The operation MUST support these actions: wireless reauthenticate, wired reauthenticate, disconnect, unauthorize guest, and deauth rogue clients.
 - **FR-004**: The operation MUST ask for a client MAC for wireless reauthenticate, wired reauthenticate, disconnect, and unauthorize guest.
@@ -87,7 +87,7 @@ A helpdesk lead can review a CSV log that records each requested client session 
 - **FR-012**: The operation MUST write `data/ClientSessionControlLog.csv` with one row for each request attempt.
 - **FR-013**: Each CSV row MUST include at least the action, target, and result.
 - **FR-014**: The operation MUST report a clear success, dry run, confirmation failure, validation failure, or Mist failure result to the operator.
-- **FR-015**: The operation MUST be registered as destructive and excluded from every automated test pass.
+- **FR-015**: The wiring manifest MUST specify destructive registration and automated test exclusion for the integration pull request.
 - **FR-016**: The implementation package MUST be `src/device/client_session_control/`.
 - **FR-017**: The handler MUST be class `ClientSessionControl` with static `run()`.
 - **FR-018**: Registration work MUST be deferred to `specs/3566-client-coa-disconnect/wiring.md` and MUST NOT edit repository wiring files during specification.
@@ -109,8 +109,8 @@ A helpdesk lead can review a CSV log that records each requested client session 
 - **SC-002**: In 100 percent of dry run cases, the operator sees the exact request preview and no Mist request is sent.
 - **SC-003**: In 100 percent of supported MAC input form tests, the target normalizes to lowercase colon-free form.
 - **SC-004**: In 100 percent of request attempts, `data/ClientSessionControlLog.csv` receives exactly one row that includes action, target, and result.
-- **SC-005**: Helpdesk operators can complete a confirmed session control request in under 2 minutes when site and target are known.
-- **SC-006**: Automated test discovery excludes the destructive operation in every automated test pass.
+- **SC-005**: Helpdesk operators can complete a confirmed session control request in under 2 minutes when site and target are known. The build-time proof is a bounded prompt flow with site, action, target, and confirmation only.
+- **SC-006**: The wiring manifest specifies that automated test discovery excludes the destructive operation in every automated test pass.
 - **SC-007**: The implementation handoff is complete when `wiring.md` exists in the feature directory and the release note fragment requirement is tracked.
 
 ## Assumptions
