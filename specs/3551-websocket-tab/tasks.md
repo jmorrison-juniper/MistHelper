@@ -46,17 +46,17 @@ description: "Task list for the WebSockets tab in the Operations portal"
 **Checkpoint**: The foundational unit tests pass. Story work starts only after this point.
 
 - [X] T004 Define the `FieldKind` and `Safety` enums in `src/websocket_streams/catalog/model.py`. Also define the `FieldSpec`, `ChannelDefinition`, and `UtilityDefinition` dataclasses. Follow data-model.md.
-- [ ] T005 [P] Implement `StreamSettings` in `src/websocket_streams/live/sessions/settings.py`. Read the 7 variables. A bad value gives the default and one warning with the variable name.
-- [ ] T006 [P] Implement `MessageBuffer` in `src/websocket_streams/live/sessions/buffer.py`. Enforce the message cap and the byte cap. Drop the oldest messages first and count them. Shorten a message above 256 KB and mark it.
-- [ ] T007 Implement `SessionState`, `SessionCounters`, and `StreamSession` in `src/websocket_streams/live/sessions/record.py`. Enforce the state machine of data-model.md. Give a page payload that holds no path and no token.
-- [ ] T008 [P] Implement `IdentifierRules` in `src/websocket_streams/intake/identifiers.py`. Check a UUID, a MAC address, a host, an IP address, and a prefix. Also check a Junos port name, a plain name, and a capture filter.
-- [ ] T009 Implement `FieldValueChecker` in `src/websocket_streams/intake/fields.py`. Check one value against one `FieldSpec`, and convert the value to the SDK type.
-- [ ] T010 [P] Write the unit tests for T004 in `tests/unit/websocket_streams/catalog/test_ws_catalog_model.py`.
-- [ ] T011 [P] Write the unit tests for T005 in `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py`.
-- [ ] T012 [P] Write the unit tests for T006 in `tests/unit/websocket_streams/live/sessions/test_ws_message_buffer.py`.
-- [ ] T013 [P] Write the unit tests for T007 in `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`.
-- [ ] T014 [P] Write the unit tests for T008 in `tests/unit/websocket_streams/intake/test_ws_identifier_rules.py`.
-- [ ] T015 [P] Write the unit tests for T009 in `tests/unit/websocket_streams/intake/test_ws_field_checker.py`.
+- [X] T005 [P] Implement `StreamSettings` in `src/websocket_streams/live/sessions/settings.py`. Read the 7 variables. A bad value gives the default and one warning with the variable name.
+- [X] T006 [P] Implement `MessageBuffer` in `src/websocket_streams/live/sessions/buffer.py`. Enforce the message cap and the byte cap. Drop the oldest messages first and count them. Shorten a message above 256 KB and mark it.
+- [X] T007 Implement `SessionState`, `SessionCounters`, and `StreamSession` in `src/websocket_streams/live/sessions/record.py`. Enforce the state machine of data-model.md. Give a page payload that holds no path and no token.
+- [X] T008 [P] Implement `IdentifierRules` in `src/websocket_streams/intake/identifiers.py`. Check a UUID, a MAC address, a host, an IP address, and a prefix. Also check a Junos port name, a plain name, and a capture filter.
+- [X] T009 Implement `FieldValueChecker` in `src/websocket_streams/intake/fields.py`. Check one value against one `FieldSpec`, and convert the value to the SDK type.
+- [X] T010 [P] Write the unit tests for T004 in `tests/unit/websocket_streams/catalog/test_ws_catalog_model.py`.
+- [X] T011 [P] Write the unit tests for T005 in `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py`.
+- [X] T012 [P] Write the unit tests for T006 in `tests/unit/websocket_streams/live/sessions/test_ws_message_buffer.py`.
+- [X] T013 [P] Write the unit tests for T007 in `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`.
+- [X] T014 [P] Write the unit tests for T008 in `tests/unit/websocket_streams/intake/test_ws_identifier_rules.py`.
+- [X] T015 [P] Write the unit tests for T009 in `tests/unit/websocket_streams/intake/test_ws_field_checker.py`.
 
 ---
 
@@ -68,30 +68,30 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Tests for User Story 1
 
-- [ ] T016 [P] [US1] Write the channel parity contract test in `tests/contract/websocket_streams/test_ws_channel_parity.py`. Create each public SDK channel class with test identifiers. Compare its channel list with the path that the catalog builds.
-- [ ] T017 [P] [US1] Write the SDK client contract test in `tests/contract/websocket_streams/test_ws_sdk_contract.py`. Pin the `_MistWebsocket` constructor parameters and the callback methods.
-- [ ] T018 [P] [US1] Write the channel catalog tests in `tests/unit/websocket_streams/catalog/test_ws_channel_catalog.py`. Cover the 18 keys, the scopes, the path build, and the repeatable identifier.
-- [ ] T019 [P] [US1] Write the catalog registry tests in `tests/unit/websocket_streams/catalog/test_ws_stream_catalog.py`. Prove that the page payload holds no path template.
-- [ ] T020 [P] [US1] Write the channel start request tests in `tests/unit/websocket_streams/intake/test_ws_start_request.py`. Refuse an unknown key, a raw path, an unknown field, and a bad identifier.
-- [ ] T021 [P] [US1] Write the message shaper tests in `tests/unit/websocket_streams/live/runners/test_ws_message_text.py`. Cover a nested data string, plain text, and a large message.
-- [ ] T022 [P] [US1] Write the channel runner tests with a fake client in `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`. Cover a message, an error, a close, and a stop during the connection.
-- [ ] T023 [P] [US1] Write the manager tests for start, read, stop, delete, and download in `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`.
-- [ ] T024 [P] [US1] Write the blueprint tests in `tests/unit/websocket_streams/web/test_ws_blueprint_routes.py`. Cover the page, the catalog, a start, a read, a stop, a delete, a download, and each error code.
+- [X] T016 [P] [US1] Write the channel parity contract test in `tests/contract/websocket_streams/test_ws_channel_parity.py`. Create each public SDK channel class with test identifiers. Compare its channel list with the path that the catalog builds.
+- [X] T017 [P] [US1] Write the SDK client contract test in `tests/contract/websocket_streams/test_ws_sdk_contract.py`. Pin the `_MistWebsocket` constructor parameters and the callback methods.
+- [X] T018 [P] [US1] Write the channel catalog tests in `tests/unit/websocket_streams/catalog/test_ws_channel_catalog.py`. Cover the 18 keys, the scopes, the path build, and the repeatable identifier.
+- [X] T019 [P] [US1] Write the catalog registry tests in `tests/unit/websocket_streams/catalog/test_ws_stream_catalog.py`. Prove that the page payload holds no path template.
+- [X] T020 [P] [US1] Write the channel start request tests in `tests/unit/websocket_streams/intake/test_ws_start_request.py`. Refuse an unknown key, a raw path, an unknown field, and a bad identifier.
+- [X] T021 [P] [US1] Write the message shaper tests in `tests/unit/websocket_streams/live/runners/test_ws_message_text.py`. Cover a nested data string, plain text, and a large message.
+- [X] T022 [P] [US1] Write the channel runner tests with a fake client in `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`. Cover a message, an error, a close, and a stop during the connection.
+- [X] T023 [P] [US1] Write the manager tests for start, read, stop, delete, and download in `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`.
+- [X] T024 [P] [US1] Write the blueprint tests in `tests/unit/websocket_streams/web/test_ws_blueprint_routes.py`. Cover the page, the catalog, a start, a read, a stop, a delete, a download, and each error code.
 
 ### Implementation for User Story 1
 
-- [ ] T025 [US1] Implement `ChannelCatalog` with the 18 channels in `src/websocket_streams/catalog/channels.py`. Build a path only from a key and checked identifiers.
-- [ ] T026 [US1] Implement `StreamCatalog` in `src/websocket_streams/catalog/registry.py`. Give a lookup by kind and key, the flag state, and the page payload.
-- [ ] T027 [US1] Implement `StartRequest` and `StartRequestChecker` for a channel request in `src/websocket_streams/intake/start_request.py`.
-- [ ] T028 [P] [US1] Implement `MessageShaper` and `ShellAddressFilter` in `src/websocket_streams/live/runners/text.py`.
-- [ ] T029 [US1] Implement `ChannelStreamRunner` in `src/websocket_streams/live/runners/channel.py`. Use `_MistWebsocket` with the settings of research.md R-02.
-- [ ] T030 [US1] Implement `StreamSessionManager` in `src/websocket_streams/live/sessions/manager.py`. Give start, list, get, read after a sequence number, stop, delete, and download.
-- [ ] T031 [US1] Implement the site and map pickers of `StreamPickerService` in `src/websocket_streams/intake/pickers.py`.
-- [ ] T032 [US1] Implement `WebSocketsServices` in `src/websocket_streams/web/services.py`. Build the catalog, the checker, the pickers, and the manager one time for each app.
-- [ ] T033 [US1] Implement the blueprint routes of the contract in `src/websocket_streams/web/blueprint.py`. Each view calls one class method.
-- [ ] T034 [P] [US1] Write the page in `src/websocket_streams/web/templates/websockets_page.html`. Extend `base.html`, and give each control a `data-testid`.
-- [ ] T035 [P] [US1] Write `src/websocket_streams/web/static/websockets.js` and `websockets.css`. Render the catalog, fill the pickers, and start a stream. Poll each second. Give pause, resume, clear, filter, download, and stop.
-- [ ] T036 [US1] Register the blueprint in `web_portal/app.py`. Add the `nav-websockets` item after Maps in `web_portal/templates/base.html`.
+- [X] T025 [US1] Implement `ChannelCatalog` with the 18 channels in `src/websocket_streams/catalog/channels.py`. Build a path only from a key and checked identifiers.
+- [X] T026 [US1] Implement `StreamCatalog` in `src/websocket_streams/catalog/registry.py`. Give a lookup by kind and key, the flag state, and the page payload.
+- [X] T027 [US1] Implement `StartRequest` and `StartRequestChecker` for a channel request in `src/websocket_streams/intake/start_request.py`.
+- [X] T028 [P] [US1] Implement `MessageShaper` and `ShellAddressFilter` in `src/websocket_streams/live/runners/text.py`.
+- [X] T029 [US1] Implement `ChannelStreamRunner` in `src/websocket_streams/live/runners/channel.py`. Use `_MistWebsocket` with the settings of research.md R-02.
+- [X] T030 [US1] Implement `StreamSessionManager` in `src/websocket_streams/live/sessions/manager.py`. Give start, list, get, read after a sequence number, stop, delete, and download.
+- [X] T031 [US1] Implement the site and map pickers of `StreamPickerService` in `src/websocket_streams/intake/pickers.py`.
+- [X] T032 [US1] Implement `WebSocketsServices` in `src/websocket_streams/web/services.py`. Build the catalog, the checker, the pickers, and the manager one time for each app.
+- [X] T033 [US1] Implement the blueprint routes of the contract in `src/websocket_streams/web/blueprint.py`. Each view calls one class method.
+- [X] T034 [P] [US1] Write the page in `src/websocket_streams/web/templates/websockets_page.html`. Extend `base.html`, and give each control a `data-testid`.
+- [X] T035 [P] [US1] Write `src/websocket_streams/web/static/websockets.js` and `websockets.css`. Render the catalog, fill the pickers, and start a stream. Poll each second. Give pause, resume, clear, filter, download, and stop.
+- [X] T036 [US1] Register the blueprint in `web_portal/app.py`. Add the `nav-websockets` item after Maps in `web_portal/templates/base.html`.
 
 **Checkpoint**: User Story 1 works alone. This is the MVP.
 
@@ -105,19 +105,19 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Tests for User Story 2
 
-- [ ] T037 [P] [US2] Write the utility catalog tests in `tests/unit/websocket_streams/catalog/test_ws_utility_catalog.py`. Prove the count for each family and the safety classes.
-- [ ] T038 [P] [US2] Write the catalog coverage contract test in `tests/contract/websocket_streams/test_ws_catalog_coverage.py`. Compare the catalog with the facade `__all__` of each `mistapi.device_utils` module, less the named exclusions (SC-003).
-- [ ] T039 [P] [US2] Add the utility request tests to `tests/unit/websocket_streams/intake/test_ws_start_request.py`. Refuse a bad host, a count out of range, and a utility of another family.
-- [ ] T040 [P] [US2] Write the utility runner tests with a fake `UtilResponse` in `tests/unit/websocket_streams/live/runners/test_ws_utility_runner.py`. Cover each end state and a stop before the connection starts.
-- [ ] T041 [P] [US2] Write the device picker tests in `tests/unit/websocket_streams/intake/test_ws_stream_pickers.py`. Cover the family rules and an empty list.
+- [X] T037 [P] [US2] Write the utility catalog tests in `tests/unit/websocket_streams/catalog/test_ws_utility_catalog.py`. Prove the count for each family and the safety classes.
+- [X] T038 [P] [US2] Write the catalog coverage contract test in `tests/contract/websocket_streams/test_ws_catalog_coverage.py`. Compare the catalog with the facade `__all__` of each `mistapi.device_utils` module, less the named exclusions (SC-003).
+- [X] T039 [P] [US2] Add the utility request tests to `tests/unit/websocket_streams/intake/test_ws_start_request.py`. Refuse a bad host, a count out of range, and a utility of another family.
+- [X] T040 [P] [US2] Write the utility runner tests with a fake `UtilResponse` in `tests/unit/websocket_streams/live/runners/test_ws_utility_runner.py`. Cover each end state and a stop before the connection starts.
+- [X] T041 [P] [US2] Write the device picker tests in `tests/unit/websocket_streams/intake/test_ws_stream_pickers.py`. Cover the family rules and an empty list.
 
 ### Implementation for User Story 2
 
-- [ ] T042 [US2] Implement `UtilityCatalog` in `src/websocket_streams/catalog/utilities.py`. Build the fields from each SDK signature and the field table of research.md.
-- [ ] T043 [US2] Add the utility request checks to `src/websocket_streams/intake/start_request.py`. Compare the device family with the utility family.
-- [ ] T044 [US2] Implement `UtilityRunner` in `src/websocket_streams/live/runners/utility.py`. Map the SDK result to the end states of research.md R-03.
-- [ ] T045 [US2] Add the device picker and the family rules to `src/websocket_streams/intake/pickers.py`.
-- [ ] T046 [US2] Add the device picker, the utility list, the parameter form, and the line and screen views to `src/websocket_streams/web/static/websockets.js`.
+- [X] T042 [US2] Implement `UtilityCatalog` in `src/websocket_streams/catalog/utilities.py`. Build the fields from each SDK signature and the field table of research.md.
+- [X] T043 [US2] Add the utility request checks to `src/websocket_streams/intake/start_request.py`. Compare the device family with the utility family.
+- [X] T044 [US2] Implement `UtilityRunner` in `src/websocket_streams/live/runners/utility.py`. Map the SDK result to the end states of research.md R-03.
+- [X] T045 [US2] Add the device picker and the family rules to `src/websocket_streams/intake/pickers.py`.
+- [X] T046 [US2] Add the device picker, the utility list, the parameter form, and the line and screen views to `src/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 and 2 work alone.
 
@@ -131,17 +131,17 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Tests for User Story 3
 
-- [ ] T047 [P] [US3] Add the capture tests to `tests/unit/websocket_streams/live/runners/test_ws_utility_runner.py`. Prove that an early stop ends only the capture of the session.
-- [ ] T048 [P] [US3] Add the packet summary tests to `tests/unit/websocket_streams/live/runners/test_ws_message_text.py`. Cover a wired record, a wireless record, and a record with missing fields.
-- [ ] T049 [P] [US3] Add the capture range tests to `test_ws_start_request.py` in `tests/unit/websocket_streams/intake/`. Add the Mist Edge picker tests to `test_ws_stream_pickers.py` in the same folder.
+- [X] T047 [P] [US3] Add the capture tests to `tests/unit/websocket_streams/live/runners/test_ws_utility_runner.py`. Prove that an early stop ends only the capture of the session.
+- [X] T048 [P] [US3] Add the packet summary tests to `tests/unit/websocket_streams/live/runners/test_ws_message_text.py`. Cover a wired record, a wireless record, and a record with missing fields.
+- [X] T049 [P] [US3] Add the capture range tests to `test_ws_start_request.py` in `tests/unit/websocket_streams/intake/`. Add the Mist Edge picker tests to `test_ws_stream_pickers.py` in the same folder.
 
 ### Implementation for User Story 3
 
-- [ ] T050 [US3] Add the capture fields to `src/websocket_streams/catalog/utilities.py`. Add the `device_interfaces` build to `src/websocket_streams/live/runners/utility.py`.
-- [ ] T051 [US3] Implement `CaptureStopper` in `src/websocket_streams/live/runners/utility.py`. Stop the capture only when the capture identifier matches.
-- [ ] T052 [P] [US3] Implement `PacketSummary` in `src/websocket_streams/live/runners/text.py`.
-- [ ] T053 [US3] Add the Mist Edge picker to `src/websocket_streams/intake/pickers.py`.
-- [ ] T054 [US3] Add the packet view to `src/websocket_streams/web/static/websockets.js`.
+- [X] T050 [US3] Add the capture fields to `src/websocket_streams/catalog/utilities.py`. Add the `device_interfaces` build to `src/websocket_streams/live/runners/utility.py`.
+- [X] T051 [US3] Implement `CaptureStopper` in `src/websocket_streams/live/runners/utility.py`. Stop the capture only when the capture identifier matches.
+- [X] T052 [P] [US3] Implement `PacketSummary` in `src/websocket_streams/live/runners/text.py`.
+- [X] T053 [US3] Add the Mist Edge picker to `src/websocket_streams/intake/pickers.py`.
+- [X] T054 [US3] Add the packet view to `src/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 to 3 work alone.
 
@@ -155,14 +155,14 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Tests for User Story 4
 
-- [ ] T055 [P] [US4] Add the limit, idle, life, and retention tests to `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`. Use a fake clock.
-- [ ] T056 [P] [US4] Write the shutdown tests in `tests/unit/websocket_streams/web/test_ws_web_services.py`. Prove that the portal shutdown stops every session.
+- [X] T055 [P] [US4] Add the limit, idle, life, and retention tests to `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`. Use a fake clock.
+- [X] T056 [P] [US4] Write the shutdown tests in `tests/unit/websocket_streams/web/test_ws_web_services.py`. Prove that the portal shutdown stops every session.
 
 ### Implementation for User Story 4
 
-- [ ] T057 [US4] Add the session limit, the reaper, and the ended-session retention to `src/websocket_streams/live/sessions/manager.py`.
-- [ ] T058 [US4] Add the stop of every session to `src/websocket_streams/web/services.py`. Call it from `shutdown_app` in `web_portal/app.py`.
-- [ ] T059 [US4] Add the session list after a reload and the limit message to `src/websocket_streams/web/static/websockets.js`.
+- [X] T057 [US4] Add the session limit, the reaper, and the ended-session retention to `src/websocket_streams/live/sessions/manager.py`.
+- [X] T058 [US4] Add the stop of every session to `src/websocket_streams/web/services.py`. Call it from `shutdown_app` in `web_portal/app.py`.
+- [X] T059 [US4] Add the session list after a reload and the limit message to `src/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 to 4 work alone.
 
@@ -176,14 +176,14 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Tests for User Story 5
 
-- [ ] T060 [P] [US5] Add the lock tests to `tests/unit/websocket_streams/intake/test_ws_start_request.py`. Prove that no `change` entry starts while the flag is off (SC-008). Prove the confirmation check while the flag is on.
-- [ ] T061 [P] [US5] Add the audit log test to `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`. Prove that the log names the command, the device, and the site.
+- [X] T060 [P] [US5] Add the lock tests to `tests/unit/websocket_streams/intake/test_ws_start_request.py`. Prove that no `change` entry starts while the flag is off (SC-008). Prove the confirmation check while the flag is on.
+- [X] T061 [P] [US5] Add the audit log test to `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`. Prove that the log names the command, the device, and the site.
 
 ### Implementation for User Story 5
 
-- [ ] T062 [US5] Add the flag check and the device name check to `src/websocket_streams/intake/start_request.py`. Read the device name with `StreamPickerService`.
-- [ ] T063 [US5] Add the audit log line for each `change` run to `src/websocket_streams/live/sessions/manager.py`.
-- [ ] T064 [US5] Add the lock mark and the confirmation field to `src/websocket_streams/web/static/websockets.js`.
+- [X] T062 [US5] Add the flag check and the device name check to `src/websocket_streams/intake/start_request.py`. Read the device name with `StreamPickerService`.
+- [X] T063 [US5] Add the audit log line for each `change` run to `src/websocket_streams/live/sessions/manager.py`.
+- [X] T064 [US5] Add the lock mark and the confirmation field to `src/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 to 5 work alone.
 
@@ -197,14 +197,14 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Tests for User Story 6
 
-- [ ] T065 [P] [US6] Write the shell runner tests in `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`. Cover the first-output gate, the keys, the ANSI removal, and the close.
-- [ ] T066 [P] [US6] Add the shell input route tests to `tests/unit/websocket_streams/web/test_ws_blueprint_routes.py`. Prove that the log never holds the sent text.
+- [X] T065 [P] [US6] Write the shell runner tests in `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`. Cover the first-output gate, the keys, the ANSI removal, and the close.
+- [X] T066 [P] [US6] Add the shell input route tests to `tests/unit/websocket_streams/web/test_ws_blueprint_routes.py`. Prove that the log never holds the sent text.
 
 ### Implementation for User Story 6
 
-- [ ] T067 [US6] Implement `ShellRunner` in `src/websocket_streams/live/runners/shell.py`.
-- [ ] T068 [US6] Add the input route to `src/websocket_streams/web/blueprint.py`. Add the input method to `src/websocket_streams/live/sessions/manager.py`.
-- [ ] T069 [US6] Add the terminal view, the line field, and the key buttons to `src/websocket_streams/web/static/websockets.js`.
+- [X] T067 [US6] Implement `ShellRunner` in `src/websocket_streams/live/runners/shell.py`.
+- [X] T068 [US6] Add the input route to `src/websocket_streams/web/blueprint.py`. Add the input method to `src/websocket_streams/live/sessions/manager.py`.
+- [X] T069 [US6] Add the terminal view, the line field, and the key buttons to `src/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: All six user stories work alone.
 
@@ -214,9 +214,9 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 **Purpose**: Prove the security criteria, run the gates, and check the page in a live browser.
 
-- [ ] T070 [P] Write the secret test in `tests/unit/websocket_streams/web/test_ws_secret_guard.py`. Prove that no response holds the token or a `wss://` address (SC-006).
-- [ ] T071 [P] Write the browser journey in `tests/e2e/test_websockets_page.py`. Use a fake engine, and take one screenshot for each story.
-- [ ] T072 [P] Add the release note `changelog.d/issue-3551-websocket-tab.md`.
+- [X] T070 [P] Write the secret test in `tests/unit/websocket_streams/web/test_ws_secret_guard.py`. Prove that no response holds the token or a `wss://` address (SC-006).
+- [X] T071 [P] Write the browser journey in `tests/e2e/test_websockets_page.py`. Use a fake engine, and take one screenshot for each story.
+- [X] T072 [P] Add the release note `changelog.d/issue-3551-websocket-tab.md`.
 - [ ] T073 Run the gates and repair each finding. The gates are py_compile, `ruff check .`, `black --check .`, mypy with `MYPY_PATHS`, pytest with coverage, Vulture, pydocstyle, interrogate, Bandit, Radon, and Pylint.
 - [ ] T074 Run the live check of quickstart.md against the real organization. Use read-only entries only. Take screenshots and read them.
 - [ ] T075 Run the load check of SC-004 and SC-005 with 5 fake sessions at 10 messages each second. Record the results in the pull request.

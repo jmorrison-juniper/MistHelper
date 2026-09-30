@@ -185,11 +185,13 @@ class WebPortalApp:
         from web_portal.routes.maps import maps_bp
         from web_portal.routes.operations import operations_bp
         from web_portal.routes.settings import settings_bp
+        from src.websocket_streams.web.blueprint import websockets_bp  # Register the WebSockets tab from gated source.
 
         app.register_blueprint(dashboard_bp)
         app.register_blueprint(data_bp)
         app.register_blueprint(operations_bp)
         app.register_blueprint(maps_bp)
+        app.register_blueprint(websockets_bp)  # Add the WebSockets page and its short API routes.
         app.register_blueprint(settings_bp)
         WebPortalApp._register_webhook_blueprint(app)
 
@@ -270,6 +272,7 @@ class WebPortalApp:
         app.config[WebPortalApp.SHUTDOWN_DONE_CONFIG_KEY] = True  # Mark done first, so a second call returns above.
         WebPortalApp._stop_event_bus(app)
         WebPortalApp._stop_operation_executor(app)
+        WebPortalApp._stop_websocket_sessions(app)  # Close live WebSocket streams before the process exits.
         logger.info("Web portal shutdown complete")  # One INFO line at the end, an operator can see a clean stop.
 
     @staticmethod
@@ -291,3 +294,12 @@ class WebPortalApp:
             return
         executor.shutdown()  # Wait for in-flight runs, then release the worker threads.
         logger.debug("Operation executor stopped")
+
+    @staticmethod
+    def _stop_websocket_sessions(app: Flask) -> None:
+        """Stop the WebSocket session manager if the app built one."""
+        from src.websocket_streams.web.services import WebSocketsServices  # Import lazily to avoid a startup cycle.
+
+        logger.info("Stopping WebSocket sessions for the web portal")  # Log before the WebSocket shutdown.
+        WebSocketsServices.stop_for_app(app)  # Stop each live WebSocket session and its reaper.
+        logger.debug("WebSocket sessions stopped for the web portal")  # Confirm the WebSocket shutdown.

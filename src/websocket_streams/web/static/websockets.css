@@ -1,0 +1,55 @@
+.ws-page .portal-card {
+    min-height: 26rem;
+}
+
+.ws-catalog-entry {
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+.ws-catalog-entry:hover,
+.ws-catalog-entry:focus {
+    border-color: var(--portal-accent);
+    box-shadow: 0 0 0 0.12rem color-mix(in srgb, var(--portal-accent) 35%, transparent);
+}
+
+.ws-output {
+    max-height: 34rem;
+    overflow: auto;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    background: var(--bs-body-bg);
+    padding: 0.75rem;
+}
+
+.ws-message-row,
+.ws-packet-row {
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 0.5rem 0;
+}
+
+.ws-message-row:last-child,
+.ws-packet-row:last-child {
+    border-bottom: 0;
+}
+
+.ws-message-row pre,
+.ws-screen,
+.ws-terminal {
+    color: var(--bs-body-color);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ws-screen,
+.ws-terminal {
+    min-height: 18rem;
+    background: #050607;
+    color: #d7ffd7;
+    border-radius: 0.4rem;
+    padding: 0.75rem;
+}
+
+.ws-terminal-input .btn-group {
+    gap: 0.25rem;
+}
