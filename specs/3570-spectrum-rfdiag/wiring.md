@@ -9,8 +9,9 @@ This manifest records integration work that must happen after the core RF diagno
 
 ## Deferred Integration Items
 
-- Add menu 290 entry for the RF diagnostics operation.
-- Add the operation registry entry for the RF diagnostics operation.
+- Add menu 290 entry for the RF diagnostics operation in `MistHelper.py`.
+- Add the operation registry entry for the RF diagnostics operation in `operation_registry.py`.
+- Add the endpoint primary-key strategy entry in `endpoint_primary_key_strategies.py`.
 - Review and update endpoint catalog coverage for these Mist paths:
   - `POST /api/v1/sites/{site_id}/analyze_spectrum`
   - `GET /api/v1/sites/{site_id}/analyze_spectrum`
@@ -21,6 +22,13 @@ This manifest records integration work that must happen after the core RF diagno
   - `GET /api/v1/sites/{site_id}/rfdiags`
 - Add a changelog fragment for issue 3570.
 - Update README or operation count only when menu integration is enabled.
+- Update the generated menu reference only when menu integration is enabled.
+- Update copilot-instructions category mappings only when menu integration is enabled.
+
+These items are deferred to the integration pull request: `MistHelper.py`
+registration, `operation_registry.py` registration,
+`endpoint_primary_key_strategies.py` registration, README, generated menu
+reference, and copilot-instructions category updates.
 
 ## Guardrails
 
