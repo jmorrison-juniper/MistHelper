@@ -3,6 +3,7 @@
 Why:
     A child process inherits the parent environment by default. The E2E child
     must remove every production credential and persistent output path.
+    It must also disable container autostart, even when the parent enables it.
 """
 
 from __future__ import annotations  # Keep annotations independent from import order.
@@ -45,7 +46,7 @@ SCRUBBED_SUFFIXES = (  # Remove common credential and persistent path settings f
 
 
 def build_child_environment(parent: Mapping[str, str]) -> dict[str, str]:  # Scrub one child environment.
-    """Return one credential-free child environment with connector sentinels."""
+    """Return an isolated child environment with connector sentinels and autostart disabled."""
     logger.info("Build the isolated E2E child environment")  # Record the scrub before it starts.
     child = dict(parent)  # Preserve interpreter and module path settings for the child.
     for variable in tuple(child):  # Inspect a stable key list while values leave the child map.
@@ -56,5 +57,6 @@ def build_child_environment(parent: Mapping[str, str]) -> dict[str, str]:  # Scr
     child["ARANGO_HOST"] = ARANGO_SENTINEL  # Force an unreachable loopback document store address.
     child["REDIS_HOST"] = REDIS_SENTINEL  # Force an unreachable loopback lock store address.
     child["REDIS_PORT"] = REDIS_PORT_SENTINEL  # Force the unreachable lock store port.
+    child["CAPTURE_AUTOSTART"] = "0"  # Failed sentinel probes must never start production containers.
     logger.debug("Built the isolated E2E child environment with %s variables", len(child))  # Report a safe count.
     return child  # The caller adds only test-owned server settings.
