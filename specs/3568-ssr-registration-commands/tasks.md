@@ -31,4 +31,6 @@
 
 - [x] T013 Run py_compile for each new Python file.
 - [x] T014 Run ruff, black, mypy, pydocstyle, pytest, vulture, and interrogate for the package and tests.
-- [x] T015 Run SpecKit analyze and repair all findings.
+- [x] T015 Run the complexity gate with maximum complexity 10.
+- [x] T016 Run the test quality ratchet against `origin/main`.
+- [x] T017 Run SpecKit analyze and repair all findings.

@@ -27,14 +27,15 @@ class FakeResponse:
 class FakeSession:
     """Small Mist session fake for client tests."""
 
-    def __init__(self) -> None:
-        """Create an empty call record."""
+    def __init__(self, response: FakeResponse | None = None) -> None:
+        """Create an empty call record and a configured response."""
         self.calls: list[tuple[str, dict[str, str] | None]] = []  # WHY: tests assert path and query values.
+        self.response = response or FakeResponse(200, sample_payload())  # WHY: tests choose success or failure.
 
     def mist_get(self, path: str, query: dict[str, str] | None = None) -> FakeResponse:
-        """Record the GET call and return a successful fake response."""
+        """Record the GET call and return the configured fake response."""
         self.calls.append((path, query))  # WHY: capture the exact client request.
-        return FakeResponse(200, sample_payload())  # WHY: client callers receive a Mist-like response.
+        return self.response  # WHY: client callers receive the Mist-like response selected by each test.
 
 
 class FakeClient:
@@ -110,6 +111,28 @@ def test_client_uses_raw_registration_path_with_ttl() -> None:
     client = SsrRegistrationClient(session)  # WHY: use the real client against the fake session.
     client.fetch_commands("org-1", ttl=30)  # WHY: exercise the optional ttl query path.
     assert session.calls == [("/api/v1/orgs/org-1/128routers/register_cmd", {"ttl": "30"})]
+
+
+def test_client_returns_4xx_response_for_operation_handling() -> None:
+    """The client returns a 4xx response so the operation can report it."""
+    response = FakeResponse(403, {"detail": "permission denied"})  # WHY: simulate a client-side API refusal.
+    session = FakeSession(response)  # WHY: provide the 4xx response through the Mist session seam.
+    client = SsrRegistrationClient(session)  # WHY: exercise the real client against the fake session.
+    result = client.fetch_commands("org-1")  # WHY: read the response without network access.
+    assert result.status_code == 403  # WHY: the caller must receive the exact HTTP failure status.
+    assert result.data == {"detail": "permission denied"}  # WHY: error detail must remain available to the caller.
+    assert session.calls == [("/api/v1/orgs/org-1/128routers/register_cmd", None)]
+
+
+def test_client_returns_5xx_response_for_operation_handling() -> None:
+    """The client returns a 5xx response so the operation can report it."""
+    response = FakeResponse(503, {"detail": "service unavailable"})  # WHY: simulate a server-side API failure.
+    session = FakeSession(response)  # WHY: provide the 5xx response through the Mist session seam.
+    client = SsrRegistrationClient(session)  # WHY: exercise the real client against the fake session.
+    result = client.fetch_commands("org-1")  # WHY: read the response without network access.
+    assert result.status_code == 503  # WHY: the caller must receive the exact HTTP failure status.
+    assert result.data == {"detail": "service unavailable"}  # WHY: error detail must remain available to the caller.
+    assert session.calls == [("/api/v1/orgs/org-1/128routers/register_cmd", None)]
 
 
 def test_operation_prints_before_prompt_and_writes_only_after_yes(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
