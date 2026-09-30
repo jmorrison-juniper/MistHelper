@@ -32,10 +32,10 @@ Build a new RF diagnostics package at `src/troubleshooting/rf_diagnostics` with 
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **I. Five-Item Rule**: Conditional pass with a recorded implementation risk. `src/troubleshooting` has four visible direct children, so adding `rf_diagnostics` keeps that level at five. `tests/unit/troubleshooting` already has five visible test files. Adding `rf_diagnostics` there would make six direct children. This is required by the issue scope and is tracked in Complexity Tracking. Implementation must not add any other child at that level.
+- **I. Five-Item Rule**: Fleet-contract exception with a recorded implementation risk. `src/troubleshooting` has four visible direct children, so adding `rf_diagnostics` keeps that level at five. `tests/unit/troubleshooting` already has five visible test files. Adding `rf_diagnostics` there would make six direct children. This is required by the issue scope and is tracked in Complexity Tracking. Implementation must not add any other child at that level.
 - **II. Class-Based Architecture**: Pass. The design uses semantically named classes. It avoids standalone wrapper functions.
 - **III. Safety-First**: Pass. Confirmation defaults to no. All operator input uses safe input. File names are sanitized before write.
-- **IV. Full Deployment Pipeline**: Not applicable to this planning-only turn. The user explicitly said not to commit. The implementation tasks must run the applicable local gates before any later PR workflow.
+- **IV. Full Deployment Pipeline**: Pass for the fleet package boundary. The core package validates locally and records menu integration in `wiring.md`; the integration pull request applies the deferred menu files.
 - **V. Observability & Logging**: Pass. Planned code logs before and after API calls, waits, file writes, and audit writes. Output text stays ASCII.
 - **VI. Inline Comments**: Pass. Planned source code requires inline comments on generated code lines.
 - **VII. Action Logging**: Pass. Planned classes include before and after logging for meaningful actions.
@@ -100,10 +100,10 @@ tests/
 
 ## Post-Design Constitution Check
 
-- **I. Five-Item Rule**: Same conditional pass and same recorded test-path risk. No new source hierarchy violation is planned.
+- **I. Five-Item Rule**: Same fleet-contract exception and same recorded test-path risk. No new source hierarchy violation is planned.
 - **II. Class-Based Architecture**: Pass. Entities map to classes and dataclasses.
 - **III. Safety-First**: Pass. Contracts require safe prompts, fail-closed downloads, and no secret output.
-- **IV. Full Deployment Pipeline**: Deferred to implementation and PR workflow. No commit was made in this planning turn.
+- **IV. Full Deployment Pipeline**: Pass for this package pull request after local validation. Menu wiring remains deferred by fleet contract and is recorded in `wiring.md`.
 - **V. Observability & Logging**: Pass. Contracts require action logs around remote calls and file writes.
 - **VI. Inline Comments**: Pass. Implementation tasks must enforce same-line comments for generated code.
 - **VII. Action Logging**: Pass. Implementation tasks must enforce before and after logs for each action.

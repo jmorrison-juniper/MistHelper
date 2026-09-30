@@ -3,6 +3,7 @@
 from __future__ import annotations  # WHY: keep annotations import-safe.
 
 from dataclasses import dataclass  # WHY: fake SDK responses mimic APIResponse.data.
+from pathlib import Path  # WHY: wiring manifest test reads the feature file.
 from typing import Any  # WHY: fake SDK accepts dynamic request bodies.
 
 from src.troubleshooting.rf_diagnostics.client import RfDiagnosticsClient  # WHY: test target.
@@ -121,3 +122,36 @@ def test_recording_stop_download_and_list_use_expected_operations() -> None:
     client.list_recordings("site1", limit=10)  # WHY: exercise generated list call.
     assert [call[0] for call in sdk.rfdiags.calls] == ["stop", "download", "list"]  # WHY: operations match.
     assert sdk.rfdiags.calls[2][2] == {"limit": 10}  # WHY: list call sends query parameters as kwargs.
+
+
+def test_confirmation_accepts_only_y() -> None:
+    """The operation confirmation starts a run only for y."""
+    from src.troubleshooting.rf_diagnostics.operation import (
+        RfDiagnosticsOperation,
+    )  # WHY: import here avoids setup cost.
+
+    operation = RfDiagnosticsOperation.__new__(RfDiagnosticsOperation)  # WHY: bypass resolver-backed constructor.
+    operation._input = lambda *args, **kwargs: ""  # WHY: Enter must default to N.
+    assert operation._confirm("Start? [y/N]: ") is False  # WHY: Enter cannot start a remote diagnostic.
+    operation._input = lambda *args, **kwargs: "Y"  # WHY: uppercase y should be accepted.
+    assert operation._confirm("Start? [y/N]: ") is True  # WHY: explicit y starts the diagnostic.
+    operation._input = lambda *args, **kwargs: "yes"  # WHY: any value other than y must be rejected.
+    assert operation._confirm("Start? [y/N]: ") is False  # WHY: only y is accepted by the safety rule.
+
+
+def test_wiring_manifest_lists_deferred_integration_files() -> None:
+    """The wiring manifest carries the exact deferred integration files."""
+    repo_root = Path(__file__).resolve().parents[4]  # WHY: pytest can run from a changed working directory.
+    text = (repo_root / "specs" / "3570-spectrum-rfdiag" / "wiring.md").read_text(
+        encoding="utf-8"
+    )  # WHY: read manifest.
+    required = [  # WHY: every file here is forbidden to this package pull request.
+        "MistHelper.py",
+        "src/utils/operation_registry.py",
+        "src/refactors/endpoint_primary_key_strategies.py",
+        "README.md",
+        "documentation/menu_reference.md",
+        ".github/copilot-instructions.md",
+    ]
+    for item in required:  # WHY: check each deferred file explicitly.
+        assert item in text  # WHY: integration agent must find the deferred file name.

@@ -1,39 +1,51 @@
-# Wiring Manifest: Spectrum RF Diagnostics
+# Wiring manifest
 
-**Feature**: `specs/3570-spectrum-rfdiag/spec.md`
-**Status**: Deferred until after the RF diagnostics package and unit tests are ready.
+## Menu entries
+| menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
+| - | - | - | - | - | - | - | - |
+| 290 | Run spectrum analysis and RF diagnostic recording | src.troubleshooting.rf_diagnostics.operation | RfDiagnosticsOperation.run | interactive |  | False | False |
 
-## Purpose
+## OperationRegistry comment
+One `# WHY:` paragraph for the registry entry, in the style of the menu 269 and menu 270 entries:
 
-This manifest records integration work that must happen after the core RF diagnostic package and unit tests are ready. It keeps planning and package implementation bounded.
+`# WHY: Menu 290 starts bounded RF diagnostics only after an operator confirmation. The operation can run AP spectrum analysis or client RF diagnostic recording, and it stops a recording in a finally block so Ctrl+C does not leave cloud work running.`
 
-## Deferred Integration Items
+## Primary key strategies
+```python
+"rf_diagnostics_runs": {
+    "type": "auto_increment_with_unique",
+    "primary_key": ["misthelper_internal_id"],
+    "unique_fields": ["mode", "site_id", "target", "started_at"],
+    "indexes": ["mode", "site_id", "target", "status", "started_at"],
+}
+```
 
-- Add menu 290 entry for the RF diagnostics operation in `MistHelper.py`.
-- Add the operation registry entry for the RF diagnostics operation in `operation_registry.py`.
-- Add the endpoint primary-key strategy entry in `endpoint_primary_key_strategies.py`.
-- Review and update endpoint catalog coverage for these Mist paths:
-  - `POST /api/v1/sites/{site_id}/analyze_spectrum`
-  - `GET /api/v1/sites/{site_id}/analyze_spectrum`
-  - `POST /api/v1/sites/{site_id}/rfdiags`
-  - `GET /api/v1/sites/{site_id}/rfdiags/{rfdiag_id}`
-  - `POST /api/v1/sites/{site_id}/rfdiags/{rfdiag_id}/stop`
-  - `GET /api/v1/sites/{site_id}/rfdiags/{rfdiag_id}/download`
-  - `GET /api/v1/sites/{site_id}/rfdiags`
-- Add a changelog fragment for issue 3570.
-- Update README or operation count only when menu integration is enabled.
-- Update the generated menu reference only when menu integration is enabled.
-- Update copilot-instructions category mappings only when menu integration is enabled.
+## copilot-instructions category table
+Add menu `290` to the `interactive` category row. Do not mark menu `290` as destructive.
 
-These items are deferred to the integration pull request: `MistHelper.py`
-registration, `operation_registry.py` registration,
-`endpoint_primary_key_strategies.py` registration, README, generated menu
-reference, and copilot-instructions category updates.
+## Import line for MistHelper.py
+`from src.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.`
 
-## Guardrails
+## Deferred integration files
+The integration pull request owns these files and generated references:
 
-- Core behavior stays in `src/troubleshooting/rf_diagnostics`.
-- Unit coverage stays in `tests/unit/troubleshooting/rf_diagnostics`.
-- Integration edits must be planned before implementation starts.
-- Request body tests must prove OpenAPI shape before wiring is enabled.
-- Do not edit `MistHelper.py`, `operation_registry.py`, README, changelog, or endpoint primary-key strategy files during this planning step.
+- `MistHelper.py` menu registration.
+- `src/utils/operation_registry.py` registry metadata.
+- `src/refactors/endpoint_primary_key_strategies.py` primary-key strategy.
+- `README.md` operation count and menu table.
+- `documentation/menu_reference.md` and `documentation/wiki/**` generated menu reference output.
+- `.github/copilot-instructions.md` category table.
+
+## Endpoint catalog notes
+Record these Mist API paths in the integration review:
+
+- `POST /api/v1/sites/{site_id}/analyze_spectrum` uses operationId `initiateSiteAnalyzeSpectrum`.
+- `GET /api/v1/sites/{site_id}/analyze_spectrum` uses operationId `getSiteRunningSprectrumAnalysis`.
+- `POST /api/v1/sites/{site_id}/rfdiags` uses operationId `startSiteRecording`.
+- `GET /api/v1/sites/{site_id}/rfdiags/{rfdiag_id}` uses operationId `getSiteRfdiagRecording`.
+- `POST /api/v1/sites/{site_id}/rfdiags/{rfdiag_id}/stop` uses operationId `stopSiteRfdiagRecording`.
+- `GET /api/v1/sites/{site_id}/rfdiags/{rfdiag_id}/download` uses operationId `downloadSiteRfdiagRecording`.
+- `GET /api/v1/sites/{site_id}/rfdiags` uses operationId `getSiteSiteRfdiagRecording`. The assignment named `listSiteRfdiagRecording`, but OpenAPI and SDK expose `getSiteSiteRfdiagRecording`.
+
+## Integration boundary
+This core package pull request does not edit the deferred files. The fleet contract requires that this manifest carry the exact wiring values. The integration pull request copies the values from this file.
