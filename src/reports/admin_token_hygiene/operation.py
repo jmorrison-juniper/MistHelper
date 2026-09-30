@@ -22,9 +22,9 @@ from src.reports.admin_token_hygiene.model import (
 logger = logging.getLogger(__name__)
 
 ADMIN_FILENAME = "AdminHygiene.csv"
-TOKEN_FILENAME = "TokenHygiene.csv"
+API_CREDENTIAL_FILENAME = "TokenHygiene.csv"
 ADMIN_ENDPOINT_NAME = "adminTokenHygieneAdmins"
-TOKEN_ENDPOINT_NAME = "adminTokenHygieneTokens"
+API_CREDENTIAL_ENDPOINT_NAME = "adminTokenHygieneTokens"
 
 
 class AdminTokenHygieneReport:
@@ -113,7 +113,12 @@ class AdminTokenHygieneReport:
         summary = cls.model.summarize(admin_rows, token_rows)  # WHY: console output needs aggregate counts.
         cls._log_summary(summary)  # WHY: operator reads the outcome before opening files.
         admin_written = cls._export_rows(cls._rows(admin_rows), ADMIN_FILENAME, ADMIN_ENDPOINT_NAME, ADMIN_COLUMNS)
-        token_written = cls._export_rows(cls._rows(token_rows), TOKEN_FILENAME, TOKEN_ENDPOINT_NAME, TOKEN_COLUMNS)
+        token_written = cls._export_rows(
+            cls._rows(token_rows),
+            API_CREDENTIAL_FILENAME,
+            API_CREDENTIAL_ENDPOINT_NAME,
+            TOKEN_COLUMNS,
+        )
         if not admin_written or not token_written:  # WHY: a failed write must not look successful.
             raise RuntimeError("Admin token hygiene report could not write one or more output files")
         logger.info("Menu #273: Admin and API token hygiene report complete")  # WHY: completion log.

@@ -14,9 +14,9 @@ each acceptance criterion.
 
 **Purpose**: Create the owned package and test structure.
 
-- [ ] T001 Create `src/reports/admin_token_hygiene/__init__.py` with exported package metadata.
-- [ ] T002 Create `tests/unit/reports/admin_token_hygiene/__init__.py` for the new unit test package.
-- [ ] T003 Verify `specs/3554-admin-token-hygiene/wiring.md` has the contract sections for menu `273`, registry comments, primary key strategies, category counts, and the import line.
+- [x] T001 Create `src/reports/admin_token_hygiene/__init__.py` with exported package metadata.
+- [x] T002 Create `tests/unit/reports/admin_token_hygiene/__init__.py` for the new unit test package.
+- [x] T003 Verify `specs/3554-admin-token-hygiene/wiring.md` has the contract sections for menu `273`, registry comments, primary key strategies, category counts, and the import line.
 
 ---
 
@@ -24,10 +24,10 @@ each acceptance criterion.
 
 **Purpose**: Add shared models and client seams before story work begins.
 
-- [ ] T004 [P] Create `src/reports/admin_token_hygiene/model.py` with dataclasses for admin rows, token rows, and console summary.
-- [ ] T005 [P] Create `src/reports/admin_token_hygiene/client.py` with the SDK calls for `listOrgAdmins`, `listOrgApiTokens`, and `getOrgSettings`.
-- [ ] T006 Create `src/reports/admin_token_hygiene/operation.py` with `AdminTokenHygieneReport.run()` and the shared session and organization resolver seam.
-- [ ] T007 [P] Create `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_client.py` with fake SDK response coverage.
+- [x] T004 [P] Create `src/reports/admin_token_hygiene/model.py` with dataclasses for admin rows, token rows, and console summary.
+- [x] T005 [P] Create `src/reports/admin_token_hygiene/client.py` with the SDK calls for `listOrgAdmins`, `listOrgApiTokens`, and `getOrgSettings`.
+- [x] T006 Create `src/reports/admin_token_hygiene/operation.py` with `AdminTokenHygieneReport.run()` and the shared session and organization resolver seam.
+- [x] T007 [P] Create `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_client.py` with fake SDK response coverage.
 
 **Checkpoint**: Foundation ready. User story implementation can start.
 
@@ -43,13 +43,13 @@ CSV files are requested, no prompt is used, and summary counts are produced.
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Add operation export tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_operation.py`.
-- [ ] T009 [P] [US1] Add empty source data header tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_operation.py`.
+- [x] T008 [P] [US1] Add operation export tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_operation.py`.
+- [x] T009 [P] [US1] Add empty source data header tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_operation.py`.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement CSV row export and summary output in `src/reports/admin_token_hygiene/operation.py`.
-- [ ] T011 [US1] Implement no-prompt test-mode behavior through dependency injection in `src/reports/admin_token_hygiene/operation.py`.
+- [x] T010 [US1] Implement CSV row export and summary output in `src/reports/admin_token_hygiene/operation.py`.
+- [x] T011 [US1] Implement no-prompt test-mode behavior through dependency injection in `src/reports/admin_token_hygiene/operation.py`.
 
 **Checkpoint**: User Story 1 works with fake source data.
 
@@ -65,13 +65,13 @@ SSO, and expired invite cases into the model and verify rows and summary counts.
 
 ### Tests for User Story 2
 
-- [ ] T012 [P] [US2] Add admin scoring tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
-- [ ] T013 [P] [US2] Add admin password and invite age tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
+- [x] T012 [P] [US2] Add admin scoring tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
+- [x] T013 [P] [US2] Add admin password and invite age tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Implement admin role, scope, two-factor, SSO, password age, and invite scoring in `src/reports/admin_token_hygiene/model.py`.
-- [ ] T015 [US2] Add admin summary counting in `src/reports/admin_token_hygiene/model.py`.
+- [x] T014 [US2] Implement admin role, scope, two-factor, SSO, password age, and invite scoring in `src/reports/admin_token_hygiene/model.py`.
+- [x] T015 [US2] Add admin summary counting in `src/reports/admin_token_hygiene/model.py`.
 
 **Checkpoint**: User Story 2 works from model tests.
 
@@ -87,16 +87,16 @@ operation tests. Confirm findings, summary counts, and redaction.
 
 ### Tests for User Story 3
 
-- [ ] T016 [P] [US3] Add token idle and never-used tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
-- [ ] T017 [P] [US3] Add unrestricted write token tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
-- [ ] T018 [P] [US3] Add token key redaction tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_redaction.py`.
-- [ ] T019 [P] [US3] Add `TOKEN_IDLE_DAYS` environment tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
+- [x] T016 [P] [US3] Add token idle and never-used tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
+- [x] T017 [P] [US3] Add unrestricted write token tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
+- [x] T018 [P] [US3] Add token key redaction tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_redaction.py`.
+- [x] T019 [P] [US3] Add `TOKEN_IDLE_DAYS` environment tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_model.py`.
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] Implement token scoring and key removal in `src/reports/admin_token_hygiene/model.py`.
-- [ ] T021 [US3] Implement `TOKEN_IDLE_DAYS` parsing in `src/reports/admin_token_hygiene/model.py`.
-- [ ] T022 [US3] Ensure `src/reports/admin_token_hygiene/operation.py` logs token counts only and never logs token payloads.
+- [x] T020 [US3] Implement token scoring and key removal in `src/reports/admin_token_hygiene/model.py`.
+- [x] T021 [US3] Implement `TOKEN_IDLE_DAYS` parsing in `src/reports/admin_token_hygiene/model.py`.
+- [x] T022 [US3] Ensure `src/reports/admin_token_hygiene/operation.py` logs token counts only and never logs token payloads.
 
 **Checkpoint**: User Story 3 works from model and operation tests.
 
@@ -110,12 +110,12 @@ operation tests. Confirm findings, summary counts, and redaction.
 
 ### Tests for User Story 4
 
-- [ ] T023 [P] [US4] Add artifact existence tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_artifacts.py`.
+- [x] T023 [P] [US4] Add artifact existence tests in `tests/unit/reports/admin_token_hygiene/test_admin_token_hygiene_artifacts.py`.
 
 ### Implementation for User Story 4
 
-- [ ] T024 [US4] Create `changelog.d/issue-3554-admin-token-hygiene.md` with one `### Added` heading and one bullet that names `#3554`.
-- [ ] T025 [US4] Recheck `specs/3554-admin-token-hygiene/wiring.md` after implementation and keep shared source edits deferred.
+- [x] T024 [US4] Create `changelog.d/issue-3554-admin-token-hygiene.md` with one `### Added` heading and one bullet that names `#3554`.
+- [x] T025 [US4] Recheck `specs/3554-admin-token-hygiene/wiring.md` after implementation and keep shared source edits deferred.
 
 **Checkpoint**: User Story 4 artifacts exist.
 
@@ -125,10 +125,10 @@ operation tests. Confirm findings, summary counts, and redaction.
 
 **Purpose**: Record required shared wiring that this fleet branch must not edit.
 
-- [ ] T026 Record the `MistHelper.py` import and menu registration as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
-- [ ] T027 Record the `src/utils/operation_registry.py` safe category update as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
-- [ ] T028 Record the `src/refactors/endpoint_primary_key_strategies.py` entries as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
-- [ ] T029 Record the `README.md`, `.github/copilot-instructions.md`, generated menu reference, and menu API map updates as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
+- [x] T026 Record the `MistHelper.py` import and menu registration as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
+- [x] T027 Record the `src/utils/operation_registry.py` safe category update as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
+- [x] T028 Record the `src/refactors/endpoint_primary_key_strategies.py` entries as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
+- [x] T029 Record the `README.md`, `.github/copilot-instructions.md`, generated menu reference, and menu API map updates as deferred in `specs/3554-admin-token-hygiene/wiring.md`.
 
 ---
 
@@ -136,15 +136,15 @@ operation tests. Confirm findings, summary counts, and redaction.
 
 **Purpose**: Prove the owned implementation before the analysis step.
 
-- [ ] T030 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m py_compile` for each new Python file under `src/reports/admin_token_hygiene/`.
-- [ ] T031 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m ruff check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`.
-- [ ] T032 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m black --check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`.
-- [ ] T033 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m mypy src\reports\admin_token_hygiene --config-file pyproject.toml`.
-- [ ] T034 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m pydocstyle src\reports\admin_token_hygiene`.
-- [ ] T035 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m pytest tests\unit\reports\admin_token_hygiene -q --timeout=120`.
-- [ ] T036 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m vulture src\reports\admin_token_hygiene --min-confidence 70`.
-- [ ] T037 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m interrogate -v src\reports\admin_token_hygiene`.
-- [ ] T038 Run the SpecKit analyze step and repair each finding before the final push.
+- [x] T030 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m py_compile` for each new Python file under `src/reports/admin_token_hygiene/`.
+- [x] T031 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m ruff check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`.
+- [x] T032 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m black --check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`.
+- [x] T033 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m mypy src\reports\admin_token_hygiene --config-file pyproject.toml`.
+- [x] T034 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m pydocstyle src\reports\admin_token_hygiene`.
+- [x] T035 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m pytest tests\unit\reports\admin_token_hygiene -q --timeout=120`.
+- [x] T036 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m vulture src\reports\admin_token_hygiene --min-confidence 70`.
+- [x] T037 Run `C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene\.venv\Scripts\python.exe -m interrogate -v src\reports\admin_token_hygiene`.
+- [x] T038 Run the SpecKit analyze step and repair each finding before the final push.
 
 ---
 

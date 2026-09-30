@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import mistapi
+import pytest
 
 from src.reports.admin_token_hygiene.client import AdminTokenHygieneClient
 
@@ -45,3 +46,41 @@ def test_client_reads_settings(monkeypatch: Any) -> None:
     )
     client = AdminTokenHygieneClient(object(), "org-1")
     assert client.get_settings() == {"password_policy": {}}
+
+
+def test_client_raises_on_admin_4xx_response(monkeypatch: Any) -> None:
+    """The client must fail closed when the admin list returns a 4xx status."""
+    monkeypatch.setattr(mistapi, "get_all", lambda response, mist_session: response.data)
+    monkeypatch.setattr(mistapi.api.v1.orgs.admins, "listOrgAdmins", lambda session, org_id: FakeResponse([], 403))
+    client = AdminTokenHygieneClient(object(), "org-1")
+    with pytest.raises(RuntimeError, match="listOrgAdmins failed with HTTP 403"):
+        client.list_admins()
+
+
+def test_client_raises_on_token_5xx_response(monkeypatch: Any) -> None:
+    """The client must fail closed when the token list returns a 5xx status."""
+    monkeypatch.setattr(mistapi, "get_all", lambda response, mist_session: response.data)
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.apitokens, "listOrgApiTokens", lambda session, org_id: FakeResponse([], 503)
+    )
+    client = AdminTokenHygieneClient(object(), "org-1")
+    with pytest.raises(RuntimeError, match="listOrgApiTokens failed with HTTP 503"):
+        client.list_tokens()
+
+
+def test_client_returns_empty_settings_on_4xx_response(monkeypatch: Any) -> None:
+    """The client must keep report generation possible when settings return a 4xx status."""
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.setting, "getOrgSettings", lambda session, org_id: FakeResponse({"error": "denied"}, 404)
+    )
+    client = AdminTokenHygieneClient(object(), "org-1")
+    assert client.get_settings() == {}
+
+
+def test_client_returns_empty_settings_on_5xx_response(monkeypatch: Any) -> None:
+    """The client must keep report generation possible when settings return a 5xx status."""
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.setting, "getOrgSettings", lambda session, org_id: FakeResponse({"error": "down"}, 500)
+    )
+    client = AdminTokenHygieneClient(object(), "org-1")
+    assert client.get_settings() == {}

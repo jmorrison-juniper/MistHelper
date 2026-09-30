@@ -8,7 +8,7 @@ from dataclasses import dataclass, fields
 from datetime import UTC, datetime
 from typing import Any
 
-TOKEN_IDLE_DAYS_ENV = "TOKEN_IDLE_DAYS"
+IDLE_DAYS_ENV_NAME = "TOKEN_IDLE_DAYS"
 DEFAULT_TOKEN_IDLE_DAYS = 90
 ADMIN_COLUMNS = [
     "admin_id",
@@ -92,7 +92,7 @@ class AdminTokenHygieneModel:
     def read_idle_threshold(environ: Mapping[str, str] | None = None) -> int:
         """Return the token idle threshold from the environment."""
         source = environ if environ is not None else os.environ  # WHY: tests can pass an isolated environment.
-        raw_value = source.get(TOKEN_IDLE_DAYS_ENV, str(DEFAULT_TOKEN_IDLE_DAYS))  # WHY: default is 90 days.
+        raw_value = source.get(IDLE_DAYS_ENV_NAME, str(DEFAULT_TOKEN_IDLE_DAYS))  # WHY: default is 90 days.
         try:
             threshold = int(raw_value)  # WHY: the threshold must be numeric for day comparisons.
         except ValueError as error:
@@ -253,19 +253,39 @@ class AdminTokenHygieneModel:
     def _scope_key(privilege: Mapping[str, Any]) -> str:
         """Return a normalized scope key."""
         raw_scope = AdminTokenHygieneModel._role_key(privilege.get("scope"))  # WHY: reuse normalization rules.
-        if raw_scope in {"org", "organization"}:
-            return "org"
-        if raw_scope in {"site", "sites"} or privilege.get("site_id"):
-            return "selected_sites"
-        if raw_scope in {"sitegroup", "sitegroups", "site_group"} or privilege.get("sitegroup_id"):
-            return "site_groups"
-        if raw_scope in {"all", "all_sites"}:
-            return "all_sites"
-        if privilege.get("org_id") and not privilege.get("site_id") and not privilege.get("sitegroup_id"):
-            return "org"
-        if privilege.get("msp_id"):
-            return "msp"
+        direct_scope = AdminTokenHygieneModel._direct_scope_key(raw_scope)  # WHY: split direct names for complexity.
+        if direct_scope:
+            return direct_scope  # WHY: explicit scope strings outrank inferred identifier fields.
+        inferred_scope = AdminTokenHygieneModel._inferred_scope_key(privilege)  # WHY: identifiers can reveal scope.
+        if inferred_scope:
+            return inferred_scope  # WHY: use the inferred scope when Mist omits the scope field.
         return raw_scope or "unknown"
+
+    @staticmethod
+    def _direct_scope_key(raw_scope: str) -> str:
+        """Return a scope key from an explicit scope value."""
+        if raw_scope in {"org", "organization"}:  # WHY: Mist can use either organization term.
+            return "org"
+        if raw_scope in {"site", "sites"}:  # WHY: site scope means selected site access.
+            return "selected_sites"
+        if raw_scope in {"sitegroup", "sitegroups", "site_group"}:  # WHY: site group scope is distinct.
+            return "site_groups"
+        if raw_scope in {"all", "all_sites"}:  # WHY: all-sites access is broader than selected sites.
+            return "all_sites"
+        return ""  # WHY: empty result lets the caller infer scope from identifiers.
+
+    @staticmethod
+    def _inferred_scope_key(privilege: Mapping[str, Any]) -> str:
+        """Return a scope key from identifier fields."""
+        if privilege.get("site_id"):  # WHY: a site identifier limits access to selected sites.
+            return "selected_sites"
+        if privilege.get("sitegroup_id"):  # WHY: a site group identifier marks site group access.
+            return "site_groups"
+        if privilege.get("org_id"):  # WHY: an org identifier without site fields means organization scope.
+            return "org"
+        if privilege.get("msp_id"):  # WHY: an MSP identifier marks MSP access.
+            return "msp"
+        return ""  # WHY: empty result lets the caller report unknown scope.
 
     @staticmethod
     def _has_super_user(privileges: list[Mapping[str, Any]]) -> bool:
