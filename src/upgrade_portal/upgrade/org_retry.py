@@ -19,11 +19,16 @@ from dataclasses import dataclass  # Keep one retry plan immutable.
 from typing import Any  # The stored record holds JSON values of mixed types.
 
 from src.upgrade_portal.capture.devices import normalize_device_mac  # The one MAC address rule of the portal.
-from src.upgrade_portal.upgrade.org_devices import OrgDeviceRows  # The device rows of the progress page.
+from src.upgrade_portal.upgrade.org_cancel_outcomes import OrgCancelLists  # Read the same writing list as the page.
+from src.upgrade_portal.upgrade.org_devices import CloudTargetLists, OrgDeviceRows  # Read device state evidence.
 
 logger = logging.getLogger(__name__)  # Keep the records of this module under one name.
 
 RETRY_STATES = frozenset({"failed", "rejected", "not_submitted", "cancelled", "skipped"})  # No firmware landed.
+ACTIVE_WRITE_STATES = frozenset(  # A second request can overlap the first firmware operation in these states.
+    {"rebooting", "upgrading", "downloading", "download requested", "downloaded", "scheduled"}
+)
+CANCEL_RELEASE_STATES = frozenset({"failed", "upgraded", "rebooted", "skipped"})  # A device list ended the hold.
 MATCH_OUTCOME = "version_match"  # The device runs the requested version, so it never needs a retry.
 MISMATCH_OUTCOME = "version_mismatch"  # The device runs another version, whatever its state word is.
 FAMILY_ORDER = ("ap", "switch", "gateway")  # The order of the device type boxes on the options page.
@@ -47,6 +52,7 @@ class OrgRetryPlan:
     org_id: str  # The retry never crosses into another organization.
     site_ids: tuple[str, ...]  # The sites that the retry selects again.
     devices: tuple[dict[str, str], ...]  # The devices that the options page keeps.
+    held_back: tuple[dict[str, str], ...]  # The devices that can still write firmware and cannot retry yet.
     options: dict[str, Any]  # The choices that the options form shows first.
 
     @property
@@ -79,7 +85,7 @@ class OrgRetryPlan:
     @classmethod
     def empty(cls, operation_id: str, org_id: str) -> OrgRetryPlan:
         """Return a plan that holds no device, so the save plans no device."""
-        return cls(operation_id, org_id, (), (), {})  # The narrow step then removes every row.
+        return cls(operation_id, org_id, (), (), (), {})  # The narrow step then removes every row.
 
     def narrow(self, view: Mapping[str, Any]) -> dict[str, Any]:
         """Return a copy of one site view that holds the retry devices only.
@@ -118,6 +124,8 @@ class OrgRetrySelection:
         if outcome == MATCH_OUTCOME:  # The device runs the requested version.
             return False  # A second attempt would reinstall healthy firmware.
         state = str(row.get("state") or "").strip().lower()  # The state word of the device.
+        if state in ACTIVE_WRITE_STATES:  # The first firmware operation can still change the device.
+            return False  # A second request must wait for a later settled state.
         return state in RETRY_STATES or outcome == MISMATCH_OUTCOME  # No firmware landed, or the wrong one did.
 
     @classmethod
@@ -134,20 +142,96 @@ class OrgRetrySelection:
         logger.info("Select the retry devices of aggregate upgrade %s", record.get("operation_id", ""))
         source = OrgDeviceRows(record).rows() if rows is None else rows  # Reuse the rows of the caller.
         site_ids = cls._approved_sites(record)  # The retry keeps the approved sites only.
-        chosen = cls._retry_rows(source, site_ids)  # The devices that did not reach the requested version.
+        held = cls._held_back_rows(record, source, site_ids)  # Keep an active write out of the retry plan.
+        held_macs = {normalize_device_mac(row.get("mac")) for row in held}  # Compare each held device once.
+        chosen = cls._retry_rows(source, site_ids, held_macs)  # The devices that can safely try again now.
         logger.debug("Aggregate upgrade %s holds %s retry device(s)", record.get("operation_id", ""), len(chosen))
-        if not chosen:  # No device needs a second attempt.
+        if not chosen and not held:  # No device needs a second attempt or a safety hold.
             return None  # The page then shows no retry control.
-        return cls._build(record, site_ids, chosen)  # Keep the plan small, so every page can build it again.
+        return cls._build(record, site_ids, chosen, held)  # Keep the plan small, so every page can build it again.
 
     @classmethod
-    def _retry_rows(cls, source: Sequence[Mapping[str, Any]], site_ids: tuple[str, ...]) -> list[Mapping[str, Any]]:
+    def _retry_rows(
+        cls,
+        source: Sequence[Mapping[str, Any]],
+        site_ids: tuple[str, ...],
+        held_macs: set[str],
+    ) -> list[Mapping[str, Any]]:
         """Return the device rows of the approved sites that need a second attempt."""
-        return [row for row in source if str(row.get("site_id") or "") in site_ids and cls.needs_retry(row)]
+        return [  # Keep each safe retry device in the progress-page order.
+            row
+            for row in source
+            if str(row.get("site_id") or "") in site_ids
+            and normalize_device_mac(row.get("mac")) not in held_macs
+            and cls.needs_retry(row)
+        ]
+
+    @classmethod
+    def _held_back_rows(
+        cls,
+        record: Mapping[str, Any],
+        source: Sequence[Mapping[str, Any]],
+        site_ids: tuple[str, ...],
+    ) -> list[Mapping[str, Any]]:
+        """Return the device rows that can still write firmware."""
+        writing_macs = cls._writing_macs(record)  # Read the same cancellation evidence that the page shows.
+        released_macs = cls._released_macs(record, writing_macs)  # Require a later settled device list.
+        return [  # Keep each held device in the progress-page order.
+            row
+            for row in source
+            if str(row.get("site_id") or "") in site_ids
+            and str(row.get("version_outcome") or "") != MATCH_OUTCOME
+            and cls._must_wait(row, writing_macs, released_macs)
+        ]
+
+    @staticmethod
+    def _must_wait(
+        row: Mapping[str, Any],
+        writing_macs: frozenset[str],
+        released_macs: frozenset[str],
+    ) -> bool:
+        """Report whether one device needs a later settled state before a retry."""
+        state = str(row.get("state") or "").strip().lower()  # Normalize the latest device state.
+        if state in ACTIVE_WRITE_STATES:  # The latest cloud state shows an active firmware operation.
+            return True  # State evidence alone is sufficient for the safety hold.
+        mac = normalize_device_mac(row.get("mac"))  # Compare the cancellation list in one address form.
+        return bool(mac and mac in writing_macs and mac not in released_macs)  # A settled device list releases it.
+
+    @staticmethod
+    def _writing_macs(record: Mapping[str, Any]) -> frozenset[str]:
+        """Return each device that the latest cancellation result shows as writing firmware."""
+        children = record.get("children")  # The cancellation result lives on each child job.
+        rows = children if isinstance(children, list) else []  # A damaged record gives no unsafe retry evidence.
+        claimed = bool(record.get("submission_claim_id"))  # A live claim can still send a planned child job.
+        found: set[str] = set()  # Join the writing lists of all child jobs.
+        for child in rows:  # Read each stored cancellation result once.
+            if not isinstance(child, Mapping) or not isinstance(child.get("cancellation"), Mapping):
+                continue  # A child with no cancellation result contributes no writing list.
+            lists, _ = OrgCancelLists.lists(child, claimed)  # Match the cancellation panel rule.
+            found.update(normalize_device_mac(mac) for mac in lists["already_writing"])  # Normalize each address.
+        found.discard("")  # A malformed address must never hold an unrelated device.
+        return frozenset(found)  # The selection only reads the completed index.
+
+    @staticmethod
+    def _released_macs(record: Mapping[str, Any], writing_macs: frozenset[str]) -> frozenset[str]:
+        """Return cancellation writing devices that a later device list shows as settled."""
+        children = record.get("children")  # Each child stores its latest cloud answer.
+        rows = children if isinstance(children, list) else []  # A damaged record releases no safety hold.
+        released: set[str] = set()  # Join the settled evidence of all child jobs.
+        for child in rows:  # Read each latest cloud answer once.
+            if not isinstance(child, Mapping):
+                continue  # A damaged child gives no settled device evidence.
+            lists = CloudTargetLists(child.get("status_data"))  # Index only explicit device lists.
+            released.update(mac for mac in writing_macs if lists.word_of(mac) in CANCEL_RELEASE_STATES)
+        return frozenset(released)  # The selection only reads the completed index.
 
     @classmethod
     def _build(
-        cls, record: Mapping[str, Any], site_ids: tuple[str, ...], chosen: Sequence[Mapping[str, Any]]
+        cls,
+        record: Mapping[str, Any],
+        site_ids: tuple[str, ...],
+        chosen: Sequence[Mapping[str, Any]],
+        held: Sequence[Mapping[str, Any]],
     ) -> OrgRetryPlan:
         """Return the retry plan of the chosen device rows of one operation."""
         return OrgRetryPlan(
@@ -155,6 +239,7 @@ class OrgRetrySelection:
             org_id=str(record.get("org_id") or ""),  # The retry never crosses into another organization.
             site_ids=cls._retry_sites(site_ids, chosen),  # Only the sites that hold a retry device.
             devices=tuple(cls._device_row(row) for row in chosen),  # One small row for each retry device.
+            held_back=tuple(cls._device_row(row) for row in held),  # Explain each device that must wait.
             options=cls._prefill(record, chosen),  # The earlier choices, narrowed to the retry.
         )
 

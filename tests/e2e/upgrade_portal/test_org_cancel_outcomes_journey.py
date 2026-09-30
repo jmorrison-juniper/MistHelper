@@ -80,8 +80,14 @@ class TestMultiSiteCancelOutcomes:
         gateway_note = page.get_by_test_id(f"org-cancel-outcome-note-{CHILD_IDS['gateway']}")
         sync_api.expect(gateway_note).to_have_text(NEVER_STARTED)  # The refused child job has no cloud job.
         assert SECOND_GATEWAY_MAC not in page.get_by_test_id("org-cancel-outcome").inner_text()  # No list names it.
+        retry = page.get_by_test_id("org-upgrade-retry-controls")  # The recovery card must explain the safety hold.
+        sync_api.expect(retry).to_be_visible()  # Another failed device can keep the retry card visible.
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-retry-held-device-{SECOND_AP_MAC}")).to_be_visible()
+        assert page.get_by_test_id(f"org-upgrade-retry-device-{SECOND_AP_MAC}").count() == 0  # Never offer it.
+        sync_api.expect(page.get_by_test_id("org-upgrade-retry-held-note")).to_contain_text("still writes firmware")
         page.screenshot(path=str(tmp_path / "cancel-after.png"), full_page=True)
         page.reload(wait_until="domcontentloaded")
         sync_api.expect(page.get_by_test_id("org-cancel-outcome")).to_be_visible()
         assert panel_lists(page) == EXPECTED_LISTS  # The stored record keeps the same lists.
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-retry-held-device-{SECOND_AP_MAC}")).to_be_visible()
         page.screenshot(path=str(tmp_path / "cancel-reload.png"), full_page=True)

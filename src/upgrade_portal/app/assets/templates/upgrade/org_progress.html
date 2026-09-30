@@ -209,31 +209,50 @@
   {% set controls = status.controls %}
   <section class="portal-card" data-testid="org-upgrade-controls">
     <h2 class="portal-card-title">Recovery actions</h2>
-    {% if controls.retry.available %}
+    {% if controls.retry.visible %}
       <div class="mb-3" data-testid="org-upgrade-retry-controls">
         <h3 class="portal-card-title">Retry the devices that did not upgrade</h3>
-        <p class="portal-card-note">
-          <span data-testid="org-upgrade-retry-count">{{ controls.retry.count }}</span>
-          {{ 'device' if controls.retry.count == 1 else 'devices' }} did not reach the target version.
-        </p>
-        <ul data-testid="org-upgrade-retry-devices">
-          {% for device in controls.retry.devices %}
-            <li data-testid="org-upgrade-retry-device-{{ device.mac }}">
-              <span class="cell-mono">{{ device.mac }}</span>
-              {{ device.name | default('Unnamed device', true) }} at {{ device.site_name | default('an unnamed site', true) }}.
-              The last state is {{ device.state | default('unknown', true) }}.
-            </li>
-          {% endfor %}
-        </ul>
-        <p class="portal-card-note">The retry opens a new plan. The portal writes no firmware until you confirm the new plan.</p>
-        <form method="post" action="/api/org-upgrades/{{ upgrade_id }}/retry">
-          <input type="hidden"
-                 name="csrf_token"
-                 value="{{ csrf_token() if csrf_token is defined else '' }}">
-          <button type="submit"
-                  class="portal-button portal-button-primary"
-                  data-testid="org-upgrade-retry">Retry the failed devices</button>
-        </form>
+        {% if controls.retry.available %}
+          <p class="portal-card-note">
+            <span data-testid="org-upgrade-retry-count">{{ controls.retry.count }}</span>
+            {{ 'device' if controls.retry.count == 1 else 'devices' }} did not reach the target version.
+          </p>
+          <ul data-testid="org-upgrade-retry-devices">
+            {% for device in controls.retry.devices %}
+              <li data-testid="org-upgrade-retry-device-{{ device.mac }}">
+                <span class="cell-mono">{{ device.mac }}</span>
+                {{ device.name | default('Unnamed device', true) }} at {{ device.site_name | default('an unnamed site', true) }}.
+                The last state is {{ device.state | default('unknown', true) }}.
+              </li>
+            {% endfor %}
+          </ul>
+          <p class="portal-card-note">The retry opens a new plan. The portal writes no firmware until you confirm the new plan.</p>
+          <form method="post" action="/api/org-upgrades/{{ upgrade_id }}/retry">
+            <input type="hidden"
+                   name="csrf_token"
+                   value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <button type="submit"
+                    class="portal-button portal-button-primary"
+                    data-testid="org-upgrade-retry">Retry the failed devices</button>
+          </form>
+        {% endif %}
+        {% if controls.retry.held_count %}
+          <p class="portal-card-note" data-testid="org-upgrade-retry-held-note">
+            The portal holds back
+            <span data-testid="org-upgrade-retry-held-count">{{ controls.retry.held_count }}</span>
+            {{ 'device' if controls.retry.held_count == 1 else 'devices' }} because it still writes firmware.
+            A later settled state can make the device available for a retry.
+          </p>
+          <ul data-testid="org-upgrade-retry-held-devices">
+            {% for device in controls.retry.held_back %}
+              <li data-testid="org-upgrade-retry-held-device-{{ device.mac }}">
+                <span class="cell-mono">{{ device.mac }}</span>
+                {{ device.name | default('Unnamed device', true) }} at {{ device.site_name | default('an unnamed site', true) }}.
+                The last state is {{ device.state | default('unknown', true) }}.
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
       </div>
     {% endif %}
     {% if controls.reconcile.children %}
