@@ -14,6 +14,7 @@ place, because a reader who trusts a false comment runs the wrong command.
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,24 @@ _COMPOSE = _ROOT / "compose.yml"
 _COMPOSE_BUILD = _ROOT / "compose.build.yml"
 _GUIDE = _ROOT / "documentation" / "container-deployment.md"
 _SCRIPT = _ROOT / "scripts" / "compose.ps1"
+_IMAGE_INPUT_PATHS = (
+    "Containerfile",
+    ".dockerignore",
+    "container/scripts/misthelper-session.sh",
+    "container/scripts/welcome.sh",
+    "container/scripts/start.sh",
+    "container/scripts/write-session-env.sh",
+    "zscaler-root-ca.crt",
+    "requirements.txt",
+    "pyproject.toml",
+    "MistHelper.py",
+    "__init__.py",
+    "wsgi.py",
+    "wsgi_capture.py",
+    "src/",
+    "web_portal/",
+    "documentation/mist-api-openapi31json.json",
+)
 
 # The sentence that the old header carried. It is false under podman-compose, so
 # no file may state it again.
@@ -138,6 +157,78 @@ def test_the_script_builds_only_through_the_build_file(script_text: str) -> None
     assert "check-revision" in script_text, "the script must offer the revision check"
     revision_message = "the revision check must read the label that names the commit"  # Explain the required label.
     assert "org.opencontainers.image.revision" in script_text, revision_message  # Hold the revision check in place.
+    assert "git -C $RepositoryRoot diff --name-only" in script_text  # Require input-aware revision comparison.
+    assert "none changes an image input" in script_text  # Require a current result for unrelated commits.
+    assert "Changed image inputs:" in script_text  # Require changed input names in the stale result.
+
+
+def _git(repository: Path, *arguments: str) -> str:
+    """Run one Git command in a temporary repository."""
+    result = subprocess.run(  # Run Git without a container or network.
+        ["git", "-C", str(repository), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+    )  # Capture output for a direct decision assertion.
+    return result.stdout.strip()  # Return only the command result text.
+
+
+def _make_revision_repository(tmp_path: Path) -> tuple[Path, str, str]:
+    """Create two commits with one image input and one unrelated file."""
+    repository = tmp_path / "revision-repository"  # Keep Git state inside pytest's temporary directory.
+    repository.mkdir()  # Create the isolated repository directory.
+    _git(repository, "init", "--initial-branch=main")  # Create the test branch.
+    _git(repository, "config", "user.email", "test@example.com")  # Set the test author.
+    _git(repository, "config", "user.name", "Test User")  # Set the test author name.
+    (repository / "src").mkdir()  # Create an image input directory.
+    (repository / "src" / "app.py").write_text("one\n", encoding="utf-8")  # Add an image input.
+    (repository / "documentation.md").write_text("one\n", encoding="utf-8")  # Add an unrelated input.
+    _git(repository, "add", ".")  # Stage the base files.
+    _git(repository, "commit", "-m", "base")  # Record the base revision.
+    base = _git(repository, "rev-parse", "HEAD")  # Save the image revision.
+    (repository / "documentation.md").write_text("two\n", encoding="utf-8")  # Change only documentation.
+    _git(repository, "add", ".")  # Stage the documentation change.
+    _git(repository, "commit", "-m", "documentation")  # Record the unrelated revision.
+    documentation_head = _git(repository, "rev-parse", "HEAD")  # Save the current revision.
+    return repository, base, documentation_head  # Return both revisions for the test.
+
+
+def test_revision_check_ignores_commits_outside_image_inputs(tmp_path: Path) -> None:
+    """A later documentation-only commit must not make the image stale."""
+    repository, base, documentation_head = _make_revision_repository(tmp_path)
+
+    changed_inputs = _git(
+        repository,
+        "diff",
+        "--name-only",
+        base,
+        documentation_head,
+        "--",
+        *_IMAGE_INPUT_PATHS,
+    )
+
+    assert changed_inputs == ""
+
+
+def test_revision_check_finds_changed_image_inputs(tmp_path: Path) -> None:
+    """A later source commit must make the image stale and name the source."""
+    repository, base, _ = _make_revision_repository(tmp_path)
+    (repository / "src" / "app.py").write_text("two\n", encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "application")
+    application_head = _git(repository, "rev-parse", "HEAD")
+
+    changed_inputs = _git(
+        repository,
+        "diff",
+        "--name-only",
+        base,
+        application_head,
+        "--",
+        *_IMAGE_INPUT_PATHS,
+    )
+
+    assert changed_inputs == "src/app.py"
 
 
 def test_the_guide_names_the_build_separation(guide_text: str) -> None:
