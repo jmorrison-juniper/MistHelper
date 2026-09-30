@@ -21,6 +21,9 @@ It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
 
+On the Maps page, each floor plan title uses the selected theme text color.
+A theme change preserves the map and its viewing range.
+
 Menu 271 exports subscription and contract expiry reports. Use it to find
 license and support renewal risk.
 

@@ -183,6 +183,7 @@ function renderMap(data, view) {
 
     var layout = {
         title: data.name || 'Floor Plan',
+        font: { color: getComputedStyle(document.getElementById('mapContainer')).color },
         xaxis: { range: [0, mapW], showgrid: false, zeroline: false, visible: false },
         yaxis: { range: [mapH, 0], showgrid: false, zeroline: false, visible: false, scaleanchor: 'x' },
         images: images,
@@ -202,6 +203,7 @@ function renderMap(data, view) {
         if (imgUrl && !plot.querySelector('.imagelayer image')) {
             showImageNote(IMAGE_FAILED_NOTE);
         }
+        updateMapTheme();
     });
 
     if (!imgUrl) {
@@ -209,6 +211,22 @@ function renderMap(data, view) {
         showImageNote(NO_IMAGE_NOTE);
     }
     renderDeviceList(currentDevices);
+}
+
+function updateMapTheme() {
+    var plot = document.getElementById('plotArea');
+    if (!plot.data) { return; }
+    var color = getComputedStyle(document.getElementById('mapContainer')).color;
+    // An unchanged font needs no redraw, which also preserves a failed image note.
+    if (plot.layout.font.color === color) { return; }
+    console.info('Updating the map text color from the active theme.');
+    Plotly.relayout(plot, {
+        'font.color': color
+    }).then(function() {
+        console.debug('Updated the map text color.');
+    }).catch(function(error) {
+        console.error('The map text color could not update.', error);
+    });
 }
 
 function deviceColor(type) {
@@ -274,6 +292,9 @@ function clearMap() {
     area.appendChild(ph);
     document.getElementById('devicePanel').classList.add('d-none');
 }
+
+// The load event runs after the replacement theme applies its text color.
+document.getElementById('theme-css').addEventListener('load', updateMapTheme);
 
 document.addEventListener('DOMContentLoaded', function() {
     loadSites();
