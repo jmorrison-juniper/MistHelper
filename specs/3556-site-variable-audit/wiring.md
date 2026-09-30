@@ -1,59 +1,81 @@
-# Wiring Notes: Site Variable Audit
+# Wiring Manifest: Site Variable Audit
 
-## Status
+## Menu entries
 
-This file is a planning placeholder. The final wiring manifest is deferred to
-the implementation or integration pull request.
+- Add Menu 275 with title `Site Variable Audit`.
+- Call `SiteVariableAudit.run()` with no positional argument.
+- Mark the operation as read-only and safe.
+- Defer the edit to the integration pull request.
 
-## Required sections for the final manifest
+## OperationRegistry comment
 
-The final manifest must include these sections:
+- Add Menu 275 to the safe category.
+- Use this comment: `Site variable audit is read-only and writes CSV reports only.`
+- Defer the edit to the integration pull request.
 
-1. Source package files.
-2. Test files.
-3. Menu registration.
-4. Operation registry entry.
-5. Generated menu reference files.
-6. Release note fragment.
-7. Validation commands.
+## Primary key strategies
 
-## Deferred source package files
+- Add `siteVariableAudit` for `SiteVariableAudit.csv`.
+- Use `natural_pk` with `["site_id", "template_id", "variable_name", "field_path"]`.
+- Add `siteVariableSummary` for `SiteVariableSummary.csv`.
+- Use `natural_pk` with `["site_id"]`.
+- Defer the edit to the integration pull request.
 
-The implementation pull request must add:
+## copilot-instructions category table
+
+- Increase the safe operation count by one.
+- Add Menu 275 to the safe menu number list.
+- Do not add Menu 275 to the destructive, interactive, websocket, resource-intensive, or continuous-loop lists.
+- Defer the edit to the integration pull request.
+
+## Import line for MistHelper.py
+
+```python
+from src.reports.site_variable_audit.operation import SiteVariableAudit
+```
+
+## Source package files
 
 - `src/reports/site_variable_audit/__init__.py`
 - `src/reports/site_variable_audit/client.py`
 - `src/reports/site_variable_audit/model.py`
 - `src/reports/site_variable_audit/operation.py`
 
-## Deferred test files
+## Test files
 
-The implementation pull request must add tests under:
+- `tests/unit/reports/site_variable_audit/__init__.py`
+- `tests/unit/reports/site_variable_audit/site_variable_audit_fixtures_test.py`
+- `tests/unit/reports/site_variable_audit/site_variable_audit_contract_test.py`
+- `tests/unit/reports/site_variable_audit/site_variable_audit_model_test.py`
+- `tests/unit/reports/site_variable_audit/site_variable_audit_operation_test.py`
+- `tests/unit/reports/site_variable_audit/site_variable_audit_summary_test.py`
+- `tests/unit/reports/site_variable_audit/site_variable_audit_client_test.py`
 
-- `tests/unit/reports/site_variable_audit/`
+## Generated reference commands
 
-The tests must target model logic and client fixtures. Tests must not use the
-network.
+```powershell
+python scripts/generate_menu_wiki.py
+python -m scripts.menu_api_map
+```
 
-## Deferred integration files
+## Validation commands
 
-The integration pull request must update:
+```powershell
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m py_compile src\reports\site_variable_audit\client.py src\reports\site_variable_audit\model.py src\reports\site_variable_audit\operation.py
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m ruff check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m black --check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m mypy src\reports\site_variable_audit --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pydocstyle src\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pytest tests\unit\reports\site_variable_audit -q --timeout=120
+```
 
-- `MistHelper.py`
-- `src/utils/operation_registry.py`
-- `README.md`
-- `documentation/menu_reference.md`
-- generated menu API map files, if the generator changes them
+## Deferred integration status
 
-This planning step must not edit those files.
+- `MistHelper.py` is deferred.
+- `src/utils/operation_registry.py` is deferred.
+- `src/refactors/endpoint_primary_key_strategies.py` is deferred.
+- `README.md` is deferred.
+- `documentation/menu_reference.md` is deferred.
+- `documentation/wiki/` generated files are deferred.
+- `MistHelper.py --test` Menu 275 proof is deferred until the integration pull request wires Menu 275.
 
-The implementation step must add:
-
-- `changelog.d/issue-3556-site-variable-audit.md`
-
-## Required run handler
-
-Menu 275 must call `SiteVariableAudit.run()`.
-
-`SiteVariableAudit.run()` must take no positional argument. It must read the API
-session and organization data through `SourceDependencyResolver`.

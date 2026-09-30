@@ -57,11 +57,11 @@ Record the required values for these files in
 
 **Critical**: No user story implementation can start until this phase is complete.
 
-- [ ] T004 Define `TemplateReference`, `VariableTokenUse`, `SiteVariableDefinition`, `MissingVariableFinding`, `SiteVariableSummary`, and `SiteVariableAuditResult` dataclasses in `src/reports/site_variable_audit/model.py`
-- [ ] T005 [P] Define `SiteVariableAuditClient` with injectable `mistapi` callables and paginated fetch reuse in `src/reports/site_variable_audit/client.py`
-- [ ] T006 [P] Define the `SiteVariableAudit` class and no-argument `run()` method seam in `src/reports/site_variable_audit/operation.py`
-- [ ] T007 [P] Add contract tests for OpenAPI operation IDs and query parameters in `tests/unit/reports/site_variable_audit/site_variable_audit_contract_test.py`
-- [ ] T008 Record the shared-file integration contract and all deferred files in `specs/3556-site-variable-audit/wiring.md`
+- [X] T004 Define `TemplateReference`, `VariableTokenUse`, `SiteVariableDefinition`, `MissingVariableFinding`, `SiteVariableSummary`, and `SiteVariableAuditResult` dataclasses in `src/reports/site_variable_audit/model.py` (delivered: src/reports/site_variable_audit/model.py)
+- [X] T005 [P] Define `SiteVariableAuditClient` with injectable `mistapi` callables and paginated fetch reuse in `src/reports/site_variable_audit/client.py` (delivered: src/reports/site_variable_audit/client.py)
+- [X] T006 [P] Define the `SiteVariableAudit` class and no-argument `run()` method seam in `src/reports/site_variable_audit/operation.py` (delivered: src/reports/site_variable_audit/operation.py)
+- [X] T007 [P] Add contract tests for OpenAPI operation IDs and query parameters in `tests/unit/reports/site_variable_audit/site_variable_audit_contract_test.py` (delivered: tests/unit/reports/site_variable_audit/site_variable_audit_contract_test.py)
+- [X] T008 Record the shared-file integration contract and all deferred files in `specs/3556-site-variable-audit/wiring.md` (delivered: specs/3556-site-variable-audit/wiring.md)
 
 **Commit checkpoint**: Commit the dataclass contracts, client seam, operation seam, and wiring contract.
 
