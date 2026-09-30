@@ -114,3 +114,32 @@ Skill citations:
 
 - Treat these actions as routine API calls.
   This hides the access impact and weakens the confirmation design.
+
+## Implementation verification on 2026-09-30
+
+Read `src/device/prompt_utils.py` before code work.
+The existing `_normalize_mac()` helper strips colons and hyphens, then lowercases the value.
+The helper does not strip dots, so the feature package must keep its own normalizer for dotted input.
+The device lookup path compares normalized inventory MAC values with the normalized operator input.
+This confirms that exact normalized comparison is the repository pattern.
+
+Searched `src/device/` for current client and MAC helper patterns before code work.
+No newer public client session control helper was found.
+The implementation must use a focused package and injected fakes in tests.
+
+Verified these OpenAPI operation IDs in `documentation/mist-api-openapi3json.json` with the worktree script:
+
+| Operation ID | Method and path |
+| - | - |
+| `reauthSiteDot1xWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/coa` |
+| `reauthSiteDot1xWiredClient` | `POST /api/v1/sites/{site_id}/wired_clients/{client_mac}/coa` |
+| `reauthOrgDot1xWirelessClient` | `POST /api/v1/orgs/{org_id}/clients/{client_mac}/coa` |
+| `reauthOrgDot1xWiredClient` | `POST /api/v1/orgs/{org_id}/wired_clients/{client_mac}/coa` |
+| `disconnectSiteWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/disconnect` |
+| `unauthorizeSiteWirelessClient` | `POST /api/v1/sites/{site_id}/clients/{client_mac}/unauthorize` |
+| `deauthSiteWirelessClientsConnectedToARogue` | `POST /api/v1/sites/{site_id}/rogues/{rogue_bssid}/deauth_clients` |
+
+Verified installed `mistapi` with `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe`.
+The environment reports `mistapi` version `0.64.0`.
+All seven functions are importable with the expected site or organization scope arguments.
+

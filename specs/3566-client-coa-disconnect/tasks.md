@@ -10,11 +10,11 @@
 
 ## Phase 1: Research Verification
 
-- [ ] T001 Read `src/device/` helper files before code work starts.
-- [ ] T002 Record the existing MAC normalization and client lookup findings in `research.md`.
-- [ ] T003 Verify these operation IDs in `documentation/mist-api-openapi3json.json`: `reauthSiteDot1xWirelessClient`, `reauthSiteDot1xWiredClient`, `reauthOrgDot1xWirelessClient`, `reauthOrgDot1xWiredClient`, `disconnectSiteWirelessClient`, `unauthorizeSiteWirelessClient`, and `deauthSiteWirelessClientsConnectedToARogue`.
-- [ ] T004 Verify the same seven operation IDs in installed `mistapi` with `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe`.
-- [ ] T005 Commit the updated research artifacts.
+- [X] T001 Read `src/device/` helper files before code work starts.
+- [X] T002 Record the existing MAC normalization and client lookup findings in `research.md`.
+- [X] T003 Verify these operation IDs in `documentation/mist-api-openapi3json.json`: `reauthSiteDot1xWirelessClient`, `reauthSiteDot1xWiredClient`, `reauthOrgDot1xWirelessClient`, `reauthOrgDot1xWiredClient`, `disconnectSiteWirelessClient`, `unauthorizeSiteWirelessClient`, and `deauthSiteWirelessClientsConnectedToARogue`.
+- [X] T004 Verify the same seven operation IDs in installed `mistapi` with `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe`.
+- [X] T005 Commit the updated research artifacts.
 
 ## Phase 2: Wiring Manifest
 
