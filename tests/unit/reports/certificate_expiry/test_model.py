@@ -15,6 +15,7 @@ from src.reports.certificate_expiry.model import (  # Import the model contract 
     BAND_31_90,
     BAND_EXPIRED,
     BAND_MORE_THAN_90,
+    NOTE_DEVICE_STATS_EXPIRY_ONLY,
     NOTE_UNPARSABLE,
     SUPPORTED_SCOPES,
     CertificateExpiryNormalizer,
@@ -92,6 +93,10 @@ def test_epoch_cert_expiry_normalizes_device_row() -> None:
     assert list(row) == CertificateExpiryRecord.column_names()  # Verify the export column order.
     assert row["scope"] == "device"  # Verify the device scope.
     assert row["owner_name"] == "switch-1"  # Verify the device owner label.
+    assert row["subject"] == ""  # Device stats do not send certificate subject metadata.
+    assert row["issuer"] == ""  # Device stats do not send certificate issuer metadata.
+    assert row["serial"] == ""  # Device stats do not send certificate serial metadata.
+    assert row["note"] == NOTE_DEVICE_STATS_EXPIRY_ONLY  # Explain that only cert_expiry exists in source data.
     assert row["band"] == BAND_0_30  # Verify epoch band normalization.
 
 
