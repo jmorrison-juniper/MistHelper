@@ -73,13 +73,13 @@ class TestExportOneTemplate:
         )
         fake_mh.APIDataFetcher.return_value.execute.assert_called_once()
 
-    def test_exception_is_logged_not_raised(self, fake_mh):
-        """APIDataFetcher failure is logged but does not propagate — other types keep exporting."""
+    def test_exception_is_logged_not_raised(self, fake_mh, caplog):
+        """Require the template label and original error without stopping other exports."""
         from src.export.org_template_exporter import OrgTemplateExporter
 
         fake_mh.APIDataFetcher.return_value.execute.side_effect = RuntimeError("boom")
-        # Should not raise.
         OrgTemplateExporter._export_one_template("Title:", MagicMock(), "File.csv", "label")
+        assert caplog.record_tuples == [("root", 40, "Failed to export label: boom")]  # Require the root ERROR record.
 
 
 class TestAllTemplates:
