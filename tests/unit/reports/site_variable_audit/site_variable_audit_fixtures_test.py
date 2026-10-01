@@ -91,6 +91,42 @@ class SiteVariableAuditFixtures:
             site_variables=site_variables,
         )
 
+    @staticmethod
+    def org_wlan_template_scope_with_portal_placeholders() -> SiteVariableAuditFixture:
+        """Return a fixture with an org WLAN scoped by its WLAN template."""
+        placeholder_site_id = "00000000-0000-0000-0000-000000000000"  # Mirror the live placeholder site value.
+        sites = [  # Build two sites so template scope can include one and exclude one.
+            {"id": "site-1", "name": "Alpha", "sitegroup_ids": ["group-1"]},  # Included through the template group.
+            {"id": "site-2", "name": "Beta", "sitegroup_ids": ["group-2"]},  # Excluded by template scope.
+        ]
+        templates = [  # Provide the WLAN template that owns the organization WLAN.
+            {
+                "id": "tmpl-1",  # Match the WLAN template_id field.
+                "name": "Guest Template",  # Give the template a readable name.
+                "applies": {"sitegroup_ids": ["group-1"]},  # Apply only to Alpha through site group scope.
+                "exceptions": {"site_ids": []},  # Mirror the live shape with an explicit empty exception list.
+            }
+        ]
+        wlans = [  # Provide the live-shaped organization WLAN row.
+            {
+                "id": "wlan-1",  # Keep the WLAN key stable for row assertions.
+                "name": "Guest",  # Give the WLAN a readable report name.
+                "template_id": "tmpl-1",  # Join the org WLAN to its WLAN template.
+                "site_id": placeholder_site_id,  # Mirror the live placeholder that must not reach output.
+                "portal": {"smsMessageFormat": "Code {{code}} expires in {{duration}} minutes."},  # Mist tokens.
+                "vlan": "{{guest_vlan}}",  # Keep one true site variable in the same WLAN.
+            }
+        ]
+        return SiteVariableAuditFixture(  # Return the complete bundle for model tests.
+            sites=sites,
+            gateway_templates=[],
+            network_templates=[],
+            templates=templates,
+            wlans=wlans,
+            device_profiles=[],
+            site_variables=[],
+        )
+
 
 def test_fixture_builders_return_offline_records() -> None:
     """Prove the fixture builders create network-free records."""
