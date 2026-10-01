@@ -95,7 +95,7 @@ def expiry_row(earlier: Mapping[str, Any], moment: str) -> dict[str, Any]:
     }
 
 
-def mark_expiries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def mark_expiries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:  # Preserve the existing direct inference API.
     """Add one expiry row wherever a hold ended with no release.
 
     Why:
@@ -103,9 +103,8 @@ def mark_expiries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         so nothing remembers who held the site, and no writer can record the
         expiry as it happens.
 
-        The trail states it all the same. A take that follows a take of the same
-        site, with no release between them, means the earlier hold ended with no
-        release.
+        A later take of the same organization and site can identify an expiry.
+        Another organization's actions cannot identify or close that hold.
 
     Args:
         rows: Every record of the trail, oldest first.
@@ -114,22 +113,25 @@ def mark_expiries(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         The same records, with one expiry row before each take that followed an
         unreleased hold.
     """
-    answered: list[dict[str, Any]] = []  # Every row that the page shows.
-    holder: dict[str, dict[str, Any]] = {}  # The open hold of each site.
+    logger.info("audit: infer expiries in %s stored actions", len(rows))  # Record the ordered inference action.
+    answered: list[dict[str, Any]] = []  # Retain actual actions and correctly attributed inferred expiries.
+    holder: dict[tuple[str, str], dict[str, Any]] = {}  # Separate reused site text across organizations.
     for row in rows:  # One pass, oldest first, so each hold closes in order.
-        site = str(row.get("site_id") or "")
-        action = str(row.get("action") or LEGACY_ACTION)
+        organization = row.get("org_id")  # Incorrect attribution types must not equal a valid string organization.
+        key = (organization if isinstance(organization, str) else "", str(row.get("site_id") or ""))  # In-memory scope.
+        action = str(row.get("action") or LEGACY_ACTION)  # Preserve the legacy missing-action takeover meaning.
         # A take of a site that still holds an open hold means the earlier hold
         # ended with no release. A takeover never reads as an expiry, because
         # the takeover row already names the operator it took the site from.
-        if action == ACTION_TAKE and site in holder:
-            answered.append(expiry_row(holder[site], str(row.get("occurred_at") or "")))
-        answered.append(row)
+        if action == ACTION_TAKE and key in holder:  # Infer only from the same organization-and-site sequence.
+            answered.append(expiry_row(holder[key], str(row.get("occurred_at") or "")))  # Earlier actor, later moment.
+        answered.append(row)  # An inferred expiry immediately precedes the matching actual take.
         if action in OPENING_ACTIONS:  # The site now holds an open hold.
-            holder[site] = row
+            holder[key] = row  # A takeover replaces the matching holder without creating an immediate expiry.
         else:  # A release closes the hold of that site.
-            holder.pop(site, None)
-    return answered
+            holder.pop(key, None)  # Preserve release, explicit expiry, and other closing-action suppression.
+    logger.debug("audit: expiry inference produced %s actions", len(answered))  # Report no stored address or row.
+    return answered  # Keep the direct API and actual input order unchanged.
 
 
 def audit_row(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -158,94 +160,60 @@ def audit_row(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _row_in_scope(record: Mapping[str, Any], site_id: str) -> bool:
-    """Report whether one record belongs to the requested site.
-
-    Why:
-        Issue #2596 narrows the audit log to the site that the page names. An
-        empty request reads every site, because the history page serves both
-        the one-site view and the whole-organization view.
-
-    Args:
-        record: One record of the trail, or one inferred expiry record.
-        site_id: The site the caller asked for. An empty value reads every site.
-
-    Returns:
-        True when the page must show the record.
-    """
-    if not site_id:  # An empty request reads every site, which is the old behavior.
-        return True
-    return str(record.get("site_id") or "") == site_id  # Compare the stored site with the request.
+def _row_in_scope(record: Mapping[str, Any], org_id: str, site_id: str) -> bool:  # Require explicit organization scope.
+    """Match organization and optional site before inference or result limits."""
+    matches = record.get("org_id") == org_id and (  # Missing or incorrectly typed attribution cannot supply scope.
+        not site_id or str(record.get("site_id") or "") == site_id  # A site narrows the organization restriction.
+    )
+    logger.debug("audit: the stored action matches the requested scope: %s", matches)  # Report only the safe decision.
+    return matches  # Foreign records must affect neither matching hold state nor visible result positions.
 
 
-def _keep_in_scope(recent: deque[dict[str, Any]], record: dict[str, Any], site_id: str) -> None:
-    """Add one record to the page when the record belongs to the requested site.
-
-    Why:
-        The caller reads every record of the trail, because the expiry
-        inference needs every site. Only the page output narrows to one site.
-
-    Args:
-        recent: The bounded page buffer. The buffer keeps the newest records.
-        record: One record of the trail, or one inferred expiry record.
-        site_id: The site the caller asked for. An empty value reads every site.
-    """
-    if not _row_in_scope(record, site_id):  # A record of another site never reaches the page.
-        return
-    recent.append(record)  # Keep the record for the page.
-
-
-def _read_limited_audit_rows(limit: int, path: Any = None, site_id: str = "") -> list[dict[str, Any]]:
-    """Return one positive-size page of the audit log, newest first.
-
-    Warning: the expiry inference reads every site, and only the page output
-    narrows to one site. A filter applied before the inference would lose the
-    take that closes a hold on another site, and the page would then show a
-    hold that never ended.
-
-    Args:
-        limit: The largest count of rows to answer.
-        path: The trail file, or None for the real one.
-        site_id: The site to narrow to. An empty value reads every site.
-
-    Returns:
-        One shaped row for each action, newest first.
-    """
-    recent: deque[dict[str, Any]] = deque(maxlen=limit)
-    holder: dict[str, dict[str, Any]] = {}
+def _read_limited_audit_rows(  # Retain complete matching context without retaining the whole trail.
+    limit: int, path: Any = None, site_id: str = "", *, org_id: str
+) -> list[dict[str, Any]]:
+    """Read complete matching context and retain a bounded newest-first result."""
+    logger.info("audit: read the scoped bounded lock trail")  # Record the source read and ordered inference.
+    recent: deque[dict[str, Any]] = deque(maxlen=limit)  # Only matching actual and inferred rows consume positions.
+    holder: dict[tuple[str, str], dict[str, Any]] = {}  # Memory follows matching open holds, not foreign events.
     for row in read_trail_lines(path):  # One pass keeps expiry inference equal to a full read.
-        site = str(row.get("site_id") or "")  # Read the site that this record names.
+        if not _row_in_scope(row, org_id, site_id):  # Filter before any holder or bounded-buffer update.
+            continue  # Foreign and unattributed events cannot change matching inference timing or attribution.
+        key = (org_id, str(row.get("site_id") or ""))  # Separate each matching organization-and-site hold.
         action = str(row.get("action") or LEGACY_ACTION)  # A record before issue #2221 holds no action.
-        if action == ACTION_TAKE and site in holder:  # A take over an open hold means the hold expired.
-            _keep_in_scope(recent, expiry_row(holder[site], str(row.get("occurred_at") or "")), site_id)
-        _keep_in_scope(recent, row, site_id)  # Keep this record when it names the requested site.
+        if action == ACTION_TAKE and key in holder:  # A matching take over an open hold identifies an expiry.
+            recent.append(expiry_row(holder[key], str(row.get("occurred_at") or "")))  # Earlier actor, later moment.
+        recent.append(row)  # Already scoped rows need no obsolete output-only filter.
         if action in OPENING_ACTIONS:  # A take and a takeover both open a hold.
-            holder[site] = row  # Track the open hold, for every site, so the inference stays correct.
+            holder[key] = row  # Retain older matching context even when its row leaves the visible buffer.
         else:  # A release and an expiry both close the hold.
-            holder.pop(site, None)  # Drop the open hold, for every site, so the inference stays correct.
-
+            holder.pop(key, None)  # Other sites and organizations cannot close this matching hold.
+    logger.debug("audit: the scoped bounded trail retained %s rows", len(recent))  # Report only a safe count.
+    logger.info("audit: shape the scoped bounded audit rows")  # Record the public-output transformation.
     shaped = [audit_row(row) for row in reversed(recent)]  # The page reads the newest action first.
-    logger.debug("audit: the trail answered %s row(s) for site %s", len(shaped), site_id or "every site")
-    return shaped
+    logger.debug("audit: the bounded trail answered %s rows", len(shaped))  # Never log stored audit addresses.
+    return shaped  # Preserve digest-only output and bounded memory use.
 
 
-def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None, site_id: str = "") -> list[dict[str, Any]]:
-    """Return one page of the audit log, newest first.
-
-    Args:
-        limit: The largest count of rows to answer.
-        path: The trail file, or None for the real one.
-        site_id: The site to narrow to. An empty value reads every site.
-
-    Returns:
-        One shaped row for each action, newest first.
-    """
-    logger.info("audit: the portal reads the site lock trail for %s", site_id or "every site")  # Before the read.
-    if isinstance(limit, int) and limit > 0:
-        return _read_limited_audit_rows(limit, path, site_id)
-
-    rows = mark_expiries(list(read_trail_lines(path)))  # Oldest first, so each hold closes in order.
-    scoped = [row for row in rows if _row_in_scope(row, site_id)]  # Narrow after the inference, never before.
-    shaped = [audit_row(row) for row in reversed(scoped)]  # The page reads the newest action first.
-    logger.debug("audit: the trail answered %s row(s) for site %s", len(shaped), site_id or "every site")
-    return shaped[:limit]
+def read_audit_rows(  # Require explicit organization scope with the existing positional argument order.
+    limit: int | None = DEFAULT_AUDIT_LIMIT, path: Any = None, site_id: str = "", *, org_id: str
+) -> list[dict[str, Any]]:
+    """Read newest-first audit rows for a required organization and optional site."""
+    logger.info("audit: validate the required organization scope")  # Validate before resolving or opening a trail.
+    if not isinstance(org_id, str) or not org_id.strip():  # An empty or incorrectly typed scope cannot authorize input.
+        logger.info("audit: refuse an invalid organization before any trail read")  # Explicit observable refusal.
+        logger.debug("audit: invalid organization scope caused zero trail reads")  # Report a safe refusal summary.
+        raise ValueError("The audit organization must be a nonempty string.")  # Refuse invalid scope.
+    chosen = org_id.strip()  # Use the same normalized explicit organization as the history route.
+    logger.debug("audit: the required organization scope is valid")  # Report no stored address or input value.
+    if isinstance(limit, int) and limit > 0:  # Preserve positive bounded reads and every legacy slice meaning.
+        return _read_limited_audit_rows(limit, path, site_id, org_id=chosen)  # Match before inference and limits.
+    logger.info("audit: read the complete scoped lock trail")  # Record the legacy full-input source read.
+    scoped = [row for row in read_trail_lines(path) if _row_in_scope(row, chosen, site_id)]  # Match before inference.
+    logger.debug("audit: the complete trail matched %s actions", len(scoped))  # Report only a safe input count.
+    logger.info("audit: infer and shape the complete scoped audit history")  # Record ordered output transformation.
+    rows = mark_expiries(scoped)  # Foreign events cannot change matching inference state or timing.
+    shaped = [audit_row(row) for row in reversed(rows)]  # Preserve newest-first digest-only output.
+    answered = shaped[:limit]  # Retain the original zero, negative, and None final slice semantics.
+    logger.debug("audit: the complete scoped trail answered %s rows", len(answered))  # Report no stored row content.
+    return answered  # No unrestricted default organization or successful authorization fallback remains.

@@ -14,6 +14,7 @@ Why:
 
 from __future__ import annotations
 
+import logging  # Record fixture setup without a live store.
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -23,6 +24,8 @@ from flask import Flask
 from flask.testing import FlaskClient
 
 from src.upgrade_portal.runtime import identity
+
+logger = logging.getLogger(__name__)  # Keep synthetic fixture records separate from portal records.
 
 SITE_ID = "00000000-0000-0000-0000-0000000000bb"  # Matches the shared site of the other contract tests.
 
@@ -117,7 +120,7 @@ class CannedLister:
 
 
 @pytest.fixture
-def history_app(portal_app: Flask) -> Flask:
+def history_app(portal_app: Flask) -> Flask:  # Keep selected formatting reads in memory.
     """Return the portal with the capture list seam replaced.
 
     Why:
@@ -130,14 +133,20 @@ def history_app(portal_app: Flask) -> Flask:
     Returns:
         The wired application.
     """
-    portal_app.config[CAPTURE_LISTER_KEY] = CannedLister(
-        rows=[
-            capture_row("cap-mixed", gateways=1, switches=1, access_points=6),
-            capture_row("cap-empty"),
+    logger.info("Prepare the synthetic device-type history rows")  # Record fixture transformation before it starts.
+    captures = CannedLister(  # Preserve the original mixed and empty device-type rows.
+        rows=[  # Preserve the existing mixed and empty device-type expectations.
+            capture_row("cap-mixed", gateways=1, switches=1, access_points=6),  # Keep the mixed type counts.
+            capture_row("cap-empty"),  # Keep the existing no-device row.
         ]
     )
-    portal_app.config[RUN_LISTER_KEY] = CannedLister()
-    return portal_app
+    logger.debug("Prepared %s synthetic device-type rows", len(captures.rows))  # Report a safe fixture count.
+    logger.info("Bind the synthetic device-type history readers")  # Record in-memory configuration changes.
+    portal_app.config[CAPTURE_LISTER_KEY] = captures  # Preserve the existing capture lister signature.
+    portal_app.config[RUN_LISTER_KEY] = CannedLister()  # Keep unused single-site run reads in memory.
+    portal_app.config["OPERATION_LISTER"] = lambda org_id, site_id="", limit=25: []  # Keep unused operation reads safe.
+    logger.debug("Bound three synthetic device-type history readers")  # A selection cannot activate a real store.
+    return portal_app  # Preserve all existing device-type cells and assertions.
 
 
 @pytest.fixture
@@ -161,7 +170,9 @@ def owner() -> Iterator[identity.SessionOwner]:
 
 
 @pytest.fixture
-def signed_in_client(history_app: Flask, owner: identity.SessionOwner) -> Iterator[FlaskClient]:
+def signed_in_client(  # Keep every unchanged device-type assertion inside explicit selected scope.
+    history_app: Flask, owner: identity.SessionOwner
+) -> Iterator[FlaskClient]:
     """Return a test client that holds a session and holds no lock.
 
     Args:
@@ -171,11 +182,14 @@ def signed_in_client(history_app: Flask, owner: identity.SessionOwner) -> Iterat
     Yields:
         The signed-in client.
     """
+    logger.info("Prepare the selected synthetic device-type client")  # Record signed-session fixture setup.
     with history_app.test_client() as client:  # The context manager holds the session across requests.
-        client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)
-        with client.session_transaction() as browser_session:
-            browser_session[identity.SESSION_OWNER_KEY] = owner.key
-        yield client
+        client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)  # Supply the browser half of sign-in.
+        with client.session_transaction() as browser_session:  # Keep an explicit selection in this test's session.
+            browser_session[identity.SESSION_OWNER_KEY] = owner.key  # Match the registered synthetic session.
+            browser_session["selected_org_id"] = "00000000-0000-0000-0000-0000000000aa"  # Existing permitted scope.
+        logger.debug("Prepared one selected synthetic device-type client")  # Report no owner key or address.
+        yield client  # Keep every existing device-type expectation unchanged.
 
 
 def read_page(client: FlaskClient) -> str:

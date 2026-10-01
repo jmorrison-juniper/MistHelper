@@ -16,15 +16,20 @@ under test would agree with a rename and would prove nothing.
 
 from __future__ import annotations
 
+import logging  # Record refusal validation without stored rows or owner keys.
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import Mock  # Count all four source boundaries in the missing-selection contract.
 
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
+from src.upgrade_portal.app.routes import review  # Count the real audit section boundary.
 from src.upgrade_portal.runtime import identity
+
+logger = logging.getLogger(__name__)  # Keep synthetic validation records separate from portal records.
 
 HISTORY_PAGE_PATH = "/history"  # Section 6 of `contracts/http-api.md` names this path.
 JOB_PAGE_PREFIX = "/upgrade/org/jobs/"  # The progress page of one multi-site operation.
@@ -237,14 +242,30 @@ def test_another_session_gets_a_note_and_no_link(history_app: Flask, owner: iden
     assert f'data-testid="history-operation-open-{FOREIGN_ID}"' not in text
 
 
-def test_no_selected_organization_reads_nothing(
-    history_app: Flask, owner: identity.SessionOwner, operation_lister: RecordingOperationLister
+def test_no_selected_organization_reads_nothing(  # Refuse the whole page before all four sources.
+    history_app: Flask,
+    owner: identity.SessionOwner,
+    operation_lister: RecordingOperationLister,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With no organization, the section asks for one and the store receives no call."""
-    text = read_page(history_app, owner, org_id="")
-    assert operation_lister.calls == []
-    assert 'data-testid="history-operation-no-org"' in text
-    assert 'data-testid="history-operation-table"' not in text
+    """A missing organization refuses the whole request before every history source."""
+    logger.info("Prepare four source counters for the missing-selection request")  # Record synthetic test setup.
+    captures = Mock(wraps=history_app.config[CAPTURE_LISTER_KEY])  # Keep the existing capture seam behavior.
+    runs = Mock(wraps=history_app.config[RUN_LISTER_KEY])  # Keep the existing run seam behavior.
+    audit = Mock(wraps=review.audit_history_rows)  # Preserve the actual helper while counting prohibited calls.
+    monkeypatch.setitem(history_app.config, CAPTURE_LISTER_KEY, captures)  # Count only this test's capture reads.
+    monkeypatch.setitem(history_app.config, RUN_LISTER_KEY, runs)  # Count only this test's run reads.
+    monkeypatch.setattr(review, "audit_history_rows", audit)  # Count only this test's audit reads.
+    logger.debug("Prepared four synthetic history source counters")  # Include the existing operation call list.
+    logger.info("Request history without a selected organization")  # Record the real route action.
+    response = signed_in_client(history_app, owner, "").get(HISTORY_PAGE_PATH)  # Keep the selection field absent.
+    logger.debug("The missing-selection history request returned %s", response.status_code)  # Report only status.
+    assert response.status_code == 400  # Do not render a successful missing-selection history card.
+    assert response.get_json() == {  # Preserve the authoritative missing-selection envelope.
+        "error": {"code": "org_not_chosen", "message": "Choose an organization before you read the site list."}
+    }
+    assert operation_lister.calls == []  # The operation source must not run.
+    assert (captures.call_count, runs.call_count, audit.call_count) == (0, 0, 0)  # All other sources must not run.
 
 
 def test_a_store_outage_shows_a_plain_statement(

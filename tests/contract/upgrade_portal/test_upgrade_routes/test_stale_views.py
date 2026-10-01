@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Keep annotations independent from import order.
 
+import logging  # Record isolated fixture setup without a live source.
 from collections.abc import Iterator  # Type the signed-in client fixture.
 from datetime import UTC, datetime, timedelta  # Build stable old and invalid run records.
 from typing import Any  # Run records contain different JSON-compatible values.
@@ -11,6 +12,8 @@ from flask import Flask  # Type the real portal application.
 from flask.testing import FlaskClient  # Type the signed-in route client.
 
 from src.upgrade_portal.runtime import identity  # Use the real signed-session guard.
+
+logger = logging.getLogger(__name__)  # Keep synthetic setup records separate from portal records.
 
 RUN_ID = "run-stale-contract"  # Keep both page requests on one exact record.
 TERMINAL_RUN_ID = "run-terminal-contract"  # Prove that an old final run has no stale badge.
@@ -49,6 +52,7 @@ class ContractRunStore:  # Hold the exact records that both real page routes rea
 @pytest.fixture
 def stale_app(portal_app: Flask) -> Flask:  # Install isolated run and lock seams on the real application.
     """Return the portal with fixed stale-view records."""
+    logger.info("Build the synthetic stale-view records")  # Record fixture transformations before they start.
     old_time = datetime.now(tz=UTC) - timedelta(days=1, hours=1, minutes=30)  # Avoid a display boundary.
     base = {  # Supply every field that the run status view and page controls read.
         "org_id": ORG_ID,  # Bind the records to one organization.
@@ -65,16 +69,21 @@ def stale_app(portal_app: Flask) -> Flask:  # Install isolated run and lock seam
     terminal = {**base, "run_id": TERMINAL_RUN_ID, "state": "failed", "updated_at": old_time.isoformat()}  # Final.
     unknown = {**base, "run_id": UNKNOWN_RUN_ID, "state": "created", "updated_at": "bad-time"}  # Unsafe time.
     store = ContractRunStore([stale, terminal, unknown])  # Give both routes the same record source.
+    logger.debug("Built three synthetic stale-view records")  # Report no stored row or operator address.
+    logger.info("Bind the synthetic stale-view readers")  # Record in-memory fixture setup.
     portal_app.config["RUN_STORE"] = store  # Keep the run page away from persistent storage.
     portal_app.config["RUN_LISTER"] = store.list_runs  # Keep the history page on the same records.
     portal_app.config["CAPTURE_LISTER"] = lambda *_arguments, **_options: []  # Keep capture reads in memory.
     portal_app.config["SITE_LOCK_READER"] = lambda _org, sites: {site: None for site in sites}  # Avoid Redis.
+    portal_app.config["OPERATION_LISTER"] = lambda org_id, site_id="", limit=25: []  # Keep unused operation reads safe.
+    logger.debug("Bound synthetic stale-view readers with no persistent operation source")  # Safe setup result.
     return portal_app  # The shared factory already registered the real route blueprints.
 
 
 @pytest.fixture
 def stale_client(stale_app: Flask) -> Iterator[FlaskClient]:  # Sign in one isolated operator for both pages.
     """Return a signed-in client for the stale view routes."""
+    logger.info("Register the selected synthetic stale-view client")  # Record signed-session fixture setup.
     owner = identity.build_owner(PROBE_EMAIL, identity.issue_browser_id())  # Build the pair that the guard checks.
     session_record = identity.OperatorSession(  # Register a safe session with no cloud client.
         owner=owner,  # Bind the record to the browser cookie pair.
@@ -82,14 +91,19 @@ def stale_client(stale_app: Flask) -> Iterator[FlaskClient]:  # Sign in one isol
         credential_mode=identity.CredentialMode.ENVIRONMENT_TOKEN,  # Use the existing session kind.
     )
     identity.SESSION_REGISTRY.register(session_record)  # Add the record before the first page request.
+    logger.debug("Registered one synthetic stale-view session")  # Report no browser identity or owner key.
     try:  # Keep cleanup active when an assertion fails.
         with stale_app.test_client() as client:  # Hold one browser session across both page reads.
             client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)  # Supply the cookie half of the guard.
             with client.session_transaction() as browser_session:  # Write the signed server-side session.
                 browser_session[identity.SESSION_OWNER_KEY] = owner.key  # Supply the session half of the guard.
+                browser_session["selected_org_id"] = ORG_ID  # Give history the same explicit scope as the run page.
+            logger.debug("Prepared one selected synthetic stale-view client")  # Report no stored row content.
             yield client  # Let each contract test read the real rendered pages.
     finally:  # The process-wide registry must not affect a later test.
+        logger.info("Remove the synthetic stale-view session")  # Record registry cleanup before it starts.
         identity.SESSION_REGISTRY.drop(owner.key)  # Remove the isolated operator record.
+        logger.debug("Removed one synthetic stale-view session")  # Report no owner key.
 
 
 class TestStaleViewContract:  # Group the three page-agreement cases under one contract owner.
