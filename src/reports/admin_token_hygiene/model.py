@@ -34,6 +34,7 @@ TOKEN_COLUMNS = [
     "findings",
 ]
 WRITE_ROLES = {"superuser", "org_admin", "network_admin"}
+NOT_REPORTED_TEXT = "not_reported"  # WHY: distinguish omitted API fields from unknown reported values.
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +81,8 @@ class HygieneSummary:
     """Console summary counts for the hygiene report."""
 
     super_users: int
-    admins_no_two_factor_no_sso: int
+    admins_no_two_factor: int
+    admins_with_unreported_security_fields: int
     idle_tokens: int
     unrestricted_write_tokens: int
 
@@ -118,7 +120,10 @@ class AdminTokenHygieneModel:
         """Return the console summary counts."""
         return HygieneSummary(
             super_users=sum("super_user" in row.findings.split("|") for row in admin_rows),
-            admins_no_two_factor_no_sso=sum("no_two_factor_no_sso" in row.findings.split("|") for row in admin_rows),
+            admins_no_two_factor=sum("no_two_factor" in row.findings.split("|") for row in admin_rows),
+            admins_with_unreported_security_fields=sum(
+                AdminTokenHygieneModel._has_unreported_admin_security_field(row) for row in admin_rows
+            ),
             idle_tokens=sum("idle_token" in row.findings.split("|") for row in token_rows),
             unrestricted_write_tokens=sum("unrestricted_write_token" in row.findings.split("|") for row in token_rows),
         )
@@ -140,8 +145,8 @@ class AdminTokenHygieneModel:
             site_scope=site_scope,
             two_factor_state=two_factor_state,
             sso_state=sso_state,
-            password_age_days=AdminTokenHygieneModel._age_days(admin.get("password_modified_time"), now),
-            invite_expiry=AdminTokenHygieneModel._time_text(admin.get("expire_time"), "unknown"),
+            password_age_days=AdminTokenHygieneModel._admin_password_age_days(admin, now),
+            invite_expiry=AdminTokenHygieneModel._admin_invite_expiry(admin),
             findings="|".join(findings),
         )
 
@@ -179,8 +184,8 @@ class AdminTokenHygieneModel:
         findings: list[str] = []  # WHY: stable order makes tests and reports predictable.
         if AdminTokenHygieneModel._has_super_user(privileges):  # WHY: Super User access is a headline count.
             findings.append("super_user")
-        if two_factor_state in {"disabled", "unknown"} and sso_state == "local":
-            findings.append("no_two_factor_no_sso")  # WHY: local sign-in without 2FA is weak access.
+        if two_factor_state == "disabled":
+            findings.append("no_two_factor")  # WHY: the live API proves disabled two-factor without SSO fields.
         if AdminTokenHygieneModel._is_expired(admin.get("expire_time"), now):
             findings.append("stale_invite")  # WHY: expired invitations need cleanup.
         if AdminTokenHygieneModel._has_unknown_role(privileges):
@@ -324,11 +329,37 @@ class AdminTokenHygieneModel:
     @staticmethod
     def _sso_state(admin: Mapping[str, Any]) -> str:
         """Return the admin SSO state."""
+        if "via_sso" not in admin:
+            return NOT_REPORTED_TEXT  # WHY: the live listOrgAdmins payload omits SSO source data.
         if admin.get("via_sso") is True:
             return "sso"
         if admin.get("via_sso") is False:
             return "local"
         return "unknown"
+
+    @staticmethod
+    def _admin_password_age_days(admin: Mapping[str, Any], now: datetime) -> int | str:
+        """Return password age, or state when the API omits the field."""
+        if "password_modified_time" not in admin:
+            return NOT_REPORTED_TEXT  # WHY: the live listOrgAdmins payload omits password age source data.
+        return AdminTokenHygieneModel._age_days(admin.get("password_modified_time"), now)  # WHY: convert if present.
+
+    @staticmethod
+    def _admin_invite_expiry(admin: Mapping[str, Any]) -> str:
+        """Return invite expiry, or state when the API omits the field."""
+        if "expire_time" not in admin:
+            return NOT_REPORTED_TEXT  # WHY: the live listOrgAdmins payload omits invitation expiry source data.
+        return AdminTokenHygieneModel._time_text(admin.get("expire_time"), "unknown")  # WHY: format if present.
+
+    @staticmethod
+    def _has_unreported_admin_security_field(row: AdminHygieneRow) -> bool:
+        """Return True when the live API omitted one admin security field."""
+        has_unreported_field = (  # WHY: summary text must name when the API omitted source fields.
+            row.sso_state == NOT_REPORTED_TEXT
+            or row.password_age_days == NOT_REPORTED_TEXT
+            or row.invite_expiry == NOT_REPORTED_TEXT
+        )
+        return has_unreported_field  # WHY: the summary counts affected administrators.
 
     @staticmethod
     def _token_idle_days(token: Mapping[str, Any], now: datetime) -> int | str:

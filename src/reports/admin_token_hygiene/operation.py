@@ -86,9 +86,13 @@ class AdminTokenHygieneReport:
     def _log_summary(summary: HygieneSummary) -> None:
         """Log the operator summary."""
         logger.info("Admin hygiene Super Users: %d", summary.super_users)  # WHY: required summary count.
-        logger.info(  # WHY: required summary count for local weak sign-in.
-            "Admin hygiene admins with no two-factor authentication and no SSO: %d",
-            summary.admins_no_two_factor_no_sso,
+        logger.info(  # WHY: required summary count for disabled two-factor authentication.
+            "Admin hygiene admins with no two-factor authentication: %d",
+            summary.admins_no_two_factor,
+        )
+        logger.info(  # WHY: the live API omits these fields, so operators need explicit context.
+            "Admin hygiene API did not report SSO state, password age, or invite expiry for %d admins",
+            summary.admins_with_unreported_security_fields,
         )
         logger.info("Token hygiene idle tokens: %d", summary.idle_tokens)  # WHY: required token stale count.
         logger.info(  # WHY: required token broad-access count.
