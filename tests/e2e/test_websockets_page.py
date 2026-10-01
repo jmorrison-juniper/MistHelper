@@ -14,7 +14,7 @@ import threading  # Serve Flask and fake stream output beside the browser.
 import time  # Let fake runners emit messages on a short timer.
 from collections.abc import Iterator  # Type fixtures and download streams.
 from dataclasses import dataclass, field  # Store fake session state clearly.
-from pathlib import Path  # Save screenshots under data artifacts.
+from pathlib import Path  # Save screenshots under the test artifact folder.
 from types import SimpleNamespace  # Build fake SDK answers.
 from typing import Any  # Type Playwright objects without importing private types.
 
@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)  # Keep this test module visible in logs.
 pytest.importorskip("playwright", reason="playwright is absent, so the browser journey cannot run")  # Browser guard.
 
 READY_TIMEOUT_MS = 15000  # Bound every browser wait.
-ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "data" / "test-artifacts" / "websockets"  # Screenshot folder.
+# The container mounts data/, so the screenshots stay in the test-artifacts/ folder instead.
+ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "test-artifacts" / "websockets"  # Git ignores this folder.
 ORG_ID = "99999999-8888-7777-6666-555555555555"  # Fake organization identifier.
 SITE_ID = "11111111-2222-3333-4444-555555555555"  # First fake site identifier.
 SITE_ID_2 = "22222222-3333-4444-5555-666666666666"  # Second fake site identifier.
