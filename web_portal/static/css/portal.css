@@ -80,13 +80,48 @@
    A result file can hold 27 columns. The shared rule above breaks a word to fit
    a narrow column, which turned "Louisburg" into three stacked lines and made
    one row 880 pixels tall. These rules keep one row on one line and move the
-   full value into the row detail. */
-#resultsTable td {
+   full value into the row detail.
+   The preview table uses the same compact rules for issue #3311. */
+#resultsTable td,
+#modalPreviewTable td {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 18ch;
     word-break: normal;
+}
+
+#modalPreviewTable .preview-cell-value {
+    display: block;
+    width: 100%;
+    max-width: 18ch;
+    min-height: 1.5em;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#modalPreviewTable .preview-cell-value:focus-visible {
+    outline: 2px solid var(--portal-link);
+    outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+    #modalPreviewTable td {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+    }
+
+    #modalPreviewTable .preview-cell-value {
+        min-height: 44px;
+    }
 }
 
 #resultsTable tr.result-detail td {
@@ -258,6 +293,29 @@
 }
 
 /* Data Preview Modal */
+/* The full value stays outside the table, so its text cannot enlarge a row. */
+#dataPreviewCellDialog {
+    width: min(48rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    padding: 1rem;
+    border: 1px solid var(--portal-border);
+    border-radius: 0.375rem;
+    background: var(--portal-bg-secondary);
+    color: var(--portal-text);
+}
+
+#dataPreviewCellDialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+#dataPreviewCellDialog pre {
+    max-height: 60vh;
+    margin-bottom: 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .modal-fullscreen-custom .modal-dialog {
     max-width: 95vw;
     max-height: 90vh;

@@ -24,6 +24,106 @@ var DataPreviewModal = (function() {
         modalInstance: null
     };
 
+    class PreviewCellDetails {
+        constructor() {
+            this.dialog = null;
+        }
+
+        create() {
+            var modal = document.getElementById('dataPreviewModal');
+            var dialog = document.createElement('dialog');
+            dialog.id = 'dataPreviewCellDialog';
+            dialog.setAttribute('aria-labelledby', 'dataPreviewCellLabel');
+            dialog.setAttribute('aria-describedby', 'dataPreviewCellColumn');
+            dialog.setAttribute('data-testid', 'preview-cell-dialog');
+            dialog.innerHTML = '<div class="d-flex justify-content-between align-items-center gap-2">' +
+                '<h6 id="dataPreviewCellLabel" class="mb-0">Full cell value</h6>' +
+                '<button type="button" class="btn btn-sm btn-outline-secondary" autofocus>Close full value</button>' +
+                '</div><p id="dataPreviewCellColumn" class="small mt-2"></p>' +
+                '<pre id="dataPreviewCellText" tabindex="0"></pre>';
+            dialog.querySelector('button').addEventListener('click', () => this.close());
+            dialog.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') event.stopPropagation(); // Keep Bootstrap from closing the parent modal.
+            });
+            dialog.addEventListener('cancel', () => console.info('Closing the full preview cell value.'));
+            dialog.addEventListener('close', () => console.debug('Closed the full preview cell value.'));
+            modal.addEventListener('hidden.bs.modal', () => this.close());
+            modal.appendChild(dialog);
+            this.dialog = dialog;
+        }
+
+        open(column, value) {
+            console.info('Opening the full preview cell value.');
+            if (!this.dialog) this.create();
+            this.dialog.querySelector('#dataPreviewCellColumn').textContent = 'Column: ' + column;
+            this.dialog.querySelector('#dataPreviewCellText').textContent = value;
+            this.dialog.showModal();
+            console.debug('Opened the full preview cell value with %d characters.', value.length);
+        }
+
+        close() {
+            if (!this.dialog || !this.dialog.open) return;
+            console.info('Closing the full preview cell value.');
+            this.dialog.close();
+        }
+    }
+
+    class PreviewTableRenderer {
+        constructor(columns) {
+            this.columns = columns;
+        }
+
+        render(rows) {
+            var table = document.createElement('table');
+            table.className = 'table table-sm portal-table';
+            table.id = 'modalPreviewTable';
+            table.createTHead().appendChild(this.header());
+            var body = table.createTBody();
+            rows.forEach(values => body.appendChild(this.row(values)));
+            return table;
+        }
+
+        header() {
+            var row = document.createElement('tr');
+            this.columns.forEach(function(column, index) {
+                var heading = document.createElement('th');
+                heading.className = getSortClass(index);
+                heading.dataset.col = String(index);
+                heading.textContent = column;
+                heading.addEventListener('click', () => sortBy(index));
+                row.appendChild(heading);
+            });
+            return row;
+        }
+
+        row(values) {
+            var row = document.createElement('tr');
+            values.forEach((value, index) => {
+                var column = this.columns[index] || 'Column ' + (index + 1);
+                row.appendChild(this.cell(value, column));
+            });
+            return row;
+        }
+
+        cell(value, column) {
+            var text = String(value !== null ? value : '');
+            var cell = document.createElement('td');
+            var button = document.createElement('button');
+            cell.title = text;
+            button.type = 'button';
+            button.className = 'preview-cell-value';
+            button.textContent = text;
+            button.title = text;
+            button.setAttribute('aria-label', 'Read full value for ' + column);
+            button.setAttribute('aria-haspopup', 'dialog');
+            button.addEventListener('click', () => cellDetails.open(column, text));
+            cell.appendChild(button);
+            return cell;
+        }
+    }
+
+    var cellDetails = new PreviewCellDetails();
+
     // -----------------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------------
@@ -56,6 +156,7 @@ var DataPreviewModal = (function() {
     }
 
     function hideModal() {
+        cellDetails.close();
         if (state.modalInstance) state.modalInstance.hide();
     }
 
@@ -71,6 +172,7 @@ var DataPreviewModal = (function() {
     }
 
     function setContent(html) {
+        cellDetails.close();
         var el = document.getElementById('dataPreviewBody');
         if (el) el.innerHTML = html;
     }
@@ -127,23 +229,17 @@ var DataPreviewModal = (function() {
         state.totalRows = data.total_rows || 0;
         state.currentPage = data.page || 1;
 
-        var html = '<table class="table table-sm portal-table" id="modalPreviewTable"><thead><tr>';
-        state.columns.forEach(function(col, idx) {
-            var sortCls = getSortClass(idx);
-            html += '<th class="' + sortCls + '" data-col="' + idx + '" onclick="DataPreviewModal.sortBy(' + idx + ')">';
-            html += escapeHtml(col) + '</th>';
-        });
-        html += '</tr></thead><tbody>';
-        (data.rows || []).forEach(function(row) {
-            html += '<tr>';
-            row.forEach(function(cell) {
-                html += '<td>' + escapeHtml(String(cell !== null ? cell : '')) + '</td>';
-            });
-            html += '</tr>';
-        });
-        html += '</tbody></table>';
-        setContent(html);
+        var content = document.getElementById('dataPreviewBody');
+        if (!content) {
+            console.warn('Caution: the preview body is missing. The portal cannot display the table.');
+            return;
+        }
+        console.info('Rendering the data preview table.');
+        cellDetails.close();
+        var rows = data.rows || [];
+        content.replaceChildren(new PreviewTableRenderer(state.columns).render(rows));
         updatePagination();
+        console.debug('Rendered %d preview rows and %d columns.', rows.length, state.columns.length);
     }
 
     function getSortClass(colIdx) {
