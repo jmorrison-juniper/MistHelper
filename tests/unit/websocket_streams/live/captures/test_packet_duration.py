@@ -87,7 +87,7 @@ class TestCaptureDuration:
     def test_every_supported_integer_remains_unchanged(self, duration: int) -> None:
         """Apply the actual field checker to generated valid durations."""
         definition = UtilityCatalog().get("ap.remotePcapWired")
-        assert definition is not None
+        assert definition is not None and definition.key == "ap.remotePcapWired"
         field = next(field for field in definition.fields if field.name == "duration")
         assert FieldValueChecker().check(field, str(duration)) == duration
         assert field.minimum == 60 and field.maximum == 3600

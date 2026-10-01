@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from json import JSONDecodeError
+
 import pytest
 from requests import Request, Response, Session
 from requests.exceptions import Timeout
 
 from src.websocket_streams.intake.fields import StreamRequestError
-from src.websocket_streams.live.captures.control import CaptureResponses
+from src.websocket_streams.live.captures.control import CaptureBodies, CaptureResponses
 from src.websocket_streams.live.captures.runner import PacketCaptureRunner
 from src.websocket_streams.live.captures.transport import CaptureHttpSession
 from src.websocket_streams.live.sessions.record import SessionState
@@ -340,15 +342,20 @@ class TestCaptureTransport:
 class TestCaptureResponseGuards:
     """Prove malformed and success-shaped response failures."""
 
-    @pytest.mark.parametrize("raw", ["<html>local proxy error</html>", "{broken", "[]"])
-    def test_invalid_success_body_is_refused(self, raw: str) -> None:
-        """Do not accept the SDK's empty object after JSON parsing fails."""
+    @pytest.mark.parametrize("raw", [b"<html>local proxy error</html>", b"bad json", b"{broken", b"[]", b""])
+    def test_invalid_success_body_is_refused(self, capture_harness: CaptureHarness, raw: bytes) -> None:
+        """Refuse empty and malformed start bodies after the SDK retains an empty object."""
         from types import SimpleNamespace
 
-        response = SimpleNamespace(status_code=200, data={}, raw_data=raw)
+        request = capture_harness.services._checker().check(capture_harness.body())
+        response = SimpleNamespace(status_code=200, data={}, raw_data=raw.decode("ascii"))
         with pytest.raises(StreamRequestError) as caught:
-            CaptureResponses.stopped(response)
-        assert caught.value.code == "not_ready" and "invalid" in caught.value.message
+            CaptureResponses.capture_id(response, CaptureBodies.build(request))
+        assert caught.value.code == "not_ready"
+        if raw in (b"bad json", b"{broken", b"<html>local proxy error</html>"):
+            assert isinstance(caught.value.__cause__, JSONDecodeError)
+        else:
+            assert "invalid" in caught.value.message or "no usable identifier" in caught.value.message
 
     @pytest.mark.parametrize(
         "data", [{"error": "local refusal"}, {"failed": ["local device"]}, {"success": False}, {"ok": False}]
