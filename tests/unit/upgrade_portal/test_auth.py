@@ -568,7 +568,8 @@ def test_token_mode_refuses_a_sign_in_with_no_token_variable(
     answer = post_signin(auth_client, body)  # The mode runs, and the environment holds nothing.
     assert answer.status_code == auth.BAD_REQUEST_STATUS  # The contract fixes 400 for this refusal.
     assert error_part(answer, "code") == auth.BAD_CREDENTIALS  # The same code as a refused pair.
-    assert error_part(answer, "message") == auth.BAD_CREDENTIALS_MESSAGE  # No cure names the token here.
+    # The selected mode names its input without exposing which token check failed.
+    assert error_part(answer, "message") == "The portal could not sign you in. Check the token, then try again."
     assert login_seam.calls == []  # The provider seam stayed untouched in this mode.
     assert token_seam.hosts == [auth.DEFAULT_CLOUD_HOST]  # The build ran before the identity check refused.
 
