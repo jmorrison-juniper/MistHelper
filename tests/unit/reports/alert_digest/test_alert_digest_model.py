@@ -80,7 +80,7 @@ def test_missing_sample_ack_state_and_times_use_safe_defaults() -> None:
     row = alarm(1, hostname="", acked=None, timestamp=None, last_seen=None)  # Remove optional evidence fields.
     groups = AlertDigestModel.group_records(AlertDigestModel.records_from_rows([row], definitions))  # Normalize.
     assert groups[0].sample_device_or_client == ""  # Confirm a missing sample stays blank.
-    assert groups[0].acknowledged_state == "unknown"  # Confirm a missing ack state stays explicit.
+    assert groups[0].acknowledged_state == "not_reported"  # Confirm omitted ack data stays explicit.
     assert groups[0].first_seen == ""  # Confirm a missing first seen value stays blank.
     assert groups[0].last_seen == ""  # Confirm a missing last seen value stays blank.
 

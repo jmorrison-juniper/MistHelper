@@ -49,6 +49,22 @@ class AlertDigestClient:
         logger.debug("Read %d alarm definitions", len(rows))  # Log result count.
         return rows  # Return raw definition rows for the model.
 
+    def list_org_sites(self) -> list[dict[str, Any]]:
+        """Read organization sites for site-name output."""
+        logger.info("Reading organization sites for alert digest")  # Log before the API call.
+        response = mistapi.api.v1.orgs.sites.listOrgSites(
+            self._apisession, self._org_id, limit=self._page_limit
+        )  # Read org sites with the shared page limit.
+        status = getattr(response, "status_code", None)  # Read the SDK response status.
+        if status != HTTP_OK:  # A failed site read should not stop the digest.
+            problem = "No HTTP answer arrived." if status is None else f"HTTP {status}"  # Summarize the failure.
+            logger.warning("The alert digest site read failed: %s", problem)  # Surface the site lookup issue.
+            return []  # Continue with site identifiers when names are unavailable.
+        rows = mistapi.get_all(response=response, mist_session=self._apisession)  # Page through site rows.
+        sites = [row for row in rows if isinstance(row, dict)]  # Keep only object rows for the name map.
+        logger.debug("Read %d organization sites for alert digest", len(sites))  # Log result count.
+        return sites  # Return raw site rows for the model.
+
     def search_alarms(self, lookback_hours: int) -> AlertDigestListResult:
         """Read every alarm page in the lookback window."""
         logger.info("Searching org %s alarms for %d hours", self._org_id, lookback_hours)  # Log before search.

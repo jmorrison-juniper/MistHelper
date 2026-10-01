@@ -161,12 +161,13 @@ class AlertDigestOperation:
             return None  # Fail closed before any destructive request.
         client = self._resolve_client()  # Build or reuse the API client.
         definitions = AlertDigestModel.definitions_by_key(client.list_alarm_definitions())  # Read categories.
+        site_names = AlertDigestModel.site_names_by_id(client.list_org_sites())  # Read site names for output rows.
         alarm_result = client.search_alarms(hours)  # Read alarm rows from the same lookback window.
         if alarm_result.problem:  # A failed alarm search must not produce a false success.
             logger.error("Alert alarm search failed: %s", alarm_result.problem)  # Log failure reason.
             echo("  Alert alarm search failed: %s", alarm_result.problem)  # Show failure to the operator.
             return None  # Fail closed.
-        records = AlertDigestModel.records_from_rows(alarm_result.rows, definitions)  # Normalize rows.
+        records = AlertDigestModel.records_from_rows(alarm_result.rows, definitions, site_names)  # Normalize rows.
         return {"client": client, "records": records, "hours": hours}  # Return shared operation context.
 
     def _resolve_client(self) -> Any:
