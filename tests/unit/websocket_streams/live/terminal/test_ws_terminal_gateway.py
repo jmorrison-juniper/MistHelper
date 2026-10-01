@@ -104,6 +104,7 @@ class QuietShellDevice(ShellDevice):
             connection: The open fake shell connection.
             data: The bytes already recorded by the base class.
         """
+        del connection, data  # The base class already recorded the bytes, and this device sends no echo.
         return None  # The test verifies received bytes only.
 
 
@@ -166,7 +167,7 @@ class TestTerminalGateway:
 
     def test_not_terminal_read_only_not_found_and_not_open_refusals(self) -> None:
         """Refuse sessions that cannot accept terminal operations."""
-        gateway, session, _runner = self._gateway()  # Build a writable terminal session.
+        _gateway, session, _runner = self._gateway()  # Build a writable terminal session.
         not_terminal = self._session(FakeClock(), None)  # Build a message-list session.
         screen = self._screen_session(FakeClock())  # Build a read-only terminal session.
         lookup = FakeLookup({"abc123": session, "plain": not_terminal, "screen": screen})  # Build lookup.

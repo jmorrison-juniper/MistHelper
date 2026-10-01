@@ -1,9 +1,9 @@
 """Shape stream text before the page receives it.
 
 Why:
-    Issue #3551. Mist sends channel data, packet records, and shell output in
-    different forms. The page needs safe JSON, short packet summaries, and
-    shell output with ANSI control sequences removed.
+    Issue #3551. Mist sends channel data and packet records in different forms.
+    The page needs safe JSON and short packet summaries. Issue #3671 keeps the
+    raw terminal bytes for xterm.js, so this module no longer changes them.
 """
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
@@ -17,11 +17,7 @@ logger = logging.getLogger(__name__)  # Keep text shaper log records under this 
 
 
 class MessageShaper:
-    """Convert raw SDK messages to page-safe content."""
-
-    ANSI_RE = re.compile(
-        r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[()][A-B0-2]"
-    )  # Remove terminal control text.
+    """Convert raw stream messages to page-safe content."""
 
     def channel_message(self, message: object) -> tuple[str, object, str | None]:
         """Return the message kind, content, and channel source path.
@@ -42,21 +38,6 @@ class MessageShaper:
             return "json", shaped, source  # Channel mappings render as JSON.
         logger.debug("Shaped a WebSockets channel text message")  # Log after parsing plain text.
         return "text", str(message), None  # Non-mapping messages render as text.
-
-    def clean_shell_text(self, data: bytes | str) -> str:
-        """Return shell output without ANSI control sequences.
-
-        Args:
-            data: The shell output bytes or text.
-
-        Returns:
-            Plain shell output text.
-        """
-        logger.info("Cleaning WebSockets shell output")  # Log before modifying shell output.
-        text = data.decode("utf-8", errors="replace") if isinstance(data, bytes) else data  # Decode bytes safely.
-        clean = self.ANSI_RE.sub("", text).replace("\x00", "")  # Remove terminal control content.
-        logger.debug("Cleaned WebSockets shell output length=%s", len(clean))  # Log length only, not the content.
-        return clean  # The runner stores only plain text.
 
     def _shape_mapping(self, message: Mapping[object, object]) -> dict[str, object]:
         """Decode the ``data`` field of one mapping when it is JSON text.

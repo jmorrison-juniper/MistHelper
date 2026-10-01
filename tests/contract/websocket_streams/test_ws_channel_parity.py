@@ -1,10 +1,15 @@
 """Contract tests for SDK WebSocket channel parity."""
 
+from __future__ import annotations  # Keep annotations lazy for Python 3.13.
+
+import inspect  # The tests pin the runner constructor.
 from collections.abc import Callable  # Type SDK class constructors.
 
 from mistapi.websockets import location, orgs, sites  # Import SDK channel modules.
 
 from src.websocket_streams.catalog.channels import ChannelCatalog  # Import channel catalog.
+from src.websocket_streams.live.runners import channel as channel_module  # Inspect the owned channel runner.
+from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # Pin the constructor interface.
 
 ORG_ID = "11111111-1111-4111-8111-111111111111"  # Use one valid organization identifier.
 SITE_ID = "22222222-2222-4222-8222-222222222222"  # Use one valid site identifier.
@@ -97,3 +102,10 @@ def test_public_sdk_channel_classes_match_catalog_paths() -> None:
         entry = catalog.get(key)  # Read the matching catalog entry.
         sdk_channels = tuple(factory()._channels)  # Read the SDK channel list.
         assert entry is not None and entry.build_paths(targets) == sdk_channels  # The catalog path must match the SDK.
+
+
+def test_channel_runner_uses_owned_transport_interface() -> None:
+    """Pin the owned channel runner interface."""
+    signature = inspect.signature(ChannelStreamRunner)  # Read the constructor signature.
+    assert tuple(signature.parameters) == ("endpoint", "request", "sink")  # The lead factory calls this form.
+    assert "_MistWebsocket" not in vars(channel_module)  # The runner must not depend on the private SDK client.

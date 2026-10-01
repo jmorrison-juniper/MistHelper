@@ -1,398 +1,422 @@
-"""Tests for the WebSockets utility runner."""
+"""Tests for the owned WebSockets utility runner."""
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
-from enum import Enum  # Enum conversion tests need a small enum.
-from types import SimpleNamespace  # The tests build a fake SDK family module.
+import threading  # The fake sink waits for the background runner thread.
+import time  # Reliability tests report measured run time.
+from dataclasses import replace  # Short timing tables replace immutable trigger records.
 
-import pytest  # The tests check input refusal.
+import pytest  # The tests verify request errors and time bounds.
 
-from src.websocket_streams.catalog.model import (
-    ChannelDefinition,
-    FieldKind,
-    FieldSpec,
-    Safety,
-    UtilityDefinition,
-)  # Tests build local definitions.
-from src.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # The runner reads enums through this class.
-from src.websocket_streams.intake.fields import StreamRequestError  # Input refusal uses this error.
-from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.runners.utility import runner as utility_module  # The tests patch capture functions.
-from src.websocket_streams.live.runners.utility.runner import CaptureStopper, UtilityRunner  # Helpers under test.
-from src.websocket_streams.live.sessions.record import SessionState  # Fake sinks record final state.
+from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Tests build utility definitions.
+from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked start requests.
+from src.websocket_streams.live.runners.utility.runner import UtilityRunner  # The stream runner under test.
+from src.websocket_streams.live.runners.utility.triggers import (
+    UtilityRequest,
+    UtilityTiming,
+    UtilityTriggerTable,
+)  # Tests shorten timing without changing trigger data.
+from src.websocket_streams.live.sessions.record import SessionState  # Sink assertions use final states.
+from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Endpoint setup.
+from tests.support.fake_mist_cloud.api import FakeApiCall, FakeApiSession  # Offline REST trigger fake.
+from tests.support.fake_mist_cloud.devices import StreamDevice  # Offline stream device fake.
+from tests.support.fake_mist_cloud.server import FakeMistCloud  # Offline WebSocket fake.
+
+SITE_ID = "11111111-1111-1111-1111-111111111111"  # Stable site identifier for trigger paths.
+DEVICE_ID = "22222222-2222-2222-2222-222222222222"  # Stable device identifier for trigger paths.
+ORG_ID = "33333333-3333-3333-3333-333333333333"  # Stable org identifier for org captures.
+COMMAND_CHANNEL = f"/sites/{SITE_ID}/devices/{DEVICE_ID}/cmd"  # Command stream channel path.
+CAPTURE_CHANNEL = f"/sites/{SITE_ID}/pcaps"  # Site packet capture channel path.
 
 
 class FakeSink:
-    """A fake session sink."""
+    """A thread-safe sink for runner tests."""
 
     def __init__(self) -> None:
         """Build an empty sink."""
-        self.messages: list[tuple[str, object, str | None]] = []  # Keep output messages.
-        self.finished: list[tuple[SessionState, str]] = []  # Keep end states.
-        self.live_calls = 0  # Count the live transitions that the runner asks for.
+        self.messages: list[tuple[str, object, str | None]] = []  # Keep output messages in order.
+        self.finished: list[tuple[SessionState, str]] = []  # Keep the final state and reason.
+        self.live_calls = 0  # Count mark_live calls.
+        self._condition = threading.Condition()  # The test waits for finish with this condition.
 
     def mark_live(self, note: str = "") -> None:
-        """Count one live transition."""
-        self.live_calls += 1  # The runner marks the session live after an accepted trigger.
+        """Record a live transition."""
+        _note_length = len(note)  # Read the optional note without storing sensitive text.
+        with self._condition:  # Protect the counter because the runner uses another thread.
+            self.live_calls += 1  # The runner should mark live once per run.
 
     def add_message(self, kind: str, content: object, *, source: str | None = None, summary: str | None = None) -> None:
-        """Record one message."""
-        self.messages.append((kind, content, summary))  # Tests verify message kind and summary.
+        """Record one output message."""
+        _source_length = len(source or "")  # Read the optional source without changing message assertions.
+        with self._condition:  # Protect output order.
+            self.messages.append((kind, content, summary))  # Store only the fields that page tests need.
+            self._condition.notify_all()  # Wake waits that look for output.
 
     def finish(self, state: SessionState, reason: str) -> None:
-        """Record a final state."""
-        self.finished.append((state, reason))  # Tests verify end state mapping.
+        """Record the final state."""
+        with self._condition:  # Protect the final state.
+            self.finished.append((state, reason))  # Store each finish call.
+            self._condition.notify_all()  # Wake the waiting test.
 
-    def mark_input_ready(self) -> None:
-        """Ignore shell readiness."""
-        return None  # Utility runner never opens shell input.
-
-
-class FakeResponse:
-    """A fake SDK UtilResponse."""
-
-    def __init__(self, status: int = 200, error: str | None = None) -> None:
-        """Build one fake response.
+    def wait_finished(self, timeout: float = 3.0) -> tuple[SessionState, str]:
+        """Wait for one final state.
 
         Args:
-            status: The trigger status code.
-            error: The WebSocket error text.
-        """
-        self.done = True  # The fake starts complete.
-        self.ws_error = error  # The runner reads this field.
-        self.trigger_api_response = type("Trigger", (), {"status_code": status})()  # The runner reads this status.
-        self.disconnects = 0  # Stop tests count disconnect calls.
-
-    def disconnect(self) -> None:
-        """Record one disconnect call."""
-        self.disconnects += 1  # The stop loop calls this method.
-
-
-class TestUtilityRunner:
-    """Verify utility runner behavior."""
-
-    def test_messages_and_finish_states(self) -> None:
-        """Map SDK output and states to the sink."""
-        sink = FakeSink()  # Record runner output.
-        runner = UtilityRunner(
-            object(), self._request("lines"), sink, clock=lambda: 0.0, sleeper=lambda _delay: None
-        )  # Build a utility runner.
-        runner._on_message("line one")  # Simulate line output.
-        assert sink.messages == [("text", "line one", None)]  # Line output becomes text.
-        runner._response = FakeResponse(status=500)  # Simulate a trigger failure.
-        runner._finish_from_response(0.0)  # Map the response to an end state.
-        assert sink.finished[-1][0] == SessionState.FAILED  # Non-200 status fails.
-        runner._response = FakeResponse()  # Simulate a clean response.
-        runner._finish_from_response(0.0)  # Map the response to an end state.
-        assert sink.finished[-1][0] == SessionState.FINISHED  # Output plus no error finishes.
-
-    def test_timeout_stop_input_and_capture_arguments(self) -> None:
-        """Cover timeout, stop, input refusal, and capture interface build."""
-        sink = FakeSink()  # Record runner output.
-        runner = UtilityRunner(
-            object(), self._request("packets"), sink, clock=lambda: 60.0, sleeper=lambda _delay: None
-        )  # Build a packet runner.
-        runner._response = FakeResponse()  # Simulate a response with no output.
-        runner._finish_from_response(0.0)  # Map no output to timeout.
-        assert sink.finished[-1][0] == SessionState.TIMED_OUT  # No output times out.
-        runner._response.done = False  # Keep the response open for stop.
-        runner._disconnect_until_done()  # Ask the fake response to disconnect.
-        assert runner._response.disconnects == 20  # The stop loop is bounded.
-        with pytest.raises(StreamRequestError):  # Utility runners are not shells.
-            runner.send_input("show version")  # Try shell input.
-        capture = runner._capture_arguments()  # Build capture device interfaces.
-        assert capture["device_interfaces"]["dev-a"] == {"ge-0/0/1": None}  # The SDK form matches the docstring.
-
-    def test_packet_and_screen_messages(self) -> None:
-        """Shape packet and screen output kinds."""
-        packet_sink = FakeSink()  # Record packet output.
-        packet_runner = UtilityRunner(
-            object(), self._request("packets"), packet_sink, sleeper=lambda _delay: None
-        )  # Build a packet runner.
-        packet_runner._on_message({"src_ip": "1.1.1.1"})  # Simulate one packet.
-        assert packet_sink.messages[0][0] == "packet"  # Packet output uses packet kind.
-        screen_sink = FakeSink()  # Record screen output.
-        screen_runner = UtilityRunner(
-            object(), self._request("screen"), screen_sink, sleeper=lambda _delay: None
-        )  # Build a screen runner.
-        screen_runner._on_message("top")  # Simulate one screen.
-        assert screen_sink.messages[0] == ("screen", "top", None)  # Screen output replaces the view.
-
-    def test_sdk_arguments_org_target_enum_and_start_stop(self) -> None:
-        """Cover SDK argument building, enum conversion, start, and stop."""
-        runner = UtilityRunner(
-            object(), self._org_request(), FakeSink(), sleeper=lambda _delay: None
-        )  # Build an org runner.
-        runner._run = lambda: None  # Keep the start thread away from the real SDK.
-        runner.start()  # Start the background thread.
-        runner.stop()  # Start the stop thread.
-        args = runner._sdk_arguments(lambda **_kwargs: None)  # Build SDK arguments with a fake function.
-        assert args["org_id"] == "org-a"  # Organization utilities pass org_id.
-        assert args["duration"] == 60  # Capture utilities force 60 seconds.
-        assert "device_interfaces" in args  # Mist Edge captures use device_interfaces.
-        assert SdkAnnotation.enum_type(SampleEnum) is SampleEnum  # Direct enum annotations are found.
-        assert (
-            runner._enum_value(self._enum_function, "node", "node0") is SampleEnum.NODE0
-        )  # Enum text becomes an enum.
-
-    def test_capture_stopper_matches_before_stop(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Stop only matching site and organization captures."""
-        calls: list[str] = []  # Record stop calls.
-        response = type("Response", (), {"data": [{"id": "cap-a"}]})()  # Build a matching SDK response.
-        monkeypatch.setattr(
-            utility_module.site_pcaps, "listSitePacketCaptures", lambda *_args, **_kwargs: response
-        )  # Fake the site read.
-        monkeypatch.setattr(
-            utility_module.site_pcaps, "stopSitePacketCapture", lambda *_args, **_kwargs: calls.append("site")
-        )  # Fake the site stop.
-        monkeypatch.setattr(
-            utility_module.org_pcaps, "listOrgPacketCaptures", lambda *_args, **_kwargs: response
-        )  # Fake the org read.
-        monkeypatch.setattr(
-            utility_module.org_pcaps, "stopOrgPacketCapture", lambda *_args, **_kwargs: calls.append("org")
-        )  # Fake the org stop.
-        stopper = CaptureStopper(object())  # Build the stopper.
-        assert stopper.stop_site("site-a", "cap-a") is True  # Matching site capture stops.
-        assert stopper.stop_org("org-a", "cap-a") is True  # Matching org capture stops.
-        assert stopper.stop_site("site-a", "other") is False  # Nonmatching capture does not stop.
-        assert calls == ["site", "org"]  # Only matching captures caused stop calls.
-
-    def test_runner_stops_matching_capture_after_disconnect(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Call the capture stopper when a stopped runner has a capture id."""
-        calls: list[str] = []  # Record stop calls.
-        response = type("Response", (), {"data": [{"id": "cap-a"}]})()  # Build a matching capture list.
-        monkeypatch.setattr(
-            utility_module.site_pcaps, "listSitePacketCaptures", lambda *_args, **_kwargs: response
-        )  # Fake the site read.
-        monkeypatch.setattr(
-            utility_module.site_pcaps, "stopSitePacketCapture", lambda *_args, **_kwargs: calls.append("site")
-        )  # Fake the site stop.
-        runner = UtilityRunner(
-            object(), self._request("packets"), FakeSink(), sleeper=lambda _delay: None
-        )  # Build a capture runner.
-        runner._response = FakeResponse()  # Build a fake SDK response.
-        runner._response.trigger_api_response.data = {"id": "cap-a"}  # Add the capture id from the trigger.
-        runner._stop_capture_if_needed()  # Stop only the matching active capture.
-        assert calls == ["site"]  # The runner sent one site stop.
-
-    def test_run_calls_sdk_waits_for_done_and_finishes(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Call the SDK with the checked targets, wait for done, and finish."""
-        response = FakeResponse()  # The fake SDK UtilResponse.
-        response.done = False  # The runner must wait until the SDK marks done.
-        calls: list[dict[str, object]] = []  # Record the SDK keyword arguments.
-
-        def remote_pcap(**kwargs: object) -> FakeResponse:
-            """Record the call, send one packet, and return the response."""
-            calls.append(kwargs)  # Keep the arguments for the asserts.
-            on_message = kwargs["on_message"]  # The runner passes its message handler.
-            assert callable(on_message)  # The handler must accept SDK messages.
-            on_message({"src_ip": "10.0.0.1"})  # Send one packet like the SDK.
-            return response  # The runner polls this response.
-
-        def mark_done(_delay: float) -> None:
-            """Mark the response done after the first poll."""
-            response.done = True  # The SDK closed the stream.
-
-        self._patch_module(monkeypatch, remote_pcap)  # The runner loads the fake SDK function.
-        sink = FakeSink()  # Record runner output.
-        runner = UtilityRunner(
-            object(), self._request("packets"), sink, clock=lambda: 0.0, sleeper=mark_done
-        )  # Build a capture runner.
-        runner._run()  # Run the SDK call on this thread.
-        assert calls[0]["site_id"] == "site-a"  # The SDK got the site target.
-        assert calls[0]["device_id"] == "dev-a"  # The SDK got the device target.
-        assert calls[0]["duration"] == 60  # A capture always asks for 60 seconds.
-        assert sink.messages[0][0] == "packet"  # The packet reached the sink.
-        assert sink.live_calls == 1  # The accepted trigger made the session live one time.
-        assert sink.finished == [(SessionState.FINISHED, "The utility finished.")]  # Output plus done finishes.
-
-    def test_run_keeps_a_refused_trigger_out_of_the_live_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Finish as failed, and do not mark live, when the Mist API refuses the trigger."""
-        self._patch_module(monkeypatch, lambda **_kwargs: FakeResponse(status=404))  # The trigger was refused.
-        sink = FakeSink()  # Record runner output.
-        runner = UtilityRunner(
-            object(), self._request("packets"), sink, clock=lambda: 0.0, sleeper=lambda _delay: None
-        )  # Build a capture runner.
-        runner._run()  # Run the SDK call on this thread.
-        assert sink.live_calls == 0  # A refused trigger never shows the Live state.
-        assert sink.finished == [(SessionState.FAILED, "The utility failed with status 404.")]  # The status shows.
-
-    def test_wait_loop_marks_live_after_the_trigger_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Mark the session live only after the SDK thread records an accepted trigger."""
-        response = FakeResponse()  # The fake SDK UtilResponse.
-        response.done = False  # The SDK still runs the trigger on its own thread.
-        response.trigger_api_response = None  # The trigger answer has not arrived yet.
-        sink = FakeSink()  # Record runner output.
-        live_before_trigger: list[int] = []  # Record the live count at the moment the trigger answer arrives.
-
-        def advance(_delay: float) -> None:
-            """Deliver the trigger answer on the first poll, and end the stream on the second poll."""
-            if response.trigger_api_response is None:  # First poll: the trigger answer arrives.
-                live_before_trigger.append(sink.live_calls)  # The session must not be live before the answer.
-                response.trigger_api_response = type("Trigger", (), {"status_code": 200})()  # An accepted trigger.
-            else:  # Second poll: the SDK closed the stream.
-                response.done = True  # End the wait loop.
-
-        self._patch_module(monkeypatch, lambda **_kwargs: response)  # The SDK returns before the trigger answer.
-        runner = UtilityRunner(
-            object(), self._request("packets"), sink, clock=lambda: 0.0, sleeper=advance
-        )  # Build a capture runner.
-        runner._run()  # Run the SDK call on this thread.
-        assert live_before_trigger == [0]  # No Live state showed before the trigger answer.
-        assert sink.live_calls == 1  # The accepted trigger made the session live one time.
-        assert sink.finished[-1][0] == SessionState.TIMED_OUT  # No output arrived, so the session timed out.
-
-    def test_run_reports_sdk_failure_with_a_plain_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Report a failed state when the SDK call raises an error."""
-
-        def refuse(**_kwargs: object) -> FakeResponse:
-            """Fail like an SDK call that the Mist API refused."""
-            raise RuntimeError("")  # An empty message needs the fallback reason.
-
-        self._patch_module(monkeypatch, refuse)  # The runner loads the failing SDK function.
-        sink = FakeSink()  # Record runner output.
-        runner = UtilityRunner(
-            object(), self._request("packets"), sink, clock=lambda: 0.0, sleeper=lambda _delay: None
-        )  # Build a capture runner.
-        runner._run()  # Run the SDK call on this thread.
-        assert sink.finished == [(SessionState.FAILED, "The utility failed.")]  # The page gets a plain reason.
-
-    def test_finish_reasons_for_limit_stop_and_timeout(self) -> None:
-        """Explain the SDK time limit, an operator stop, and a silent device."""
-        sink = FakeSink()  # Record runner output.
-        runner = UtilityRunner(
-            object(), self._request("lines"), sink, clock=lambda: 60.0, sleeper=lambda _delay: None
-        )  # Build a line runner with a clock at the SDK limit.
-        runner._response = FakeResponse()  # A clean SDK response.
-        runner._finish_from_response(0.0)  # No output arrived.
-        assert sink.finished[-1][0] == SessionState.TIMED_OUT  # A silent device times out.
-        assert "Check that the device is connected" in sink.finished[-1][1]  # The reason tells the next step.
-        runner._on_message("line one")  # One line arrived.
-        runner._finish_from_response(0.0)  # Sixty seconds passed on the fake clock.
-        assert sink.finished[-1][1] == "The SDK 60 second limit ended the session."  # The limit reason shows.
-        runner._stopping.set()  # The operator asked for a stop.
-        runner._finish_from_response(0.0)  # Map the stop.
-        assert sink.finished[-1] == (SessionState.STOPPED, "The operator stopped the session.")  # Stop wins.
-
-    def test_site_targets_and_capture_skips(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Build site targets and skip capture stops that do not apply."""
-        calls: list[str] = []  # Record stop calls.
-        monkeypatch.setattr(
-            utility_module.site_pcaps, "stopSitePacketCapture", lambda *_args, **_kwargs: calls.append("site")
-        )  # A stop call here is a defect.
-        runner = UtilityRunner(object(), self._ping_request(), FakeSink(), sleeper=lambda _delay: None)  # Ping.
-        assert runner._target_arguments() == {"site_id": "site-a", "device_id": "dev-a"}  # Site and device.
-        assert runner._capture_arguments() == {}  # A ping has no capture ports.
-        runner._response = FakeResponse()  # A clean SDK response.
-        runner._response.trigger_api_response.data = {"id": "cap-a"}  # A capture id that a ping never owns.
-        runner._stop_capture_if_needed()  # A ping needs no capture stop.
-        assert calls == []  # The runner sent no capture stop.
-
-    def test_org_capture_stop_and_wrong_definition(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Stop a matching organization capture and refuse a channel definition."""
-        calls: list[str] = []  # Record stop calls.
-        response = type("Response", (), {"data": {"results": [{"id": "cap-a"}]}})()  # The mapping response form.
-        monkeypatch.setattr(
-            utility_module.org_pcaps, "listOrgPacketCaptures", lambda *_args, **_kwargs: response
-        )  # Fake the organization read.
-        monkeypatch.setattr(
-            utility_module.org_pcaps, "stopOrgPacketCapture", lambda *_args, **_kwargs: calls.append("org")
-        )  # Fake the organization stop.
-        runner = UtilityRunner(object(), self._org_request(), FakeSink(), sleeper=lambda _delay: None)  # Mist Edge.
-        runner._response = FakeResponse()  # A clean SDK response.
-        runner._response.trigger_api_response.data = {"id": "cap-a"}  # The capture of this session.
-        runner._stop_capture_if_needed()  # Stop the matching organization capture.
-        assert calls == ["org"]  # The runner sent one organization stop.
-        assert CaptureStopper(object()).stop_org("org-a", "other") is False  # Another capture stays live.
-        channel = ChannelDefinition("site.stats.devices", "site", "Devices", "Device statistics.", "/sites/x")  # Wrong.
-        bad_request = StartRequest("utility", channel, {}, {}, "Devices")  # A request that breaks the contract.
-        bad_runner = UtilityRunner(object(), bad_request, FakeSink())  # Build a runner for the bad request.
-        with pytest.raises(StreamRequestError, match="not valid"):  # The runner needs a utility definition.
-            bad_runner._utility_definition()  # Read the definition.
-
-    def _patch_module(self, monkeypatch: pytest.MonkeyPatch, function: object) -> None:
-        """Replace the SDK module loader with a fake capture function.
-
-        Args:
-            monkeypatch: The pytest patch fixture.
-            function: The fake ``remotePcap`` function.
-        """
-        module = SimpleNamespace(remotePcap=function)  # A fake EX device utility module.
-        loader = SimpleNamespace(import_module=lambda _name: module)  # A fake importlib for the runner.
-        monkeypatch.setattr(utility_module, "importlib", loader)  # The runner loads the fake module.
-
-    def _ping_request(self) -> StartRequest:
-        """Build a checked ping request.
+            timeout: The maximum wait in seconds.
 
         Returns:
-            A utility start request without capture ports.
+            The final state and reason.
         """
-        target = FieldSpec("device_id", "Device", FieldKind.UUID, picker="devices")  # Build a device target.
-        definition = UtilityDefinition(
-            "ex.ping", "ex", "ping", "Ping", "Ping a host.", (), Safety.READ, "lines", (target,)
-        )  # Build a ping utility.
-        return StartRequest(
-            "utility", definition, {"site_id": ("site-a",), "device_id": ("dev-a",)}, {"host": "8.8.8.8"}, "Ping"
-        )  # Return a checked request.
+        deadline = time.monotonic() + timeout  # Bound every test wait.
+        with self._condition:  # Wait on the same condition that finish() notifies.
+            while not self.finished:  # Stop when the runner records a final state.
+                remaining = deadline - time.monotonic()  # Recalculate the remaining wait.
+                if remaining <= 0.0:  # A missing finish is a test failure.
+                    raise AssertionError("The utility runner did not finish in time.")  # Give one clear failure.
+                self._condition.wait(remaining)  # Wait until finish() or timeout.
+            return self.finished[-1]  # Return the latest state for assertions.
 
-    def _request(self, output: str) -> StartRequest:
-        """Build a checked utility request.
+
+class ExplodingSink(FakeSink):
+    """A sink that raises when the runner emits output."""
+
+    def add_message(self, kind: str, content: object, *, source: str | None = None, summary: str | None = None) -> None:
+        """Raise during output to test the broad failure path."""
+        _kind_length = len(kind)  # Read the kind without using output content.
+        _source_length = len(source or "")  # Read the source without storing it.
+        _summary_length = len(summary or "")  # Read the summary without storing it.
+        raise TypeError("sink exploded")  # Model an unexpected sink failure.
+
+
+class ShortTriggerTable(UtilityTriggerTable):
+    """Return real triggers with test timing limits."""
+
+    def __init__(self, timing: UtilityTiming) -> None:
+        """Build a short trigger table.
 
         Args:
-            output: The utility output kind.
-
-        Returns:
-            A utility start request.
+            timing: The replacement timing.
         """
-        target = FieldSpec("device_id", "Device", FieldKind.UUID, picker="devices")  # Build a device target.
-        definition = UtilityDefinition(
-            "ex.remotePcap", "ex", "remotePcap", "Capture", "Capture packets.", (), Safety.CAPTURE, output, (target,)
-        )  # Build a capture utility.
-        return StartRequest(
-            "utility",
-            definition,
-            {"site_id": ("site-a",), "device_id": ("dev-a",)},
-            {"port_ids": ["ge-0/0/1"]},
-            "Capture",
-        )  # Return a checked request.
+        super().__init__()  # Keep base table initialization behavior.
+        self._timing = timing  # Store replacement timing for request_for().
 
-    def _org_request(self) -> StartRequest:
-        """Build a checked organization capture request.
-
-        Returns:
-            A utility start request.
-        """
-        target = FieldSpec("mxedge_id", "Mist Edge", FieldKind.UUID, picker="mxedges")  # Build a Mist Edge target.
-        definition = UtilityDefinition(
-            "mxedge.orgRemotePcap",
-            "mxedge",
-            "orgRemotePcap",
-            "Capture",
-            "Capture packets.",
-            (),
-            Safety.CAPTURE,
-            "packets",
-            (target,),
-            "organization",
-        )  # Build an organization capture utility.
-        return StartRequest(
-            "utility",
-            definition,
-            {"org_id": ("org-a",), "mxedge_id": ("mx-a",)},
-            {"interfaces": ["port0"]},
-            "Capture",
-        )  # Return a checked request.
-
-    def _enum_function(self, node: SampleEnum) -> None:
-        """Provide an enum annotation for conversion tests.
+    def request_for(self, request: StartRequest) -> UtilityRequest:
+        """Return a real request with short timing.
 
         Args:
-            node: The enum value.
+            request: The checked start request.
+
+        Returns:
+            The real request with replacement timing.
         """
-        return None  # The function is never called.
+        trigger = super().request_for(request)  # Read real method, path, body, and channel.
+        listen = replace(trigger.listen, timing=self._timing)  # Keep the channel and path exact.
+        return replace(trigger, listen=listen)  # Return an immutable trigger copy.
 
 
-class SampleEnum(Enum):
-    """A small enum for conversion tests."""
+def test_trigger_posts_only_after_channel_subscribed() -> None:
+    """Send the trigger only after the stream subscription succeeds."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session for the trigger.
+        api.add_override("/show_arp", data={"session": "session-order"})  # Make the session id deterministic.
+        subscribed_before_post = threading.Event()  # The hook records subscription order.
+        _set_before_post_return(api, _publish_after_subscription(cloud, device, subscribed_before_post))  # Hook.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _fast_table())  # Start the runner.
+        state, _reason = sink.wait_finished()  # Wait for the background run.
+    assert subscribed_before_post.is_set()  # The trigger hook saw a stream subscription first.
+    assert api.calls[0].method == "POST"  # The first REST call is the trigger POST.
+    assert state == SessionState.FINISHED  # Output plus quiet completion finishes cleanly.
+    assert sink.messages == [("text", "show arp output", None)]  # The command line shape is stable.
 
-    NODE0 = "node0"  # The runner converts this value from text.
+
+def test_early_command_output_before_post_return_is_kept() -> None:
+    """Keep output that arrives before the REST trigger returns."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", data={"session": "session-early"})  # Use a known session id.
+        _set_before_post_return(api, _publish_lines(device, "session-early", ["early", "done"]))  # Hook.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _fast_table())  # Start the runner.
+        state, _reason = sink.wait_finished()  # Wait for completion.
+    assert state == SessionState.FINISHED  # The utility completes after quiet time.
+    assert [message[1] for message in sink.messages] == ["early", "done"]  # Early lines stay in order.
+
+
+def test_first_output_limit_times_out_without_output() -> None:
+    """End as timed out when the device sends no first output."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", data={"session": "session-timeout"})  # Return a valid trigger answer.
+        timing = UtilityTiming(0.2, 0.2, 1.0)  # Keep the no-output wait short.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), ShortTriggerTable(timing))  # Run.
+        state, reason = sink.wait_finished()  # Wait for timeout.
+    assert state == SessionState.TIMED_OUT  # No output uses the timeout state.
+    assert "no output" in reason  # The reason tells the operator what happened.
+
+
+def test_quiet_limit_finishes_after_output() -> None:
+    """Finish after the quiet limit when output already arrived."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", data={"session": "session-quiet"})  # Use a deterministic session id.
+        _set_before_post_return(api, _publish_lines(device, "session-quiet", ["one line"]))  # Publish one line.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _fast_table())  # Run with short quiet time.
+        state, reason = sink.wait_finished()  # Wait for quiet completion.
+    assert state == SessionState.FINISHED  # Output before quiet time is successful.
+    assert reason == "The utility finished."  # Quiet completion keeps the current success reason.
+
+
+def test_total_limit_uses_existing_total_reason() -> None:
+    """End at the total limit with the existing total-limit reason."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", data={"session": "session-total"})  # Use a deterministic session id.
+        _set_before_post_return(api, _publish_lines(device, "session-total", ["one line"]))  # Publish one line.
+        timing = UtilityTiming(1.0, 5.0, 0.3)  # Force the total limit before quiet time.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), ShortTriggerTable(timing))  # Run.
+        state, reason = sink.wait_finished()  # Wait for total completion.
+    assert state == SessionState.FINISHED  # Output arrived before the total limit.
+    assert reason == "The SDK 60 second limit ended the session."  # Keep the existing reason text.
+
+
+def test_stop_closes_stream_within_three_seconds() -> None:
+    """Stop a running command session within three seconds."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", data={"session": "session-stop"})  # Use a deterministic session id.
+        runner, sink = _build_runner(cloud, api, _request("ex.retrieveArpTable"), _slow_table())  # Build runner.
+        runner.start()  # Start the command runner.
+        _wait_for_calls(api, 1)  # Wait until the trigger was sent.
+        started = time.monotonic()  # Start the stop timer.
+        runner.stop()  # Close the stream from the test thread.
+        state, _reason = sink.wait_finished()  # Wait for the run thread to finish.
+        elapsed = time.monotonic() - started  # Measure the stop duration.
+    assert state == SessionState.STOPPED  # A user stop wins over transport close.
+    assert elapsed < 3.0  # The close path must not block the operator.
+
+
+def test_subscribe_refusal_does_not_leak_channel_path() -> None:
+    """Return a safe subscribe failure reason without the channel path."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        device.refuse(COMMAND_CHANNEL, "denied")  # Refuse the command stream channel.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _fast_table())  # Start the runner.
+        state, reason = sink.wait_finished()  # Wait for the subscribe failure.
+    assert state == SessionState.FAILED  # Subscribe refusal fails the session.
+    assert reason == "The stream subscription failed: denied."  # The reason uses only safe detail.
+    assert "/sites/" not in reason  # The channel path must not reach the page.
+
+
+def test_unexpected_output_exception_fails_session_safely() -> None:
+    """Convert an unexpected output exception into a safe failed session."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", data={"session": "session-crash"})  # Use a deterministic session id.
+        _set_before_post_return(api, _publish_lines(device, "session-crash", ["boom"]))  # Publish one output line.
+        runner, sink = _build_runner(
+            cloud, api, _request("ex.retrieveArpTable"), _fast_table(), ExplodingSink()
+        )  # Build.
+        runner.start()  # Start the runner with the exploding sink.
+        state, reason = sink.wait_finished()  # Wait for the broad exception handler.
+    assert state == SessionState.FAILED  # Unexpected exceptions fail the session.
+    assert reason == "The utility failed. Read the portal log for the cause."  # The page reason is safe.
+
+
+def test_show_arp_runs_one_hundred_times_with_full_output(capsys: pytest.CaptureFixture[str]) -> None:
+    """Run Show ARP one hundred times against a fast fake device."""
+    started = time.perf_counter()  # Measure only the loop run time.
+    with FakeMistCloud() as cloud:  # Reuse one loopback server to keep the reliability test bounded.
+        for index in range(100):  # Repeat the SC-003 reliability path.
+            device = StreamDevice()  # Use a fresh fake device without stale closed sockets.
+            cloud.register("/api-ws/v1/stream", device)  # Replace the stream route for this run.
+            api = FakeApiSession(cloud)  # Build a fake API session.
+            session_id = f"session-{index}"  # Give each run an exact filter value.
+            lines = [f"run {index} header", f"run {index} detail"]  # Full output expected from the device.
+            api.add_override("/show_arp", data={"session": session_id})  # Force the filter identifier.
+            _set_before_post_return(api, _publish_lines(device, session_id, lines))  # Publish during trigger.
+            sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _very_fast_table())  # Run once.
+            state, _reason = sink.wait_finished()  # Wait for the utility to finish.
+            assert state == SessionState.FINISHED  # Each fast run finishes cleanly.
+            assert [message[1] for message in sink.messages] == lines  # Each run preserves full output.
+    elapsed = time.perf_counter() - started  # Compute the reliability measurement.
+    print(f"show_arp_100_run_seconds={elapsed:.3f}")  # Report the runtime for the builder report.
+    assert "show_arp_100_run_seconds" in capsys.readouterr().out  # Prove the measurement printed.
+
+
+def test_capture_filters_capture_id_and_adds_packet_summary() -> None:
+    """Emit only matching capture packets and include a packet summary."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/pcaps/capture", data={"id": "cap-ok"})  # Use a deterministic capture id.
+        _set_before_post_return(api, _publish_capture_pair(device))  # Publish noise and the matching packet.
+        sink = _run_utility(cloud, api, _request("ex.remotePcap", "packets"), _fast_table())  # Run capture.
+        state, _reason = sink.wait_finished()  # Wait for quiet completion.
+    assert state == SessionState.FINISHED  # A matching capture packet completes successfully.
+    assert len(sink.messages) == 1  # The filter drops the nonmatching capture.
+    assert sink.messages[0][0] == "packet"  # Packet captures keep the packet message kind.
+    assert sink.messages[0][1] == _packet_record()  # The page sees only the packet dictionary.
+    assert sink.messages[0][2] == "12:00 1.1.1.1 -> 2.2.2.2 TCP 64"  # Summary uses packet fields.
+
+
+def test_capture_stop_sends_delete_only_for_matching_capture() -> None:
+    """Stop a running capture with the capture identifier from the trigger answer."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/pcaps/capture", data={"id": "cap-stop"})  # Use a deterministic capture id.
+        api.add_override("/pcaps?limit=1", data=[{"id": "cap-stop"}])  # Let CaptureStopper match the capture.
+        runner, sink = _build_runner(cloud, api, _request("ex.remotePcap", "packets"), _slow_table())  # Build.
+        runner.start()  # Start the capture runner.
+        _wait_for_calls(api, 1)  # Wait for the capture trigger.
+        runner.stop()  # Ask the runner to stop the capture.
+        state, _reason = sink.wait_finished()  # Wait for stopped state.
+    assert state == SessionState.STOPPED  # Stop produces the operator stopped state.
+    assert _has_call(api.calls, "DELETE", f"/api/v1/sites/{SITE_ID}/pcaps")  # Matching capture was stopped.
+
+
+def test_screen_utility_is_refused() -> None:
+    """Reject screen utilities in the utility runner."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        runner, sink = _build_runner(cloud, api, _request("ex.topCommand", "screen"), _fast_table())  # Build.
+        runner.start()  # Start a screen request in the wrong runner.
+        state, _reason = sink.wait_finished()  # Wait for refusal.
+    assert state == SessionState.FAILED  # Screen commands must use ScreenRunner.
+    assert sink.live_calls == 0  # Refused screen utilities never become live.
+
+
+def _request(key: str, output: str = "lines") -> StartRequest:
+    """Build a checked utility request for tests."""
+    definition = UtilityDefinition(key, "ex", "unused", key, key, (), Safety.READ, output, ())  # Catalog entry.
+    targets = {"site_id": (SITE_ID,), "device_id": (DEVICE_ID,), "org_id": (ORG_ID,)}  # Stable targets.
+    params = {"duration": 60, "port_id": "ge-0/0/1", "protocol": "tcp"}  # Common trigger parameters.
+    return StartRequest("utility", definition, targets, params, key)  # Return checked request shape.
+
+
+def _build_runner(
+    cloud: FakeMistCloud,
+    api: FakeApiSession,
+    request: StartRequest,
+    table: UtilityTriggerTable,
+    sink: FakeSink | None = None,
+) -> tuple[UtilityRunner, FakeSink]:
+    """Build a runner and sink for one fake cloud."""
+    profile = TransportProfile(
+        stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
+        allow_loopback=True,
+        read_timeout_seconds=0.2,
+        subscribe_timeout_seconds=1.0,
+    )  # Point transport to the fake stream.
+    endpoint = MistStreamEndpoint(api, profile)  # Use the same API session for auth and REST.
+    selected_sink = sink or FakeSink()  # Let tests inject a sink that raises.
+    runner = UtilityRunner(api, endpoint, request, selected_sink, table)  # Build the runner under test.
+    return runner, selected_sink  # The caller starts the runner.
+
+
+def _run_utility(
+    cloud: FakeMistCloud, api: FakeApiSession, request: StartRequest, table: UtilityTriggerTable
+) -> FakeSink:
+    """Start one utility runner."""
+    runner, sink = _build_runner(cloud, api, request, table)  # Build the runner and sink.
+    runner.start()  # Start the utility run.
+    return sink  # The caller waits for finish.
+
+
+def _fast_table() -> ShortTriggerTable:
+    """Return short but stable utility timing."""
+    return ShortTriggerTable(UtilityTiming(0.5, 0.05, 1.0))  # Keep unit tests fast.
+
+
+def _very_fast_table() -> ShortTriggerTable:
+    """Return very short utility timing for reliability loops."""
+    return ShortTriggerTable(UtilityTiming(0.5, 0.01, 1.0))  # Keep the 100-run test bounded.
+
+
+def _slow_table() -> ShortTriggerTable:
+    """Return long timing for stop tests."""
+    return ShortTriggerTable(UtilityTiming(10.0, 10.0, 10.0))  # Prevent limits from winning over stop().
+
+
+def _set_before_post_return(api: FakeApiSession, hook) -> None:
+    """Set and verify the pre-return hook on the fake API session."""
+    api.before_post_return = hook  # Configure the fake API session hook.
+    assert api.before_post_return is hook  # Read the attribute so tests prove the hook is installed.
+
+
+def _publish_after_subscription(cloud: FakeMistCloud, device: StreamDevice, subscribed: threading.Event):
+    """Return a hook that proves subscription order and publishes output."""
+
+    def publish(_uri: str, _body: object | None) -> None:
+        if _is_subscribed(cloud, COMMAND_CHANNEL):  # The stream must subscribe before the REST trigger.
+            subscribed.set()  # Record the subscribe state.
+        device.publish_command_lines(COMMAND_CHANNEL, "session-order", ["show arp output"])  # Publish output.
+
+    return publish  # FakeApiSession calls this hook before returning.
+
+
+def _publish_lines(device: StreamDevice, session_id: str, lines: list[str]):
+    """Return a hook that publishes command output."""
+
+    def publish(_uri: str, _body: object | None) -> None:
+        device.publish_command_lines(COMMAND_CHANNEL, session_id, lines)  # Publish each command line.
+
+    return publish  # FakeApiSession calls this hook before returning.
+
+
+def _publish_capture_pair(device: StreamDevice):
+    """Return a hook that publishes one noise packet and one matching packet."""
+
+    def publish(_uri: str, _body: object | None) -> None:
+        device.publish_capture(CAPTURE_CHANNEL, "cap-noise", {"src_ip": "9.9.9.9"})  # Publish noise first.
+        device.publish_capture(CAPTURE_CHANNEL, "cap-ok", _packet_record())  # Publish the matching packet.
+
+    return publish  # FakeApiSession calls this hook before returning.
+
+
+def _packet_record() -> dict[str, object]:
+    """Return one packet record with every summary field."""
+    return {
+        "timestamp": "12:00",
+        "src_ip": "1.1.1.1",
+        "dst_ip": "2.2.2.2",
+        "proto": "TCP",
+        "length": 64,
+    }  # PacketSummary should use each value.
+
+
+def _is_subscribed(cloud: FakeMistCloud, channel: str) -> bool:
+    """Return whether any connection has subscribed to a channel."""
+    needle = f'"subscribe": "{channel}"'.encode()  # The fake cloud records raw subscribe frames.
+    return any(needle in frame.payload for frame in cloud.frames)  # Tests need only a boolean proof.
+
+
+def _wait_for_calls(api: FakeApiSession, count: int) -> None:
+    """Wait until the fake API session has at least a count of calls."""
+    deadline = time.monotonic() + 2.0  # Bound the poll loop.
+    while len(api.calls) < count:  # Wait until the background thread sends REST.
+        if time.monotonic() >= deadline:  # Missing REST call is a test failure.
+            raise AssertionError("The utility runner did not send the REST trigger.")  # Explain the missing event.
+        time.sleep(0.01)  # Keep the poll cheap.
+
+
+def _has_call(calls: list[FakeApiCall], method: str, uri: str) -> bool:
+    """Return whether the fake API session recorded a matching call."""
+    return any(call.method == method and call.uri == uri for call in calls)  # Tests assert stop request shape.

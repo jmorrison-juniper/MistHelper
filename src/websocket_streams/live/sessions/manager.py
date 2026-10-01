@@ -14,6 +14,7 @@ import secrets  # Session identifiers must be hard to guess.
 import threading  # Gunicorn threads share one manager.
 import time  # The default clock and reaper sleep use monotonic time.
 from collections.abc import Callable, Iterator  # The manager injects a fake clock in tests.
+from datetime import UTC, datetime, timedelta  # The terminal expiry time is public UTC text.
 from typing import Protocol, cast  # Web services and tests inject runner factories.
 
 from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Audit decisions use utility safety.
@@ -23,6 +24,7 @@ from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # Ch
 from src.websocket_streams.live.runners.shell import ShellRunner  # Shell requests use this runner.
 from src.websocket_streams.live.runners.text import ShellAddressFilter  # The SDK can log a shell address.
 from src.websocket_streams.live.runners.utility.runner import UtilityRunner  # Utility requests use this runner.
+from src.websocket_streams.live.runners.utility.screen import ScreenRunner  # Top and Monitor Traffic use this runner.
 from src.websocket_streams.live.sessions.buffer import MessageBuffer, MessagePage  # Buffers and read answers.
 from src.websocket_streams.live.sessions.record import (
     SessionSink,
@@ -30,6 +32,11 @@ from src.websocket_streams.live.sessions.record import (
     StreamSession,
 )  # The manager owns sessions.
 from src.websocket_streams.live.sessions.settings import StreamSettings  # Settings define limits.
+from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Terminal sessions keep raw output bytes.
+from src.websocket_streams.live.terminal.gateway import TerminalRunner  # A shell runner receives the queued keys.
+from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Early keys wait for the first output.
+from src.websocket_streams.live.terminal.state import TerminalState  # One terminal state for each terminal session.
+from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Connection values.
 
 logger = logging.getLogger(__name__)  # Keep manager records under this module.
 
@@ -42,13 +49,6 @@ class StreamRunner(Protocol):
 
     def stop(self) -> None:
         """Request stream stop and return at once."""
-
-    def send_input(self, text: str) -> None:
-        """Send shell input, or raise when unsupported.
-
-        Args:
-            text: The checked shell input.
-        """
 
 
 class RunnerFactoryLike(Protocol):
@@ -67,18 +67,33 @@ class RunnerFactoryLike(Protocol):
 
 
 class RunnerFactory:
-    """Build SDK stream runners for checked requests."""
+    """Build the stream runners for checked requests."""
 
     _filter_installed = False  # Install the Mist SDK shell redaction filter one time.
     _filter_lock = threading.Lock()  # Several apps can build at the same time in tests.
 
-    def __init__(self, apisession: object) -> None:
+    def __init__(self, apisession: object, profile: TransportProfile | None = None) -> None:
         """Build one runner factory.
 
         Args:
             apisession: The Mist API session.
+            profile: The transport values, or None for the production values. Tests use a loopback profile.
         """
-        self._apisession = apisession  # Each runner uses the same authenticated session.
+        self._apisession = apisession  # Each runner sends its REST trigger with the same session.
+        self._endpoint = MistStreamEndpoint(apisession, profile)  # One endpoint builds each connection value.
+
+    @staticmethod
+    def is_screen(request: StartRequest) -> bool:
+        """Return whether a request runs a full-screen device command.
+
+        Args:
+            request: The checked start request.
+
+        Returns:
+            True for Top and Monitor Traffic, which send screen updates.
+        """
+        definition = request.definition  # The catalog marks each screen command.
+        return isinstance(definition, UtilityDefinition) and definition.output == "screen"  # Catalog decides.
 
     def build(self, request: StartRequest, sink: SessionSink) -> StreamRunner:
         """Build a runner for one checked request.
@@ -91,13 +106,16 @@ class RunnerFactory:
             The matching stream runner.
         """
         logger.info("Building WebSockets runner for key %s", request.key)  # Log before building a runner.
-        if request.kind == "channel":  # Channel streams use the private SDK WebSocket client.
-            runner: StreamRunner = ChannelStreamRunner(self._apisession, request, sink)  # Build a channel runner.
-        elif request.kind == "shell":  # Shell streams need the shell address filter.
-            self._install_shell_filter()  # Prevent SDK shell address leaks.
-            runner = ShellRunner(self._apisession, request, sink)  # Build a shell runner.
-        else:  # All non-shell utilities use the utility runner.
-            runner = UtilityRunner(self._apisession, request, sink)  # Build a utility runner.
+        if request.kind == "channel":  # Channel streams read the Mist stream connection.
+            runner: StreamRunner = ChannelStreamRunner(self._endpoint, request, sink)  # Build a channel runner.
+        elif request.kind == "shell":  # A shell is a two-way terminal.
+            self._install_shell_filter()  # The REST layer of the SDK can log the shell address.
+            runner = ShellRunner(self._apisession, self._endpoint, request, sink)  # Build a shell runner.
+        elif self.is_screen(request):  # Top and Monitor Traffic are read-only terminals.
+            self._install_shell_filter()  # The screen trigger answer holds a WebSocket address too.
+            runner = ScreenRunner(self._apisession, self._endpoint, request, sink)  # Build a screen runner.
+        else:  # All other utilities send lines or packets on the stream connection.
+            runner = UtilityRunner(self._apisession, self._endpoint, request, sink)  # Build a utility runner.
         logger.debug("Built WebSockets runner for key %s", request.key)  # Log safe metadata only.
         return runner  # The manager starts it outside the lock.
 
@@ -114,7 +132,6 @@ class RunnerFactory:
 class StreamSessionManager:
     """Own and bound all WebSockets tab sessions in one portal process."""
 
-    KEY_INPUTS = {"interrupt": "\x03", "tab": "\t", "space": " ", "q": "q", "enter": "\r"}  # Allowed shell keys.
     ENDED_KEEP_COUNT = 5  # Research decision: keep 5 ended sessions at most, so their buffers stay bounded.
     ENDED_KEEP_SECONDS = 600.0  # Research decision: keep an ended session 10 minutes for a read or a download.
 
@@ -192,7 +209,7 @@ class StreamSessionManager:
         Returns:
             The read answer, with the records of the returned messages.
         """
-        session = self._get(session_id)  # Raise not_found when absent.
+        session = self.session(session_id)  # Raise not_found when absent.
         session.mark_read()  # Prevent an idle stop after a successful read.
         count = min(500, max(1, limit))  # The contract clamps the limit to 1 through 500.
         records, first_seq, gap = session.read_records(max(0, after), count)  # Copy the records under the lock.
@@ -210,29 +227,29 @@ class StreamSessionManager:
         Returns:
             The session payload.
         """
-        session = self._get(session_id)  # Raise not_found when absent.
+        session = self.session(session_id)  # Raise not_found when absent.
         changed = session.request_stop(reason)  # Stop is safe to repeat.
         if changed and session.runner is not None:  # A new stop needs a runner call.
             cast(StreamRunner, session.runner).stop()  # Runner stop returns at once.
         return session.payload()  # Return the current public state.
 
-    def send_input(self, session_id: str, line: str | None, key: str | None) -> None:
-        """Send checked shell input to a live shell session.
+    def session(self, session_id: str) -> StreamSession:
+        """Return one session or raise a contract error.
 
         Args:
             session_id: The session identifier.
-            line: The command line, or None.
-            key: The special key, or None.
+
+        Returns:
+            The matching session. The terminal gateway reads and writes through it.
+
+        Raises:
+            StreamRequestError: The identifier is unknown.
         """
-        session = self._get(session_id)  # Raise not_found when absent.
-        text = self._input_text(session, line, key)  # Validate and shape the input.
-        logger.info(
-            "Sending WebSockets shell input for session %s length=%s", session_id, len(text)
-        )  # Never log shell text.
-        cast(StreamRunner, session.runner).send_input(text)  # The shell runner sends the text.
-        logger.debug(
-            "Sent WebSockets shell input for session %s length=%s", session_id, len(text)
-        )  # Never log shell text.
+        with self._lock:  # The session map can change during a request.
+            session = self._sessions.get(session_id)  # Check the map.
+        if session is None:  # The identifier is unknown.
+            raise StreamRequestError("not_found", "The session was not found.")  # Contract error.
+        return session  # The caller can operate on the session.
 
     def delete(self, session_id: str) -> None:
         """Delete an ended session.
@@ -257,7 +274,7 @@ class StreamSessionManager:
         Returns:
             The file name and an iterator of lines.
         """
-        session = self._get(session_id)  # Raise not_found when absent.
+        session = self.session(session_id)  # Raise not_found when absent.
         stamp = session.started_at.replace("-", "").replace(":", "")  # Build a file-safe UTC stamp.
         filename = f"{session.request.key}-{stamp}.jsonl"  # Include the key and start time.
         lines = (
@@ -333,63 +350,45 @@ class StreamSessionManager:
         buffer = MessageBuffer(
             self._settings.buffer_messages, self._settings.buffer_bytes
         )  # Each session owns one buffer.
-        session = StreamSession(session_id, request, buffer, self._clock)  # Build the sink before the runner.
+        terminal = self._new_terminal(request)  # Shell and screen sessions keep raw output bytes.
+        session = StreamSession(session_id, request, buffer, self._clock, terminal)  # Build the sink first.
         session.runner = self._runner_factory.build(request, session)  # The runner writes to this session.
+        self._bind_input(session)  # Early keys wait in the queue and go to this runner after the first output.
         return session  # The caller stores and starts it.
 
-    def _get(self, session_id: str) -> StreamSession:
-        """Return one session or raise a contract error.
+    def _new_terminal(self, request: StartRequest) -> TerminalState | None:
+        """Build the terminal state of a shell session or a screen session.
 
         Args:
-            session_id: The session identifier.
+            request: The checked start request.
 
         Returns:
-            The matching session.
+            The terminal state, or None for a session that shows a message list.
         """
-        with self._lock:  # The session map can change during a request.
-            session = self._sessions.get(session_id)  # Check the map.
-        if session is None:  # The identifier is unknown.
-            raise StreamRequestError("not_found", "The session was not found.")  # Contract error.
-        return session  # The caller can operate on the session.
+        shell = request.kind == "shell"  # Only a shell accepts keys from the page.
+        if not shell and not RunnerFactory.is_screen(request):  # Lines and packets use the message list.
+            return None  # The session keeps no byte history.
+        logger.debug("Building the terminal state for key %s", request.key)  # Log before the build.
+        history = ByteHistory(self._settings.terminal_history_bytes)  # The setting bounds the kept bytes.
+        keys = TerminalInput(self._clock) if shell else None  # A screen command is read-only.
+        life = float(self._settings.max_stream_seconds)  # The reaper stops the session at this age.
+        expires = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=life)  # The page warns before it.
+        expires_at = expires.isoformat().replace("+00:00", "Z")  # Use the public UTC format of the payload.
+        return TerminalState(history, keys, self._clock() + life, expires_at)  # One state for the session.
 
-    def _input_text(self, session: StreamSession, line: str | None, key: str | None) -> str:
-        """Validate shell input and return the text to send.
+    @staticmethod
+    def _bind_input(session: StreamSession) -> None:
+        """Connect the input queue of a shell session to its runner.
 
         Args:
-            session: The target session.
-            line: The command line, or None.
-            key: The special key, or None.
-
-        Returns:
-            The text to send to the shell runner.
+            session: The new session with its runner.
         """
-        if (
-            session.request.kind != "shell" or not session.live or not session.input_ready
-        ):  # Only ready shell sessions accept input.
-            raise StreamRequestError("not_open", "The shell is not ready for input.")  # Contract error.
-        if key is not None:  # Special keys bypass line checks.
-            return self._key_text(key)  # Convert the key to a control character.
-        if (
-            line is None or len(line) > 512 or any(ord(char) < 32 for char in line)
-        ):  # Lines are short printable text only.
-            raise StreamRequestError(
-                "bad_request", "The shell line is not valid.", {"field": "line"}
-            )  # Contract error.
-        return f"{line}\r"  # The SDK shell expects a carriage return.
-
-    def _key_text(self, key: str) -> str:
-        """Return the control text for a special key.
-
-        Args:
-            key: The key name from the page.
-
-        Returns:
-            The text to send.
-        """
-        text = self.KEY_INPUTS.get(key)  # Only five keys are allowed.
-        if text is None:  # The key name is unknown.
-            raise StreamRequestError("bad_request", "The shell key is not valid.", {"field": "key"})  # Contract error.
-        return text  # The runner sends this text as-is.
+        terminal = session.terminal  # Only terminal sessions have an input queue.
+        runner = session.runner  # The runner sends the keys to the device.
+        if terminal is None or terminal.input is None or not isinstance(runner, TerminalRunner):  # No keys.
+            return  # Message-list sessions and screen sessions accept no keys.
+        terminal.input.bind(runner.send_input)  # The queue sends each released text through the runner.
+        logger.debug("Bound the terminal input of session %s", session.session_id)  # Log after the bind.
 
     def _audit_start(self, request: StartRequest) -> None:
         """Write the required audit line for risky starts.
