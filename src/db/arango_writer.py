@@ -17,8 +17,10 @@ from urllib.parse import urlparse  # WHY: extract hostname for DNS pre-flight
 
 import structlog  # WHY: structured logging for observability of writes and edges
 from arango import ArangoClient  # type: ignore[attr-defined]  # WHY: python-arango client entrypoint
+from arango.collection import StandardCollection
 
 from . import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, WriteResult  # WHY: shared config and result dataclasses
+from .database_schema_utils import ArangoIndexManager, ArangoIndexState
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger tags every event
 
@@ -3900,6 +3902,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
         self._preflight_dns(hostname)  # WHY: fail fast when host cannot resolve so callers see a clear error
         self._client = ArangoClient(hosts=config.arango_host)  # WHY: python-arango client is the entry to all ops
         self._config = config  # WHY: retain config for later system-db reconnects and diagnostics
+        self._index_manager = ArangoIndexManager(config)
         self._ensure_database()  # WHY: create the target database when the server is empty
         self._db = self._client.db(  # WHY: reopen the client bound to the target database
             config.arango_database,
@@ -3955,17 +3958,25 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
         self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)  # WHY: recreate with new defs
         logger.info("graph_updated", name=GRAPH_NAME)  # WHY: audit trail for graph refresh
 
-    def _ensure_collection(self, name: str) -> Any:  # WHY: idempotent collection creation with edge-awareness
-        """Return collection, creating it if needed (edge-aware)."""
-        if not self._db.has_collection(name):  # WHY: guard clause skips existing collections
-            is_edge = name in _EDGE_COLLECTION_NAMES  # WHY: edge collections require the edge=True flag
-            self._db.create_collection(name, edge=is_edge)  # WHY: create with correct edge flag
-            logger.info("collection_created", name=name, edge=is_edge)  # WHY: audit trail
-        return self._db.collection(name)  # WHY: return live handle for the caller
+    def _ensure_collection(self, name: str, indexes: object = ()) -> StandardCollection:
+        """Open a collection and ensure only its declared field indexes."""
+        fields = ArangoIndexState.fields(indexes, name)
+        logger.info("collection_open", name=name)
+        with self._index_manager.guard:
+            if not self._db.has_collection(name):  # Keep collection creation and index confirmation in one guard.
+                is_edge = name in _EDGE_COLLECTION_NAMES
+                logger.info("collection_create", name=name, edge=is_edge)
+                self._db.create_collection(name, edge=is_edge)
+                self._index_manager.invalidate(name)
+                logger.info("collection_created", name=name, edge=is_edge)
+            collection: StandardCollection = self._db.collection(name)
+            self._index_manager.ensure(collection, fields)
+        logger.debug("collection_ready", name=name, checked_count=len(fields))
+        return collection
 
     def write(self, data: list[dict], collection_name: str, strategy: dict) -> WriteResult:  # WHY: public write API
         """Upsert documents using batch import for performance."""
-        collection = self._ensure_collection(collection_name)  # WHY: guarantee target collection exists first
+        collection = self._ensure_collection(collection_name, strategy.get("indexes", ()))
         if not data:  # WHY: empty payload returns a trivially successful WriteResult
             return WriteResult(  # WHY: zero-record success avoids downstream branches on empty input
                 success=True,
