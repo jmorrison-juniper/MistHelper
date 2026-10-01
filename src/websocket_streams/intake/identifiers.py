@@ -35,7 +35,7 @@ class IdentifierRules:
         Returns:
             True when the value has the UUID shape.
         """
-        logger.info("Checking a WebSocket UUID value")  # Log before validation without the value.
+        logger.debug("Checking a WebSocket UUID value")  # Debug level: every picker and poll request runs this check.
         result = isinstance(value, str) and IdentifierRules._UUID.fullmatch(value) is not None  # Check the UUID shape.
         logger.debug("Checked a WebSocket UUID value: %s", result)  # Log only the result.
         return result  # The caller chooses the error text.

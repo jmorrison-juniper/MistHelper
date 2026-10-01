@@ -20,6 +20,7 @@ Every route answers with JSON, except the page route and the download route. Eve
 | `limit_reached` | 429 | The live sessions reached the limit. The `live` key lists the session titles. |
 | `not_found` | 404 | The session identifier names no session. |
 | `not_open` | 409 | The shell is not ready for input, or the session has ended. |
+| `session_live` | 409 | A delete request named a session that is still live. |
 
 ## Page
 
@@ -46,8 +47,9 @@ Returns the WebSockets page. The page reads the catalog and the session list fro
       "scope": "site",
       "name": "Device statistics",
       "description": "Live statistics for each device at the site.",
-      "identifiers": [{"name": "site_id", "label": "Site", "kind": "uuid", "picker": "sites"}],
-      "repeatable": null
+      "identifiers": [{"name": "site_id", "label": "Site", "kind": "uuid", "required": true,
+        "minimum": null, "maximum": null, "choices": [], "default": null, "hint": "", "picker": "sites"}],
+      "repeatable": "site_id"
     }
   ],
   "utilities": [
@@ -59,11 +61,15 @@ Returns the WebSockets page. The page reads the catalog and the session list fro
       "safety": "read",
       "locked": false,
       "output": "lines",
-      "fields": [{"name": "host", "label": "Host", "kind": "host", "required": true}]
+      "fields": [{"name": "host", "label": "Host", "kind": "host", "required": true, "hint": "", "picker": null}],
+      "targets": [{"name": "site_id", "kind": "uuid", "picker": "sites"}, {"name": "device_id", "kind": "uuid", "picker": "devices"}],
+      "scope": "site"
     }
   ]
 }
 ```
+
+Each field object holds every FieldSpec attribute. The example above shortens some field objects.
 
 ## Sessions
 
@@ -73,9 +79,10 @@ Lists every session that the manager holds, live and ended.
 
 ```json
 {"sessions": [{"session_id": "a1b2c3d4e5f6a7b8", "kind": "channel", "key": "site.stats.devices",
-  "title": "Device statistics - HQ", "state": "live", "reason": "", "started_at": "2026-09-29T20:00:00Z",
-  "ended_at": null, "counters": {"received": 42, "dropped": 0, "shortened": 0, "bytes": 81234},
-  "rate_per_second": 1.4, "last_seq": 42, "live": true}],
+  "title": "Device statistics - HQ", "output": "json", "safety": "read", "state": "live", "live": true,
+  "reason": "", "input_ready": false, "started_at": "2026-09-29T20:00:00Z", "ended_at": null,
+  "counters": {"received": 42, "dropped": 0, "shortened": 0, "bytes": 81234},
+  "rate_per_second": 1.4, "last_seq": 42}],
   "limits": {"max_sessions": 5, "live_count": 1}}
 ```
 
@@ -87,8 +94,11 @@ Starts a session. The body holds only keys and values. It never holds a path.
 {"kind": "utility", "key": "ex.ping",
  "targets": {"site_id": "<uuid>", "device_id": "<uuid>"},
  "parameters": {"host": "8.8.8.8", "count": 5},
- "confirmation": null}
+ "confirmation": null,
+ "labels": {"<uuid>": "HQ"}}
 ```
+
+The repeatable identifier of a channel accepts a list of 1 to 10 values, such as `"site_id": ["<uuid>", "<uuid>"]`. The server takes the organization from the portal settings. A body that names `org_id`, `path`, or any other unknown key is refused. The `labels` map is optional, and the server uses it only in the session title.
 
 Returns 201 with the session object from the list route. The server checks the whole request before it sends a request to Mist.
 
@@ -99,7 +109,7 @@ Returns the messages with a sequence number above `after`. The default limit is 
 ```json
 {"session": {"session_id": "a1b2c3d4e5f6a7b8", "state": "live"},
  "messages": [{"seq": 43, "received_at": "2026-09-29T20:00:01Z", "kind": "json",
-   "content": {"mac": "5c5b35000001"}, "summary": null, "size": 812, "shortened": false}],
+   "content": {"mac": "5c5b35000001"}, "summary": null, "source": "<uuid>", "size": 812, "shortened": false}],
  "next_after": 43, "first_seq": 1, "gap": false}
 ```
 
@@ -122,11 +132,11 @@ The keys are `interrupt`, `tab`, `space`, `q`, and `enter`. A line holds 512 cha
 
 ### `DELETE /api/websockets/sessions/<session_id>`
 
-Removes an ended session from the list. Returns 409 for a live session.
+Removes an ended session from the list. Returns 409 with the code `session_live` for a live session.
 
 ### `GET /api/websockets/sessions/<session_id>/download`
 
-Returns the buffer as JSON Lines, with the `application/x-ndjson` type. The file name holds the catalog key and the start time.
+Returns the buffer as JSON Lines, with the `application/x-ndjson` type. Each line holds one message object as compact JSON with sorted keys. The file name holds the catalog key and the start time.
 
 ## Pickers
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # The read test decodes the joined JSON text.
 import logging  # caplog checks the audit line.
 
 import pytest  # The tests check contract errors.
@@ -124,8 +125,12 @@ class TestStreamSessionManager:
         for index in range(3):  # Add three messages to force one drop.
             session.add_message("text", str(index))  # Store one message.
         read = manager.read(str(payload["session_id"]), 0, 999)  # Ask for more than the max.
-        assert read["gap"] is True  # The page missed a dropped message.
-        assert read["first_seq"] == 2  # The oldest kept sequence is two.
+        _filename, lines = manager.download(str(payload["session_id"]))  # Build a download of the kept messages.
+        assert read.gap is True  # The page missed a dropped message.
+        assert read.first_seq == 2 and read.next_after == 3  # The oldest kept sequence is two, and the newest is three.
+        decoded = json.loads(read.to_json_text())  # Decode the answer that the route sends.
+        assert [message["content"] for message in decoded["messages"]] == ["1", "2"]  # The kept messages.
+        assert [json.loads(line)["seq"] for line in lines] == [2, 3]  # Each download line holds one kept message.
 
     def test_stop_repeat_delete_and_download(self) -> None:
         """Stop once, reject live delete, and stream download lines."""
@@ -164,7 +169,7 @@ class TestStreamSessionManager:
         assert "show version" not in caplog.text  # The audit line never logs shell text.
 
     def test_reaper_stops_idle_and_prunes_old_ended(self) -> None:
-        """Stop idle sessions and prune old ended sessions."""
+        """Stop idle sessions, keep 5 ended sessions at most, and remove them after 10 minutes."""
         manager, _factory, clock = self._manager(
             max_sessions=10, idle_seconds=30
         )  # Build a manager with short idle time.
@@ -179,9 +184,28 @@ class TestStreamSessionManager:
             ended_payload = manager.start(self._channel_request(f"ended-{index}"))  # Start one extra session.
             ended = manager._get(str(ended_payload["session_id"]))  # Read it for a direct finish.
             ended.finish(SessionState.FINISHED, "done")  # Mark the session ended.
+        manager.reap_once()  # Seven new ended sessions exist, so the count limit applies.
+        assert len(manager.list_payload()["sessions"]) == 5  # The manager keeps five ended sessions at most.
+        clock.value = 47.0 + 600.0  # Move to the exact edge of the age limit.
+        manager.reap_once()  # Run pruning at the edge.
+        assert len(manager.list_payload()["sessions"]) == 5  # A session that is exactly 10 minutes old stays.
         clock.value = 700.0  # Move past the ended retention age.
         manager.reap_once()  # Run pruning.
-        assert len(manager.list_payload()["sessions"]) == 5  # The manager keeps the five newest ended sessions.
+        assert manager.list_payload()["sessions"] == []  # Each ended session older than 10 minutes left.
+
+    def test_prune_keeps_the_newest_ended_sessions(self) -> None:
+        """Remove the oldest ended sessions first when more than five ended sessions exist."""
+        manager, _factory, clock = self._manager(max_sessions=10)  # Allow enough live sessions for the setup.
+        for index in range(7):  # End seven sessions at different times.
+            clock.value = 100.0 + index  # Each session ends one second after the previous session.
+            payload = manager.start(self._channel_request(f"ended-{index}"))  # Start one session.
+            manager._get(str(payload["session_id"])).finish(SessionState.FINISHED, "done")  # End it at once.
+        clock.value = 200.0  # Start the live session last, so the list order is clear.
+        live = manager.start(self._channel_request("live"))  # A live session never counts as ended.
+        manager.reap_once()  # Apply the count limit.
+        titles = [session["title"] for session in manager.list_payload()["sessions"]]  # Newest first.
+        assert titles == ["live", "ended-6", "ended-5", "ended-4", "ended-3", "ended-2"]  # The two oldest left.
+        assert manager._get(str(live["session_id"])).live is True  # The live session stays live.
 
     def test_not_found_bad_input_stop_all_and_shutdown(self) -> None:
         """Cover manager error paths and shutdown behavior."""

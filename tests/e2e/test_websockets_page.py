@@ -7,6 +7,7 @@ Why:
 
 from __future__ import annotations  # Keep annotations lazy for Playwright imports.
 
+import json  # The fake keeps JSON message text, like the real buffer.
 import logging  # Keep browser test records under this module.
 import socket  # Find an unused local port.
 import threading  # Serve Flask and fake stream output beside the browser.
@@ -19,6 +20,8 @@ from typing import Any  # Type Playwright objects without importing private type
 
 import pytest  # Use fixtures and Playwright integration.
 
+from src.websocket_streams.live.sessions.buffer import MessagePage, StreamMessage  # The fake keeps real records.
+
 logger = logging.getLogger(__name__)  # Keep this test module visible in logs.
 
 pytest.importorskip("playwright", reason="playwright is absent, so the browser journey cannot run")  # Browser guard.
@@ -29,6 +32,10 @@ ORG_ID = "99999999-8888-7777-6666-555555555555"  # Fake organization identifier.
 SITE_ID = "11111111-2222-3333-4444-555555555555"  # First fake site identifier.
 SITE_ID_2 = "22222222-3333-4444-5555-666666666666"  # Second fake site identifier.
 DEVICE_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"  # Fake device identifier.
+ROUTE_TABLE_TEXT = (
+    '{"columns":[{"id":"Destination","display_name":"Destination"},{"id":"Gateway","display_name":"Gateway"}],'
+    '"rows":[{"Destination":"10.0.0.0/24","Gateway":"192.168.1.1"}],"status":"SUCCESS","message":""}'
+)  # A route table as the device sends it, as JSON text.
 
 
 @dataclass
@@ -41,7 +48,7 @@ class BrowserSession:
     title: str  # Card title.
     output: str  # json, lines, packets, or terminal.
     safety: str  # read, capture, change, or shell.
-    messages: list[dict[str, object]] = field(default_factory=list)  # Buffered messages.
+    messages: list[StreamMessage] = field(default_factory=list)  # Buffered message records.
     state: str = "live"  # Current state.
     live: bool = True  # Live sessions count toward the limit.
     reason: str = ""  # Plain end reason.
@@ -100,20 +107,14 @@ class FakeWebSocketServices:
             live_count = sum(1 for session in self._sessions.values() if session.live)  # Live count.
         return {"sessions": sessions, "limits": {"max_sessions": 2, "live_count": live_count}}  # List payload.
 
-    def read_messages(self, session_id: str, after: int, _limit: int) -> dict[str, object]:
+    def read_messages(self, session_id: str, after: int, _limit: int) -> MessagePage:
         """Return messages after the given sequence."""
         with self._lock:  # Copy while timer threads can write.
             session = self._sessions[session_id]  # The test always names a known session.
-            messages = [message for message in session.messages if int(message["seq"]) > after]  # New messages.
-            next_after = int(messages[-1]["seq"]) if messages else after  # Highest returned sequence.
+            messages = [message for message in session.messages if message.seq > after]  # New messages.
+            next_after = messages[-1].seq if messages else after  # Highest returned sequence.
             payload = self._payload(session)  # Copy the session card state.
-        return {
-            "session": payload,
-            "messages": messages,
-            "next_after": next_after,
-            "first_seq": 1,
-            "gap": False,
-        }  # Read.
+        return MessagePage(payload, messages, next_after, 1, False)  # Read.
 
     def stop_session(self, session_id: str) -> dict[str, object]:
         """Stop one fake session."""
@@ -213,6 +214,7 @@ class FakeWebSocketServices:
         }  # Packets.
         return [
             self._utility("ex.ping", "Ping", "read", "lines", targets, [host, count], False),
+            self._utility("ex.retrieveRoutes", "Routes", "read", "lines", targets, [], False),
             self._utility("ex.remotePcap", "Packet capture", "capture", "packets", targets, [packets], False),
             self._utility("ex.bouncePort", "Bounce port", "change", "lines", targets, [], True),
             self._utility("ex.shell", "Remote shell", "shell", "terminal", targets, [], False),
@@ -283,24 +285,20 @@ class FakeWebSocketServices:
             )  # Packet.
         elif session.output == "terminal":  # Terminal view reads text.
             self._add_message(session, "text", "device> ready", None)  # Prompt.
+        elif session.key == "ex.retrieveRoutes":  # The route utility sends a table as JSON text.
+            self._add_message(session, "text", ROUTE_TABLE_TEXT, None)  # Route table.
         elif session.output == "lines":  # Line view reads text lines.
             self._add_message(session, "text", "reply from 8.8.8.8", None)  # Ping line.
         else:  # Channel view reads JSON.
             self._add_message(session, "json", {"site": session.title, "count": index}, None)  # JSON row.
 
     def _add_message(self, session: BrowserSession, kind: str, content: object, summary: str | None) -> None:
-        """Append one message with the next sequence number."""
+        """Append one message record with the next sequence number, like the real buffer."""
         seq = len(session.messages) + 1  # Sequence numbers start at one.
-        message = {
-            "seq": seq,
-            "received_at": "2026-09-29T20:00:00Z",
-            "kind": kind,
-            "content": content,
-            "summary": summary,
-            "source": "HQ",
-            "size": 1,
-            "shortened": False,
-        }  # Payload.
+        content_json = json.dumps(content, sort_keys=True, separators=(",", ":"))  # The real buffer keeps JSON text.
+        message = StreamMessage(
+            seq, "2026-09-29T20:00:00Z", kind, content_json, len(content_json), False, "HQ", summary
+        )  # Record.
         session.messages.append(message)  # Add the message to the buffer.
 
     def _payload(self, session: BrowserSession) -> dict[str, object]:
@@ -329,6 +327,7 @@ class FakeWebSocketServices:
         return {
             "site.stats.devices": "Device statistics - HQ and Branch",
             "ex.ping": "Ping - EX Switch 1",
+            "ex.retrieveRoutes": "Routes - EX Switch 1",
             "ex.remotePcap": "Packet capture - EX Switch 1",
             "ex.shell": "Remote shell - EX Switch 1",
         }.get(
@@ -488,4 +487,19 @@ def test_shell_with_line_and_key(page: Any, websocket_portal: str, fake_services
     shot = screenshot(page, "06-shell-terminal.png")  # Keep evidence.
     assert {"line": "show version"} in fake_services.shell_inputs  # Line reached the fake.
     assert {"key": "interrupt"} in fake_services.shell_inputs  # Key reached the fake.
+    assert shot.exists()  # The screenshot was written.
+
+
+def test_route_table_shows_columns(page: Any, websocket_portal: str) -> None:
+    """US2: a table that the device sends as JSON text shows as aligned columns."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    page.get_by_test_id("ws-catalog-entry-ex.retrieveRoutes").click()  # Choose the route utility.
+    choose_device(page)  # Choose site and device.
+    page.get_by_test_id("ws-start-button").click()  # Start the route read.
+    output = page.locator('[data-testid="ws-output"]')  # The message view.
+    output.get_by_text("10.0.0.0/24").nth(0).wait_for(timeout=READY_TIMEOUT_MS)  # The table row shows.
+    text = output.inner_text()  # Read the drawn view text.
+    shot = screenshot(page, "07-route-table.png")  # Keep evidence.
+    assert "Destination  Gateway" in text  # The header cells show in aligned columns.
+    assert '"columns"' not in text  # The raw JSON text does not show.
     assert shot.exists()  # The screenshot was written.

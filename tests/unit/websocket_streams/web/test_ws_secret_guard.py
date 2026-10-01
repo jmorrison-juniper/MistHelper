@@ -12,6 +12,7 @@ from typing import Any  # Type Flask test client answers.
 
 import pytest  # Use fixtures for the portal app lifetime.
 
+from src.websocket_streams.live.sessions.buffer import MessagePage, StreamMessage  # The fake read returns records.
 from src.websocket_streams.web.services import WebSocketsServices  # Inject the fake WebSocket service.
 from web_portal.app import WebPortalApp  # Build the real portal app as the browser tests do.
 from web_portal.menu_registry import build_static_menu_actions  # Supply normal menu actions.
@@ -45,15 +46,10 @@ class SecretGuardServices:
         """Return a safe session list."""
         return {"sessions": [self._session("abc123")], "limits": {"max_sessions": 5, "live_count": 1}}  # List.
 
-    def read_messages(self, session_id: str, _after: int, _limit: int) -> dict[str, object]:
-        """Return a safe message payload."""
-        return {
-            "session": self._session(session_id),
-            "messages": [{"seq": 1, "content": {"state": "ok"}}],
-            "next_after": 1,
-            "first_seq": 1,
-            "gap": False,
-        }  # Messages.
+    def read_messages(self, session_id: str, _after: int, _limit: int) -> MessagePage:
+        """Return a safe message answer."""
+        message = StreamMessage(1, "2026-01-01T00:00:00Z", "json", '{"state":"ok"}', 14, False)  # One safe record.
+        return MessagePage(self._session(session_id), [message], 1, 1, False)  # Messages.
 
     def stop_session(self, session_id: str) -> dict[str, object]:
         """Return a safe stopped payload."""

@@ -11,7 +11,7 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 import logging  # The session logs each state change.
 import threading  # The session protects its state with a lock.
 from collections import deque  # The rate window uses the newest receive times.
-from collections.abc import Callable  # The manager injects a fake clock in tests.
+from collections.abc import Callable  # The manager injects a fake clock.
 from dataclasses import dataclass  # Counters are a small value record.
 from datetime import UTC, datetime  # Public payload times use UTC text.
 from enum import StrEnum  # The state values are also their JSON text.
@@ -19,7 +19,7 @@ from typing import Protocol  # Runners depend on the sink behavior only.
 
 from src.websocket_streams.catalog.model import Safety  # Payload safety depends on the definition.
 from src.websocket_streams.intake.start_request import StartRequest  # A session is created from a checked request.
-from src.websocket_streams.live.sessions.buffer import MessageBuffer  # The bounded buffer stores messages.
+from src.websocket_streams.live.sessions.buffer import MessageBuffer, StreamMessage  # The buffer keeps the records.
 
 logger = logging.getLogger(__name__)  # Keep session log records under this module.
 
@@ -43,7 +43,7 @@ class SessionCounters:
     received: int = 0  # Count every accepted message.
     dropped: int = 0  # Count messages removed by the buffer caps.
     shortened: int = 0  # Count messages shortened by the single-message cap.
-    bytes: int = 0  # Count bytes currently in the buffer.
+    bytes: int = 0  # The memory that the kept messages use, in bytes. The byte cap applies to this value.
 
     def to_payload(self) -> dict[str, int]:
         """Return the public counter payload.
@@ -144,9 +144,10 @@ class StreamSession:
         with self._lock:  # A callback can race with a stop request.
             if not self.live:  # Ended sessions ignore late callbacks.
                 return  # The first final state wins.
-            logger.info("Marking WebSockets session %s live", self.session_id)  # Log before the state change.
-            self.state = SessionState.LIVE  # The stream can now receive messages.
-            logger.debug("Marked WebSockets session %s live", self.session_id)  # Log after the state change.
+            if self.state == SessionState.CONNECTING:  # A stop in progress must stay in the stopping state.
+                logger.info("Marking WebSockets session %s live", self.session_id)  # Log before the state change.
+                self.state = SessionState.LIVE  # The stream can now receive messages.
+                logger.debug("Marked WebSockets session %s live", self.session_id)  # Log after the state change.
         if note:  # A status note becomes a visible event.
             self.add_message("event", note)  # Reuse the normal message path.
 
@@ -169,7 +170,35 @@ class StreamSession:
             self.counters.received = message.seq  # Sequence numbers equal accepted count.
             self.counters.dropped = self.buffer.dropped  # Mirror the buffer drop count.
             self.counters.shortened = self.buffer.shortened  # Mirror the buffer shortening count.
-            self.counters.bytes = self.buffer.bytes_used  # Mirror the buffer byte count.
+            self.counters.bytes = self.buffer.bytes_used  # Mirror the buffer memory total.
+
+    def read_records(self, after: int, limit: int) -> tuple[list[StreamMessage], int, bool]:
+        """Copy the kept records after a sequence number.
+
+        Args:
+            after: The newest sequence number that the page has.
+            limit: The largest count of messages to return.
+
+        Returns:
+            The records, the first kept sequence, and the gap flag.
+        """
+        logger.debug("Reading WebSockets session %s messages", self.session_id)  # Debug level: the page polls often.
+        with self._lock:  # A runner callback can add a message while the buffer copies its records.
+            records, first_seq, gap = self.buffer.read_after(after, limit)  # Copy the record references only.
+        logger.debug("Read %s WebSockets session messages", len(records))  # Log the result count.
+        return records, first_seq, gap  # The manager formats the records outside the lock.
+
+    def snapshot_records(self) -> list[StreamMessage]:
+        """Copy every kept record for a download.
+
+        Returns:
+            The records in sequence order.
+        """
+        logger.info("Preparing the WebSockets session %s download", self.session_id)  # Log before the copy.
+        with self._lock:  # A runner callback can add a message while the buffer copies its records.
+            records = self.buffer.snapshot()  # Copy the record references only.
+        logger.debug("Prepared %s WebSockets download messages", len(records))  # Log the result count.
+        return records  # The manager formats one record at a time while the file streams.
 
     def finish(self, state: SessionState, reason: str) -> None:
         """Set the first final state of the session.

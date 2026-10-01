@@ -14,6 +14,7 @@ import pytest  # Assert contract errors from service calls.
 from flask import Flask  # Build small app instances for the service tests.
 
 from src.websocket_streams.intake.fields import StreamRequestError  # Not-ready errors use this type.
+from src.websocket_streams.live.sessions.buffer import MessagePage  # The fake manager returns a read answer.
 from src.websocket_streams.web.services import WebSocketsServiceParts, WebSocketsServices  # Classes under test.
 
 
@@ -50,15 +51,10 @@ class FakeManager:
         """Return an empty session list."""
         return {"sessions": [], "limits": {"max_sessions": 2, "live_count": 0}}  # Empty list.
 
-    def read(self, session_id: str, after: int, limit: int) -> dict[str, object]:
-        """Return an empty read payload."""
-        return {
-            "session": {"session_id": session_id},
-            "messages": [],
-            "next_after": after,
-            "first_seq": 0,
-            "gap": False,
-        }  # Read.
+    def read(self, session_id: str, after: int, limit: int) -> MessagePage:
+        """Return an empty read answer."""
+        assert limit > 0  # The service passed the limit through.
+        return MessagePage({"session_id": session_id}, [], after, 0, False)  # Read with no new message.
 
     def stop(self, session_id: str) -> dict[str, object]:
         """Return one stopped session."""
@@ -164,7 +160,7 @@ def test_ready_service_delegates_to_manager_and_pickers() -> None:
     asset_picker = service.assets("site1")  # Read assets through the picker service.
     client_picker = service.sdkclients("site1", "map1")  # Read SDK clients through the picker service.
     assert manager.started is True and started["session_id"] == "abc123"  # Manager start ran.
-    assert listed["sessions"] == [] and read["next_after"] == 4  # Manager reads ran.
+    assert listed["sessions"] == [] and read.next_after == 4  # Manager reads ran.
     assert stopped["state"] == "stopped" and sent == {"ok": True}  # Stop and input ran.
     assert deleted == {"ok": True} and filename == "download.jsonl"  # Delete and download ran.
     assert list(lines) == ['{"seq":1}\n'] and picker["rows"][0]["label"] == "Row"  # Streams and picker ran.

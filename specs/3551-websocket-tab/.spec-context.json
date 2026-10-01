@@ -2,8 +2,8 @@
   "workflow": "speckit",
   "specName": "WebSockets tab in the Operations portal",
   "branch": "feat/3551-websocket-tab",
-  "currentStep": "tasks",
-  "status": "ready-to-implement",
+  "currentStep": "implement",
+  "status": "implemented",
   "history": [
     {
       "step": "specify",
@@ -25,7 +25,26 @@
       "kind": "complete",
       "by": "agent",
       "at": "2026-09-29T22:37:07.308Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-01T03:27:10.595Z"
     }
   ],
+  "tasksPath": "specs/3551-websocket-tab/tasks.md",
+  "taskCounts": {
+    "total": 77,
+    "completed": 77,
+    "remaining": 0
+  },
+  "completionRecord": {
+    "method": "direct-feature-context-update",
+    "hookCommand": "speckit.companion.after-implement",
+    "hookStatus": "unavailable-direct-update",
+    "optionalGitCommitHooks": "skipped-manual-commit"
+  },
   "telemetryInstanceId": "df1b0c16-95f1-47a4-87ce-2cf829d22c5e"
 }

@@ -217,11 +217,11 @@ description: "Task list for the WebSockets tab in the Operations portal"
 - [X] T070 [P] Write the secret test in `tests/unit/websocket_streams/web/test_ws_secret_guard.py`. Prove that no response holds the token or a `wss://` address (SC-006).
 - [X] T071 [P] Write the browser journey in `tests/e2e/test_websockets_page.py`. Use a fake engine, and take one screenshot for each story.
 - [X] T072 [P] Add the release note `changelog.d/issue-3551-websocket-tab.md`.
-- [ ] T073 Run the gates and repair each finding. The gates are py_compile, `ruff check .`, `black --check .`, mypy with `MYPY_PATHS`, pytest with coverage, Vulture, pydocstyle, interrogate, Bandit, Radon, and Pylint.
-- [ ] T074 Run the live check of quickstart.md against the real organization. Use read-only entries only. Take screenshots and read them.
-- [ ] T075 Run the load check of SC-004 and SC-005 with 5 fake sessions at 10 messages each second. Record the results in the pull request.
-- [ ] T076 Run the STE check on each changed Markdown file and on the pull request body. Each text must score 80 or more with 0 errors.
-- [ ] T077 Update data-model.md, the contract, and quickstart.md where the code differs from the design.
+- [X] T073 Run the gates and repair each finding. The gates are py_compile, `ruff check .`, `black --check .`, mypy with `MYPY_PATHS`, pytest with coverage, Vulture, pydocstyle, interrogate, Bandit, Radon, and Pylint.
+- [X] T074 Run the live check of quickstart.md against the real organization. Use read-only entries only. Take screenshots and read them.
+- [X] T075 Run the load check of SC-004 and SC-005 with 5 fake sessions at 10 messages each second. Record the results in the pull request.
+- [X] T076 Run the STE check on each changed Markdown file and on the pull request body. Each text must score 80 or more with 0 errors.
+- [X] T077 Update data-model.md, the contract, and quickstart.md where the code differs from the design.
 
 ---
 

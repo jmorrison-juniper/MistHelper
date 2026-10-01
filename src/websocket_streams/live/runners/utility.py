@@ -13,13 +13,13 @@ import logging  # The runner logs starts, stops, and end states.
 import threading  # Utility monitoring must not block a web request.
 import time  # The default clock and sleeper come from the standard library.
 from collections.abc import Callable, Mapping  # Tests inject fake functions.
-from enum import Enum  # SDK parameters can be enum values.
-from typing import Any, get_args, get_origin, get_type_hints  # The SDK is untyped at the call boundary.
+from typing import Any  # The SDK is untyped at the call boundary.
 
 from mistapi.api.v1.orgs import pcaps as org_pcaps  # The stopper reads and stops organization captures.
 from mistapi.api.v1.sites import pcaps as site_pcaps  # The stopper reads and stops site captures.
 
 from src.websocket_streams.catalog.model import UtilityDefinition  # Utility runners need utility-only fields.
+from src.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # The SDK signature names each enum.
 from src.websocket_streams.intake.fields import StreamRequestError  # Non-shell input raises this contract error.
 from src.websocket_streams.intake.start_request import StartRequest  # The request is already checked.
 from src.websocket_streams.live.runners.text import PacketSummary  # Packet output needs one summary line.
@@ -59,6 +59,7 @@ class UtilityRunner:
         self._response: Any | None = None  # The SDK UtilResponse is untyped.
         self._stopping = threading.Event()  # Stop requests map the final state.
         self._output_count = 0  # End-state logic distinguishes timeout from finished.
+        self._live_marked = False  # The session goes live one time, on an accepted trigger or on the first output.
 
     def start(self) -> None:
         """Start the SDK utility and return at once."""
@@ -190,30 +191,12 @@ class UtilityRunner:
         Returns:
             The original value, or an SDK enum member.
         """
-        hints = get_type_hints(function)  # Read real SDK annotations for enum parameters.
+        hints = SdkAnnotation.hints(function)  # Read real SDK annotations for enum parameters.
         annotation = hints.get(key)  # Missing hints mean no conversion is needed.
-        enum_type = self._enum_type(annotation)  # Optional enum annotations need unwrapping.
+        enum_type = SdkAnnotation.enum_type(annotation)  # Optional enum annotations need unwrapping.
         if enum_type is not None and isinstance(value, str):  # JSON-safe requests hold enum values as text.
             return enum_type(value)  # The SDK functions expect enum members.
         return value  # Non-enum values pass through unchanged.
-
-    def _enum_type(self, annotation: object) -> type[Enum] | None:
-        """Return the enum type inside one annotation.
-
-        Args:
-            annotation: The type annotation to inspect.
-
-        Returns:
-            The enum class, or None.
-        """
-        if isinstance(annotation, type) and issubclass(annotation, Enum):  # Direct enum annotation.
-            return annotation  # The caller can construct it from a value.
-        for option in (
-            get_args(annotation) if get_origin(annotation) is not None else ()
-        ):  # Optional and union annotations hold args.
-            if isinstance(option, type) and issubclass(option, Enum):  # Find the enum inside the union.
-                return option  # The caller can construct it from a value.
-        return None  # No enum conversion applies.
 
     def _on_message(self, message: object) -> None:
         """Handle one SDK utility message.
@@ -222,6 +205,7 @@ class UtilityRunner:
             message: The raw SDK message.
         """
         self._output_count += 1  # Count output for the end-state decision.
+        self._mark_live_once()  # Output proves that the device runs the utility.
         definition = self._utility_definition()  # Utility-only fields need narrowing.
         if definition.output == "packets":  # Packet captures use packet records.
             self._sink.add_message(
@@ -233,10 +217,11 @@ class UtilityRunner:
             self._sink.add_message("text", str(message))  # Store one line of text.
 
     def _wait_for_done(self) -> None:
-        """Wait until the SDK reports completion."""
+        """Wait until the SDK reports completion, and mark the session live when the trigger succeeds."""
         while self._response is not None and not bool(
             getattr(self._response, "done", True)
         ):  # Poll the untyped SDK response.
+            self._mark_live_when_accepted()  # The SDK sets the trigger result on its own thread.
             self._sleeper(0.05)  # Sleep briefly on the background thread.
 
     def _utility_definition(self) -> UtilityDefinition:
@@ -258,16 +243,8 @@ class UtilityRunner:
         Args:
             started: The monotonic start time.
         """
-        response = self._response  # Copy the reference for safe attribute reads.
-        trigger = (
-            getattr(response, "trigger_api_response", None) if response is not None else None
-        )  # The SDK stores the REST result here.
-        status = (
-            getattr(trigger, "status_code", 200) if trigger is not None else 200
-        )  # Missing trigger means no REST failure was known.
-        error = (
-            getattr(response, "ws_error", None) if response is not None else None
-        )  # The SDK stores WebSocket errors here.
+        status = self._trigger_status()  # The REST trigger result decides a refused start.
+        error = getattr(self._response, "ws_error", None)  # The SDK stores WebSocket errors here.
         if self._stopping.is_set():  # Operator or reaper stopped the utility.
             self._sink.finish(
                 SessionState.STOPPED, "The operator stopped the session."
@@ -277,9 +254,34 @@ class UtilityRunner:
                 SessionState.FAILED, f"The utility failed with status {status}."
             )  # Keep the reason plain.
         elif self._output_count == 0:  # The SDK finished without output.
-            self._sink.finish(SessionState.TIMED_OUT, "The utility ended before it sent output.")  # Report timeout.
+            self._sink.finish(
+                SessionState.TIMED_OUT,
+                "The device sent no output before the time limit. Check that the device is connected, then try again.",
+            )  # Tell the operator what to check.
         else:  # Output arrived and no failure was recorded.
             self._sink.finish(SessionState.FINISHED, self._finish_reason(started))  # Report successful completion.
+
+    def _trigger_status(self) -> object:
+        """Return the HTTP status of the SDK trigger request.
+
+        Returns:
+            The status code, or 200 when the SDK recorded no trigger response.
+        """
+        trigger = getattr(self._response, "trigger_api_response", None)  # The SDK stores the REST result here.
+        return getattr(trigger, "status_code", 200) if trigger is not None else 200  # No trigger means no failure.
+
+    def _mark_live_when_accepted(self) -> None:
+        """Mark the session live after the Mist API accepts the trigger request."""
+        trigger = getattr(self._response, "trigger_api_response", None)  # The SDK sets this value on its own thread.
+        if trigger is not None and getattr(trigger, "status_code", None) == 200:  # The device now runs the utility.
+            self._mark_live_once()  # The page shows Live while the device sends output.
+
+    def _mark_live_once(self) -> None:
+        """Mark the session live one time, because the record logs each state change."""
+        if self._live_marked:  # A later call changes nothing.
+            return  # The session is already live.
+        self._live_marked = True  # Set the flag first, so that the other thread does not repeat the call.
+        self._sink.mark_live()  # The record changes the state only from connecting.
 
     def _finish_reason(self, started: float) -> str:
         """Return the plain completion reason.

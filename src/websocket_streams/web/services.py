@@ -17,6 +17,7 @@ from flask import Flask  # The factory stores services on a Flask app.
 
 from src.websocket_streams.intake.fields import StreamRequestError  # Raise contract errors when not ready.
 from src.websocket_streams.intake.pickers import StreamPickerService  # Fill form identifiers from Mist.
+from src.websocket_streams.live.sessions.buffer import MessagePage  # Message reads return JSON text parts.
 
 logger = logging.getLogger(__name__)  # Keep service records under this module name.
 
@@ -211,12 +212,12 @@ class WebSocketsServices:
         Returns:
             The manager session list.
         """
-        logger.info("Listing WebSocket sessions")  # Log before the manager read.
+        logger.debug("Listing WebSocket sessions")  # Debug level: the page refreshes the list every few seconds.
         payload = cast(dict[str, object], self._parts.manager.list_payload())  # Read live and ended sessions.
         logger.debug("Listed WebSocket sessions")  # Confirm the manager read.
         return payload  # Return the manager payload.
 
-    def read_messages(self, session_id: str, after: int, limit: int) -> dict[str, object]:
+    def read_messages(self, session_id: str, after: int, limit: int) -> MessagePage:
         """Read messages from one session.
 
         Args:
@@ -225,12 +226,14 @@ class WebSocketsServices:
             limit: The maximum messages to return.
 
         Returns:
-            The manager read payload.
+            The manager read answer, with the records of the returned messages.
         """
-        logger.info("Reading WebSocket messages for session %s", session_id)  # Log before the read.
-        payload = cast(dict[str, object], self._parts.manager.read(session_id, after, limit))  # Read the buffer.
-        logger.debug("Read WebSocket messages for session %s", session_id)  # Confirm the read.
-        return payload  # Return the manager payload.
+        logger.debug("Reading WebSocket messages for session %s", session_id)  # The page polls each second.
+        page = cast(MessagePage, self._parts.manager.read(session_id, after, limit))  # Read the buffer.
+        logger.debug(
+            "Read %s WebSocket messages for session %s", len(page.messages), session_id
+        )  # Confirm the read with the count only.
+        return page  # Return the manager read answer.
 
     def stop_session(self, session_id: str) -> dict[str, object]:
         """Stop one session.

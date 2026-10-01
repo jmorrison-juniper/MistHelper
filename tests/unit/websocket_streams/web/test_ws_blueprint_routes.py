@@ -15,6 +15,7 @@ import pytest  # Use pytest fixtures for the route app.
 from flask import Flask  # Build a small app around the blueprint.
 
 from src.websocket_streams.intake.fields import StreamRequestError  # Raise contract errors from the fake.
+from src.websocket_streams.live.sessions.buffer import MessagePage, StreamMessage  # The fake read returns records.
 from src.websocket_streams.web.blueprint import websockets_bp  # The blueprint under test.
 from src.websocket_streams.web.services import WebSocketsServices  # The config key for dependency injection.
 
@@ -45,15 +46,13 @@ class FakeWebSocketServices:
         """Return one session in the list."""
         return {"sessions": [self._session("abc123")], "limits": {"max_sessions": 5, "live_count": 1}}  # List.
 
-    def read_messages(self, session_id: str, after: int, limit: int) -> dict[str, object]:
-        """Return one message after the query values."""
-        return {
-            "session": self._session(session_id),
-            "messages": [{"seq": after + 1, "content": "ok"}],
-            "next_after": after + 1,
-            "first_seq": 1,
-            "gap": False,
-        }  # Read.
+    def read_messages(self, session_id: str, after: int, limit: int) -> MessagePage:
+        """Return one message after the query values, or refuse an unknown session."""
+        if session_id == "missing":  # The test asks for a refusal.
+            raise StreamRequestError("not_found", "The session was not found.")  # Contract error.
+        assert limit > 0  # The route passed the checked limit.
+        message = StreamMessage(after + 1, "2026-01-01T00:00:00Z", "text", '"ok"', 4, False)  # One message record.
+        return MessagePage(self._session(session_id), [message], after + 1, 1, False)  # Read.
 
     def stop_session(self, session_id: str) -> dict[str, object]:
         """Return a stopped session."""
@@ -173,6 +172,9 @@ def test_session_routes_cover_start_read_stop_delete_and_download(client: Any) -
     assert started.status_code == 201  # Start returns created.
     assert listed.get_json()["limits"]["live_count"] == 1  # List includes the live count.
     assert read.get_json()["next_after"] == 3  # Read uses the after value.
+    assert read.mimetype == "application/json"  # The joined text keeps the JSON type.
+    message = read.get_json()["messages"][0]  # The one returned message.
+    assert (message["seq"], message["content"]) == (3, "ok")  # The message text joins the answer.
     assert stopped.status_code == 202 and stopped.get_json()["state"] == "stopped"  # Stop returns accepted.
     assert deleted.get_json() == {"ok": True}  # Delete confirms success.
     assert download.mimetype == "application/x-ndjson"  # Download uses JSON Lines.
@@ -182,8 +184,10 @@ def test_errors_use_contract_codes(client: Any) -> None:
     """Route errors use the shared error payload."""
     bad_start = client.post("/api/websockets/sessions", json={"kind": "channel", "key": "bad"})  # Unknown key.
     bad_query = client.get("/api/websockets/sessions/abc123/messages?after=x")  # Bad after.
+    missing = client.get("/api/websockets/sessions/missing/messages")  # Unknown session.
     bad_delete = client.delete("/api/websockets/sessions/live")  # Live delete.
     assert bad_start.status_code == 404 and bad_start.get_json()["code"] == "unknown_key"  # Unknown key.
+    assert missing.status_code == 404 and missing.get_json()["code"] == "not_found"  # Read refusal.
     assert bad_query.status_code == 400 and bad_query.get_json()["field"] == "after"  # Query refusal.
     assert bad_delete.status_code == 409 and bad_delete.get_json()["code"] == "session_live"  # Live refusal.
 

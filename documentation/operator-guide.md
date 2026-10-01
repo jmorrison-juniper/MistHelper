@@ -163,7 +163,7 @@ Read [the SSH guide](SSH_GUIDE.md) for the setup.
 
 | Portal | Address | Purpose |
 |--------|---------|---------|
-| Web portal | <http://127.0.0.1:8055/> | Browse the data that the tool collected |
+| Web portal | <http://127.0.0.1:8055/> | Browse the data that the tool collected, run the safe operations, and watch the live Mist API streams on the WebSockets tab |
 | Upgrade capture portal | <http://127.0.0.1:8056/> | Record a site before a firmware upgrade and after it, then read what changed |
 
 In the upgrade capture portal, a capture is one record of site state and not a

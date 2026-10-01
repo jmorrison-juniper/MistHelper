@@ -67,7 +67,7 @@ class StreamCatalog:
         Returns:
             The variable name when locked, or None when unlocked.
         """
-        logger.info("Checking the WebSocket lock for %s", definition.key)  # Log before flag check.
+        logger.debug("Checking the WebSocket lock for %s", definition.key)  # One catalog read checks 54 entries.
         flag = self._flag_for(definition)  # Map safety to the matching flag.
         logger.debug("WebSocket lock for %s is %s", definition.key, flag)  # Log only the variable name.
         return flag  # READ and CAPTURE return None.

@@ -78,9 +78,15 @@ class WebSocketRouteViews:
         if isinstance(parsed, StreamRequestError):  # Bad query values refuse the request.
             return jsonify(parsed.to_payload()), parsed.status  # Return the standard error shape.
         after, limit = parsed  # The query now holds integers.
-        return WebSocketRouteViews._json_call(
-            lambda services: services.read_messages(session_id, after, limit)
-        )  # Read.
+        try:  # The service can refuse an unknown session.
+            logger.debug("Reading WebSocket messages for session %s", session_id)  # Debug level: the page polls often.
+            page = WebSocketRouteViews._services().read_messages(session_id, after, limit)  # Read one answer.
+            body = page.to_json_text()  # The stored message text joins the answer with no decode step.
+            logger.debug("Read WebSocket messages with %d characters", len(body))  # Log the size only.
+            return Response(body, mimetype="application/json")  # Send the JSON text as it is.
+        except StreamRequestError as error:  # Convert a service refusal.
+            logger.debug("WebSocket message read refused with code %s", error.code)  # Log only the code.
+            return jsonify(error.to_payload()), error.status  # Return the standard error shape.
 
     @staticmethod
     def stop(session_id: str) -> Response | tuple[Response, int]:
@@ -224,7 +230,7 @@ class WebSocketRouteViews:
         """
         from src.websocket_streams.web.services import WebSocketsServices  # Import lazily to avoid cycles.
 
-        logger.info("Loading the WebSockets service object")  # Log before dependency lookup.
+        logger.debug("Loading the WebSockets service object")  # Debug level: every API request runs this lookup.
         app = cast(Any, current_app)._get_current_object()  # Resolve the Flask local proxy for typing.
         services = WebSocketsServices.for_app(app)  # Build or reuse the service object.
         logger.debug("Loaded the WebSockets service object")  # Confirm the dependency lookup.
@@ -244,7 +250,7 @@ class WebSocketRouteViews:
             A JSON response and optional status.
         """
         try:  # Each service method can refuse the request with a contract error.
-            logger.info("Handling a WebSocket API request")  # Log before the service action.
+            logger.debug("Handling a WebSocket API request")  # Debug level: the service method logs each real action.
             payload = action(WebSocketRouteViews._services()) or {"ok": True}  # Call exactly one service action.
             logger.debug("Handled a WebSocket API request with keys %s", sorted(payload.keys()))  # Log keys only.
             return (jsonify(payload), success) if success != 200 else jsonify(payload)  # Send JSON.

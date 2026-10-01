@@ -9,7 +9,6 @@ Why:
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
-import json  # Downloads use JSON Lines.
 import logging  # The manager logs starts, stops, and audit events.
 import secrets  # Session identifiers must be hard to guess.
 import threading  # Gunicorn threads share one manager.
@@ -24,7 +23,7 @@ from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # Ch
 from src.websocket_streams.live.runners.shell import ShellRunner  # Shell requests use this runner.
 from src.websocket_streams.live.runners.text import ShellAddressFilter  # The SDK can log a shell address.
 from src.websocket_streams.live.runners.utility import UtilityRunner  # Utility requests use this runner.
-from src.websocket_streams.live.sessions.buffer import MessageBuffer  # Each session owns one bounded buffer.
+from src.websocket_streams.live.sessions.buffer import MessageBuffer, MessagePage  # Buffers and read answers.
 from src.websocket_streams.live.sessions.record import (
     SessionSink,
     SessionState,
@@ -116,6 +115,8 @@ class StreamSessionManager:
     """Own and bound all WebSockets tab sessions in one portal process."""
 
     KEY_INPUTS = {"interrupt": "\x03", "tab": "\t", "space": " ", "q": "q", "enter": "\r"}  # Allowed shell keys.
+    ENDED_KEEP_COUNT = 5  # Research decision: keep 5 ended sessions at most, so their buffers stay bounded.
+    ENDED_KEEP_SECONDS = 600.0  # Research decision: keep an ended session 10 minutes for a read or a download.
 
     def __init__(
         self, settings: StreamSettings, runner_factory: RunnerFactoryLike, clock: Callable[[], float] | None = None
@@ -167,7 +168,7 @@ class StreamSessionManager:
 
     def list_payload(self) -> dict[str, object]:
         """Return every held session, newest first."""
-        logger.info("Building WebSockets session list payload")  # Log before reading sessions.
+        logger.debug("Building WebSockets session list payload")  # Debug level: the page refreshes the list often.
         with self._lock:  # The session map can change during a request.
             sessions = sorted(
                 self._sessions.values(), key=lambda item: item.started_mono, reverse=True
@@ -180,7 +181,7 @@ class StreamSessionManager:
             "limits": {"max_sessions": self._settings.max_sessions, "live_count": live_count},
         }  # Contract shape.
 
-    def read(self, session_id: str, after: int, limit: int) -> dict[str, object]:
+    def read(self, session_id: str, after: int, limit: int) -> MessagePage:
         """Read messages after a sequence number.
 
         Args:
@@ -189,25 +190,15 @@ class StreamSessionManager:
             limit: The requested message count.
 
         Returns:
-            The read payload.
+            The read answer, with the records of the returned messages.
         """
         session = self._get(session_id)  # Raise not_found when absent.
         session.mark_read()  # Prevent an idle stop after a successful read.
         count = min(500, max(1, limit))  # The contract clamps the limit to 1 through 500.
-        messages, first_seq, gap = session.buffer.read_after(max(0, after), count)  # Read messages from the buffer.
-        newest_seq = (
-            messages[-1].get("seq", after) if messages else after
-        )  # Keep the cursor stable when no message exists.
-        next_after = (
-            newest_seq if isinstance(newest_seq, int) else after
-        )  # Payloads should hold integer sequence numbers.
-        return {
-            "session": session.payload(),
-            "messages": messages,
-            "next_after": next_after,
-            "first_seq": first_seq,
-            "gap": gap,
-        }  # Contract shape.
+        records, first_seq, gap = session.read_records(max(0, after), count)  # Copy the records under the lock.
+        next_after = records[-1].seq if records else after  # Keep the cursor stable when no message exists.
+        logger.debug("Read %s WebSockets messages for session %s", len(records), session_id)  # Log the count only.
+        return MessagePage(session.payload(), records, next_after, first_seq, gap)  # The route joins the text later.
 
     def stop(self, session_id: str, reason: str = "The operator stopped the session.") -> dict[str, object]:
         """Request a session stop.
@@ -270,8 +261,8 @@ class StreamSessionManager:
         stamp = session.started_at.replace("-", "").replace(":", "")  # Build a file-safe UTC stamp.
         filename = f"{session.request.key}-{stamp}.jsonl"  # Include the key and start time.
         lines = (
-            json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n" for payload in session.buffer.iter_payloads()
-        )  # Build JSON Lines lazily.
+            "".join((*record.json_parts(), "\n")) for record in session.snapshot_records()
+        )  # Python copies the record list now and formats one line for each download step.
         return filename, lines  # The blueprint streams these lines.
 
     def live_count(self) -> int:
@@ -321,7 +312,7 @@ class StreamSessionManager:
 
     def reap_once(self) -> None:
         """Run one reaper pass for tests and the background loop."""
-        logger.info("Running WebSockets session reaper pass")  # Log before reading sessions.
+        logger.debug("Running WebSockets session reaper pass")  # Debug level: the reaper runs every few seconds.
         with self._lock:  # Build a stable list for the pass.
             sessions = list(self._sessions.values())  # Copy the sessions for decisions.
         for session in sessions:  # Stop and prune without holding the main lock.
@@ -442,21 +433,32 @@ class StreamSessionManager:
             )  # Mark stuck stopping as stopped.
 
     def _prune_ended(self) -> None:
-        """Remove old ended sessions."""
+        """Remove ended sessions after 10 minutes, and keep 5 ended sessions at most.
+
+        Why:
+            Issue #3551, task T075. The old rule kept the 5 newest ended
+            sessions with no time limit, and it kept any count of older ended
+            sessions for 10 minutes. Each ended session holds a full buffer,
+            so a fast start and stop cycle grew the memory with no bound.
+        """
+        logger.debug("Pruning ended WebSockets sessions")  # Debug level: the reaper runs every five seconds.
         with self._lock:  # The session map changes.
             ended = [
                 session for session in self._sessions.values() if not session.live
             ]  # Only ended sessions are pruned.
             ended.sort(
                 key=lambda item: item.ended_mono or item.started_mono, reverse=True
-            )  # Keep newest ended sessions.
-            keep = {session.session_id for session in ended[:5]}  # The five newest ended sessions always stay.
-            now = self._clock()  # Age decisions use the fake clock.
-            for session in ended[5:]:  # Older ended sessions can leave.
-                if (
-                    session.session_id not in keep and now - (session.ended_mono or session.started_mono) > 600.0
-                ):  # Keep 10 minutes.
-                    self._sessions.pop(session.session_id, None)  # Remove stale ended session.
+            )  # The newest ended session comes first.
+            now = self._clock()  # Age decisions use the fake clock in tests.
+            removed = [
+                session.session_id
+                for position, session in enumerate(ended)
+                if position >= self.ENDED_KEEP_COUNT
+                or now - (session.ended_mono or session.started_mono) > self.ENDED_KEEP_SECONDS
+            ]  # A session past the count limit or past the age limit leaves.
+            for session_id in removed:  # Release each removed buffer.
+                self._sessions.pop(session_id, None)  # The buffer memory returns to the process.
+        logger.debug("Pruned %s ended WebSockets sessions", len(removed))  # Log the result count.
 
     def _reaper_loop(self) -> None:
         """Run the reaper until shutdown."""

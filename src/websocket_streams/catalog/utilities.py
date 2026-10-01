@@ -20,6 +20,8 @@ import mistapi.device_utils.srx as sdk_srx  # The SRX facade lists gateway utili
 import mistapi.device_utils.ssr as sdk_ssr  # The SSR facade lists router utilities.
 
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec, Safety, UtilityDefinition  # Catalog records.
+from src.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # Each enum comes from the SDK signature.
+from src.websocket_streams.catalog.utility_text import UtilityText  # Plain names, sentences, and hints.
 
 logger = logging.getLogger(__name__)  # Keep catalog log records under this module name.
 
@@ -54,11 +56,8 @@ class UtilityCatalog:
     }
     _MODULES = (("ap", sdk_ap), ("ex", sdk_ex), ("srx", sdk_srx), ("ssr", sdk_ssr), ("mxedge", sdk_mxedge))
     _CHOICES = {
-        "node": ("node0", "node1"),
-        "protocol": ("icmp", "udp"),
-        "route_type": ("any", "bgp", "direct", "evpn", "ospf", "static"),
         "band": ("24", "5", "6"),
-    }
+    }  # The SDK types the band as text. Each enum parameter reads its values from the SDK signature.
     _SPECS = {
         "host": (FieldKind.HOST, True, None, None, None),
         "count": (FieldKind.INTEGER, False, 1, 100, 5),
@@ -68,7 +67,7 @@ class UtilityCatalog:
         "network": (FieldKind.NAME, False, None, None, None),
         "service_name": (FieldKind.NAME, False, None, None, None),
         "ssid": (FieldKind.NAME, False, None, None, None),
-        "route_type": (FieldKind.CHOICE, False, None, None, None),
+        "route_type": (FieldKind.NAME, False, None, None, None),
         "ip": (FieldKind.IP, False, None, None, None),
         "neighbor": (FieldKind.IP, False, None, None, None),
         "prefix": (FieldKind.PREFIX, False, None, None, None),
@@ -163,7 +162,7 @@ class UtilityCatalog:
         Returns:
             One utility definition.
         """
-        fields = cls._fields_for(family, name, inspect.signature(func))  # Convert SDK parameters to fields.
+        fields = cls._fields_for(family, name, func)  # Convert SDK parameters to fields.
         safety = cls._safety(name)  # Classify the action before building the record.
         output = cls._output(name, safety)  # Pick the page view for the stream.
         targets = cls._targets_for(family, name)  # Pick the identifiers that start the utility.
@@ -174,8 +173,8 @@ class UtilityCatalog:
             f"{family}.{name}",
             family,
             name,
-            cls._label(name),
-            cls._description(name, safety),
+            UtilityText.label(name),
+            UtilityText.sentence(name, safety),
             fields,
             safety,
             output,
@@ -184,20 +183,21 @@ class UtilityCatalog:
         )  # Return the frozen record.
 
     @classmethod
-    def _fields_for(cls, family: str, name: str, signature: inspect.Signature) -> tuple[FieldSpec, ...]:
-        """Build fields for one SDK signature.
+    def _fields_for(cls, family: str, name: str, func: Callable[..., object]) -> tuple[FieldSpec, ...]:
+        """Build fields for one SDK function.
 
         Args:
             family: The device family of the function.
             name: The SDK function name.
-            signature: The SDK function signature.
+            func: The SDK callable. Its signature and annotations name the fields.
 
         Returns:
             The checked parameter fields.
         """
+        hints = SdkAnnotation.hints(func)  # One parameter name can use a different enum in each function.
         fields = [
-            cls._field_for(name, parameter)
-            for parameter in signature.parameters.values()
+            cls._field_for(name, parameter, hints.get(parameter.name))
+            for parameter in inspect.signature(func).parameters.values()
             if parameter.name not in cls._SKIP_PARAMS and parameter.name != "port"
         ]  # Convert each operator parameter.
         if name == "remotePcap" and family in {"ex", "srx", "ssr"}:  # Wired device captures take selected ports.
@@ -207,12 +207,13 @@ class UtilityCatalog:
         return tuple(fields)  # Return fields in SDK order with derived fields first.
 
     @classmethod
-    def _field_for(cls, function_name: str, parameter: inspect.Parameter) -> FieldSpec:
+    def _field_for(cls, function_name: str, parameter: inspect.Parameter, annotation: object) -> FieldSpec:
         """Build one field for one SDK parameter.
 
         Args:
             function_name: The SDK function name that owns the parameter.
             parameter: The SDK parameter metadata.
+            annotation: The resolved SDK annotation of the parameter, or None.
 
         Returns:
             One field specification.
@@ -222,16 +223,18 @@ class UtilityCatalog:
             function_name == "retrieveDhcpLeases" and parameter.name == "network"
         ):  # The contract makes this field required.
             required = True  # The SDK also requires this value.
-        return cls._field_named(parameter.name, required, "")  # Use the shared field table.
+        choices = SdkAnnotation.enum_choices(annotation)  # An SDK enum gives the only accepted values.
+        return cls._field_named(parameter.name, required, "", choices)  # Use the shared field table.
 
     @classmethod
-    def _field_named(cls, name: str, required: bool, family: str) -> FieldSpec:
+    def _field_named(cls, name: str, required: bool, family: str, choices: tuple[str, ...] = ()) -> FieldSpec:
         """Build one field from the contract field table.
 
         Args:
             name: The SDK parameter name or derived field name.
             required: True when the request must hold this field.
             family: The device family that can change a range.
+            choices: The SDK enum values. An empty tuple uses the choice table.
 
         Returns:
             One field specification.
@@ -245,17 +248,16 @@ class UtilityCatalog:
         maximum = (
             1520 if name == "max_pkt_len" and family in {"srx", "ssr"} else maximum
         )  # Gateways use the lower packet length.
-        choices = cls._CHOICES.get(name, ())  # Choice fields use SDK enum values.
         return FieldSpec(
             name=name,
-            label=cls._label(name),
+            label=UtilityText.label(name),
             kind=kind,
             required=required or bool(base_required),
             minimum=minimum,
             maximum=maximum,
-            choices=choices,
+            choices=choices or cls._CHOICES.get(name, ()),
             default=default,
-            hint=cls._hint(name),
+            hint=UtilityText.hint(name),
         )  # Return the checked field.
 
     @staticmethod
@@ -323,53 +325,3 @@ class UtilityCatalog:
         if safety is Safety.CAPTURE:  # A capture sends packet records.
             return "packets"  # The page shows packet summaries.
         return "screen" if name in {"topCommand", "monitorTraffic"} else "lines"  # Screen utilities replace the view.
-
-    @staticmethod
-    def _label(name: str) -> str:
-        """Return a plain label for a name.
-
-        Args:
-            name: The SDK name or field name.
-
-        Returns:
-            A title-cased label.
-        """
-        text = "".join((" " + char if char.isupper() else char) for char in name).replace(
-            "_", " "
-        )  # Split camel case and underscores.
-        return text.strip().capitalize()  # Keep the label short for the page.
-
-    @staticmethod
-    def _description(name: str, safety: Safety) -> str:
-        """Return a plain description for one utility.
-
-        Args:
-            name: The SDK function name.
-            safety: The safety class of the utility.
-
-        Returns:
-            One plain sentence for the page.
-        """
-        action = UtilityCatalog._label(name).lower()  # Reuse the label text for a plain sentence.
-        return (
-            f"Run {action} and stream the output from the device."
-            if safety is not Safety.CAPTURE
-            else "Run a 60-second packet capture and stream packet records."
-        )  # Describe the operator result.
-
-    @staticmethod
-    def _hint(name: str) -> str:
-        """Return a plain hint for one field.
-
-        Args:
-            name: The field name.
-
-        Returns:
-            One short hint, or an empty text.
-        """
-        hints = {
-            "tcpdump_expression": "Use 256 printable filter characters or fewer.",
-            "port_ids": "Select one or more device ports.",
-            "interfaces": "Select one or more Mist Edge interfaces.",
-        }  # Keep only helpful hints.
-        return hints.get(name, "")  # Most fields need no extra text.

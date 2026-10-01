@@ -2,6 +2,33 @@
     min-height: 26rem;
 }
 
+/* Bootstrap paints .btn:hover and .btn:disabled from these variables. The
+ * shared .btn-accent rule sets none of them, so the start button lost its fill
+ * when the operator pointed at it or when the page disabled it. */
+.ws-page .btn-accent {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--portal-accent, #0077B6);
+    --bs-btn-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--portal-accent, #0077B6);
+    --bs-btn-hover-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--portal-accent, #0077B6);
+    --bs-btn-active-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-disabled-bg: var(--portal-accent, #0077B6);
+    --bs-btn-disabled-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-disabled-opacity: 0.45;
+    --bs-btn-focus-shadow-rgb: 0, 119, 182;
+}
+
+/* The catalog holds 72 entries. It scrolls inside its card, so the start
+ * form stays in view next to it. */
+#wsCatalog {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
 .ws-catalog-entry {
     border-color: var(--bs-border-color);
     color: var(--bs-body-color);
@@ -11,6 +38,15 @@
 .ws-catalog-entry:focus {
     border-color: var(--portal-accent);
     box-shadow: 0 0 0 0.12rem color-mix(in srgb, var(--portal-accent) 35%, transparent);
+}
+
+/* The chosen catalog entry and the shown session use a light accent tint.
+ * The text keeps the body color, so it stays readable in each theme. */
+.ws-page .ws-catalog-entry.active,
+.ws-page .ws-session-item.active {
+    background-color: color-mix(in srgb, var(--portal-accent, #0077B6) 16%, var(--bs-body-bg));
+    border-color: var(--portal-accent, #0077B6);
+    color: var(--bs-body-color);
 }
 
 .ws-output {
