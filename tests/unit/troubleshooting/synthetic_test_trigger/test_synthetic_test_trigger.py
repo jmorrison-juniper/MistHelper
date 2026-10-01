@@ -159,7 +159,8 @@ def test_timeout_writes_clear_export_row() -> None:
 
 def test_completed_site_result_exports_row() -> None:
     """A completed site result writes one safe CSV row."""
-    response = FakeResponse({"results": [{"status": "success", "type": "dhcp", "failed": False}]})
+    row = {"status": "success", "type": "dhcp", "failed": False, "by": "user", "timestamp": 9999999999.0}
+    response = FakeResponse({"results": [row]})  # WHY: one fresh manual result completes the site poll.
     client = FakeClient(response)  # WHY: one poll returns a completed result.
     capture = ExportCapture()  # WHY: capture CSV rows.
     prompts = PromptAnswers(["1", "", "y"])  # WHY: site scope, blank email, send trigger.
@@ -168,6 +169,19 @@ def test_completed_site_result_exports_row() -> None:
     assert result is not None and result.status == "success"  # WHY: the site result completed.
     assert capture.calls[0][0][0]["test_type"] == "dhcp"  # WHY: result values are included in the row.
     assert capture.calls[0][3] == ExportRowBuilder.FIELDNAMES  # WHY: export columns are stable.
+
+
+def test_stale_marvis_site_result_times_out_without_exporting_row() -> None:
+    """A stale scheduled Minis row must not stand in for a manual site trigger."""
+    live_payload = {"by": "MARVIS", "type": "dhcp", "status": "success", "timestamp": 1790883314.535164}
+    client = FakeClient(FakeResponse({"results": [live_payload]}))  # WHY: mirror the stale live payload shape.
+    capture = ExportCapture()  # WHY: capture the final timeout export row.
+    prompts = PromptAnswers(["1", "", "y"])  # WHY: site scope, blank email, send trigger.
+    runner = SyntheticTestTriggerRunner(build_runtime(client, prompts, capture), timeout_seconds=2)
+    result = runner.run()  # WHY: execute the poll loop against the stale row.
+    assert result is not None and result.timed_out  # WHY: the stale row must not become the final outcome.
+    assert capture.calls[0][0][0]["timed_out"] is True  # WHY: the CSV must show no accepted stale row.
+    assert capture.calls[0][0][0]["timestamp"] == ""  # WHY: timeout rows must not copy the stale timestamp.
 
 
 def test_radius_secret_never_reaches_logs_or_export(caplog: Any) -> None:
@@ -245,7 +259,8 @@ def test_invalid_scope_and_missing_device_stop_before_trigger(caplog: Any) -> No
 def test_no_site_and_failed_export_paths(caplog: Any) -> None:
     """Missing site and failed export paths produce operator-visible logs."""
     caplog.set_level(logging.DEBUG)  # WHY: capture error logs and export result details.
-    client = FakeClient(FakeResponse({"results": [{"status": "success"}]}))  # WHY: successful poll reaches export.
+    row = {"status": "success", "timestamp": 9999999999.0}  # WHY: fresh timestamp lets site polling finish.
+    client = FakeClient(FakeResponse({"results": [row]}))  # WHY: successful poll reaches export.
     no_site_runtime = build_runtime(client, PromptAnswers([]), ExportCapture())  # WHY: reuse standard fakes.
     no_site_runtime = SyntheticTestRuntime(  # WHY: replace only the site selector with a missing selection.
         client=no_site_runtime.client,

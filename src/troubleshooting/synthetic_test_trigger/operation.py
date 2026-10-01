@@ -172,6 +172,8 @@ class SyntheticTestTriggerRunner:
         """Return a completed result from one poll, or None."""
         response = self._runtime.client.poll_once(request)  # WHY: read one result endpoint.
         result = self._extract_result(request, response)  # WHY: site and device responses differ.
+        if result is not None and not self._result_matches_request(request, result):  # WHY: ignore old site rows.
+            return None  # WHY: caller must poll again until the triggered run appears.
         if result is None or not ResultNormalizer.is_complete(result):  # WHY: incomplete rows continue polling.
             return None  # WHY: caller sleeps and retries.
         return ResultNormalizer.to_result(result)  # WHY: caller needs one normalized result object.
@@ -196,6 +198,44 @@ class SyntheticTestTriggerRunner:
         if request.scope == "site":  # WHY: site polling reads the search response.
             return ResultNormalizer.first_site_result(response)  # WHY: site result is inside results.
         return ResultNormalizer.device_result(response)  # WHY: device and RADIUS polling read one device result.
+
+    @staticmethod
+    def _result_matches_request(request: SyntheticTestRequest, result: dict[str, object]) -> bool:
+        """Return True when one poll row belongs to this trigger request."""
+        if request.scope != "site":  # WHY: device endpoints read the current result of the selected device.
+            return True  # WHY: only the site search endpoint can return an unrelated historical row.
+        if not SyntheticTestTriggerRunner._site_result_created_by_user(result):  # WHY: scheduled runs are unrelated.
+            logger.debug("Ignoring synthetic test row with by=%s", result.get("by", ""))  # WHY: explain skip.
+            return False  # WHY: keep polling for the manual run.
+        if not SyntheticTestTriggerRunner._site_result_is_new(request, result):  # WHY: old rows predate trigger.
+            logger.debug(  # WHY: explain why the poll continues without accepting a stale row.
+                "Ignoring stale synthetic test row timestamp=%s triggered_at=%s",
+                result.get("timestamp", ""),
+                request.triggered_at,
+            )
+            return False  # WHY: keep polling until a fresh row arrives or timeout.
+        return True  # WHY: row identity matches the request closely enough to report.
+
+    @staticmethod
+    def _site_result_created_by_user(result: dict[str, object]) -> bool:
+        """Return True when Mist names the manual trigger as the creator."""
+        creator = result.get("by")  # WHY: the live search row identifies scheduled runs as MARVIS.
+        if creator is None:  # WHY: older payloads can omit the creator field.
+            return True  # WHY: timestamp remains the required identity guard.
+        return str(creator).lower() == "user"  # WHY: only the operator-triggered site run is valid here.
+
+    @staticmethod
+    def _site_result_is_new(request: SyntheticTestRequest, result: dict[str, object]) -> bool:
+        """Return True when a site result timestamp is at or after the trigger."""
+        timestamp = result.get("timestamp")  # WHY: live rows use this field for the result time.
+        if timestamp is None:  # WHY: no timestamp means the row cannot be tied to this trigger.
+            return False  # WHY: a timeout is safer than reporting an unrelated row.
+        try:
+            result_time = float(timestamp)  # WHY: Mist returns timestamps as JSON numbers.
+        except (TypeError, ValueError):
+            logger.debug("Ignoring synthetic test row with invalid timestamp=%s", timestamp)  # WHY: explain skip.
+            return False  # WHY: invalid time cannot prove the row belongs to this request.
+        return result_time >= request.triggered_at  # WHY: the accepted row must not predate the trigger.
 
     @staticmethod
     def _scope_prompt() -> str:
