@@ -1,0 +1,60 @@
+{
+  "issue": 3701,
+  "featureDirectory": "specs/3701-macos-bootstrap-environment",
+  "branch": "jmorrison-juniper-macos-bootstrap-environment",
+  "parentSession": "6d71fd26-57c2-48c0-abc8-607af98f75d0",
+  "projectSession": "8afaef97-dc14-4dbc-ac5b-520462e5e36f",
+  "cliSession": "5319d1cd-61d5-4c74-8e8d-eb032e0addbf",
+  "publicationPosition": 34,
+  "precedingIssue": 3700,
+  "publicationGrant": null,
+  "status": "implemented",
+  "currentStep": "analyze",
+  "workflow": "feature-only-template-fallback",
+  "mandatoryGitHook": {
+    "exitCode": 127,
+    "error": "env: pwsh: No such file or directory",
+    "executedSuccessfully": false
+  },
+  "mandatoryCompanionHooks": {
+    "commands": [
+      "speckit.companion.after-specify",
+      "speckit.companion.after-plan",
+      "speckit.companion.after-tasks",
+      "speckit.companion.after-implement"
+    ],
+    "exitCodes": [1, 1, 1, 1],
+    "error": "No such file or directory",
+    "executedSuccessfully": false
+  },
+  "documentationOwnership": "confirmed-by-parent",
+  "coupledTestOwnership": {
+    "path": "tests/unit/bootstrap/test_pip_index_probe.py",
+    "method": "test_environment_options",
+    "status": "confirmed-by-parent",
+    "change": "Add only the expected platform-specific symlinks flag."
+  },
+  "validation": {
+    "phase": "local-precommit-pass",
+    "nativePlatform": "darwin-arm64",
+    "pythonVersion": "3.13.13",
+    "selectedTestsPassed": 181,
+    "selectedTestsSkipped": 0,
+    "creationExecutableLines": "11/11",
+    "creationBranches": "4/4",
+    "scriptCoveragePercent": 99.76,
+    "testQualityDiscoveredFiles": 998,
+    "testQualityParsedFiles": 950,
+    "testQualityExistingExclusions": 48,
+    "testQualityFindings": 725,
+    "testQualityNewFindings": 0,
+    "writingCoverage": "dictionary_unavailable/partial",
+    "runtimePackagesAudited": 105,
+    "runtimeAuditVulnerabilities": 0,
+    "runtimeAuditSkippedPackages": 0,
+    "normalPipAudit": "Temporary ensurepip SIGABRT before auditing. Separate issue 3612.",
+    "developmentAuditLimit": "The Git-only devtools requirement is outside the native runtime hash audit."
+  },
+  "postCommitEvidence": "Private files/issue3701/validation.json",
+  "actualMainVerification": "not-authorized"
+}

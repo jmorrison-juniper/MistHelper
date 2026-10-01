@@ -382,7 +382,11 @@ class TestInstallEnvironment:
                 if existing and not recreate:  # Reuse must not instantiate another environment builder.
                     assert offline.setup.builder.call_args is None  # Prove no redundant creation.
                 else:  # Both new and recreated environments retain the existing pip seed policy.
-                    assert offline.setup.builder.call_args.kwargs == {"with_pip": True, "upgrade_deps": False}  # Seed.
+                    assert offline.setup.builder.call_args.kwargs == {
+                        "with_pip": True,
+                        "upgrade_deps": False,
+                        "symlinks": os.name != "nt",
+                    }  # Preserve the complete seed and native platform policy.
                     assert offline.setup.builder.created_directory == offline.bootstrapper.venv_dir  # Same target.
 
         class TestIndexes:  # Keep source-policy cases and their local recorder under a compliant parent.

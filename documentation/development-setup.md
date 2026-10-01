@@ -44,13 +44,27 @@ On Linux or macOS, activate the environment with `source .venv/bin/activate`.
 Windows keeps `.venv\Scripts\python.exe`. Linux and macOS keep `.venv/bin/python`.
 The `--recreate` option deletes the existing environment before creation.
 
-Caution: some uv-managed Python installations on macOS stop during `ensurepip`.
-The bootstrap cannot create a new environment in that case.
-If this error occurs, create the environment with the command below, then run the bootstrap again.
+The bootstrap uses symbolic links for the interpreter on Linux and macOS.
+It keeps interpreter copies on Windows.
+This policy matches `python -m venv` and preserves the base interpreter's runtime library paths.
+Environment creation does not require uv.
+The installer choices below remain unchanged.
+`UV_LINK_MODE=copy` still applies to installed packages, not to the interpreter.
+
+### Recover an earlier partial environment
+
+If an earlier macOS bootstrap reported `@rpath/libpython3.13.dylib`, recreate the environment in that worktree.
+Use a working Python 3.13 or newer outside the broken environment.
+
+Caution: `--recreate` removes all packages in this worktree's `.venv`.
+The bootstrap then creates the environment and installs the declared requirements again.
 
 ```bash
-UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv venv --python 3.13 --seed .venv
+python3.13 scripts/bootstrap_worktree.py --recreate
 ```
+
+Without `--recreate`, the bootstrap keeps an existing interpreter path, including one from a partial failed creation.
+Issue #3701 records the copied-interpreter failure and this repair.
 
 ### Installer selection and reports
 

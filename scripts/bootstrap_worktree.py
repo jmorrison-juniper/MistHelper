@@ -11,7 +11,7 @@ Usage:
     python scripts/bootstrap_worktree.py
     python scripts/bootstrap_worktree.py --recreate
 
-The script works on Windows and on Linux. The script prints the path of the
+The script works on Windows, Linux, and macOS. The script prints the path of the
 interpreter that it created.
 
 The script also protects the install against an unreachable pip index. It reads
@@ -322,7 +322,9 @@ class WorktreeBootstrapper:
             LOGGER.info("The environment exists at %s", self.venv_dir)
             return  # Keep the existing environment, because a second creation adds no value.
         LOGGER.info("Creating the virtual environment at %s", self.venv_dir)
-        venv.EnvBuilder(with_pip=True, upgrade_deps=False).create(self.venv_dir)  # Build the environment with pip.
+        venv.EnvBuilder(  # Match the CLI policy to preserve POSIX interpreter library paths.
+            with_pip=True, upgrade_deps=False, symlinks=sys.platform != "win32"
+        ).create(self.venv_dir)
         LOGGER.debug("Created the virtual environment")
 
     def install_requirements(self) -> list[str]:  # Keep installer selection local to this invocation.
