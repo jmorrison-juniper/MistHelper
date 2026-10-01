@@ -44,6 +44,8 @@ from mistapi.api.v1.sites import guests as guest_api
 from mistapi.api.v1.sites import stats as stats_api
 from mistapi.api.v1.sites import wired_clients as wired_client_api
 
+from ..api.numeric_input import AsciiWholeNumberReader
+
 logger = logging.getLogger(__name__)
 
 # The search endpoints aggregate a time window and default to one day. A busy
@@ -314,20 +316,22 @@ def fetch_guest_rows(session: Any, site_id: str) -> list[dict[str, Any]]:
 
 
 def page_limit() -> int:
-    """Return the page size for one paged read.
+    """Read the existing page size setting with bounded ASCII validation.
 
-    Why:
-        A large page holds the request count down. The repository already
-        offers this control through one environment variable, and the capture
-        path follows the same control instead of adding a second one.
-
-    Returns:
-        The page size, held between ``MIN_PAGE_LIMIT`` and ``MAX_PAGE_LIMIT``.
+    Invalid text uses the named default.
+    Valid zero still uses the existing minimum page size.
     """
+    logger.info("Read the capture setting %s.", PAGE_LIMIT_VARIABLE)
     raw = os.environ.get(PAGE_LIMIT_VARIABLE, "").strip()
-    if not raw.isdigit():
+    value = AsciiWholeNumberReader(MAX_PAGE_LIMIT, PAGE_LIMIT_VARIABLE).read(raw)
+    if value is None:
+        if raw:
+            logger.warning("Caution: invalid %s. The capture uses %s.", PAGE_LIMIT_VARIABLE, DEFAULT_PAGE_LIMIT)
+        logger.debug("Capture setting field=%s uses default=%s.", PAGE_LIMIT_VARIABLE, DEFAULT_PAGE_LIMIT)
         return DEFAULT_PAGE_LIMIT
-    return max(MIN_PAGE_LIMIT, min(MAX_PAGE_LIMIT, int(raw)))
+    result = max(MIN_PAGE_LIMIT, value)
+    logger.debug("Capture setting checked=1 field=%s clamped=%s.", PAGE_LIMIT_VARIABLE, result != value)
+    return result
 
 
 def _collect(session: Any, response: Any) -> list[dict[str, Any]]:
