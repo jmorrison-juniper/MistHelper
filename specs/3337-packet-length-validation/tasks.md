@@ -367,23 +367,29 @@ The fragment and terminal contract document the changed range.
 Do not add unrequested deployment or production health checks to these delivery tasks.
 Protected merge, all applicable checks, and offline exact-main tests remain required.
 
-### Coordinator-Blocked Delivery
+### Coordinator-Authorized Delivery
 
-Queue position 9 has no delivery authorization.
-Coordinator `6d71fd26-57c2-48c0-abc8-607af98f75d0` must supply the full verified stable `main` SHA.
-The recorded source base does not satisfy that condition.
-T031 through T038 remain blocked and unchecked until that authorization.
-Later tasks also require every listed prerequisite.
-Local implementation or a commit does not authorize a push or pull request.
+The coordinator released publication on `bceba98ff1177ab32ed65ef90279baccba85a47f`.
+The prerequisite protected merge and 919 exact-main cases passed.
+The preserved local tip rebased cleanly onto that exact revision.
+The isolated environment now matches the current manifests and contains 160 compatible packages.
+Both exhaustive prompt tests and all adjacent capture tests passed after the rebase.
+The repeated ratchet checked 947 files and 725 existing findings with zero new findings.
+The complete hashed runtime audit checked 105 packages with zero vulnerabilities or skips.
+No remote check or protection requirement is waived.
+The initial source-base SHA remains red-test evidence, not publication authorization.
 
-- [ ] T031 When the coordinator supplies the full verified stable `main` SHA, record authorization in `specs/3337-packet-length-validation/.spec-context.json`. **Blocked**: queue position 9 lacks that authorization.
-- [ ] T032 After T031, rebase the existing branch onto the authorized `main` revision. Record the verified SHA in `specs/3337-packet-length-validation/.spec-context.json`. **Blocked** until authorization.
-- [ ] T033 After T032, repeat T018 through T026 and T029 against the rebased tree. Record every result in `specs/3337-packet-length-validation/tasks.md`. **Blocked** until authorized rebase.
-- [ ] T034 After T033, push only the existing issue branch. Record the delivered commit in `specs/3337-packet-length-validation/.spec-context.json`. **Blocked** until authorization and repeated gates pass.
-- [ ] T035 After T034, create the pull request using `.github/PULL_REQUEST_TEMPLATE.md`. Include `Closes #3337`, accurate evidence, and required labels. **Blocked** until authorized push.
-- [ ] T036 After T035, verify all CI, title, CodeQL, and normal requirements-audit results. Record them in `specs/3337-packet-length-validation/.spec-context.json`. **Blocked** until the authorized pull request exists.
-- [ ] T037 After T036, complete the protected, up-to-date squash merge. Record the exact resulting `main` SHA in `specs/3337-packet-length-validation/.spec-context.json`. **Blocked** until all checks pass.
-- [ ] T038 After T037, test the exact merged `main` revision locally. Record offline focused and adjacent results in `specs/3337-packet-length-validation/.spec-context.json`. **Blocked** until the protected merge completes.
+- [X] T031 Record the coordinator-authorized main SHA `bceba98ff1177ab32ed65ef90279baccba85a47f`. (delivered: specs/3337-packet-length-validation/.spec-context.json)
+- [X] T032 Rebase the preserved local tip onto that exact authorized main revision. (delivered: 4dbe3a7fa374459f406309c4c11faf6c93639bb3)
+- [X] T033 Refresh the isolated environment and repeat all scoped tests, coverage, quality checks, and the runtime audit. (delivered: specs/3337-packet-length-validation/.spec-context.json)
+- [ ] T034 Push only the verified issue branch after confirming the authorized main revision still matches.
+- [ ] T035 Create the complete-template pull request with `Closes #3337`, exact evidence, and required labels.
+- [ ] T036 Verify every CI, title, CodeQL, and normal requirements-audit result.
+- [ ] T037 Complete the protected, up-to-date, exact-head squash merge. Omit `--delete-branch`.
+- [ ] T038 Test the exact merged main revision locally without any capture request or Mist cloud contact.
+
+Record publication and post-merge evidence in the issue, pull request, and session artifacts.
+Do not create an orphan commit after the squash merge merely to update these delivery checkboxes.
 
 Before T032 and T034, confirm that remote `main` still matches the coordinator's authorized full SHA.
 If it differs, retain the block until the coordinator supplies a new verified stable SHA.
@@ -608,12 +614,12 @@ It is not the complete feature or permission for remote delivery.
 | **Total** | **38** |
 
 Four tasks carry `[P]`: T002, T010, T013, and T027.
-Eight delivery tasks, T031 through T038, remain blocked.
+Five delivery tasks, T034 through T038, remain incomplete.
 All 38 tasks retain their sequential IDs and exact file paths.
 T001 through T029 are complete from the supplied verified local evidence.
 T030 is complete in local implementation commit `e74a996777d9fffb163c1be904f497132cbb7081`.
-T031 through T038 remain blocked and unchecked.
-There are 30 completed tasks and eight remaining tasks.
+T031 through T033 are complete after coordinator authorization and repeated verification.
+There are 33 completed tasks and five remaining tasks.
 The normal requirements audit remains failed before scanning.
 The documented local audit alternative does not audit the Git-pinned package.
 Story tasks also carry their required label.

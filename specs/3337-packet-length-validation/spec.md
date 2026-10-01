@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Locally committed and verified with the documented audit limitation. Coordinator authorization and remote delivery remain incomplete.
+**Status**: Rebased and verified on the coordinator-authorized main revision. Publication, protected merge, and exact-main tests remain incomplete.
 
 **Issue**: [MistHelper #3337](https://github.com/jmorrison-juniper/MistHelper/issues/3337)
 

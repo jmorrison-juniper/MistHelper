@@ -4,7 +4,7 @@
   "branch": "jmorrison-juniper-packet-length-validation",
   "currentStep": "implement",
   "status": "in-progress",
-  "implementationStatus": "local-committed-awaiting-coordinator",
+  "implementationStatus": "rebased-validated-ready-for-publication",
   "localValidationStatus": "verified-with-local-audit-alternative",
   "commitStatus": "committed",
   "localImplementationCommit": "e74a996777d9fffb163c1be904f497132cbb7081",
@@ -12,8 +12,8 @@
   "tasksPath": "specs/3337-packet-length-validation/tasks.md",
   "taskCounts": {
     "total": 38,
-    "completed": 30,
-    "remaining": 8,
+    "completed": 33,
+    "remaining": 5,
     "perStory": {
       "US1": 8,
       "US2": 3,
@@ -21,7 +21,7 @@
     },
     "shared": 24,
     "parallel": 4,
-    "blockedDelivery": 8
+    "blockedDelivery": 0
   },
   "localValidation": {
     "provenance": "user-supplied verified final results",
@@ -146,22 +146,42 @@
       "openApiDependenciesReadmeSharedConfigBaselinesUnchanged": true
     }
   },
+  "rebasedVerification": {
+    "base": "bceba98ff1177ab32ed65ef90279baccba85a47f",
+    "sourceCommit": "4dbe3a7fa374459f406309c4c11faf6c93639bb3",
+    "python": "3.13.13",
+    "installedPackages": 160,
+    "focusedPassed": 4010,
+    "adjacentPassed": 4373,
+    "testFailures": 0,
+    "testSkips": 0,
+    "guardCoveragePercent": 100,
+    "blackFiles": 1885,
+    "mypyFiles": 608,
+    "banditFindings": 0,
+    "banditLines": 206613,
+    "qualityFiles": 947,
+    "qualityExistingFindings": 725,
+    "qualityNewFindings": 0,
+    "runtimeAuditPackages": 105,
+    "runtimeAuditVulnerabilities": 0,
+    "runtimeAuditSkips": 0,
+    "normalRequirementsAuditRequiredInCI": true
+  },
   "delivery": {
-    "status": "blocked",
+    "status": "authorized-local-verification-complete",
     "queuePosition": 9,
     "coordinatorSessionId": "6d71fd26-57c2-48c0-abc8-607af98f75d0",
-    "authorizedMainSha": null,
-    "blockedTaskIds": [
-      "T031",
-      "T032",
-      "T033",
+    "authorizedMainSha": "bceba98ff1177ab32ed65ef90279baccba85a47f",
+    "blockedTaskIds": [],
+    "pendingTaskIds": [
       "T034",
       "T035",
       "T036",
       "T037",
       "T038"
     ],
-    "reason": "The coordinator must supply the full verified stable main SHA before remote delivery."
+    "reason": "The coordinator released publication after the prerequisite protected merge and 919 exact-main tests. All remote checks and protection remain required."
   },
   "completionRecord": {
     "method": "direct-feature-context-update",
