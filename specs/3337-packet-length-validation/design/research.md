@@ -126,5 +126,6 @@ Measure the three actual AST regions separately without a new helper file.
 Require nonzero statements and at least 80% coverage in each region.
 The repository's global coverage threshold remains unchanged and required in CI.
 The supplied final measurements confirmed shared 11/11, wireless bounded 12/12, and collector 8/8 statements, each at 100%.
-T030 remains pending for the parent after cross-artifact analysis.
+Cross-artifact analysis is complete.
+T030 is complete in local implementation commit `e74a996777d9fffb163c1be904f497132cbb7081`.
 T031 through T038 remain blocked by coordinator queue position 9.

@@ -23,7 +23,8 @@ The parent owns source, tests, release notes, gate execution, and final gate cou
 Implementation is in progress.
 The parent supplied verified final local results for T001 through T029.
 Checked tasks record that supplied evidence, not gate execution by the documentation owner.
-T030 remains unchecked while the parent completes cross-artifact analysis before the commit.
+Cross-artifact analysis and T030 are complete.
+The verified local implementation commit is `e74a996777d9fffb163c1be904f497132cbb7081`.
 T031 through T038 remain blocked.
 The normal requirements audit failed before scanning.
 The documented local audit alternative completed without known vulnerabilities in the audited packages.
@@ -39,7 +40,7 @@ The optional Git commit hooks remain skipped.
 Do not repeat their failed command attempts.
 Update implementation progress directly in the feature's `.spec-context.json`.
 Record verified local validation with the documented audit alternative.
-Keep implementation in progress, the commit pending, and delivery blocked.
+Keep implementation in progress, record the local implementation commit, and keep delivery blocked.
 Do not claim that the companion command executed.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -262,7 +263,7 @@ The three existing definitions remain unchanged apart from necessary imports and
 - [X] T027 [P] Add one `### Fixed` heading and one bullet to `changelog.d/issue-3337-packet-length-validation.md`. Link issue #3337 in that bullet. (delivered: changelog.d/issue-3337-packet-length-validation.md)
 - [X] T028 Record exact local commands, results, counts, and blockers in `specs/3337-packet-length-validation/tasks.md` and `.spec-context.json`. Do not mark unmeasured work complete. (delivered: specs/3337-packet-length-validation/tasks.md)
 - [X] T029 Verify the complete bounded manifest against `specs/3337-packet-length-validation/plan.md`. Require six production literal changes, two appended test functions, and exact restoration of the large test file. (delivered: specs/3337-packet-length-validation/plan.md)
-- [ ] T030 After the parent's cross-artifact analysis, commit only the approved manifest from `specs/3337-packet-length-validation/plan.md`. Use a Conventional Commit and the exact Copilot co-author trailer below.
+- [X] T030 After cross-artifact analysis, commit only the approved manifest. Commit `e74a996777d9fffb163c1be904f497132cbb7081` contains the repair and the required Copilot trailer. (delivered: e74a996777d9fffb163c1be904f497132cbb7081)
 
 T019 measures these existing regions separately:
 
@@ -336,7 +337,8 @@ The final test file contains five functions.
 The large packet-capture test file matches the base exactly.
 No other production declaration, wrapper, or class was added.
 All named senders, OpenAPI artifacts, dependencies, README, shared configuration, and baselines remain unchanged.
-Cross-artifact analysis and T030 remain pending for the parent.
+Cross-artifact analysis and T030 are complete.
+The verified local implementation commit is `e74a996777d9fffb163c1be904f497132cbb7081`.
 
 T029 includes committed branch changes, staged changes, unstaged changes, and feature-owned untracked files.
 Verify the two appended functions, five total definitions, permitted imports and docstring, and unchanged production declarations.
@@ -609,9 +611,9 @@ Four tasks carry `[P]`: T002, T010, T013, and T027.
 Eight delivery tasks, T031 through T038, remain blocked.
 All 38 tasks retain their sequential IDs and exact file paths.
 T001 through T029 are complete from the supplied verified local evidence.
-T030 remains unchecked pending the parent's cross-artifact analysis and commit.
+T030 is complete in local implementation commit `e74a996777d9fffb163c1be904f497132cbb7081`.
 T031 through T038 remain blocked and unchecked.
-There are 29 completed tasks and nine remaining tasks.
+There are 30 completed tasks and eight remaining tasks.
 The normal requirements audit remains failed before scanning.
 The documented local audit alternative does not audit the Git-pinned package.
 Story tasks also carry their required label.

@@ -64,7 +64,8 @@ No substantive requirement remains unresolved.
 The existing specification, plan, and tasks define the bounded correction.
 The parent supplied verified final red and green tests, coverage, and configured local gate results.
 T001 through T029 are complete from that supplied evidence.
-Cross-artifact analysis and T030 remain pending.
+Cross-artifact analysis is complete.
+T030 is complete in local implementation commit `e74a996777d9fffb163c1be904f497132cbb7081`.
 T031 through T038 remain blocked.
 The normal requirements audit failed before scanning, and its documented local alternative left the Git pin unaudited.
 
@@ -266,6 +267,6 @@ The app workspace excludes branch-creation and commit hooks.
 Skip unavailable PowerShell and companion commands and optional Git commit hooks.
 Update only this feature's `.spec-context.json` directly.
 Keep implementation in progress and record supplied verified local validation with the documented audit alternative.
-Keep the commit pending and delivery blocked.
+Record the verified local implementation commit and keep delivery blocked.
 Shared feature selection and extension configuration remain unchanged.
 Future specification commands must use the explicit directory `specs/3337-packet-length-validation/`.

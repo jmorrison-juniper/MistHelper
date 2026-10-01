@@ -4,15 +4,16 @@
   "branch": "jmorrison-juniper-packet-length-validation",
   "currentStep": "implement",
   "status": "in-progress",
-  "implementationStatus": "local-validated-awaiting-commit",
+  "implementationStatus": "local-committed-awaiting-coordinator",
   "localValidationStatus": "verified-with-local-audit-alternative",
-  "commitStatus": "pending",
+  "commitStatus": "committed",
+  "localImplementationCommit": "e74a996777d9fffb163c1be904f497132cbb7081",
   "crossArtifactAnalysisStatus": "verified-after-layout-and-evidence-corrections",
   "tasksPath": "specs/3337-packet-length-validation/tasks.md",
   "taskCounts": {
     "total": 38,
-    "completed": 29,
-    "remaining": 9,
+    "completed": 30,
+    "remaining": 8,
     "perStory": {
       "US1": 8,
       "US2": 3,
@@ -191,6 +192,14 @@
       "kind": "supplied-evidence-recorded",
       "by": "copilot",
       "at": "2026-10-01T00:06:28.648Z"
+    },
+    {
+      "step": "implement",
+      "substep": "local-commit",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-30T19:33:48-05:00",
+      "commit": "e74a996777d9fffb163c1be904f497132cbb7081"
     }
   ]
 }
