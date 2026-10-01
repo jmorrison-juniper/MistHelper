@@ -43,6 +43,17 @@ def test_normalize_rows_sorts_and_sanitizes_values() -> None:
     assert rows[0].site_name == "HQ"  # WHY: site context must be present in every export row.
 
 
+def test_normalize_rows_reads_live_distinct_key_shape() -> None:
+    """Assert that live org count rows can key the value by the selected field."""
+    raw_rows = [  # WHY: mirror the live org payload quoted by issue 3691.
+        {"family": "Unknown", "count": 7},
+        {"family": "Phone/Tablet/Wearable", "count": 6},
+    ]
+    rows = FingerprintCensusModel.normalize_rows(raw_rows, "site-1", "HQ", "family")  # WHY: run transform.
+    assert [row.value for row in rows] == ["Unknown", "Phone/Tablet/Wearable"]  # WHY: selected key is read.
+    assert [row.count for row in rows] == [7, 6]  # WHY: live counts remain intact.
+
+
 def test_top_rows_limits_console_output() -> None:
     """Assert that the console table never exceeds the display limit."""
     raw_rows = [{"property": f"value-{index}", "count": index} for index in range(30)]  # WHY: exceed limit.

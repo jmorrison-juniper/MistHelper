@@ -1,5 +1,20 @@
 # Research: Client Device Fingerprint Census
 
+## Decision: Prefer the live organization fingerprint count path
+
+The live Mist cloud answers `200` for `GET /api/v1/orgs/{org_id}/insights/fingerprints/count`.
+The live Mist cloud answered the same seven family rows with and without
+`site_id=cf36153a-97bb-4974-8f8f-e9cc25d64d83` on 2026-10-01. The top rows were
+`Unknown=7`, `Phone/Tablet/Wearable=6`, `Access Point=1`,
+`Audio/Imaging/Video Equipment=1`, and `Gaming Console=1`. This shows that the
+current live endpoint accepts the site filter but does not honor it for that org.
+
+**Rationale**: Menu 289 must stop the live HTTP 404 and must send the selected
+site filter when the cloud starts to honor it.
+
+**Alternatives considered**: Use only the documented site path. Rejected because
+the live cloud returns HTTP 404 for that path.
+
 ## Decision: Use the site-scoped fingerprint count endpoint
 
 The OpenAPI operation `countOrgClientFingerprints` is `GET /api/v1/sites/{site_id}/insights/fingerprints/count`. Its tag is `Orgs NAC Fingerprints`, but its path parameter is `site_id`. Query parameters are `distinct`, `start`, `end`, `duration`, and `limit`. The `distinct` schema is `fingerprints_count_distinct`.

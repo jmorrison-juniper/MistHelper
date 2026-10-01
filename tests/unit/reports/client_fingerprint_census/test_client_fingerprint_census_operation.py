@@ -19,9 +19,10 @@ class _FakeClient:
     rows: list[dict[str, object]] = []  # WHY: each test controls the API response rows.
     calls: list[tuple[str, str]] = []  # WHY: tests assert that the API call happened once.
 
-    def __init__(self, session: object) -> None:
+    def __init__(self, session: object, org_id: str) -> None:
         """Store the fake session for completeness."""
         self.session = session  # WHY: mirror the real client constructor.
+        self.org_id = org_id  # WHY: mirror the real client constructor.
 
     def count(self, site_id: str, distinct: str) -> list[dict[str, object]]:
         """Return the configured fake API rows."""
@@ -45,6 +46,7 @@ def test_run_prompts_calls_exports_and_prints_top_20(monkeypatch: MonkeyPatch, c
     monkeypatch.setattr(ClientFingerprintCensus, "_prompt_distinct", staticmethod(lambda: "family"))  # WHY.
     monkeypatch.setattr(operation_module, "ClientFingerprintCensusClient", _FakeClient)  # WHY: no network.
     monkeypatch.setattr(operation_module.SourceDependencyResolver, "apisession", object())  # WHY: fake session.
+    monkeypatch.setattr(operation_module.SourceDependencyResolver, "org_id", "org-1")  # WHY: fake org context.
     monkeypatch.setattr(  # WHY: replace the shared exporter with a capture fake.
         operation_module.SourceDependencyResolver.DataExporter,
         "write_with_format_selection",
@@ -82,6 +84,7 @@ def test_run_empty_response_writes_header_only_and_message(
     monkeypatch.setattr(ClientFingerprintCensus, "_prompt_distinct", staticmethod(lambda: "os_type"))  # WHY.
     monkeypatch.setattr(operation_module, "ClientFingerprintCensusClient", _FakeClient)  # WHY: no network.
     monkeypatch.setattr(operation_module.SourceDependencyResolver, "apisession", object())  # WHY: fake session.
+    monkeypatch.setattr(operation_module.SourceDependencyResolver, "org_id", "org-1")  # WHY: fake org context.
     monkeypatch.setattr(  # WHY: replace the shared exporter with a capture fake.
         operation_module.SourceDependencyResolver.DataExporter,
         "write_with_format_selection",

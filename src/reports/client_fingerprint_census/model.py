@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: allow forward-compatible annotations 
 
 import logging  # WHY: trace validation and normalization decisions for the operator.
 from dataclasses import dataclass, fields  # WHY: keep export column order in one declared type.
-from typing import Final, TypedDict  # WHY: define stable constants and response row shapes.
+from typing import Final  # WHY: define stable constants and response row shapes.
 
 logger = logging.getLogger(__name__)  # WHY: name this module in the shared log stream.
 
@@ -16,11 +16,7 @@ EXPORT_ENDPOINT_NAME: Final[str] = "countOrgClientFingerprints"  # WHY: match th
 EMPTY_CENSUS_MESSAGE: Final[str] = "The client fingerprint census is empty for this site."  # WHY: clear empty state.
 
 
-class RawFingerprintCount(TypedDict, total=False):
-    """Raw count row returned by the Mist count endpoint."""
-
-    count: object  # WHY: the SDK returns JSON values, so validation must coerce the count.
-    property: object  # WHY: the API names the grouped value as property.
+RawFingerprintCount = dict[str, object]  # WHY: live rows use the selected distinct field as the value key.
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +86,8 @@ class FingerprintCensusModel:
         distinct: str,
     ) -> FingerprintCensusRow:
         """Return one normalized census row."""
-        value = FingerprintCensusModel._read_value(raw_row.get("property"))  # WHY: API field can be absent.
+        raw_value = raw_row.get("property", raw_row.get(distinct))  # WHY: live org rows key by distinct field.
+        value = FingerprintCensusModel._read_value(raw_value)  # WHY: API field can be absent.
         count = FingerprintCensusModel._read_count(raw_row.get("count"))  # WHY: API value must become an integer.
         return FingerprintCensusRow(site_id, site_name, distinct, value, count)  # WHY: dataclass fixes schema.
 
