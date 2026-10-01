@@ -157,6 +157,95 @@ pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\unit --split tests
 pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\contract tests\guardrails tests\integration --split tests\contract\upgrade_portal --split tests\integration\upgrade_portal
 ```
 
+Run all applicable local checks before the local commit.
+Commit all intended tests and relevant inputs.
+Require clean relevant working-tree content before the required check.
+If relevant staged, unstaged, or untracked changes remain, stop.
+Run each command separately.
+If any command fails, stop before the next command.
+
+**Intended base for the required check:**
+
+```powershell
+$BASE_REF = "main" # Use main only when it is the intended pull-request base.
+rtk proxy git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+rtk proxy git rev-parse --verify "origin/${BASE_REF}^{commit}"
+```
+
+Set `BASE_REF` to the intended base branch.
+Do not substitute another resolving reference.
+The fetch destination, commit resolution, and comparison must use the same base.
+Use the activated worktree environment for the commands below.
+
+**Required input preflight:**
+
+```powershell
+rtk proxy python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+```
+
+Run this preflight before either analyzer command.
+It reads all six required files and checks all three active guide procedures.
+It rejects missing required files, including repository settings.
+The analyzer alone uses defaults for missing or empty settings.
+Unreadable or malformed settings cause analyzer errors.
+Gate mode requires a valid baseline, even at empty scope.
+Zero counts do not prove required-input readability.
+
+**Required check after the local commit and before push:**
+
+```powershell
+rtk proxy test-quality-analyzer --gate `
+  --config .github/test-quality-config.toml `
+  --baseline .github/test-quality-baseline.json `
+  --changed-from "origin/$BASE_REF" `
+  --full-gate-path .github/workflows/ci.yml `
+  --full-gate-path requirements-dev.txt
+```
+
+`--changed-from` compares the intended base with `HEAD`, using two revision endpoints.
+The installed comparison is `git diff --name-only --relative -z REVISION HEAD`.
+It does not use a merge-base or triple-dot comparison.
+Staged, unstaged, and untracked-only paths do not enter selection.
+The analyzer then reads selected files from the current working tree.
+A selected dirty file can change findings without changing `HEAD`.
+Recognized filenames are `test_*.py` and `*_test.py`.
+Deleted tests have no existing file to analyze.
+For renames, only existing recognized paths from the committed difference enter analysis.
+Git rename detection can change which names enter that difference.
+
+If the committed difference names a trigger below, the analyzer scans every test root.
+
+| Trigger path | Source |
+| - | - |
+| `.github/test-quality-config.toml` | Automatic settings trigger |
+| `.github/test-quality-baseline.json` | Automatic baseline trigger |
+| `.github/workflows/ci.yml` | Explicit CI `--full-gate-path` |
+| `requirements-dev.txt` | Explicit CI `--full-gate-path` |
+
+**Full-suite check for push or manual CI:**
+
+```powershell
+rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
+```
+
+Push and manual CI runs scan every discovered test root.
+This complete local equivalent has no changed-scope controls.
+Use the same required-input preflight before it.
+
+`gate_scope: N files checked, M findings checked` contains only those two counts.
+`N` counts discovered files before parsing and exclusions.
+`M` counts findings after rule filters, not only new findings.
+The separate `gate: K new findings vs baseline` line counts new findings.
+Accepted baseline findings can make `M` positive while `K` remains zero.
+Parsed counts and selection reasons appear in stderr logging.
+JSON reports list `analyzed_files` when a report exists.
+Do not equate discovered, parsed, and analyzed counts.
+A valid empty scope prints zero gate counts and writes no report.
+Stop on an unknown base, unreadable input, failed command, or skipped check.
+Require exit 0 and zero new findings before push.
+Do not rewrite the baseline to hide new findings.
+If the candidate, checked content, or fetched base changes, repeat the affected checks.
+
 Build and run the container on your own machine. Podman builds the same
 image that the registry builds.
 
