@@ -87,7 +87,7 @@ Run the strict runtime dependency audit without changing dependency constraints.
 
 ## Delivery
 
-Create one local Conventional Commits commit with the required co-author trailer.
+Create local Conventional Commits commits with the required co-author trailer.
 Report the exact files, commit, red and green evidence, measured SSH layer, and gate results.
 Wait for the parent grant before a push or pull request.
 After the grant, rebase onto that exact `main` revision and repeat the local gates.

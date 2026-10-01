@@ -107,13 +107,14 @@ class SessionEnvironmentHarness:
         return result
 
     def source(self, mode: str, expected: dict[str, str]) -> subprocess.CompletedProcess[str]:
-        """Pass values as input data, never as shell command text."""
+        """Require a readable session file and pass values as input data."""
         logging.info("Reading one fixture session file through a fresh shell")
         result = subprocess.run(
             [
                 str(BASH_PATH),
                 "-c",
-                'set -a; source "$1"; set +a; exec "$2" -m ' 'tests.unit.container.session_database.harness "$3" "$4"',
+                'set -a; source "$1" || exit 1; set +a; exec "$2" -m '
+                'tests.unit.container.session_database.harness "$3" "$4"',
                 "session-database-contract",
                 str(self.target),
                 sys.executable,
@@ -124,7 +125,6 @@ class SessionEnvironmentHarness:
             input=json.dumps(expected),
             cwd=self.ROOT,
             capture_output=True,
-            text=True,
             encoding="utf-8",
             timeout=self.timeout,
             check=False,
