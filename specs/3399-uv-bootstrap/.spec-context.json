@@ -1,0 +1,543 @@
+{
+  "featureDirectory": "specs/3399-uv-bootstrap",
+  "issueNumber": 3399,
+  "issueUrl": "https://github.com/jmorrison-juniper/MistHelper/issues/3399",
+  "claimOwnerSessionId": "6d71fd26-57c2-48c0-abc8-607af98f75d0",
+  "branch": "jmorrison-juniper-unclaimed-issue-repairs",
+  "currentStep": "implement",
+  "status": "implementing",
+  "artifacts": {
+    "specification": "spec.md",
+    "requirementsChecklist": "checklists/requirements.md",
+    "implementationPlan": "plan.md",
+    "research": "research.md",
+    "dataModel": "data-model.md",
+    "validationGuide": "quickstart.md",
+    "installationContract": "contracts/bootstrap-installation.md",
+    "taskList": "tasks.md"
+  },
+  "userConstraints": {
+    "installerDiscovery": "shutil.which(\"uv\")",
+    "specificationOnly": false,
+    "branchChangesAllowed": false,
+    "newIssuesAllowed": false,
+    "productionNetworkOperationsAllowed": false,
+    "dependencyChangesAllowed": false,
+    "sharedChangelogEditsAllowed": false
+  },
+  "deferredImplementationArtifacts": [
+    "Focused offline unit tests",
+    "Directly related bootstrap documentation",
+    "One unique issue #3399 release fragment"
+  ],
+  "planning": {
+    "date": "2026-09-30",
+    "planningOnly": true,
+    "offlineAnalysis": true,
+    "unresolvedDesignChoices": [],
+    "plannedPaths": {
+      "implementation": [
+        "scripts/bootstrap_worktree.py"
+      ],
+      "tests": [
+        "tests/unit/bootstrap/test_pip_index_probe.py",
+        "tests/unit/scripts/test_browser_download_certificates.py"
+      ],
+      "documentation": [
+        "documentation/development-setup.md",
+        "README.md",
+        "changelog.d/issue-3399-uv-bootstrap.md"
+      ],
+      "unchangedRegressionTests": [
+        "tests/unit/bootstrap/test_github_account_checker.py",
+        "tests/unit/scripts/test_browser_driver_bootstrap.py"
+      ]
+    },
+    "setup": {
+      "script": ".specify/scripts/powershell/setup-plan.ps1",
+      "result": "command_unavailable",
+      "commandExitCode": 127,
+      "pathResolution": "existing_feature_json_and_current_branch",
+      "template": ".specify/templates/plan-template.md",
+      "planResult": "completed_locally"
+    },
+    "agentContext": {
+      "script": ".specify/scripts/powershell/update-agent-context.ps1",
+      "agentType": "copilot",
+      "result": "command_unavailable",
+      "commandExitCode": 127,
+      "contextScope": "issue_only",
+      "language": "Python 3.13 or newer",
+      "installer": "Optional uv with absent-only pip selection",
+      "tests": "Offline pytest with simulated external actions",
+      "sharedAgentFilesChanged": false
+    },
+    "checks": {
+      "initialConstitution": "passed",
+      "postDesignConstitution": "passed",
+      "localArtifactLinks": {
+        "count": 14,
+        "result": "passed"
+      },
+      "protectedFileHashes": {
+        "count": 12,
+        "result": "unchanged"
+      },
+      "runtimeTestsExecuted": false,
+      "dependencyInstallExecuted": false,
+      "tasksGenerated": false
+    }
+  },
+  "taskGeneration": {
+    "date": "2026-09-30",
+    "currentDeliverable": "issue_local_tasks_and_context_only",
+    "implementationAuthorized": false,
+    "parentEnvironmentReleased": false,
+    "environmentAccessed": false,
+    "runtimeTestsExecuted": false,
+    "dependencyInstallExecuted": false,
+    "branchChanged": false,
+    "issuesCreated": false,
+    "committed": false,
+    "pushed": false,
+    "taskCount": 33,
+    "storyTaskCounts": {
+      "US1": 9,
+      "US2": 8,
+      "US3": 5,
+      "US4": 4
+    },
+    "sharedTaskCounts": {
+      "setup": 2,
+      "foundation": 1,
+      "polish": 4
+    },
+    "parallelTaskIds": [
+      "T004",
+      "T005",
+      "T030",
+      "T031"
+    ],
+    "parallelWritePairs": [
+      [
+        "T004",
+        "T005"
+      ],
+      [
+        "T030",
+        "T031"
+      ]
+    ],
+    "executionOrder": [
+      "setup",
+      "foundation",
+      "US1",
+      "US2",
+      "US3",
+      "US4",
+      "polish"
+    ],
+    "logicalStoryDependencies": {
+      "US1": [],
+      "US2": [
+        "US1"
+      ],
+      "US3": [
+        "US1"
+      ],
+      "US4": [
+        "US1",
+        "US2",
+        "US3"
+      ]
+    },
+    "scopeAdjustment": {
+      "supersedes": "plan.md README documentation edit only",
+      "reason": "README.md:238 already links to documentation/development-setup.md.",
+      "setupPage": "documentation/development-setup.md",
+      "readmeEditRequired": false,
+      "laterDependencyConcern": 3398,
+      "podmanComposeAllowed": false,
+      "requirementFileEditsAllowed": false
+    },
+    "implementationFileManifest": [
+      "scripts/bootstrap_worktree.py",
+      "tests/unit/bootstrap/test_pip_index_probe.py",
+      "tests/unit/scripts/test_browser_download_certificates.py",
+      "documentation/development-setup.md",
+      "changelog.d/issue-3399-uv-bootstrap.md"
+    ],
+    "unchangedRegressionTests": [
+      "tests/unit/bootstrap/test_github_account_checker.py",
+      "tests/unit/scripts/test_browser_driver_bootstrap.py"
+    ],
+    "taskGenerationWrites": [
+      "specs/3399-uv-bootstrap/tasks.md",
+      "specs/3399-uv-bootstrap/quickstart.md",
+      "specs/3399-uv-bootstrap/.spec-context.json"
+    ],
+    "setup": {
+      "command": "pwsh -NoProfile -File .specify/scripts/powershell/setup-tasks.ps1 -Json",
+      "result": "command_unavailable",
+      "wrapperExitCode": 1,
+      "missingExecutable": "pwsh",
+      "pathResolution": "read_only_existing_feature_json",
+      "template": ".specify/templates/tasks-template.md",
+      "absolutePathsValidated": true,
+      "availableDocs": [
+        "research.md",
+        "data-model.md",
+        "contracts/",
+        "quickstart.md"
+      ]
+    },
+    "validationPlan": {
+      "interpreter": ".venv/bin/python",
+      "minimumPython": "3.13",
+      "deferredUntilParentRelease": true,
+      "guide": "quickstart.md",
+      "testQualityModule": "misthelper_devtools.test_quality_analyzer",
+      "testQualityConfig": ".github/test-quality-config.toml",
+      "testQualityBaseline": ".github/test-quality-baseline.json",
+      "changedBehaviorCoverageMinimumPercent": 80,
+      "configuredCoverageReportMinimumPercent": 90,
+      "baselineEditsAllowed": false
+    },
+    "startingHead": "415b2f83da1c91f680be5f06e17fb30ee1ce00f3",
+    "preexistingTrackedChanges": [
+      ".specify/feature.json"
+    ],
+    "protectedFileHashes": {
+      "scripts/bootstrap_worktree.py": "2d4955604006c9064fd57d2f0a8909f8d73a6cb7f6dff8ef6a36bfd59a555038",
+      "scripts/bootstrap_worktree.ps1": "c4462c0a6b445b0eaa45474efb694ee9d34aa2c093ff50371bb41493e50fa100",
+      "tests/unit/bootstrap/test_pip_index_probe.py": "390b3a65232d5c4d96be7d1b76210a24f36a7012dde8b0de2a1d10e7f9c95c2b",
+      "tests/unit/bootstrap/test_github_account_checker.py": "0edd24a0fdc6a2e643ae6cd3d566b84839d6ce5c5955c5cff19dac7b5a6e6446",
+      "tests/unit/scripts/test_browser_download_certificates.py": "95d59f295806fcd5d88ad577d4a8d2f30bdcbd4d9304fe7478c19985e3a135b1",
+      "tests/unit/scripts/test_browser_driver_bootstrap.py": "2ca64f339cf93370ee892ade3a92ecf43e2e7998e19fe03b16b686b58fd056cc",
+      "documentation/development-setup.md": "cb09953f2c93a469d0e7b807c2cab8d9797aab60ad02a44b22ac9c2420b93fe4",
+      "README.md": "60e88a3b7ef13ac875bf1a3591dab1485739588d38fa057330ddba13c5eff3ca",
+      "requirements.txt": "848301049195163bb029b66e486efdea9ec2da71126a1c64219978613dee8d72",
+      "requirements-dev.txt": "3b3904e11910278b1547cd2d4ef62848ac5bea872c96cc4e0d3f27888373beb4",
+      "pyproject.toml": "c6761f814c02355f771b7241c03d168efe8fbf62c98783c78294bb327e4ffb5a",
+      "CHANGELOG.md": "cf06bdf1f6a739b602dae670da8af54ed7bab1e69248c1989a5cceacdfda2bc6",
+      ".specify/feature.json": "755f0bc17dc9fc05cd78246941a6de51a6c3542d2febdf28d80f63c8ce5230b8",
+      "specs/3399-uv-bootstrap/spec.md": "3d4c8668a179f15830f63c1e2fc575885858973c118d35061cb2c02eb1743e5b",
+      "specs/3399-uv-bootstrap/plan.md": "52917224873d3a288f626d177dbc4b08876e6ed84402354d28ab09ddd2d10564",
+      "specs/3399-uv-bootstrap/research.md": "11372281c3d3ea7a5df261c3c7feba34c313ec3017137674903bb5107b6dda8d",
+      "specs/3399-uv-bootstrap/data-model.md": "ee299bbc8247294887eb1b572c60afb461053da13006e9e9234c54a46c825eba",
+      "specs/3399-uv-bootstrap/contracts/bootstrap-installation.md": "b55465e599b9c9246d84e14da1d1182ad78ac1c7f45d851b6647fecf9930efd9",
+      "specs/3399-uv-bootstrap/checklists/requirements.md": "75b084e76db85e92d36235648e710b001ec9bfe8cc3577b5042ceb06eaf5a6d4"
+    },
+    "artifactChecks": {
+      "taskFormat": {
+        "result": "passed",
+        "count": 33,
+        "allTasksUnchecked": true,
+        "sequentialIds": true,
+        "storyLabels": true,
+        "exactPaths": true,
+        "parallelPairsUseDifferentFiles": true
+      },
+      "localLinks": {
+        "result": "passed",
+        "count": 11
+      },
+      "shellCommandSyntax": {
+        "result": "passed",
+        "bashBlocksParsed": 14,
+        "runtimeCommandsExecuted": false
+      },
+      "protectedFileHashes": {
+        "result": "unchanged",
+        "count": 19,
+        "branchUnchanged": true,
+        "headUnchanged": true
+      },
+      "proseReview": {
+        "result": "passed",
+        "guide": "documentation/ASD-STE100_writing-guide.md",
+        "asciiOnly": true,
+        "sentencesOver25Words": 0,
+        "trailingWhitespace": 0
+      },
+      "hookDispatch": {
+        "result": "mandatory_command_unavailable",
+        "mandatoryInvocationAttempted": true,
+        "mandatoryCommandExitCode": 127,
+        "extensionExecutedSuccessfully": false,
+        "declaredStateRecordedLocally": true
+      }
+    }
+  },
+  "implementation": {
+    "date": "2026-09-30",
+    "implementationAuthorized": true,
+    "parentEnvironmentReleased": true,
+    "authorization": "The caller authorized implementation in this worktree and confirmed completed dependency restoration.",
+    "interpreter": ".venv/bin/python",
+    "pythonVersion": "3.13.13",
+    "dependencyInstallExecuted": false,
+    "startingBranch": "jmorrison-juniper-unclaimed-issue-repairs",
+    "startingHead": "415b2f83da1c91f680be5f06e17fb30ee1ce00f3",
+    "preexistingTrackedChanges": [
+      ".specify/feature.json"
+    ],
+    "prerequisites": {
+      "command": "rtk proxy pwsh -NoProfile -File .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks",
+      "exitCode": 1,
+      "result": "pwsh_unavailable",
+      "replacement": "Read-only Python validation of absolute feature paths, required files, and available documents.",
+      "checklistItems": 16,
+      "incompleteChecklistItems": 0
+    },
+    "baseline": {
+      "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest --confcutdir=tests/unit -o addopts= -p no:cacheprovider tests/unit/bootstrap/test_pip_index_probe.py tests/unit/bootstrap/test_github_account_checker.py tests/unit/scripts/test_browser_download_certificates.py tests/unit/scripts/test_browser_driver_bootstrap.py -q",
+      "exitCode": 0,
+      "passed": 48,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 0.09
+    },
+    "protectedFiles": {
+      "hashesReference": "taskGeneration.protectedFileHashes",
+      "verifiedAtStart": [
+        "README.md",
+        "requirements.txt",
+        "requirements-dev.txt",
+        "pyproject.toml",
+        "CHANGELOG.md",
+        "scripts/bootstrap_worktree.ps1",
+        ".specify/feature.json",
+        "tests/unit/bootstrap/test_github_account_checker.py",
+        "tests/unit/scripts/test_browser_driver_bootstrap.py"
+      ],
+      "readmeReferenceLine": 238,
+      "readmeEditAllowed": false
+    },
+    "protectedSourceSnapshot": {
+      "gitObject": "415b2f83da1c91f680be5f06e17fb30ee1ce00f3:scripts/bootstrap_worktree.py",
+      "methodHashes": {
+        "WorktreeBootstrapper.__init__": "487615b4e6dce65ace9eb190b8d77664753fdccb67e95ed72540d3272118bda3",
+        "WorktreeBootstrapper.interpreter": "4b8aad7dcf9a3e54411f111b516f455850d5df40fcbadf1e63404aae026bbaf5",
+        "WorktreeBootstrapper.create_environment": "1be47c921163fad5a98c4057b93896b5510d9aeb1d0ca3b309b6e92c6682df8f",
+        "WorktreeBootstrapper.install_browser_driver": "2ee8f098698c66b2dd8509845cd4c25bb9aab6a8a4cd1cc992c5c75950193db2",
+        "WorktreeBootstrapper.browser_repair_command": "9792af68c948d357d9e78561d10897c1845c950a095a2e3b28c78e04d0319d7f",
+        "WorktreeBootstrapper.check_environment_health": "b37ad2cbcc81052cab59d40510587ea4238401c6381e096e360321239ed30991",
+        "WorktreeBootstrapper._browser_environment": "71297d2e27b6bd7aca2e1b98499798c2fb7779083cd2e2f3391099eccd3b4256",
+        "GitHubAccountChecker.__init__": "b2bc4aabaed047fedebcfb189bd139e549fe10ee6c3abf9e85b0c6024d146eb3",
+        "GitHubAccountChecker.configure_git_username": "c72acf24a828e1f07cb1d0f686225720352e61023bd81834d66dc0f469534b72",
+        "GitHubAccountChecker.read_active_account": "d599b1c3465d6e9117d3156d7b3cdbefb34f5ae0bec715f8d2b098f1e7b7915c",
+        "GitHubAccountChecker.warn_on_mismatch": "7e67ef4ec8cb58eb54d91811924889bfd32b7a9352151700443b90728f97fbba",
+        "GitHubAccountChecker._report_wrong_account": "b62f023b794c2d9a790b9a47d28891925caa42bfd095997d39d026aee6c1a298"
+      }
+    },
+    "validation": {
+      "recoveredByParent": true,
+      "agentFailure": "Native model HTTP response ended unexpectedly after five retries. Partial edits were retained.",
+      "focusedTests": {"files": 4, "passed": 155, "failed": 0, "skipped": 0},
+      "coverage": {"statements": 341, "missedStatements": 0, "branches": 72, "percentage": 99.76},
+      "uvTransportBounds": {"redCases": 1, "greenSuite": 154, "retries": 1, "timeoutSeconds": 15},
+      "compile": {"files": 4, "result": "passed"},
+      "ruff": {"scope": "configured repository and three changed Python files", "result": "passed"},
+      "black": {"files": 1875, "result": "passed"},
+      "mypy": {"configuredSourceFiles": 608, "explicitBootstrapFiles": 1, "result": "passed"},
+      "bandit": {
+        "configuredRepository": "passed after removal of the temporary baseline source",
+        "bareBootstrap": "Two unchanged baseline B603 findings in protected health and account methods.",
+        "newFindings": 0
+      },
+      "testQuality": {"neighborFiles": 10, "existingFindings": 2, "newFindings": 0, "parseErrors": 0},
+      "protectedMethods": {"checked": 12, "changed": 0},
+      "sourceSymbols": {"lost": 0, "added": 0},
+      "sharedFeatureState": "Restored to the original tracked HEAD. No shared feature state will be committed.",
+      "ste": {"files": 5, "result": "passed", "dictionaryCapability": "unavailable"},
+      "macosColdBootstrap": "The host ensurepip copy abort is pre-existing. The setup page names the uv venv --seed workaround.",
+      "liveInstallPerformance": "Not measured. Offline tests do not prove OneDrive or live certificate behavior."
+    },
+    "designCorrection": {
+      "reference": "plan.md#implementation-correction-changed-function-limits",
+      "authorizedBy": "The caller's explicit narrow-correction instruction.",
+      "source": "One nested WorktreeBootstrapper.InstallationPolicy class with at most five methods.",
+      "sourceReason": "Keep source mapping, configuration controls, logs, and failure handling readable within changed-function limits.",
+      "tests": "Qualified annotations name the existing nested recorder. No module-level alias is added.",
+      "structure": "The nested policy replaces the removed private _install_file method. The bootstrapper child count does not increase.",
+      "privacy": "Launch failures log sanitized traceback frames without raw exception values or chained credentials.",
+      "readme": "One behavior sentence was added after the Maps ownership reservation ended.",
+      "newSourceModules": 0,
+      "newTopLevelSourceClasses": 0,
+      "protectedMethodsChanged": false
+    },
+    "storyEvidence": {
+      "US4": {
+        "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest --confcutdir=tests/unit -o addopts= -p no:cacheprovider tests/unit/bootstrap/test_pip_index_probe.py -k 'TestUvBootstrap and (test_platform_paths or test_missing_files or test_environment_options or test_successful_main or test_browser_isolation or test_nonblocking_checks)' -q",
+        "green": {
+          "exitCode": 0,
+          "passed": 48,
+          "deselected": 83,
+          "durationSeconds": 1.58
+        },
+        "unchangedRegression": {
+          "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest --confcutdir=tests/unit -o addopts= -p no:cacheprovider tests/unit/bootstrap/test_github_account_checker.py tests/unit/scripts/test_browser_driver_bootstrap.py -q",
+          "exitCode": 0,
+          "passed": 12,
+          "skipped": 0,
+          "durationSeconds": 1.58
+        }
+      },
+      "US3": {
+        "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest --confcutdir=tests/unit -o addopts= -p no:cacheprovider tests/unit/bootstrap/test_pip_index_probe.py -k 'TestUvBootstrap and TestFailures' --tb=no -q",
+        "red": {
+          "exitCode": 1,
+          "failed": 4,
+          "passed": 10,
+          "deselected": 69,
+          "durationSeconds": 0.57,
+          "failures": [
+            "contextual uv launch failures",
+            "guaranteed launch-attempt durations",
+            "safe launch-error reports"
+          ],
+          "externalActionsExecuted": false,
+          "relatedSourceEditedBeforeRed": false
+        },
+        "green": {
+          "exitCode": 0,
+          "passed": 14,
+          "deselected": 69,
+          "durationSeconds": 0.16
+        },
+        "focusedRegression": {
+          "exitCode": 0,
+          "passed": 106,
+          "failed": 0,
+          "skipped": 0,
+          "durationSeconds": 0.39
+        }
+      },
+      "US2": {
+        "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest --confcutdir=tests/unit -o addopts= -p no:cacheprovider tests/unit/bootstrap/test_pip_index_probe.py -k 'TestUvBootstrap and (TestIndexes or test_fresh_invocations)' --tb=no -q",
+        "red": {
+          "exitCode": 1,
+          "failed": 24,
+          "passed": 14,
+          "deselected": 31,
+          "durationSeconds": 0.28,
+          "failures": [
+            "working uv sources and source precedence",
+            "complete configuration snapshots",
+            "exclusive public overrides",
+            "safe source and discovery-error reports",
+            "reset before subsequent probes"
+          ],
+          "externalActionsExecuted": false,
+          "relatedSourceEditedBeforeRed": false
+        },
+        "green": {
+          "exitCode": 0,
+          "passed": 38,
+          "deselected": 31,
+          "durationSeconds": 0.32
+        },
+        "focusedRegression": {
+          "exitCode": 0,
+          "passed": 92,
+          "failed": 0,
+          "skipped": 0,
+          "durationSeconds": 0.42
+        }
+      },
+      "US1": {
+        "command": "rtk proxy env PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest --confcutdir=tests/unit -o addopts= -p no:cacheprovider tests/unit/bootstrap/test_pip_index_probe.py -k 'TestUvBootstrap and (test_installer_commands or test_uv_child_settings or test_separate_environments or test_success_reports)' -q",
+        "red": {
+          "exitCode": 1,
+          "failed": 5,
+          "passed": 1,
+          "deselected": 25,
+          "durationSeconds": 0.72,
+          "failures": [
+            "uv command selection",
+            "once-per-run discovery",
+            "uv selection report",
+            "pip absence report",
+            "uv child overrides"
+          ],
+          "externalActionsExecuted": false,
+          "sourceEditedBeforeRed": false
+        },
+        "browserRegressionBeforeSource": {
+          "exitCode": 0,
+          "passed": 11,
+          "durationSeconds": 0.11
+        },
+        "green": {
+          "exitCode": 0,
+          "passed": 6,
+          "deselected": 25,
+          "durationSeconds": 0.09
+        },
+        "focusedRegression": {
+          "exitCode": 0,
+          "passed": 54,
+          "failed": 0,
+          "skipped": 0,
+          "durationSeconds": 0.17
+        }
+      }
+    }
+  },
+  "hooks": {
+    "beforeImplement": {
+      "command": "speckit.git.commit",
+      "result": "skipped_user_prohibits_commits"
+    },
+    "beforeSpecify": {
+      "command": "speckit.git.feature",
+      "result": "completed_dry_run",
+      "branchChanged": false
+    },
+    "afterSpecify": {
+      "command": "speckit.companion.after-specify",
+      "result": "command_unavailable",
+      "commandExitCode": 127,
+      "declaredAction": "record_specify_completion",
+      "declaredActionResult": "completed_locally",
+      "contextFile": "specs/3399-uv-bootstrap/.spec-context.json",
+      "rootContextChanged": false
+    },
+    "beforePlan": {
+      "command": "speckit.git.commit",
+      "result": "skipped_user_prohibits_commits"
+    },
+    "afterPlanGit": {
+      "command": "speckit.git.commit",
+      "result": "skipped_user_prohibits_commits"
+    },
+    "afterPlan": {
+      "command": "speckit.companion.after-plan",
+      "result": "command_unavailable",
+      "commandExitCode": 127,
+      "declaredAction": "record_plan_completion",
+      "declaredActionResult": "completed_locally",
+      "contextFile": "specs/3399-uv-bootstrap/.spec-context.json",
+      "rootContextChanged": false
+    },
+    "beforeTasks": {
+      "command": "speckit.git.commit",
+      "result": "skipped_user_prohibits_commits"
+    },
+    "afterTasksGit": {
+      "command": "speckit.git.commit",
+      "result": "skipped_user_prohibits_commits"
+    },
+    "afterTasks": {
+      "command": "speckit.companion.after-tasks",
+      "result": "command_unavailable",
+      "commandExitCode": 127,
+      "declaredAction": "record_tasks_completion",
+      "declaredActionResult": "completed_locally",
+      "extensionExecutedSuccessfully": false,
+      "contextFile": "specs/3399-uv-bootstrap/.spec-context.json",
+      "rootContextChanged": false
+    }
+  }
+}

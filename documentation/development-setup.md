@@ -26,10 +26,10 @@ cd MistHelper
 ## Step 2: Create the environment
 
 The bootstrap script creates `.venv` and installs `requirements.txt` and
-`requirements-dev.txt`.
+`requirements-dev.txt`, in that order. Use Python 3.13 or newer to run the script.
 
 ```powershell
-python scripts/bootstrap_worktree.py   # Windows or Linux
+python scripts/bootstrap_worktree.py   # Windows, Linux, or macOS
 .\scripts\bootstrap_worktree.ps1       # Windows entry point
 .venv\Scripts\Activate.ps1
 ```
@@ -40,18 +40,108 @@ the environment is absent, the activation line fails and the tests then run
 against the global interpreter. `python -m pytest` stops with one message that
 names the bootstrap command. Issue #1866 records that case.
 
+On Linux or macOS, activate the environment with `source .venv/bin/activate`.
+Windows keeps `.venv\Scripts\python.exe`. Linux and macOS keep `.venv/bin/python`.
+The `--recreate` option deletes the existing environment before creation.
+
+Caution: some uv-managed Python installations on macOS stop during `ensurepip`.
+The bootstrap cannot create a new environment in that case.
+If this error occurs, create the environment with the command below, then run the bootstrap again.
+
+```bash
+UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv venv --python 3.13 --seed .venv
+```
+
+### Installer selection and reports
+
+The bootstrap checks for `uv` once per invocation.
+If `uv` is available, the bootstrap uses its resolved executable for each present requirement file.
+Each command uses `uv pip install --python <worktree interpreter> -r <requirement file>`.
+The explicit interpreter prevents installation into another environment.
+
+If `uv` is absent, the bootstrap uses `<worktree interpreter> -m pip install -r <requirement file>`.
+It reports the absence before installation.
+The bootstrap does not install `uv` automatically.
+It keeps pip available for configuration discovery and the absence-only fallback.
+It changes no package pins or dependency declarations.
+
+Each uv installation receives these child-only settings:
+
+| Setting | Purpose |
+|---------|---------|
+| `UV_LINK_MODE=copy` | Use file copies instead of hardlinks for worktree storage, including OneDrive. |
+| `UV_NATIVE_TLS=1` | Use system certificate trust with uv versions that recognize this setting. |
+| `UV_SYSTEM_CERTS=1` | Use the modern uv setting for the same system certificate trust. |
+| `UV_NO_CONFIG=1` | Prevent saved uv source settings from replacing the existing pip source choices. |
+
+The bootstrap removes `UV_CONFIG_FILE` from each uv installation child.
+It does not disable certificate verification.
+Each file receives a new environment copy.
+Proxy settings, certificate paths, and other unrelated caller settings remain available.
+The caller environment and saved configuration remain unchanged.
+
+The report identifies the installer and each attempted file.
+Each attempt reports elapsed seconds to one decimal place, including failed attempts.
+A successful invocation reports total installation time.
+An invocation with no requirement files reports a total and installs no package.
+Actual duration depends on caches, storage, and network conditions.
+
+Caution: a failed installation leaves an incomplete environment.
+The bootstrap returns status `1` and stops before later setup actions.
+It does not retry a failed uv installation through pip.
+This rule also applies when a discovered uv executable cannot start.
+Correct the reported fault before you run setup again.
+
+### Package sources
+
+The bootstrap reads pip configuration once through the worktree interpreter.
+It retains the existing connection probe, with a three-second timeout.
+Working mirrors remain selected.
+For uv, nonempty caller `PIP_INDEX_URL` and `PIP_EXTRA_INDEX_URL` values take precedence.
+Install-specific pip configuration follows, then global pip configuration.
+Primary and extra sources use this precedence independently.
+Extra-source order remains unchanged.
+The bootstrap removes competing uv source aliases only from installation children.
+It keeps uv's default source-resolution policy.
+
+If the configured mirror does not answer, the invocation uses `https://pypi.org/simple` exclusively.
+The child removes inherited extra indexes and competing uv source aliases.
+For pip installation, child `PIP_CONFIG_FILE` uses the platform's null device.
+This setting prevents saved extra indexes from restoring the failed mirror.
+For uv installation, child `UV_NO_CONFIG=1` prevents saved uv settings from restoring it.
+The bootstrap changes no pip or uv configuration file.
+Each later invocation makes a fresh installer and source decision, including after a failed invocation.
+
+The pip path retains `PIP_RETRIES=1` and `PIP_TIMEOUT=15`.
+The uv path uses `UV_HTTP_RETRIES=1` and `UV_HTTP_TIMEOUT=15` for the same transport bounds.
+These controls remain in the installation child and do not change caller settings.
+Bootstrap reports identify source hosts or decisions, not source credentials or environment dictionaries.
+
+### Browser and account checks
+
+After dependency installation succeeds, the bootstrap retains its health, browser, readiness, and account steps.
+The browser child preserves caller `NODE_OPTIONS` and adds `--use-system-ca` only when absent.
+It receives no newly forced uv controls or pip null-configuration setting.
+The browser repair guidance below remains unchanged.
+
+The bootstrap keeps the repository credential username `jmorrison-juniper`.
+It also checks the active GitHub account.
+If credential variables select another account, the warning names `GH_TOKEN` or `GITHUB_TOKEN`, not their values.
+The report gives the existing account repair command.
+
 To build the environment by hand instead:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-python -m pip install uv
-uv pip install -r requirements.txt -r requirements-dev.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-UV installs faster than pip. `pip install -r requirements.txt -r requirements-dev.txt`
-also works. The development requirements install the quality tools from a
-reviewed, immutable commit in `misthelper-devtools`.
+If uv is available, you can replace the final command with
+`uv pip install --python .venv\Scripts\python.exe -r requirements.txt -r requirements-dev.txt`.
+On Linux or macOS, use `.venv/bin/python` as the interpreter argument.
+Manual installation does not perform the bootstrap's source probe or browser download.
+The development requirements install the quality tools from a reviewed, immutable commit in `misthelper-devtools`.
 
 ## Step 3: Configure the credentials
 

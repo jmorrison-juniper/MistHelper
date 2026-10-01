@@ -99,71 +99,96 @@ GIT_USERNAME_CONFIG = "credential.https://github.com.username"
 class PipIndexProbe:
     """Report whether the configured pip index accepts a connection."""
 
-    def __init__(self, interpreter: Path) -> None:
+    def __init__(self, interpreter: Path) -> None:  # Keep source discovery specific to the worktree interpreter.
         """Store the interpreter that owns the pip configuration to read."""
+        LOGGER.info("Preparing package-source discovery.")  # Trace before creating the run-local snapshot.
         self.interpreter = interpreter  # Read the configuration of the new environment, not of the global one.
+        self.source_settings: dict[str, str] = {}  # Capture primary and extra settings during the existing read.
+        LOGGER.debug("Prepared an empty package-source snapshot.")  # Report no caller values.
 
-    def read_index_url(self) -> str | None:
+    def read_index_url(self) -> str | None:  # Retain one captured pip configuration read per install invocation.
         """Return the configured global index URL, or None when none is set."""
+        LOGGER.info("Reading the pip source configuration.")  # Trace before configuration discovery.
+        self.source_settings.clear()  # Keep a failed or repeated read from retaining older settings.
         command = [str(self.interpreter), "-m", "pip", "config", "list"]  # Ask pip for its effective settings.
-        LOGGER.debug("Reading the pip configuration with %s", " ".join(command))
         try:  # A missing pip or a broken configuration must not stop the bootstrap.
             result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
-                command, check=False, capture_output=True, text=True, timeout=30
+                command, check=False, capture_output=True, text=True, timeout=30  # Preserve the existing read boundary.
             )
         except (OSError, subprocess.SubprocessError) as error:  # Treat any failure as "no index configured".
-            LOGGER.debug("The pip configuration read failed: %s", error)
+            LOGGER.debug("The pip configuration read failed (%s).", type(error).__name__)  # Keep source detail private.
             return None  # Report no index, because the caller then keeps the pip default.
-        return self._parse_index_url(result.stdout)  # Pull the index line out of the report.
+        LOGGER.debug("Read the pip configuration with code %s.", result.returncode)  # Report status, not captured text.
+        return self._parse_index_url(result.stdout, self.source_settings)  # Capture sources without another subprocess.
 
     @staticmethod
-    def _parse_index_url(output: str) -> str | None:
-        """Return the value of the global.index-url line of a pip config report."""
+    def _parse_index_url(output: str, sources: dict[str, str] | None = None) -> str | None:  # Keep probe precedence.
+        """Capture source settings and return the first primary value of a pip report."""
+        LOGGER.info("Parsing the pip source report.")  # Trace before interpreting captured configuration.
+        settings = sources if sources is not None else {}  # Preserve an empty output mapping too.
+        first_index: str | None = None  # An empty first value must still stop later primary-line selection.
         for line in output.splitlines():  # The report holds one setting for each line.
             key, separator, value = line.partition("=")  # Split the setting name from its value.
-            if not separator:  # A line without a separator carries no setting.
-                continue  # Move to the next line of the report.
-            if key.strip() not in ("global.index-url", "install.index-url"):  # Read the index setting only.
-                continue  # Move to the next line of the report.
-            return value.strip().strip("'\"") or None  # Remove the quotes that pip prints around the value.
-        return None  # Report no index, because the report named none.
+            key = key.strip()  # Accept the same surrounding whitespace as the existing parser.
+            section, _, option = key.partition(".")  # Separate pip scope from its source option.
+            if (  # Accept only complete pip source entries.
+                not separator  # Reject a report line without a value separator.
+                or section not in ("global", "install")  # Ignore unrelated pip scopes.
+                or option not in ("index-url", "extra-index-url")  # Ignore unrelated options.
+            ):
+                continue  # Ignore incomplete or unrelated settings.
+            settings[key] = value.strip().strip("'\"")  # Capture extras even when they follow the first primary line.
+            if first_index is None and option == "index-url":  # Keep the first primary match.
+                first_index = settings[key]  # Keep an empty first-match marker.
+        LOGGER.debug("Captured %s pip source settings.", len(settings))  # Keep credential-bearing values private.
+        return first_index or None  # Preserve the existing result when the first primary value is empty.
 
-    def reaches(self, index_url: str) -> bool:
+    def reaches(self, index_url: str) -> bool:  # Keep the existing connection decision without disclosing credentials.
         """Open one short TCP connection to the index host and report the result."""
+        LOGGER.info("Reading the index connection target.")  # Trace before parsing a potentially private URL.
         parsed = urlparse(index_url)  # Split the URL, because the probe needs the host and the port.
         host = parsed.hostname  # Read the host without the credentials and without the port.
+        LOGGER.debug("The index has a usable host: %s.", bool(host))  # Keep source values private.
         if not host:  # A URL without a host cannot be probed.
-            LOGGER.debug("The index URL %s carries no host", index_url)
+            LOGGER.debug("The index has no usable host.")  # Do not print an unreadable credential-bearing source.
             return True  # Report success, because the script must not override a value it cannot read.
         port = parsed.port or SCHEME_PORTS.get(parsed.scheme, 443)  # Use the explicit port, or the scheme default.
-        LOGGER.debug("Probing the index host %s on port %d", host, port)
+        LOGGER.info("Probing the index host %s on port %s.", host, port)  # Trace the bounded probe.
         try:  # A dead host raises here after the short timeout, not after 75 seconds.
-            with socket.create_connection((host, port), timeout=PROBE_TIMEOUT_SECONDS):
+            with socket.create_connection(  # Retain one bounded connection.
+                (host, port), timeout=PROBE_TIMEOUT_SECONDS  # Keep the three-second timeout.
+            ):
+                LOGGER.debug("The index host %s answered.", host)  # Confirm success without source credentials.
                 return True  # The host accepted the connection, so pip can reach it.
         except OSError as error:  # A refused, a filtered, or an unknown host lands here.
-            LOGGER.debug("The index host %s did not answer: %s", host, error)
+            LOGGER.debug(  # Keep error values private.
+                "The index host %s did not answer (%s).", host, type(error).__name__  # Report only a safe error kind.
+            )
             return False  # Report the failure, so the caller can choose the public index.
 
-    def fallback_index(self) -> str | None:
+    def fallback_index(self) -> str | None:  # Preserve public-host and unusable-host decisions.
         """Return the public index when the configured index does not answer."""
+        LOGGER.info("Checking the package-source decision.")  # Trace before the existing read and connection policy.
         index_url = self.read_index_url()  # Read the index that pip would use for this run.
         if not index_url:  # No configured index means the pip default, which is the public index.
-            LOGGER.debug("pip names no global index, so the script keeps the pip default")
+            LOGGER.debug("pip names no global index, so the script keeps the pip default")  # Keep the existing default.
             return None  # Report no override, because the default already points at the public index.
-        if urlparse(index_url).hostname in ("pypi.org", "files.pythonhosted.org"):  # The public index needs no probe.
-            LOGGER.debug("The configured index is already the public index")
+        host = urlparse(index_url).hostname  # Keep source credentials out of every report.
+        if host in ("pypi.org", "files.pythonhosted.org"):  # The public index needs no probe.
+            LOGGER.debug("The configured index is already the public index")  # Avoid an unnecessary connection.
             return None  # Report no override, because the configured index is the public one.
         if self.reaches(index_url):  # A reachable mirror stays in use, because it is faster than the public index.
-            LOGGER.info("The configured pip index answered: %s", index_url)
+            LOGGER.info("The configured pip index host answered: %s", host or "unavailable")  # Report only a safe host.
+            LOGGER.debug("The run keeps its existing package sources.")  # Confirm no public override.
             return None  # Report no override, because the mirror works.
-        host = urlparse(index_url).hostname or index_url  # Name the host in the message that the user reads.
         LOGGER.warning(  # State the signal word and the consequence, as the writing guide requires.
             "Caution: the configured pip index host %s did not answer in %.0f seconds. "
             "The script uses %s for this run only. Your pip configuration is not changed.",
-            host,
-            PROBE_TIMEOUT_SECONDS,
-            PUBLIC_INDEX_URL,
+            host,  # Identify the failed source without credentials.
+            PROBE_TIMEOUT_SECONDS,  # Preserve the existing bounded probe contract.
+            PUBLIC_INDEX_URL,  # Report only the fixed public destination.
         )
+        LOGGER.debug("The run uses the public package source.")  # Confirm the temporary override.
         return PUBLIC_INDEX_URL  # Give the caller the index to use for this run.
 
 
@@ -175,6 +200,110 @@ class WorktreeBootstrapper:
         self.root = root  # Keep the worktree root, because every path starts here.
         self.venv_dir = root / venv_name  # Build the environment path with pathlib, so both platforms work.
         self.index_override: str | None = None  # Hold the index that this run uses when the configured one fails.
+
+    class InstallationPolicy:  # Own installer-only decisions without changing browser or account helpers.
+        """Apply one invocation's selected installer and effective package-source policy."""
+
+        def __init__(
+            self, uv_path: str | None, sources: dict[str, str], override: str | None
+        ) -> None:  # Keep selected tools and sources local to one invocation.
+            """Store a private snapshot and report the selected installer."""
+            LOGGER.info("Preparing the installation policy.")  # Trace before copying source state.
+            self.uv_path = uv_path  # Retain the exact discovery result without another lookup.
+            self.sources = dict(sources)  # Do not share mutable configuration state with another invocation.
+            self.override = override  # Keep the existing probe's public decision authoritative.
+            self.installer = "uv" if uv_path is not None else "pip"  # Use only a safe tool name in reports.
+            LOGGER.debug(  # Keep source values private.
+                "Prepared %s source settings for %s.", len(self.sources), self.installer  # Report only a count.
+            )
+            if uv_path is None:  # Tool absence remains the only automatic pip-selection reason.
+                LOGGER.info("uv is absent. Using pip for dependency installation.")  # Explain tool absence.
+            else:  # A resolved uv failure must never change this choice.
+                LOGGER.info("Using uv for dependency installation.")  # Identify the selected tool.
+
+        def apply(self, environment: dict[str, str]) -> None:  # Change only the fresh installation child.
+            """Normalize sources and configuration controls for the selected installer."""
+            LOGGER.info("Applying the installation source policy.")  # Trace before child-only changes.
+            if self.uv_path is not None or self.override:  # Public pip fallback must also remove uv source aliases.
+                for name in (  # Clear every competing source alias.
+                    "UV_INDEX",  # Remove current extra-index settings.
+                    "UV_DEFAULT_INDEX",  # Remove current primary-index settings.
+                    "UV_INDEX_URL",  # Remove legacy primary-index settings.
+                    "UV_EXTRA_INDEX_URL",  # Remove legacy extra-index settings.
+                ):
+                    environment.pop(name, None)  # Prevent restoration of the failed mirror.
+            if self.uv_path is None:  # Ordinary pip keeps its existing file configuration behavior.
+                if self.override:  # Saved pip extras must not defeat the exclusive public fallback.
+                    environment["PIP_CONFIG_FILE"] = os.devnull  # Suppress file settings only for this installation.
+            else:  # uv needs explicit storage, trust, and source settings.
+                environment.update(  # Keep storage and system trust explicit for every uv attempt.
+                    {"UV_LINK_MODE": "copy", "UV_NATIVE_TLS": "1", "UV_SYSTEM_CERTS": "1", "UV_NO_CONFIG": "1"}
+                )
+                environment.pop("UV_CONFIG_FILE", None)  # Prevent saved uv settings from replacing pip source choices.
+                self._effective_sources(environment)  # Map primary and extra sources separately.
+            LOGGER.debug(  # Confirm the child-only source decision.
+                "Applied %s source policy. Public override: %s.", self.installer, bool(self.override)
+            )  # Confirm safe decisions without caller values.
+
+        def _effective_sources(self, environment: dict[str, str]) -> None:  # Preserve working pip source precedence.
+            """Apply bounded uv transport and map the selected pip sources."""
+            LOGGER.info("Mapping pip installation settings into uv.")
+            environment.update(  # uv does not read pip's transport controls.
+                {"UV_HTTP_RETRIES": PIP_RETRIES, "UV_HTTP_TIMEOUT": PIP_TIMEOUT}
+            )
+            for name in ("INDEX_URL", "EXTRA_INDEX_URL"):  # Preserve independent primary and extra-source decisions.
+                key = name.lower().replace("_", "-")  # Match pip's existing configuration-key spelling.
+                if self.override:  # Public fallback replaces both primary and extra sources.
+                    source = self.override if name == "INDEX_URL" else None  # Never restore saved failed extras.
+                else:  # Working sources remain authoritative with either installer.
+                    source = (  # Apply existing installation precedence without resolver-policy changes.
+                        environment.get("PIP_" + name)  # Prefer a nonempty caller choice.
+                        or self.sources.get("install." + key)  # Prefer an install-specific file choice next.
+                        or self.sources.get("global." + key)  # Retain the global file choice last.
+                    )
+                if source:  # An absent primary retains uv's implicit public default.
+                    environment["UV_" + name] = source  # Preserve extra-index order.
+                LOGGER.debug("Mapped %s source. Configured: %s.", name, bool(source))  # Report only source presence.
+
+        def install(self, interpreter: Path, path: Path, environment: dict[str, str]) -> None:
+            """Install one requirement file and report its attempted duration."""
+            LOGGER.info("Installing %s packages from %s.", self.installer, path.name)
+            started = time.monotonic()
+            command = [str(interpreter), "-m", "pip", "install"]
+            if self.uv_path is not None:
+                command = [self.uv_path, "pip", "install", "--python", str(interpreter)]
+            command.extend(["-r", str(path)])
+            LOGGER.debug("Prepared %s arguments for %s.", len(command), self.installer)
+            try:
+                self._run(path, command, environment)
+            finally:
+                elapsed = time.monotonic() - started
+                LOGGER.info("The %s install of %s took %.1f seconds.", self.installer, path.name, elapsed)
+                LOGGER.debug("Finished the %s attempt for %s in %.1f seconds.", self.installer, path.name, elapsed)
+
+        def _run(
+            self, path: Path, command: list[str], environment: dict[str, str]
+        ) -> None:  # Propagate installation and launch errors without switching installers.
+            """Run one installation with visible output and safe failure context."""
+            context = f"The {self.installer} install of {path.name}"  # Include only a tool name and declared file name.
+            LOGGER.info("Starting the %s installation of %s.", self.installer, path.name)  # Trace before execution.
+            try:  # A discovered executable can disappear or lose permission before it starts.
+                result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
+                    command, check=False, env=environment  # Keep installer output visible and the environment isolated.
+                )
+            except OSError as error:  # A launch error is not executable absence.
+                LOGGER.error(  # Keep raw launch-error values private.
+                    "%s could not start (%s).",
+                    context,
+                    type(error).__name__,
+                    exc_info=(OSError, OSError("The installer could not start."), error.__traceback__),
+                )
+                LOGGER.debug("Recorded a failed %s launch.", self.installer)  # Confirm failure without credentials.
+                raise RuntimeError(f"{context} could not start ({type(error).__name__}).") from error  # Stop setup.
+            LOGGER.debug("%s returned code %s.", context, result.returncode)  # Report the actual subprocess result.
+            if result.returncode != 0:  # A failed file must stop every later installation and setup action.
+                LOGGER.error("%s failed with code %s.", context, result.returncode)  # Report explicit failure context.
+                raise RuntimeError(f"{context} failed with code {result.returncode}.")  # Never retry through pip.
 
     @property
     def interpreter(self) -> Path:
@@ -196,19 +325,29 @@ class WorktreeBootstrapper:
         venv.EnvBuilder(with_pip=True, upgrade_deps=False).create(self.venv_dir)  # Build the environment with pip.
         LOGGER.debug("Created the virtual environment")
 
-    def install_requirements(self) -> list[str]:
+    def install_requirements(self) -> list[str]:  # Keep installer selection local to this invocation.
         """Install each requirement file that the worktree holds."""
+        LOGGER.info("Selecting the dependency installer.")  # Trace before executable discovery.
+        uv_path = shutil.which("uv")  # Select pip only when executable discovery reports absence.
+        LOGGER.debug("uv is available: %s.", uv_path is not None)  # Report availability without caller paths.
         installed: list[str] = []  # Record each file that the script installed, so the caller can report it.
-        self.index_override = PipIndexProbe(self.interpreter).fallback_index()  # Probe one time, not for each file.
+        self.index_override = None  # Clear an earlier public decision before the new configuration read.
+        probe = PipIndexProbe(self.interpreter)  # Own a fresh source snapshot for this invocation.
+        self.index_override = probe.fallback_index()  # Retain one existing index decision for both files.
+        policy = self.InstallationPolicy(uv_path, probe.source_settings, self.index_override)  # Keep run state local.
         started = time.monotonic()  # Start the clock, so a slow install is visible rather than silent.
         for name in REQUIREMENT_FILES:  # Install the files in the declared order.
             path = self.root / name  # Build the file path under the worktree root.
             if not path.is_file():  # A worktree without the file needs no action.
-                LOGGER.info("Skipping %s, because the worktree does not hold this file", name)
+                LOGGER.info("Skipping %s, because the worktree does not hold this file", name)  # Skip absent files.
                 continue  # Move to the next file in the list.
-            self._install_file(path)  # Install the packages that this file declares.
+            environment = self._install_environment(policy)
+            policy.install(self.interpreter, path, environment)
+            LOGGER.info("Recording the completed requirement file %s.", name)  # Trace before recording success.
             installed.append(name)  # Add the file to the report list.
+            LOGGER.debug("Recorded %s completed requirement files.", len(installed))  # Confirm successful attempts.
         LOGGER.info("The install took %.1f seconds.", time.monotonic() - started)  # Report the total wall time.
+        LOGGER.debug("Installed %s requirement files.", len(installed))  # Confirm only successful file results.
         return installed  # Give the caller the list of the installed files.
 
     def install_browser_driver(self) -> bool:
@@ -265,15 +404,20 @@ class WorktreeBootstrapper:
             LOGGER.warning("The virtual environment health check exited with code %d.", result.returncode)
             LOGGER.warning("The bootstrap continues because this check must not block setup.")
 
-    def _install_environment(self) -> dict[str, str]:
-        """Build the environment that the pip subprocess reads."""
+    def _install_environment(
+        self, policy: WorktreeBootstrapper.InstallationPolicy | None = None
+    ) -> dict[str, str]:  # Preserve the browser's zero-argument behavior.
+        """Build a separate child environment without changing caller settings."""
+        LOGGER.info("Preparing the child environment.")  # Trace before copying caller settings.
         environment = dict(os.environ)  # Copy the caller environment, because pip needs the rest of it.
         environment["PIP_RETRIES"] = PIP_RETRIES  # Cut the retry count, so a dead index costs seconds, not minutes.
         environment["PIP_TIMEOUT"] = PIP_TIMEOUT  # Bound the socket wait of each attempt.
         if self.index_override:  # An override applies only when the probe found the configured index unreachable.
             environment["PIP_INDEX_URL"] = self.index_override  # Point this run at the public index.
             environment.pop("PIP_EXTRA_INDEX_URL", None)  # Drop the extra index, because the override replaces it.
-        LOGGER.debug("The pip subprocess uses index override %s", self.index_override or "none")
+        if policy is not None:  # Browser setup must not receive installer-only configuration or uv overrides.
+            policy.apply(environment)  # Apply the same run-local source decision to each fresh child copy.
+        LOGGER.debug("Prepared a child environment. Installation: %s.", policy is not None)  # Report no caller values.
         return environment  # Give the caller the environment for the subprocess alone.
 
     def _browser_environment(self) -> dict[str, str]:
@@ -292,19 +436,6 @@ class WorktreeBootstrapper:
         environment["NODE_OPTIONS"] = f"{current} {NODE_SYSTEM_CA_OPTION}".strip()  # Append, so caller options stay.
         LOGGER.debug("The browser download adds %s to NODE_OPTIONS", NODE_SYSTEM_CA_OPTION)
         return environment  # Give the caller the environment for the download subprocess alone.
-
-    def _install_file(self, path: Path) -> None:
-        """Install one requirement file with pip."""
-        command = [str(self.interpreter), "-m", "pip", "install", "-r", str(path)]  # Use the new interpreter.
-        LOGGER.info("Installing the packages from %s", path.name)
-        started = time.monotonic()  # Time this file, so the report names the slow one.
-        result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
-            command, check=False, env=self._install_environment()
-        )
-        LOGGER.info("The install of %s took %.1f seconds.", path.name, time.monotonic() - started)
-        LOGGER.debug("The install of %s returned code %d", path.name, result.returncode)
-        if result.returncode != 0:  # A failed install leaves an incomplete environment.
-            raise RuntimeError(f"The install of {path.name} failed with code {result.returncode}.")
 
 
 def build_parser() -> argparse.ArgumentParser:
