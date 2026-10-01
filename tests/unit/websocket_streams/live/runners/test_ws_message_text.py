@@ -2,7 +2,10 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # The malformed JSON test proves the input fails the standard decoder.
 import logging  # The filter test builds a log record.
+
+import pytest  # The malformed JSON test checks the decoder refusal.
 
 from src.websocket_streams.live.runners.text import (
     MessageShaper,
@@ -35,6 +38,22 @@ class TestMessageText:
         kind, content, _source = MessageShaper().channel_message({"data": "not json"})  # Shape invalid nested data.
         assert kind == "json"  # Mappings still render as JSON.
         assert content["data"] == "not json"  # Invalid JSON text stays unchanged.
+
+    def test_cut_json_data_stays_text(self) -> None:
+        """Keep a cut JSON object as text, and do not fail."""
+        cut_json = '{"mac": "aa"'  # A JSON object without its end, as a cut frame can arrive.
+        with pytest.raises(json.JSONDecodeError):  # Prove that the input is malformed JSON.
+            json.loads(cut_json)  # The standard decoder refuses the cut object.
+        kind, content, _source = MessageShaper().channel_message({"data": cut_json})  # Shape the malformed data.
+        assert kind == "json"  # Mappings still render as JSON.
+        assert content["data"] == cut_json  # The shaper keeps the malformed text unchanged.
+
+    def test_empty_body_stays_empty(self) -> None:
+        """Keep an empty channel body and an empty shell frame empty."""
+        kind, content, _source = MessageShaper().channel_message({"data": ""})  # Shape an event with an empty body.
+        assert kind == "json"  # Mappings still render as JSON.
+        assert content["data"] == ""  # The empty body stays an empty string.
+        assert MessageShaper().clean_shell_text(b"") == ""  # An empty shell frame gives empty text.
 
     def test_packet_summary_uses_dash_for_missing_fields(self) -> None:
         """Use dashes when packet fields are absent."""

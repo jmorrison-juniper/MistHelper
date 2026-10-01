@@ -16,7 +16,7 @@ def test_channel_catalog_lookup_and_repeatable_path() -> None:
     """A channel key resolves and builds repeated device command paths."""
     catalog = ChannelCatalog()  # Build the channel catalog.
     entry = catalog.get("site.devices.cmd")  # Read the repeated device channel.
-    assert entry is not None  # The key must exist.
+    assert entry is not None and entry.key == "site.devices.cmd"  # The key resolves to its own entry.
     paths = entry.build_paths(
         {
             "site_id": ("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",),

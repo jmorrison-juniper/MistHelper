@@ -87,6 +87,10 @@ class FakeSink:
 class TestChannelStreamRunner:
     """Verify channel runner behavior."""
 
+    def setup_method(self) -> None:
+        """Forget the fake client of an earlier test."""
+        FakeClient.last = None  # Each test reads only the client that it built.
+
     def test_start_message_error_close_and_stop(self) -> None:
         """Drive every SDK callback with a fake client."""
         sink = FakeSink()  # Record runner output.
@@ -95,7 +99,7 @@ class TestChannelStreamRunner:
         )  # Build a runner with a fake SDK.
         runner.start()  # Start the fake client.
         client = FakeClient.last  # Read the newest fake client.
-        assert client is not None  # The runner built a client.
+        assert client is not None and client.connected is True  # The runner built a client and connected it.
         assert client.kwargs["auto_reconnect"] is True  # The runner enables reconnect.
         assert client.kwargs["max_reconnect_attempts"] == 3  # The runner uses three attempts.
         client.callbacks["open"]()  # Simulate an SDK open callback.

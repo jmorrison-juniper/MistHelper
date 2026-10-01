@@ -1,6 +1,7 @@
 """Tests for the joined WebSocket stream catalog."""
 
 from src.websocket_streams.catalog.channels import ChannelCatalog  # Import channel catalog.
+from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Check the class of the shell entry.
 from src.websocket_streams.catalog.registry import StreamCatalog  # Import the registry under test.
 from src.websocket_streams.catalog.utilities import UtilityCatalog  # Import utility catalog.
 
@@ -15,10 +16,13 @@ def build_catalog(changes: bool = False, shell: bool = False) -> StreamCatalog:
 def test_stream_catalog_find_separates_shell_kind() -> None:
     """The registry keeps shell entries separate from utility starts."""
     catalog = build_catalog()  # Build the joined catalog.
-    assert catalog.find("channel", "site.devices") is not None  # Channel lookup works.
-    assert catalog.find("utility", "ex.ping") is not None  # Utility lookup works.
+    channel = catalog.find("channel", "site.devices")  # Look up one channel entry.
+    utility = catalog.find("utility", "ex.ping")  # Look up one read utility entry.
+    shell = catalog.find("shell", "ex.createShellSession")  # Look up the shell entry with its own kind.
+    assert channel is not None and channel.key == "site.devices"  # Channel lookup returns the named entry.
+    assert utility is not None and utility.key == "ex.ping"  # Utility lookup returns the named entry.
     assert catalog.find("utility", "ex.createShellSession") is None  # Shell entries do not start as utilities.
-    assert catalog.find("shell", "ex.createShellSession") is not None  # Shell lookup works.
+    assert isinstance(shell, UtilityDefinition) and shell.safety == Safety.SHELL  # Shell lookup returns a shell entry.
 
 
 def test_stream_catalog_payload_hides_paths_and_marks_locks() -> None:

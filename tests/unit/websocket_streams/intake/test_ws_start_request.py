@@ -120,59 +120,68 @@ def test_start_request_accepts_utility_and_checks_device() -> None:
 def test_start_request_refuses_unknown_top_level_key() -> None:
     """A raw path key is refused."""
     body = channel_body() | {"path": "/sites/x/devices"}  # Add a forbidden raw path.
-    assert_error(body, "bad_request", "path")  # The checker refuses the unknown key.
+    error = assert_error(body, "bad_request", "path")  # The checker refuses the unknown key.
+    assert error.status == 400  # A field refusal gives the page HTTP 400.
 
 
 def test_start_request_refuses_unknown_catalog_key() -> None:
     """An unknown catalog key is refused."""
     body = channel_body() | {"key": "site.unknown"}  # Use an unknown channel key.
-    assert_error(body, "unknown_key")  # The checker refuses the key.
+    error = assert_error(body, "unknown_key")  # The checker refuses the key.
+    assert error.status == 404  # An unknown catalog key gives the page HTTP 404.
 
 
 def test_start_request_refuses_unknown_target_and_org_id_body() -> None:
     """Unknown targets and body org_id values are refused."""
     body = channel_body()  # Build a valid body.
     body["targets"] = {"site_id": SITE_ID, "org_id": ORG_ID}  # Add an invalid body org_id.
-    assert_error(body, "bad_request", "org_id")  # The checker refuses the target.
+    error = assert_error(body, "bad_request", "org_id")  # The checker refuses the target.
+    assert error.to_payload()["field"] == "org_id"  # The JSON answer names the field for the page.
 
 
 def test_start_request_refuses_bad_uuid_and_repeat_errors() -> None:
     """Targets must be valid UUIDs, unique, and within the limit."""
     bad_uuid = channel_body()  # Build a valid body.
     bad_uuid["targets"] = {"site_id": "bad"}  # Put a bad UUID in the target.
-    assert_error(bad_uuid, "bad_request", "site_id")  # The checker refuses the UUID.
+    uuid_error = assert_error(bad_uuid, "bad_request", "site_id")  # The checker refuses the UUID.
     duplicate = channel_body() | {
         "key": "site.stats.devices",
         "targets": {"site_id": [SITE_ID, SITE_ID]},
     }  # Duplicate repeat values are invalid.
-    assert_error(duplicate, "bad_request", "site_id")  # The checker refuses duplicates.
+    duplicate_error = assert_error(duplicate, "bad_request", "site_id")  # The checker refuses duplicates.
     too_many = channel_body() | {
         "key": "site.stats.devices",
         "targets": {"site_id": [SITE_ID] * 11},
     }  # More than 10 values are invalid.
-    assert_error(too_many, "bad_request", "site_id")  # The checker refuses too many values.
+    limit_error = assert_error(too_many, "bad_request", "site_id")  # The checker refuses too many values.
+    statuses = {uuid_error.status, duplicate_error.status, limit_error.status}  # Collect each HTTP status.
+    assert statuses == {400}  # Each target refusal gives the page HTTP 400.
 
 
 def test_start_request_refuses_unknown_and_missing_parameters() -> None:
     """Utility parameters must match the catalog and required fields."""
     unknown = utility_body(parameters={"host": "192.0.2.1", "bad": "x"})  # Add an unknown parameter.
-    assert_error(unknown, "bad_request", "bad")  # The checker refuses the parameter.
+    unknown_error = assert_error(unknown, "bad_request", "bad")  # The checker refuses the parameter.
     missing = utility_body(parameters={})  # Omit the required host parameter.
-    assert_error(missing, "bad_request", "host")  # The checker refuses the missing parameter.
+    missing_error = assert_error(missing, "bad_request", "host")  # The checker refuses the missing parameter.
+    assert {unknown_error.status, missing_error.status} == {400}  # Each parameter refusal gives the page HTTP 400.
 
 
 def test_start_request_refuses_bad_host_and_count_range() -> None:
     """The checker applies field value checks to parameters."""
     bad_host = utility_body(parameters={"host": "bad host"})  # Use a host with a space.
-    assert_error(bad_host, "bad_request", "host")  # The checker refuses the host.
+    host_error = assert_error(bad_host, "bad_request", "host")  # The checker refuses the host.
     bad_count = utility_body(parameters={"host": "192.0.2.1", "count": 101})  # Use a count above the limit.
-    assert_error(bad_count, "bad_request", "count")  # The checker refuses the count.
+    count_error = assert_error(bad_count, "bad_request", "count")  # The checker refuses the count.
+    assert {host_error.status, count_error.status} == {400}  # Each value refusal gives the page HTTP 400.
 
 
 def test_start_request_refuses_device_lookup_and_family_errors() -> None:
     """The checker refuses unknown devices and wrong families."""
-    assert_error(utility_body(), "bad_request", "device_id", family=None)  # An unknown device is refused.
-    assert_error(utility_body(), "bad_request", "device_id", family="ap")  # A device of another family is refused.
+    unknown = assert_error(utility_body(), "bad_request", "device_id", family=None)  # An unknown device is refused.
+    other = assert_error(utility_body(), "bad_request", "device_id", family="ap")  # Another device family is refused.
+    assert unknown.message == "The device is unknown."  # The operator reads the cause of the refusal.
+    assert other.message == "The device family cannot run this utility."  # The operator reads the family cause.
 
 
 def test_start_request_locks_change_before_device_lookup() -> None:
