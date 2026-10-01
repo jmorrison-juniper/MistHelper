@@ -80,12 +80,29 @@ class ClientSessionControl:  # WHY: required class based handler for menu 286.
         return dependencies  # WHY: run() consumes this bundle.
 
     @staticmethod
-    def _select_site_from_prompt(_session: Any, _org_id: str) -> str | None:
+    def _select_site_from_prompt(_session: Any, _org_id: str) -> str | Mapping[str, str] | None:
         """Select one Mist site using the existing prompt utility."""
         logger.info("Prompting for client session control site")  # WHY: before site prompt.
         site_id = PromptUtils.select_site_with_logging()  # WHY: reuse the repository site selection pattern.
+        if site_id:  # WHY: the existing prompt returns only the id, so read its CSV name after selection.
+            site_record = ClientSessionControl._site_record_from_csv(site_id)  # WHY: preserve the chosen site name.
+            logger.debug("Site prompt completed with named selection=%s", bool(site_record))  # WHY: after lookup.
+            return site_record  # WHY: downstream preview and audit rows need the name and id.
         logger.debug("Site prompt completed with selected=%s", bool(site_id))  # WHY: after site prompt.
         return site_id  # WHY: handler normalizes string site IDs into site records.
+
+    @staticmethod
+    def _site_record_from_csv(site_id: str) -> dict[str, str]:
+        """Return the selected site id and name from the generated site CSV."""
+        logger.info("Reading selected client session control site name")  # WHY: before CSV lookup.
+        index_to_site, _name_to_site = PromptUtils._load_site_csv_maps("SiteList.csv")  # WHY: same CSV as prompt.
+        for site in index_to_site.values():  # WHY: find the row that owns the selected id.
+            if str(site.get("id", "")).strip() == site_id:  # WHY: match the exact selected site identifier.
+                site_name = str(site.get("name", site_id)).strip() or site_id  # WHY: guarantee display text.
+                logger.debug("Resolved selected site name for client session control")  # WHY: after lookup.
+                return {"id": site_id, "name": site_name}  # WHY: mapping path keeps name in preview and CSV.
+        logger.debug("Selected site name was absent from SiteList.csv")  # WHY: after failed lookup.
+        return {"id": site_id, "name": site_id}  # WHY: keep the old fallback when the CSV lacks the row.
 
     @staticmethod
     def _select_site(
