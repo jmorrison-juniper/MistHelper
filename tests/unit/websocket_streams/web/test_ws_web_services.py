@@ -15,6 +15,7 @@ from flask import Flask  # Build small app instances for the service tests.
 
 from src.websocket_streams.intake.fields import StreamRequestError  # Not-ready errors use this type.
 from src.websocket_streams.live.sessions.buffer import MessagePage  # The fake manager returns a read answer.
+from src.websocket_streams.live.terminal.gateway import TerminalGateway  # The terminal routes use this gateway.
 from src.websocket_streams.web.services import WebSocketsServiceParts, WebSocketsServices  # Classes under test.
 
 
@@ -60,9 +61,9 @@ class FakeManager:
         """Return one stopped session."""
         return {"session_id": session_id, "state": "stopped"}  # Stop payload.
 
-    def send_input(self, session_id: str, line: str | None, key: str | None) -> None:
-        """Accept shell input without using it."""
-        assert session_id and (line is not None or key is not None)  # The service passed one input form.
+    def session(self, session_id: str) -> object:
+        """Refuse each session, because the fake holds no session."""
+        raise StreamRequestError("not_found", f"The session {session_id} was not found.")  # Contract error.
 
     def delete(self, session_id: str) -> None:
         """Accept a delete request."""
@@ -144,6 +145,26 @@ def test_not_ready_refuses_start_and_picker() -> None:
     assert picker_error.value.code == "not_ready"  # Picker refusal code.
 
 
+def test_not_ready_refuses_the_terminal() -> None:
+    """A not-ready service refuses the terminal routes before the gateway runs."""
+    service, _manager = make_service("The portal has no Mist session or organization.")  # Build not ready.
+    with pytest.raises(StreamRequestError) as terminal_error:  # The terminal must fail.
+        service.terminal()  # Ask for the terminal gateway.
+    assert terminal_error.value.code == "not_ready"  # The refusal uses the contract code.
+    assert terminal_error.value.status == 503  # The page shows the not-ready state.
+
+
+def test_ready_terminal_gateway_reaches_the_manager() -> None:
+    """The ready service gives one gateway, and the gateway finds sessions through the manager."""
+    service, _manager = make_service()  # Build a ready service.
+    gateway = service.terminal()  # Ask for the terminal gateway.
+    with pytest.raises(StreamRequestError) as read_error:  # The fake manager holds no session.
+        gateway.read("missing", 0, 0.0)  # Read a session that does not exist.
+    assert isinstance(gateway, TerminalGateway)  # The routes call the real gateway.
+    assert service.terminal() is gateway  # One gateway counts the waiting reads of the process.
+    assert read_error.value.code == "not_found"  # The manager refusal reaches the route.
+
+
 def test_ready_service_delegates_to_manager_and_pickers() -> None:
     """A ready service delegates route work to the built parts."""
     service, manager = make_service()  # Build a ready service.
@@ -151,7 +172,6 @@ def test_ready_service_delegates_to_manager_and_pickers() -> None:
     listed = service.list_sessions()  # List sessions.
     read = service.read_messages("abc123", 4, 10)  # Read messages.
     stopped = service.stop_session("abc123")  # Stop session.
-    sent = service.send_input("abc123", {"key": "enter"})  # Send shell key.
     deleted = service.delete_session("abc123")  # Delete session.
     filename, lines = service.download_session("abc123")  # Download session.
     picker = service.mxedges(None)  # Read a picker.
@@ -161,7 +181,7 @@ def test_ready_service_delegates_to_manager_and_pickers() -> None:
     client_picker = service.sdkclients("site1", "map1")  # Read SDK clients through the picker service.
     assert manager.started is True and started["session_id"] == "abc123"  # Manager start ran.
     assert listed["sessions"] == [] and read.next_after == 4  # Manager reads ran.
-    assert stopped["state"] == "stopped" and sent == {"ok": True}  # Stop and input ran.
+    assert stopped["state"] == "stopped"  # Stop ran.
     assert deleted == {"ok": True} and filename == "download.jsonl"  # Delete and download ran.
     assert list(lines) == ['{"seq":1}\n'] and picker["rows"][0]["label"] == "Row"  # Streams and picker ran.
     assert device_picker["rows"][0]["label"] == "Row" and map_picker["rows"][0]["label"] == "Row"  # Picker rows.

@@ -3,6 +3,8 @@
 Why:
     Issue #3551. The Flask routes need one seam that builds the catalog, the
     request checker, the picker service, and the session manager for one app.
+    Issue #3671. The terminal routes need one terminal gateway for each portal
+    process, because the gateway counts the waiting reads of the process.
 """
 
 from __future__ import annotations  # Keep annotations lazy for Flask and agent-owned modules.
@@ -18,6 +20,7 @@ from flask import Flask  # The factory stores services on a Flask app.
 from src.websocket_streams.intake.fields import StreamRequestError  # Raise contract errors when not ready.
 from src.websocket_streams.intake.pickers import StreamPickerService  # Fill form identifiers from Mist.
 from src.websocket_streams.live.sessions.buffer import MessagePage  # Message reads return JSON text parts.
+from src.websocket_streams.live.terminal.gateway import TerminalGateway  # The terminal routes call this gateway.
 
 logger = logging.getLogger(__name__)  # Keep service records under this module name.
 
@@ -76,6 +79,7 @@ class WebSocketsServices:
             parts: The catalog, checker, picker, manager, settings, and ready state.
         """
         self._parts = parts  # One object keeps the constructor below the parameter limit.
+        self._terminal = TerminalGateway(parts.manager)  # One gateway counts the waiting reads of the process.
 
     @classmethod
     def for_app(cls, app: Flask) -> Any:
@@ -249,23 +253,18 @@ class WebSocketsServices:
         logger.debug("Stopped WebSocket session %s", session_id)  # Confirm the stop request.
         return payload  # Return the manager payload.
 
-    def send_input(self, session_id: str, body: object) -> dict[str, object]:
-        """Send shell input to one session.
-
-        Args:
-            session_id: The session identifier.
-            body: The JSON request body.
+    def terminal(self) -> TerminalGateway:
+        """Return the terminal gateway that the terminal routes call.
 
         Returns:
-            A small confirmation payload.
+            The terminal gateway of the session manager.
+
+        Raises:
+            StreamRequestError: The portal is not ready, so no terminal session can exist.
         """
-        payload = body if isinstance(body, dict) else {}  # Only JSON objects can hold input.
-        line = payload.get("line") if isinstance(payload.get("line"), str) else None  # Optional line.
-        key = payload.get("key") if isinstance(payload.get("key"), str) else None  # Optional key.
-        logger.info("Sending WebSocket shell input for session %s", session_id)  # Log before input send.
-        self._parts.manager.send_input(session_id, line, key)  # Manager validates and sends the input.
-        logger.debug("Sent WebSocket shell input for session %s", session_id)  # Never log the input text.
-        return {"ok": True}  # The route returns 202 with this payload.
+        self._require_ready()  # A terminal needs the live session manager.
+        logger.debug("Using the WebSocket terminal gateway")  # Debug level: the page reads the terminal often.
+        return self._terminal  # The gateway checks and runs each terminal request.
 
     def delete_session(self, session_id: str) -> dict[str, object]:
         """Delete one ended session.

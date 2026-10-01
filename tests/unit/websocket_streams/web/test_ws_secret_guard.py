@@ -3,6 +3,7 @@
 Why:
     Issue #3551 requires the browser answers to exclude the API token, raw
     Mist channel paths, and Mist WebSocket addresses.
+    Issue #3671 adds the terminal routes, so the guard reads them too.
 """
 
 from __future__ import annotations  # Keep annotations lazy for Flask imports.
@@ -22,6 +23,32 @@ MAP_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"  # A valid map identifier.
 API_TOKEN = "secret-token-123"  # The token that must never appear.
 CHANNEL_PATH = f"/sites/{SITE_ID}/stats/devices"  # A raw channel path that must never appear.
 WS_ADDRESS = "wss://api-ws.mist.com/api-ws/session"  # A WebSocket address that must never appear.
+
+
+class SecretGuardTerminal:
+    """Fake terminal gateway with safe answers for the terminal routes."""
+
+    def read(self, _session_id: str, after: int, _wait_seconds: float) -> dict[str, object]:
+        """Return a safe terminal read answer."""
+        return {
+            "data": "b2s=",
+            "first": 0,
+            "next": after + 2,
+            "gap": 0,
+            "state": "live",
+            "reason": "",
+            "input_ready": True,
+            "read_only": False,
+            "expires_at": "2026-10-01T09:30:00Z",
+        }  # The two bytes "ok" and no address.
+
+    def send(self, _session_id: str, data: str) -> dict[str, object]:
+        """Return a safe input answer."""
+        return {"accepted": len(data.encode("utf-8")), "queued": False}  # No input text appears.
+
+    def resize(self, _session_id: str, cols: int, rows: int) -> dict[str, object]:
+        """Return a safe size answer."""
+        return {"cols": cols, "rows": rows}  # The size holds no secret.
 
 
 class SecretGuardServices:
@@ -57,9 +84,9 @@ class SecretGuardServices:
         payload["state"] = "stopped"  # Mark stopped.
         return payload  # Safe payload.
 
-    def send_input(self, _session_id: str, _body: object) -> dict[str, object]:
-        """Return a safe input answer."""
-        return {"ok": True}  # No input text appears.
+    def terminal(self) -> SecretGuardTerminal:
+        """Return the safe fake terminal gateway."""
+        return SecretGuardTerminal()  # The terminal routes call this fake.
 
     def delete_session(self, _session_id: str) -> dict[str, object]:
         """Return a safe delete answer."""
@@ -138,7 +165,9 @@ def test_websocket_routes_do_not_leak_secrets(portal_client: Any) -> None:
         portal_client.post("/api/websockets/sessions", json={"kind": "channel", "key": "site.stats.devices"}),
         portal_client.get("/api/websockets/sessions/abc123/messages?after=0"),
         portal_client.post("/api/websockets/sessions/abc123/stop"),
-        portal_client.post("/api/websockets/sessions/abc123/input", json={"line": "show version"}),
+        portal_client.post("/api/websockets/sessions/abc123/input", json={"data": "show version\r"}),
+        portal_client.get("/api/websockets/sessions/abc123/terminal?after=0"),
+        portal_client.post("/api/websockets/sessions/abc123/resize", json={"cols": 80, "rows": 24}),
         portal_client.delete("/api/websockets/sessions/abc123"),
         portal_client.get("/api/websockets/sessions/abc123/download"),
         portal_client.get(f"/api/websockets/sites/{SITE_ID}/devices"),

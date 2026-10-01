@@ -3,11 +3,14 @@
 Why:
     Issue #3551. The browser uses these short routes to list the catalog,
     start streams, read messages, and send safe shell input through the server.
+    Issue #3671. The terminal routes read the terminal bytes, send the keys and
+    the pasted text without a change, and send the terminal size.
 """
 
 from __future__ import annotations  # Keep annotations lazy for Flask imports.
 
 import logging  # Use the portal logger for each route action.
+import math  # Refuse a wait value that is not a finite number.
 import re  # Validate identifiers until the shared rules module is present.
 from collections.abc import Callable  # Type route helpers and streamed lines.
 from typing import Any, cast  # Flask service objects use dependency injection.
@@ -25,6 +28,100 @@ websockets_bp = Blueprint(  # The web portal registers this blueprint in the app
     static_folder="static",  # Store the script and stylesheet inside the package.
     static_url_path="/websockets/assets",  # Serve static files below the WebSockets path.
 )
+
+
+class TerminalRequestValues:
+    """Convert the values of one terminal request to checked Python values.
+
+    The routes refuse a bad value shape at once. The terminal gateway checks
+    each range, so one class owns each limit of the terminal contract.
+    """
+
+    MAX_WAIT_SECONDS = 25.0  # The contract holds one read for 25 seconds at most.
+
+    @staticmethod
+    def read_query() -> tuple[int, float]:
+        """Return the checked ``after`` and ``wait`` values of a terminal read.
+
+        Returns:
+            The byte position after which the read starts, and the wait in seconds.
+
+        Raises:
+            StreamRequestError: A value is not a number, or the wait is outside 0 to 25 seconds.
+        """
+        after_text = request.args.get("after", "0")  # A missing position starts at the oldest kept byte.
+        wait_text = request.args.get("wait", "0")  # A missing wait answers at once.
+        if not after_text.isdecimal():  # Only a whole number names a byte position.
+            raise StreamRequestError(
+                "bad_request", "The after value must be a whole number.", {"field": "after"}
+            )  # Refuse before the gateway runs.
+        wait = TerminalRequestValues._wait_seconds(wait_text)  # Check the wait text and its range.
+        return int(after_text), wait  # The gateway checks the position against the history.
+
+    @staticmethod
+    def input_text(body: object) -> str:
+        """Return the text of a terminal input body.
+
+        Args:
+            body: The JSON body of the request.
+
+        Returns:
+            The keys or the pasted text, without a change.
+
+        Raises:
+            StreamRequestError: The body holds no text in the ``data`` field.
+        """
+        data = body.get("data") if isinstance(body, dict) else None  # Only a JSON object can hold the text.
+        if not isinstance(data, str) or data == "":  # The old line and key shapes have no data field.
+            raise StreamRequestError(
+                "bad_request", "The input must hold text in the data field.", {"field": "data"}
+            )  # Refuse the old body shapes.
+        return data  # The gateway checks the size and sends the text without a change.
+
+    @staticmethod
+    def size(body: object) -> tuple[int, int]:
+        """Return the columns and the rows of a terminal resize body.
+
+        Args:
+            body: The JSON body of the request.
+
+        Returns:
+            The column count and the row count.
+
+        Raises:
+            StreamRequestError: A size value is not a whole number.
+        """
+        values = body if isinstance(body, dict) else {}  # Only a JSON object can hold the size.
+        for field in ("cols", "rows"):  # Check each size value in the same way.
+            value = values.get(field)  # Read one size value.
+            if isinstance(value, bool) or not isinstance(value, int):  # JSON true is not a size.
+                raise StreamRequestError(
+                    "bad_request", "The terminal size must be whole numbers.", {"field": field}
+                )  # Refuse before the gateway runs.
+        return int(values["cols"]), int(values["rows"])  # The gateway checks the size range.
+
+    @staticmethod
+    def _wait_seconds(text: str) -> float:
+        """Return the checked wait in seconds.
+
+        Args:
+            text: The ``wait`` query text.
+
+        Returns:
+            The wait in seconds, from 0 to 25.
+
+        Raises:
+            StreamRequestError: The text is not a finite number from 0 to 25.
+        """
+        try:  # The query holds text, so convert it first.
+            wait = float(text)  # Accept a whole number or a decimal number.
+        except ValueError:  # The text is not a number.
+            wait = -1.0  # Use a value outside the range, so one check refuses both cases.
+        if not math.isfinite(wait) or not 0.0 <= wait <= TerminalRequestValues.MAX_WAIT_SECONDS:  # Range check.
+            raise StreamRequestError(
+                "bad_request", "The wait value must be a number from 0 to 25.", {"field": "wait"}
+            )  # Refuse before a thread waits.
+        return wait  # The gateway waits for this time at most.
 
 
 class WebSocketRouteViews:
@@ -102,18 +199,47 @@ class WebSocketRouteViews:
 
     @staticmethod
     def send_input(session_id: str) -> Response | tuple[Response, int]:
-        """Send shell input to one session.
+        """Send keys or pasted text to the terminal of one shell session.
 
         Args:
             session_id: The session identifier.
 
         Returns:
-            A JSON response that confirms acceptance.
+            A JSON response with the accepted byte count and the queue state.
         """
-        body = request.get_json(silent=True) or {}  # A missing JSON body becomes an empty object.
+        body = request.get_json(silent=True)  # A missing or bad JSON body becomes None, and the check refuses it.
         return WebSocketRouteViews._json_call(
-            lambda services: services.send_input(session_id, body), 202
-        )  # Send input.
+            lambda services: services.terminal().send(session_id, TerminalRequestValues.input_text(body)), 202
+        )  # Send the text without a change.
+
+    @staticmethod
+    def terminal(session_id: str) -> Response | tuple[Response, int]:
+        """Read the terminal bytes of one session after one byte position.
+
+        Args:
+            session_id: The session identifier.
+
+        Returns:
+            A JSON response with the next terminal bytes.
+        """
+        return WebSocketRouteViews._json_call(
+            lambda services: services.terminal().read(session_id, *TerminalRequestValues.read_query())
+        )  # Read and wait for new bytes.
+
+    @staticmethod
+    def resize(session_id: str) -> Response | tuple[Response, int]:
+        """Send the terminal size of one shell session.
+
+        Args:
+            session_id: The session identifier.
+
+        Returns:
+            A JSON response with the stored size.
+        """
+        body = request.get_json(silent=True)  # A missing or bad JSON body becomes None, and the check refuses it.
+        return WebSocketRouteViews._json_call(
+            lambda services: services.terminal().resize(session_id, *TerminalRequestValues.size(body)), 202
+        )  # Store and send the size.
 
     @staticmethod
     def delete(session_id: str) -> Response | tuple[Response, int]:
@@ -306,6 +432,12 @@ websockets_bp.add_url_rule(
 websockets_bp.add_url_rule(
     "/api/websockets/sessions/<session_id>/input", view_func=WebSocketRouteViews.send_input, methods=["POST"]
 )  # Input.
+websockets_bp.add_url_rule(
+    "/api/websockets/sessions/<session_id>/terminal", view_func=WebSocketRouteViews.terminal
+)  # Terminal read.
+websockets_bp.add_url_rule(
+    "/api/websockets/sessions/<session_id>/resize", view_func=WebSocketRouteViews.resize, methods=["POST"]
+)  # Terminal size.
 websockets_bp.add_url_rule(
     "/api/websockets/sessions/<session_id>", view_func=WebSocketRouteViews.delete, methods=["DELETE"]
 )  # Delete.
