@@ -228,8 +228,8 @@ class StreamSessionManager:
             The session payload.
         """
         session = self.session(session_id)  # Raise not_found when absent.
-        changed = session.request_stop(reason)  # Stop is safe to repeat.
-        if changed and session.runner is not None:  # A new stop needs a runner call.
+        session.request_stop(reason)  # Stop is safe to repeat and keeps the first reason.
+        if session.live and session.runner is not None:  # Each live stop request must wake the runner.
             cast(StreamRunner, session.runner).stop()  # Runner stop returns at once.
         return session.payload()  # Return the current public state.
 

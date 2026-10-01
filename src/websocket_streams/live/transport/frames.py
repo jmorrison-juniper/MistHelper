@@ -9,6 +9,7 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import json  # Mist stream data frames use JSON text.
 import logging  # The frame reader logs safe keepalive state.
+import select  # Read waits must not change the shared socket timeout.
 import threading  # The close event comes from the client.
 from collections.abc import Callable, Mapping  # The frame reader accepts a clock and mapping events.
 from dataclasses import dataclass  # FrameRead is a small immutable value.
@@ -102,7 +103,7 @@ class FrameReader:
         """Read one application frame or one control frame.
 
         Args:
-            timeout: The socket timeout for this attempt.
+            timeout: The application wait for this attempt.
 
         Returns:
             A data frame, or None after timeout or a control frame.
@@ -111,7 +112,11 @@ class FrameReader:
             ConnectionClosed: The socket closed or missed two intervals.
         """
         try:  # Map websocket-client errors to the runner close contract.
-            self._socket.settimeout(max(0.01, timeout))  # Keep every receive bounded.
+            if self._closed.is_set():  # A local close should not wait for network data.
+                raise ConnectionClosed(code=None, dropped=False)  # Report a local close to the runner.
+            if not self._wait_until_ready(timeout):  # Keep application waits independent of socket timeout.
+                self._check_keepalive()  # A timeout can trigger ping or dead detection.
+                return None  # A quiet period is not data.
             opcode, payload = self._socket.recv_data(control_frame=True)  # Read data and control frames.
         except websocket.WebSocketTimeoutException:
             self._check_keepalive()  # A timeout can trigger ping or dead detection.
@@ -123,6 +128,19 @@ class FrameReader:
         except OSError as exc:
             raise ConnectionClosed(code=None, dropped=not self._closed.is_set()) from exc  # TCP loss has no close code.
         return self._frame_or_control(opcode, payload)  # Control frames update liveness and return no data.
+
+    @staticmethod
+    def close_socket(socket: Any) -> None:
+        """Abort, close, and shut down one websocket-client socket.
+
+        Args:
+            socket: The websocket-client socket.
+        """
+        if hasattr(socket, "abort"):  # websocket-client abort wakes a blocked reader.
+            socket.abort()  # Abort before close so recv_data stops promptly.
+        socket.close()  # Ask websocket-client to send or process close state.
+        if hasattr(socket, "shutdown"):  # websocket-client shutdown handles CLOSE_WAIT sockets.
+            socket.shutdown()  # Shutdown is safe when close already ran.
 
     def _frame_or_control(self, opcode: int, payload: object) -> FrameRead | None:
         """Process one received frame.
@@ -156,7 +174,7 @@ class FrameReader:
         """
         quiet = self._now() - self._last_rx  # Measure silence since the last data or control frame.
         if quiet >= self._read_timeout_seconds * 2:  # Two quiet intervals means the peer is dead.
-            self._socket.close()  # Close before raising so the client loop wakes.
+            FrameReader.close_socket(self._socket)  # Close before raising so the client loop wakes.
             raise ConnectionClosed(code=None, dropped=True)  # Silent peer close has no close code.
         if quiet >= self._read_timeout_seconds and not self._ping_sent:  # One quiet interval triggers keepalive.
             logger.debug("Sending WebSocket ping after quiet interval")  # High-frequency read path uses debug.
@@ -168,6 +186,52 @@ class FrameReader:
         """Mark the connection as recently alive."""
         self._last_rx = self._now()  # Reset the quiet timer.
         self._ping_sent = False  # A received frame answered any outstanding ping.
+
+    def _wait_until_ready(self, timeout: float) -> bool:
+        """Wait until the socket can be read without changing its timeout.
+
+        Args:
+            timeout: The application wait in seconds.
+
+        Returns:
+            True when recv_data can run.
+        """
+        raw_socket = getattr(self._socket, "sock", None)  # websocket-client stores the TCP or TLS socket here.
+        if raw_socket is None:  # Unit-test fakes can expose only recv_data.
+            return True  # Let the fake control its own timeout behavior.
+        if self._tls_bytes_waiting(raw_socket):  # The TLS layer can hold a frame that select cannot see.
+            return True  # recv_data reads the held frame without a network wait.
+        readable, _writable, errored = select.select(
+            [raw_socket], [], [raw_socket], max(0.0, timeout)
+        )  # Wait without changing the socket timeout.
+        if errored:  # Exceptional socket state is a transport loss.
+            raise OSError("The WebSocket socket reported an error.")  # Map through read() to ConnectionClosed.
+        return bool(readable)  # A readable socket can run recv_data now.
+
+    @staticmethod
+    def _tls_bytes_waiting(raw_socket: Any) -> bool:
+        """Tell whether the TLS layer holds decrypted bytes.
+
+        Why:
+            One TLS record can carry two WebSocket frames. The TLS layer
+            decrypts the full record, but recv_data reads only the first
+            frame. The kernel buffer is then empty, so select reports no
+            data. Without this check, the second frame waits until more
+            network data arrives, which can take a full keepalive interval.
+
+        Args:
+            raw_socket: The TCP or TLS socket from websocket-client.
+
+        Returns:
+            True when the TLS layer holds bytes that recv_data can read now.
+        """
+        pending = getattr(raw_socket, "pending", None)  # Only an ssl.SSLSocket has pending().
+        if not callable(pending):  # A plain TCP socket has no TLS buffer.
+            return False  # select alone is correct for plain TCP.
+        waiting = int(pending())  # Count the decrypted bytes that no read has taken yet.
+        if waiting > 0:  # Log only the skip, because this check runs on every read.
+            logger.debug("Skipping the socket wait: the TLS layer holds %d bytes.", waiting)  # Trace the skip.
+        return waiting > 0  # Held bytes mean that recv_data can run now.
 
     def _now(self) -> float:
         """Return the current monotonic time.

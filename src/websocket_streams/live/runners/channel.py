@@ -99,6 +99,8 @@ class ChannelStreamRunner:
         subscribed = False  # Drops before subscribe must count as failed opens.
         try:  # Convert subscribe and read outcomes into retry state.
             client.open()  # Subscribe before declaring the session live.
+            if self._state.stop.is_set():  # A stop after subscribe must not leave a live stream.
+                return "stopped"  # The outer loop records the stopped state.
             subscribed = True  # open() returned only after every channel subscribed.
             self._sink.mark_live("The WebSocket connection opened.")  # The page can show the connection state.
             client.run(self._on_event)  # Read until local close or drop.
@@ -143,6 +145,9 @@ class ChannelStreamRunner:
         logger.info("Waiting before WebSockets channel reconnect attempt")  # Do not log paths.
         stopped = self._state.stop.wait(delay)  # Stop wakes the reconnect wait at once.
         logger.debug("Reconnect wait ended for WebSockets channel runner stopped=%s", stopped)  # Safe state.
+        if stopped:  # A stop during the wait must finish the session now.
+            self._finish(SessionState.STOPPED, "The operator stopped the session.")  # Keep existing stop reason.
+            return False  # Do not leave the session in stopping state.
         return not stopped  # Retry only when the delay completed normally.
 
     def _on_event(self, message: dict[str, object]) -> None:

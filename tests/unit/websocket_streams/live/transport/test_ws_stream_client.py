@@ -8,12 +8,71 @@ from collections.abc import Callable  # The recorder helper returns a callback.
 
 import pytest  # Tests assert expected transport errors.
 
+import websocket  # Socket fakes raise websocket-client timeout errors.
 from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Need endpoints.
 from src.websocket_streams.live.transport.frames import ConnectionClosed, SubscribeError  # Test structured errors.
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Test the stream transport client.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions provide endpoint fields.
 from tests.support.fake_mist_cloud.devices import StreamDevice  # Stream tests need a fake stream endpoint.
 from tests.support.fake_mist_cloud.server import FakeMistCloud  # Fake cloud provides WebSocket I/O.
+
+
+class SilentSubscribeSocket:
+    """A socket fake that never confirms subscriptions."""
+
+    def __init__(self) -> None:
+        """Build a silent socket fake."""
+        self.sent: list[str] = []  # Tests assert whether subscribe frames were sent.
+        self.sent_event = threading.Event()  # Tests wait until subscribe starts.
+        self.closed = False  # Tests assert close behavior.
+        self.aborted = False  # Tests assert abort behavior.
+        self.shutdown_called = False  # Tests assert shutdown behavior.
+        self.timeout_value: float | None = None  # Tests assert the stable socket timeout.
+
+    def settimeout(self, timeout: float) -> None:
+        """Record the stable socket timeout."""
+        self.timeout_value = timeout  # The client should set this once during open.
+
+    def send(self, payload: str) -> None:
+        """Record one subscribe frame."""
+        self.sent.append(payload)  # Keep the frame for assertions.
+        self.sent_event.set()  # Wake the test after subscribe starts.
+
+    def recv_data(self, control_frame: bool = False) -> tuple[int, bytes]:
+        """Report a quiet socket."""
+        _control_frame = control_frame  # Read the argument for the comment checker.
+        time.sleep(0.01)  # Yield so another thread can call close().
+        raise websocket.WebSocketTimeoutException("quiet")  # Force the subscribe loop to continue.
+
+    def abort(self) -> None:
+        """Wake a blocked reader."""
+        self.aborted = True  # close_socket should abort before close.
+
+    def close(self) -> None:
+        """Record a close call."""
+        self.closed = True  # The client should close stopped sockets.
+
+    def shutdown(self) -> None:
+        """Record a shutdown call."""
+        self.shutdown_called = True  # close_socket should release CLOSE_WAIT sockets.
+
+
+class BlockingFactory:
+    """A WebSocket factory fake that waits before returning a socket."""
+
+    def __init__(self) -> None:
+        """Build a blocking factory."""
+        self.started = threading.Event()  # Tests wait until the connection attempt starts.
+        self.release = threading.Event()  # Tests release the factory after stop.
+        self.socket = SilentSubscribeSocket()  # The returned socket records side effects.
+        self.timeout: float | None = None  # Tests assert the connect timeout argument.
+
+    def __call__(self, *_args: object, timeout: float | None = None, **_kwargs: object) -> SilentSubscribeSocket:
+        """Return a socket after the test releases the factory."""
+        self.timeout = timeout  # Store the connect timeout.
+        self.started.set()  # Tell the test the factory is active.
+        self.release.wait(timeout=1.0)  # Simulate a slow connect without hanging the suite.
+        return self.socket  # Return the fake socket after the stop request.
 
 
 class TestStreamClient:
@@ -140,7 +199,43 @@ class TestStreamClient:
         client = self._client_for_url("ws://127.0.0.1:1/api-ws/v1/stream", ["/one"])  # Port 1 should not accept.
         with pytest.raises(Exception) as caught:  # websocket-client raises its own connection error type.
             client.open()  # Attempt a connection to an unused port.
-        assert caught.value.__class__.__name__ in {"ConnectionRefusedError", "WebSocketProxyException"}  # Exact class.
+        assert caught.value.__class__.__name__ in {  # The bounded connect can refuse or time out.
+            "ConnectionRefusedError",
+            "TimeoutError",
+            "WebSocketProxyException",
+        }
+
+    def test_stop_during_connect_raises_local_close_and_sends_no_subscribe(self) -> None:
+        """Stop during connect before any subscribe frame can leave."""
+        factory = BlockingFactory()  # Build a factory that lets the test stop during connect.
+        client = self._client_for_url("ws://127.0.0.1:1/api-ws/v1/stream", ["/one"], subscribe_timeout=0.7)  # Client.
+        client._factory = factory  # Inject the factory because the helper builds the default client.
+        errors: list[ConnectionClosed] = []  # The opener records the local close.
+        thread = threading.Thread(target=self._open_until_close, args=(client, errors), daemon=True)  # Opener.
+        thread.start()  # Start the slow connect.
+        assert factory.started.wait(timeout=1.0) is True  # The factory is blocking the connection.
+        client.close()  # Stop before the socket is published.
+        factory.release.set()  # Let open publish the socket and see the stop.
+        thread.join(timeout=1.0)  # The opener must finish quickly.
+        assert thread.is_alive() is False  # The stop did not leak the open thread.
+        assert [(error.code, error.dropped) for error in errors] == [(None, False)]  # Local stop.
+        assert factory.timeout == 0.7  # The factory received the connect timeout.
+        assert factory.socket.sent == []  # No subscription frame left after stop.
+        assert factory.socket.shutdown_called is True  # The stopped socket was shut down.
+
+    def test_stop_during_subscribe_wait_raises_local_close(self) -> None:
+        """Stop during subscribe wait instead of reporting a false subscribe success."""
+        socket = SilentSubscribeSocket()  # Build a socket that never sends channel_subscribed.
+        client = self._client_for_url("ws://127.0.0.1:1/api-ws/v1/stream", ["/one"])  # Build the client.
+        client._factory = lambda *_args, **_kwargs: socket  # Return the silent socket from open().
+        errors: list[ConnectionClosed] = []  # The opener records the local close.
+        thread = threading.Thread(target=self._open_until_close, args=(client, errors), daemon=True)  # Opener.
+        thread.start()  # Start the subscribe wait.
+        assert socket.sent_event.wait(timeout=1.0) is True  # The subscribe frame was sent.
+        client.close()  # Stop while open waits for channel_subscribed.
+        thread.join(timeout=1.0)  # The opener must finish quickly.
+        assert thread.is_alive() is False  # The stop did not leave open blocked.
+        assert [(error.code, error.dropped) for error in errors] == [(None, False)]  # Local stop.
 
     def _client(
         self,
@@ -174,6 +269,13 @@ class TestStreamClient:
         """Read until a local close occurs."""
         try:  # Record any close error from the background read.
             client.next_event(5.0)  # This call should block until close().
+        except ConnectionClosed as error:
+            errors.append(error)  # Record the structured close error.
+
+    def _open_until_close(self, client: StreamClient, errors: list[ConnectionClosed]) -> None:
+        """Open until a local close occurs."""
+        try:  # Record any close error from the background open.
+            client.open()  # This call should stop when another thread calls close().
         except ConnectionClosed as error:
             errors.append(error)  # Record the structured close error.
 

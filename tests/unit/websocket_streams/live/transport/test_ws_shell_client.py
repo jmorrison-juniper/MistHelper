@@ -3,9 +3,11 @@
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import threading  # Send from another thread is part of the contract.
+from collections.abc import Callable  # The client helper accepts fake factories.
 
 import pytest  # Tests assert expected transport errors.
 
+import websocket  # Socket fakes raise websocket-client write errors.
 from src.websocket_streams.intake.fields import StreamRequestError  # Sends use the request error contract.
 from src.websocket_streams.live.transport.endpoint import (  # Build client endpoints.
     MistStreamEndpoint,
@@ -37,6 +39,63 @@ class MarkerDevice:
         connection.send_binary(b"abc")  # A frame without the marker must stay unchanged.
         connection.send_binary(b"\x00")  # A marker-only frame becomes empty.
         connection.send_binary(b"\x00\x00x")  # Only the first marker byte is removed.
+
+
+class WriteFailSocket:
+    """A socket fake that can fail writes after open."""
+
+    def __init__(self, fail_binary: bool = False, fail_text_after: int = 99) -> None:
+        """Build a write-failure socket."""
+        self.fail_binary = fail_binary  # Tests choose whether input fails.
+        self.fail_text_after = fail_text_after  # Tests choose which resize fails.
+        self.text_writes = 0  # Count resize writes.
+        self.binary_writes = 0  # Count input writes.
+        self.timeout_value: float | None = None  # The open path stores the stable timeout.
+        self.aborted = False  # close_socket should abort before close.
+        self.closed = False  # close_socket should call close.
+        self.shutdown_called = False  # close_socket should call shutdown after close.
+
+    def settimeout(self, timeout: float) -> None:
+        """Record the stable socket timeout."""
+        self.timeout_value = timeout  # The client should set one connection timeout.
+
+    def send(self, _message: str) -> None:
+        """Send or fail one text frame."""
+        self.text_writes += 1  # Count the resize attempt.
+        if self.text_writes > self.fail_text_after:  # Tests can fail a later resize.
+            raise websocket.WebSocketException("resize failed")  # The client maps this to not_open.
+
+    def send_binary(self, _payload: bytes) -> None:
+        """Send or fail one binary frame."""
+        self.binary_writes += 1  # Count the input attempt.
+        if self.fail_binary:  # Tests can fail the paste write.
+            raise OSError("input failed")  # The client maps OS write errors to not_open.
+
+    def abort(self) -> None:
+        """Wake a blocked reader."""
+        self.aborted = True  # close_socket should call abort.
+
+    def close(self) -> None:
+        """Record a close call."""
+        self.closed = True  # close_socket should call close.
+
+    def shutdown(self) -> None:
+        """Record a shutdown call."""
+        self.shutdown_called = True  # close_socket should call shutdown.
+
+
+class RecordingFactory:
+    """A shell WebSocket factory that records the connect timeout."""
+
+    def __init__(self, socket: WriteFailSocket) -> None:
+        """Build a factory for one socket."""
+        self.socket = socket  # The factory returns this socket.
+        self.timeout: float | None = None  # Tests assert the timeout argument.
+
+    def __call__(self, *_args: object, timeout: float | None = None, **_kwargs: object) -> WriteFailSocket:
+        """Return the configured socket."""
+        self.timeout = timeout  # Record the connect timeout.
+        return self.socket  # Return the fake socket.
 
 
 class TestShellClient:
@@ -216,10 +275,45 @@ class TestShellClient:
             client = self._client(cloud)  # Build a shell client.
             with pytest.raises(Exception) as caught:  # websocket-client raises its own connection error type.
                 client.open("ws://127.0.0.1:1/shell/default", 80, 24)  # Port 1 should not accept.
-            assert caught.value.__class__.__name__ in {
+            assert caught.value.__class__.__name__ in {  # The bounded connect can refuse or time out.
                 "ConnectionRefusedError",
+                "TimeoutError",
                 "WebSocketProxyException",
-            }  # Exact class.
+            }
+
+    def test_open_passes_connect_timeout_to_factory(self) -> None:
+        """Pass a bounded connect timeout to websocket-client."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud for a safe shell URL.
+            socket = WriteFailSocket()  # Build a socket that accepts the initial resize.
+            factory = RecordingFactory(socket)  # Record the factory arguments.
+            client = self._client(cloud, factory=factory, subscribe_timeout=0.6)  # Use a distinct timeout.
+            client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open through the fake factory.
+            client.close()  # Close to exercise abort, close, and shutdown.
+            assert factory.timeout == 0.6  # The factory received the connect timeout.
+            assert socket.timeout_value == 0.6  # The stable socket timeout matches the profile.
+            assert socket.shutdown_called is True  # close() shut down the socket after close.
+
+    def test_send_write_error_closes_client_and_returns_not_open(self) -> None:
+        """Close the shell client after a failed input write."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud for a safe shell URL.
+            socket = WriteFailSocket(fail_binary=True)  # Make the input write fail.
+            client = self._client(cloud, factory=RecordingFactory(socket))  # Use the failing socket.
+            client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Initial resize succeeds.
+            with pytest.raises(StreamRequestError) as caught:  # The route expects a contract error.
+                client.send("show version\r")  # The failing socket simulates a broken TLS write.
+            assert caught.value.code == "not_open"  # Failed writes map to not_open.
+            assert socket.shutdown_called is True  # The failed write closed the client.
+
+    def test_resize_write_error_closes_client_and_returns_not_open(self) -> None:
+        """Close the shell client after a failed resize write."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud for a safe shell URL.
+            socket = WriteFailSocket(fail_text_after=1)  # Let the initial resize pass and fail the next one.
+            client = self._client(cloud, factory=RecordingFactory(socket))  # Use the failing socket.
+            client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Initial resize succeeds.
+            with pytest.raises(StreamRequestError) as caught:  # The route expects a contract error.
+                client.resize(100, 30)  # The failing socket simulates a broken TLS write.
+            assert caught.value.code == "not_open"  # Failed writes map to not_open.
+            assert socket.shutdown_called is True  # The failed write closed the client.
 
     def test_fake_cloud_records_early_hook_and_bytes(self) -> None:
         """Guarantee the reusable fake records input bytes and early publishes."""
@@ -241,13 +335,21 @@ class TestShellClient:
             finally:
                 client.close()  # Ensure the socket and server thread stop.
 
-    def _client(self, cloud: FakeMistCloud, allow_loopback: bool = True, read_timeout: float = 20.0) -> ShellClient:
+    def _client(
+        self,
+        cloud: FakeMistCloud,
+        allow_loopback: bool = True,
+        read_timeout: float = 20.0,
+        subscribe_timeout: float = 1.0,
+        factory: Callable[..., object] | None = None,
+    ) -> ShellClient:
         """Build a shell client for the fake cloud."""
         profile = TransportProfile(
             stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
             allow_loopback=allow_loopback,
             read_timeout_seconds=read_timeout,
+            subscribe_timeout_seconds=subscribe_timeout,
         )  # Configure loopback.
         endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Build endpoint with fake auth.
         policy = ShellAddressPolicy(endpoint.cloud_host, allow_loopback=allow_loopback)  # Build address policy.
-        return ShellClient(endpoint, policy)  # Return the client under test.
+        return ShellClient(endpoint, policy, factory=factory or websocket.create_connection)  # Return the client.

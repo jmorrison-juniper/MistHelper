@@ -142,6 +142,9 @@ class UtilityRunner:
         try:  # The runner must report thread failures as session failures.
             trigger = self._prepare_trigger()  # Build the SDK-parity REST trigger.
             client = self._open_stream(trigger)  # Subscribe before the REST trigger.
+            if self._state.stopping.is_set():  # A stop between subscribe and trigger must prevent side effects.
+                self._finish_stopped()  # Finish without sending the REST trigger.
+                return  # The utility never starts after an operator stop.
             filterer = UtilityMessageFilter(trigger.listen.channel)  # Match only this trigger output.
             answer = self._send_trigger(trigger)  # Send REST trigger after subscription.
             self._bind_filter(filterer, answer)  # Bind with the session or capture identifier.
@@ -149,7 +152,12 @@ class UtilityRunner:
             self._finish(started)  # Map the collected output to a final state.
         except SubscribeError as exc:
             self._fail(f"The stream subscription failed: {exc.detail}.")  # Do not leak the channel path.
-        except (StreamRequestError, ConnectionClosed, RuntimeError, OSError) as exc:
+        except ConnectionClosed as exc:
+            if self._state.stopping.is_set() and not exc.dropped:  # A local close during open is an operator stop.
+                self._finish_stopped()  # Map the interrupted open to stopped.
+            else:
+                self._fail(str(exc) or "The utility failed.")  # Return a safe failure reason.
+        except (StreamRequestError, RuntimeError, OSError) as exc:
             self._fail(str(exc) or "The utility failed.")  # Return a safe failure reason.
         except Exception:
             logger.exception("WebSockets utility runner crashed for key %s", self._request.key)  # Log traceback.
@@ -371,6 +379,12 @@ class UtilityRunner:
             )  # Tell the operator what to check.
         else:  # Output arrived and no failure was recorded.
             self._sink.finish(SessionState.FINISHED, self._finish_reason(started))  # Report successful completion.
+
+    def _finish_stopped(self) -> None:
+        """Finish the utility after an operator stop."""
+        logger.info("Finishing stopped WebSockets utility runner for key %s", self._request.key)  # Log before finish.
+        self._sink.finish(SessionState.STOPPED, "The operator stopped the session.")  # Stop wins over start.
+        logger.debug("Finished stopped WebSockets utility runner for key %s", self._request.key)  # Log after finish.
 
     def _finish_reason(self, started: float) -> str:
         """Return the plain completion reason.

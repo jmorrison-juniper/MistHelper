@@ -18,6 +18,7 @@ from src.websocket_streams.live.runners.utility.triggers import (
 )  # Tests shorten timing without changing trigger data.
 from src.websocket_streams.live.sessions.record import SessionState  # Sink assertions use final states.
 from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Endpoint setup.
+from src.websocket_streams.live.transport.stream_client import StreamClient  # Stop tests override open behavior.
 from tests.support.fake_mist_cloud.api import FakeApiCall, FakeApiSession  # Offline REST trigger fake.
 from tests.support.fake_mist_cloud.devices import StreamDevice  # Offline stream device fake.
 from tests.support.fake_mist_cloud.server import FakeMistCloud  # Offline WebSocket fake.
@@ -114,6 +115,23 @@ class ShortTriggerTable(UtilityTriggerTable):
         return replace(trigger, listen=listen)  # Return an immutable trigger copy.
 
 
+class StopAfterOpenUtilityRunner(UtilityRunner):
+    """A utility runner that stops after subscribe but before the REST trigger."""
+
+    def _open_stream(self, trigger: UtilityRequest) -> StreamClient:
+        """Open the stream, then request a stop.
+
+        Args:
+            trigger: The utility trigger request.
+
+        Returns:
+            The open stream client.
+        """
+        client = super()._open_stream(trigger)  # Run the real subscribe-before-trigger path.
+        self.stop()  # Simulate the operator pressing Stop while the page shows connecting.
+        return client  # The base _run method decides whether it sends the trigger.
+
+
 def test_trigger_posts_only_after_channel_subscribed() -> None:
     """Send the trigger only after the stream subscription succeeds."""
     with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
@@ -204,6 +222,28 @@ def test_stop_closes_stream_within_three_seconds() -> None:
         elapsed = time.monotonic() - started  # Measure the stop duration.
     assert state == SessionState.STOPPED  # A user stop wins over transport close.
     assert elapsed < 3.0  # The close path must not block the operator.
+
+
+def test_stop_after_subscribe_prevents_utility_trigger() -> None:
+    """Do not send the REST trigger when stop arrives after subscribe."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        profile = TransportProfile(
+            stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
+            allow_loopback=True,
+            read_timeout_seconds=0.2,
+            subscribe_timeout_seconds=1.0,
+        )  # Point transport to the fake stream.
+        endpoint = MistStreamEndpoint(api, profile)  # Use the same API session for auth and REST.
+        sink = FakeSink()  # Record the final state.
+        runner = StopAfterOpenUtilityRunner(api, endpoint, _request("ex.retrieveArpTable"), sink, _slow_table())  # Run.
+        runner.start()  # Start the background utility.
+        state, reason = sink.wait_finished()  # Wait for stop handling.
+    assert state == SessionState.STOPPED  # Stop wins before the trigger.
+    assert reason == "The operator stopped the session."  # The page receives the standard stop reason.
+    assert api.calls == []  # No REST call can bounce a port after Stop.
 
 
 def test_subscribe_refusal_does_not_leak_channel_path() -> None:

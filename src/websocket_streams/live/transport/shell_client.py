@@ -70,8 +70,9 @@ class ShellClient:
             sslopt=self._endpoint.sslopt(),
             enable_multithread=True,
             skip_utf8_validation=True,
+            timeout=self._endpoint.profile.subscribe_timeout_seconds,  # Bound a stalled TCP or TLS handshake.
         )  # Open with thread-safe websocket-client mode.
-        socket.settimeout(0.1)  # A short timeout lets close() stop a blocked read.
+        socket.settimeout(self._endpoint.profile.subscribe_timeout_seconds)  # Keep writes from using read timeouts.
         with self._lock:  # Publish the socket under the lock.
             self._socket = socket  # send(), resize(), and close() can now use it.
             self._reader = FrameReader(
@@ -121,7 +122,7 @@ class ShellClient:
         logger.debug("Sending %s Mist shell input bytes", len(payload))  # Debug level: paste sends many chunks.
         with self._send_lock:  # Preserve input order across web threads.
             socket = self._open_socket()  # Refuse sends after close.
-            self._send_binary(socket, payload)  # Send one binary frame.
+            self._write_binary(socket, payload)  # Send one binary frame or close on write failure.
         logger.debug("Sent %s Mist shell input bytes", len(payload))  # Log only the byte count.
 
     def resize(self, cols: int, rows: int) -> None:
@@ -138,7 +139,7 @@ class ShellClient:
         logger.debug("Sending Mist shell resize to %s columns and %s rows", cols, rows)  # Debug level: drags are busy.
         with self._send_lock:  # Keep resize order consistent with input frames.
             socket = self._open_socket()  # Refuse resize after close.
-            socket.send(message)  # Resize is a text frame.
+            self._write_text(socket, message)  # Send one text frame or close on write failure.
         logger.debug("Sent Mist shell resize to %s columns and %s rows", cols, rows)  # Log after send.
 
     def close(self) -> None:
@@ -150,7 +151,7 @@ class ShellClient:
             self._socket = None  # Future sends fail as not open.
             self._reader = None  # Future reads cannot use the old socket.
         if socket is not None:  # close() before open is harmless.
-            socket.close()  # websocket-client close wakes recv.
+            FrameReader.close_socket(socket)  # Abort, close, and shutdown to release CLOSE_WAIT sockets.
         logger.debug("Closed Mist shell WebSocket")  # Log after the close request.
 
     def _open_socket(self) -> Any:
@@ -205,14 +206,37 @@ class ShellClient:
         """
         return frame[1:] if frame.startswith(b"\x00") else frame  # Remove exactly one leading channel marker.
 
-    def _send_binary(self, socket: Any, payload: bytes) -> None:
+    def _write_text(self, socket: Any, message: str) -> None:
+        """Send one text frame.
+
+        Args:
+            socket: The open websocket object.
+            message: The text frame payload.
+
+        Raises:
+            StreamRequestError: The write failed.
+        """
+        try:  # A slow or broken link must close the terminal session.
+            socket.send(message)  # Resize is a text frame.
+        except (websocket.WebSocketException, OSError) as exc:
+            self.close()  # Close the reader after a failed write.
+            raise StreamRequestError("not_open", "The shell connection is not open.") from exc  # Contract refusal.
+
+    def _write_binary(self, socket: Any, payload: bytes) -> None:
         """Send one binary frame.
 
         Args:
             socket: The open websocket object.
             payload: The binary payload.
+
+        Raises:
+            StreamRequestError: The write failed.
         """
-        if hasattr(socket, "send_binary"):  # websocket-client exposes this helper on real sockets.
-            socket.send_binary(payload)  # Use the helper when present.
-        else:
-            socket.send(payload, opcode=ABNF.OPCODE_BINARY)  # Fakes or older clients can use the opcode form.
+        try:  # A failed paste write must close the terminal session.
+            if hasattr(socket, "send_binary"):  # websocket-client exposes this helper on real sockets.
+                socket.send_binary(payload)  # Use the helper when present.
+            else:
+                socket.send(payload, opcode=ABNF.OPCODE_BINARY)  # Fakes or older clients can use the opcode form.
+        except (websocket.WebSocketException, OSError) as exc:
+            self.close()  # Close the reader after a failed write.
+            raise StreamRequestError("not_open", "The shell connection is not open.") from exc  # Contract refusal.

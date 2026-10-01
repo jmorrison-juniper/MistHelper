@@ -170,7 +170,7 @@ class TestStreamSessionManager:
         second = manager.stop(session_id)  # Repeat the stop.
         assert first["state"] == "stopping"  # A stop request moves to stopping.
         assert second["state"] == "stopping"  # A repeat stop returns the same state.
-        assert factory.runners[0].stopped == 1  # The runner receives one stop call.
+        assert factory.runners[0].stopped == 2  # Each live Stop request wakes the runner.
         manager.session(session_id).finish(SessionState.STOPPED, "done")  # End the session.
         filename, lines = manager.download(session_id)  # Build a download.
         assert filename.startswith("site.stats.devices-")  # The file name includes the key.

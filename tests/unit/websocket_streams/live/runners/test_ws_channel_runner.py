@@ -5,6 +5,8 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 import threading  # Fake sinks use a condition to wait for runner callbacks.
 import time  # Reconnect timing tests compare elapsed time.
 
+import pytest  # The post-open stop test patches the transport client.
+
 from src.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
@@ -89,6 +91,33 @@ class DropDuringSubscribeDevice:
         with self._lock:  # Protect the drop count.
             self.drop_count += 1  # Count the subscribe attempt before dropping.
         connection.drop()  # Drop before any channel_subscribed answer.
+
+
+class StopAfterOpenClient:
+    """A stream client fake that requests stop immediately after open."""
+
+    stop_event: threading.Event | None = None  # The test injects the runner stop event.
+    instances: list[StopAfterOpenClient] = []  # Tests read the fake client after the run.
+
+    def __init__(self, _endpoint: object, channels: tuple[str, ...]) -> None:
+        """Record the channel set."""
+        self.channels = channels  # The runner should pass all channel paths.
+        self.run_called = False  # A stop after open must prevent run().
+        StopAfterOpenClient.instances.append(self)  # Keep the instance for assertions.
+
+    def open(self) -> None:
+        """Request stop as soon as open returns."""
+        if StopAfterOpenClient.stop_event is None:  # The test must inject the stop event.
+            raise AssertionError("The stop event was not configured.")  # Fail with a clear reason.
+        StopAfterOpenClient.stop_event.set()  # Simulate Stop during the post-open gap.
+
+    def run(self, _callback: object) -> None:
+        """Record an unexpected read-loop call."""
+        self.run_called = True  # The runner must not read after post-open stop.
+
+    def close(self) -> None:
+        """Accept close from the runner."""
+        return None  # The fake has no socket to close.
 
 
 class TestChannelStreamRunner:
@@ -210,6 +239,22 @@ class TestChannelStreamRunner:
             assert time.monotonic() - start < 0.5  # Stop woke the wait promptly.
             assert finished == [(SessionState.STOPPED, "The operator stopped the session.")]  # Stop state.
 
+    def test_stop_after_open_does_not_mark_live_or_run_reader(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Stop after open before the runner marks the session live."""
+        sink = FakeSink()  # Record runner callbacks.
+        endpoint = self._endpoint_for_url("ws://127.0.0.1:1/api-ws/v1/stream")  # The fake ignores the URL.
+        runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+        StopAfterOpenClient.instances = []  # Clear prior fake-client instances.
+        StopAfterOpenClient.stop_event = runner._state.stop  # Inject the runner stop event for the fake client.
+        monkeypatch.setattr(
+            "src.websocket_streams.live.runners.channel.StreamClient", StopAfterOpenClient
+        )  # Replace only this test's stream client.
+        runner.start()  # Start the daemon reader thread.
+        finished = sink.wait_for_finished(1, 1.0)  # Wait for stopped state.
+        assert finished == [(SessionState.STOPPED, "The operator stopped the session.")]  # Stop state.
+        assert sink.live_notes == []  # The page must not see a live connection after stop.
+        assert StopAfterOpenClient.instances[0].run_called is False  # No channel stream was left running.
+
     def test_quiet_channel_stays_open_when_pongs_arrive(self) -> None:
         """Keep a quiet channel alive when the fake cloud answers pings."""
         with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
@@ -243,6 +288,11 @@ class TestChannelStreamRunner:
             reconnect_delays=reconnect_delays,
         )  # Configure short offline timeouts.
         return MistStreamEndpoint(FakeApiSession(), profile)  # Return the endpoint under test.
+
+    def _endpoint_for_url(self, url: str) -> MistStreamEndpoint:
+        """Build an endpoint for a direct stream URL."""
+        profile = TransportProfile(stream_url=url, allow_loopback=True)  # Use a direct URL for a patched client.
+        return MistStreamEndpoint(FakeApiSession(), profile)  # Build endpoint with fake auth.
 
     def _request(self, sites: tuple[str, ...]) -> StartRequest:
         """Build a repeatable channel request."""
