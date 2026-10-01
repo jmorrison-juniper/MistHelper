@@ -1,0 +1,48 @@
+{
+  "workflow": "speckit",
+  "specName": "Read-only retry evidence",
+  "branch": "jmorrison-juniper-read-only-retry-evidence",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-01T22:14:07Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-01T22:14:07Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-01T22:14:07Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-01T23:12:15Z"
+    }
+  ],
+  "templateWorkflow": {
+    "reason": "The mandatory feature hook failed because pwsh is unavailable.",
+    "hookExitCode": 127,
+    "sharedStateChanged": false
+  },
+  "publication": {
+    "queuePosition": 35,
+    "grantReceived": false,
+    "state": "local-only",
+    "parentSessionId": "6d71fd26-57c2-48c0-abc8-607af98f75d0"
+  }
+}

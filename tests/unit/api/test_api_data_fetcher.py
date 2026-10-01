@@ -236,9 +236,9 @@ class TestLogRetryAttempt:
             carries the "retrying in" notice.
         """
         with caplog.at_level(logging.WARNING):
-            APIDataFetcher._log_retry_attempt("listOrgSites", attempt=0, delay=2.0)
-        assert "listOrgSites" in caplog.text
-        assert "retrying in 2s" in caplog.text
+            APIDataFetcher._log_retry_attempt("listOrgSites", 0, 2.0, SimpleNamespace(status_code=503))
+        assert caplog.messages == ["API call listOrgSites failed (attempt 1/3, HTTP status: 503) - retrying in 2s"]
+        assert caplog.records[0].levelno == logging.WARNING
 
 
 # ---------------------------------------------------------------------------
