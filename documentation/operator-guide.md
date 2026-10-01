@@ -107,6 +107,10 @@ Menu 293 runs Mist Edge lifecycle actions. It requires typing `CLAIM`, `ASSIGN`,
 `UNASSIGN`, `BOUNCE`, or `UPGRADE` to confirm, and `--dry-run` previews the
 lifecycle request.
 
+Read [Menu operations 271 to 293](menu-operations-271-293.md) for the output
+files, the thresholds, the environment variables, and the typed confirmation
+of each operation in that range.
+
 ## What MistHelper does
 
 | Area | What you get |
