@@ -81,6 +81,21 @@ class TestSessionDatabaseEnvironment:
         assert stat.S_IMODE(harness.target.stat().st_mode) == 0o400
         assert harness.target.with_suffix(".env.new").exists() is False
 
+    @pytest.mark.parametrize("failure", ("missing", "directory"))
+    def test_an_unavailable_session_file_cannot_pass_an_empty_comparison(self, tmp_path: Path, failure: str) -> None:
+        """The probe must fail before it compares an environment from no readable file."""
+        harness = SessionEnvironmentHarness(tmp_path)
+        written = harness.write({})
+        harness.target.unlink()
+        if failure == "directory":
+            harness.target.mkdir()
+        result = harness.source("environment", dict.fromkeys(DatabaseSettingsFixture.FIELDS, ""))
+        assert written.returncode == 0
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert result.stderr != ""
+        print("Checked 1 unavailable session file.")
+
 
 class TestSessionFileProtection:
     """Keep the file and its reports limited to the explicit configuration."""

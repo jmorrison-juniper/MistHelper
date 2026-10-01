@@ -58,10 +58,12 @@ Each value case covers empty, plain, space, quote, dollar, newline, Unicode, or 
 Command-shaped password text remains data and creates no marker file.
 Nine missing-credential cases preserve required credential validation.
 Four invalid-input cases fail instead of reporting an empty successful measurement.
+Two unavailable-file cases stop the shell before an empty comparison can report success.
+Both cases failed against the initial harness and passed after its source guard changed.
 The visible allowlist proof prints `Checked 18 session configuration names.`
 
 The new contracts have no skip marker.
-All seventy-nine new cases pass.
+All eighty-one new cases pass.
 The ten existing writer cases also pass.
 
 ## Measured SSH Layer
@@ -97,12 +99,12 @@ The fixture closes its listener, channels, transports, and worker before it retu
 | `.venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed for 663 source files. |
 | `.venv/bin/python -m mypy tests/unit/container/session_database/harness.py tests/unit/container/session_database/test_environment.py tests/unit/container/session_database/test_export.py --config-file pyproject.toml` | Passed with no suppression. |
 | `.venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed for 786 files with no finding or parse error. |
-| The combined regression command below | Passed with 281 passed and one existing skip. |
-| The writer and new contracts alone | Passed with 89 passed and no skip. |
+| The combined regression command below | Passed with 283 passed and one existing skip. |
+| The writer and new contracts alone | Passed with 91 passed and no skip. |
 | Exporter tests with `--cov=src.export.data_exporter --cov-branch --cov-fail-under=80` | Passed with 95.44 percent coverage. |
 | Full test-quality ratchet with the unchanged configuration and baseline | Checked 994 files and found no new finding. |
 | Radon and `complexity-gate --max 10` on the new package | Passed. |
-| An AST count of the new functions | Checked 36 functions. None exceeds 25 lines. |
+| An AST count of the new functions | Checked 37 functions. None exceeds 25 lines. |
 | Configured STE heuristics with `--min-score 80` | Passed. Dictionary coverage remains partial. |
 | `.venv/bin/markdown-link-check documentation/SSH_GUIDE.md changelog.d/issue-3313-ssh-database-settings.md specs/3313-ssh-database-settings` | Passed for six Markdown files with no broken link. |
 
@@ -159,6 +161,10 @@ The configured heuristic check passes, but its dictionary scope is `partial` wit
 This repair does not generate, obtain, or substitute a dictionary.
 
 ## Delivery State
+
+The final review found a false successful comparison after the shell could not read its session file.
+A local follow-up commit corrects the harness and proves both unavailable-file cases.
+The initial local commit remains unchanged.
 
 The local repair, specification, implementation, analysis, and quality evidence are complete.
 The parent has not granted remote publication.
