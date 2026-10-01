@@ -38,9 +38,11 @@ class SsrRegistrationCommands:
         if not text:  # WHY: an empty body cannot help the operator onboard a router.
             print("No SSR registration commands were returned.")  # WHY: give a clear operator result.
             return  # WHY: no text means no file should be written.
-        SsrRegistrationCommands._print_commands(text)  # WHY: print before asking about the file write.
         if SsrRegistrationCommands._confirm_write():  # WHY: explicit consent protects the registration code.
+            SsrRegistrationCommands._print_commands(text)  # WHY: print sensitive commands only after consent.
             SsrRegistrationCommands._write_commands(text)  # WHY: persist the text only after confirmation.
+        else:
+            SsrRegistrationCommands._print_declined_footer()  # WHY: explain why no sensitive code was printed.
         logger.debug("Menu #288: Finished SSR registration command read")  # WHY: action summary without secrets.
 
     @staticmethod
@@ -104,3 +106,9 @@ class SsrRegistrationCommands:
         path.parent.mkdir(parents=True, exist_ok=True)  # WHY: a fresh worktree may not hold a data directory.
         path.write_text(text, encoding="utf-8")  # WHY: persist exact command text after approval.
         logger.debug("Wrote SSR registration commands to %s", path)  # WHY: confirm write without the secret.
+
+    @staticmethod
+    def _print_declined_footer() -> None:
+        """Print the declined sensitive-output footer."""
+        logger.info("SSR registration commands were not printed because write approval was declined")  # WHY: audit.
+        print("Registration commands were not printed or written because they include a sensitive code.")  # WHY.
