@@ -7,11 +7,11 @@ import pytest  # WHY: tests assert SystemExit behavior for invalid menu input.
 import MistHelper  # WHY: the runtime menu table is the source under test.
 from src.utils.menu_entry import MenuEntry  # WHY: the test verifies the production row type.
 
-EXPECTED_MENU_ENTRY_COUNT = 286  # WHY: guard against lost rows during menu-table refactors.
+EXPECTED_MENU_ENTRY_COUNT = 293  # WHY: guard against lost rows during menu-table refactors.
 EXPECTED_DESTRUCTIVE_NUMBERS = frozenset(  # WHY: operators rely on these numbers as write-capable actions.
     {str(number) for number in range(154, 188)}
     | {str(number) for number in range(189, 192)}
-    | {"194", "206", "207", "208"}
+    | {"194", "206", "207", "208", "281", "286", "287", "291", "292", "293"}
 )
 DESTRUCTIVE_BOUNDARY_CASES = (  # WHY: test every edge of the discontinuous destructive set.
     ("153", False),
@@ -28,6 +28,15 @@ DESTRUCTIVE_BOUNDARY_CASES = (  # WHY: test every edge of the discontinuous dest
     ("206", True),
     ("208", True),
     ("209", False),
+    ("280", False),
+    ("281", True),
+    ("285", False),
+    ("286", True),
+    ("287", True),
+    ("288", False),
+    ("290", False),
+    ("291", True),
+    ("293", True),
 )
 
 

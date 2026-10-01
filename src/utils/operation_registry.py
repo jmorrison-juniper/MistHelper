@@ -383,6 +383,18 @@ class OperationRegistry:
         # WHY: menu 279 is safe because it reads organization gateway statistics only, writes
         # report files under data/, and makes no Mist configuration change.
         "279": {"category": "safe"},
+        # WHY: Menu 280 reads recent alarms and writes a shift handover digest without
+        # changing Mist cloud state. Menu 281 changes alarm acknowledgement state, so it
+        # stays in the destructive category, requires the operator to type `ACK <count>`,
+        # and supports `--dry-run` for a no-change preview.
+        "280": {"category": "safe"},
+        "281": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 281 acknowledges Mist alarms; requires typed ACK <count> "
+                "confirmation and supports --dry-run."
+            ),
+        },
         # WHY: Menu 282 is safe because it reads Mist rogue, WLAN, and site setting evidence,
         # then writes local evidence files only. PCI DSS 4.0 requires evidence of rogue and
         # unknown wireless access point detection, so this operation packages detection rows,
@@ -412,6 +424,28 @@ class OperationRegistry:
             "category": "interactive",
             "skip_reason": "Requires a provider, a username, a hidden password, and a y/N confirmation",
         },
+        # WHY: Client CoA, reauthentication, disconnect, guest unauthorize, and rogue client
+        # deauth can drop live sessions, so menu 286 is destructive and requires typed target
+        # confirmation plus dry-run support.
+        "286": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 286 disconnects or reauthenticates live client sessions; requires typed "
+                "target confirmation and must not run in automated safe or fast tests."
+            ),
+        },
+        # WHY: Menu 287 moves an existing Mist device configuration to an unassigned
+        # replacement during an RMA. It is destructive because the Mist cloud changes
+        # inventory assignment and configuration ownership. The operation requires the
+        # typed word REPLACE, writes a backup under data/rma_backups/ before the request,
+        # and supports --dry-run so an operator can prove the path without changing Mist.
+        "287": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 287 moves a device configuration for an RMA; requires typed REPLACE "
+                "confirmation and supports --dry-run."
+            ),
+        },
         # WHY: Menu 288 prints SSR registration commands for a NOC engineer who must manually
         # onboard a Session Smart Router. The read is safe and has no prompt, but the optional
         # file write asks y/N because the command text can include a live registration code.
@@ -437,6 +471,37 @@ class OperationRegistry:
         "290": {
             "category": "interactive",
             "skip_reason": "Requires a mode, a site, target values, and a y/N confirmation",
+        },
+        # WHY: this destructive site RRM action must capture the current plan before it
+        # changes channels or power, and typed confirmation keeps accidental optimize or
+        # reset requests from reaching Mist.
+        "291": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 291 changes AP radio state; requires typed OPTIMIZE or RESET "
+                "confirmation and supports --dry-run."
+            ),
+        },
+        # WHY: menu 292 imports PSKs, user MACs, and assets into Mist Cloud from CSV
+        # files under data/. It creates or updates cloud records, so it is destructive
+        # and must stay behind the exact IMPORT <row_count> confirmation and --dry-run
+        # support.
+        "292": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 292 creates Mist records from CSV; requires typed IMPORT <row_count> "
+                "confirmation and supports --dry-run."
+            ),
+        },
+        # WHY: Menu 293 changes Mist Edge organization inventory, site assignment, tunnel
+        # data ports, and firmware state. It is destructive, so the operator must use
+        # the sub-menu typed confirmation words and dry-run mode before any live request.
+        "293": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 293 changes Mist Edge inventory, site assignment, tunnel data ports, "
+                "and firmware state; requires typed confirmation and a live Mist tenant."
+            ),
         },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {

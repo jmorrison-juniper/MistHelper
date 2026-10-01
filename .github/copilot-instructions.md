@@ -228,7 +228,7 @@ python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirem
 .venv\Scripts\Activate.ps1
 python MistHelper.py --test
 ```
-**Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208, 239), `interactive`, `websocket`, and `continuous_loop`.
+**Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293), `interactive`, `websocket`, and `continuous_loop`.
 
 **Warning**: `git worktree add` copies the tracked files only. `.venv` is not tracked, so a new
 worktree has no virtual environment. The activation line then fails, and the tests run against the
@@ -436,10 +436,10 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ## Menu System & Operations
 
-### Menu Categories (Full Range: 0-290)
+### Menu Categories (Full Range: 0-293)
 
 `src/utils/operation_registry.py` is the single source of truth. Read it before
-you trust this table. Counts were measured on 2026-09-30. Run
+you trust this table. Counts were measured on 2026-10-01. Run
 `python scripts/generate_menu_wiki.py` to regenerate the full reference.
 `tests/guardrails/test_destructive_menu_docs.py` proves that this table matches
 the registry, so a stale count now fails the gate.
@@ -447,8 +447,8 @@ the registry, so a stale count now fails the gate.
 | Category | Count | Menu numbers |
 | - | - | - |
 | `interactive_safe` | 95 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289 |
-| `safe` | 83 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-279, 282 |
-| `destructive` | 42 | 154-187, 189-191, 194, 206-208, 239 |
+| `safe` | 84 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 |
+| `destructive` | 48 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293 |
 | `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
 | `websocket` | 22 | 102-123 |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
@@ -456,13 +456,15 @@ the registry, so a stale count now fails the gate.
 
 Warning: A `destructive` operation changes the Mist cloud configuration. Never
 automate one without explicit user confirmation. The destructive set is
-154-187, 189-191, 194, 206-208, and 239. It is not a single block, so do not
+154-187, 189-191, 194, 206-208, 239, 281, 286-287, and 291-293. It is not a single block, so do not
 treat any range boundary as a shortcut.
 
-Warning: menu 239 sits far from the other destructive numbers. It starts the
-upgrade capture portal on port 8056, and it drives a firmware upgrade for the
-selected site. An earlier version of this table stopped at 208, so a reader
-could treat 239 as safe. Issue #2825 records that gap.
+Warning: menu 239 and menus 281, 286-287, and 291-293 sit far from the other
+destructive numbers. Menu 239 starts the upgrade capture portal on port 8056,
+and it drives a firmware upgrade for the selected site. The later menus change
+alarm state, client sessions, inventory, RRM, CSV imports, or Mist Edge state.
+An earlier version of this table stopped at 208, so a reader could treat these
+menus as safe. Issue #2825 records the first gap.
 
 Operations 195 through 209 were the newest set in the 2026-08 measurement.
 Three of them are destructive: 206 manages Zscaler synthetic probes, 207
@@ -873,7 +875,7 @@ Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
 - AI must tick all conformance checklist boxes in the PR template.
 - AI must **wait for CodeQL to pass** before adding the `auto-merge` label.
   Use `gh pr checks <pr-number> --watch` to confirm all checks are green.
-- Destructive operations (154-187, 189-191, 194, 206-208, 239) require explicit human review regardless of AI authorship.
+- Destructive operations (154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293) require explicit human review regardless of AI authorship.
 
 ---
 
@@ -909,7 +911,7 @@ See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.ins
 § Part 7 for the full decision table.
 
 **MistHelper-specific escalation triggers**:
-- Any change to a destructive operation (154-187, 189-191, 194, 206-208, 239)
+- Any change to a destructive operation (154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293)
 - Database schema or primary key strategy changes
 - Changes touching 3+ files or 2+ classes
 

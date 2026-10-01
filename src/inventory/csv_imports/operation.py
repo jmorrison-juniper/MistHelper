@@ -159,10 +159,11 @@ class CsvImportOperation:
         cls,
         options: CsvImportOptions | None = None,
         deps: CsvImportDependencies | None = None,
+        dry_run: bool | None = None,
     ) -> None:
         """Run menu 292 without positional arguments."""
         logger.warning("Menu #292 destructive CSV import started")  # WHY: destructive audit start.
-        run_options = options or CsvImportOptions()  # WHY: default keeps menu handler argument-free.
+        run_options = options or CsvImportOptions(dry_run=dry_run)  # WHY: default accepts the shared dry-run flag.
         run_deps = deps or cls._default_dependencies()  # WHY: use shared runtime unless tests inject seams.
         dry_run = cls._is_dry_run(run_options)  # WHY: determine whether a request can be sent.
         definition = cls._select_definition(run_options, run_deps)  # WHY: choose the exact import endpoint.

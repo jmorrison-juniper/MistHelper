@@ -2,7 +2,7 @@
 
 # Menu API endpoint map
 
-This map shows the Mist API endpoints that each of the 286 MistHelper menu options can call.
+This map shows the Mist API endpoints that each of the 293 MistHelper menu options can call.
 The count includes menu 0, which closes MistHelper.
 The menu reference does not count menu 0 as an actionable entry.
 Use the map to find the endpoint that does a task, and to find the code that sends the request.
@@ -61,9 +61,9 @@ flowchart TB
 ```mermaid
 pie showData
     title Menu options in each category
-    "safe" : 83
+    "safe" : 84
     "interactive_safe" : 95
-    "destructive" : 42
+    "destructive" : 48
     "interactive" : 33
     "websocket" : 22
     "resource_intensive" : 10
@@ -74,9 +74,9 @@ pie showData
 
 | Category | Menu options | With an endpoint | Page |
 | - | - | - | - |
-| `safe` | 83 | 81 | [safe](Menu-API-Endpoints-Safe) |
+| `safe` | 84 | 82 | [safe](Menu-API-Endpoints-Safe) |
 | `interactive_safe` | 95 | 94 | [interactive_safe](Menu-API-Endpoints-Interactive-Safe) |
-| `destructive` | 42 | 40 | [destructive](Menu-API-Endpoints-Destructive) |
+| `destructive` | 48 | 45 | [destructive](Menu-API-Endpoints-Destructive) |
 | `interactive` | 33 | 31 | [interactive](Menu-API-Endpoints-Interactive) |
 | `websocket` | 22 | 22 | [websocket](Menu-API-Endpoints-Websocket) |
 | `resource_intensive` | 10 | 10 | [resource_intensive](Menu-API-Endpoints-Resource-Intensive) |
@@ -365,17 +365,24 @@ pie showData
 | [277](Menu-API-Endpoints-Safe#menu-277) | Export the organization switch scorecard | `safe` | 1 |
 | [278](Menu-API-Endpoints-Safe#menu-278) | Export the organization access point scorecard | `safe` | 1 |
 | [279](Menu-API-Endpoints-Safe#menu-279) | Organization WAN Edge Scorecard | `safe` | 1 |
+| [280](Menu-API-Endpoints-Safe#menu-280) | Export the alert digest handover report | `safe` | 2 |
+| [281](Menu-API-Endpoints-Destructive#menu-281) | DESTRUCTIVE: Acknowledge recent unacknowledged alarms (Requires typing 'ACK <count>' to confirm, supports --dry-run) | `destructive` | 3 |
 | [282](Menu-API-Endpoints-Safe#menu-282) | Export the rogue and PCI evidence pack | `safe` | 5 |
 | [283](Menu-API-Endpoints-Interactive#menu-283) | Trigger a synthetic test on demand | `interactive` | 5 |
 | [284](Menu-API-Endpoints-Interactive#menu-284) | Test the guest portal SMS provider | `interactive` | 3 |
 | [285](Menu-API-Endpoints-Interactive#menu-285) | Validate a NAC identity provider credential | `interactive` | 3 |
+| [286](Menu-API-Endpoints-Destructive#menu-286) | DESTRUCTIVE: Client CoA, reauthentication, and disconnect (Requires typing the target to confirm, supports --dry-run) | `destructive` | 5 |
+| [287](Menu-API-Endpoints-Destructive#menu-287) | DESTRUCTIVE: Replace a Mist inventory device for RMA (Requires typing 'REPLACE' to confirm, supports --dry-run) | `destructive` | 3 |
 | [288](Menu-API-Endpoints-Interactive-Safe#menu-288) | Show the SSR registration commands | `interactive_safe` | 0 |
 | [289](Menu-API-Endpoints-Interactive-Safe#menu-289) | Export the client fingerprint census for a site | `interactive_safe` | 2 |
 | [290](Menu-API-Endpoints-Interactive#menu-290) | Run spectrum analysis and RF diagnostic recording | `interactive` | 4 |
+| [291](Menu-API-Endpoints-Destructive#menu-291) | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run) | `destructive` | 2 |
+| [292](Menu-API-Endpoints-Destructive#menu-292) | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run) | `destructive` | 10 |
+| [293](Menu-API-Endpoints-Destructive#menu-293) | DESTRUCTIVE: Run the Mist Edge lifecycle operation (Requires typing 'CLAIM', 'ASSIGN', 'UNASSIGN', 'BOUNCE', or 'UPGRADE' to confirm, supports --dry-run) | `destructive` | 0 |
 
 ## Menu options with no endpoint
 
-The map finds no Mist API request for 7 menu options.
+The map finds no Mist API request for 8 menu options.
 
 - Menu 0: Menu 0 closes MistHelper. It sends no API request.
 - Menu 141: Menu 141 opens a browser for the mistapi library. The operator selects the SDK function at run time, so the map cannot name one endpoint.
@@ -384,6 +391,7 @@ The map finds no Mist API request for 7 menu options.
 - Menu 243: Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric catalog. It sends no API request.
 - Menu 274: No curated reason exists yet.
 - Menu 288: No curated reason exists yet.
+- Menu 293: No curated reason exists yet.
 
 ## Most used endpoints
 
@@ -391,29 +399,29 @@ The map finds no Mist API request for 7 menu options.
 | - | - | - | - |
 | 114 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) |
 | 41 | GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) |
-| 34 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) |
+| 35 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) |
 | 28 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) |
 | 22 | GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) |
 | 15 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) |
-| 14 | GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) |
+| 15 | GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) |
 | 12 | GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) |
 | 10 | GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) |
 | 9 | GET | `/api/v1/sites/{site_id}` | [`sites.sites.getSiteInfo`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/get-site-info) |
+| 8 | GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) |
 | 8 | GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) |
 | 8 | GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) |
 | 8 | GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) |
 | 8 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) |
 | 8 | GET | `/api/v1/sites/{site_id}/stats/devices` | [`sites.stats.listSiteDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats) |
 | 7 | GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) |
+| 7 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) |
 | 7 | GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) |
 | 7 | GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) |
-| 6 | GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) |
 | 6 | GET | `/api/v1/const/ap_channels` | [`const.ap_channels.listApChannels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-channels) |
 | 6 | GET | `/api/v1/const/ap_esl_versions` | [`const.ap_esl_versions.listApLEslVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-l-esl-versions) |
 | 6 | GET | `/api/v1/const/ap_led_status` | [`const.ap_led_status.listApLedDefinition`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-led-definition) |
 | 6 | GET | `/api/v1/const/app_categories` | [`const.app_categories.listAppCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-category-definitions) |
 | 6 | GET | `/api/v1/const/app_subcategories` | [`const.app_subcategories.listAppSubCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-sub-category-definitions) |
-| 6 | GET | `/api/v1/const/applications` | [`const.applications.listApplications`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-applications) |
 
 ## Shared helpers
 

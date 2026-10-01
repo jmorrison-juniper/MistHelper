@@ -3265,6 +3265,42 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "primary_key": ["site_id", "distinct", "value"],
         "indexes": ["site_id", "site_name", "distinct", "value"],
     },
+    "alertDigest": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["category", "alarm_type", "site", "first_seen", "last_seen"],
+        "indexes": ["category", "severity", "alarm_type", "site", "acknowledged_state"],
+    },
+    "alertAcknowledgeLog": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["alarm_id", "outcome", "run_time"],
+        "indexes": ["alarm_id", "alarm_type", "site", "outcome", "http_status"],
+    },
+    "replaceOrgDevices": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["timestamp", "org_id", "old_mac", "new_mac", "result"],
+        "indexes": ["org_id", "old_mac", "new_mac", "result"],
+    },
+    "rrm_reset_plan_diff": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["site_id", "ap", "band", "change_type"],
+        "indexes": ["site_id", "ap", "band", "change_type"],
+    },
+    "csv_import_log": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["import_type", "row_count", "dry_run", "status", "message"],
+        "indexes": ["import_type", "status"],
+    },
+    "mxedge_lifecycle_log": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "unique_fields": ["timestamp_utc", "org_id", "step", "target"],
+        "indexes": ["org_id", "step", "status", "dry_run"],
+    },
     "rf_diagnostics_runs": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],

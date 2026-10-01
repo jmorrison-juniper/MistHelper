@@ -2,7 +2,7 @@
 
 # Menu API endpoints: destructive
 
-This page lists the Mist API endpoints of the 42 menu options in the `destructive` category.
+This page lists the Mist API endpoints of the 48 menu options in the `destructive` category.
 A menu option in this category changes the Mist cloud configuration.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -18,12 +18,12 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["destructive: 42 menu<br/>options"]
-    root --> f_sites_devices["sites/devices<br/>25 menu options"]
+    root["destructive: 48 menu<br/>options"]
+    root --> f_sites_devices["sites/devices<br/>26 menu options"]
     root --> f_orgs_sites["orgs/sites<br/>21 menu options"]
     root --> f_sites_stats["sites/stats<br/>16 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>12 menu options"]
-    root --> f_orgs_inventory["orgs/inventory<br/>10 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>11 menu options"]
     root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>6 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>6 menu options"]
     root --> f_sites_setting["sites/setting<br/>4 menu options"]
@@ -31,7 +31,7 @@ flowchart LR
     root --> f_orgs_ssr["orgs/ssr<br/>3 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>3 menu options"]
     root --> f_orgs_tickets["orgs/tickets<br/>3 menu options"]
-    root --> more["15 more families"]
+    root --> more["26 more families"]
 ```
 
 ## Menu 154
@@ -978,3 +978,131 @@ flowchart LR
 | POST | `/api/v1/sites/{site_id}/devices/{device_id}/upgrade` | [`sites.devices.upgradeDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/upgrade-device) | [`ENDPOINT_SITE_DEVICE`](../../src/firmware/upgrade_service.py) | Name |
 | GET | `/api/v1/sites/{site_id}/ssr/upgrade/{upgrade_id}` | [`sites.ssr.getSiteSsrUpgrade`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/get-site-ssr-upgrade) | [`_ENDPOINT_MODULES`](../../src/firmware/upgrade_service.py) | Name |
 | GET | `/api/v1/sites/{site_id}/stats/devices` | [`sites.stats.listSiteDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats) | [`SiteStatsFirmwareEvidenceReader._read_site_statistics`](../../src/upgrade_portal/api/run_controls/routes.py) | Call |
+
+## Menu 281
+
+- Title: DESTRUCTIVE: Acknowledge recent unacknowledged alarms (Requires typing 'ACK <count>' to confirm, supports --dry-run)
+- Handler: `lambda dry_run=False: AlertDigestOperation.run_acknowledge(dry_run=dry_run)`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 281:<br/>DESTRUCTIVE:<br/>Acknowledge recent<br/>unack..."]
+    menu --> c1["AlertDigestClient"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/alarm_defs"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/alarms/ack"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/alarms<br/>/search"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`AlertDigestClient.list_alarm_definitions`](../../src/reports/alert_digest/client.py) | Call |
+| POST | `/api/v1/orgs/{org_id}/alarms/ack` | [`orgs.alarms.ackOrgMultipleAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/ack-org-multiple-alarms) | [`AlertDigestClient.acknowledge_alarms`](../../src/reports/alert_digest/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`AlertDigestClient._read_first_alarm_page`](../../src/reports/alert_digest/client.py) | Call |
+
+## Menu 286
+
+- Title: DESTRUCTIVE: Client CoA, reauthentication, and disconnect (Requires typing the target to confirm, supports --dry-run)
+- Handler: `lambda dry_run=False: ClientSessionControl.run(MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id(), dry_run=dry_run)`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`PromptUtils`](README.md#promptutils)
+- Endpoints: 5
+
+```mermaid
+flowchart LR
+    menu["Menu 286:<br/>DESTRUCTIVE: Client<br/>CoA, reauthentica..."]
+    menu --> c1["MistSessionControl<br/>ApiClient"]
+    c1 --> e1["POST<br/>/api/v1/sites<br/>/{site_id}/clients<br/>/{client_mac}/coa"]
+    c1 --> e2["POST<br/>/api/v1/sites<br/>/{site_id}/clients<br/>/{client_mac}<br/>/disconnect"]
+    c1 --> e3["POST<br/>/api/v1/sites<br/>/{site_id}/clients<br/>/{client_mac}<br/>/unauthorize"]
+    c1 --> e4["POST<br/>/api/v1/sites<br/>/{site_id}/rogues<br/>/{rogue_bssid}<br/>/deauth_clients"]
+    c1 --> e5["POST<br/>/api/v1/sites<br/>/{site_id}<br/>/wired_clients<br/>/{client_mac}/coa"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| POST | `/api/v1/sites/{site_id}/clients/{client_mac}/coa` | [`sites.clients.reauthSiteDot1xWirelessClient`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/reauth-site-dot1x-wireless-client) | [`MistSessionControlApiClient._SDK_CALLS`](../../src/device/client_session_control/actions.py) | Reference |
+| POST | `/api/v1/sites/{site_id}/clients/{client_mac}/disconnect` | [`sites.clients.disconnectSiteWirelessClient`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/disconnect-site-wireless-client) | [`MistSessionControlApiClient._SDK_CALLS`](../../src/device/client_session_control/actions.py) | Reference |
+| POST | `/api/v1/sites/{site_id}/clients/{client_mac}/unauthorize` | [`sites.clients.unauthorizeSiteWirelessClient`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/unauthorize-site-wireless-client) | [`MistSessionControlApiClient._SDK_CALLS`](../../src/device/client_session_control/actions.py) | Reference |
+| POST | `/api/v1/sites/{site_id}/rogues/{rogue_bssid}/deauth_clients` | [`sites.rogues.deauthSiteWirelessClientsConnectedToARogue`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/deauth-site-wireless-clients-connected-to-a-rogue) | [`MistSessionControlApiClient._SDK_CALLS`](../../src/device/client_session_control/actions.py) | Reference |
+| POST | `/api/v1/sites/{site_id}/wired_clients/{client_mac}/coa` | [`sites.wired_clients.reauthSiteDot1xWiredClient`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/reauth-site-dot1x-wired-client) | [`MistSessionControlApiClient._SDK_CALLS`](../../src/device/client_session_control/actions.py) | Reference |
+
+## Menu 287
+
+- Title: DESTRUCTIVE: Replace a Mist inventory device for RMA (Requires typing 'REPLACE' to confirm, supports --dry-run)
+- Handler: `lambda dry_run=False: DeviceReplaceOperation.run(dry_run=dry_run)`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils)
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 287:<br/>DESTRUCTIVE: Replace<br/>a Mist inventory..."]
+    menu --> c1["DeviceReplaceClient"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/inventory<br/>/replace"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`DeviceReplaceClient.list_inventory`](../../src/inventory/device_replace/client.py) | Call |
+| POST | `/api/v1/orgs/{org_id}/inventory/replace` | [`orgs.inventory.replaceOrgDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/replace-org-devices) | [`DeviceReplaceClient.replace_device`](../../src/inventory/device_replace/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`DeviceReplaceClient.get_old_configuration`](../../src/inventory/device_replace/client.py) | Call |
+
+## Menu 291
+
+- Title: DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run)
+- Handler: `lambda dry_run=False: RrmResetOperation.run(dry_run=dry_run)`
+- Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver), [`SourceDependencyResolverService`](README.md#sourcedependencyresolverservice)
+- Endpoints: 2
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/sites/{site_id}/rrm/current` | [`sites.rrm.getSiteCurrentChannelPlanning`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rrm/get-site-current-channel-planning) | [`RrmResetClient.get_current_plan`](../../src/site/rrm_reset/client.py) | Call |
+| POST | `/api/v1/sites/{site_id}/rrm/optimize` | [`sites.rrm.optimizeSiteRrm`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wi-fi/optimize-site-rrm) | [`RrmResetClient.optimize`](../../src/site/rrm_reset/client.py) | Call |
+
+## Menu 292
+
+- Title: DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run)
+- Handler: `lambda dry_run=False: CsvImportOperation.run(dry_run=dry_run)`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils)
+- Endpoints: 10
+
+```mermaid
+flowchart LR
+    menu["Menu 292:<br/>DESTRUCTIVE: Import<br/>PSKs, user MACs,..."]
+    menu --> c1["CsvImportCatalog"]
+    c1 --> e1["POST<br/>/api/v1/orgs<br/>/{org_id}/assets<br/>/import"]
+    c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/psks<br/>/import"]
+    c1 --> e3["POST<br/>/api/v1/orgs<br/>/{org_id}/usermacs<br/>/import"]
+    c1 --> e4["POST<br/>/api/v1/sites<br/>/{site_id}/assets<br/>/import"]
+    c1 --> e5["POST<br/>/api/v1/sites<br/>/{site_id}/psks<br/>/import"]
+    menu --> c2["CsvImportClient"]
+    c2 --> e6["POST<br/>/api/v1/orgs<br/>/{org_id}/assets<br/>/import"]
+    c2 --> e7["POST<br/>/api/v1/orgs<br/>/{org_id}/psks<br/>/import"]
+    c2 --> e8["POST<br/>/api/v1/orgs<br/>/{org_id}/usermacs<br/>/import"]
+    c2 --> e9["POST<br/>/api/v1/sites<br/>/{site_id}/assets<br/>/import"]
+    c2 --> e10["POST<br/>/api/v1/sites<br/>/{site_id}/psks<br/>/import"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| POST | `/api/v1/orgs/{org_id}/assets/import` | [`orgs.assets.importOrgAssets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/assets/import-org-assets) | [`CsvImportCatalog.DEFINITIONS`](../../src/inventory/csv_imports/model.py) | Name |
+| POST | `/api/v1/orgs/{org_id}/assets/import` | [`orgs.assets.importOrgAssetsFile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/assets/import-org-assets) | [`CsvImportClient._CALLS`](../../src/inventory/csv_imports/client.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/psks/import` | [`orgs.psks.importOrgPsks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psks/import-org-psks) | [`CsvImportCatalog.DEFINITIONS`](../../src/inventory/csv_imports/model.py) | Name |
+| POST | `/api/v1/orgs/{org_id}/psks/import` | [`orgs.psks.importOrgPsksFile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psks/import-org-psks) | [`CsvImportClient._CALLS`](../../src/inventory/csv_imports/client.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/usermacs/import` | [`orgs.usermacs.importOrgUserMacs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/user-macs/import-org-user-macs) | [`CsvImportCatalog.DEFINITIONS`](../../src/inventory/csv_imports/model.py) | Name |
+| POST | `/api/v1/orgs/{org_id}/usermacs/import` | [`orgs.usermacs.importOrgUserMacsFile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/user-macs/import-org-user-macs) | [`CsvImportClient._CALLS`](../../src/inventory/csv_imports/client.py) | Reference |
+| POST | `/api/v1/sites/{site_id}/assets/import` | [`sites.assets.importSiteAssets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/assets/import-site-assets) | [`CsvImportCatalog.DEFINITIONS`](../../src/inventory/csv_imports/model.py) | Name |
+| POST | `/api/v1/sites/{site_id}/assets/import` | [`sites.assets.importSiteAssetsFile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/assets/import-site-assets) | [`CsvImportClient._CALLS`](../../src/inventory/csv_imports/client.py) | Reference |
+| POST | `/api/v1/sites/{site_id}/psks/import` | [`sites.psks.importSitePsks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/psks/import-site-psks) | [`CsvImportCatalog.DEFINITIONS`](../../src/inventory/csv_imports/model.py) | Name |
+| POST | `/api/v1/sites/{site_id}/psks/import` | [`sites.psks.importSitePsksFile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/psks/import-site-psks) | [`CsvImportClient._CALLS`](../../src/inventory/csv_imports/client.py) | Reference |
+
+## Menu 293
+
+- Title: DESTRUCTIVE: Run the Mist Edge lifecycle operation (Requires typing 'CLAIM', 'ASSIGN', 'UNASSIGN', 'BOUNCE', or 'UPGRADE' to confirm, supports --dry-run)
+- Handler: `lambda dry_run=False: MxEdgeLifecycleOperation.run(dry_run=dry_run)`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
