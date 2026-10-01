@@ -18,17 +18,40 @@ def test_admin_superuser_counts_from_org_scope_privilege() -> None:
     admins = [{"email": "admin@example.net", "privileges": [{"role": "superuser", "scope": "org"}]}]
     rows = AdminTokenHygieneModel.build_admin_rows(admins, NOW)
     summary = AdminTokenHygieneModel.summarize(rows, [])
-    assert rows[0].findings == "super_user|unknown_security_state"
+    assert rows[0].findings == "super_user"
     assert summary.super_users == 1
 
 
-def test_admin_without_two_factor_and_sso_counts() -> None:
+def test_live_admin_without_two_factor_counts_without_sso_fields() -> None:
+    """A live-shaped admin with disabled two-factor authentication must count."""
+    admins = [  # WHY: mirror the six keys seen in the live listOrgAdmins payload.
+        {
+            "admin_id": "admin-1",
+            "email": "live-admin@example.net",
+            "first_name": "Live",
+            "last_name": "Admin",
+            "privileges": [{"role": "org_admin", "scope": "org"}],
+            "two_factor_verified": False,
+        }
+    ]
+    rows = AdminTokenHygieneModel.build_admin_rows(admins, NOW)
+    summary = AdminTokenHygieneModel.summarize(rows, [])
+    assert rows[0].two_factor_state == "disabled"
+    assert rows[0].sso_state == "not_reported"
+    assert rows[0].password_age_days == "not_reported"
+    assert rows[0].invite_expiry == "not_reported"
+    assert rows[0].findings == "no_two_factor"
+    assert summary.admins_no_two_factor == 1
+    assert summary.admins_with_unreported_security_fields == 1
+
+
+def test_admin_without_two_factor_and_local_sso_counts() -> None:
     """A local admin without two-factor authentication must count in the summary."""
     admins = [{"email": "local@example.net", "enable_two_factor": False, "via_sso": False, "privileges": []}]
     rows = AdminTokenHygieneModel.build_admin_rows(admins, NOW)
     summary = AdminTokenHygieneModel.summarize(rows, [])
-    assert "no_two_factor_no_sso" in rows[0].findings
-    assert summary.admins_no_two_factor_no_sso == 1
+    assert "no_two_factor" in rows[0].findings
+    assert summary.admins_no_two_factor == 1
 
 
 def test_admin_expired_invite_adds_stale_invite() -> None:
