@@ -93,7 +93,7 @@ Each utility prompts for a target. The four that start a test on a device ask
 
 | Menu | What it does | Writes | Notes |
 | - | - | - | - |
-| 283 | Starts a synthetic test for a site, for one device, or a RADIUS check from one switch, then polls for the result | `SyntheticTestTrigger.csv` | The poll stops after 120 seconds with a clear message. The RADIUS shared secret never reaches the log or the file. |
+| 283 | Starts a synthetic test for a site, for one device, or a RADIUS check from one switch, then polls for the result | `SyntheticTestTrigger.csv` | Site scope asks for `Notification email (optional)` before the `y` or `N` gate. The poll stops after 120 seconds with a clear message. The RADIUS shared secret never reaches the log or the file. |
 | 284 | Tests the guest portal SMS provider (Twilio, SMSGlobal, or Telstra) with one message to a phone number | `SmsProviderTest.csv` | Each credential prompt hides the input. No credential reaches the log or the file. |
 | 285 | Validates a NAC identity provider credential with a username and a hidden password | `NacIdpCredentialTest.csv` | The password never reaches the log or the file. A failed validation prints the reason that the API returns. |
 | 288 | Prints the SSR registration commands of the organization | `SsrRegistrationCommands.txt` after a `y` answer | The text holds a registration code, so the file write asks first and the log never holds the code. |
