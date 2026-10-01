@@ -259,6 +259,8 @@ Start here, then follow the group that matches your task.
 
 ### Develop
 
+Worktree setup uses available uv and uses pip only when uv is absent. See the development setup guide below.
+
 | Page | What it holds |
 |------|---------------|
 | [Development setup](documentation/development-setup.md) | Run the code from a source checkout |

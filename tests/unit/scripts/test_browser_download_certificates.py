@@ -111,10 +111,16 @@ def test_the_pip_install_gets_no_node_option(
     """FR-004: the pip subprocess gets no new Node option."""
     logger.info("Checking the environment of the pip install")  # WHY: Report the plan before the work.
     monkeypatch.delenv("NODE_OPTIONS", raising=False)  # WHY: Start from a caller that set no Node option.
+    monkeypatch.setattr("scripts.bootstrap_worktree.shutil.which", lambda name: None)  # Keep host uv out of this case.
     monkeypatch.setattr("scripts.bootstrap_worktree.PipIndexProbe.fallback_index", lambda self: None)  # WHY: No probe.
+    logger.debug("Prepared the pip-only test environment.")  # Confirm the local selection without caller values.
+    logger.info("Writing the local requirement fixture.")  # Trace before the temporary file write.
     (tmp_path / "requirements.txt").write_text("", encoding="utf-8")  # WHY: Give the bootstrap one file.
+    logger.debug("Wrote one local requirement fixture.")  # Report the write count.
 
+    logger.info("Running the local pip installation test.")  # Trace before the simulated install.
     WorktreeBootstrapper(tmp_path).install_requirements()  # WHY: Run the pip install against the recorder.
+    logger.debug("Recorded %s pip install commands.", len(recorded_run.commands))  # Report no environment values.
 
     assert recorded_run.commands[0][1:3] == ["-m", "pip"]  # WHY: The recorded run is the pip install.
     assert "NODE_OPTIONS" not in recorded_run.environments[0]  # WHY: pip starts no Node runtime.
