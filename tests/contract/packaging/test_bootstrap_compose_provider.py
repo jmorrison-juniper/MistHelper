@@ -71,21 +71,27 @@ class TestBootstrapComposeProvider:
         with pytest.raises(AssertionError, match="native compose provider"):
             self._assert_provider_pin(lines)
 
-    def test_windows_bootstrap_installs_both_manifests(self) -> None:
-        """The Windows interpreter must receive the development manifest through pip."""
+    @pytest.mark.parametrize("uv_path", (None, r"C:\Tools\uv.exe"))
+    def test_windows_bootstrap_installs_both_manifests(self, uv_path: str | None) -> None:
+        """Both installers target the Windows worktree without using the host's executable search."""
         bootstrapper = WorktreeBootstrapper(REPOSITORY_ROOT)
         LOGGER.info("Checking the Windows bootstrap install commands without starting a process")
         with (
             patch("scripts.bootstrap_worktree.sys.platform", "win32"),
+            patch("scripts.bootstrap_worktree.shutil.which", return_value=uv_path),
             patch.object(PipIndexProbe, "fallback_index", return_value=None),
             patch("scripts.bootstrap_worktree.subprocess.run", return_value=CompletedProcess([], 0)) as install,
         ):
             installed = bootstrapper.install_requirements()
             commands = [call.args[0] for call in install.call_args_list]
         interpreter = str(REPOSITORY_ROOT / ".venv" / "Scripts" / "python.exe")
+        prefix = (
+            [interpreter, "-m", "pip", "install"]
+            if uv_path is None
+            else [uv_path, "pip", "install", "--python", interpreter]
+        )
         expected = [
-            [interpreter, "-m", "pip", "install", "-r", str(REPOSITORY_ROOT / name)]
-            for name in ("requirements.txt", "requirements-dev.txt")
+            [*prefix, "-r", str(REPOSITORY_ROOT / name)] for name in ("requirements.txt", "requirements-dev.txt")
         ]
         LOGGER.debug("The Windows bootstrap issued %d install commands", len(commands))
         print(f"The Windows bootstrap guard checked {len(commands)} install commands.")
