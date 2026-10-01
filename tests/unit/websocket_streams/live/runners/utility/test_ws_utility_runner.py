@@ -17,8 +17,8 @@ from src.websocket_streams.catalog.model import (
 from src.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # The runner reads enums through this class.
 from src.websocket_streams.intake.fields import StreamRequestError  # Input refusal uses this error.
 from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.runners import utility as utility_module  # The tests patch capture functions.
-from src.websocket_streams.live.runners.utility import CaptureStopper, UtilityRunner  # The tests cover utility helpers.
+from src.websocket_streams.live.runners.utility import runner as utility_module  # The tests patch capture functions.
+from src.websocket_streams.live.runners.utility.runner import CaptureStopper, UtilityRunner  # Helpers under test.
 from src.websocket_streams.live.sessions.record import SessionState  # Fake sinks record final state.
 
 

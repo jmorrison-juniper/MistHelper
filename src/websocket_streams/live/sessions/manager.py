@@ -22,7 +22,7 @@ from src.websocket_streams.intake.start_request import StartRequest  # The manag
 from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # Channel requests use this runner.
 from src.websocket_streams.live.runners.shell import ShellRunner  # Shell requests use this runner.
 from src.websocket_streams.live.runners.text import ShellAddressFilter  # The SDK can log a shell address.
-from src.websocket_streams.live.runners.utility import UtilityRunner  # Utility requests use this runner.
+from src.websocket_streams.live.runners.utility.runner import UtilityRunner  # Utility requests use this runner.
 from src.websocket_streams.live.sessions.buffer import MessageBuffer, MessagePage  # Buffers and read answers.
 from src.websocket_streams.live.sessions.record import (
     SessionSink,
