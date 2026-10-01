@@ -9,6 +9,7 @@ Why:
 from __future__ import annotations  # WHY: enable modern annotations for this operation module.
 
 import logging  # WHY: log each step before and after it without storing credentials.
+import sys  # WHY: detect piped runs before hidden prompts can block on Windows.
 from typing import Any  # WHY: the shared dependency resolver is dynamically configured.
 
 from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: shared session and exporter.
@@ -37,6 +38,11 @@ class SmsProviderTest:
     def run() -> None:
         """Ask for provider details, send one test request, and write the result."""
         logger.info("Menu #284: Starting the guest portal SMS provider test")  # WHY: identify the menu action.
+        if not sys.stdin.isatty():  # WHY: getpass reads the console on Windows and can block piped runs.
+            message = SmsProviderTest._non_interactive_message()  # WHY: share the exact operator sentence.
+            print(message)  # WHY: show the stop reason even when logging is redirected.
+            logger.error(message)  # WHY: audit the skipped run without exposing credentials.
+            return  # WHY: stop before the first hidden provider credential prompt.
         prompts = SmsProviderPrompts()  # WHY: production prompts use safe input and hidden credential entry.
         provider = prompts.ask_provider()  # WHY: select which Mist utility endpoint to call.
         if provider is None:  # WHY: an unknown provider must not guess an endpoint.
@@ -126,3 +132,11 @@ class SmsProviderTest:
     def _data_exporter() -> Any:
         """Return the shared exporter object."""
         return SourceDependencyResolver.DataExporter  # WHY: tests patch the resolver or this seam.
+
+    @staticmethod
+    def _non_interactive_message() -> str:
+        """Return the non-interactive terminal stop message."""
+        return (  # WHY: one operator sentence explains the guard.
+            "Menu 284 needs an interactive terminal because it hides provider credentials "  # WHY: name the menu.
+            "and cannot run from a pipe or a scheduled job."  # WHY: name the non-interactive causes.
+        )

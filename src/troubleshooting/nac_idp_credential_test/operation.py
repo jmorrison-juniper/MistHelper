@@ -3,6 +3,7 @@
 from __future__ import annotations  # WHY: keep annotations compact on Python 3.13.
 
 import logging  # WHY: log each operator-visible step and API action safely.
+import sys  # WHY: detect piped runs before hidden password input can block on Windows.
 from typing import Any  # WHY: SourceDependencyResolver provides dynamic runtime objects.
 
 from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: resolve shared session and exporter.
@@ -34,6 +35,11 @@ class NacIdpCredentialTest:
         if not providers:  # WHY: no provider means no safe credential target.
             logger.error("No NAC identity provider was found for this organization. No credential was sent.")
             return  # WHY: stop before asking for a username or password.
+        if not sys.stdin.isatty():  # WHY: getpass reads the console on Windows and can block piped runs.
+            message = NacIdpCredentialTest._non_interactive_message()  # WHY: share the exact operator sentence.
+            print(message)  # WHY: show the stop reason even when logging is redirected.
+            logger.error(message)  # WHY: audit the skipped run without exposing credentials.
+            return  # WHY: stop before operator prompts can reach the hidden password prompt.
         request = NacIdpCredentialTest._build_request(providers)  # WHY: prompts collect username and password.
         if request is None:  # WHY: prompt validation or confirmation stopped the run.
             return  # WHY: no credential should be sent.
@@ -110,3 +116,11 @@ class NacIdpCredentialTest:
         exporter = SourceDependencyResolver.DataExporter  # WHY: the shared exporter owns CSV and database writes.
         logger.debug("Resolved credential test data exporter present=%s", exporter is not None)  # WHY: summary.
         return exporter  # WHY: tests can replace this seam without touching global resolver state.
+
+    @staticmethod
+    def _non_interactive_message() -> str:
+        """Return the non-interactive terminal stop message."""
+        return (  # WHY: one operator sentence explains the guard.
+            "Menu 285 needs an interactive terminal because it hides the test password "  # WHY: name the menu.
+            "and cannot run from a pipe or a scheduled job."  # WHY: name the non-interactive causes.
+        )
