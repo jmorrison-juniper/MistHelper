@@ -103,6 +103,34 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 7. **Release Note**: Add one new fragment file under `changelog.d/`. Never edit `CHANGELOG.md` on a feature branch. See [Release notes](#release-notes-each-change-owns-one-fragment)
 8. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 
+#### Gates that a new menu operation trips
+
+The 2026-09 feature program added menus 271 through 293 across 22 branches.
+Seven gates failed at least one of those pull requests. Each failure cost one
+CI run and one repair commit. Run each check before you push.
+
+| Gate | What fails | Local command |
+| - | - | - |
+| Complexity | A function above cyclomatic complexity 10. Split a long classifier or summary function into helpers. | `radon cc <package> -j \| complexity-gate --max 10` |
+| Test quality | A new API client test module with no HTTP 4xx test and no HTTP 5xx test, or a weak assertion such as a bare `assert result`. | `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main` |
+| SDK compatibility | A call that forwards `*args` or `**kwargs` into a `mistapi.api.v1` function. Pass explicit arguments. | `python -m pytest tests/integration/test_mistapi_sdk_compatibility.py` |
+| Output scan | A test module that names a folder under `data/` with the word `test` in its name. Use `tmp_path`. | `python -m pytest tests/unit/web_portal/test_output_scan_runtime_files.py` |
+| Bandit | An `assert` in production code, a hardcoded credential string, or a bare `try/except/pass`. Repair the cause. Never add `# nosec`. | `bandit -c pyproject.toml -r <package> -q` |
+| Portal registry | A regenerated `web_portal/menu_registry.py` that holds a row the portal cannot run. Feed the generator only the `safe` and `interactive_safe` titles. | `python -m pytest tests/guardrails/test_portal_operation_coverage.py` |
+| Destructive marker | A `destructive` registry entry whose `skip_reason` lacks the word `DESTRUCTIVE`. | `python -m pytest tests/guardrails/test_operation_registry_menu_coverage.py` |
+
+When several agents add menu operations at the same time, give each feature
+branch its own package under `src/` and its own test directory. Each branch
+also writes a `specs/<issue>-<slug>/wiring.md` manifest. The manifest lists
+the menu row, the registry entry, the primary key strategies, and the import
+line. One integration pull request for each batch then applies every manifest
+to `MistHelper.py`, to `src/utils/operation_registry.py`, to the category
+table above, and to the generated references. Pull requests #3643, #3644,
+#3645, and #3679 show the shape. A feature branch never touches a shared file,
+so two feature branches never conflict.
+[Menu operations 271 to 293](../documentation/menu-operations-271-293.md)
+describes the operations that this pattern delivered.
+
 ### Validate locally, then push once
 
 Branching, agent coordination, and Actions minute rules live in
