@@ -1,7 +1,7 @@
 """Description and safety flag for each endpoint family operation.
 
 Why:
-    Menus 259 through 268 group 286 read operations into ten families. Each
+    Menus 259 through 268 group 284 read operations into ten families. Each
     family listed the raw operationId alone, so an operator read `getOrgWlan`
     and learned nothing about the call or its risk.
 
@@ -210,10 +210,6 @@ ENDPOINT_CATALOG: dict[str, EndpointInfo] = {
     "getSiteSdkStatsByMap": EndpointInfo("Get site sdk stats by map", INTERACTIVE_SAFE),
     "getSiteSettingDerived": EndpointInfo("Get site setting derived", INTERACTIVE_SAFE),
     "getSiteSiteRfdiagRecording": EndpointInfo("Get site RF diagnostic recording", INTERACTIVE_SAFE),
-    "getSiteSleClassifierDetails": EndpointInfo(
-        "Get site SLE classifier details (needs scope, scope ID, metric)",
-        INTERACTIVE_SAFE,
-    ),
     "getSiteSleClassifierSummaryTrend": EndpointInfo(
         "Get site SLE classifier summary trend (needs scope, scope ID, metric)",
         INTERACTIVE_SAFE,
@@ -223,7 +219,6 @@ ENDPOINT_CATALOG: dict[str, EndpointInfo] = {
         "Get site SLE impact summary (needs scope, scope ID, metric)",
         INTERACTIVE_SAFE,
     ),
-    "getSiteSleSummary": EndpointInfo("Get site SLE summary (needs scope, scope ID, metric)", INTERACTIVE_SAFE),
     "getSiteSleSummaryTrend": EndpointInfo(
         "Get site SLE summary trend (needs scope, scope ID, metric)",
         INTERACTIVE_SAFE,

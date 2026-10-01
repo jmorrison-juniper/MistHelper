@@ -4500,7 +4500,7 @@ menu_actions: dict[str, Any] = {
     "263": GlobalImportManager.MenuEntry(  # Use named fields for menu 263.
         menu_id="263",  # Store key for drift checks.
         handler=EndpointFamilyExporter.site_sle_endpoints,
-        title="Run any site SLE endpoint with scope prompts (17 operations)",
+        title="Run any site SLE endpoint with scope prompts (15 operations)",
         category=OperationRegistry.skip_category("263"),  # Read the safety class.
         destructive=False,  # Keep the safety flag.
         supports_fast=False,  # Avoid fast-mode inspection.

@@ -296,7 +296,7 @@ never runs in an automated test pass.
 | 260 | Run any org-scoped Mist get or list endpoint (55 operations) | Interactive safe | `SimpleEndpointExporter.org_endpoints` |
 | 261 | Run any site-scoped simple Mist read endpoint (58 operations) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
 | 262 | Run any MSP-scoped Mist get or list endpoint (10 operations) | Interactive safe | `SimpleEndpointExporter.msp_endpoints` |
-| 263 | Run any site SLE endpoint with scope prompts (17 operations) | Interactive safe | `EndpointFamilyExporter.site_sle_endpoints` |
+| 263 | Run any site SLE endpoint with scope prompts (15 operations) | Interactive safe | `EndpointFamilyExporter.site_sle_endpoints` |
 | 264 | Run any site map endpoint with map prompts (7 operations) | Interactive safe | `EndpointFamilyExporter.site_map_endpoints` |
 | 265 | Run any site detail endpoint with identifier prompts (33 operations) | Interactive safe | `EndpointFamilyExporter.site_detail_endpoints` |
 | 266 | Run any org detail endpoint with identifier prompts (61 operations) | Interactive safe | `EndpointFamilyExporter.org_detail_endpoints` |
@@ -338,14 +338,14 @@ operationId, a plain description, and a safety word:
 ```
 
 `src/export/endpoint_catalog.py` holds the description and the safety word for
-all 286 operations. The description comes from the Mist API documentation
+all 284 operations. The description comes from the Mist API documentation
 name that the installed `mistapi` docstring carries. The safety word uses the
 vocabulary of `OperationRegistry`.
 
 | Safety word in the menu | Registry category | Operations | Meaning |
 |---|---|---:|---|
 | `safe` | `safe` | 29 | The read needs no operator identifier. Only menu 259 carries it. |
-| `safe interactive` | `interactive_safe` | 257 | The read needs a site, an org, an MSP, or another identifier. |
+| `safe interactive` | `interactive_safe` | 255 | The read needs a site, an org, an MSP, or another identifier. |
 | `not safe` | `destructive` | 0 | The call changes the Mist cloud. No endpoint family holds one. |
 
 Warning: do not add a `destructive` operation to an endpoint family.
