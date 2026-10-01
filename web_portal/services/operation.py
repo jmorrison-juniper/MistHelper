@@ -907,10 +907,13 @@ class OperationExecutor:
         logger.info("Operation pool stopped: %d of %d run(s) finished cleanly", len(done), len(pending))
 
     def build_category_list(self, menu_actions: dict) -> list:
-        """Build categorized operation list for the UI."""
+        """Build category rows with one INFO action and a DEBUG count summary."""
+        logger.info("Portal builds the operation category list")
         categories = {}
+        refused = 0
         for key, value in menu_actions.items():
             if not self._is_portal_runnable(key):  # One rule for the page and the run gate.
+                refused += 1
                 continue
             num = self._parse_menu_number(key)  # Safe here, because the gate proved the key parses.
             category = self._get_category(num)
@@ -930,6 +933,7 @@ class OperationExecutor:
             # Sort by the numeric value, not the text. Text order puts "10"
             # before "9", and the page showed an operator a shuffled list.
             operations.sort(key=lambda op: self._parse_menu_number(op["menu_number"]))
+        logger.debug("Portal operation list: listed=%d refused=%d", len(menu_actions) - refused, refused)
         return [{"name": name, "operations": ops} for name, ops in sorted(categories.items(), key=lambda x: x[0])]
 
     def get_operation_parameters(self, menu_number: str) -> dict | None:
@@ -958,6 +962,7 @@ class OperationExecutor:
 
     def _validate_operation(self, menu_number: str) -> dict | None:
         """Check that the operation exists and that the portal may run it."""
+        logger.info("Portal checks whether it may run operation %s", menu_number)  # Record actual run gates only.
         if menu_number not in self._menu_actions:
             return {"error": f"Operation {menu_number} not found"}
         if not self._is_portal_runnable(menu_number):  # One rule for the page and the run gate.
@@ -976,7 +981,6 @@ class OperationExecutor:
         An unregistered key, an unparseable key, and any category outside
         `PORTAL_RUNNABLE_CATEGORIES` all return False.
         """
-        logger.info("Portal checks whether it may run operation %s", menu_number)
         category = OperationRegistry.skip_category(menu_number)  # Authoritative safety verdict.
         num = self._parse_menu_number(menu_number)  # None when int() cannot read the key.
         allowed = (
