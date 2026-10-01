@@ -1,0 +1,225 @@
+{
+  "workflow": "speckit",
+  "specName": "Packet Length Validation",
+  "branch": "jmorrison-juniper-packet-length-validation",
+  "currentStep": "implement",
+  "status": "in-progress",
+  "implementationStatus": "rebased-validated-ready-for-publication",
+  "localValidationStatus": "verified-with-local-audit-alternative",
+  "commitStatus": "committed",
+  "localImplementationCommit": "e74a996777d9fffb163c1be904f497132cbb7081",
+  "crossArtifactAnalysisStatus": "verified-after-layout-and-evidence-corrections",
+  "tasksPath": "specs/3337-packet-length-validation/tasks.md",
+  "taskCounts": {
+    "total": 38,
+    "completed": 33,
+    "remaining": 5,
+    "perStory": {
+      "US1": 8,
+      "US2": 3,
+      "US3": 3
+    },
+    "shared": 24,
+    "parallel": 4,
+    "blockedDelivery": 0
+  },
+  "localValidation": {
+    "provenance": "user-supplied verified final results",
+    "suppliedAt": "2026-10-01T00:06:28.648Z",
+    "executedOrRecheckedByDocumentationOwner": false,
+    "sourceBase": "9148155c95e1f502abb0a09fd69f5a928b3bf22f",
+    "focusedRed": {
+      "executed": 4010,
+      "failed": 4010,
+      "errors": 0,
+      "skipped": 0,
+      "sourceMatchedBaseExactly": true,
+      "shared1537Result": 1537,
+      "wireless1537Result": [120, 7, 1537]
+    },
+    "focusedGreen": {
+      "passed": 4010,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "eachPromptPath": {
+      "executed": 2005,
+      "supportedIntegers": 1473,
+      "requiredRejectedIntegers": 513,
+      "additionalCases": 19
+    },
+    "adjacent": {
+      "passed": 4373,
+      "failed": 0,
+      "skipped": 0
+    },
+    "regionCoverage": {
+      "shared": {
+        "executedStatements": 11,
+        "totalStatements": 11,
+        "percentage": 100
+      },
+      "wirelessBounded": {
+        "executedStatements": 12,
+        "totalStatements": 12,
+        "percentage": 100
+      },
+      "collector": {
+        "executedStatements": 8,
+        "totalStatements": 8,
+        "percentage": 100
+      }
+    },
+    "qualityRatchet": {
+      "status": "passed",
+      "filesChecked": 944,
+      "existingFindingsChecked": 728,
+      "newFindings": 0,
+      "configuredSkips": 42,
+      "parseErrors": 0
+    },
+    "compile": {
+      "status": "passed",
+      "filesChecked": 4
+    },
+    "ruff": {
+      "status": "passed",
+      "scope": "."
+    },
+    "black": {
+      "status": "passed",
+      "scope": ".",
+      "command": "rtk proxy .venv/bin/python -m black --check --diff .",
+      "filesChecked": 1882
+    },
+    "mypy": {
+      "status": "passed",
+      "scope": "exact CI MYPY_PATHS",
+      "sourceFilesChecked": 608
+    },
+    "bandit": {
+      "status": "passed",
+      "findings": 0,
+      "linesChecked": 206617,
+      "reportPath": "data/issue-3337/bandit.json"
+    },
+    "normalRequirementsAudit": {
+      "status": "failed-before-scan",
+      "scanStarted": false,
+      "error": "macOS ensurepip SIGABRT"
+    },
+    "localAuditAlternative": {
+      "status": "no-known-vulnerabilities-in-audited-installed-packages",
+      "command": "rtk proxy .venv/bin/python -m pip_audit --local --skip-editable",
+      "unauditedPackages": [
+        {
+          "name": "misthelper-devtools",
+          "version": "0.5.2",
+          "source": "pinned Git dependency",
+          "reason": "Package does not exist on PyPI."
+        }
+      ]
+    },
+    "manifest": {
+      "productionLiteralChanges": 6,
+      "replacedLinesPerSourceFile": 3,
+      "testFile": "tests/unit/capture/test_multi_ap_scan_workflow.py",
+      "totalFunctions": 5,
+      "newFunctions": [
+        {
+          "name": "test_packet_length_prompt_limits",
+          "lines": 23,
+          "parameters": 4
+        },
+        {
+          "name": "test_packet_length_prompt_defaults",
+          "lines": 21,
+          "parameters": 3
+        }
+      ],
+      "largeTestFileRestoredExactly": true,
+      "otherProductionDeclarationsAdded": 0,
+      "wrappersAdded": 0,
+      "classesAdded": 0,
+      "namedSendersUnchanged": true,
+      "openApiDependenciesReadmeSharedConfigBaselinesUnchanged": true
+    }
+  },
+  "rebasedVerification": {
+    "base": "bceba98ff1177ab32ed65ef90279baccba85a47f",
+    "sourceCommit": "4dbe3a7fa374459f406309c4c11faf6c93639bb3",
+    "python": "3.13.13",
+    "installedPackages": 160,
+    "focusedPassed": 4010,
+    "adjacentPassed": 4373,
+    "testFailures": 0,
+    "testSkips": 0,
+    "guardCoveragePercent": 100,
+    "blackFiles": 1885,
+    "mypyFiles": 608,
+    "banditFindings": 0,
+    "banditLines": 206613,
+    "qualityFiles": 947,
+    "qualityExistingFindings": 725,
+    "qualityNewFindings": 0,
+    "runtimeAuditPackages": 105,
+    "runtimeAuditVulnerabilities": 0,
+    "runtimeAuditSkips": 0,
+    "normalRequirementsAuditRequiredInCI": true
+  },
+  "delivery": {
+    "status": "authorized-local-verification-complete",
+    "queuePosition": 9,
+    "coordinatorSessionId": "6d71fd26-57c2-48c0-abc8-607af98f75d0",
+    "authorizedMainSha": "bceba98ff1177ab32ed65ef90279baccba85a47f",
+    "blockedTaskIds": [],
+    "pendingTaskIds": [
+      "T034",
+      "T035",
+      "T036",
+      "T037",
+      "T038"
+    ],
+    "reason": "The coordinator released publication after the prerequisite protected merge and 919 exact-main tests. All remote checks and protection remain required."
+  },
+  "completionRecord": {
+    "method": "direct-feature-context-update",
+    "hookCommand": "speckit.companion.after-implement",
+    "hookStatus": "unavailable-not-run",
+    "optionalGitCommitHooks": "skipped",
+    "setupTasksScriptStatus": "not-run-pwsh-unavailable",
+    "implementationPrerequisitesScriptStatus": "not-run-pwsh-unavailable"
+  },
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-30T23:02:48Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-30T23:32:27Z"
+    },
+    {
+      "step": "implement",
+      "substep": "local-validation",
+      "kind": "supplied-evidence-recorded",
+      "by": "copilot",
+      "at": "2026-10-01T00:06:28.648Z"
+    },
+    {
+      "step": "implement",
+      "substep": "local-commit",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-30T19:33:48-05:00",
+      "commit": "e74a996777d9fffb163c1be904f497132cbb7081"
+    }
+  ]
+}

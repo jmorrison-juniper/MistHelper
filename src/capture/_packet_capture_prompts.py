@@ -512,7 +512,7 @@ class PacketCapturePrompts:
     def prompt_max_packet_length(default: int = 128) -> int | None:
         """Prompt for max packet length and validate range."""
         max_pkt_len_str = _lazy_input_utils().safe_input(  # WHY: solicit numeric truncation length
-            f"Enter max packet length in bytes (default {default}, max 2048): ",  # WHY: prompt text
+            f"Enter max packet length in bytes (default {default}, max 1536): ",  # WHY: prompt text
             default_value=str(default),  # WHY: default preserves legacy value
             context="max_pkt_len",  # WHY: audit tag for input logging
         )
@@ -521,8 +521,8 @@ class PacketCapturePrompts:
         except ValueError:  # WHY: bad input -> validation failure
             print(f"\n! Invalid max packet length: {max_pkt_len_str}")  # WHY: user-facing error
             return None  # WHY: sentinel signal to caller
-        if max_pkt_len < 64 or max_pkt_len > 2048:  # WHY: enforce API-defined range
-            print("\n! Max packet length must be between 64 and 2048 bytes")  # WHY: user-facing error
+        if max_pkt_len < 64 or max_pkt_len > 1536:  # WHY: enforce API-defined range
+            print("\n! Max packet length must be between 64 and 1536 bytes")  # WHY: user-facing error
             return None  # WHY: validation failure sentinel
         return max_pkt_len  # WHY: valid packet length returned to caller
 

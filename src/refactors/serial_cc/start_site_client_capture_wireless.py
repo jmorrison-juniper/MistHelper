@@ -77,13 +77,13 @@ _PACKETS_SPEC = SimpleNamespace(
     range_lines=["\n! Number of packets must be between 0 and 10000"],
 )
 _MAX_PKT_LEN_SPEC = SimpleNamespace(
-    prompt="Enter max packet length in bytes (default 1300, max 2048): ",
+    prompt="Enter max packet length in bytes (default 1300, max 1536): ",
     default="1300",
     context="max_pkt_len",
     invalid_label="max packet length",
     low=64,
-    high=2048,
-    range_lines=["\n! Max packet length must be between 64 and 2048 bytes"],
+    high=1536,
+    range_lines=["\n! Max packet length must be between 64 and 1536 bytes"],
 )
 # Ordered tuple drives sequential bounded-int prompts inside _gather_settings (table-driven).
 _BOUNDED_INT_SPECS = (_DURATION_SPEC, _PACKETS_SPEC, _MAX_PKT_LEN_SPEC)  # WHY: Table-drives prompt sequence
