@@ -11,10 +11,10 @@ Why:
     runs it as root at container start, and the session script reads the file
     that it writes.
 
-    The file holds the Mist API token, so these tests also guard the mode and
-    the allowlist. A wider mode would expose the token to every account of the
-    container, and a blind copy of the environment would write the SSH password
-    to disk.
+    The file holds the Mist API token and two database passwords, so these
+    tests also guard the mode and the allowlist. A wider mode exposes these
+    credentials to other accounts. A blind copy of the environment would write
+    the SSH password to disk.
 
 Scope:
     The writer script only. No test starts a container, and no test reaches the
@@ -23,7 +23,10 @@ Scope:
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
 
+import getpass  # The test must request a valid owner on this host.
+import logging  # Record action counts without configuration values.
 import os  # The writer reads its values from the environment.
+import secrets  # Create fixture credentials that never name a real account.
 import stat  # One test reads the permission bits of the finished file.
 import subprocess  # The test runs a shell script.
 from pathlib import Path  # Every path in this module is a Path.
@@ -44,9 +47,8 @@ HARNESS_TIMEOUT_SECONDS = 30
 # nothing on Windows. Read tests/unit/container/bash_support.py for the reason.
 pytestmark = pytest.mark.skipif(BASH_SKIP_REASON is not None, reason=BASH_SKIP_REASON or "")
 
-# The account that owns the finished file inside the container. A test runs as
-# one account, so the writer treats a failed change of owner as harmless.
-OWNER_NAME = "misthelper"
+# Request the current valid account, so a local test proves the actual owner.
+OWNER_NAME = getpass.getuser()
 
 
 def _run_writer(target: Path, values: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -61,7 +63,8 @@ def _run_writer(target: Path, values: dict[str, str]) -> subprocess.CompletedPro
     """
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}  # Start clean, so no real token reaches the file.
     env.update(values)  # Apply the values that this test states.
-    return subprocess.run(
+    logging.info("Writing one fixture session file with %d configuration names", len(values))
+    result = subprocess.run(
         [str(BASH_PATH), WRITER_SCRIPT.as_posix(), OWNER_NAME, target.as_posix()],
         capture_output=True,  # Keep the report line for the assertions.
         text=True,  # Decode the output for the message.
@@ -69,6 +72,8 @@ def _run_writer(target: Path, values: dict[str, str]) -> subprocess.CompletedPro
         env=env,  # Pass the fixed environment.
         check=False,  # Keep the status, because one test proves a clean status.
     )
+    logging.debug("Checked 1 session file. Writer exit status: %d", result.returncode)
+    return result
 
 
 def test_the_script_parses_under_bash() -> None:
@@ -129,11 +134,25 @@ def test_an_empty_variable_never_reaches_the_file(tmp_path: Path) -> None:
 def test_the_report_names_the_variables_and_prints_no_value(tmp_path: Path) -> None:
     """The report reaches the log file, which every reader of the data volume opens."""
     target = tmp_path / "session.env"
-    result = _run_writer(target, {"MIST_APITOKEN": "a-secret-token", "MIST_HOST": "api.mist.com"})
-
-    assert "MIST_APITOKEN" in result.stdout  # The report names the variable.
-    assert "a-secret-token" not in result.stdout  # The report holds no token value.
-    assert "a-secret-token" not in result.stderr  # No error path leaks the value either.
+    names = (
+        "MIST_HOST",
+        "MIST_APITOKEN",
+        "ARANGO_HOST",
+        "ARANGO_DATABASE",
+        "ARANGO_USERNAME",
+        "ARANGO_ROOT_PASSWORD",
+        "REDIS_HOST",
+        "REDIS_PORT",
+        "REDIS_PASSWORD",
+    )
+    values = {name: secrets.token_hex(24) for name in names}
+    result = _run_writer(target, values)
+    expected = "[SSH] Carried 9 configuration name(s) into the session file: " + " ".join(names) + "\n"
+    assert result.returncode == 0
+    assert result.stdout == expected
+    assert result.stderr == ""
+    exposed = any(value in result.stdout + result.stderr for value in values.values())
+    assert exposed is False
 
 
 def test_a_value_with_a_space_and_a_quotation_mark_reads_back_whole(tmp_path: Path) -> None:
