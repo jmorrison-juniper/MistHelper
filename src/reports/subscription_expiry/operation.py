@@ -9,7 +9,9 @@ from src.config.source_dependency_resolver import SourceDependencyResolver  # Re
 from src.reports.subscription_expiry.client import JsiAccountNotLinkedError, SubscriptionExpiryClient
 from src.reports.subscription_expiry.model import (
     CONTRACT_BUCKETS,
+    CONTRACT_RECORD_ABSENT_NOTE,
     MISSING_VALUE,
+    STATE_UNSUPPORTED,
     SUBSCRIPTION_BANDS,
     ConsoleSummary,
     ContractExpiryRow,
@@ -135,7 +137,10 @@ class SubscriptionExpiryReport:
         """Return export rows that still create a CSV when the report is empty."""
         if rows:  # Real source rows should export one row per device.
             return [row.to_dict() for row in rows]  # Convert contract rows for export.
-        return [{column: MISSING_VALUE for column in CONTRACT_COLUMNS}]  # Force DataExporter to create headers.
+        payload: dict[str, object] = {column: MISSING_VALUE for column in CONTRACT_COLUMNS}  # Create CSV headers.
+        payload["contract_state"] = STATE_UNSUPPORTED  # State that no source contract record supports the device.
+        payload["note"] = CONTRACT_RECORD_ABSENT_NOTE  # Explain why the placeholder row exists.
+        return [payload]  # Return one explicit unsupported row for empty JSI contract data.
 
     @staticmethod
     def _print_summary(summary: ConsoleSummary) -> None:
