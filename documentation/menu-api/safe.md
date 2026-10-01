@@ -2,7 +2,7 @@
 
 # Menu API endpoints: safe
 
-This page lists the Mist API endpoints of the 83 menu options in the `safe` category.
+This page lists the Mist API endpoints of the 84 menu options in the `safe` category.
 A menu option in this category reads data and exports it. The --test run executes this category.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -16,7 +16,7 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["safe: 83 menu<br/>options"]
+    root["safe: 84 menu<br/>options"]
     root --> f_orgs_sites["orgs/sites<br/>20 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
@@ -26,9 +26,9 @@ flowchart LR
     root --> f_orgs_jsi["orgs/jsi<br/>4 menu options"]
     root --> f_orgs_networktemplates["orgs/networktemplates<br/>4 menu options"]
     root --> f_sites_insights["sites/insights<br/>4 menu options"]
+    root --> f_const_alarm_defs["const/alarm_defs<br/>3 menu options"]
     root --> f_orgs_admins["orgs/admins<br/>3 menu options"]
-    root --> f_orgs_apitokens["orgs/apitokens<br/>3 menu options"]
-    root --> f_orgs_clients["orgs/clients<br/>3 menu options"]
+    root --> f_orgs_alarms["orgs/alarms<br/>3 menu options"]
     root --> more["71 more families"]
 ```
 
@@ -1302,6 +1302,18 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`WanEdgeGatewayStatsClient.fetch_gateway_stats`](../../src/reports/wan_edge_scorecard/client.py) | Reference |
+
+## Menu 280
+
+- Title: Export the alert digest handover report
+- Handler: `AlertDigestOperation.run_digest`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 2
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`AlertDigestClient.list_alarm_definitions`](../../src/reports/alert_digest/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`AlertDigestClient._read_first_alarm_page`](../../src/reports/alert_digest/client.py) | Call |
 
 ## Menu 282
 

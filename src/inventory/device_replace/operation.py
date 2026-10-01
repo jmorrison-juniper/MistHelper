@@ -3,7 +3,6 @@
 from __future__ import annotations  # WHY: keep annotations lightweight during import.
 
 import logging  # WHY: log each operator action and result.
-import sys  # WHY: detect --dry-run until root wiring passes arguments explicitly.
 from pathlib import Path  # WHY: type backup paths in the operation result.
 
 from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: reach shared session and prompts.
@@ -20,13 +19,12 @@ class DeviceReplaceOperation:
     """Run the destructive RMA device replacement workflow."""
 
     @staticmethod
-    def run() -> None:
+    def run(dry_run: bool = False) -> None:
         """Run menu 287 with shared MistHelper dependencies."""
         logger.info("Menu #287: Starting RMA device replacement")  # WHY: name the destructive operation.
         org_id = str(SourceDependencyResolver.ConfigUtils.get_cached_or_prompted_org_id())  # WHY: org scope.
         client = DeviceReplaceClient(SourceDependencyResolver.apisession, org_id)  # WHY: Mist API seam.
         persistence = DeviceReplacePersistence()  # WHY: evidence files go under the default data directory.
-        dry_run = "--dry-run" in sys.argv  # WHY: integration wiring can pass the existing process flag.
         DeviceReplaceOperation.run_with_dependencies(org_id, client, persistence, dry_run)  # WHY: tested core flow.
 
     @staticmethod

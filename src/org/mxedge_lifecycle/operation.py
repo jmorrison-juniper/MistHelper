@@ -71,7 +71,7 @@ class MxEdgeLifecycleOperation:
     """
 
     @staticmethod
-    def run() -> None:
+    def run(dry_run: bool = False) -> None:
         """Resolve shared context and run the interactive sub-menu."""
         logger.warning("Menu #293 DESTRUCTIVE: Starting Mist Edge lifecycle operation")  # WHY: risk banner.
         org_id = str(SourceDependencyResolver.ConfigUtils.get_cached_or_prompted_org_id())  # WHY: org scoped API.
@@ -80,13 +80,22 @@ class MxEdgeLifecycleOperation:
             logger.error("No active API session exists for Mist Edge lifecycle operation")  # WHY: clear stop reason.
             return  # WHY: stop before prompts can imply a change.
         client = MxEdgeLifecycleClient(session, org_id)  # WHY: real SDK client for menu runs.
-        MxEdgeLifecycleOperation(client, org_id).run_menu()  # WHY: instance holds client and org state.
+        MxEdgeLifecycleOperation(
+            client, org_id, default_dry_run=dry_run
+        ).run_menu()  # WHY: pass the shared dry-run flag.
 
-    def __init__(self, client: MxEdgeLifecycleClientProtocol, org_id: str, csv_path: Path | None = None) -> None:
-        """Store client, organization, and CSV path."""
+    def __init__(
+        self,
+        client: MxEdgeLifecycleClientProtocol,
+        org_id: str,
+        csv_path: Path | None = None,
+        default_dry_run: bool = False,
+    ) -> None:
+        """Store client, organization, CSV path, and dry-run default."""
         self.client = client  # WHY: fake clients make tests network-free.
         self.org_id = org_id  # WHY: each CSV row names the organization.
         self.csv_path = csv_path or Path("data") / EXPORT_FILENAME  # WHY: assignment requires data directory output.
+        self.default_dry_run = default_dry_run  # WHY: CLI --dry-run must preview without another prompt.
 
     def run_menu(self) -> None:
         """Ask for one sub-menu choice and execute it."""
@@ -269,6 +278,8 @@ class MxEdgeLifecycleOperation:
 
     def _ask_dry_run(self) -> bool:
         """Return True when the operator chooses dry-run."""
+        if self.default_dry_run:  # WHY: the shared CLI --dry-run flag must force preview mode.
+            return True  # WHY: no destructive request can run when the global preview flag is set.
         answer = self._ask("Dry run only? (y/N): ", "mxedge_lifecycle_dry_run").strip().lower()  # WHY: preview flag.
         return answer in {"y", "yes"}  # WHY: default is live only after confirmation.
 

@@ -110,11 +110,13 @@ class AlertDigestOperation:
         return result  # Return the operation result for dashboards.
 
     @classmethod
-    def run_acknowledge(cls) -> bool:
+    def run_acknowledge(cls, dry_run: bool | None = None) -> bool:
         """Acknowledge alarms for menu 281 after destructive safety checks."""
         logger.info("Menu #281: Starting the alert acknowledgement handler")  # Log the destructive entry point.
-        dry_run = AlertDigestPromptResolver.dry_run_requested()  # Read the shared dry-run flag from arguments.
-        result = cls().execute_acknowledge(dry_run=dry_run)  # Build live dependencies and run the workflow.
+        effective_dry_run = (
+            AlertDigestPromptResolver.dry_run_requested() if dry_run is None else dry_run
+        )  # Resolve the shared CLI flag when the menu wrapper does not pass it.
+        result = cls().execute_acknowledge(dry_run=effective_dry_run)  # Build live dependencies and run the workflow.
         logger.debug("Menu #281 alert acknowledgement handler returned %s", result)  # Log the handler result.
         return result  # Return the operation result for dashboards.
 

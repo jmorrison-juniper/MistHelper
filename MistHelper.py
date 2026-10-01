@@ -621,12 +621,21 @@ from src.gateway.template_config import GatewayTemplateConfigManager  # Cat A ca
 from src.input.prompt_client_utils import (
     PromptClientUtils,  # Cat B (1013 SC-001 position 35) -- re-export for MistHelper.PromptClientUtils callers
 )
+from src.inventory.csv_imports.operation import (
+    CsvImportOperation,  # Menu 292 (issue #3572) -- destructive CSV imports for PSKs, user MACs, and assets.
+)
+from src.inventory.device_replace.operation import (
+    DeviceReplaceOperation,  # Menu 287 (issue #3567) -- Replace a Mist inventory device for an RMA.
+)
 from src.inventory.org_device_inventory_summary_facade import (
     OrgDeviceInventorySummary,  # Cat B (1013 SC-001 position 29) -- re-export
 )
 from src.network.routing_utils import (  # Cat A canonical (1014 P4)
     RoutingDeps,
     RoutingUtils,
+)
+from src.org.mxedge_lifecycle.operation import (
+    MxEdgeLifecycleOperation,  # Menu 293 (issue #3573) -- destructive Mist Edge lifecycle operation.
 )
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
 from src.org.org_synthetic_probes_manager import (
@@ -672,6 +681,9 @@ from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main e
 
 MainEntrypoint.bind_host_module(sys.modules[__name__])  # Give source packages a bound host without root imports.
 
+from src.device.client_session_control.handler import (
+    ClientSessionControl,  # Menu 286 (issue #3566) -- destructive client session control handler.
+)
 from src.gateway.ssr_registration.operation import (
     SsrRegistrationCommands,  # Menu 288 (issue #3568) -- show SSR registration commands.
 )
@@ -713,6 +725,9 @@ from src.refactors.wlanradius_timer_manager import (
     WLANRadiusTimerManager,  # Extracted WLAN RADIUS timer manager (SC-014)
 )
 from src.reports.admin_token_hygiene.operation import AdminTokenHygieneReport  # Menu 273 (issue #3554) -- tokens.
+from src.reports.alert_digest.operation import (
+    AlertDigestOperation,  # Menu 280 and 281 (issue #3561) -- alert digest and alarm acknowledgement.
+)
 from src.reports.ap_scorecard.operation import (
     ApScorecard,  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.
 )
@@ -755,6 +770,9 @@ from src.security.rogue_dhcp import (
 from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
 from src.site.bulk_radius_wlan_config_manager import (
     BulkRadiusWLANConfigManager,  # Cat B (1013 SC-001 position 15) -- re-export
+)
+from src.site.rrm_reset.operation import (
+    RrmResetOperation,  # Menu 291 (issue #3571) -- capture RRM before and after optimize or reset.
 )
 from src.site.site_config_manager import (  # Cat A canonical (1013 SC-003)
     SiteConfigDependencies as _SiteConfigDependencies,
@@ -4615,6 +4633,25 @@ menu_actions: dict[str, Any] = {
         destructive=False,  # The scorecard reads Mist data and writes local files only.
         supports_fast=False,  # Keep report pacing under the handler.
     ),
+    "280": GlobalImportManager.MenuEntry(  # Use named fields for menu 280.
+        menu_id="280",  # Store key for drift checks.
+        handler=AlertDigestOperation.run_digest,
+        title="Export the alert digest handover report",
+        category=OperationRegistry.skip_category("280"),  # Read the safety class.
+        destructive=False,  # The digest reads alarm data and writes local handover files only.
+        supports_fast=False,  # Keep digest pacing under the handler.
+    ),
+    "281": GlobalImportManager.MenuEntry(  # Use named fields for menu 281.
+        menu_id="281",  # Store key for drift checks.
+        handler=lambda dry_run=False: AlertDigestOperation.run_acknowledge(dry_run=dry_run),
+        title=(
+            " DESTRUCTIVE: Acknowledge recent unacknowledged alarms "
+            "(Requires typing 'ACK <count>' to confirm, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("281"),  # Read the safety class.
+        destructive=True,  # The acknowledgement path changes Mist alarm state.
+        supports_fast=False,  # Keep destructive pacing under the handler.
+    ),
     "282": GlobalImportManager.MenuEntry(  # Use named fields for menu 282.
         menu_id="282",  # Store key for drift checks.
         handler=RoguePciEvidencePack.run,
@@ -4647,6 +4684,32 @@ menu_actions: dict[str, Any] = {
         destructive=False,  # The operation validates one credential and exports no password.
         supports_fast=False,  # Keep credential test pacing under the handler.
     ),
+    "286": GlobalImportManager.MenuEntry(  # Use named fields for menu 286.
+        menu_id="286",  # Store key for drift checks.
+        handler=lambda dry_run=False: ClientSessionControl.run(
+            MainEntrypoint.context.apisession,
+            ConfigUtils.get_cached_or_prompted_org_id(),
+            dry_run=dry_run,
+        ),
+        title=(
+            " DESTRUCTIVE: Client CoA, reauthentication, and disconnect "
+            "(Requires typing the target to confirm, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("286"),  # Read the safety class.
+        destructive=True,  # Client session control can disconnect live clients.
+        supports_fast=False,  # Keep destructive pacing under the handler.
+    ),
+    "287": GlobalImportManager.MenuEntry(  # Use named fields for menu 287.
+        menu_id="287",  # Store key for drift checks.
+        handler=lambda dry_run=False: DeviceReplaceOperation.run(dry_run=dry_run),
+        title=(
+            " DESTRUCTIVE: Replace a Mist inventory device for RMA "
+            "(Requires typing 'REPLACE' to confirm, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("287"),  # Read the safety class.
+        destructive=True,  # Device replacement changes inventory assignment and ownership.
+        supports_fast=False,  # Keep destructive pacing under the handler.
+    ),
     "288": GlobalImportManager.MenuEntry(  # Use named fields for menu 288.
         menu_id="288",  # Store key for drift checks.
         handler=SsrRegistrationCommands.run,
@@ -4670,6 +4733,39 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("290"),  # Read the safety class.
         destructive=False,  # The operation starts bounded diagnostics only after confirmation.
         supports_fast=False,  # Keep diagnostic pacing under the handler.
+    ),
+    "291": GlobalImportManager.MenuEntry(  # Use named fields for menu 291.
+        menu_id="291",  # Store key for drift checks.
+        handler=lambda dry_run=False: RrmResetOperation.run(dry_run=dry_run),
+        title=(
+            " DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture "
+            "(Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("291"),  # Read the safety class.
+        destructive=True,  # RRM optimize and reset change AP channel or power state.
+        supports_fast=False,  # Keep destructive pacing under the handler.
+    ),
+    "292": GlobalImportManager.MenuEntry(  # Use named fields for menu 292.
+        menu_id="292",  # Store key for drift checks.
+        handler=lambda dry_run=False: CsvImportOperation.run(dry_run=dry_run),
+        title=(
+            " DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV "
+            "(Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("292"),  # Read the safety class.
+        destructive=True,  # CSV import creates or updates Mist cloud records.
+        supports_fast=False,  # Keep destructive pacing under the handler.
+    ),
+    "293": GlobalImportManager.MenuEntry(  # Use named fields for menu 293.
+        menu_id="293",  # Store key for drift checks.
+        handler=lambda dry_run=False: MxEdgeLifecycleOperation.run(dry_run=dry_run),
+        title=(
+            " DESTRUCTIVE: Run the Mist Edge lifecycle operation "
+            "(Requires typing 'CLAIM', 'ASSIGN', 'UNASSIGN', 'BOUNCE', or 'UPGRADE' to confirm, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("293"),  # Read the safety class.
+        destructive=True,  # Mist Edge lifecycle actions change inventory, site, port, or firmware state.
+        supports_fast=False,  # Keep destructive pacing under the handler.
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.

@@ -85,7 +85,7 @@ journey
 ## Destructive Operation Safety Requirements
 
 Requirements that must be met before any destructive operation executes. The
-destructive set is menus 154-187, 189-191, 194, 206-208, and 239. It is not one
+destructive set is menus 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293, 281, 286-287, and 291-293. It is not one
 unbroken block, so do not treat any range boundary as a shortcut. Menus 188 and
 193 sit inside those numbers and are safe, and menu 192 is interactive.
 
@@ -104,12 +104,12 @@ selected site. Issue #2825 records the gap that left it out of this list.
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 flowchart TB
-    subgraph requirements["Safety Requirements - Menus 154-187, 189-191, 194, 206-208, 239"]
+    subgraph requirements["Safety Requirements - Menus 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293"]
         SAF001["SAF-001: Explicit Confirmation<br/>Type exact word to proceed<br/>Risk: HIGH | Verify: test"]
         SAF002["SAF-002: EOF Handling<br/>All input calls handle EOFError<br/>Risk: HIGH | Verify: inspection"]
         SAF003["SAF-003: Test Skip<br/>--test and --testinteractive skip destructive menus<br/>Risk: HIGH | Verify: test"]
         SAF004["SAF-004: Logging Required<br/>Full context logged before execution<br/>Risk: MEDIUM | Verify: inspection"]
-        SAF005["SAF-005: Human Review<br/>Menu 239 stays in the destructive set<br/>Risk: MEDIUM | Verify: registry"]
+        SAF005["SAF-005: Human Review<br/>Menus 239, 281, 286-287, and 291-293 stay in the destructive set<br/>Risk: MEDIUM | Verify: registry"]
     end
 
     subgraph impl["Implementation"]

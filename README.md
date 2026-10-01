@@ -16,7 +16,7 @@ organizations, your sites, your devices, and your clients, and it writes what it
 finds to a file or to a database. It also runs a small set of change operations,
 such as a firmware upgrade.
 
-The tool holds **285 operations**, numbered 1 to 290 with gaps at 152, 280-281, 286-287.
+The tool holds **292 operations**, numbered 1 to 293 with one gap at 152.
 It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
@@ -71,6 +71,29 @@ groups from observed client attributes.
 
 Menu 290 runs bounded RF diagnostics. Use it to start AP spectrum analysis or a
 client RF diagnostic recording.
+
+Menu 280 exports the alert digest handover report. Use it to group recent alarms
+for a shift change.
+
+Menu 281 acknowledges recent unacknowledged alarms. It requires typing
+`ACK <count>` to confirm, and `--dry-run` previews the acknowledgement request.
+
+Menu 286 runs client CoA, reauthentication, and disconnect actions. It requires
+typing the target to confirm, and `--dry-run` previews the client request.
+
+Menu 287 replaces a Mist inventory device for RMA. It requires typing `REPLACE`
+to confirm, and `--dry-run` previews the replacement request.
+
+Menu 291 optimizes or resets site RRM with before and after plan capture. It
+requires typing `OPTIMIZE` or `RESET` to confirm, and `--dry-run` previews the
+RRM request.
+
+Menu 292 imports PSKs, user MACs, and assets from CSV. It requires typing
+`IMPORT <row_count>` to confirm, and `--dry-run` previews the import request.
+
+Menu 293 runs Mist Edge lifecycle actions. It requires typing `CLAIM`, `ASSIGN`,
+`UNASSIGN`, `BOUNCE`, or `UPGRADE` to confirm, and `--dry-run` previews the
+lifecycle request.
 
 ## Why
 
