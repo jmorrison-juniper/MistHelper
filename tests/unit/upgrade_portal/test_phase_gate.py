@@ -647,8 +647,9 @@ def test_an_active_srx1500_upgrade_extends_past_thirty_minutes_and_settles() -> 
     assert harness.clock() < START_TIME + 60 * 60  # The replay settled near 53 minutes and before the hard limit.
 
 
-def test_an_active_gateway_job_stops_at_the_hard_limit() -> None:
-    """An unfinished gateway job cannot extend past the 90-minute hard limit."""
+@pytest.mark.parametrize("schedule_field", [None, "start_time", "reboot_at"])
+def test_an_active_gateway_job_stops_at_the_hard_limit(schedule_field: str | None) -> None:
+    """An active gateway stops 90 minutes after its effective scheduled window."""
     reading = gate.GateReading(  # WHY: Positive active-job evidence keeps the gateway in the extended wait.
         SWITCH_MAC,
         VERSION_BEFORE,
@@ -658,11 +659,16 @@ def test_an_active_gateway_job_stops_at_the_hard_limit() -> None:
     statistics = FakeStatisticsReader({SWITCH_MAC: reading})  # Repeat the unfinished cloud state for every poll.
     harness = Harness(FakeReconnectReader(), statistics)  # Use the production limits with no reconnect event.
     target = target_entry(SWITCH_MAC, "gateway")  # Select the only family that can use the extension.
+    anchor = START_TIME  # Keep the immediate case and both scheduling cases in the same timing contract.
+    if schedule_field is not None:
+        anchor += float(phase_gate.PHASE_DEADLINE_SECONDS * 2)  # Put the schedule beyond the old phase limit.
+        target[schedule_field] = anchor
     outcome = harness.adapter.settle(RUN_ID, "gateways", [target])  # Run through the standard and hard limits.
     assert outcome.state == PhaseState.FAILED.value  # The hard limit must end an upgrade that never finishes.
     assert outcome.not_returned == (SWITCH_MAC,)  # The driver must mark the unresolved gateway.
-    assert harness.clock() == START_TIME + float(phase_gate.GATEWAY_HARD_DEADLINE_SECONDS)  # Prove the final bound.
+    assert harness.clock() == anchor + float(phase_gate.GATEWAY_HARD_DEADLINE_SECONDS)  # Prove the scheduled bound.
     assert harness.statistics.calls == phase_gate.polls_per_phase(phase_gate.GATEWAY_HARD_DEADLINE_SECONDS)
+    assert harness.events.calls == harness.statistics.calls  # The quiet scheduled wait must add no cloud polls.
 
 
 def test_an_empty_phase_settles_at_once() -> None:
