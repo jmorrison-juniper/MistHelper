@@ -216,8 +216,10 @@ log_container_event "[PORTAL] Using $PORTAL_THREADS worker threads."  # Name the
 # the environment. Every runtime variable that `compose.yml` supplies is then
 # lost, and the portal starts with no database address and no allow list.
 log_container_event "[PORTAL] Starting the web portal on port $WEB_PORT."  # Report the start before the launch, so a failed launch has a start point in the log.
+# Keep this master on its own socket, so a reload cannot take the capture portal's control path.
 su misthelper -c "cd /app && gunicorn wsgi:app \
     --bind 0.0.0.0:${WEB_PORT} \
+    --control-socket /home/misthelper/.gunicorn/portal.ctl \
     --workers 1 \
     --worker-class gthread \
     --threads ${PORTAL_THREADS} \
@@ -304,8 +306,10 @@ export MIBS=
 # Warning: `su` carries no dash here for the reason given above. With a dash,
 # CAPTURE_ALLOWED_IPS never reaches the portal and every client address passes.
 log_container_event "[CAPTURE] Starting the upgrade capture portal on port $CAPTURE_PORT."  # Report the start before the launch, so a failed launch has a start point in the log.
+# Keep this master on its own socket, so a reload cannot take the web portal's control path.
 su misthelper -c "cd /app && gunicorn wsgi_capture:app \
     --bind 0.0.0.0:${CAPTURE_PORT} \
+    --control-socket /home/misthelper/.gunicorn/capture.ctl \
     --workers 1 \
     --worker-class gthread \
     --threads 4 \
