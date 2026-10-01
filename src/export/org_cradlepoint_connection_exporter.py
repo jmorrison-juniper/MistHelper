@@ -16,6 +16,12 @@ Shape of the response:
     ``error`` and ``last_status``. The exporter reads ``response.data``
     directly, because the endpoint is not paginated and ``mistapi.get_all``
     would return nothing useful.
+
+HTTP status handling:
+    The exporter requires a trustworthy HTTP success status before it reads the body.
+    A refusal or unavailable transport status stops row construction and persistence.
+    The menu reports the operation and status without exposing the response body.
+    A valid HTTP 200 integration status can still contain its own configuration error.
 """
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on the project toolchain.
@@ -59,13 +65,17 @@ class OrgCradlepointConnectionExporter:
             org_id: The organization that owns the Cradlepoint integration.
 
         Returns:
-            The status body as a dict, or an empty dict when the body is absent.
+            The successful status body, or an empty dict when that body is absent.
+
+        Raises:
+            RuntimeError: The HTTP request failed or its transport status is unavailable.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Calling testOrgCradlepointConnection for org_id=%s", org_id)  # Pre-call log.
         response = mistapi.api.v1.orgs.setting.testOrgCradlepointConnection(
             mh.apisession, org_id
         )  # The SDK call for the Cradlepoint status.
+        OrgCradlepointConnectionExporter._require_http_success(response)
         payload = getattr(response, "data", None)  # The SDK exposes the body on .data.
         logger.debug(
             "testOrgCradlepointConnection returned payload_type=%s", type(payload).__name__
@@ -138,3 +148,18 @@ class OrgCradlepointConnectionExporter:
         except Exception as e:  # WHY: surface any SDK or network error, keep the menu alive.
             logging.error("Error fetching the Cradlepoint status for org %s: %s", org_id, e)  # Failure context.
             logging.info("! Error fetching Cradlepoint connection status: %s", e)  # ASCII-only user notice.
+
+    @staticmethod
+    def _require_http_success(response: object) -> None:
+        """Reject HTTP failures without reading or reporting private response data."""
+        logger.info("The export checks 1 HTTP response for %s.", _OPERATION)
+        status_code = getattr(response, "status_code", None)
+        if (
+            not isinstance(status_code, int)
+            or isinstance(status_code, bool)  # A boolean inherits from int but is not an HTTP status.
+            or not 100 <= status_code <= 599
+        ):
+            raise RuntimeError(f"{_OPERATION} failed: transport status is unavailable (checked 1 response).")
+        logger.debug("The check read 1 HTTP response for %s with status %s.", _OPERATION, status_code)
+        if not 200 <= status_code < 300:
+            raise RuntimeError(f"{_OPERATION} failed: HTTP {status_code} (checked 1 response).")

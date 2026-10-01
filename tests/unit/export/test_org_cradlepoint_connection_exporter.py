@@ -52,7 +52,7 @@ class TestFetch:
         body = {"last_status": "active", "error": ""}
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data=body),
+            return_value=SimpleNamespace(data=body, status_code=200),
         ) as call:
             assert OrgCradlepointConnectionExporter._fetch(ORG_ID) == body
 
@@ -63,7 +63,7 @@ class TestFetch:
         """Only a dict body can hold the status, so any other shape is empty."""
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data=body),
+            return_value=SimpleNamespace(data=body, status_code=200),
         ):
             assert OrgCradlepointConnectionExporter._fetch(ORG_ID) == {}
 
@@ -113,7 +113,7 @@ class TestStatusMenu:
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data={"last_status": "active", "error": ""}),
+            return_value=SimpleNamespace(data={"last_status": "active", "error": ""}, status_code=200),
         ):
             OrgCradlepointConnectionExporter.status()
 
@@ -133,7 +133,7 @@ class TestStatusMenu:
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data=None),
+            return_value=SimpleNamespace(data=None, status_code=200),
         ):
             OrgCradlepointConnectionExporter.status()
 
