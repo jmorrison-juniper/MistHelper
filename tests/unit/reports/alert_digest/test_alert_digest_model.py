@@ -40,6 +40,31 @@ def test_acknowledgement_candidates_use_unacknowledged_ids() -> None:
     assert [candidate.alarm_id for candidate in candidates] == ["alarm-1"]  # Confirm safe filtering.
 
 
+def test_acknowledgement_candidates_treat_missing_acked_as_open() -> None:
+    """A live search row without acked remains an acknowledgement candidate."""
+    definitions = AlertDigestModel.definitions_by_key([definition("idp_attack_detected")])  # Build live type map.
+    row = {  # Mirror the live searchOrgAlarms payload shape from issue 3690.
+        "applications": ["ssh"],  # Preserve a live-only field that the model ignores safely.
+        "attacker_ips": ["192.0.2.10"],  # Preserve a live-only field that the model ignores safely.
+        "attacks": ["scan"],  # Preserve a live-only field that the model ignores safely.
+        "count": 1,  # Preserve recurrence from the live alarm row.
+        "cve_ids": [],  # Preserve a live-only field that the model ignores safely.
+        "group": "idp",  # Preserve a live-only category hint that definitions override.
+        "id": "live-alarm-1",  # Preserve the identifier needed for acknowledgement.
+        "ingress_ports": ["ge-0/0/1"],  # Preserve a live-only field that the model ignores safely.
+        "last_seen": 1_700_000_100,  # Preserve the live last-seen epoch.
+        "org_id": "00000000-0000-4000-8000-000000003690",  # Preserve the live organization field.
+        "protocols": ["tcp"],  # Preserve a live-only field that the model ignores safely.
+        "severity": "warn",  # Preserve the live severity when no definition overrides it.
+        "site_id": "site-1",  # Preserve the live site identifier.
+        "timestamp": 1_700_000_000,  # Preserve the live first-seen epoch.
+        "type": "idp_attack_detected",  # Preserve the live alarm type key.
+    }
+    records = AlertDigestModel.records_from_rows([row], definitions)  # Normalize the live-shaped row.
+    candidates = AlertDigestModel.acknowledgement_candidates(records)  # Select candidate rows for menu 281.
+    assert [candidate.alarm_id for candidate in candidates] == ["live-alarm-1"]  # Confirm missing acked means open.
+
+
 def test_result_rows_hold_one_row_per_candidate() -> None:
     """Each candidate receives one acknowledgement log result row."""
     definitions = AlertDigestModel.definitions_by_key([definition()])  # Build the category map.

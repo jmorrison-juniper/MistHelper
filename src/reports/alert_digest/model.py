@@ -311,7 +311,7 @@ class AlertDigestModel:
                 last_seen=AlertDigestFieldReader.iso(record.last_seen),
             )
             for record in records
-            if record.acked is False and bool(record.alarm_id)
+            if record.acked is not True and bool(record.alarm_id)
         ]
         logger.debug("Selected %d acknowledgement candidates", len(candidates))  # Log result count.
         return candidates  # Return candidates in source order.
