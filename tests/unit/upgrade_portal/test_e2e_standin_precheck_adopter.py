@@ -7,6 +7,9 @@ Why:
     run, and it reads the newest start time first. These tests hold the
     stand-in to the same rules, so a browser journey can prove the standalone
     filter of Delta H3 (FR-103).
+
+    Issue #3353. The pair reader must return the tier of that same capture.
+    Its tier conversion must match production without changing the selection.
 """
 
 from __future__ import annotations  # Keep annotations independent from import order.
@@ -15,7 +18,7 @@ from typing import Any  # A capture record holds values of different types.
 
 import pytest  # Parametrize the rules that a capture can fail.
 
-from tests.support.upgrade_portal_e2e import PortalRecordStore  # The stand-in store under test.
+from tests.support.upgrade_portal_e2e.records import PortalRecordStore
 
 OWNER = "e2e-unit-precheck-owner"  # The test owner that the store binds to each record.
 SITE_ID = "site-precheck-one"  # The site that each read names.
@@ -125,3 +128,92 @@ def test_the_store_order_decides_a_tie() -> None:
     """Two equal start times keep the old answer: the capture that the store holds last."""
     store = store_with(capture("cap-first", NEWER_STAMP), capture("cap-last", NEWER_STAMP))  # Equal start times.
     assert store.newest_precheck(SITE_ID) == "cap-last", "A tie did not keep the capture that the store holds last."
+
+
+class TestPrecheckTierReader:
+    """Prove the selected capture identifier and its production tier contract."""
+
+    @pytest.mark.parametrize(
+        ("raw_tier", "expected_tier"),
+        [(2, 2), (3, 3), ("2", 2), ("3", 3), (" 3 ", 3), (3.9, 3)],
+        ids=["standard", "extended", "standard-text", "extended-text", "padded-text", "production-integer-conversion"],
+    )
+    def test_returns_the_stored_tier(self, raw_tier: Any, expected_tier: int) -> None:
+        """The reader returns the selected identifier and the converted stored tier."""
+        store = store_with(capture("cap-tier", tier=raw_tier))
+        assert store.newest_precheck_tier(SITE_ID) == ("cap-tier", expected_tier)
+
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {},
+            {"tier": None},
+            {"tier": ""},
+            {"tier": "three"},
+            {"tier": "3.5"},
+            {"tier": True},
+            {"tier": False},
+            {"tier": 0},
+            {"tier": 1},
+            {"tier": 4},
+            {"tier": -1},
+            {"tier": []},
+            {"tier": {}},
+        ],
+        ids=[
+            "missing",
+            "null",
+            "empty-text",
+            "invalid-text",
+            "fraction-text",
+            "true",
+            "false",
+            "zero",
+            "unknown-low",
+            "unknown-high",
+            "negative",
+            "list",
+            "mapping",
+        ],
+    )
+    def test_uses_the_production_default_for_an_unusable_tier(self, fields: dict[str, Any]) -> None:
+        """A missing or unusable tier preserves the selected identifier and uses tier 2."""
+        store = store_with(capture("cap-default", **fields))
+        assert store.newest_precheck_tier(SITE_ID) == ("cap-default", 2)
+
+    def test_returns_the_tier_of_the_selected_newest_standalone_capture(self) -> None:
+        """The pair reader preserves the existing origin filter and start-time order."""
+        store = store_with(
+            capture("cap-newer", NEWER_STAMP, tier=3),
+            capture("cap-older", OLDER_STAMP, tier=2),
+            capture("cap-owned", "2026-09-01T12:00:00+00:00", tier=2, run_id=OWNING_RUN),
+        )
+        assert store.newest_precheck(SITE_ID) == "cap-newer"
+        assert store.newest_precheck_tier(SITE_ID) == ("cap-newer", 3)
+
+    def test_returns_the_tier_of_the_existing_tie_winner(self) -> None:
+        """Equal start times keep the last stored capture and its own tier."""
+        store = store_with(
+            capture("cap-first", NEWER_STAMP, tier=2),
+            capture("cap-last", NEWER_STAMP, tier=3),
+        )
+        assert store.newest_precheck(SITE_ID) == "cap-last"
+        assert store.newest_precheck_tier(SITE_ID) == ("cap-last", 3)
+
+    @pytest.mark.parametrize(
+        "records",
+        [
+            (),
+            (
+                capture("cap-other-site", tier=3, site_id=OTHER_SITE_ID),
+                capture("cap-post", tier=3, role="post"),
+                capture("cap-failed", tier=3, capture_status="failed"),
+                capture("cap-owned", tier=3, run_id=OWNING_RUN),
+            ),
+        ],
+        ids=["empty-store", "no-eligible-capture"],
+    )
+    def test_returns_no_identifier_and_the_default_without_a_capture(self, records: tuple[dict[str, Any], ...]) -> None:
+        """If no capture matches, the reader returns an empty identifier and tier 2."""
+        store = store_with(*records)
+        assert store.newest_precheck_tier(SITE_ID) == ("", 2)
