@@ -2,7 +2,31 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
-from src.websocket_streams.live.transport.frames import ConnectionClosed, FrameDecoder, SubscribeError
+import threading  # FrameReader needs a close event for close-origin decisions.
+
+from src.websocket_streams.live.transport.frames import (  # Test frame contracts.
+    ConnectionClosed,
+    FrameDecoder,
+    FrameReader,
+    SubscribeError,
+)
+from websocket import ABNF  # Tests use concrete opcode values.
+
+
+class CloseFrameSocket:
+    """A minimal socket that returns one close frame."""
+
+    def __init__(self, payload: bytes) -> None:
+        """Store the close payload."""
+        self._payload = payload  # The frame reader reads this payload once.
+
+    def settimeout(self, _timeout: float) -> None:
+        """Accept the timeout value."""
+
+    def recv_data(self, control_frame: bool = False) -> tuple[int, bytes]:
+        """Return one close frame."""
+        assert control_frame is True  # FrameReader must request control frames.
+        return ABNF.OPCODE_CLOSE, self._payload  # Return the configured close payload.
 
 
 class TestFrameDecoder:
@@ -53,3 +77,25 @@ class TestTransportErrors:
         error = SubscribeError("/channel", "timeout")  # Build a timeout error.
         assert error.channel == "/channel"  # The channel is visible.
         assert error.detail == "timeout"  # The detail is visible.
+
+    def test_empty_close_frame_reports_no_status_code_1005(self) -> None:
+        """Map an empty close frame to RFC 6455 code 1005."""
+        socket = CloseFrameSocket(b"")  # Build a close frame with no status payload.
+        reader = FrameReader(socket, threading.Event(), lambda: 1.0, 20.0)  # Build a reader around it.
+        try:  # The close frame should raise the structured close error.
+            reader.read(0.1)  # Read the close frame.
+        except ConnectionClosed as error:
+            assert error.code == 1005  # Empty close frames report no status received.
+        else:
+            raise AssertionError("ConnectionClosed was not raised.")  # A close frame must end the read.
+
+    def test_two_byte_close_frame_keeps_status_code(self) -> None:
+        """Keep a two-byte close status code."""
+        socket = CloseFrameSocket((1000).to_bytes(2, "big"))  # Build a normal close frame.
+        reader = FrameReader(socket, threading.Event(), lambda: 1.0, 20.0)  # Build a reader around it.
+        try:  # The close frame should keep its status code.
+            reader.read(0.1)  # Read the close frame.
+        except ConnectionClosed as error:
+            assert error.code == 1000  # The close code must be preserved.
+        else:
+            raise AssertionError("ConnectionClosed was not raised.")  # A close frame must end the read.

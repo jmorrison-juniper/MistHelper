@@ -2,7 +2,8 @@
 
 Why:
     Issue #3671 needs a terminal-grade bidirectional client. This class sends
-    input and resize frames while a reader thread receives output bytes.
+    input and resize frames while a reader thread receives output without
+    the Mist channel marker byte.
 """
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)  # Keep shell client logs under this module
 
 
 class ShellClient:
-    """Read and write one shell or screen WebSocket."""
+    """Read and write one shell or screen WebSocket without the Mist channel marker."""
 
     def __init__(
         self,
@@ -87,7 +88,7 @@ class ShellClient:
             timeout: Maximum wait in seconds, or None for one quiet interval.
 
         Returns:
-            Output bytes, or None after a quiet interval.
+            Output bytes with one leading Mist channel NUL removed, or None after a quiet interval.
 
         Raises:
             ConnectionClosed: The connection ended.
@@ -104,7 +105,7 @@ class ShellClient:
                 if deadline is None:  # The caller asked for one quiet interval.
                     return None  # Match the contract quiet result.
                 continue  # The bounded wait can continue.
-            return frame  # Text and binary output bytes are returned unchanged.
+            return self._strip_channel_marker(frame)  # Remove only the Mist channel marker byte.
         raise ConnectionClosed(dropped=False)  # A local close is a clean end.
 
     def send(self, text: str) -> None:
@@ -182,7 +183,7 @@ class ShellClient:
         if reader is None:  # A local close removed the reader.
             raise ConnectionClosed(dropped=False)  # The caller should end cleanly.
         frame = reader.read(timeout)  # The shared reader handles keepalive and close codes.
-        return None if frame is None else frame.payload  # Shell output stays byte-for-byte.
+        return None if frame is None else frame.payload  # The caller removes any Mist channel marker.
 
     def _read_slice(self) -> float:
         """Return one bounded socket wait slice.
@@ -192,6 +193,17 @@ class ShellClient:
         """
         interval = self._endpoint.profile.read_timeout_seconds  # The profile controls keepalive timing.
         return max(0.01, min(0.1, interval / 2))  # Keep a lower bound so sockets do not spin.
+
+    def _strip_channel_marker(self, frame: bytes) -> bytes:
+        """Remove one leading Mist channel marker byte from output.
+
+        Args:
+            frame: One shell or screen output frame.
+
+        Returns:
+            The frame after one leading NUL byte is removed, or the original frame.
+        """
+        return frame[1:] if frame.startswith(b"\x00") else frame  # Remove exactly one leading channel marker.
 
     def _send_binary(self, socket: Any, payload: bytes) -> None:
         """Send one binary frame.

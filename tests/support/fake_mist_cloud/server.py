@@ -56,9 +56,9 @@ class FakeConnection:
         """Send a pong control frame."""
         self._send_frame(0xA, data)  # Pong replies to client ping frames.
 
-    def send_close(self, code: int = 1000) -> None:
+    def send_close(self, code: int | None = 1000) -> None:
         """Send a close control frame and close the TCP socket."""
-        payload = struct.pack("!H", code)  # Close frames start with a two-byte code.
+        payload = b"" if code is None else struct.pack("!H", code)  # None sends an empty close payload.
         self._send_frame(0x8, payload)  # RFC 6455 close frame.
         self.drop()  # End the underlying socket after the close frame.
 
@@ -158,7 +158,7 @@ class FakeMistCloud:
         """Accept connections until stop."""
         assert self._server is not None  # start() sets the listener before the thread starts.
         while not self._stop.is_set():  # stop() ends the accept loop.
-            try:
+            try:  # Accept sockets until stop closes the listener.
                 client, _address = self._server.accept()  # Wait for one client.
             except OSError:
                 break  # The listener closed during stop.
@@ -169,7 +169,7 @@ class FakeMistCloud:
     def _serve_client(self, client: socket.socket) -> None:
         """Handle one accepted TCP client."""
         client.settimeout(0.2)  # Timeouts let stop() end the loop.
-        try:
+        try:  # Drop incomplete or closed connections without failing the test.
             path, headers = self._handshake(client)  # Complete the WebSocket opening handshake.
             connection = self._new_connection(client, path, headers)  # Record the accepted connection.
             handler = self._routes.get(path)  # Route the request path to a device.
@@ -272,7 +272,7 @@ class FakeMistCloud:
 
     def _read_frame(self, client: socket.socket) -> tuple[int, bytes, bool] | None:
         """Read and unmask one client frame."""
-        try:
+        try:  # Return None on timeout so the worker can check stop state.
             header = client.recv(2)  # Every WebSocket frame starts with two bytes.
         except TimeoutError:
             return None  # A quiet socket stays open.

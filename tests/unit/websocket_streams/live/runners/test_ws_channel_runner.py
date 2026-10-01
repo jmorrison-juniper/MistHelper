@@ -101,7 +101,7 @@ class TestChannelStreamRunner:
             cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
             sink = FakeSink()  # Record runner callbacks.
             runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a", "site-b")), sink)  # Runner.
-            try:
+            try:  # Ensure the reader thread stops even if assertions fail.
                 runner.start()  # Start the daemon reader thread.
                 assert sink.wait_for_live(1, 1.0) == ["The WebSocket connection opened."]  # Subscription done.
                 device.publish("/sites/site-b/stats/devices", {"ok": True})  # Send one site-b event.
@@ -125,7 +125,7 @@ class TestChannelStreamRunner:
             endpoint = self._endpoint(cloud, reconnect_delays=(0.05, 0.05, 0.05))  # Use short waits.
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
             start = time.monotonic()  # Measure that reconnect waits occurred.
-            try:
+            try:  # Ensure retries stop before the fake cloud exits.
                 runner.start()  # Start the daemon reader thread.
                 cloud.wait_for_requests(1, 1.0)  # Wait for the initial connection.
                 device.drop()  # Drop the first connection.
@@ -144,15 +144,17 @@ class TestChannelStreamRunner:
         with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
             cloud.register("/api-ws/v1/stream", object())  # This handler never confirms subscription.
             sink = FakeSink()  # Record runner callbacks.
-            endpoint = self._endpoint(
+            endpoint = self._endpoint(  # Use short waits so this failure test stays fast.
                 cloud, reconnect_delays=(0.01, 0.01, 0.01), subscribe_timeout=0.02
             )  # Use short waits.
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
-            try:
+            try:  # Stop the runner after the retry-budget assertion.
                 runner.start()  # Start the daemon reader thread.
                 finished = sink.wait_for_finished(1, 1.0)  # Wait for the retry budget to end.
                 assert len(cloud.requests) == 4  # Initial attempt plus three retries.
-                assert finished == [(SessionState.FAILED, "The WebSocket connection failed after retry attempts.")]
+                assert finished == [  # Keep the retry failure result stable.
+                    (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
+                ]
             finally:
                 runner.stop()  # Ensure the reader thread stops.
 
@@ -166,13 +168,15 @@ class TestChannelStreamRunner:
             delays = (0.01, 0.01)  # Keep the retry budget short.
             endpoint = self._endpoint(cloud, reconnect_delays=delays, subscribe_timeout=0.2)  # Use short waits.
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
-            try:
+            try:  # Stop the runner after the drop-budget assertion.
                 runner.start()  # Start the daemon reader thread.
                 finished = sink.wait_for_finished(1, 1.0)  # Wait for the retry budget to end.
                 expected_attempts = len(delays) + 1  # The budget is initial attempt plus retries.
                 assert len(cloud.requests) == expected_attempts  # The runner did not retry forever.
                 assert device.drop_count == expected_attempts  # Each open attempt reached subscribe.
-                assert finished == [(SessionState.FAILED, "The WebSocket connection failed after retry attempts.")]
+                assert finished == [  # Keep the retry failure result stable.
+                    (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
+                ]
             finally:
                 runner.stop()  # Ensure the reader thread stops.
 
@@ -184,7 +188,7 @@ class TestChannelStreamRunner:
             cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
             sink = FakeSink()  # Record runner callbacks.
             runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a",)), sink)  # Runner.
-            try:
+            try:  # Stop the runner after the refusal assertion.
                 runner.start()  # Start the daemon reader thread.
                 finished = sink.wait_for_finished(1, 1.0)  # Wait for the subscription failure.
                 assert finished == [(SessionState.FAILED, "The stream subscription failed: denied.")]  # Safe reason.
@@ -214,7 +218,7 @@ class TestChannelStreamRunner:
             sink = FakeSink()  # Record runner callbacks.
             endpoint = self._endpoint(cloud, read_timeout=0.05)  # Use a short keepalive interval.
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
-            try:
+            try:  # Stop the quiet runner after the ping assertion.
                 runner.start()  # Start the daemon reader thread.
                 sink.wait_for_live(1, 1.0)  # Wait for subscription.
                 pings = cloud.wait_for_pings(3, 1.0)  # A healthy quiet channel should keep pinging.

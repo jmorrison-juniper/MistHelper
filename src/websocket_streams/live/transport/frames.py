@@ -24,7 +24,7 @@ class ConnectionClosed(Exception):
     """A WebSocket connection ended.
 
     Args:
-        code: The close code, or None when no code arrived.
+        code: The close code, 1005 for an empty close frame, or None when no close frame arrived.
         dropped: True when the network or far side ended the connection.
     """
 
@@ -32,7 +32,7 @@ class ConnectionClosed(Exception):
         """Build the connection close error.
 
         Args:
-            code: The close code, or None.
+            code: The close code, 1005, or None when no close frame arrived.
             dropped: True for a remote or network end.
         """
         super().__init__("The WebSocket connection closed.")  # The caller reads structured fields.
@@ -110,7 +110,7 @@ class FrameReader:
         Raises:
             ConnectionClosed: The socket closed or missed two intervals.
         """
-        try:
+        try:  # Map websocket-client errors to the runner close contract.
             self._socket.settimeout(max(0.01, timeout))  # Keep every receive bounded.
             opcode, payload = self._socket.recv_data(control_frame=True)  # Read data and control frames.
         except websocket.WebSocketTimeoutException:
@@ -193,16 +193,16 @@ class FrameReader:
         return bytes(payload) if isinstance(payload, bytearray) else b""  # Unknown payloads become empty bytes.
 
     def _close_code(self, payload: bytes) -> int | None:
-        """Return a WebSocket close code.
+        """Return the WebSocket close code.
 
         Args:
             payload: The close frame payload.
 
         Returns:
-            The close code, or None when none is present.
+            The close code, or 1005 when the close frame has no status code.
         """
-        if len(payload) < 2:  # A close frame can omit the code.
-            return None  # No code arrived.
+        if len(payload) < 2:  # RFC 6455 section 7.1.5 defines 1005 for no status code.
+            return 1005  # A close frame arrived, but it carried no status code.
         return int.from_bytes(payload[:2], "big")  # WebSocket close codes use big-endian bytes.
 
 
@@ -223,7 +223,7 @@ class FrameDecoder:
             text = frame.replace(b"\x00", b"").decode("utf-8", errors="replace")  # Match the SDK cleanup.
         else:
             text = frame.replace("\x00", "")  # Text frames get the same NUL removal for consistency.
-        try:
+        try:  # Preserve non-JSON stream text as raw data.
             decoded = json.loads(text)  # Mist stream frames are usually JSON objects.
         except json.JSONDecodeError:
             return {"raw": text}  # The SDK wraps non-JSON text this way.
@@ -246,7 +246,7 @@ class FrameDecoder:
             return payload  # Preserve dictionaries, lists, None, and numbers.
         if payload == "":  # Empty data is a valid edge value.
             return ""  # Do not convert an empty body to None.
-        try:
+        try:  # Decode nested JSON only when the data field holds JSON text.
             return json.loads(payload)  # Command data can be JSON text inside the event.
         except json.JSONDecodeError:
             return payload  # Malformed JSON stays as text for the caller to decide.

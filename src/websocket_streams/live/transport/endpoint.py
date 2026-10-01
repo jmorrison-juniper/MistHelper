@@ -111,7 +111,9 @@ class MistStreamEndpoint:
         cookies = getattr(session, "cookies", None)  # Requests keeps cookies on this jar.
         safe = [self._cookie_pair(cookie) for cookie in cookies or []]  # Skip cookies that could inject headers.
         joined = "; ".join(pair for pair in safe if pair is not None)  # websocket-client wants one cookie string.
-        logger.debug("Built %s safe Mist WebSocket cookies for host %s", len([p for p in safe if p]), self._cloud_host)
+        logger.debug(  # Count safe cookies without exposing cookie names or values.
+            "Built %s safe Mist WebSocket cookies for host %s", len([p for p in safe if p]), self._cloud_host
+        )
         return joined or None  # An empty string should not become a header.
 
     def sslopt(self) -> dict[str, object]:
@@ -131,7 +133,9 @@ class MistStreamEndpoint:
         elif isinstance(verify, str):  # A path names a CA bundle.
             ssl_options["ca_certs"] = verify  # websocket-client uses ca_certs for the same path.
         self._add_cert_options(ssl_options, cert)  # Client certificate handling matches the SDK.
-        logger.debug("Built %s Mist WebSocket TLS options for host %s", len(ssl_options), self._cloud_host)
+        logger.debug(  # Count TLS options without logging certificate paths twice.
+            "Built %s Mist WebSocket TLS options for host %s", len(ssl_options), self._cloud_host
+        )
         return ssl_options  # Callers pass this directly to websocket-client.
 
     def host_label(self, url: str) -> str:

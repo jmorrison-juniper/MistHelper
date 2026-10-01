@@ -8,12 +8,12 @@ from collections.abc import Callable  # The recorder helper returns a callback.
 
 import pytest  # Tests assert expected transport errors.
 
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile
-from src.websocket_streams.live.transport.frames import ConnectionClosed, SubscribeError
-from src.websocket_streams.live.transport.stream_client import StreamClient
-from tests.support.fake_mist_cloud.api import FakeApiSession
-from tests.support.fake_mist_cloud.devices import StreamDevice
-from tests.support.fake_mist_cloud.server import FakeMistCloud
+from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Need endpoints.
+from src.websocket_streams.live.transport.frames import ConnectionClosed, SubscribeError  # Test structured errors.
+from src.websocket_streams.live.transport.stream_client import StreamClient  # Test the stream transport client.
+from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions provide endpoint fields.
+from tests.support.fake_mist_cloud.devices import StreamDevice  # Stream tests need a fake stream endpoint.
+from tests.support.fake_mist_cloud.server import FakeMistCloud  # Fake cloud provides WebSocket I/O.
 
 
 class TestStreamClient:
@@ -25,7 +25,7 @@ class TestStreamClient:
             device = StreamDevice()  # Build a stream device.
             cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
             client = self._client(cloud, ["/one", "/two"])  # Build client with two channels.
-            try:
+            try:  # Always close the client after the data-event path.
                 client.open()  # Open and wait for both subscription answers.
                 device.publish("/two", {"value": "snowman \u2603"})  # Publish Unicode data on one channel.
                 event = client.next_event(1.0)  # Read the next data event.
@@ -44,7 +44,7 @@ class TestStreamClient:
             device.refuse("/bad", "denied")  # Force a refused channel.
             cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
             client = self._client(cloud, ["/bad"])  # Build client with refused channel.
-            try:
+            try:  # Always close the client after the refusal path.
                 with pytest.raises(SubscribeError) as caught:  # open() must fail.
                     client.open()  # Wait for the refused subscription.
                 assert caught.value.channel == "/bad"  # The error names the channel.
@@ -57,7 +57,7 @@ class TestStreamClient:
         with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
             cloud.register("/api-ws/v1/stream", object())  # This handler sends no subscription answer.
             client = self._client(cloud, ["/quiet"], subscribe_timeout=0.2)  # Use a short timeout.
-            try:
+            try:  # Always close the client after the timeout path.
                 with pytest.raises(SubscribeError) as caught:  # open() must fail.
                     client.open()  # Wait for the missing subscription answer.
                 assert caught.value.channel == "/quiet"  # The timeout names the missing channel.
@@ -71,7 +71,7 @@ class TestStreamClient:
             device = StreamDevice()  # Build a stream device that stays quiet.
             cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
             client = self._client(cloud, ["/quiet"], read_timeout=0.05)  # Use short keepalive intervals.
-            try:
+            try:  # Always close the client after the keepalive success path.
                 client.open()  # Subscribe successfully first.
                 result = client.next_event(0.25)  # Wait for more than four keepalive intervals.
                 pings = cloud.wait_for_pings(3, 1.0)  # The fake cloud records received pings.
@@ -87,7 +87,7 @@ class TestStreamClient:
             device = StreamDevice()  # Build a stream device that stays quiet.
             cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
             client = self._client(cloud, ["/quiet"], read_timeout=0.05)  # Use short keepalive intervals.
-            try:
+            try:  # Always close the client after the keepalive failure path.
                 client.open()  # Subscribe successfully first.
                 with pytest.raises(ConnectionClosed) as caught:  # Silence should end as a drop.
                     client.next_event(0.5)  # Wait through two quiet intervals.
@@ -172,7 +172,7 @@ class TestStreamClient:
 
     def _read_until_close(self, client: StreamClient, errors: list[ConnectionClosed]) -> None:
         """Read until a local close occurs."""
-        try:
+        try:  # Record any close error from the background read.
             client.next_event(5.0)  # This call should block until close().
         except ConnectionClosed as error:
             errors.append(error)  # Record the structured close error.

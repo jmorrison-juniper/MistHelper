@@ -16,7 +16,12 @@ from typing import Any  # websocket-client is not fully typed.
 
 import websocket  # The feature uses websocket-client per the contract.
 from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint  # Endpoint builds safe connection values.
-from src.websocket_streams.live.transport.frames import ConnectionClosed, FrameDecoder, FrameReader, SubscribeError
+from src.websocket_streams.live.transport.frames import (  # Share frame parsing across stream clients.
+    ConnectionClosed,
+    FrameDecoder,
+    FrameReader,
+    SubscribeError,
+)
 
 logger = logging.getLogger(__name__)  # Keep stream client logs under this module.
 
@@ -110,7 +115,7 @@ class StreamClient:
         """
         logger.info("Running Mist stream read loop for %s channel(s)", len(self._channels))  # Log before the loop.
         while not self._closed.is_set():  # The local close path returns cleanly.
-            try:
+            try:  # Keep local close separate from a dropped connection.
                 event = self.next_event(
                     self._endpoint.profile.read_timeout_seconds
                 )  # Keepalive uses the profile timeout.

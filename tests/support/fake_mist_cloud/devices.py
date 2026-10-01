@@ -106,7 +106,7 @@ class ShellDevice:
     def on_connect(self, connection: FakeConnection) -> None:
         """Send the shell banner and prompt."""
         self._connection = connection  # Later command handlers send on this connection.
-        connection.send_text("Welcome to Fake Mist Shell\r\n")  # Send a banner like a real device.
+        self._send_output(connection, b"Welcome to Fake Mist Shell\r\n")  # Send a banner like a real device.
         self._send_prompt()  # Prompt includes bracketed paste mode.
 
     def receive(self, connection: FakeConnection, opcode: int, payload: bytes) -> None:
@@ -156,16 +156,16 @@ class ShellDevice:
         """Echo input and run complete lines."""
         for byte in data:  # Process byte-by-byte like a terminal.
             if self._fullscreen and byte == ord("q"):  # The fake full-screen program exits on q.
-                connection.send_text("\x1b[?1049l")  # Leave the alternate screen.
+                self._send_output(connection, b"\x1b[?1049l")  # Leave the alternate screen.
                 self._fullscreen = False  # The shell returns to normal mode.
                 self._send_prompt()  # Show the prompt after exiting.
                 continue  # Do not echo q as a command.
             if byte == 3:  # Ctrl+C interrupts the shell line.
                 self._line.clear()  # The current line is canceled.
-                connection.send_text("^C\r\n")  # Real shells echo the interrupt marker.
+                self._send_output(connection, b"^C\r\n")  # Real shells echo the interrupt marker.
                 self._send_prompt()  # Show a fresh prompt.
                 continue  # Continue processing any later bytes.
-            connection.send_binary(bytes([byte]))  # Echo typed characters.
+            self._send_output(connection, bytes([byte]))  # Echo typed characters with the Mist channel marker.
             if byte in (10, 13):  # Enter runs the line.
                 line = self._line.decode("utf-8", errors="replace").strip()  # Decode the command text.
                 self._line.clear()  # Start a new line buffer.
@@ -176,24 +176,35 @@ class ShellDevice:
     def _run_line(self, connection: FakeConnection, line: str) -> None:
         """Run one fake shell line."""
         if line == "exit":  # The shell closes normally on exit.
-            connection.send_text("\r\nlogout\r\n")  # Send a small close notice.
-            connection.send_close(1000)  # Normal close.
+            self._send_output(connection, b"exit \r\n")  # Real Mist echoes exit before the empty close frame.
+            self._send_output(connection, b"\r\n")  # Real Mist sends a blank line before close.
+            connection.send_close(None)  # Real Mist sends an empty close payload after exit.
             return  # Do not send another prompt.
         if line == "fullscreen":  # Tests use this to exercise alternate screen output.
             self._fullscreen = True  # q exits this fake program.
-            connection.send_text("\x1b[?1049h\x1b[2J\x1b[1;1H\x1b[31mRED\x1b[0m")  # Draw colored text.
+            self._send_output(connection, b"\x1b[?1049h\x1b[2J\x1b[1;1H\x1b[31mRED\x1b[0m")  # Draw colored text.
             return  # The program owns the screen until q.
         if line == "big":  # Performance tests request about 1 MB of output.
-            connection.send_text("X" * 1_048_576)  # Send one large text frame.
+            self._send_output(connection, b"X" * 1_048_576)  # Send one large binary frame.
             self._send_prompt()  # Return to the prompt after output.
             return  # The big command is complete.
-        connection.send_text(f"\r\nran: {line}\r\n")  # General command output.
+        self._send_output(connection, f"\r\nran: {line}\r\n".encode())  # General command output.
         self._send_prompt()  # Show the prompt after each command.
 
     def _send_prompt(self) -> None:
         """Send the prompt with bracketed paste mode enabled."""
         if self._connection is not None:  # A prompt can be sent only after connect.
-            self._connection.send_text("\x1b[?2004h" + self.prompt)  # Bracketed paste turns on at the prompt.
+            prompt = ("\x1b[?2004h" + self.prompt).encode("utf-8")  # Bracketed paste turns on at the prompt.
+            self._send_output(self._connection, prompt)  # Prompt frames match the real Mist binary framing.
+
+    def _send_output(self, connection: FakeConnection, payload: bytes) -> None:
+        """Send one fake Mist terminal output frame.
+
+        Args:
+            connection: The active fake WebSocket connection.
+            payload: The terminal bytes without the Mist channel marker.
+        """
+        connection.send_binary(b"\x00" + payload)  # Real Mist output uses one leading NUL channel marker.
 
 
 class ScreenDevice:
@@ -206,5 +217,15 @@ class ScreenDevice:
     def on_connect(self, connection: FakeConnection) -> None:
         """Send configured screen updates."""
         for index in range(self.updates):  # Each update splits one CSI sequence.
-            connection.send_text("\x1b[")  # Split inside the escape sequence.
-            connection.send_text(f"2J\x1b[1;1Hscreen update {index}\r\n")  # Complete and draw the screen.
+            self._send_output(connection, b"\x1b[")  # Split inside the escape sequence.
+            payload = f"2J\x1b[1;1Hscreen update {index}\r\n".encode()  # Complete and draw the screen.
+            self._send_output(connection, payload)  # Screen frames match the real Mist binary framing.
+
+    def _send_output(self, connection: FakeConnection, payload: bytes) -> None:
+        """Send one fake Mist screen output frame.
+
+        Args:
+            connection: The active fake WebSocket connection.
+            payload: The screen bytes without the Mist channel marker.
+        """
+        connection.send_binary(b"\x00" + payload)  # Real Mist screen output uses one leading NUL channel marker.

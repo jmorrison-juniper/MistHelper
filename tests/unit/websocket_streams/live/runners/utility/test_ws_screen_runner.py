@@ -171,6 +171,7 @@ def test_screen_history_preserves_split_control_bytes_and_read_only_state() -> N
         _wait_for_state(session, {SessionState.FINISHED})  # Wait for the device close.
     assert b"\x1b[2J\x1b[1;1Hscreen update 0\r\n" in _history(session)  # Split bytes rejoined in history.
     assert b"\x1b[2J\x1b[1;1Hscreen update 1\r\n" in _history(session)  # Second update also arrived.
+    assert b"\x00" not in _history(session)  # The client removes the Mist screen channel markers.
     assert session.terminal is not None and session.terminal.read_only is True  # Screen terminal is read-only.
     assert session.terminal.input is None  # The gateway refuses input and resize with read_only before runner calls.
     assert isinstance(runner, TerminalRunner) is False  # A screen runner is not a writable terminal runner.

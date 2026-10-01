@@ -87,7 +87,7 @@ class DeviceTerminalRunner:
             rows: The terminal rows.
         """
         logger.debug("Sending the terminal size for key %s", self._request.key)  # Debug level: drags send many sizes.
-        try:
+        try:  # Send the resize only when a socket is ready.
             self._client.resize(cols, rows)  # The device redraws for the new size.
         except StreamRequestError:
             logger.debug("Kept the terminal size until the connection opens")  # The open sends the stored size.
@@ -96,7 +96,7 @@ class DeviceTerminalRunner:
 
     def _run(self) -> None:
         """Open the terminal and read until it closes."""
-        try:
+        try:  # Convert terminal open and read outcomes into session state.
             url = self._terminal_url()  # Send the REST trigger and read the address.
             self._open(url)  # Check the address, connect, and send the size.
             self._sink.mark_live(self.OPENED_NOTE)  # The page shows the terminal as open.
@@ -172,7 +172,7 @@ class DeviceTerminalRunner:
         if self._output_seen:  # Only the first output changes the state.
             return  # Later output needs no action.
         self._output_seen = True  # Remember that the device answered.
-        try:
+        try:  # Release queued input only after the first output arrives.
             self._on_first_output()  # A shell sends the queued keys now.
         except StreamRequestError:
             logger.debug("The connection closed before the queued keys left")  # The next read reports the close.

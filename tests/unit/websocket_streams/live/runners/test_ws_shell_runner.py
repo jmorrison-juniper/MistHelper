@@ -206,7 +206,7 @@ def test_shell_first_output_marks_live_and_releases_queued_input() -> None:
 def test_shell_close_drop_stop_and_stop_during_trigger() -> None:
     """Shell close, drop, operator stop, and stop during trigger map to final states."""
     with FakeMistCloud() as cloud:  # Run all subcases against one server.
-        close_device = ShellDevice()  # The exit command sends close code 1000.
+        close_device = ShellDevice()  # The exit command sends an empty close frame like Mist.
         drop_device = ShellDevice()  # This device is dropped by the test.
         cloud.register("/shell/close", close_device)  # Route close subcase.
         cloud.register("/shell/drop", drop_device)  # Route drop subcase.
@@ -239,7 +239,8 @@ def test_shell_close_drop_stop_and_stop_during_trigger() -> None:
         slow_api.before_post_return = lambda _uri, _body: slow_runner.stop()  # Stop during REST trigger.
         slow_runner.start()  # Start slow subcase.
         _wait_for_state(slow_session, {SessionState.STOPPED})  # The stop must win.
-    assert close_session.reason == "The device closed the shell."  # Close code 1000 is finished.
+    assert close_session.reason == "The device closed the shell."  # Empty close frame code 1005 is finished.
+    assert b"\x00" not in _history(close_session)  # The client removes the Mist output channel markers.
     assert drop_session.reason == "The connection to the device dropped."  # TCP loss is failed.
     assert stop_session.reason == "The operator stopped the session."  # Local stop stays stopped.
     assert slow_session.reason == "The operator stopped the session."  # Stop during trigger opens no socket.

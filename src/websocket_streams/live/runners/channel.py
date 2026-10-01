@@ -97,7 +97,7 @@ class ChannelStreamRunner:
         client = StreamClient(self._endpoint, tuple(self._source_by_path))  # One client watches all channel paths.
         self._state.client = client  # stop() can close this client from another thread.
         subscribed = False  # Drops before subscribe must count as failed opens.
-        try:
+        try:  # Convert subscribe and read outcomes into retry state.
             client.open()  # Subscribe before declaring the session live.
             subscribed = True  # open() returned only after every channel subscribed.
             self._sink.mark_live("The WebSocket connection opened.")  # The page can show the connection state.

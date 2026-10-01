@@ -7,7 +7,11 @@ import ssl  # TLS option tests compare ssl constants.
 import pytest  # The policy tests assert refusal errors.
 
 from src.websocket_streams.intake.fields import StreamRequestError  # Policy refusals use this contract error.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, ShellAddressPolicy, TransportProfile
+from src.websocket_streams.live.transport.endpoint import (  # Build endpoint policies for these tests.
+    MistStreamEndpoint,
+    ShellAddressPolicy,
+    TransportProfile,
+)
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions expose the SDK private attributes.
 
 
@@ -115,4 +119,6 @@ class TestShellAddressPolicy:
         with pytest.raises(StreamRequestError) as caught:  # Default policy should refuse loopback.
             refused.check("ws://127.0.0.1:1234/shell/default")  # Loopback is cleartext.
         assert caught.value.code == "bad_request"  # Refusal code is stable.
-        assert allowed.check("ws://127.0.0.1:1234/shell/default") == "ws://127.0.0.1:1234/shell/default"
+        assert (  # Loopback works only when tests allow it.
+            allowed.check("ws://127.0.0.1:1234/shell/default") == "ws://127.0.0.1:1234/shell/default"
+        )

@@ -6,13 +6,17 @@ import threading  # Send from another thread is part of the contract.
 
 import pytest  # Tests assert expected transport errors.
 
-from src.websocket_streams.intake.fields import StreamRequestError
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, ShellAddressPolicy, TransportProfile
-from src.websocket_streams.live.transport.frames import ConnectionClosed
-from src.websocket_streams.live.transport.shell_client import ShellClient
-from tests.support.fake_mist_cloud.api import FakeApiSession
-from tests.support.fake_mist_cloud.devices import ShellDevice
-from tests.support.fake_mist_cloud.server import FakeConnection, FakeMistCloud
+from src.websocket_streams.intake.fields import StreamRequestError  # Sends use the request error contract.
+from src.websocket_streams.live.transport.endpoint import (  # Build client endpoints.
+    MistStreamEndpoint,
+    ShellAddressPolicy,
+    TransportProfile,
+)
+from src.websocket_streams.live.transport.frames import ConnectionClosed  # Read errors use this structured close.
+from src.websocket_streams.live.transport.shell_client import ShellClient  # Test the shell transport client.
+from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions provide endpoint fields.
+from tests.support.fake_mist_cloud.devices import ShellDevice  # Shell tests need a fake terminal endpoint.
+from tests.support.fake_mist_cloud.server import FakeConnection, FakeMistCloud  # Fake cloud provides WebSocket I/O.
 
 
 class SplitUtf8Device:
@@ -24,6 +28,17 @@ class SplitUtf8Device:
         connection.send_binary(b"\x98\x83")  # Send the remaining bytes as a binary frame.
 
 
+class MarkerDevice:
+    """A fake device that sends output frames with and without Mist channel markers."""
+
+    def on_connect(self, connection: FakeConnection) -> None:
+        """Send marker edge cases after connect."""
+        connection.send_binary(b"\x00abc")  # A normal Mist output frame has one leading NUL.
+        connection.send_binary(b"abc")  # A frame without the marker must stay unchanged.
+        connection.send_binary(b"\x00")  # A marker-only frame becomes empty.
+        connection.send_binary(b"\x00\x00x")  # Only the first marker byte is removed.
+
+
 class TestShellClient:
     """Verify shell client behavior against the fake cloud."""
 
@@ -33,7 +48,7 @@ class TestShellClient:
             device = ShellDevice()  # Build a fake shell.
             cloud.register("/shell/default", device)  # Route the shell path.
             client = self._client(cloud)  # Build a shell client.
-            try:
+            try:  # Always close the client after the open-read-send path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open and send initial size.
                 first = client.read(1.0)  # Read the banner.
                 second = client.read(1.0)  # Read the prompt.
@@ -55,7 +70,7 @@ class TestShellClient:
             device = ShellDevice()  # Build a fake shell.
             cloud.register("/shell/default", device)  # Route the shell path.
             client = self._client(cloud)  # Build a shell client.
-            try:
+            try:  # Always close the client after the thread send path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
                 thread = threading.Thread(target=client.send, args=("unicode \u2603\r",), daemon=True)  # Web thread.
                 thread.start()  # Send from another thread.
@@ -72,7 +87,7 @@ class TestShellClient:
             device = ShellDevice()  # Build a fake shell.
             cloud.register("/shell/default", device)  # Route the shell path.
             client = self._client(cloud)  # Build a shell client.
-            try:
+            try:  # Always close the client after the quiet read path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
                 client.read(1.0)  # Drain the banner.
                 client.read(1.0)  # Drain the prompt.
@@ -86,7 +101,7 @@ class TestShellClient:
             device = ShellDevice()  # Build a fake shell.
             cloud.register("/shell/default", device)  # Route the shell path.
             client = self._client(cloud, read_timeout=0.05)  # Use a short keepalive interval.
-            try:
+            try:  # Always close the client after the keepalive success path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
                 client.read(1.0)  # Drain the banner.
                 client.read(1.0)  # Drain the prompt.
@@ -104,7 +119,7 @@ class TestShellClient:
             device = ShellDevice()  # Build a fake shell.
             cloud.register("/shell/default", device)  # Route the shell path.
             client = self._client(cloud, read_timeout=0.05)  # Use a short keepalive interval.
-            try:
+            try:  # Always close the client after the keepalive failure path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
                 client.read(1.0)  # Drain the banner.
                 client.read(1.0)  # Drain the prompt.
@@ -121,14 +136,14 @@ class TestShellClient:
             device = ShellDevice()  # Build a fake shell.
             cloud.register("/shell/default", device)  # Route the shell path.
             client = self._client(cloud)  # Build a shell client.
-            try:
+            try:  # Always close the client after the device-close path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
                 client.send("exit\r")  # Ask the device to close normally.
                 with pytest.raises(ConnectionClosed) as caught:  # read() must report the close.
                     while True:  # Drain any close notice first.
                         client.read(1.0)  # The fake closes after output.
                 assert caught.value.dropped is True  # Device close is remote.
-                assert caught.value.code == 1000  # The close code must be preserved.
+                assert caught.value.code == 1005  # Mist sends an empty close payload after exit.
             finally:
                 client.close()  # Ensure the socket and server thread stop.
 
@@ -138,8 +153,10 @@ class TestShellClient:
             device = ShellDevice()  # Build a fake shell.
             cloud.register("/shell/default", device)  # Route the shell path.
             client = self._client(cloud)  # Build a shell client.
-            try:
+            try:  # Always close the client after the TCP-drop path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
+                client.read(1.0)  # Drain the banner before the drop.
+                client.read(1.0)  # Drain the prompt before the drop.
                 device.drop()  # Drop TCP with no close frame.
                 with pytest.raises(ConnectionClosed) as caught:  # read() must report the drop.
                     client.read(1.0)  # Read after the drop.
@@ -153,10 +170,24 @@ class TestShellClient:
         with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
             cloud.register("/shell/default", SplitUtf8Device())  # Route a split UTF-8 device.
             client = self._client(cloud)  # Build a shell client.
-            try:
+            try:  # Always close the client after the split-frame path.
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
                 assert client.read(1.0) == b"\xe2"  # Text frame bytes stay unchanged.
                 assert client.read(1.0) == b"\x98\x83"  # Binary frame bytes stay unchanged.
+            finally:
+                client.close()  # Ensure the socket and server thread stop.
+
+    def test_read_removes_one_leading_mist_channel_marker(self) -> None:
+        """Remove exactly one leading NUL from shell output frames."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.register("/shell/default", MarkerDevice())  # Route marker edge-case frames.
+            client = self._client(cloud)  # Build a shell client.
+            try:  # Always close the client after the marker-stripping path.
+                client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell.
+                assert client.read(1.0) == b"abc"  # One leading NUL is removed.
+                assert client.read(1.0) == b"abc"  # Frames without the marker stay unchanged.
+                assert client.read(1.0) == b""  # A marker-only frame becomes empty output.
+                assert client.read(1.0) == b"\x00x"  # Only one leading NUL is removed.
             finally:
                 client.close()  # Ensure the socket and server thread stop.
 
@@ -200,7 +231,7 @@ class TestShellClient:
             api.before_post_return = lambda uri, _body: called.append(uri)  # Hook runs before mist_post returns.
             response = api.mist_post("/api/v1/sites/site/devices/device/shell", body={})  # Trigger shell URL.
             client = self._client(cloud)  # Build a shell client.
-            try:
+            try:  # Always close the client after fake-cloud record checks.
                 client.open(str(response.data["url"]), 80, 24)  # Connect to the returned URL.
                 client.send("paste\r")  # Send input for byte recording.
                 received = device.wait_for_input(len("paste\r"), 1.0)  # Wait for recorded bytes.

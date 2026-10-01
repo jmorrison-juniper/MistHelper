@@ -148,7 +148,11 @@ class TestUtilityTriggerParity:
         kwargs: dict[str, object] = {"apisession": session}  # Every SDK call needs the API session.
         for name in ("site_id", "device_id", "org_id"):  # Add target identifiers that the SDK declares.
             if name in signature.parameters:  # The SDK function accepts this target.
-                kwargs[name] = {"site_id": self.SITE_ID, "device_id": self.DEVICE_ID, "org_id": self.ORG_ID}[name]
+                kwargs[name] = {  # Select the matching target sample for the SDK parameter.
+                    "site_id": self.SITE_ID,
+                    "device_id": self.DEVICE_ID,
+                    "org_id": self.ORG_ID,
+                }[name]
         for field in entry.fields:  # Add catalog sample parameters.
             if field.name in signature.parameters:  # Derived capture fields are converted below.
                 self._add_field(kwargs, function, field)  # Convert enums to SDK enum objects.
@@ -169,11 +173,11 @@ class TestUtilityTriggerParity:
         value = self.SAMPLES[field.name]  # Every catalog field has a parity sample.
         annotation = SdkAnnotation.hints(function).get(field.name)  # Read the SDK annotation for enums.
         enum_type = SdkAnnotation.enum_type(annotation)  # Find the enum type when present.
-        if (
+        if (  # Reject samples that do not fit the SDK enum.
             enum_type is not None and isinstance(value, str) and value not in {member.value for member in enum_type}
         ):  # Pick a valid enum.
             value = next(iter(enum_type)).value  # Match the recorder rule for a mismatched generic sample.
-        kwargs[field.name] = (
+        kwargs[field.name] = (  # Store the SDK-shaped sample value for this field.
             enum_type(value) if enum_type is not None and isinstance(value, str) else value
         )  # Store value.
 
@@ -189,9 +193,11 @@ class TestUtilityTriggerParity:
         """
         parameters = {field.name: self._request_value(field, sdk_body) for field in entry.fields}  # Match SDK samples.
         if isinstance(sdk_body, dict) and "num_packets" not in sdk_body:  # Non-captures must omit capture defaults.
-            parameters = {key: value for key, value in parameters.items() if key not in {"num_packets", "max_pkt_len"}}
-        targets = {
-            "org_id": (self.ORG_ID,),
+            parameters = {  # Drop capture defaults from non-capture SDK bodies.
+                key: value for key, value in parameters.items() if key not in {"num_packets", "max_pkt_len"}
+            }
+        targets = {  # Provide every identifier that the trigger table can request.
+            "org_id": (self.ORG_ID,),  # Include org routes.
             "site_id": (self.SITE_ID,),
             "device_id": (self.DEVICE_ID,),
             "mxedge_id": (self.DEVICE_ID,),

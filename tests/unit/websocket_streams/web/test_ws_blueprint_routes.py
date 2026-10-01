@@ -423,7 +423,10 @@ class TestTerminalFormToken:
     def test_post_without_the_form_token_is_refused(self, route: str, body: dict[str, object]) -> None:
         """A POST without the token gets csrf_expired, and the gateway receives nothing."""
         token_app = RouteTestApp.build(form_token_check=True)  # The app that checks the form token.
-        answer = token_app.test_client().post(TERMINAL_PATH.format(session_id="shell1", route=route), json=body)
+        answer = token_app.test_client().post(  # Omit the token to prove the guard.
+            TERMINAL_PATH.format(session_id="shell1", route=route),
+            json=body,
+        )
         fake_gateway = token_app.config[WebSocketsServices.CONFIG_KEY].gateway  # The fake behind the routes.
         assert answer.status_code == 400  # The portal keeps the status of the token library.
         assert answer.get_json()["code"] == "csrf_expired"  # The page can tell the operator to reload.
