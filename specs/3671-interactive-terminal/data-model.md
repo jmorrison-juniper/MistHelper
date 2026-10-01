@@ -87,7 +87,7 @@ Rules:
 - One request holds 16 KiB of UTF-8 text at most. A larger request gets `too_large` (413).
 - One session accepts 60 requests each second. More requests get `rate_limited` (429).
 - Before the first output, the text goes into `pending`. If `pending` then holds more than
-  4,096 characters, the request gets `not_ready` (409), and the text does not go into
+  4,096 characters, the request gets `input_full` (409), and the text does not go into
   `pending`.
 - At the first output, the queue sends the pending text in order. Then it sends each new
   request at once.

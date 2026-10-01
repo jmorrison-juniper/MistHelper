@@ -91,6 +91,10 @@ request with the table request.
 already worked for this research. All 52 triggers use POST. 41 commands use the command
 channel, 7 use a capture channel, and 4 screen commands use the `url` value.
 
+The table also holds the shell trigger. The software kit sends
+`POST /api/v1/sites/{site_id}/devices/{device_id}/shell` with the body `{}`. The answer holds
+the shell address in `url`. The EX shell and the SRX shell use the same request.
+
 ## R5. Browser transport: long poll and short POST requests
 
 **Decision**: The page reads terminal bytes with a long poll to

@@ -129,6 +129,7 @@ src/websocket_streams/live/
 |   |-- __init__.py
 |   |-- byte_history.py     (ByteHistory)
 |   |-- input_queue.py      (TerminalInput)
+|   |-- state.py            (TerminalState and TerminalChunk)
 |   `-- gateway.py          (TerminalGateway)
 `-- transport/              (new package)
     |-- __init__.py
@@ -170,4 +171,6 @@ terminal routes.
 
 ## Complexity Tracking
 
-No constitution rule fails, so this section lists no exception.
+| Item | Reason | Simpler option that the plan does not use |
+| - | - | - |
+| `tests/support/` gets a sixth folder | The folder already holds 11 entries before this feature. It is the shared location for test support code, so the fake Mist cloud server goes there. | A new support folder under `tests/unit/websocket_streams/` makes that folder hold 6 entries. A move of the old entries is out of scope. |

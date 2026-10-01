@@ -35,11 +35,12 @@ accepts `ws://127.0.0.1`.
 
 ## StreamClient
 
-One Mist stream connection with one channel.
+One Mist stream connection with one or more channels. A channel stream can watch more
+than one site or device, so the client takes a list of channel paths.
 
 | Method | Behavior |
 | - | - |
-| `open()` | Connect, send the subscribe frame, and wait for `channel_subscribed`. The wait is 10 seconds. Raise on `subscribe_failed` or on the timeout. |
+| `open()` | Connect, send one subscribe frame for each channel, and wait for `channel_subscribed` for each channel. The wait is 10 seconds. Raise on `subscribe_failed` or on the timeout. |
 | `run(on_event)` | Read until the connection closes. Call `on_event` for each data event. Send a ping after 20 quiet seconds. Close after 2 silent intervals. |
 | `close()` | Close the socket from any thread. `run` then returns. |
 
