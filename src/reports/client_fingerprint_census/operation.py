@@ -83,6 +83,14 @@ class ClientFingerprintCensus:
         return bool(written)  # WHY: caller reports a failed write.
 
     @staticmethod
+    def _resolve_org_id() -> str:
+        """Return the active organization identifier."""
+        logger.info("Resolving organization for client fingerprint census")  # WHY: action log before context read.
+        org_id = str(SourceDependencyResolver.org_id)  # WHY: direct menu execution already selected the org.
+        logger.debug("Resolved client fingerprint census org_present=%s", bool(org_id))  # WHY: safe summary.
+        return org_id  # WHY: the client needs the live organization path.
+
+    @staticmethod
     def run() -> None:
         """Run the client fingerprint census operation."""
         logger.info("Menu #289: Starting the client fingerprint census")  # WHY: mark the selected menu row.
@@ -93,7 +101,8 @@ class ClientFingerprintCensus:
         if distinct is None:  # WHY: no selected field means no safe API call.
             return  # WHY: prompt already logged the cancellation.
         site_id, site_name = resolved  # WHY: split identifiers for API and export rows.
-        client = ClientFingerprintCensusClient(SourceDependencyResolver.apisession)  # WHY: shared session.
+        org_id = ClientFingerprintCensus._resolve_org_id()  # WHY: live fingerprint count path needs the org.
+        client = ClientFingerprintCensusClient(SourceDependencyResolver.apisession, org_id)  # WHY: shared session.
         raw_rows = client.count(site_id, distinct)  # WHY: read the census from Mist.
         rows = FingerprintCensusModel.normalize_rows(raw_rows, site_id, site_name, distinct)  # WHY: export schema.
         ClientFingerprintCensus._print_report(rows)  # WHY: operator sees the result before the file path.

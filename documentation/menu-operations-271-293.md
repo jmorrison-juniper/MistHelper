@@ -97,7 +97,7 @@ Each utility prompts for a target. The four that start a test on a device ask
 | 284 | Tests the guest portal SMS provider (Twilio, SMSGlobal, or Telstra) with one message to a phone number | `SmsProviderTest.csv` | Each credential prompt hides the input. No credential reaches the log or the file. |
 | 285 | Validates a NAC identity provider credential with a username and a hidden password | `NacIdpCredentialTest.csv` | The password never reaches the log or the file. A failed validation prints the reason that the API returns. |
 | 288 | Prints the SSR registration commands of the organization | `SsrRegistrationCommands.txt` after a `y` answer | The text holds a registration code, so the file write asks first and the log never holds the code. |
-| 289 | Counts the clients of one site by family, OS, model, manufacturer, or OS type | `ClientFingerprintCensus.csv` | The console prints the top 20 rows. An empty census writes the header only. |
+| 289 | Counts clients by family, OS, model, or OS type through the live org fingerprint path | `ClientFingerprintCensus.csv` | The request sends the selected site filter. The live cloud can ignore that filter. |
 | 290 | Runs a spectrum analysis on one AP, or records an RF diagnostic for one client and downloads the file | `RfDiagnostics.csv`, recordings under `data/rfdiags/` | A recording stops even when you press Ctrl+C during the wait. |
 
 ## Lifecycle operations (286, 287, 291, 292, 293)
