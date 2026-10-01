@@ -148,7 +148,6 @@ USER misthelper
 
 # Environment variables for container-specific configurations
 ENV PYTHONUNBUFFERED=1
-ENV OUTPUT_FORMAT=sqlite
 ENV DATABASE_PATH=/app/data/mist_data.db
 # TLS trust settings. The image verifies every certificate by default.
 # update-ca-certificates writes the merged bundle to this same path, so a
