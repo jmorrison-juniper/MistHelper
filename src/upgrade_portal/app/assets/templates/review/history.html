@@ -70,6 +70,10 @@
                     capture_lead_text, capture_holder_text, and
                     capture_caption_text. The page with no site names every
                     site, and the page of one site names that site.
+    history_cards - the descriptions of Runs, Multi-site upgrades, and Audit
+                    log (issue #3485). It gives runs, operations, and audit.
+                    Each card gives note, caption, and empty text for the
+                    selected organization and optional site filter.
     history_columns - the columns of the Captures table (issue #3486). It
                       gives shows_site_column, column_count, and
                       row_values_text. The page with no site shows the Site
@@ -120,6 +124,10 @@
 {% set capture_lead_text = scope.capture_lead_text | default('The list shows the stored captures.', true) %}
 {% set capture_holder_text = scope.capture_holder_text | default('The site holds', true) %}
 {% set capture_caption_text = scope.capture_caption_text | default('The stored captures of the site.', true) %}
+{% set cards = history_cards | default(none, true) %}
+{% set run_texts = cards.runs | default(none, true) %}
+{% set operation_texts = cards.operations | default(none, true) %}
+{% set audit_texts = cards.audit | default(none, true) %}
 
 {#
   Issue #3486. The page with no site lists the captures of every site in one
@@ -155,8 +163,9 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Runs</h2>
 
-  <p class="portal-card-note">
-    Every single-site upgrade run, newest first. Each row links to the capture from before
+  <p class="portal-card-note" data-testid="history-run-note">
+    {{ run_texts.note | default('The single-site upgrade runs in this list, newest first.', true) }}
+    Each row links to the capture from before
     the upgrade and to the capture from after it. Every moment reads as UTC.
   </p>
 </div>
@@ -164,7 +173,8 @@
 <div class="portal-table-scroll">
   <table class="portal-table run-history-table" data-testid="history-run-table" data-sortable>
     <caption class="visually-hidden">
-      Every upgrade run. Each row holds the site, the state, the device count,
+      {{ run_texts.caption | default('The single-site upgrade runs in this list.', true) }}
+      Each row holds the site, the state, the device count,
       the start moment, the end moment, and a link to each capture.
     </caption>
 
@@ -256,7 +266,7 @@
       {% else %}
         <tr>
           <td colspan="11" class="portal-table-empty" data-testid="history-run-empty">
-            The portal holds no upgrade run yet.
+            {{ run_texts.empty | default('This page shows no single-site upgrade run.', true) }}
           </td>
         </tr>
       {% endfor %}
@@ -311,9 +321,9 @@
 <div class="portal-card" data-testid="history-operation-section">
   <h2 class="portal-card-title">Multi-site upgrades</h2>
 
-  <p class="portal-card-note">
-    Every multi-site upgrade of the selected organization, newest first. The
-    upgrade identifier links to the progress page when this browser session
+  <p class="portal-card-note" data-testid="history-operation-note">
+    {{ operation_texts.note | default('The multi-site upgrades in this list, newest first.', true) }}
+    The upgrade identifier links to the progress page when this browser session
     started the upgrade. Every moment reads as UTC.
   </p>
 
@@ -332,9 +342,9 @@
 <div class="portal-table-scroll">
   <table class="portal-table" data-testid="history-operation-table" data-sortable>
     <caption class="visually-hidden">
-      Every multi-site upgrade of the selected organization. Each row holds the
-      sites, the device types, the operator, the Mist account, the state, the
-      start moment, and the moment of the last update.
+      {{ operation_texts.caption | default('The multi-site upgrades in this list.', true) }}
+      Each row holds the sites, the device types, the operator, the Mist account,
+      and the state. It also holds the start moment and the moment of the last update.
     </caption>
 
     <thead>
@@ -381,7 +391,7 @@
       {% else %}
         <tr>
           <td colspan="8" class="portal-table-empty" data-testid="history-operation-empty">
-            The selected organization holds no multi-site upgrade yet.
+            {{ operation_texts.empty | default('This page shows no multi-site upgrade.', true) }}
           </td>
         </tr>
       {% endfor %}
@@ -394,8 +404,9 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Audit log</h2>
 
-  <p class="portal-card-note">
-    Every change of a site lock, newest first. Each row names the moment in UTC,
+  <p class="portal-card-note" data-testid="history-audit-note">
+    {{ audit_texts.note | default('The site lock actions in this list, newest first.', true) }}
+    Each row names the moment in UTC,
     the site, the action, and the operator. The portal shows a one-way digest of
     the address of the operator and never the address itself.
   </p>
@@ -404,7 +415,8 @@
 <div class="portal-table-scroll">
   <table class="portal-table" data-testid="history-audit-table" data-sortable>
     <caption class="visually-hidden">
-      Every take, release, takeover, and expiry of a site lock.
+      {{ audit_texts.caption | default('The site lock actions in this list.', true) }}
+      Each row shows a take, release, takeover, or expiry.
     </caption>
 
     <thead>
@@ -443,7 +455,7 @@
       {% else %}
         <tr>
           <td colspan="5" class="portal-table-empty" data-testid="history-audit-empty">
-            The portal holds no site lock action yet.
+            {{ audit_texts.empty | default('This page shows no site lock action.', true) }}
           </td>
         </tr>
       {% endfor %}
