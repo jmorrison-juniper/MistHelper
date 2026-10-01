@@ -20,6 +20,7 @@ from typing import Protocol  # Runners depend on the sink behavior only.
 from src.websocket_streams.catalog.model import Safety  # Payload safety depends on the definition.
 from src.websocket_streams.intake.start_request import StartRequest  # A session is created from a checked request.
 from src.websocket_streams.live.sessions.buffer import MessageBuffer, StreamMessage  # The buffer keeps the records.
+from src.websocket_streams.live.terminal.state import TerminalState  # Terminal sessions keep raw byte history.
 
 logger = logging.getLogger(__name__)  # Keep session log records under this module.
 
@@ -62,6 +63,8 @@ class SessionCounters:
 class SessionSink(Protocol):
     """The methods that runners call on a session."""
 
+    terminal: TerminalState | None  # Shell and screen runners read the stored terminal size at open.
+
     def mark_live(self, note: str = "") -> None:
         """Mark the session as live.
 
@@ -77,6 +80,13 @@ class SessionSink(Protocol):
             content: The page-safe content.
             source: The repeated identifier value, or None.
             summary: The packet summary, or None.
+        """
+
+    def add_bytes(self, data: bytes) -> None:
+        """Add raw terminal output bytes.
+
+        Args:
+            data: The raw terminal output bytes.
         """
 
     def finish(self, state: SessionState, reason: str) -> None:
@@ -101,7 +111,12 @@ class StreamSession:
     }  # These states count against the limit.
 
     def __init__(
-        self, session_id: str, request: StartRequest, buffer: MessageBuffer, clock: Callable[[], float]
+        self,
+        session_id: str,
+        request: StartRequest,
+        buffer: MessageBuffer,
+        clock: Callable[[], float],
+        terminal: TerminalState | None = None,
     ) -> None:
         """Build one stream session.
 
@@ -110,6 +125,7 @@ class StreamSession:
             request: The checked start request.
             buffer: The bounded message buffer.
             clock: The monotonic clock for age and rate calculations.
+            terminal: The terminal state, or None for a message-list session.
         """
         self.session_id = session_id  # The browser names the session with this value.
         self.request = request  # The runner and payload use the checked request.
@@ -129,6 +145,7 @@ class StreamSession:
         self.counters = SessionCounters()  # The card reads these counters.
         self._rate_times: deque[float] = deque()  # Only the last ten seconds matter.
         self.runner: object | None = None  # The manager sets the runner after build.
+        self.terminal = terminal  # Terminal sessions expose byte history through this state.
 
     @property
     def live(self) -> bool:
@@ -172,6 +189,27 @@ class StreamSession:
             self.counters.shortened = self.buffer.shortened  # Mirror the buffer shortening count.
             self.counters.bytes = self.buffer.bytes_used  # Mirror the buffer memory total.
 
+    def add_bytes(self, data: bytes) -> None:
+        """Add raw terminal bytes unless the session ended.
+
+        Args:
+            data: The raw terminal output bytes.
+        """
+        logger.debug(
+            "Adding terminal bytes to WebSockets session %s length=%s", self.session_id, len(data)
+        )  # Debug level: a busy shell sends many chunks, and the log never holds the bytes.
+        with self._lock:  # Terminal history and counters must change together.
+            if not self.live or self.terminal is None:  # Ended or non-terminal sessions ignore raw bytes.
+                logger.debug("Ignored terminal bytes for WebSockets session %s", self.session_id)  # Safe state log.
+                return  # Late callbacks cannot change an ended session.
+            now = self._clock()  # Use one time value for rate and counters.
+            self.terminal.history.append(data)  # Store raw bytes for terminal reads.
+            self._rate_times.append(now)  # Count the output message in the rate window.
+            self._trim_rate(now)  # Keep only the newest ten seconds.
+            self.counters.received += 1  # Terminal output chunks count as messages on the card.
+            self.counters.bytes += len(data)  # Terminal byte count shows received output bytes.
+        logger.debug("Added terminal bytes to WebSockets session %s length=%s", self.session_id, len(data))  # Safe log.
+
     def read_records(self, after: int, limit: int) -> tuple[list[StreamMessage], int, bool]:
         """Copy the kept records after a sequence number.
 
@@ -207,15 +245,20 @@ class StreamSession:
             state: The final state.
             reason: The plain reason for the operator.
         """
+        terminal: TerminalState | None = None  # Close outside the record lock.
         with self._lock:  # Two callbacks can try to finish at the same time.
             if not self.live:  # The first final state already won.
                 return  # Later close events do not change the outcome.
             logger.info("Finishing WebSockets session %s", self.session_id)  # Log before the state change.
+            keep_stop_reason = state == SessionState.STOPPED and self.stop_requested and bool(self.reason)  # #3671.
             self.state = state  # Store the final state.
-            self.reason = reason  # Store the reason for the page.
+            self.reason = self.reason if keep_stop_reason else reason  # An idle stop or a life stop keeps its cause.
             self.ended_mono = self._clock()  # Store a monotonic age for the reaper.
             self.ended_at = self._utc_text()  # Store a public UTC end time.
+            terminal = self.terminal  # Copy the terminal so close can run outside the record lock.
             logger.debug("Finished WebSockets session %s state=%s", self.session_id, state.value)  # Log safe metadata.
+        if terminal is not None:  # Non-terminal sessions have no history to close.
+            terminal.close()  # Wake any terminal read that waits for output.
 
     def request_stop(self, reason: str) -> bool:
         """Mark the session as stopping.
@@ -240,11 +283,17 @@ class StreamSession:
             return True  # The caller should call the runner.
 
     def mark_input_ready(self) -> None:
-        """Allow input for a shell session."""
+        """Allow input for a shell session, and send the early input one time."""
+        terminal_input = None  # Release outside the record lock because it sends to the network.
         with self._lock:  # The shell reader thread changes this flag.
+            if self.input_ready:  # A runner can report each output, but the queue opens one time.
+                return  # The early input already went to the device.
             logger.info("Marking WebSockets session %s input ready", self.session_id)  # Log before the state change.
             self.input_ready = True  # The manager now accepts shell input.
+            terminal_input = self.terminal.input if self.terminal is not None else None  # Copy the input queue.
             logger.debug("Marked WebSockets session %s input ready", self.session_id)  # Log after the state change.
+        if terminal_input is not None:  # Read-only terminals have no input to release.
+            terminal_input.release()  # Send queued early input outside the record lock.
 
     def mark_read(self) -> None:
         """Record that a page read the session."""
@@ -279,6 +328,7 @@ class StreamSession:
                 "live": self.live,  # The page enables live controls from this flag.
                 "reason": self.reason,  # The page shows the end or stop reason.
                 "input_ready": self.input_ready,  # The shell input uses this flag.
+                "terminal": self.terminal is not None,  # The page chooses the terminal panel from this flag.
                 "started_at": self.started_at,  # The page shows the start time.
                 "ended_at": self.ended_at,  # Live sessions return None here.
                 "counters": self.counters.to_payload(),  # The card shows these counters.

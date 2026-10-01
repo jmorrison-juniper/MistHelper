@@ -39,6 +39,11 @@ class StreamRequestError(Exception):
         "not_found": 404,  # The session identifier names no session.
         "not_open": 409,  # The shell is not ready, or the session has ended.
         "session_live": 409,  # A delete request named a session that is still live.
+        "not_terminal": 409,  # The session has no terminal, so terminal routes refuse it.
+        "read_only": 409,  # The terminal shows a screen command, so it takes no input.
+        "input_full": 409,  # The text before the first output is more than 4,096 characters.
+        "too_large": 413,  # One input request holds more than 16 KiB of UTF-8 text.
+        "rate_limited": 429,  # The session received more than 60 requests in one second.
     }
 
     def __init__(self, code: str, message: str, extra: Mapping[str, object] | None = None) -> None:
