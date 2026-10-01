@@ -188,7 +188,8 @@ class TestOrganizationUpgradeBrowserFlow:
         sync_api.expect(page.get_by_test_id("org-upgrade-cancel")).to_be_enabled()
         page.get_by_test_id("org-upgrade-cancel").click()
         page.wait_for_url(re.compile(r".*/upgrade/org/jobs/org-run-[0-9a-f]+$"))
-        sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("requested")
+        sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).to_contain_text("Status: Sent.")
+        sync_api.expect(page.get_by_test_id("org-upgrade-site-progress")).not_to_contain_text("Status: requested.")
         # WHY: Issue #3220. The portal keeps both sites until the cloud reports
         # every child as ended. The route above answered each status read in the
         # browser, so the server never read the cancelled job. A reload reads it,
