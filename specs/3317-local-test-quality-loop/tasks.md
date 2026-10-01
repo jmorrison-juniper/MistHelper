@@ -74,8 +74,8 @@ Do not install packages or alter an environment to conceal missing capabilities.
 ### Required results
 
 - T001 confirms Python 3.13+, pytest, PyYAML, Git, RTK, and the installed analyzer.
-- The required devtools version is `misthelper-devtools` 0.5.2.
-- The required pin is `0b969be7f60599f9a19ebc3069161f9353a1d830`.
+- The required devtools version is `misthelper-devtools` 0.6.0.
+- The required pin is `b140350ebc40e61b57a3a65731c0df520f143661`.
 - Use installed metadata and CLI help, not an obsolete repository analyzer module.
 - If a required capability is unavailable, report the limitation and stop affected checks.
 - T002 adds no wrapper or automatic import with side effects.
@@ -457,6 +457,13 @@ Structural checks read five Python files and checked 136 functions.
 The configured full-suite ratchet checked 949 files and found zero new findings.
 The parent owns the clean local commit and the post-commit intended-base comparison.
 The implementation agent made no real-repository delivery mutations.
+
+The coordinator released `856e5065413d3026f9c0f6d5222d9d379ec79d8b` as the verified publication base.
+The parent rebased without conflicts and repeated the 514 cases with incoming devtools 0.6.0.
+The scoped ratchet checked two files and reported zero new findings.
+The full-suite ratchet checked 994 files and reported zero new findings.
+Current global style, types, links, writing structure, Bandit, and the 105-package hashed runtime audit pass.
+The parent retains the one-push, protected-merge, and exact-main proof requirements.
 
 Before any push or pull request, the parent must receive a full verified stable `main` SHA.
 Only coordinator `6d71fd26-57c2-48c0-abc8-607af98f75d0` supplies that delivery permission.

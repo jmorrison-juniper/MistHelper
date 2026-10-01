@@ -4,7 +4,7 @@
 
 **Specification**: [spec.md](../spec.md)
 
-**Status**: Research, implementation, and local validation are complete. The committed comparison and delivery remain pending.
+**Status**: Research, implementation, validation, and committed comparison are complete. Delivery remains pending.
 
 ## Sources and Evidence Limits
 
@@ -36,8 +36,10 @@ That partial review does not prove a complete dictionary-backed STE check.
 
 ## R01: Use the Installed CLI and Exact Pin
 
-**Decision**: Use `test-quality-analyzer` from `misthelper-devtools` 0.5.2.
-Retain commit `0b969be7f60599f9a19ebc3069161f9353a1d830`.
+**Decision**: Use `test-quality-analyzer` from the current incoming `misthelper-devtools` 0.6.0.
+Retain commit `b140350ebc40e61b57a3a65731c0df520f143661`.
+The initial design used 0.5.2 before the coordinator released the updated base.
+The final authorized-base run repeats all 514 ratchet cases with 0.6.0.
 
 **Rationale**: Current CI installs that pinned package.
 The installed CLI exposes every required scope control.

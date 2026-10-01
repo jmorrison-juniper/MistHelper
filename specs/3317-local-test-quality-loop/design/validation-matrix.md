@@ -2,7 +2,7 @@
 
 **Specification**: [spec.md](../spec.md)
 
-**Status**: Local scope and guidance cases passed. Final parent candidate validation remains pending.
+**Status**: Scope and guidance cases pass on the authorized base. Publication and exact-main proof remain pending.
 
 ## Fixture Rules
 
@@ -295,3 +295,8 @@ The parent retains the clean candidate commit, fetched intended base, and final 
 Native PowerShell execution and dictionary-backed STE vocabulary coverage remain unavailable.
 The existing changelog diff guard skips because a local run has no pull-request event.
 No new guard or required offline case skips.
+
+The authorized rebase uses devtools 0.6.0 without a feature-owned dependency change.
+All 514 ratchet cases pass again and retain 98.22 percent coverage.
+The exact committed comparison checks two files and finds zero new findings.
+The configured full-suite check reads 994 files and finds zero new findings.

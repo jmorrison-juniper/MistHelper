@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Local implementation and validation are complete. The committed comparison and delivery remain pending.
+**Status**: Local implementation, validation, and committed comparison are complete. Delivery remains pending.
 
 **Input**: User description: "Complete the required specification for MistHelper issue #3317. Add the missing local test-quality check to three development guides. Require direct guardrails and offline proof of the installed analyzer's scope."
 
@@ -309,8 +309,10 @@ Check the observed scope, counts, findings, and exit result against explicit exp
 - Current CI defines the required command and explicit full-suite paths.
   The installed analyzer defines automatic triggers, filename recognition, comparison semantics, and printed scope counts.
 - The parent verifies installed options and behavior in an isolated Python 3.13 environment before implementation.
-  The parent verified CPython 3.13.13 and `misthelper-devtools` 0.5.2.
-  `requirements-dev.txt` pins commit `0b969be7f60599f9a19ebc3069161f9353a1d830`.
+  The parent initially verified CPython 3.13.13 and `misthelper-devtools` 0.5.2.
+  The authorized rebase now uses incoming `misthelper-devtools` 0.6.0.
+  `requirements-dev.txt` pins commit `b140350ebc40e61b57a3a65731c0df520f143661`.
+  All 514 ratchet cases pass under that unchanged incoming pin.
   The parent verified the installed CLI options and read the installed implementation.
   The resolver uses `git diff --name-only --relative -z REVISION HEAD`, not a merge-base comparison.
   Only existing files with `test_*.py` or `*_test.py` names enter changed-test selection.

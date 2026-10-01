@@ -90,6 +90,31 @@ No new guard or required offline case skips.
 The committed intended-base check follows the local commit.
 Publication still requires the coordinator's stable-main permission.
 
+### Authorized-base validation
+
+The coordinator supplied `856e5065413d3026f9c0f6d5222d9d379ec79d8b` after its protected bootstrap merge and exact-main proof.
+The local feature rebased onto that exact revision without conflicts.
+The unchanged incoming requirements now install devtools 0.6.0 at `b140350ebc40e61b57a3a65731c0df520f143661`.
+
+| Repeated check | Actual result |
+|----------------|---------------|
+| New and existing ratchet cases | 514 passed, no skips |
+| Guard and fixture coverage | 98.22 percent |
+| Required input guard | Six inputs, three guides, four effective paths |
+| Committed CI-equivalent ratchet | Two files, zero findings, zero new findings |
+| Configured full-suite ratchet | 994 files, 725 findings, zero new findings |
+| Global Ruff and Black | Passed, 2,005 files unchanged |
+| CI type scope | 663 files passed |
+| Explicit package types | Five files passed |
+| Changed Markdown links | 13 files, no broken links |
+| Document and link guards | 161 passed, one existing pull-request-only skip |
+| Complete hashed runtime audit | 105 packages, no known vulnerabilities |
+| Bandit and writing structure | Passed |
+
+The writing dictionary and native PowerShell remain unavailable.
+The required checks repeat after the local evidence commit and before push.
+Publication, the protected merge, and exact-main proof remain under the released coordinator sequence.
+
 ## Prerequisites
 
 1. Use an existing activated Python 3.13 or newer environment.

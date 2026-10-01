@@ -24,11 +24,11 @@ See [quickstart.md](design/quickstart.md) for measured local proof and remaining
 
 **Language/Version**: Python 3.13 or newer. The parent verified CPython 3.13.13.
 
-**Primary Dependencies**: Existing pytest, PyYAML, and `misthelper-devtools` 0.5.2.
+**Primary Dependencies**: Existing pytest, PyYAML, and `misthelper-devtools` 0.6.0.
 Use standard-library `pathlib`, `shlex`, `json`, `tomllib`, `logging`, and `subprocess`.
 Add no dependency.
 
-**Installed Tool Pin**: `requirements-dev.txt` pins `0b969be7f60599f9a19ebc3069161f9353a1d830`.
+**Installed Tool Pin**: `requirements-dev.txt` pins `b140350ebc40e61b57a3a65731c0df520f143661`.
 Use the installed `test-quality-analyzer`, not an old repository module.
 
 **Storage**: Six read-only repository inputs and transient fixture files.
@@ -361,6 +361,24 @@ One existing changelog guard skipped because a local run has no pull-request eve
 Global Ruff, Black, compilation, and the CI type scope passed.
 The configured full-suite ratchet checked 949 files and reported zero new findings.
 The parent retains the clean candidate commit and gated publication.
+
+### Authorized-base validation
+
+The coordinator released publication on `856e5065413d3026f9c0f6d5222d9d379ec79d8b`.
+The feature rebased onto that exact revision without conflicts.
+The isolated environment now uses the incoming `misthelper-devtools` 0.6.0 pin.
+No requirement file changed in this feature.
+
+All 514 ratchet cases pass without skips and retain 98.22 percent coverage.
+The required input guard checks six inputs, three guides, and four effective paths.
+The committed CI-equivalent comparison checks two files and reports zero new findings.
+The configured full-suite comparison checks 994 files and reports zero new findings.
+Global Ruff passes, and Black leaves 2,005 files unchanged.
+The current CI type scope passes for 663 source files.
+The package type scope passes for five files.
+The 13-file Markdown link check passes.
+The complete hashed runtime audit checks 105 packages and finds no known vulnerabilities.
+Dictionary-backed writing coverage and native PowerShell execution remain unavailable.
 
 PowerShell prerequisite execution failed because `pwsh` is absent.
 The implementation used the explicit feature directory and checked-in context.
