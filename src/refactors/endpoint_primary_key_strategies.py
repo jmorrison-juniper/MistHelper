@@ -3976,13 +3976,6 @@ for _endpoint_family_operation, _endpoint_family_strategy in {  # Add missing st
         "unique_constraints": [],
         "description": "Endpoint family export for getSiteSdkStatsByMap",
     },
-    "getSiteSleClassifierDetails": {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
-        "indexes": ["site_id", "scope", "scope_id", "metric", "classifier"],
-        "unique_constraints": [],
-        "description": "Endpoint family export for getSiteSleClassifierDetails",
-    },
     "getSiteSleClassifierSummaryTrend": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
@@ -4003,13 +3996,6 @@ for _endpoint_family_operation, _endpoint_family_strategy in {  # Add missing st
         "indexes": ["site_id", "scope", "scope_id", "metric"],
         "unique_constraints": [],
         "description": "Endpoint family export for getSiteSleImpactSummary",
-    },
-    "getSiteSleSummary": {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
-        "indexes": ["site_id", "scope", "scope_id", "metric"],
-        "unique_constraints": [],
-        "description": "Endpoint family export for getSiteSleSummary",
     },
     "getSiteSleSummaryTrend": {
         "type": "auto_increment_with_unique",

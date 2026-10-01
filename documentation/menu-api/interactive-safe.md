@@ -1625,34 +1625,33 @@ flowchart LR
 
 ## Menu 263
 
-- Title: Run any site SLE endpoint with scope prompts (17 operations)
+- Title: Run any site SLE endpoint with scope prompts (15 operations)
 - Handler: `EndpointFamilyExporter.site_sle_endpoints`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 18
+- Endpoints: 16
 
 ```mermaid
 flowchart LR
     menu["Menu 263: Run any<br/>site SLE endpoint<br/>with scope..."]
     menu --> c1["_SITE_SLE_OPS"]
-    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifier<br/>/{classifier}<br/>/summary"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifier<br/>/{classifier}<br/>/summary-trend"]
-    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifiers"]
-    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/histogram"]
-    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impact-summary"]
-    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-applications"]
-    c1 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-aps"]
-    c1 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-chassis"]
-    c1 --> e9["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-clients"]
-    c1 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-gateways"]
-    c1 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-interfaces"]
-    c1 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-switches"]
-    menu --> more["6 more endpoints in<br/>the table"]
+    c1 --> e1["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifier<br/>/{classifier}<br/>/summary-trend"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifiers"]
+    c1 --> e3["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/histogram"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impact-summary"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-applications"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-aps"]
+    c1 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-chassis"]
+    c1 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-clients"]
+    c1 --> e9["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-gateways"]
+    c1 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-interfaces"]
+    c1 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-switches"]
+    c1 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/impacted-users"]
+    menu --> more["4 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary` | [`sites.sle.getSiteSleClassifierDetails`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-details) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifiers` | [`sites.sle.listSiteSleMetricClassifiers`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/list-site-sle-metric-classifiers) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/histogram` | [`sites.sle.getSiteSleHistogram`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-histogram) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
@@ -1665,7 +1664,6 @@ flowchart LR
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/impacted-interfaces` | [`sites.sle.listSiteSleImpactedInterfaces`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/list-site-sle-impacted-interfaces) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/impacted-switches` | [`sites.sle.listSiteSleImpactedSwitches`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/list-site-sle-impacted-switches) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/impacted-users` | [`sites.sle.listSiteSleImpactedWirelessClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/list-site-sle-impacted-wireless-clients) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
-| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary` | [`sites.sle.getSiteSleSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/threshold` | [`sites.sle.getSiteSleThreshold`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-threshold) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metrics` | [`sites.sle.listSiteSlesMetrics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/list-site-sles-metrics) | [`_SITE_SLE_OPS`](../../src/export/endpoint_family_exporter.py) | Name |
