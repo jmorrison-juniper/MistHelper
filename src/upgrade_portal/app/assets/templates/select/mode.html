@@ -52,9 +52,35 @@
         </span>
       </fieldset>
 
-      <p class="portal-card-note" id="mode-help">
-        Single-site keeps the current workflow. Multi-site uses one organization-level upgrade job for the selected sites.
-      </p>
+      <div id="mode-help">
+        <p class="portal-card-note" data-testid="mode-single-site-description">
+          <strong>Single-site:</strong> Open the inventory of one site.
+          If no verified pre-check capture exists, take one.
+          Set the upgrade options for that site.
+          Access points, switches, and Junos gateways use site routes
+          (<code>upgradeSiteDevices</code> or <code>upgradeDevice</code>).
+          Session Smart Router (SSR) gateways use the organization SSR route
+          (<code>upgradeOrgSsrs</code>).
+        </p>
+        <p class="portal-card-note" data-testid="mode-multi-site-description">
+          <strong>Multi-site:</strong> Select one or more sites.
+          Set the upgrade options for the selected sites.
+          One portal operation tracks one or more child jobs.
+          Access points use an organization cloud job (<code>upgradeOrgDevices</code>).
+          Switches and Junos gateways use site routes
+          (<code>upgradeSiteDevices</code> or <code>upgradeDevice</code>).
+          Session Smart Router (SSR) gateways use the organization SSR route
+          (<code>upgradeOrgSsrs</code>).
+        </p>
+        <p class="portal-card-note" data-testid="mode-capture-description">
+          Both modes require a verified pre-check capture for each site.
+          The portal can use each site's newest verified standalone pre-check capture.
+          In multi-site mode, take missing pre-check captures from the confirmation page.
+          After the upgrade phases end, automatic post-check mode takes captures at sites with accepted upgrade jobs.
+          In manual post-check mode, take those captures yourself.
+          Compare each verified pre-check and post-check pair.
+        </p>
+      </div>
 
       <button type="submit"
               class="portal-button portal-button-primary"
