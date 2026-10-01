@@ -146,6 +146,28 @@ The SSH container maintains access to:
 
 All MistHelper data files and logs persist on the host system.
 
+## Session Configuration
+
+The container entrypoint runs `container/scripts/write-session-env.sh`.
+The writer copies an explicit allowlist into `/etc/misthelper/session.env`.
+The SSH session reads this file and exports the assignments before it starts MistHelper.
+
+The allowlist contains eleven Mist and proxy names and seven database names.
+The database names are `ARANGO_HOST`, `ARANGO_DATABASE`, `ARANGO_USERNAME`,
+`ARANGO_ROOT_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD`.
+Set these names in the container environment through `.env`.
+Existing output-format controls remain unchanged.
+
+Warning: a wider mode can expose the API token and two database passwords to other accounts.
+The session file contains these credentials.
+Keep mode `0400` and the session owner.
+Never print the file or any credential value.
+
+The writer reports configuration names and a count only.
+It excludes empty values and unrelated secrets.
+Each container start replaces the file, so a removed setting cannot survive from an earlier start.
+The writer quotes shell characters as data.
+
 ## Troubleshooting
 
 ### Connection Refused

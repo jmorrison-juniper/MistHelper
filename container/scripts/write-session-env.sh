@@ -11,9 +11,10 @@
 # The entrypoint runs this script as root, so this script is the one writer.
 # `misthelper-session.sh` is the one reader.
 #
-# Warning: the file holds the Mist API token. The write sets the mode 0400 and
-# the ownership of the session user before any value reaches the disk. A wider
-# mode would expose the token to every account of the container.
+# Warning: the file holds the Mist API token and two database passwords.
+# The stage protects every value during the write. The finished file has mode
+# 0400 and the session owner. A wider mode exposes these credentials to other
+# accounts of the container.
 #
 # Usage: write-session-env.sh <owner> <path>
 
@@ -29,8 +30,9 @@ TARGET="$2"  # The path of the finished file.
 # the SSH password and every unrelated secret into a file on disk.
 #
 # The first six reach the credential preflight and the organization choice. The
-# last five let a session behind a corporate proxy reach the Mist cloud, which
-# the trust store step of the entrypoint already prepares.
+# next five let a session behind a corporate proxy reach the Mist cloud, which
+# the trust store step of the entrypoint already prepares. The last seven carry
+# the ArangoDB and Redis settings. These include two database passwords.
 SESSION_ENV_NAMES=(
     MIST_HOST
     MIST_APITOKEN
@@ -43,6 +45,13 @@ SESSION_ENV_NAMES=(
     HTTPS_PROXY
     HTTP_PROXY
     NO_PROXY
+    ARANGO_HOST
+    ARANGO_DATABASE
+    ARANGO_USERNAME
+    ARANGO_ROOT_PASSWORD
+    REDIS_HOST
+    REDIS_PORT
+    REDIS_PASSWORD
 )
 
 mkdir -p "$(dirname "$TARGET")"  # The file needs its directory before the write.
@@ -76,6 +85,7 @@ chown "$OWNER" "$STAGED" 2>/dev/null || true  # A test runs as one account, so a
 mv -f "$STAGED" "$TARGET"  # Replace in one step, so no session reads a half-written file.
 
 # Warning: never print a value from the list above. The list holds the API
-# token, and a token in the log file reaches every reader of the data volume.
+# token and two database passwords. A value in the log file exposes these
+# credentials to every reader of the data volume.
 # This line names the variables and prints no value.
 echo "[SSH] Carried ${#CARRIED[@]} configuration name(s) into the session file: ${CARRIED[*]}"
