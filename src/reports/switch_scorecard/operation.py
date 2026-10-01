@@ -14,6 +14,7 @@ from src.reports.switch_scorecard.model import (  # WHY: pure scorecard math and
     SwitchScorecardBuilder,
     SwitchScorecardSettings,
 )
+from src.reports.switch_scorecard.site_lookup import SiteNameLookup  # WHY: enrich live stats with site names.
 
 logger = logging.getLogger(__name__)  # WHY: name this module in operation logs.
 
@@ -31,9 +32,11 @@ class SwitchScorecard:
         """Fetch switch stats, build scorecards, and write both outputs."""
         logger.info("Menu #277: Starting the organization switch scorecard")  # WHY: name the menu operation.
         client = SwitchScorecardClient()  # WHY: the operation owns the production client.
-        rows = client.list_switch_stats()  # WHY: fetch raw switch runtime evidence.
+        org_id = client.resolve_org_id()  # WHY: reuse one organization value for stats and site lookup.
+        rows = client.list_switch_stats(org_id)  # WHY: fetch raw switch runtime evidence.
+        site_names = SiteNameLookup.fetch(org_id)  # WHY: listOrgDevicesStats carries site_id but not site_name.
         settings = SwitchScorecardSettings.from_environment()  # WHY: resolve the AP threshold once per run.
-        output = SwitchScorecardBuilder.build(rows, settings)  # WHY: transform API rows into report rows.
+        output = SwitchScorecardBuilder.build(rows, settings, site_names)  # WHY: transform enriched API rows.
         SwitchScorecard._write_outputs(output, SourceDependencyResolver.DataExporter)  # WHY: shared export backend.
         SwitchScorecard._print_summary(output, settings.fallback_note)  # WHY: console summary closes the run.
         logger.info("Menu #277: Finished the organization switch scorecard")  # WHY: log successful completion.

@@ -59,6 +59,7 @@ SITE_COLUMNS = [  # WHY: keep the site summary CSV column order stable for opera
     "switch_uptime_count",
     "config_success_percent",
     "config_success_count",
+    "config_unknown_count",
     "potential_anomalies_percent",
     "potential_anomalies_count",
 ]
@@ -113,11 +114,19 @@ class SwitchScorecardBuilder:
     """Build switch detail, site summary, and organization summary rows."""
 
     @classmethod
-    def build(cls, switches: Sequence[Mapping[str, Any]], settings: ScorecardSettings) -> ScorecardOutput:
+    def build(
+        cls,
+        switches: Sequence[Mapping[str, Any]],
+        settings: ScorecardSettings,
+        site_names: Mapping[str, str] | None = None,
+    ) -> ScorecardOutput:
         """Return all scorecard output rows for one API result."""
         logger.info("Building switch scorecard rows for %s switches", len(switches))  # WHY: log transform start.
         predominant = cls._predominant_versions(switches)  # WHY: version compliance is per model.
-        detail_rows = [cls._detail_row(row, predominant, settings) for row in switches]  # WHY: one row per switch.
+        site_lookup = site_names or {}  # WHY: tests can omit site enrichment while live runs pass names.
+        detail_rows = [  # WHY: one enriched detail row is produced for each switch.
+            cls._detail_row(row, predominant, settings, site_lookup) for row in switches
+        ]
         site_rows = cls._site_rows(detail_rows)  # WHY: site tiles summarize detail row decisions.
         org_summary = cls._summary_row("ORG", "Organization", detail_rows)  # WHY: console summary mirrors site math.
         logger.debug("Built detail=%s site=%s rows", len(detail_rows), len(site_rows))  # WHY: log transform result.
@@ -144,7 +153,11 @@ class SwitchScorecardBuilder:
 
     @classmethod
     def _detail_row(
-        cls, row: Mapping[str, Any], predominant: Mapping[str, str], settings: ScorecardSettings
+        cls,
+        row: Mapping[str, Any],
+        predominant: Mapping[str, str],
+        settings: ScorecardSettings,
+        site_names: Mapping[str, str],
     ) -> dict[str, Any]:
         """Return one `SwitchScorecard.csv` row."""
         modules = cls._safe_sequence(row.get("module_stat"))  # WHY: missing module stats are valid.
@@ -153,17 +166,18 @@ class SwitchScorecardBuilder:
         expected_version = predominant.get(model, "")  # WHY: absent model version means no compliance evidence.
         ap_count = cls._ap_count(row)  # WHY: AP affinity uses connected AP count.
         module_values = cls._module_values(modules)  # WHY: module lists become flat columns.
+        config_success = cls._config_success(row.get("config_status"))  # WHY: keep unknown separate from failure.
         return {  # WHY: the export writer accepts flat dictionaries.
             "site_id": row.get("site_id", ""),
-            "site_name": row.get("site_name", ""),
-            "switch_name": row.get("name") or row.get("hostname") or "",
+            "site_name": cls._site_name(row, site_names),
+            "switch_name": row.get("name") or row.get("hostname") or row.get("device_name") or "",
             "switch_mac": row.get("mac", ""),
             "model": model,
             "version": version,
             "predominant_model_version": expected_version,
             "version_compliant": bool(version and version == expected_version),
             "config_status": row.get("config_status", ""),
-            "config_success": cls._config_success(row.get("config_status")),
+            "config_success": config_success,
             "ap_count": ap_count,
             "affinity_limit": settings.affinity_limit,
             "affinity_exceeded": ap_count > settings.affinity_limit,
@@ -261,10 +275,18 @@ class SwitchScorecardBuilder:
         return int(value) if isinstance(value, int) else 0  # WHY: malformed values become zero.
 
     @staticmethod
-    def _config_success(value: Any) -> bool:
+    def _config_success(value: Any) -> bool | None:
         """Return whether a config status means success."""
         normalized = str(value or "").strip().lower()  # WHY: API status text can vary by case.
+        if not normalized:  # WHY: live stats can omit config_status for otherwise healthy switches.
+            return None  # WHY: unknown config status must not count as success or failure.
         return normalized in SUCCESS_CONFIG_STATES  # WHY: summary tiles need a boolean.
+
+    @staticmethod
+    def _site_name(row: Mapping[str, Any], site_names: Mapping[str, str]) -> str:
+        """Return the site display name for one switch row."""
+        site_id = str(row.get("site_id") or "")  # WHY: site_id is the only field always present in live stats.
+        return str(row.get("site_name") or site_names.get(site_id, site_id))  # WHY: avoid empty site-name cells.
 
     @staticmethod
     def _uptime_days(value: Any) -> float | str:
@@ -297,7 +319,6 @@ class SwitchScorecardBuilder:
             "poe_compliance": cls._poe_compliant,  # WHY: PoE compliance needs power draw within budget.
             "version_compliance": lambda row: bool(row.get("version_compliant")),  # WHY: predominant version per model.
             "switch_uptime": cls._has_positive_uptime,  # WHY: positive uptime means seen as up.
-            "config_success": lambda row: bool(row.get("config_success")),  # WHY: count successful config states.
             "potential_anomalies": lambda row: not row.get("last_trouble"),  # WHY: no trouble means no anomaly signal.
         }
         return {
@@ -316,6 +337,12 @@ class SwitchScorecardBuilder:
         for name, count in cls._tile_counts(rows).items():  # WHY: each tile gets a percent column and a count column.
             summary[f"{name}_percent"] = cls._percent(count, total)  # WHY: the percent matches the Mist tile value.
             summary[f"{name}_count"] = count  # WHY: the count behind the percent lets an operator check the math.
+        config_success_count = sum(1 for row in rows if row.get("config_success") is True)  # WHY: count known passes.
+        config_unknown_count = sum(1 for row in rows if row.get("config_success") is None)  # WHY: count unknown rows.
+        config_total = total - config_unknown_count  # WHY: unknown rows must not lower the config percentage.
+        summary["config_success_percent"] = cls._percent(config_success_count, config_total)  # WHY: known-only score.
+        summary["config_success_count"] = config_success_count  # WHY: keep the success count next to the percent.
+        summary["config_unknown_count"] = config_unknown_count  # WHY: show rows excluded from the percentage.
         return summary  # WHY: the caller writes this row to the per-site file.
 
     @staticmethod

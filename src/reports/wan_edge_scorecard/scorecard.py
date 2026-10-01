@@ -7,6 +7,7 @@ from collections import defaultdict  # Group gateway rows by site for summaries.
 from typing import Any  # Accept Mist gateway rows with optional fields.
 
 from src.config.source_dependency_resolver import SourceDependencyResolver  # Reuse project runtime dependencies.
+from src.reports.switch_scorecard.site_lookup import SiteNameLookup  # Enrich live stats with site names.
 from src.reports.wan_edge_scorecard.client import WanEdgeGatewayStatsClient  # Reuse the shared fetch seam.
 from src.reports.wan_edge_scorecard.models import DhcpPoolRow, GatewayScorecardRow, SiteScorecardRow
 from src.reports.wan_edge_scorecard.scoring import WanEdgeScoring  # Reuse pure scoring helpers.
@@ -59,6 +60,7 @@ class WanEdgeScorecard:
         "version_compliance_percent",
         "wan_edge_uptime_percent",
         "potential_anomalies_percent",
+        "config_unknown_count",
     ]
 
     @staticmethod
@@ -74,8 +76,11 @@ class WanEdgeScorecard:
         logger.info("Fetching WAN edge gateway statistics")  # Log before the fetch action.
         gateway_stats = WanEdgeGatewayStatsClient.fetch_gateway_stats(org_id)  # Fetch gateway rows through one seam.
         logger.debug("Fetched %s WAN edge gateway statistics rows", len(gateway_stats))  # Log fetch count.
+        site_names = SiteNameLookup.fetch(org_id)  # Read sites once because gateway stats carry site_id only.
         logger.info("Transforming WAN edge gateway statistics")  # Log before report transformation.
-        gateway_rows, dhcp_rows, site_rows, org_score = WanEdgeScorecard.build_reports(gateway_stats)  # Build rows.
+        gateway_rows, dhcp_rows, site_rows, org_score = WanEdgeScorecard.build_reports(
+            gateway_stats, site_names
+        )  # Build rows.
         logger.debug(
             "Transformed WAN edge rows: gateways=%s, dhcp_pools=%s, sites=%s",
             len(gateway_rows),
@@ -88,16 +93,20 @@ class WanEdgeScorecard:
     @staticmethod
     def build_reports(
         gateway_stats: list[dict[str, Any]],
+        site_names: dict[str, str] | None = None,
     ) -> tuple[list[GatewayScorecardRow], list[DhcpPoolRow], list[SiteScorecardRow], Any]:
         """Build gateway, DHCP, site, and organization scorecard rows."""
         threshold = WanEdgeScoring.parse_dhcp_warn_percent()  # Resolve the DHCP threshold once per run.
         predominant_version = WanEdgeScoring.predominant_version(gateway_stats)  # Compute the organization baseline.
+        site_lookup = site_names or {}  # Keep tests simple while live runs pass the listOrgSites map.
         gateway_rows: list[GatewayScorecardRow] = []  # Collect gateway rows for export and summaries.
         dhcp_rows: list[DhcpPoolRow] = []  # Collect DHCP pool evidence rows.
         for gateway in gateway_stats:  # Process each gateway statistics row.
-            pools = WanEdgeScorecard._build_dhcp_rows(gateway, threshold)  # Extract DHCP rows for this gateway.
+            pools = WanEdgeScorecard._build_dhcp_rows(gateway, threshold, site_lookup)  # Extract DHCP rows.
             dhcp_rows.extend(pools)  # Add pool rows before the gateway summary uses them.
-            gateway_rows.append(WanEdgeScorecard._build_gateway_row(gateway, predominant_version, pools))  # Add row.
+            gateway_rows.append(  # Add one enriched gateway scorecard row.
+                WanEdgeScorecard._build_gateway_row(gateway, predominant_version, pools, site_lookup)
+            )
         site_rows = WanEdgeScorecard._build_site_rows(
             gateway_rows, threshold
         )  # Build site score rows from gateway rows.
@@ -111,6 +120,7 @@ class WanEdgeScorecard:
         gateway: dict[str, Any],
         predominant_version: str,
         pools: list[DhcpPoolRow],
+        site_names: dict[str, str],
     ) -> GatewayScorecardRow:
         """Build one gateway scorecard row."""
         version = WanEdgeScorecard._text(gateway.get("version"))  # Normalize the optional version value.
@@ -119,7 +129,7 @@ class WanEdgeScorecard:
         worst_pool = WanEdgeScorecard._worst_pool_percent(pools)  # Find the highest safe DHCP pool percentage.
         uptime_days = WanEdgeScorecard._uptime_days(gateway.get("uptime"))  # Convert uptime seconds to days.
         return GatewayScorecardRow(  # Build the immutable report row.
-            site=WanEdgeScorecard._site_name(gateway),  # Use a clear site display value.
+            site=WanEdgeScorecard._site_name(gateway, site_names),  # Use a clear site display value.
             site_id=WanEdgeScorecard._text(gateway.get("site_id")),  # Preserve the site identifier.
             gateway_name=WanEdgeScorecard._gateway_name(gateway),  # Use the best available gateway name.
             gateway_id=WanEdgeScorecard._gateway_id(gateway),  # Use the stable gateway identity.
@@ -142,7 +152,11 @@ class WanEdgeScorecard:
         )
 
     @staticmethod
-    def _build_dhcp_rows(gateway: dict[str, Any], threshold: float) -> list[DhcpPoolRow]:
+    def _build_dhcp_rows(
+        gateway: dict[str, Any],
+        threshold: float,
+        site_names: dict[str, str] | None = None,
+    ) -> list[DhcpPoolRow]:
         """Build DHCP pool rows for one gateway."""
         pool_stats = gateway.get("dhcpd_stat") or {}  # Missing DHCP data must behave like no pools.
         if not isinstance(pool_stats, dict):  # Ignore unexpected shapes from optional API fields.
@@ -156,7 +170,7 @@ class WanEdgeScorecard:
             percent = WanEdgeScoring.safe_percent(leased, total)  # Calculate utilization only when safe.
             rows.append(  # Add one pool evidence row.
                 DhcpPoolRow(
-                    site=WanEdgeScorecard._site_name(gateway),  # Preserve the parent site name.
+                    site=WanEdgeScorecard._site_name(gateway, site_names or {}),  # Preserve parent site name.
                     site_id=WanEdgeScorecard._text(gateway.get("site_id")),  # Preserve the parent site id.
                     gateway_name=WanEdgeScorecard._gateway_name(gateway),  # Preserve the parent gateway name.
                     gateway_id=WanEdgeScorecard._gateway_id(gateway),  # Preserve the parent gateway id.
@@ -305,15 +319,18 @@ class WanEdgeScorecard:
         return ""  # Keep missing optional trouble evidence empty.
 
     @staticmethod
-    def _site_name(gateway: dict[str, Any]) -> str:
+    def _site_name(gateway: dict[str, Any], site_names: dict[str, str]) -> str:
         """Return the best available site display name."""
-        return WanEdgeScorecard._text(gateway.get("site_name") or gateway.get("site"))  # Prefer named site fields.
+        site_id = WanEdgeScorecard._text(gateway.get("site_id"))  # Use the stable site identifier for lookup.
+        return WanEdgeScorecard._text(
+            gateway.get("site_name") or gateway.get("site") or site_names.get(site_id, site_id)
+        )  # Prefer names and fall back to site ID.
 
     @staticmethod
     def _gateway_name(gateway: dict[str, Any]) -> str:
         """Return the best available gateway display name."""
         return WanEdgeScorecard._text(
-            gateway.get("name") or gateway.get("router_name") or gateway.get("hostname")
+            gateway.get("name") or gateway.get("device_name") or gateway.get("router_name") or gateway.get("hostname")
         )  # Name.
 
     @staticmethod

@@ -62,9 +62,11 @@ class WanEdgeScoring:
         return bool(version) and bool(predominant_version) and version == predominant_version  # Compare known values.
 
     @staticmethod
-    def config_success(config_status: str) -> bool:
+    def config_success(config_status: str) -> bool | None:
         """Return True when a configuration status is successful."""
         normalized = config_status.strip().lower()  # Normalize Mist values and fixture values.
+        if not normalized:  # Live stats can omit config_status for otherwise healthy gateways.
+            return None  # Unknown configuration status must not count as failed.
         return normalized in {"success", "synced", "in_sync", "ok", "connected"}  # Accept known success states.
 
     @staticmethod
@@ -94,17 +96,19 @@ class WanEdgeScoring:
     ) -> SiteScorecardRow:
         """Build one site scorecard row from gateway rows."""
         gateway_count = len(rows)  # Count gateways used in this site score.
-        config_ok, version_ok, uptime_ok, anomaly_ok = WanEdgeScoring._summary_counts(
+        config_ok, config_unknown, version_ok, uptime_ok, anomaly_ok = WanEdgeScoring._summary_counts(
             rows, dhcp_warn_percent
         )  # Count all tile inputs once.
+        config_total = gateway_count - config_unknown  # Exclude unknown status rows from the config denominator.
         return SiteScorecardRow(  # Create the export model for this site.
             site=site,  # Preserve the site display name.
             site_id=site_id,  # Preserve the site identifier.
             gateway_count=gateway_count,  # Preserve the gateway count.
-            config_success_percent=WanEdgeScoring.safe_percent(config_ok, gateway_count) or 0.0,  # Score config.
+            config_success_percent=WanEdgeScoring.safe_percent(config_ok, config_total) or 0.0,  # Score config.
             version_compliance_percent=WanEdgeScoring.safe_percent(version_ok, gateway_count) or 0.0,  # Score version.
             wan_edge_uptime_percent=WanEdgeScoring.safe_percent(uptime_ok, gateway_count) or 0.0,  # Score uptime.
             potential_anomalies_percent=WanEdgeScoring.safe_percent(anomaly_ok, gateway_count) or 0.0,  # Score risk.
+            config_unknown_count=config_unknown,  # Show how many rows did not affect the config score.
         )
 
     @staticmethod
@@ -113,25 +117,35 @@ class WanEdgeScoring:
         site_ids = {row.site_id for row in rows if row.site_id}  # Count only sites with at least one gateway.
         site_count = len(site_ids)  # Store the organization site count.
         gateway_count = len(rows)  # Store the organization gateway count.
-        config_ok, version_ok, uptime_ok, anomaly_ok = WanEdgeScoring._summary_counts(
+        config_ok, config_unknown, version_ok, uptime_ok, anomaly_ok = WanEdgeScoring._summary_counts(
             rows, dhcp_warn_percent
         )  # Count all tile inputs once.
+        config_total = gateway_count - config_unknown  # Exclude unknown status rows from the config denominator.
         return OrganizationScorecard(  # Create the organization score model.
             gateway_count=gateway_count,  # Preserve the gateway count.
             site_count=site_count,  # Preserve the site count.
-            config_success_percent=WanEdgeScoring.safe_percent(config_ok, gateway_count) or 0.0,  # Score config.
+            config_success_percent=WanEdgeScoring.safe_percent(config_ok, config_total) or 0.0,  # Score config.
             version_compliance_percent=WanEdgeScoring.safe_percent(version_ok, gateway_count) or 0.0,  # Score version.
             wan_edge_uptime_percent=WanEdgeScoring.safe_percent(uptime_ok, gateway_count) or 0.0,  # Score uptime.
             potential_anomalies_percent=WanEdgeScoring.safe_percent(anomaly_ok, gateway_count) or 0.0,  # Score risk.
+            config_unknown_count=config_unknown,  # Show how many rows did not affect the config score.
         )
 
     @staticmethod
-    def _summary_counts(rows: list[GatewayScorecardRow], dhcp_warn_percent: float) -> tuple[int, int, int, int]:
+    def _summary_counts(rows: list[GatewayScorecardRow], dhcp_warn_percent: float) -> tuple[int, int, int, int, int]:
         """Return counts for the four tile inputs."""
-        config_ok = sum(1 for row in rows if WanEdgeScoring.config_success(row.config_status))  # Count configs.
+        config_ok, config_unknown = WanEdgeScoring._config_counts(rows)  # Count known and unknown config states.
         version_ok = sum(1 for row in rows if row.version_compliant)  # Count gateways that match the baseline.
         uptime_ok = sum(1 for row in rows if WanEdgeScoring.uptime_success(row.uptime_days))  # Count uptime.
         anomaly_ok = sum(
             1 for row in rows if WanEdgeScoring.anomaly_free(row, dhcp_warn_percent)
         )  # Count anomaly-free gateways.
-        return config_ok, version_ok, uptime_ok, anomaly_ok  # Return counts in tile order.
+        return config_ok, config_unknown, version_ok, uptime_ok, anomaly_ok  # Return counts in tile order.
+
+    @staticmethod
+    def _config_counts(rows: list[GatewayScorecardRow]) -> tuple[int, int]:
+        """Return successful and unknown configuration counts."""
+        values = [WanEdgeScoring.config_success(row.config_status) for row in rows]  # Normalize each status once.
+        success_count = sum(1 for value in values if value is True)  # Count rows that have a known success state.
+        unknown_count = sum(1 for value in values if value is None)  # Count rows that have no known status.
+        return success_count, unknown_count  # Return both values for percent and audit columns.

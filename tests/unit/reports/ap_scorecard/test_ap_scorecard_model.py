@@ -67,6 +67,34 @@ def test_ap_scorecard_redundancy_classification_values() -> None:
     assert classify_switch_redundancy(normalize_switch_redundancy(3)) == "excellent"
 
 
+def test_ap_scorecard_live_redundancy_dict_and_site_lookup() -> None:
+    """The live switch_redundancy dict and site_id-only shape produce useful rows."""
+    rows = build_ap_rows(  # WHY: fixture mirrors the issue 3692 live payload shape.
+        [
+            {
+                "site_id": "site-live",
+                "device_name": "Living Room AP",
+                "mac": "aabbcc000010",
+                "model": "AP45",
+                "version": "1.0.0",
+                "status": "connected",
+                "inactive_wired_vlans": None,
+                "switch_redundancy": {"num_redundant_aps": 1},
+                "power_constrained": None,
+            }
+        ],
+        org_id="org-live",
+        site_names={"site-live": "Morrison House Site"},
+    )
+    site_rows = build_site_rows(rows)  # WHY: site summary must count the normalized redundancy class.
+
+    assert rows[0].site == "Morrison House Site"  # WHY: live stats carry site_id but no site_name.
+    assert rows[0].ap_name == "Living Room AP"  # WHY: device_name is the live display name fallback.
+    assert rows[0].switch_redundancy_count == 1  # WHY: num_redundant_aps is the live count field.
+    assert rows[0].switch_redundancy_class == "none"  # WHY: one redundant AP maps to none by contract.
+    assert site_rows[0].switch_redundancy_none_count == 1  # WHY: the site row preserves the none count.
+
+
 def test_ap_scorecard_redundancy_rejects_none_zero_and_negative_values() -> None:
     """Invalid redundancy inputs stay unknown and never count as healthy."""
     assert normalize_switch_redundancy(None) is None

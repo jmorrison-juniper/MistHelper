@@ -30,11 +30,16 @@ class SwitchScorecardClient:
         self._fetcher_factory = fetcher_factory  # WHY: tests verify parameters without network calls.
         self._resolver = resolver  # WHY: tests provide a fake organization resolver.
 
-    def list_switch_stats(self) -> list[dict[str, Any]]:
-        """Return switch statistics rows for the organization."""
+    def resolve_org_id(self) -> str:
+        """Return the active organization identifier for this scorecard run."""
         logger.info("Switch scorecard resolves the organization")  # WHY: log before shared org lookup.
-        org_id = str(self._resolver.ConfigUtils.get_cached_or_prompted_org_id())  # WHY: API path needs org_id.
+        org_id = str(self._resolver.ConfigUtils.get_cached_or_prompted_org_id())  # WHY: API paths need org_id.
         logger.debug("Switch scorecard resolved org=%s", org_id)  # WHY: log lookup result without secrets.
+        return org_id  # WHY: callers reuse one org ID for all reads in the run.
+
+    def list_switch_stats(self, org_id: str | None = None) -> list[dict[str, Any]]:
+        """Return switch statistics rows for the organization."""
+        resolved_org_id = org_id or self.resolve_org_id()  # WHY: preserve tests and older direct callers.
         logger.info("Switch scorecard fetches switch stats with %s", SWITCH_STATS_ENDPOINT)  # WHY: log API action.
         fetcher = self._fetcher_factory(  # WHY: reuse APIDataFetcher pagination and retry behavior.
             title=SWITCH_STATS_TITLE,
@@ -45,7 +50,7 @@ class SwitchScorecardClient:
             duration="7d",
             limit=1000,
         )
-        fetcher.org_id = org_id  # WHY: call the raw fetch path after the shared org resolution.
+        fetcher.org_id = resolved_org_id  # WHY: call the raw fetch path after the shared org resolution.
         success = fetcher._fetch_api_data()  # WHY: reuse the existing paginated fetch without exporting source rows.
         if not success:  # WHY: a refused or failed Mist call must leave a visible trace, not a silent empty report.
             status = getattr(fetcher, "last_status_code", None)  # WHY: name the HTTP status when the fetcher kept it.
