@@ -92,9 +92,34 @@
     {% if org_label %}
       The list shows the sites of {{ org_label }}.
     {% endif %}
+  </p>
+  <p class="portal-card-note" data-testid="site-mode-description">
     {% if operation_mode == 'multi_site' %}
-      Select one or more sites. The portal uses one organization-level upgrade job.
+      <strong>Multi-site:</strong> Select one or more sites.
+      Set the upgrade options for the selected sites.
+      One portal operation tracks one or more child jobs.
+      Access points use an organization cloud job (<code>upgradeOrgDevices</code>).
+      Switches and Junos gateways use site routes
+      (<code>upgradeSiteDevices</code> or <code>upgradeDevice</code>).
+      Session Smart Router (SSR) gateways use the organization SSR route
+      (<code>upgradeOrgSsrs</code>).
+    {% else %}
+      <strong>Single-site:</strong> Open the inventory of one site.
+      If no verified pre-check capture exists, take one.
+      Set the upgrade options for that site.
+      Access points, switches, and Junos gateways use site routes
+      (<code>upgradeSiteDevices</code> or <code>upgradeDevice</code>).
+      Session Smart Router (SSR) gateways use the organization SSR route
+      (<code>upgradeOrgSsrs</code>).
     {% endif %}
+  </p>
+  <p class="portal-card-note" data-testid="site-capture-description">
+    Both modes require a verified pre-check capture for each site.
+    The portal can use each site's newest verified standalone pre-check capture.
+    In multi-site mode, take missing pre-check captures from the confirmation page.
+    After the upgrade phases end, automatic post-check mode takes captures at sites with accepted upgrade jobs.
+    In manual post-check mode, take those captures yourself.
+    Compare each verified pre-check and post-check pair.
   </p>
 </div>
 
