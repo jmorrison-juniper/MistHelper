@@ -341,16 +341,15 @@ def _reschedule_request(operation: Mapping[str, Any]) -> RescheduleRequest:
     if start is not None:  # An empty field starts the upgrade at once after the confirmation.
         build_options({"start_time": str(start)})  # The single-site window guard refuses a stale moment.
     actor = identity.email_digest(upgrade_routes.actor_address())  # The digest, never the address.
-    return RescheduleRequest(start_time=start, reboot_at=_moved_reboot(operation), actor=actor)  # One change.
+    return RescheduleRequest(start_time=start, reboot_at=_moved_reboot(operation, start), actor=actor)  # One change.
 
 
-def _moved_reboot(operation: Mapping[str, Any]) -> int | None:
+def _moved_reboot(operation: Mapping[str, Any], start: int | None) -> int | None:
     """Return the reboot moment of the moved plan, or None when the plan holds no reboot delay.
 
     Why:
-        The save turns the reboot delay into a moment from the clock of the
-        save. The reschedule applies the same rule from its own clock, so the
-        reboot never falls before the moment of the reschedule.
+        A scheduled plan counts the delay from the moved start. A plan that
+        starts at once counts the delay from this reschedule action.
 
     Args:
         operation: The durable operation record.
@@ -362,7 +361,9 @@ def _moved_reboot(operation: Mapping[str, Any]) -> int | None:
     delay = stored.get("reboot_at") if isinstance(stored, Mapping) else None  # The duration text, such as "1h".
     if not isinstance(delay, str) or not delay.strip():  # The plan holds no reboot delay.
         return None  # The service refuses to move a stored reboot moment without a delay.
-    return build_options({"reboot_at": delay}).reboot_at  # The clock of this request plus the delay.
+    anchor = start if start is not None else OrgUpgradeScheduleReader.current_epoch()  # Select the action moment.
+    mapped = build_options({"reboot_at": delay}, now=lambda: anchor)  # Parse the duration against that moment.
+    return mapped.reboot_at  # The moved start and the reboot keep the confirmed delay.
 
 
 def _store_reschedule(

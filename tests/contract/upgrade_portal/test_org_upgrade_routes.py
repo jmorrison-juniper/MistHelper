@@ -144,8 +144,15 @@ class AggregateBoundaryStandIn:
         """Start with no submitted operation."""
         self.submit_count = 0
         self.cancel_count = 0
+        self.anchored_reboot_at: int | None = None  # Record the submit-relative reboot moment.
         self.requests: list[Any] = []  # Store build inputs so safety tests can inspect validated options.
         self.final_state = ""  # An empty value keeps the mixed status answer below.
+
+    def anchor_reboot(self, record: Any, store: Any, reboot_at: int) -> Any:
+        """Record the submit-relative reboot moment without a durable write."""
+        del store  # The route contract only proves the value that reaches the service.
+        self.anchored_reboot_at = reboot_at  # Keep the resolved moment for the assertion.
+        return record  # Preserve the operation snapshot for the remaining route actions.
 
     def build(self, request: Any) -> dict[str, Any]:
         """Build three child rows for the selected device families."""
@@ -988,10 +995,68 @@ def test_multidevice_reboot_delay_reaches_the_confirmed_options(
         saved_options = dict(browser_session["org_upgrade_options"])  # Detach the session record for assertions.
     assert saved.status_code == 200  # The valid delay must not block the save.
     assert saved_options["reboot_at"] == "8h"  # The route stores the same field name and duration units.
-    reboot_at = boundary.requests[0].options.reboot_at  # The value that the service sends to the cloud.
-    assert isinstance(reboot_at, int) and reboot_at > 0  # The service receives an epoch value for the cloud.
+    assert boundary.requests[0].options.reboot_at is None  # An immediate plan waits for the submit clock.
     assert b'data-testid="org-upgrade-reboot-at"' in page.data  # The confirmation names the reboot delay.
+    assert b"The portal calculates this moment when you submit the upgrade." in page.data  # State the rule.
     assert b"8h" in page.data  # The operator sees the same duration they entered.
+
+
+def test_scheduled_multidevice_reboot_delay_counts_from_the_start(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scheduled plan sets the reboot moment to the start plus the delay."""
+    boundary = AggregateBoundaryStandIn()  # Capture the build input without a cloud write.
+    org_upgrade_client.application.config["RUN_STORE"] = AggregateStoreStandIn()  # Hold the plan in memory.
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary  # Stop before submission.
+    devices = [{"mac": SWITCH_ONE, "name": "switch", "device_type": "switch", "model": "EX4400"}]  # One switch.
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+
+    def built(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Return the validated target and the submitted schedule fields."""
+        del session, org_id  # The deterministic record needs no cloud context.
+        target = {**devices[0], "version_before": "old", "version_target": "23.4R1.9", "site_id": site_id}  # Target.
+        options = {
+            "strategy": "big_bang",
+            "start_time": body["start_time"],
+            "reboot_at": body["reboot_at"],
+        }  # Schedule.
+        return {"targets": [target], "options": options}  # Match the production record shape.
+
+    monkeypatch.setattr(org_upgrade, "build_options_record", built)  # Keep the contract offline.
+    start = 1_900_000_000  # Use one fixed scheduled start.
+    answer = org_upgrade_client.post(  # Save the plan at a clock that must not affect the result.
+        ORG_OPTIONS_API,
+        json={
+            "selected_types": ["switch"],
+            "version_switch": "23.4R1.9",
+            "strategy": "big_bang",
+            "start_time": "2030-03-17T17:46:40+00:00",
+            "reboot_at": "1h",
+        },
+    )
+    page = org_upgrade_client.get(ORG_CONFIRM_PAGE)  # Read the absolute moment on the confirmation page.
+    assert answer.status_code == 200  # The valid future schedule saves.
+    assert boundary.requests[0].options.start_time == start  # The cloud start uses the submitted epoch.
+    assert boundary.requests[0].options.reboot_at == start + 3600  # The reboot counts from the start.
+    assert b'data-testid="org-upgrade-reboot-moment"' in page.data  # The page shows the absolute moment.
+
+
+def test_immediate_multidevice_reboot_delay_counts_from_the_submit_clock(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An immediate plan resolves the reboot moment from the fixed submit clock."""
+    submit = 1_900_000_000  # Use a fixed submit clock for a deterministic contract.
+    monkeypatch.setattr(org_upgrade.time, "time", lambda: float(submit))  # Fix the route clock.
+    boundary = AggregateBoundaryStandIn()  # Capture the moment that reaches the aggregate service.
+    org_upgrade_client.application.config["RUN_STORE"] = AggregateStoreStandIn()  # Supply the durable seam.
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary  # Stop before a durable write.
+    operation = {"operation_id": "operation", "plan_options": {"reboot_at": "1h"}}  # No scheduled start.
+    with org_upgrade_client.application.app_context():  # Give the helper its configured service seams.
+        refusal = org_upgrade._anchor_submission_reboot(operation)  # Resolve the delay at submit.
+    assert refusal is None  # The valid stored delay continues to the cloud submission.
+    assert boundary.anchored_reboot_at == submit + 3600  # The reboot counts from submit, not from save.
 
 
 def test_multidevice_without_reboot_delay_preserves_current_behavior(

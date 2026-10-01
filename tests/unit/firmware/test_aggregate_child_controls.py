@@ -111,6 +111,17 @@ def test_the_reschedule_moves_the_start_and_the_reboot_of_every_child() -> None:
     assert record == stored
 
 
+def test_the_submit_anchor_adds_the_reboot_moment_to_each_non_ap_child() -> None:
+    """An immediate plan receives one submit-relative reboot moment before a cloud write."""
+    record = build_record(UpgradeOptions(reboot=True))  # Build a plan with no absolute reboot moment.
+    store = CasStore(record)  # Hold the planned operation behind compare-and-set.
+    AggregateUpgradeService().anchor_reboot(record, store, FIRST_REBOOT)  # Apply the fixed submit moment.
+    for mac in (SWITCH_MAC, GATEWAY_MAC, SSR_MAC):  # Each non-access-point child reads reboot_at.
+        assert child_of(store.record, mac)["body"]["reboot_at"] == FIRST_REBOOT  # The cloud body holds the moment.
+        assert child_of(store.record, mac)["reboot_at"] == FIRST_REBOOT  # The durable summary matches the body.
+    assert "reboot_at" not in child_of(store.record, AP_MAC)["body"]  # The access point route has no field.
+
+
 def test_a_reschedule_to_now_removes_every_start() -> None:
     """An empty start removes the field, so the cloud starts the upgrade at once."""
     record = build_record(UpgradeOptions(start_time=FIRST_START, reboot=True))
