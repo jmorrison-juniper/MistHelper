@@ -23,11 +23,11 @@ class SecurityPostureCheckResult:
     def to_row(self) -> dict[str, str]:
         """Return the exact CSV row shape required by the contract."""
         return {  # Map internal field names to the user-facing CSV headings.
-            "check id": self.check_id,  # Keep the stable check identifier visible to reviewers.
+            "check_id": self.check_id,  # Keep the stable check identifier visible to reviewers.
             "area": self.area,  # Keep the posture area visible for triage.
-            "setting path": self.setting_path,  # Name the exact setting a reviewer must inspect.
-            "current value": self.current_value,  # Show the redacted source value or review state.
-            "recommended value": self.recommended_value,  # Show the secure target beside the evidence.
+            "setting_path": self.setting_path,  # Name the exact setting a reviewer must inspect.
+            "current_value": self.current_value,  # Show the redacted source value or review state.
+            "recommended_value": self.recommended_value,  # Show the secure target beside the evidence.
             "verdict": self.verdict,  # Use the fixed verdict vocabulary from the contract.
             "reason": self.reason,  # Give the reviewer one sentence that explains the verdict.
         }

@@ -50,9 +50,8 @@ class ApiTokenExpirationCheck(BaseSecurityPostureCheck):
             self._read_token_days(token) for token in source_data.org_api_tokens
         ]  # Read each token lifespan.
         if any(days is None for days in expirations):  # Unknown dates cannot prove token expiration posture.
-            return self.result(
-                source_data.org_api_tokens, "review", "An API token expiration value is absent and needs review."
-            )
+            summary = self._token_count_summary(source_data.org_api_tokens, expirations)  # Summarize only counts.
+            return self.result(summary, "review", "An API token expiration value is absent and needs review.")
         known_expirations = [days for days in expirations if days is not None]  # Narrow values for type checking.
         if any(days > 365 for days in known_expirations):  # Any long-lived token fails the check.
             return self.result(
@@ -61,6 +60,13 @@ class ApiTokenExpirationCheck(BaseSecurityPostureCheck):
         return self.result(
             max(known_expirations), "pass", "All visible API tokens expire within the recommended limit."
         )
+
+    @staticmethod
+    def _token_count_summary(tokens: list[dict[str, Any]], expirations: list[int | None]) -> str:
+        """Return a safe count summary for token evidence."""
+        token_count = len(tokens)  # Count visible token records without exporting their contents.
+        missing_count = sum(1 for days in expirations if days is None)  # Count records with unclear lifetime data.
+        return f"{token_count} token records checked, {missing_count} missing expiration values"  # Export no secrets.
 
     @staticmethod
     def _read_token_days(token: dict[str, Any]) -> int | None:

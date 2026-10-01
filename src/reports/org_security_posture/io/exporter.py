@@ -16,7 +16,7 @@ class OrgSecurityPostureExporter:
     """Persist organization security posture rows through DataExporter."""
 
     FILENAME = "OrgSecurityPosture.csv"
-    FIELDNAMES = ["check id", "area", "setting path", "current value", "recommended value", "verdict", "reason"]
+    FIELDNAMES = ["check_id", "area", "setting_path", "current_value", "recommended_value", "verdict", "reason"]
 
     def __init__(self, write_fn: Callable[..., bool] | None = None) -> None:
         """Store the export function dependency."""

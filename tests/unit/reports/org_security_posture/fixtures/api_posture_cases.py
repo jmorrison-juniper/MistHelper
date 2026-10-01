@@ -37,3 +37,10 @@ class ApiPostureCases:
         settings = {"api_policy": {"access": "restricted"}}  # Keep access secure so token age is the tested defect.
         tokens = [{"created_time": 1_700_000_000, "expire_time": 1_800_000_000}]  # This lifespan exceeds 365 days.
         return OrganizationSecuritySourceData(settings, [], [], tokens, [{"url": "https://example.invalid/hook"}])
+
+    @staticmethod
+    def token_with_absent_expiration() -> OrganizationSecuritySourceData:
+        """Return source data with a token record that omits expiration time."""
+        settings = {"api_policy": {"access": "restricted"}}  # Keep access secure so token evidence is isolated.
+        tokens = [{"created_time": 1_700_000_000, "api_token": "raw-secret"}]  # Match the live missing-expiry shape.
+        return OrganizationSecuritySourceData(settings, [], [], tokens, [{"url": "https://example.invalid/hook"}])
