@@ -26,6 +26,8 @@ Covers every static method on ``src.analytics.insight_metrics_utils``:
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -50,9 +52,10 @@ def _make_mh(**extra):
 def test_export_const_insight_metrics_delegates_and_reports_present(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """CSV present -> exporter.export_all is called and 'available' message logged."""
+    """The helper selects only insight metrics and retains its availability notice."""
     fake_mh = _make_mh()
     exporter_instance = MagicMock()
+    exporter_instance.export_endpoint.return_value = SimpleNamespace(outcome="updated")
     fake_mh.ConstDefinitionsExporter.return_value = exporter_instance
     with (
         caplog.at_level("INFO", logger="root"),
@@ -61,7 +64,10 @@ def test_export_const_insight_metrics_delegates_and_reports_present(
     ):
         InsightMetricsUtils.export_const_insight_metrics()
     fake_mh.ConstDefinitionsExporter.assert_called_once_with(fake_mh.apisession)
-    exporter_instance.export_all.assert_called_once_with()
+    exporter_instance.export_endpoint.assert_called_once_with("insight_metrics")
+    assert exporter_instance.export_endpoint.call_count == 1
+    exporter_instance.export_all.assert_not_called()
+    assert exporter_instance.export_all.call_count == 0
     messages = " ".join(rec.getMessage() for rec in caplog.records)
     assert "Export Available Insight Metrics" in messages
     assert "ConstInsightMetrics.csv is available" in messages
@@ -72,6 +78,7 @@ def test_export_const_insight_metrics_warns_when_csv_missing(
 ) -> None:
     """CSV absent -> warning is logged."""
     fake_mh = _make_mh()
+    fake_mh.ConstDefinitionsExporter.return_value.export_endpoint.return_value = SimpleNamespace(outcome="updated")
     with (
         caplog.at_level("WARNING", logger="root"),
         patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=False),
@@ -80,6 +87,43 @@ def test_export_const_insight_metrics_warns_when_csv_missing(
         InsightMetricsUtils.export_const_insight_metrics()
     messages = " ".join(rec.getMessage() for rec in caplog.records)
     assert "was not created" in messages
+
+
+@pytest.mark.parametrize("outcome", ["fresh", "updated"])
+def test_refresh_success_reports_only_the_selected_csv(outcome: str, caplog: pytest.LogCaptureFixture) -> None:
+    """A successful backend result must still distinguish actual CSV availability."""
+    fake_mh = _make_mh()
+    fake_mh.ConstDefinitionsExporter.return_value.export_endpoint.return_value = SimpleNamespace(outcome=outcome)
+    with (
+        caplog.at_level("INFO"),
+        patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True) as exists,
+        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
+    ):
+        result = InsightMetricsUtils.export_const_insight_metrics()
+    assert result is None
+    assert exists.call_count == 1
+    assert exists.call_args.args == (str(Path("data") / "ConstInsightMetrics.csv"),)
+    assert "ConstInsightMetrics.csv is available" in caplog.text
+
+
+def test_refresh_failure_cannot_report_an_existing_stale_csv(caplog: pytest.LogCaptureFixture) -> None:
+    """A failed attempt must report failure before checking whether an old file remains."""
+    fake_mh = _make_mh()
+    fake_mh.ConstDefinitionsExporter.return_value.export_endpoint.return_value = SimpleNamespace(
+        outcome="failed", http_status=503, first_error=OSError("Original refresh failure")
+    )
+    with (
+        caplog.at_level("INFO"),
+        patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True) as exists,
+        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
+    ):
+        result = InsightMetricsUtils.export_const_insight_metrics()
+    assert result is None
+    assert exists.call_count == 0
+    assert "ConstInsightMetrics.csv is available" not in caplog.text
+    assert any(
+        record.levelno >= logging.ERROR and "insight" in record.getMessage().lower() for record in caplog.records
+    )
 
 
 # ---------- _should_skip_row ----------

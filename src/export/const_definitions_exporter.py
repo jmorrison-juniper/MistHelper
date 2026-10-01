@@ -13,7 +13,12 @@ from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
 import importlib  # WHY: source resolver access to reach DataExporter + DataProcessingUtils without circular load.
 import logging  # WHY: structured trace for discovery/fetch/export lifecycle events.
-from typing import Any  # WHY: helper return types normalize heterogenous mistapi payloads.
+import re
+import traceback
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Literal
 
 import requests  # WHY: Mist SDK calls use requests exceptions for transport failures.
 
@@ -24,8 +29,20 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.dataclasses.endpoint_config import EndpointConfig  # Const endpoint descriptor.
+from src.utils.logger_utils import SensitiveFilter
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
+@dataclass(frozen=True, slots=True)
+class DefinitionRefreshResult:
+    """Retain the outcome and independent counter differences for one definition refresh."""
+
+    endpoint_name: str
+    outcome: Literal["fresh", "updated", "failed"]
+    counts: Mapping[str, int]
+    http_status: int | None
+    first_error: Exception | None
 
 
 class ConstDefinitionsExporter:  # Const definitions exporter.
@@ -41,6 +58,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
     Usage:
         exporter = ConstDefinitionsExporter(apisession)
         exporter.export_all()
+        result = exporter.export_endpoint("insight_metrics")
     """
 
     CACHE_MAX_AGE_HOURS = 24  # Cache freshness window.
@@ -56,6 +74,109 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         self.endpoints_skipped_fresh = 0  # Skipped-fresh count.
         self.endpoints_updated = 0  # Updated count.
         self.endpoints_failed = 0  # Failed count.
+
+    def export_endpoint(self, endpoint_name: str) -> DefinitionRefreshResult:
+        """Refresh only the selected SDK definition through the existing export path."""
+        before = self._snapshot_counts()
+        if not self._is_valid_endpoint_name(endpoint_name):
+            first_error: Exception | None = ValueError("Select one public ASCII SDK module name.")
+            logger.error("Invalid const definition selection. Select one public ASCII SDK module name.")
+        else:
+            first_error = self._discover_selected_endpoint(endpoint_name)
+            if first_error is None:
+                first_error = self._process_single_endpoint(self.discovered_endpoints[endpoint_name])
+        if first_error is not None and self.endpoints_failed == before["failed"]:
+            self.endpoints_failed += 1
+        return self._refresh_result(endpoint_name, before, first_error)
+
+    @staticmethod
+    def _is_valid_endpoint_name(endpoint_name: object) -> bool:
+        """Accept one public ASCII module name before constructing an import path."""
+        return isinstance(endpoint_name, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", endpoint_name) is not None
+
+    def _discover_selected_endpoint(self, endpoint_name: str) -> Exception | None:
+        """Discover one definition without reusing a registration from an earlier attempt."""
+        logger.info("Discovering selected const definition %s", endpoint_name)
+        self.discovered_endpoints.pop(endpoint_name, None)  # A failed discovery must not reuse an old registration.
+        first_error = self._inspect_module(f"mistapi.api.v1.const.{endpoint_name}")
+        if first_error is None and endpoint_name not in self.discovered_endpoints:
+            first_error = ImportError(f"No usable const definition was found for {endpoint_name}.")
+            self._report_failure(f"Selected const discovery failed for {endpoint_name}", first_error)
+        if first_error is not None:
+            self.discovered_endpoints.pop(endpoint_name, None)
+        logger.debug(
+            "Selected const discovery %s: registered=%s, outcome=%s",
+            endpoint_name,
+            int(endpoint_name in self.discovered_endpoints),
+            "failed" if first_error is not None else "discovered",
+        )
+        return first_error
+
+    def _snapshot_counts(self) -> dict[str, int]:
+        """Copy the existing counters without introducing another counter owner."""
+        return {
+            "processed": self.endpoints_processed,
+            "skipped_fresh": self.endpoints_skipped_fresh,
+            "updated": self.endpoints_updated,
+            "failed": self.endpoints_failed,
+        }
+
+    def _refresh_result(
+        self, endpoint_name: str, before: Mapping[str, int], first_error: Exception | None
+    ) -> DefinitionRefreshResult:
+        """Build a read-only attempt result and report only its counter differences."""
+        counts = {name: value - before[name] for name, value in self._snapshot_counts().items()}
+        outcome: Literal["fresh", "updated", "failed"] = (
+            "failed" if first_error is not None else "fresh" if counts["skipped_fresh"] else "updated"
+        )
+        selected_name = endpoint_name if isinstance(endpoint_name, str) else ""
+        result = DefinitionRefreshResult(
+            selected_name, outcome, MappingProxyType(counts), self._error_http_status(first_error), first_error
+        )
+        logger.info(
+            "Const definition refresh %s: outcome=%s, HTTP=%s, processed=%s, skipped_fresh=%s, updated=%s, failed=%s",
+            selected_name if self._is_valid_endpoint_name(selected_name) else "<invalid>",
+            result.outcome,
+            result.http_status,
+            counts["processed"],
+            counts["skipped_fresh"],
+            counts["updated"],
+            counts["failed"],
+        )
+        return result
+
+    @staticmethod
+    def _error_http_status(error: Exception | None) -> int | None:
+        """Read the status from the original response without relying on its truth value."""
+        response = getattr(error, "response", None)
+        status_code = getattr(response, "status_code", None)
+        return status_code if isinstance(status_code, int) else None
+
+    @staticmethod
+    def _safe_error_text(value: object) -> str:
+        """Use the SDK redaction boundary before an error reaches any visible output."""
+        from mistapi.__logger import Console
+
+        message = Console().sanitize(str(value))  # LogSanitizer uses this same SDK text boundary.
+        record = logging.LogRecord(__name__, logging.ERROR, __file__, 0, message, (), None)
+        SensitiveFilter().filter(record)
+        message = re.sub(
+            r"\b(?:request[_ -]?headers|headers|authorization|proxy-authorization|cookie|set-cookie|x-api-key)"
+            r"""["']?\s*[:=][^\r\n]*""",
+            "[REDACTED HEADERS]",
+            record.getMessage(),
+            flags=re.IGNORECASE,
+        )
+        message = re.sub(r"""[A-Za-z][A-Za-z0-9+.-]*://[^\s<>"']+""", "[REDACTED URL]", message)
+        return message.encode("ascii", "backslashreplace").decode("ascii")
+
+    @classmethod
+    def _report_failure(cls, context: str, error: Exception, level: int = logging.ERROR) -> str:
+        """Log safe error and traceback text without changing the original exception."""
+        reason = cls._safe_error_text(error)
+        safe_traceback = cls._safe_error_text("".join(traceback.format_exception(error)))
+        logger.log(level, "%s: %s (HTTP %s)\n%s", context, reason, cls._error_http_status(error), safe_traceback)
+        return reason
 
     def export_all(self) -> None:  # Export every const endpoint.
         """Main entry point: discover and export all const definitions."""
@@ -78,8 +199,8 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             OSError,
             requests.RequestException,
         ) as error:  # Discovery or export I/O failed.
-            print(f"! Critical error during dynamic const discovery: {error}")  # Tell the user.
-            logging.error("Critical error during dynamic const discovery: %s", error)  # Log the error.
+            reason = self._report_failure("Critical error during dynamic const discovery", error)
+            print(f"! Critical error during dynamic const discovery: {reason}")
 
     def _discover_endpoints(self) -> None:  # Discover const endpoints.
         """Discover all const modules in mistapi.api.v1.const package."""
@@ -100,7 +221,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print(f"! Successfully discovered {len(self.discovered_endpoints)} const endpoints dynamically")
         logger.info("Dynamic discovery completed: %s endpoints found", len(self.discovered_endpoints))
 
-    def _inspect_module(self, modname: str) -> None:  # Inspect one const module.
+    def _inspect_module(self, modname: str) -> Exception | None:
         """Inspect a single const module for API functions."""
         endpoint_name = modname.split(".")[-1]  # Endpoint name from path.
         if endpoint_name.startswith("_"):  # Skip private modules.
@@ -111,10 +232,12 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         try:
             module = importlib.import_module(modname)  # Import the module.
             self._inspect_module_functions(module, endpoint_name, modname)  # Find + register the best API function
-        except (AttributeError, ImportError, ValueError) as error:  # Import or signature inspection failed.
+        except (AttributeError, ImportError, OSError, ValueError, requests.RequestException) as error:
             module_display_name = modname.split(".")[-1] if modname else "unknown"  # Module display name.
-            print(f"    ! Error inspecting {module_display_name}: {error}")  # Tell the user.
-            logging.error("Error inspecting const module %s: %s", module_display_name, error)  # Log the error.
+            reason = self._report_failure(f"Error inspecting const module {module_display_name}", error)
+            print(f"    ! Error inspecting {module_display_name}: {reason}")
+            return error
+        return None
 
     def _inspect_module_functions(self, module, endpoint_name: str, modname: str) -> None:  # Register best API function
         """Find API functions in a module and register the best one, logging when none qualify."""
@@ -267,24 +390,25 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         for config in self.discovered_endpoints.values():  # Walk endpoints. Keys are unused here.
             self._process_single_endpoint(config)  # Process each.
 
-    def _process_single_endpoint(self, config: EndpointConfig) -> None:  # Process one endpoint.
+    def _process_single_endpoint(self, config: EndpointConfig) -> Exception | None:
         """Process a single endpoint with cache checking and data export."""
         print(f"\n! Processing {config.description} ({config.endpoint_name})...")  # Tell the user.
-
         try:
-            if self._is_file_fresh(config):  # File is fresh.
+            logger.info("Checking const cache %s for %s", config.filename, config.endpoint_name)
+            fresh = self._is_file_fresh(config)
+            logger.debug("Const cache %s: fresh=%s", config.endpoint_name, fresh)
+            if fresh:
                 self.endpoints_skipped_fresh += 1  # Count skipped-fresh.
-                self.endpoints_processed += 1  # Count processed.
-                return  # Skip it.
-
-            self._fetch_and_export_endpoint(config)  # Fetch and export.
-            self.endpoints_processed += 1  # Count processed.
-
+                first_error = None
+            else:
+                first_error = self._fetch_and_export_endpoint(config)
         except (AttributeError, ImportError, OSError, requests.RequestException) as error:  # Endpoint I/O failed.
-            print(f"! Critical error processing {config.endpoint_name}: {error}")  # Tell the user.
-            logging.error("Critical error processing %s: %s", config.endpoint_name, error)  # Log the error.
+            reason = self._report_failure(f"Critical error processing {config.endpoint_name}", error)
+            print(f"! Critical error processing {config.endpoint_name}: {reason}")
             self.endpoints_failed += 1  # Count failed.
-            self.endpoints_processed += 1  # Count processed.
+            first_error = error
+        self.endpoints_processed += 1
+        return first_error
 
     def _evaluate_cache_window(self, config: EndpointConfig, file_age_hours: float, file_timestamp: str) -> bool:
         """Decide whether the file is within the cache window. Emit fresh/stale user messages either way."""
@@ -315,28 +439,45 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")  # Format the timestamp.
             return self._evaluate_cache_window(config, file_age_hours, file_timestamp)  # Compare window + emit message.
         except (OSError, OverflowError, ValueError) as error:  # Timestamp check failed.
-            print(f"  ! Error checking file timestamp: {error}")  # Tell the user.
-            logging.warning("Could not check %s file timestamp, will fetch fresh data: %s", config.endpoint_name, error)
+            reason = self._report_failure(
+                f"Could not check {config.endpoint_name} file timestamp. Fetching fresh data", error, logging.WARNING
+            )
+            print(f"  ! Error checking file timestamp: {reason}")
             return False  # Not fresh.
 
-    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:  # Fetch and export an endpoint.
+    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> Exception | None:
         """Fetch data from API and export to file."""
         print(f"  ! Requesting fresh {config.description.lower()} from Mist API using {config.function_name}()...")
-
+        logger.info("Fetching const definition %s using %s", config.endpoint_name, config.function_name)
         try:
             const_data = self._fetch_endpoint_data(config)  # Fetch the data.
+            logger.debug("Fetched const definition %s using %s", config.endpoint_name, config.function_name)
             self._export_data(config, const_data)  # Export the data.
-        except (
-            AttributeError,
-            ImportError,
-            OSError,
-            requests.RequestException,
-        ) as error:  # Fetch or file export failed.
-            print(f"  ! Error exporting {config.description.lower()}: {error}")  # Tell the user.
-            logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
-            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-            mh.DataExporter.write_with_format_selection([], config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
-            self.endpoints_failed += 1  # Count failed.
+        except (AttributeError, ImportError, OSError, requests.RequestException) as error:
+            self.endpoints_failed += 1  # Count the first failure before the fallback can fail.
+            reason = self._report_failure(
+                f"Failed to export {config.description.lower()} from {config.endpoint_name}", error
+            )
+            print(f"  ! Error exporting {config.description.lower()}: {reason}")
+            self._write_empty_fallback(config)
+            return error
+        return None
+
+    def _write_empty_fallback(self, config: EndpointConfig) -> None:
+        """Retain the empty fallback without replacing or recounting the first failure."""
+        mh = SourceDependencyResolver
+        logger.info("Writing empty const fallback %s using %s: rows=0", config.filename, config.function_name)
+        try:
+            written = mh.DataExporter.write_with_format_selection(
+                [], config.filename, api_function_name=config.function_name
+            )
+            logger.debug("Empty const fallback %s: success=%s, rows=0", config.filename, bool(written))
+            if not written:
+                raise OSError(
+                    f"Empty fallback writer returned False for {config.filename} using {config.function_name}."
+                )
+        except (AttributeError, ImportError, OSError, requests.RequestException) as secondary_error:
+            self._report_failure(f"Secondary empty fallback failure for {config.endpoint_name}", secondary_error)
 
     def _fetch_endpoint_data(self, config: EndpointConfig):  # Dispatch the fetch type.
         """Fetch data based on special handling type."""
@@ -349,11 +490,49 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         else:
             return self._fetch_standard_endpoint(config)  # Standard fetch.
 
-    def _fetch_standard_endpoint(self, config: EndpointConfig):  # Fetch a standard endpoint.
+    def _fetch_standard_endpoint(self, config: EndpointConfig) -> Any:
         """Fetch data from a standard endpoint with no special parameters."""
         api_function = getattr(config.module, config.function_name)  # Resolve the function.
+        logger.info("Requesting const definition %s using %s", config.endpoint_name, config.function_name)
         response = api_function(self.api_session)  # Call the API.
+        if hasattr(response, "status_code"):
+            status_code = response.status_code
+            logger.debug(
+                "Const definition %s response: HTTP %s",
+                config.endpoint_name,
+                status_code if isinstance(status_code, int) else None,
+            )
+            if status_code is None:
+                raise requests.ConnectionError(
+                    f"No HTTP response for const definition {config.endpoint_name}.", response=response
+                )
+            if isinstance(status_code, int) and 400 <= status_code < 600:
+                reason = self._response_error_text(response)
+                message = f"HTTP {status_code} for const definition {config.endpoint_name}"
+                raise requests.HTTPError(f"{message}: {reason}" if reason else message, response=response)
+        else:
+            logger.debug("Const definition %s returned a raw payload without HTTP status", config.endpoint_name)
         return getattr(response, "data", response) or {}  # Unwrap data. Default empty.
+
+    @classmethod
+    def _response_error_text(cls, response: Any) -> str:
+        """Keep the first available safe error text instead of treating an error body as definitions."""
+        data = getattr(response, "data", None)
+        if isinstance(data, dict):
+            data = next(
+                (
+                    data[name]
+                    for name in ("detail", "error", "message")
+                    if isinstance(data.get(name), str) and data[name].strip()
+                ),
+                "",
+            )
+        if isinstance(data, str) and data.strip():
+            return cls._safe_error_text(data.strip())
+        text = getattr(response, "raw_data", "")  # The SDK keeps unparsed error bodies in raw_data, not text.
+        if not isinstance(text, str) or not text.strip():
+            text = getattr(response, "text", "")
+        return cls._safe_error_text(text.strip()) if isinstance(text, str) else ""
 
     def _fetch_one_gateway_model(self, config: EndpointConfig, model: str) -> list:
         """Call the per-model API and return normalized records (or [] on empty / error)."""
@@ -365,7 +544,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 return self._normalize_model_data(model, model_data)  # Normalize and return.
             return []  # No data for this model.
         except (AttributeError, requests.RequestException) as error:  # Model fetch failed.
-            logging.warning("Failed to get gateway config for model %s: %s", model, error)  # Warn the failure.
+            logging.warning("Failed to get gateway config for model %s: %s", model, self._safe_error_text(error))
             raise  # Re-raise so the caller can tally failure count.
 
     def _fetch_all_gateway_models(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
@@ -401,7 +580,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 return gateway_models  # Return them.
 
         except (AttributeError, ImportError, requests.RequestException) as error:  # Fetch failed.
-            logging.warning("Failed to get gateway models list: %s", error)  # Warn the failure.
+            logging.warning("Failed to get gateway models list: %s", self._safe_error_text(error))
 
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
         return self.FALLBACK_GATEWAY_MODELS  # Use the fallback list.
@@ -479,7 +658,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                     all_states.extend(records)  # Collect them.
                     successful += 1  # Count success.
             except (AttributeError, requests.RequestException) as error:  # Country fetch failed.
-                logging.warning("Failed to get states for country %s: %s", country_code, error)  # Warn the failure.
+                logging.warning("Failed to get states for country %s: %s", country_code, self._safe_error_text(error))
                 failed += 1  # Count failure.
 
         print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")  # Tell the user.
@@ -493,7 +672,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             response = countries_function(self.api_session)  # Call the Mist API
             return getattr(response, "data", response) or {}  # Unwrap. Default to empty
         except (AttributeError, ImportError, requests.RequestException) as error:  # Network, import, or auth failure
-            logging.warning("Failed to get countries list: %s", error)  # Warn for diagnostics
+            logging.warning("Failed to get countries list: %s", self._safe_error_text(error))
             return {}  # Empty signals caller to use fallback
 
     @staticmethod
@@ -612,7 +791,9 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                     all_channels.extend(records)  # Collect them.
                     successful += 1  # Count success.
             except (AttributeError, requests.RequestException) as error:  # Country fetch failed.
-                logging.debug("Failed to get AP channels for country %s: %s", country_code, error)  # Trace the failure.
+                logging.debug(
+                    "Failed to get AP channels for country %s: %s", country_code, self._safe_error_text(error)
+                )
                 failed += 1  # Count failure.
 
         print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")  # Tell the user.
@@ -642,7 +823,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
                 return country_codes  # Return them.
         except (AttributeError, ImportError, requests.RequestException) as error:  # Fetch failed.
-            logging.warning("Failed to get countries list for AP channels: %s", error)  # Warn the failure.
+            logging.warning("Failed to get countries list for AP channels: %s", self._safe_error_text(error))
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
         return self.FALLBACK_CHANNEL_COUNTRIES  # Use the fallback list.
 
@@ -685,23 +866,34 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
         return records  # Return the rows.
 
-    def _export_data(self, config: EndpointConfig, const_data) -> None:  # Export const data to CSV.
+    def _export_data(self, config: EndpointConfig, const_data: Any) -> None:
         """Convert data to list format and export to file."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        if not const_data:  # No data.
+        logger.info("Normalizing const definition %s", config.endpoint_name)
+        data_list = self._convert_to_list(config.endpoint_name, const_data) if const_data else []
+        processed = DataProcessingUtils.escape_multiline(data_list) if data_list else []  # type: ignore[no-untyped-call]
+        logger.debug("Normalized const definition %s: rows=%s", config.endpoint_name, len(processed))
+        logger.info(
+            "Writing primary const output %s using %s: rows=%s", config.filename, config.function_name, len(processed)
+        )
+        written = mh.DataExporter.write_with_format_selection(
+            processed, config.filename, api_function_name=config.function_name
+        )
+        logger.debug("Primary const output %s: success=%s, rows=%s", config.filename, bool(written), len(processed))
+        if not written:
+            raise OSError(f"Const definition writer returned False for {config.filename} using {config.function_name}.")
+        self.endpoints_updated += 1
+        self._report_export_success(config, len(processed))
+
+    @staticmethod
+    def _report_export_success(config: EndpointConfig, row_count: int) -> None:
+        """Report a completed primary write without claiming that an empty CSV exists."""
+        if not row_count:
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
             logger.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
-            mh.DataExporter.write_with_format_selection([], config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
-            self.endpoints_updated += 1  # Count updated.
-            return  # Abort.
-
-        data_list = self._convert_to_list(config.endpoint_name, const_data)  # Normalize to a list.
-        processed = DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
-        mh.DataExporter.write_with_format_selection(processed, config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
-
-        print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")  # Tell the user.
-        logger.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
-        self.endpoints_updated += 1  # Count updated.
+            return
+        print(f"  ! {row_count} {config.description.lower()} exported to {config.filename}")
+        logger.info("Exported %s fresh %s to %s", row_count, config.description.lower(), config.filename)
 
     def _convert_to_list(self, endpoint_name: str, const_data) -> list:  # type: ignore[no-untyped-def, type-arg]
         """Convert various data formats to list of records for CSV."""

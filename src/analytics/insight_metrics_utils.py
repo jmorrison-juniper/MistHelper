@@ -35,29 +35,24 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
 
     @staticmethod
     def export_const_insight_metrics() -> None:  # Export const insight metrics.
-        """Export available const insight metrics via the ConstDefinitionsExporter.
-
-        Refreshes data/ConstInsightMetrics.csv so scope-filtering helpers can read it.
-        """
+        """Refresh only the insight definition and report its outcome before CSV availability."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        # WHY: Preserve user-facing banner. Emit via logging for structured output.
         logger.info("Export Available Insight Metrics:")
-        # WHY: Preserve user-facing note verbatim.
-        logger.info("! Note: This function now uses the dynamic comprehensive const export system")
-        # WHY: Preserve user-facing note verbatim.
-        logger.info("! For best results, consider using Menu 82: Export All Const Definitions")
-        logger.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
-
+        logger.info("Refreshing only the insight metric definition.")
         exporter = mh.ConstDefinitionsExporter(mh.apisession)  # type: ignore[no-untyped-call]
-        exporter.export_all()  # Run the dynamic export.
-
-        insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")  # Expected output file.
-        if os.path.exists(insight_metrics_file):  # File present.
-            # WHY: Preserve user-facing success message verbatim.
-            logger.info("! ConstInsightMetrics.csv is available in the dynamic export results")
+        result = exporter.export_endpoint("insight_metrics")
+        if result.outcome not in ("fresh", "updated"):
+            logger.error("Insight metric definition refresh failed. An existing CSV does not prove success.")
+            return
+        logger.debug("Insight metric definition refresh outcome: %s", result.outcome)
+        insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")
+        logger.info("Checking insight metric CSV availability.")
+        available = os.path.exists(insight_metrics_file)
+        logger.debug("Insight metric CSV availability: %s", available)
+        if available:
+            logger.info("! ConstInsightMetrics.csv is available after the selected definition refresh.")
         else:
-            # WHY: Preserve user-facing warning verbatim. Semantic level is warning.
-            logger.warning("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
+            logger.warning("Caution: ConstInsightMetrics.csv was not created. CSV metric selection can be unavailable.")
 
     @staticmethod
     def _should_skip_row(metric_name: str, scopes: str) -> bool:

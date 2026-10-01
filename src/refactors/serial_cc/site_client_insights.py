@@ -76,7 +76,6 @@ def _resolve_runtime_dependencies() -> SimpleNamespace:
         mistapi=misthelper_module.mistapi,
         apisession=misthelper_module.apisession,
         InsightMetricsUtils=misthelper_module.InsightMetricsUtils,
-        ConstDefinitionsExporter=misthelper_module.ConstDefinitionsExporter,  # WHY: Canonical metrics refresh exporter
         PromptUtils=misthelper_module.PromptUtils,
         InputUtils=misthelper_module.InputUtils,
         EnhancedSSHRunner=misthelper_module.EnhancedSSHRunner,
@@ -349,7 +348,8 @@ class SiteClientInsightsService:
         logger.info(_MSG_START)  # WHY: Trace workflow start
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_REFRESH)  # WHY: Inform about the metric refresh
-        deps.ConstDefinitionsExporter(deps.apisession).export_all()  # WHY: Regenerate ConstInsightMetrics.csv
+        deps.InsightMetricsUtils.export_const_insight_metrics()
+        logger.debug("The client insight definition refresh helper returned.")
 
     @classmethod
     def _resolve_export_context(cls, deps: SimpleNamespace, site_id: str) -> _ExportContext | None:
