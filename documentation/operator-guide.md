@@ -211,6 +211,70 @@ runs. It sends no firmware, stop, or cancel request to Mist.
 Read [the portal guide](upgrade_capture_portal.md) for the full
 operator flow and deployment rules.
 
+### Use the WebSockets terminal
+
+The WebSockets tab shows an xterm.js terminal panel for a shell session. It
+shows a read-only terminal panel for Top and Monitor Traffic. The panel has a
+toolbar, a terminal screen, a status line, a time notice, and a gap notice.
+
+Warning: a shell sends each key to a live device. A command can change the
+device configuration.
+
+Top and Monitor Traffic use a fixed device screen of 80 columns and 40 rows.
+The page does not fit this screen to the panel, and it sends no resize request.
+The warning line says, "This view is read-only. The device sends the screen."
+The Paste toolbar button and the Paste menu item are disabled.
+
+The status line shows the session state, the terminal size, and the end reason.
+The session header shows the same state names, such as `Live` and `Finished`.
+For a terminal session, the header counter shows `Output: N bytes`. `N` is the
+newest terminal read position. The session list item shows the state only. The
+Stop button is disabled after a final state.
+
+Select a session in the session list to show its output. The page then scrolls
+to the terminal panel and replays the output that the portal holds.
+
+The time notice appears when less than two minutes remain. The gap notice shows
+how many terminal bytes the portal no longer holds.
+
+Use these copy actions.
+
+- Select text to copy it. This setting is on by default.
+- Press Ctrl+Shift+C or Ctrl+Insert to copy selected text.
+- Press Ctrl+C with selected text to copy it.
+- Press Ctrl+C with no selected text to send the interrupt character.
+- Select Copy from the right-click menu.
+
+Use these paste actions.
+
+- Press Ctrl+V, Ctrl+Shift+V, or Shift+Insert.
+- Select Paste from the toolbar or from the right-click menu.
+- If the browser blocks clipboard read, paste text into the dialog.
+- If the text has more than one line, confirm the paste first.
+- `Lines: N` counts the lines. A line end at the end of the text adds no line.
+- The `Paste text` label appears only with the paste text box.
+- If the text is larger than 256 KiB, the page refuses it.
+
+For Ctrl+Shift+V and Shift+Insert, the page reads the clipboard directly. For
+Ctrl+V, the page can use the native paste event. The preference
+`ctrlVBehavior` controls that behavior.
+
+The right-click menu also has Select all and Clear. Clear removes only the
+local terminal screen. It does not stop the session.
+
+The terminal settings are stored in browser local storage under
+`misthelper.wsTerminal.prefs`. The visible settings keep copy on select,
+multi-line paste confirmation, and font size. The stored settings also keep
+`ctrlVBehavior` and `rightClickAction`. The A+ and A- buttons change the font
+size from 10 to 28.
+
+Select Download in the terminal toolbar to save the visible terminal history as
+a text file. The file contains the xterm.js buffer text and no terminal control
+codes.
+
+Set `PORTAL_WS_TERMINAL_HISTORY_KB` to change the server byte history for one
+terminal session. The default is `1024`. The range is `256` to `8192`.
+
 ### Watch the network from a monitoring system
 
 Menu 241 starts a metrics gateway on port 8057. The gateway reads your
@@ -259,9 +323,9 @@ second. Two different values make every read return `No Such Instance`.
 Warning: The gateway asks for no password. Keep the default loopback bind unless
 a reverse proxy holds the access control.
 
-Read `mist_scrape_success` and `mist_scrape_age_seconds` in your alarm rules. A
-failed read of Mist Cloud keeps the last good reading, so those two values are
-how you tell a stale reading from a real outage.
+Read `mist_scrape_success` and `mist_scrape_age_seconds` in your alarm rules.
+A failed read of Mist Cloud keeps the last good reading. Those two values show
+the difference between stale data and a real outage.
 
 #### Read the metrics by name
 

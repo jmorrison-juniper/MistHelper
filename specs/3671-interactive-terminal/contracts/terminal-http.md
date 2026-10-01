@@ -11,7 +11,7 @@ The Flask-WTF CSRF protection covers each POST route. A POST without a valid
 | Code | Status | Meaning |
 | - | - | - |
 | `not_terminal` | 409 | The session is not a shell session or a screen command session. |
-| `read_only` | 409 | The session is a screen command. It accepts no input and no size. |
+| `read_only` | 409 | The session is a screen command. It accepts no input and no resize. |
 | `input_full` | 409 | The text before the first output is more than 4,096 characters. |
 | `too_large` | 413 | The request holds more than 16 KiB of UTF-8 text. |
 | `rate_limited` | 429 | The session received more than 60 requests in one second. |
@@ -94,7 +94,13 @@ Body:
 {"cols": 120, "rows": 40}
 ```
 
-Rules: `cols` is an integer from 20 to 500. `rows` is an integer from 5 to 200.
+Rules:
+
+- `cols` is an integer from 20 to 500.
+- `rows` is an integer from 5 to 200.
+- A screen command always uses 80 columns and 40 rows.
+- The page does not send a resize request for a screen command.
+- If a resize request reaches a screen command, the route returns `read_only`.
 
 Answer 202:
 
@@ -119,6 +125,7 @@ The session payload of the list route and the start route gets one more field.
 | `terminal` | boolean | True for a shell session and a screen command session |
 
 The page uses this field to show the terminal panel instead of the message list.
+The terminal read route tells the page whether the session is read-only.
 
 ## Log rule
 

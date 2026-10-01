@@ -28,22 +28,22 @@ answering.
 - **Data Browser**: Browse, preview, search, and download the CSV and SQLite output files.
 - **Operations**: Run the operations whose registry category is `safe` or `interactive_safe`.
 - **Map Viewer**: View a floor plan in an interactive Plotly.js viewer with device markers.
-- **WebSockets**: Open a live Mist API stream, read its messages, and stop it. Run a device utility, such as a ping or an ARP table. See [WebSockets Tab](#websockets-tab).
+- **WebSockets**: Open a live Mist API stream, run a device utility, or use a terminal session. See [WebSockets Tab](#websockets-tab).
 - **Themes**: Brand Magenta, Dark, Light, and High Contrast themes with instant switching (persisted in localStorage). Brand Magenta is the default and matches the upgrade capture portal.
 - **Branding**: Customize the title, the logo, and the accent color with environment variables.
 
 ## WebSockets Tab
 
 The WebSockets tab at `/websockets` opens the live streams of the Mist API. The
-portal server holds each stream. The browser reads the new messages of the
-selected session one time each second.
+portal server holds each stream. The browser reads message sessions one time
+each second. It reads terminal sessions with a long poll.
 
 The tab gives three kinds of entry.
 
 | Kind | Action | Examples |
 | - | - | - |
 | Channel | Subscribes to one Mist API stream and shows each message. | Device statistics, client statistics, and map locations |
-| Utility | Runs one command on one device and shows the output. | Ping, traceroute, ARP table, and packet capture |
+| Utility | Runs one command on one device and shows the output. | Ping, traceroute, ARP table, packet capture, Top, and Monitor Traffic |
 | Shell | Opens a command shell on one device. | The device shell |
 
 The catalog holds 18 channels and 54 utilities. One channel session can follow
@@ -62,6 +62,9 @@ Each utility has one safety class.
 Warning: a `change` utility can stop the traffic on a production port. A shell
 can change any device setting. Unlock a class only when an operator needs it.
 
+Warning: a shell sends each key to a live device. A command can change the
+device configuration.
+
 To unlock a class, do these steps.
 
 1. Set `PORTAL_WS_ENABLE_CHANGES` or `PORTAL_WS_ENABLE_SHELL` to `true`.
@@ -78,17 +81,79 @@ The tab obeys these session limits.
 - A session stops when no page reads it for 120 seconds.
 - A session stops after 30 minutes.
 - You can download the messages of a session as a JSON Lines file.
+- A terminal session keeps 1,024 KiB of output bytes by default.
 
-### Known limits
+### Terminal panel
 
-The `mistapi` 0.64.0 SDK causes two limits.
+The tab shows an xterm.js terminal panel for a shell session. It shows a
+read-only xterm.js panel for Top and Monitor Traffic. The panel has a toolbar,
+a terminal screen, a status line, a time notice, and a gap notice.
 
-- A read utility that answers fast can end with no output, or with a part of a
-  table. The SDK sends the command before it subscribes to the answer. The ARP
-  table and the routes of a gateway show this limit. If a table is empty or
-  short, run the utility again. Issue #3660 records the defect and the repair.
-- The `topCommand` screen can show parts of terminal control codes, such as
-  `[21;65H`. The SDK draws the screen before the portal receives it. Issue #3659
+Top and Monitor Traffic use a fixed device screen of 80 columns and 40 rows.
+The page does not fit this screen to the panel, and it sends no resize request.
+The warning line says, "This view is read-only. The device sends the screen."
+The Paste toolbar button and the Paste menu item are disabled.
+
+The status line shows the session state, the terminal size, and the end reason.
+The session header shows the same state names, such as `Live` and `Finished`.
+For a terminal session, the header counter shows `Output: N bytes`. `N` is the
+newest terminal read position. The session list item shows the state only. The
+Stop button is disabled after a final state.
+
+Select a session in the session list to show its output. The page then scrolls
+to the terminal panel and replays the output that the portal holds.
+
+The time notice appears when less than two minutes remain. The gap notice shows
+how many terminal bytes the portal no longer holds.
+
+Use these copy actions.
+
+- Select text to copy it. This setting is on by default.
+- Press Ctrl+Shift+C or Ctrl+Insert to copy selected text.
+- Press Ctrl+C with selected text to copy it.
+- Press Ctrl+C with no selected text to send the interrupt character.
+- Select Copy from the right-click menu.
+
+Use these paste actions.
+
+- Press Ctrl+V, Ctrl+Shift+V, or Shift+Insert.
+- Select Paste from the toolbar or from the right-click menu.
+- If the browser blocks clipboard read, paste text into the dialog.
+- If the text has more than one line, confirm the paste first.
+- `Lines: N` counts the lines. A line end at the end of the text adds no line.
+- The `Paste text` label appears only with the paste text box.
+- If the text is larger than 256 KiB, the page refuses it.
+
+The page sends pasted text through xterm.js. xterm.js changes the text to the
+terminal bytes that the device receives. For large paste text, the page sends
+parts of 4 KiB or less. It shows a progress bar above 16 KiB.
+
+For Ctrl+Shift+V and Shift+Insert, the page reads the clipboard directly. For
+Ctrl+V, the page can use the native paste event. The preference
+`ctrlVBehavior` controls that behavior.
+
+The right-click menu has Copy, Paste, Select all, and Clear. Clear removes only
+the local terminal screen. It does not stop the session.
+
+The terminal settings are stored in browser local storage under
+`misthelper.wsTerminal.prefs`. The visible settings keep copy on select,
+multi-line paste confirmation, and font size. The stored settings also keep
+`ctrlVBehavior` and `rightClickAction`. The A+ and A- buttons change the font
+size from 10 to 28.
+
+Select Download in the terminal toolbar to save the visible terminal history as
+a text file. The file contains the xterm.js buffer text and no terminal control
+codes.
+
+### WebSockets repair notes
+
+The WebSockets tab now owns the Mist live connections for terminal and command
+sessions. This repairs two defects in the Mist software kit path.
+
+- A device command subscribes before the trigger request. This prevents lost
+  first output lines. Issue #3660 records the defect.
+- Top and Monitor Traffic now use the terminal parser in xterm.js. This prevents
+  split terminal control sequences from showing as stray text. Issue #3659
   records the defect.
 
 ## Environment Variables
@@ -109,6 +174,7 @@ The `mistapi` 0.64.0 SDK causes two limits.
 | `PORTAL_WS_BUFFER_MESSAGES` | `500` | Messages that each session keeps, 50 to 5000 |
 | `PORTAL_WS_BUFFER_MB` | `8` | Megabytes that each session keeps, 1 to 64 |
 | `PORTAL_WS_MAX_STREAM_MINUTES` | `30` | Minutes before a session stops, 1 to 240 |
+| `PORTAL_WS_TERMINAL_HISTORY_KB` | `1024` | KiB of terminal output bytes per session, 256 to 8192 |
 
 ## API Endpoints
 
@@ -128,9 +194,11 @@ The `mistapi` 0.64.0 SDK causes two limits.
 | `/api/websockets/catalog` | GET | List the channels, the utilities, and the state of each flag |
 | `/api/websockets/sessions` | GET | List the sessions and the session limits |
 | `/api/websockets/sessions` | POST | Start a session |
-| `/api/websockets/sessions/<session_id>/messages` | GET | Read the new messages of a session |
+| `/api/websockets/sessions/<session_id>/messages` | GET | Read the new messages of a message session |
+| `/api/websockets/sessions/<session_id>/terminal` | GET | Read the terminal bytes of a terminal session |
 | `/api/websockets/sessions/<session_id>/stop` | POST | Stop a session |
-| `/api/websockets/sessions/<session_id>/input` | POST | Send one line or one key to a shell |
+| `/api/websockets/sessions/<session_id>/input` | POST | Send terminal input text to a shell |
+| `/api/websockets/sessions/<session_id>/resize` | POST | Send the terminal size to a shell |
 | `/api/websockets/sessions/<session_id>` | DELETE | Remove an ended session |
 | `/api/websockets/sessions/<session_id>/download` | GET | Download the messages of a session |
 | `/api/websockets/sites/<site_id>/devices` | GET | List the devices of a site for a picker |

@@ -12,10 +12,14 @@ The `StreamSession` record of a shell session or a screen command session holds 
 | - | - | - |
 | `history` | `ByteHistory` | One history for each session |
 | `input` | `TerminalInput` or `None` | `None` for a screen command, because its view is read-only |
-| `cols` | integer | 20 to 500. The start value is 80. |
-| `rows` | integer | 5 to 200. The start value is 24. |
+| `cols` | integer | Shell range is 20 to 500. A screen command is fixed at 80. |
+| `rows` | integer | Shell range is 5 to 200. A screen command is fixed at 40. |
 | `expires_mono` | float | The start time plus the session life limit |
 | `expires_at` | text | The same time in UTC, for the page |
+
+A shell session starts with a terminal size from the browser. It can resize.
+Top and Monitor Traffic use a terminal of exactly 80 columns and 40 rows. The
+page does not fit a screen command to the panel, and it sends no resize request.
 
 The session states do not change. A terminal session moves through these states.
 
@@ -131,6 +135,11 @@ The page keeps the preferences under the local storage key `misthelper.wsTermina
 | - | - | - | - |
 | `copyOnSelect` | boolean | true | Copy by selection |
 | `confirmPaste` | boolean | true | The paste confirmation for text with more than one line |
-| `fontSize` | integer | 14 | 10 to 24 |
+| `ctrlVBehavior` | text | paste | Ctrl+V uses the native paste event |
+| `fontSize` | integer | 14 | 10 to 28 |
+| `rightClickAction` | text | menu | Right-click opens the terminal menu |
 
 If the stored value is not valid JSON, the page uses the defaults.
+
+The visible settings show `copyOnSelect`, `confirmPaste`, and `fontSize`. The
+other settings can exist in local storage for browser behavior.
