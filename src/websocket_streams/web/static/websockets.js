@@ -1,4 +1,4 @@
-/* global getCsrfToken, readJsonAnswer */
+/* global getCsrfToken, readJsonAnswer, MistWebSocketTerminal */
 
 /*
  * The WebSockets page of the Operations portal (issue #3551).
@@ -47,6 +47,7 @@
         timed_out: 'Timed out',
         failed: 'Failed'
     };  // Plain names for the session states.
+    var FINAL_STATES = ['stopped', 'finished', 'timed_out', 'failed'];  // Final terminal states cannot stop again.
     var PICKER_TEXT = {
         sites: 'Choose a site.',
         devices: 'Choose a device.',
@@ -76,7 +77,8 @@
         sessionTimer: null,  // The timer that refreshes the session list.
         pickerLoads: 0,  // A counter that marks the newest picker read.
         messages: [],  // The messages of the selected session, oldest first.
-        labels: {}  // Picker labels by identifier, for the session title.
+        labels: {},  // Picker labels by identifier, for the session title.
+        terminalController: null  // The xterm.js controller for terminal sessions.
     };
 
     function byId(id) {
@@ -135,11 +137,6 @@
         byId('wsClearButton').addEventListener('click', clearMessages);  // Empty the message view.
         byId('wsStopButton').addEventListener('click', stopSelectedSession);  // Stop the selected session.
         byId('wsMessageFilter').addEventListener('input', renderMessages);  // Filter the messages while the operator types.
-        byId('wsShellSend').addEventListener('click', sendShellLine);  // Send one shell line.
-        byId('wsShellLine').addEventListener('keydown', onShellKeyDown);  // The Enter key also sends the line.
-        document.querySelectorAll('[data-ws-key]').forEach(function(button) {
-            button.addEventListener('click', function() { sendShellKey(button.getAttribute('data-ws-key')); });  // Send one special key.
-        });
         document.addEventListener('visibilitychange', function() {
             if (!document.hidden) loadSessions(true);  // Show the current counters when the tab is visible again.
         });
@@ -551,8 +548,13 @@
         button.classList.toggle('active', isSelected(session));  // Show the session of the message panel.
         button.appendChild(make('div', 'fw-semibold', session.title || session.key));  // Session title.
         button.appendChild(make('div', 'small ws-session-status', sessionStatusText(session)));  // State and counters.
-        button.addEventListener('click', function() { selectSession(session); });  // Show this session.
+        button.addEventListener('click', function() { showSessionOutput(session); });  // Show this session and its output.
         return button;  // The caller adds the button to the list.
+    }
+
+    function showSessionOutput(session) {
+        selectSession(session);  // Show the chosen session in the output panel.
+        byId('wsMessagePanel').scrollIntoView({ behavior: 'smooth', block: 'start' });  // Move the view to the output, as a start does.
     }
 
     function isSelected(session) {
@@ -560,6 +562,7 @@
     }
 
     function sessionStatusText(session) {
+        if (isTerminalSession(session)) return stateText(session);  // Terminal session frames are not operator messages.
         return stateText(session) + ' - ' + countersText(session);  // One status line for the list.
     }
 
@@ -588,6 +591,7 @@
     }
 
     function selectSession(session) {
+        stopTerminalController();  // Stop any terminal read loop for the previous session.
         state.selectedSession = session;  // The message panel shows this session.
         state.nextAfter = 0;  // Read the buffer from the oldest kept message.
         state.messages = [];  // Remove the messages of the last session.
@@ -596,8 +600,91 @@
         show(byId('wsMessagePanel'), true);  // Show the message panel.
         setPaused(false);  // A new selection shows live output.
         updateSessionHeader(session);  // Title, state, and counters.
+        if (isTerminalSession(session)) {
+            showTerminalSession(session);  // A terminal session uses xterm.js and terminal routes.
+            return;  // The terminal read loop replaces the message poll loop.
+        }
+        showMessageSession();  // A non-terminal session uses the existing row view.
         renderMessages();  // Show the empty view until messages arrive.
         startPollTimer();  // Read new messages every second.
+    }
+
+    function isTerminalSession(session) {
+        return session.terminal === true || session.output === 'terminal' || session.output === 'screen';  // Support new and old payloads.
+    }
+
+    function showTerminalSession(session) {
+        stopPollTimer();  // Message polling is not used for a terminal session.
+        show(byId('wsOutput'), false);  // Hide the old message view.
+        show(byId('wsMessageFilter'), false);  // The xterm buffer has its own view.
+        show(byId('wsClearButton'), false);  // The terminal menu clears local history.
+        show(byId('wsDownloadLink'), false);  // The terminal toolbar owns text download.
+        byId('wsPauseButton').disabled = true;  // Terminal long-poll reads do not pause here.
+        byId('wsResumeButton').disabled = true;  // Terminal long-poll reads do not resume here.
+        terminalController().open(session);  // Start the terminal read loop.
+    }
+
+    function updateTerminalSession(terminalState) {
+        if (!state.selectedSession) return;  // No session is selected during teardown.
+        Object.assign(state.selectedSession, terminalState);  // Merge the latest terminal state.
+        if (FINAL_STATES.indexOf(state.selectedSession.state) >= 0) state.selectedSession.live = false;  // Final state cannot stop.
+        updateSessionHeader(state.selectedSession);  // Keep the header equal to the terminal read answer.
+        updateSessionItem(state.selectedSession);  // Keep the session list equal to the terminal read answer.
+    }
+
+    function showMessageSession() {
+        show(byId('wsOutput'), true);  // Show rows for streams, commands, and captures.
+        show(byId('wsMessageFilter'), true);  // Filtering applies only to message rows.
+        show(byId('wsClearButton'), true);  // The message row view can clear local rows.
+        show(byId('wsDownloadLink'), true);  // The message row view downloads JSON Lines.
+        byId('wsPauseButton').disabled = false;  // The message poll can pause.
+        byId('wsResumeButton').disabled = false;  // The message poll can resume.
+    }
+
+    function terminalController() {
+        if (!state.terminalController) {
+            state.terminalController = new MistWebSocketTerminal.TerminalController(terminalElements(), {
+                onState: updateTerminalSession,  // Let terminal reads update the session header.
+                stateText: STATE_TEXT  // Keep terminal footer state labels equal to page labels.
+            });  // Build once with a state bridge to the page header.
+        }
+        return state.terminalController;  // Reuse the controller for each terminal selection.
+    }
+
+    function stopTerminalController() {
+        if (state.terminalController) state.terminalController.close();  // Close the read loop and xterm instance.
+    }
+
+    function terminalElements() {
+        return {
+            panel: byId('wsTerminalPanel'),
+            screen: byId('wsTerminalScreen'),
+            warning: byId('wsTerminalWarning'),
+            status: byId('wsTerminalStatus'),
+            expiry: byId('wsTerminalExpiry'),
+            gap: byId('wsTerminalGap'),
+            copy: byId('wsTerminalCopy'),
+            paste: byId('wsTerminalPaste'),
+            download: byId('wsTerminalDownload'),
+            fontUp: byId('wsTerminalFontUp'),
+            fontDown: byId('wsTerminalFontDown'),
+            copyOnSelect: byId('wsTerminalCopyOnSelect'),
+            confirmPaste: byId('wsTerminalConfirmPaste'),
+            menu: byId('wsTerminalMenu'),
+            menuCopy: byId('wsTerminalMenuCopy'),
+            menuPaste: byId('wsTerminalMenuPaste'),
+            menuSelectAll: byId('wsTerminalMenuSelectAll'),
+            menuClear: byId('wsTerminalMenuClear'),
+            dialog: byId('wsTerminalPasteDialog'),
+            pasteLines: byId('wsTerminalPasteLines'),
+            pastePreview: byId('wsTerminalPastePreview'),
+            pasteSend: byId('wsTerminalPasteSend'),
+            pasteCancel: byId('wsTerminalPasteCancel'),
+            pasteInputLabel: byId('wsTerminalPasteInputLabel'),
+            pasteInput: byId('wsTerminalPasteInput'),
+            progress: byId('wsTerminalProgress'),
+            toast: byId('wsTerminalToast')
+        };  // Keep test elements in one map for the controller.
     }
 
     function updateSessionHeader(session) {
@@ -607,10 +694,10 @@
         setText('wsCounters', countersText(session));  // Message counters.
         byId('wsDownloadLink').href = '/api/websockets/sessions/' + encodeURIComponent(session.session_id) + '/download';  // Buffer download.
         byId('wsStopButton').disabled = !session.live;  // A closed session cannot stop again.
-        show(byId('wsTerminalInput'), session.output === 'terminal');  // Only a shell takes typed input.
     }
 
     function countersText(session) {
+        if (isTerminalSession(session)) return 'Output: ' + (session.terminal_next || 0) + ' bytes';  // Terminal counters show bytes, not frames.
         var counters = session.counters || {};  // The server counts the messages of each session.
         var rate = Number(session.rate_per_second || 0).toFixed(1);  // One decimal place is enough for a rate.
         return 'Messages: ' + (counters.received || 0) + ', dropped: ' + (counters.dropped || 0) + ', rate: ' + rate + '/s';  // Counter line.
@@ -672,9 +759,7 @@
 
     function drawMessages(output, messages) {
         var view = state.selectedSession ? state.selectedSession.output : 'lines';  // The server names the view type.
-        if (view === 'screen') renderScreen(output, messages);  // Show the newest full screen.
-        else if (view === 'terminal') renderTerminal(output, messages);  // Show the shell text.
-        else if (view === 'packets') renderPackets(output, messages);  // Show one row for each packet.
+        if (view === 'packets') renderPackets(output, messages);  // Show one row for each packet.
         else renderRows(output, messages);  // Show one row for each message.
     }
 
@@ -687,22 +772,10 @@
         });
     }
 
-    function renderScreen(output, messages) {
-        var newest = messages[messages.length - 1];  // Each screen message holds the full screen.
-        output.appendChild(make('pre', 'ws-screen mb-0', newest ? messageText(newest) : 'No screen output yet.'));  // Show the newest screen.
-    }
-
     function renderPackets(output, messages) {
         messages.forEach(function(message) {
             output.appendChild(make('div', 'ws-packet-row', message.summary || messageText(message)));  // One packet summary.
         });
-    }
-
-    function renderTerminal(output, messages) {
-        var terminal = make('pre', 'ws-terminal mb-0');  // The shell view.
-        terminal.dataset.testid = 'ws-terminal';  // Stable test hook.
-        terminal.textContent = messages.map(messageText).join('\n') || 'The terminal has no output yet.';  // Shell text.
-        output.appendChild(terminal);  // Add the view.
     }
 
     function messageText(message) {
@@ -791,31 +864,8 @@
         state.selectedSession = session;  // Keep the newest state.
         updateSessionHeader(session);  // Show the stopping state.
         updateSessionItem(session);  // Keep the list equal to the panel.
+        if (isTerminalSession(session)) return;  // The terminal read loop observes the final state.
         if (!state.pollTimer) startPollTimer();  // Read the last messages until the runner closes.
-    }
-
-    function onShellKeyDown(event) {
-        if (event.key !== 'Enter') return;  // Other keys type text.
-        event.preventDefault();  // The input is not in a form, but block any default action.
-        sendShellLine();  // Send the typed line.
-    }
-
-    function sendShellLine() {
-        var input = byId('wsShellLine');  // The shell line input.
-        sendShellPayload({ line: input.value });  // Send the typed line.
-        input.value = '';  // Clear the input for the next line.
-    }
-
-    function sendShellKey(key) {
-        sendShellPayload({ key: key });  // Send one special key, such as the interrupt key.
-    }
-
-    function sendShellPayload(payload) {
-        var session = state.selectedSession;  // The shell session of the message panel.
-        if (!session) return;  // No session means nothing to send.
-        apiJson('/api/websockets/sessions/' + encodeURIComponent(session.session_id) + '/input', { method: 'POST', body: JSON.stringify(payload) }).then(function(answer) {
-            if (answer.error) setText('wsSessionReason', answer.error);  // Show why the shell refused the input.
-        });
     }
 
     document.addEventListener('DOMContentLoaded', init);  // Start after the page markup exists.

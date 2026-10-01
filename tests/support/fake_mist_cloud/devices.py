@@ -229,3 +229,31 @@ class ScreenDevice:
             payload: The screen bytes without the Mist channel marker.
         """
         connection.send_binary(b"\x00" + payload)  # Real Mist screen output uses one leading NUL channel marker.
+
+
+class MonitorFramingScreenDevice(ScreenDevice):
+    """A fake screen device that uses the live Mist 80 by 40 monitor framing."""
+
+    def __init__(self, updates: int = 2) -> None:
+        """Build one fixed-geometry monitor device."""
+        super().__init__(updates=updates)  # Keep the same update count interface as ScreenDevice.
+        self.header = "SRX-1500 Monitor Header"  # Row 1 text proves the header stays at the top.
+        self.help_line = "Bytes=b, Clear=c, Delta=d, Packets=p, Q or ESC"  # Row 40 text proves the help line stays low.
+
+    def on_connect(self, connection: FakeConnection) -> None:
+        """Send a monitor screen that depends on rows 1 through 40."""
+        self._send_output(connection, b"\x1b[1;40r")  # Mist monitor sets a 40-row scroll region.
+        self._send_output(connection, b"\x1b[H\x1b[2J")  # Clear the screen and place the cursor at row 1.
+        self._send_output(connection, self.header.encode("utf-8"))  # Draw the header on row 1.
+        self._send_output(connection, b"\x1b[39B")  # Move to row 40 like the live monitor command.
+        self._send_output(connection, self.help_line.encode("utf-8"))  # Draw the help line on row 40.
+        for index in range(1, self.updates + 1):  # Send positioned counter updates across the fixed screen.
+            self._send_update(connection, index)  # Keep each update in the same framing shape.
+
+    def _send_update(self, connection: FakeConnection, index: int) -> None:
+        """Send one positioned screen update."""
+        payload = (  # Build the update as bytes so the terminal receives real control sequences.
+            f"\x1b[2;1HInterface      Link    Input packets\x1b[3;1Hge-0/0/{index:<2}     Up      {index:08d}"
+            f"\x1b[40;54HRate={index:04d}"
+        ).encode()  # Encode once so the fake WebSocket sends bytes.
+        self._send_output(connection, payload)  # Send the update with the Mist binary channel marker.

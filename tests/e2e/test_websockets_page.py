@@ -7,6 +7,7 @@ Why:
 
 from __future__ import annotations  # Keep annotations lazy for Playwright imports.
 
+import base64  # The fake terminal read route returns base64 terminal bytes.
 import json  # The fake keeps JSON message text, like the real buffer.
 import logging  # Keep browser test records under this module.
 import socket  # Find an unused local port.
@@ -65,6 +66,7 @@ class FakeWebSocketServices:
         self._sessions: dict[str, BrowserSession] = {}  # Active and ended sessions.
         self._next_id = 1  # Deterministic identifiers make tests easy to read.
         self.shell_inputs: list[dict[str, object]] = []  # Record shell input forms.
+        self.terminal_data: dict[str, bytes] = {}  # Store fake terminal byte history by session.
 
     def reset(self) -> None:
         """Clear sessions before one browser story."""
@@ -72,6 +74,7 @@ class FakeWebSocketServices:
             self._sessions.clear()  # Remove all prior sessions.
             self._next_id = 1  # Reset identifiers.
             self.shell_inputs.clear()  # Remove prior shell input.
+            self.terminal_data.clear()  # Remove prior terminal bytes.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -98,6 +101,8 @@ class FakeWebSocketServices:
                 )  # Limit.
             session = self._new_session(body)  # Build the fake session.
             self._sessions[session.session_id] = session  # Store it before the runner starts.
+            if session.output == "terminal":  # Terminal sessions read through the new terminal route.
+                self.terminal_data[session.session_id] = b"Welcome to Fake Mist Shell\r\ndevice> "  # Initial banner.
         self._start_runner(session)  # Start timer output after the session exists.
         return self._payload(session)  # Return the session card payload.
 
@@ -134,6 +139,41 @@ class FakeWebSocketServices:
             session = self._sessions[session_id]  # The selected shell session.
             self._add_message(session, "text", "device> output accepted", None)  # Echo safe text only.
         return {"ok": True}  # Confirm input.
+
+    def terminal(self) -> FakeWebSocketServices:
+        """Return the fake terminal gateway object."""
+        return self  # The blueprint calls read, send, and resize on this object.
+
+    def read(self, session_id: str, after: int, _wait_seconds: float) -> dict[str, object]:
+        """Return fake terminal bytes after one position."""
+        with self._lock:  # Copy terminal state while the fake runner can append bytes.
+            session = self._sessions[session_id]  # The browser names a visible fake session.
+            data = self.terminal_data.get(session_id, b"")  # A new terminal can have no bytes.
+            chunk = data[after:] if after <= len(data) else b""  # Continue from the browser position.
+            next_position = len(data) if after <= len(data) else after  # Keep the browser cursor stable.
+        return {
+            "data": base64.b64encode(chunk).decode("ascii"),
+            "first": 0,
+            "next": next_position,
+            "gap": 0,
+            "state": session.state,
+            "reason": session.reason,
+            "input_ready": True,
+            "read_only": False,
+            "expires_at": "2026-10-01T09:30:00Z",
+        }  # Terminal read contract.
+
+    def send(self, session_id: str, data: str) -> dict[str, object]:
+        """Accept fake terminal input and append visible output."""
+        self.shell_inputs.append({"data": data})  # Prove the new terminal body shape was used.
+        with self._lock:  # Append output and keep terminal bytes in order.
+            current = self.terminal_data.get(session_id, b"")  # Existing terminal bytes.
+            self.terminal_data[session_id] = current + b"\r\nran: terminal input\r\n"  # Safe output text.
+        return {"accepted": len(data.encode("utf-8")), "queued": False}  # Terminal input contract.
+
+    def resize(self, _session_id: str, cols: int, rows: int) -> dict[str, object]:
+        """Accept fake terminal size changes."""
+        return {"cols": cols, "rows": rows}  # Terminal resize contract.
 
     def delete_session(self, _session_id: str) -> dict[str, object]:
         """Confirm delete for ended sessions."""
@@ -316,6 +356,7 @@ class FakeWebSocketServices:
             "live": session.live,
             "reason": session.reason,
             "input_ready": session.input_ready,
+            "terminal": session.output == "terminal",
             "started_at": "2026-09-29T20:00:00Z",
             "ended_at": None,
             "counters": counters,
@@ -473,21 +514,24 @@ def test_locked_change_utility(page: Any, websocket_portal: str) -> None:
     assert shot.exists()  # The screenshot was written.
 
 
-def test_shell_with_line_and_key(page: Any, websocket_portal: str, fake_services: FakeWebSocketServices) -> None:
-    """US6: a shell accepts a line and a key and shows terminal output."""
+def test_shell_uses_terminal_panel(page: Any, websocket_portal: str, fake_services: FakeWebSocketServices) -> None:
+    """US6: a shell uses the xterm panel and sends the new terminal body shape."""
     open_page(page, websocket_portal)  # Load the WebSockets page.
     page.get_by_test_id("ws-catalog-entry-ex.shell").click()  # Choose shell.
     choose_device(page)  # Choose site and device.
     page.get_by_test_id("ws-confirmation-input").fill("EX Switch 1")  # Confirm the shell.
     page.get_by_test_id("ws-start-button").click()  # Start shell.
-    page.get_by_test_id("ws-terminal").wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Terminal view.
-    page.get_by_test_id("ws-shell-line").fill("show version")  # Type a line.
-    page.get_by_test_id("ws-shell-send").click()  # Send the line.
-    page.get_by_test_id("ws-key-interrupt").click()  # Send a key.
-    page.get_by_text("output accepted").wait_for(timeout=READY_TIMEOUT_MS)  # Output echo.
+    page.get_by_test_id("ws-terminal-panel").wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Terminal panel.
+    page.get_by_test_id("ws-terminal-screen").click()  # Focus the terminal emulator.
+    page.keyboard.type("show version")  # Send text through xterm onData.
+    page.keyboard.press("Enter")  # Send the carriage return through xterm.
+    terminal_output = page.get_by_test_id("ws-terminal-screen")  # Scope the echo check to xterm output.
+    terminal_output.get_by_text("ran: terminal input").nth(0).wait_for(timeout=READY_TIMEOUT_MS)  # Output echo.
     shot = screenshot(page, "06-shell-terminal.png")  # Keep evidence.
-    assert {"line": "show version"} in fake_services.shell_inputs  # Line reached the fake.
-    assert {"key": "interrupt"} in fake_services.shell_inputs  # Key reached the fake.
+    has_data = any("data" in record for record in fake_services.shell_inputs)  # Check new terminal body shape.
+    has_old_shape = any("line" in record or "key" in record for record in fake_services.shell_inputs)  # Old shape.
+    assert has_data is True  # The new body shape reached the fake.
+    assert has_old_shape is False  # The old line and key shapes are gone.
     assert shot.exists()  # The screenshot was written.
 
 
