@@ -139,6 +139,28 @@ flowchart TD
 | `searchOrgAlarms` | `composite_pk` | `[id, org_id, timestamp]` | Time-stamped alarm records |
 | `getOrgLicensesSummary` | `auto_increment_with_unique` | `[misthelper_internal_id]` | Aggregated summary without stable ID |
 
+## Declared Secondary Indexes
+
+Each endpoint strategy can declare an `indexes` list.
+SQLite creates a field index when that field exists in the exported columns.
+ArangoDB ensures one non-unique persistent index for each declared field before it imports documents.
+The writer also ensures these indexes when an export contains no records.
+
+The process shares completed checks across writers for the same configured server, database, account, and collection.
+A repeated declaration sends no additional index request.
+A changed declaration checks its unconfirmed fields and removes no existing index.
+A new process uses the SDK's equal-index response to retain the existing index.
+
+If index creation fails, the writer logs the collection, field, and checked count.
+It reports the original exception and imports no documents from that write.
+The next write retries the incomplete field check.
+The existing router converts an ArangoDB driver exception into its failed export result.
+Transport exceptions remain visible to the caller.
+
+The index check changes no business key, document value, batch size, replacement option, or record count.
+The normal configured writer owns index creation.
+The repair for issue #3309 performs no production migration.
+
 ---
 
 ## Related Diagrams

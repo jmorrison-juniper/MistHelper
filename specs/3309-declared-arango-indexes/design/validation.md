@@ -1,0 +1,194 @@
+# Validation Record: Declared ArangoDB indexes
+
+## Initial evidence
+
+The issue was open, unassigned, and had no comments before the claim.
+The authenticated account was `jmorrison-juniper`.
+The claim added the `bug`, `src`, `tests`, and `in-progress` labels.
+The app session is `5a6310ca-dc9b-4058-bb3a-737ea559440a`.
+Both live checks covered all 12 open pull requests and their exact files.
+No reserved file overlapped an open pull request.
+
+The base revision is `ff3cc1bea8ab58026210a968ff1465f61c9fec78`.
+That revision is not a remote authorization grant.
+The production writer did not read the strategy indexes.
+The installed SDK is `python-arango` 8.3.5.
+
+## Baseline
+
+| Command | Result |
+| - | - |
+| `rtk proxy python3.13 -m pytest tests/unit/test_arango_writer.py -q --no-cov` | Could not run because the initial interpreter lacked pytest |
+| `rtk proxy env UV_NATIVE_TLS=1 UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv venv --python python3.13 --seed .venv` | Passed with Python 3.13.13 and an owned environment |
+| `rtk proxy .venv/bin/python scripts/bootstrap_worktree.py` | Passed with current runtime and development manifests |
+| `rtk proxy .venv/bin/python -m pytest tests/unit/test_arango_writer.py tests/unit/test_router.py -q --no-cov` | Passed all 289 tests |
+
+## Repair evidence
+
+The unchanged writer failed 23 of 26 declared-index tests.
+Ten parameterized cases used five unchanged strategy fixtures across new and existing collections.
+Their failure compared zero actual index requests against the exact declared requests.
+Eight invalid-declaration cases failed because the writer raised no error.
+The run reported zero collection errors and zero skips.
+The three existing empty or missing declaration cases passed.
+
+```bash
+rtk proxy .venv/bin/python -m pytest tests/unit/arango_indexes/test_declared_indexes.py -q --no-cov --tb=short --junitxml=/Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/red-index-tests.xml
+```
+
+The final offline command passes 445 tests with zero skips.
+It includes 71 feature tests and 374 existing adjacent database tests.
+The suite checks new and existing collections with five unchanged strategy fixtures.
+The native SDK tests exercise the actual index formatter, connection parser, and query explanation return shape.
+
+```bash
+rtk proxy .venv/bin/python -m pytest tests/unit/arango_indexes tests/contract/test_arango_declared_indexes.py tests/unit/test_arango_writer.py tests/unit/test_router.py tests/unit/db tests/unit/refactors/test_sqlite_database_writer.py -q --tb=short --cov=src.db.arango_writer --cov=src.db.database_schema_utils --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/index-coverage.json --cov-fail-under=90
+```
+
+The two changed database modules reach 96.48 percent combined statement and branch coverage.
+`database_schema_utils.py` reaches 100 percent.
+All seven new or changed methods reach 100 percent statement and branch coverage.
+The unchanged writer methods contain the remaining uncovered lines.
+Existing SQLite tests emit three warnings about unclosed database connections.
+Those warnings do not fail the tests and do not belong to this repair.
+
+| Behavior | Measured result |
+| - | - |
+| First complete declaration | One ordered persistent request per distinct declared field |
+| Repeated declaration | Zero additional index requests |
+| Failure on the second field | Two attempted requests and zero document imports |
+| Retry after that failure | Five unconfirmed field requests, including equal-index reuse |
+| Failed strategy extension | Preserve the earlier confirmed field and retry the four unconfirmed fields |
+| Concurrent first writes | One complete five-field request set and two successful document writes |
+| Concurrent retry after the first failure | One failed request, then one complete five-field retry |
+| Separate server, database, or account | Each scope sends its own complete five-field request set |
+| Independent same-scope clients | Share one check while retaining each writer's own client |
+| Native empty or malformed JSON | Expose the SDK exception, import no document, then retry all five fields |
+| Invalid test targets | Reject 13 URLs with `checked_count=1` before any connection |
+| Existing batching | Preserve the 5,000-record boundary and the final one-record batch |
+| Record values | Preserve full prepared documents and 30 generated JSON examples |
+
+## Integration evidence
+
+The isolated ArangoDB 3.12.4-3 store passed both live tests.
+Its endpoint was `http://127.0.0.1:9650`.
+The container, volume, network, and compose project used `misthelper-tmp-issue3309-indexes-5a6310ca`.
+The service used the issue-specific profile and started with `--no-deps`.
+Its published address was `127.0.0.1:9650`.
+It started no production dependency.
+
+```bash
+rtk proxy env MISTHELPER_ISSUE3309_ARANGO_URL=http://127.0.0.1:9650 .venv/bin/python -m pytest tests/integration/test_arango_declared_indexes_live.py -q -s --no-cov --tb=short
+```
+
+The combined run included both live tests and passed all 445 tests before the final two native JSON cases were added.
+The final offline run includes those two additional cases.
+The repair therefore has 447 distinct passing tests across the offline and live commands.
+
+The live proof compares 1,001 complete prepared documents before and after index creation.
+It excludes only the server-owned `_id` and `_rev` fields from the comparison.
+The normal optimizer plan changes from zero index nodes to one index node on `status`.
+The selective query returns exactly `["action-0"]`.
+The collection contains exactly five declared non-unique persistent indexes.
+An equal `status` index request retains its index identifier and returns `isNewlyCreated=False`.
+A replacement write retains one document and updates its status.
+
+The first query proof exposed a test's incorrect REST wrapper assumption.
+The repair corrected that helper to the native SDK plan shape and added a native SDK contract case.
+The subsequent live proof passed.
+
+Each fixture removed its own issue-prefixed database.
+The owned store contained only `_system` before container cleanup.
+The session removed the exact container, volume, and network.
+All three exact-name cleanup scans returned empty results.
+No production store access occurred.
+
+## Quality and writing coverage
+
+| Exact command | Result |
+| - | - |
+| `rtk proxy .venv/bin/python -m ruff check .` | Passed with zero findings |
+| `rtk proxy .venv/bin/python -m black --check --diff .` | Passed across 2,007 files |
+| `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed across 663 source files |
+| `rtk proxy .venv/bin/bandit-exclude-check --pyproject pyproject.toml` | Passed both separator spellings |
+| `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r . -q -f json -o /Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/bandit-report.json` | Passed across 786 files with zero findings and zero read errors |
+| `rtk proxy .venv/bin/python -m pylint src/ --fail-under=9.5` | Passed with a score of 9.83 |
+| `rtk proxy bash -o pipefail -c '.venv/bin/radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j \| .venv/bin/complexity-gate --max 10'` | Passed every configured block |
+| `rtk proxy .venv/bin/vulture src/ MistHelper.py wsgi.py web_portal --min-confidence 70` | Passed with zero findings |
+| `rtk proxy .venv/bin/pydocstyle src/ wsgi.py web_portal` | Passed |
+| `rtk proxy .venv/bin/interrogate src/ MistHelper.py wsgi.py wsgi_capture.py web_portal --fail-under 90` | Passed with 99.6 percent coverage |
+| `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --log-level WARNING` | Passed with 997 files checked, 725 existing findings, zero new findings, and zero parse errors |
+| `rtk proxy .venv/bin/check-citations src tests` | Passed 251 citations with zero unresolved references |
+| `rtk proxy .venv/bin/diagram-refs --docs-dir documentation/diagrams --extra-files README.md --allowlist-file .github/diagram-refs-allowlist.txt` | Passed 153 references across 15 diagrams |
+
+The syntax command compiles `MistHelper.py` and all nine changed Python files.
+All compile checks pass.
+The new function review finds no function above 25 lines.
+
+```bash
+rtk proxy .venv/bin/python -m py_compile MistHelper.py src/db/arango_writer.py src/db/database_schema_utils.py tests/unit/arango_indexes/conftest.py tests/unit/arango_indexes/fakes.py tests/unit/arango_indexes/test_declared_indexes.py tests/unit/arango_indexes/test_retry_concurrency.py tests/unit/arango_indexes/test_preservation.py tests/contract/test_arango_declared_indexes.py tests/integration/test_arango_declared_indexes_live.py
+```
+
+The unchanged test-quality ratchet initially rejected missing native empty-body and malformed-JSON evidence.
+The final cases use actual SDK connection parsing, explicit source calls, and invalid wire bytes.
+They prove the original exception and complete-check retry.
+The ratchet then reports zero new findings.
+The configuration, baseline, exclusions, and suppressions remain unchanged.
+
+### Runtime dependency audit
+
+The configured `pip-audit -r requirements.txt` aborts before an audit on the uv-managed macOS interpreter.
+Its temporary interpreter fails during `ensurepip` with `SIGABRT`.
+This result is not an audit pass.
+
+```bash
+rtk proxy env UV_NATIVE_TLS=1 UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv pip compile requirements.txt --python .venv/bin/python --generate-hashes --output-file /Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/runtime-audit-requirements.txt --quiet
+rtk proxy .venv/bin/pip-audit -r /Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/runtime-audit-requirements.txt --no-deps --disable-pip --strict --format json --output /Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/pip-audit-runtime.json
+```
+
+The complete runtime resolution contains 105 exact package pins and 2,083 SHA-256 hashes.
+The strict audit checks all 105 packages, skips none, and reports zero known vulnerabilities.
+The Git-only development tool package is outside this runtime audit.
+The runtime and development manifests remain unchanged.
+
+### Links and writing
+
+The feature link command is:
+
+```bash
+rtk proxy .venv/bin/markdown-link-check --root . specs/3309-declared-arango-indexes changelog.d/issue-3309-declared-arango-indexes.md documentation/diagrams/core/database-strategy.md
+```
+
+The configured STE command uses `--config .ste-linter.toml --min-score 80 --format json` and names all 20 feature files.
+The final scores range from 92 through 98.
+The link check covers all 11 staged Markdown files and reports zero broken links.
+No licensed STE dictionary is authorized for this repair.
+The report states `dictionary_unavailable`, `scope=partial`, and `unintended_skip=false`.
+This evidence covers the configured heuristics only.
+It does not prove licensed dictionary coverage.
+
+## SpecKit analysis
+
+The final review covers 14 functional requirements and seven success criteria.
+Every requirement has an implementation task and passing behavioral evidence.
+
+| Requirements | Tasks | Evidence |
+| - | - | - |
+| FR-001 through FR-004 | T006 through T009 | Exact real-strategy requests, empty writes, and native SDK responses |
+| FR-005 and FR-006 | T014 and T015 | Same-scope coordination and independent scope cases |
+| FR-007 and FR-008 | T010 and T011 | Failure, partial extension, complete retry, and concurrent retry |
+| FR-009 and FR-010 | T010 through T012 | Ordered diagnostic events, checked counts, and explicit single and dual failures |
+| FR-011 | T006 and T010 | Invalid declarations fail before database mutations |
+| FR-012 and FR-013 | T013 and T018 | Complete document comparisons, preserved imports, batching, and coverage |
+| FR-014 | T016 | Real owned-store proof, target guard failure, and complete resource cleanup |
+
+The review finds zero unmapped requirements, zero behavioral ambiguities, and zero critical implementation findings.
+The parent directory and existing class limits remain documented pre-existing structural debt.
+The workflow uses the existing templates without changing shared `.specify` state.
+The tracked task list keeps local commit reporting and remote delivery conditional until their actual receipts exist.
+
+## Remote boundary
+
+The coordinator has not granted remote work.
+The repair must stop after its verified local commit.
+A push, pull request, protected merge, and exact-main local tests remain blocked until the explicit grant.
