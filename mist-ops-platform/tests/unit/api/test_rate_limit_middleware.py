@@ -10,25 +10,25 @@ cover atomic expiry without a live Redis service.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fakeredis import FakeServer
-from fakeredis.aioredis import FakeRedis
+from fakeredis.aioredis import AsyncFakeSocket, FakeRedis
 from fastapi import HTTPException
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
+from src.api.middleware import logging as request_logging
 from src.api.middleware import rate_limit
-from src.api.middleware.rate_limit import (
-    DEFAULT_REQUEST_LIMIT,
-    DEFAULT_WINDOW_SECONDS,
-    OrgRateLimiter,
-)
+from src.api.middleware.rate_limit import DEFAULT_REQUEST_LIMIT as DEFAULT_REQUEST_LIMIT
+from src.api.middleware.rate_limit import DEFAULT_WINDOW_SECONDS as DEFAULT_WINDOW_SECONDS
+from src.api.middleware.rate_limit import OrgRateLimiter as OrgRateLimiter
 from src.shared.redis_timeouts import redis_timeout_kwargs
 
 if TYPE_CHECKING:
@@ -43,13 +43,41 @@ HTTP_TOO_MANY_REQUESTS = 429  # Names the status that the rate limiter returns
 RATE_LIMIT_KEY = f"api_ratelimit:{ORG_IN_SCOPE}"
 EXPECTED_SCRIPT_CALLS = 2
 
+logger = logging.getLogger(__name__)
+
 
 @pytest.fixture
 def redis_clock() -> Iterator[MagicMock]:
-    """Control only the fake server clock, not the application clock."""
-    with patch("fakeredis._basefakesocket.time", wraps=time) as clock:
+    """Keep the expiry clock separate from Python and application clocks.
+
+    Fakeredis has no public clock setting. Before each command, its private
+    processor updates database time. Resolve that processor's module through
+    the exported socket class. Fakeredis 2.39 moved the module (issue #3682).
+    Replace the module binding, not the shared time.time function.
+    """
+    command_module = AsyncFakeSocket._process_command.__module__
+    logger.info("Setting the fake Redis command clock in %s.", command_module)
+    with patch(f"{command_module}.time", wraps=time) as clock:
         clock.time.return_value = 1_800_000_000.0
+        logger.debug("The fake Redis command clock is %s.", clock.time.return_value)
         yield clock.time
+    logger.debug("The fake Redis command clock binding is restored.")
+
+
+def test_redis_clock_keeps_application_time_real(redis_clock: MagicMock) -> None:
+    """Advancing Redis expiry must not replace the application's time module."""
+    application_time = vars(request_logging)["time"]
+    wall_clock = time.time
+    monotonic_clock = time.monotonic
+    started = wall_clock()
+
+    redis_clock.return_value += DEFAULT_WINDOW_SECONDS
+
+    assert application_time is time
+    assert application_time.time is wall_clock
+    assert application_time.monotonic is monotonic_clock
+    assert application_time.time is not redis_clock
+    assert started <= application_time.time() <= wall_clock()
 
 
 @pytest.fixture
