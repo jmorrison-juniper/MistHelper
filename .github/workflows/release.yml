@@ -95,6 +95,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Checkout must precede downloads because cleanup can remove downloaded artifacts.
+      - name: Checkout tagged repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+
+      - name: Set up Python for release notes
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
       - name: Download Python artifacts
         uses: actions/download-artifact@v8
         with:
@@ -106,10 +118,36 @@ jobs:
         with:
           name: standalone-bundle
 
+      - name: Generate release notes
+        id: generate_release_notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'phase=generate_release_notes event=before completed_requests=0 captured_files=0'
+          if gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" --raw-field "tag_name=${RELEASE_TAG}" > "${RUNNER_TEMP}/generated-release-notes.json"; then
+            printf '%s\n' 'phase=generate_release_notes event=after completed_requests=1 captured_files=1'
+          else
+            printf '%s\n' 'phase=generate_release_notes event=failed completed_requests=0 captured_files=0' >&2
+            exit 2
+          fi
+
+      - name: Prepare complete release body
+        id: prepare_release_body
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          python -m scripts.release_body --source "${RUNNER_TEMP}/generated-release-notes.json" --output "${RUNNER_TEMP}/release-body.md" --tag "${RELEASE_TAG}" --repository "${GITHUB_REPOSITORY}"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-body.md
+          generate_release_notes: false
           files: |
             dist/*.whl
             dist/*.tar.gz
