@@ -10,7 +10,7 @@ from __future__ import annotations  # Postpone annotation evaluation for forward
 
 import logging  # Standard-library logger used by every fetch method for observability
 from collections.abc import Callable, Iterable  # Callable for injected resolver, Iterable for helpers
-from typing import Any  # Generic type used for untyped mistapi response payloads
+from typing import Any, Literal  # Generic payload types and the two required request fields.
 
 import mistapi.api.v1.orgs.gatewaytemplates  # Org gateway-template endpoint namespace
 import mistapi.api.v1.orgs.networks  # Org networks endpoint namespace
@@ -37,16 +37,46 @@ def _response_status_code(response: Any) -> int:
     return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
-def _add_valid_name(target: set[str], value: Any) -> None:  # Reusable single-value guard-and-insert
-    """Add ``value`` to ``target`` only when it is a non-empty string identifier."""
-    if isinstance(value, str) and value:  # Guard: reject None, empty strings, and non-string junk
-        target.add(value)  # Safe to insert -- mistapi payloads occasionally carry ints or None
+class TenantIdentifierValidator:
+    """Validate required request identifiers without disclosing invalid values."""
+
+    @staticmethod
+    def resolve(org_id_fn: Callable[[], object], site_id: object = None) -> tuple[str, str | None]:
+        """Resolve the organization and validate an optional supplied site."""
+        org_id = TenantIdentifierValidator.require(org_id_fn(), "org_id")
+        validated_site: str | None = None
+        if site_id is not None:
+            validated_site = TenantIdentifierValidator.require(site_id, "site_id")
+        return org_id, validated_site
+
+    @staticmethod
+    def require(value: object, field: Literal["org_id", "site_id"]) -> str:
+        """Return a nonblank identifier unchanged, or raise a field-named error."""
+        logger.info("Checking the %s tenant identifier. checked_identifiers=0", field)
+        if not isinstance(value, str) or not value.strip():
+            logger.error(
+                "Cannot fetch tenants: %s must be a non-empty string. checked_identifiers=1 refused_identifiers=1",
+                field,
+            )
+            raise ValueError(f"{field} must be a non-empty string.")
+        logger.debug("Checked the %s tenant identifier. checked_identifiers=1 refused_identifiers=0", field)
+        return value  # Check whitespace without changing an opaque identifier.
 
 
-def _add_valid_names(target: set[str], values: Iterable[Any]) -> None:  # Bulk variant over any iterable
-    """Add every non-empty string from ``values`` into ``target`` (dict keys, lists, sets)."""
-    for value in values:  # Iterate any iterable. Caller passes dict keys, lists, or generators
-        _add_valid_name(target, value)  # Delegate per-item validity to keep logic single-sourced
+class TenantNameCollector:
+    """Collect optional payload names without treating them as request inputs."""
+
+    @staticmethod
+    def add(target: set[str], value: object) -> None:
+        """Ignore missing or unknown optional names and retain nonempty strings."""
+        if isinstance(value, str) and value:
+            target.add(value)
+
+    @staticmethod
+    def collect(target: set[str], values: Iterable[object]) -> None:
+        """Collect optional names from lists, mapping keys, or other iterables."""
+        for value in values:
+            TenantNameCollector.add(target, value)
 
 
 class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the api package
@@ -58,12 +88,12 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     Extracted from MistHelper.py for Wave 2 systematic decomposition (issue #331).
     """
 
-    def __init__(self, apisession: object, get_org_id_fn: Callable[[], str]) -> None:  # DI constructor
+    def __init__(self, apisession: object, get_org_id_fn: Callable[[], object]) -> None:  # DI constructor
         """Store injected dependencies for use by all tenant-fetching methods.
 
         Args:
             apisession: Active Mist API session for making API calls.
-            get_org_id_fn: Callable that returns the current org ID string.
+            get_org_id_fn: Callable whose result must pass required identifier validation.
         """
         self._session = apisession  # Mist API session for all API calls
         self._get_org_id = get_org_id_fn  # Org ID resolver called lazily per method
@@ -73,9 +103,12 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
 
         Returns:
             List of tenant names found in organization networks, or empty list if error.
+
+        Raises:
+            ValueError: The resolved organization identifier is invalid.
         """
         try:
-            org_id = self._get_org_id()  # Resolve org ID via injected callable
+            org_id = TenantIdentifierValidator.require(self._get_org_id(), "org_id")
             logger.info("Fetching org networks for tenant info from org_id: %s", org_id)  # Trace request
             response = mistapi.api.v1.orgs.networks.listOrgNetworks(
                 self._session, org_id, limit=_API_PAGE_LIMIT
@@ -112,8 +145,12 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
 
         Returns:
             List of tenant names found in site derived networks, or empty list if error.
+
+        Raises:
+            ValueError: The required site identifier is invalid.
         """
         try:
+            site_id = TenantIdentifierValidator.require(site_id, "site_id")
             logger.info("Fetching site derived networks for tenant info from site_id: %s", site_id)  # Trace
             response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(
                 self._session, site_id
@@ -148,17 +185,18 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
 
         Returns:
             List of tenant names found in service policies, or empty list if error.
+
+        Raises:
+            ValueError: The organization or supplied site identifier is invalid.
         """
         try:
+            org_id, site_id = TenantIdentifierValidator.resolve(self._get_org_id, site_id)
             tenant_names: set[str] = set()  # Deduplicate across org and site policies
-            org_id = self._get_org_id()  # Resolve org ID via injected callable
             tenant_names.update(self._fetch_org_policy_tenants(org_id))  # Org-scope contributions
-            if site_id:  # Only fetch site policies when a site_id is provided
+            if site_id is not None:  # Only None selects organization-only discovery.
                 tenant_names.update(self._fetch_site_policy_tenants(site_id))  # Site-scope contributions
             tenant_list = sorted(tenant_names)  # Deterministic order for UI + tests
-            logger.info(
-                "Found %d unique tenants across service policies: %s", len(tenant_list), tenant_list
-            )  # Emit final union count for operator visibility
+            logger.info("Found %d unique tenants across service policies: %s", len(tenant_list), tenant_list)
             return tenant_list  # Sorted list handed back to caller
         except (AttributeError, requests.RequestException) as error:  # Expected API or SDK lookup failure.
             logging.error("Error fetching tenants from service policies: %s", error)  # Log root cause
@@ -172,17 +210,18 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
 
         Returns:
             List of tenant names found in gateway templates, or empty list if error.
+
+        Raises:
+            ValueError: The organization or supplied site identifier is invalid.
         """
         try:
+            org_id, site_id = TenantIdentifierValidator.resolve(self._get_org_id, site_id)
             tenant_names: set[str] = set()  # Deduplicate across org and site templates
-            org_id = self._get_org_id()  # Resolve org ID via injected callable
             tenant_names.update(self._fetch_org_template_tenants(org_id))  # Org-scope contributions
-            if site_id:  # Only fetch site templates when a site_id is provided
+            if site_id is not None:  # Only None selects organization-only discovery.
                 tenant_names.update(self._fetch_site_template_tenants(site_id))  # Site-scope contributions
             tenant_list = sorted(tenant_names)  # Deterministic order for UI + tests
-            logger.info(
-                "Found %d unique tenants across gateway templates: %s", len(tenant_list), tenant_list
-            )  # Emit final union count for operator visibility
+            logger.info("Found %d unique tenants across gateway templates: %s", len(tenant_list), tenant_list)
             return tenant_list  # Sorted list handed back to caller
         except (AttributeError, requests.RequestException) as error:  # Expected API or SDK lookup failure.
             logging.error("Error fetching tenants from gateway templates: %s", error)  # Log root cause
@@ -196,10 +235,10 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     @staticmethod
     def _collect_network_tenants(network: dict[str, Any], target: set[str]) -> None:  # Per-network merger
         """Collect tenant names from one network dict into ``target`` (name + tenants keys)."""
-        _add_valid_name(target, network.get("name"))  # Network name itself is a tenant identifier
+        TenantNameCollector.add(target, network.get("name"))  # Network name itself is a tenant identifier
         tenants_dict = network.get("tenants")  # Optional dict whose keys are extra tenants
         if isinstance(tenants_dict, dict):  # Guard: skip non-dict payloads defensively
-            _add_valid_names(target, tenants_dict.keys())  # Each key is a tenant identifier
+            TenantNameCollector.collect(target, tenants_dict.keys())  # Each key is a tenant identifier
 
     @staticmethod
     def _extract_tenants_from_networks(networks_data: list[Any]) -> set[str]:  # Aggregate over network list
@@ -219,7 +258,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
         """Collect ``svc.tenant`` values from each service dict into ``target``."""
         for svc in services:  # Iterate the per-service list on the parent policy
             if isinstance(svc, dict):  # Guard: skip malformed non-dict service entries
-                _add_valid_name(target, svc.get("tenant"))  # Per-service tenant reference
+                TenantNameCollector.add(target, svc.get("tenant"))  # Per-service tenant reference
 
     @staticmethod
     def _extract_tenants_from_policy_item(policy: dict[str, Any]) -> set[str]:  # One-policy tenant merge
@@ -229,8 +268,8 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
         ``services[].tenant`` nested strings.
         """
         tenant_names: set[str] = set()  # Aggregates all three tenant patterns
-        _add_valid_names(tenant_names, policy.get("tenants", []))  # Preferred list format
-        _add_valid_name(tenant_names, policy.get("tenant"))  # Legacy scalar field
+        TenantNameCollector.collect(tenant_names, policy.get("tenants", []))  # Preferred list format
+        TenantNameCollector.add(tenant_names, policy.get("tenant"))  # Legacy scalar field
         APITenantFetchUtils._extract_service_tenants(
             policy.get("services", []), tenant_names
         )  # Nested per-service references
@@ -253,7 +292,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
         """Collect tenant names from router ``tenants[].name`` dict entries into ``target``."""
         for item in items:  # Iterate the router.tenants list (list of dicts)
             if isinstance(item, dict):  # Guard: skip non-dict entries defensively
-                _add_valid_name(target, item.get("name"))  # Named tenant object contributes its .name
+                TenantNameCollector.add(target, item.get("name"))  # Named tenant object contributes its .name
 
     @staticmethod
     def _extract_router_tenants(router: dict[str, Any], tmpl_name: str) -> set[str]:  # Router-block merge
@@ -262,7 +301,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
         APITenantFetchUtils._collect_router_tenant_items(
             router.get("tenants", []), tenant_names
         )  # Named tenant references
-        _add_valid_names(tenant_names, router.get("tenant_profiles", {}))  # Profile keys are tenant IDs
+        TenantNameCollector.collect(tenant_names, router.get("tenant_profiles", {}))  # Profile keys are tenant IDs
         logger.debug(
             "Extracted %d router tenants for template '%s'", len(tenant_names), tmpl_name
         )  # Diagnostic trace with template context
@@ -274,7 +313,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
         tenant_names: set[str] = set()  # Collected from networks[].tenants dict keys
         for network in networks:  # Iterate each network block in the template
             if isinstance(network, dict):  # Guard: skip any non-dict entries
-                _add_valid_names(tenant_names, network.get("tenants", {}))  # Each dict key is a tenant name
+                TenantNameCollector.collect(tenant_names, network.get("tenants", {}))  # Each dict key is a tenant name
         logger.debug(
             "Extracted %d network tenants for template '%s'", len(tenant_names), tmpl_name
         )  # Diagnostic trace with template context
@@ -305,6 +344,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_org_policy_tenants(self, org_id: str) -> set[str]:  # Org service-policies API wrapper
         """Fetch and extract tenant names from org-level service policies."""
         try:
+            org_id = TenantIdentifierValidator.require(org_id, "org_id")
             logger.info("Fetching org service policies for tenant info from org_id: %s", org_id)  # Request trace
             response = mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies(
                 self._session, org_id, limit=_API_PAGE_LIMIT
@@ -321,6 +361,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_site_policy_tenants(self, site_id: str) -> set[str]:  # Site service-policies API wrapper
         """Fetch and extract tenant names from site-level derived service policies."""
         try:
+            site_id = TenantIdentifierValidator.require(site_id, "site_id")
             logger.info("Fetching site service policies for tenant info from site_id: %s", site_id)  # Request trace
             response = mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived(
                 self._session, site_id
@@ -337,6 +378,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_org_template_tenants(self, org_id: str) -> set[str]:  # Org gateway-templates API wrapper
         """Fetch and extract tenant names from org-level gateway templates."""
         try:
+            org_id = TenantIdentifierValidator.require(org_id, "org_id")
             logger.info("Fetching org gateway templates for tenant info from org_id: %s", org_id)  # Request trace
             response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(
                 self._session, org_id, limit=_API_PAGE_LIMIT
@@ -356,6 +398,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_site_template_tenants(self, site_id: str) -> set[str]:  # Site gateway-templates API wrapper
         """Fetch and extract tenant names from site-level derived gateway templates."""
         try:
+            site_id = TenantIdentifierValidator.require(site_id, "site_id")
             logger.info("Fetching site gateway templates for tenant info from site_id: %s", site_id)  # Request trace
             response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(
                 self._session, site_id
