@@ -226,3 +226,11 @@ After the merge, no MistHelper workflow names `github/codeql-action`. So a
 later change deleted the Dependabot rule that kept that action on the floating
 `v4` tag. The shared CodeQL workflow keeps the `v4` tag, and the Dependabot
 configuration of the devtools repository holds the same rule.
+
+## Phase 8: adopt devtools release v0.6.0
+
+Issue #3672 moved MistHelper to devtools release v0.6.0.
+
+| Change | File |
+| - | - |
+| The development requirements pin the v0.6.0 commit. Each workflow caller, the Mermaid action, and the pre-commit hook pin the same release. | `requirements-dev.txt`, `.github/workflows/`, and `.pre-commit-config.yaml` |
