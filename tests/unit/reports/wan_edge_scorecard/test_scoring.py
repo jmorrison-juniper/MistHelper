@@ -37,3 +37,10 @@ def test_safe_percent_handles_zero_total() -> None:
     """A zero denominator returns no percentage."""
     assert WanEdgeScoring.safe_percent(1, 0) is None  # Avoid division by zero.
     assert WanEdgeScoring.safe_percent(40, 100) == 40.0  # Confirm normal percentage math.
+
+
+def test_config_success_returns_unknown_for_absent_status() -> None:
+    """Missing config status is unknown, not failed."""
+    assert WanEdgeScoring.config_success("") is None  # Empty status has no success or failure evidence.
+    assert WanEdgeScoring.config_success("success") is True  # A known success state still passes.
+    assert WanEdgeScoring.config_success("failed") is False  # A known failure state still fails.

@@ -8,7 +8,11 @@ from src.reports.switch_scorecard import operation  # WHY: monkeypatch operation
 
 
 class _Client:
-    def list_switch_stats(self):  # Return one switch without a network call.
+    def resolve_org_id(self):  # Return the active organization without a prompt.
+        return "org-1"  # WHY: operation tests must not call the real org resolver.
+
+    def list_switch_stats(self, org_id=None):  # Return one switch without a network call.
+        assert org_id == "org-1"  # WHY: the operation must reuse the resolved organization ID.
         return [  # WHY: operation tests need one complete healthy switch.
             {
                 "site_id": "site-1",
@@ -50,6 +54,7 @@ def test_operation_writes_both_scorecard_files(monkeypatch):  # Verify FR-007 an
     _Exporter.calls.clear()  # WHY: isolate this test from previous calls.
     monkeypatch.setattr(operation, "SwitchScorecardClient", _Client)  # WHY: avoid the real Mist API.
     monkeypatch.setattr(operation, "SourceDependencyResolver", _Resolver)  # WHY: avoid the real exporter.
+    monkeypatch.setattr(operation.SiteNameLookup, "fetch", lambda org_id: {"site-1": "Main"})  # WHY: no API.
     monkeypatch.delenv("SWITCH_AP_AFFINITY_LIMIT", raising=False)  # WHY: prove no prompt or env setup is required.
 
     operation.SwitchScorecard.run()  # WHY: execute the menu handler exactly as wiring will call it.

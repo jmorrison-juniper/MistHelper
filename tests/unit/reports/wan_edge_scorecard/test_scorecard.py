@@ -52,6 +52,30 @@ def test_missing_optional_gateway_fields_do_not_fail() -> None:
     assert dhcp_rows == []  # Missing DHCP data writes no pool rows.
 
 
+def test_live_gateway_shape_uses_site_lookup_and_device_name() -> None:
+    """The live gateway stats shape can fill the gateway and site names."""
+    gateway_rows, _dhcp_rows, site_rows, org_score = WanEdgeScorecard.build_reports(  # Build live-like rows.
+        [
+            {
+                "id": "gw-live",
+                "site_id": "site-live",
+                "device_name": "Morrison WAN",
+                "model": "SRX",
+                "version": "22.4R1",
+                "config_status": None,
+                "uptime": 172800,
+            }
+        ],
+        {"site-live": "Morrison House Site"},
+    )
+
+    assert gateway_rows[0].gateway_name == "Morrison WAN"  # WHY: device_name is the live display name fallback.
+    assert gateway_rows[0].site == "Morrison House Site"  # WHY: live stats carry site_id but no site_name.
+    assert site_rows[0].config_unknown_count == 1  # WHY: absent config_status must not count as a failure.
+    assert site_rows[0].config_success_percent == 0.0  # WHY: no known config rows leaves no success score.
+    assert org_score.config_unknown_count == 1  # WHY: the organization summary uses the same unknown handling.
+
+
 def test_absent_dhcpd_stat_sets_gateway_pool_count_zero(gateway_stats_sample: list[dict[str, object]]) -> None:
     """A gateway without dhcpd_stat stays in the gateway scorecard."""
     gateway_rows, _dhcp_rows, _site_rows, _org_score = WanEdgeScorecard.build_reports(
@@ -101,6 +125,7 @@ def test_site_scorecard_percentages(gateway_stats_sample: list[dict[str, object]
     alpha = next(row for row in site_rows if row.site_id == "site-a")  # Select the two-gateway site.
     assert alpha.gateway_count == 2  # Alpha has two gateways.
     assert alpha.config_success_percent == 100.0  # Both Alpha gateways have successful config states.
+    assert alpha.config_unknown_count == 0  # All Alpha gateways have known config status.
     assert alpha.version_compliance_percent == 100.0  # Both Alpha gateways match the predominant version.
     assert alpha.wan_edge_uptime_percent == 50.0  # One Alpha gateway has at least one day of uptime.
 
@@ -212,7 +237,11 @@ def test_run_exports_three_reports_and_prints_summary(gateway_stats_sample: list
             "src.reports.wan_edge_scorecard.scorecard.WanEdgeGatewayStatsClient.fetch_gateway_stats",
             return_value=gateway_stats_sample,
         ):
-            WanEdgeScorecard.run()  # Run the operation with isolated dependencies.
+            with patch(
+                "src.reports.wan_edge_scorecard.scorecard.SiteNameLookup.fetch",
+                return_value={"site-a": "Alpha", "site-b": "Beta"},
+            ):
+                WanEdgeScorecard.run()  # Run the operation with isolated dependencies.
     filenames = [call.args[1] for call in exporter.write_with_format_selection.call_args_list]  # Read targets.
     assert filenames == ["WanEdgeScorecard.csv", "WanEdgeDhcpPools.csv", "WanEdgeScorecardBySite.csv"]  # Files.
     assert "WAN Edge Scorecard Summary" in capsys.readouterr().out  # Summary is printed for the operator.

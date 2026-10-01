@@ -60,6 +60,7 @@ def _patch_operation(
 ) -> None:
     """Patch operation dependencies with no-prompt and no-network doubles."""
     monkeypatch.setattr(operation.ApScorecardClient, "list_ap_stats", lambda self: payload)
+    monkeypatch.setattr(operation.SiteNameLookup, "fetch", lambda org_id: {"site-a": "Alpha", "site-b": "Beta"})
 
     def fake_write(
         rows: list[Mapping[str, object]],

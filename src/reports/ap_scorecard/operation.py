@@ -19,6 +19,7 @@ from src.reports.ap_scorecard.model import (
     build_site_rows,
     site_rows_as_dicts,
 )
+from src.reports.switch_scorecard.site_lookup import SiteNameLookup  # WHY: live AP stats include site_id only.
 
 logger = logging.getLogger(__name__)  # WHY: let operators filter AP scorecard operation messages.
 
@@ -43,8 +44,9 @@ class ApScorecard:
         if not source_rows:  # WHY: no AP rows means every percentage would be misleading.
             logger.info("No access point statistics were found. No AP scorecard files were written.")  # WHY: clear.
             return  # WHY: stop before exports and summary.
+        site_names = SiteNameLookup.fetch(org_id)  # WHY: enrich site names after proving AP rows exist.
         logger.info("Building AP scorecard detail rows")  # WHY: log before transformation.
-        ap_rows = build_ap_rows(source_rows, org_id=org_id)  # WHY: include org ID for database keys.
+        ap_rows = build_ap_rows(source_rows, org_id=org_id, site_names=site_names)  # WHY: include site names.
         logger.debug("Built AP scorecard detail rows=%d", len(ap_rows))  # WHY: summarize transformation.
         logger.info("Building AP scorecard site summary rows")  # WHY: log before transformation.
         site_rows = build_site_rows(ap_rows)  # WHY: model aggregates rows by site.

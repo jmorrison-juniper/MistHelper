@@ -145,7 +145,9 @@ def normalize_switch_redundancy(value: object) -> int | None:
     if isinstance(value, int):  # WHY: some payloads carry the count as a number.
         return value if value > 0 else None  # WHY: zero or negative values are invalid.
     if isinstance(value, Mapping):  # WHY: some payloads carry a map of upstream switches.
-        count_value = value.get("count") or value.get("num_switches") or len(value)  # WHY: support known shapes.
+        count_value = (  # WHY: support both documented and live payload names.
+            value.get("count") or value.get("num_switches") or value.get("num_redundant_aps") or len(value)
+        )
         return normalize_switch_redundancy(count_value)  # WHY: reuse one validation rule.
     return None  # WHY: unknown shapes are exported as unknown.
 
@@ -172,10 +174,17 @@ def predominant_versions(rows: Sequence[Mapping[str, object]]) -> dict[str, str]
     return {model: counter.most_common(1)[0][0] for model, counter in counters.items()}  # WHY: choose the mode.
 
 
-def build_ap_rows(rows: Sequence[Mapping[str, object]], org_id: str = "") -> list[ApScorecardRow]:
+def build_ap_rows(
+    rows: Sequence[Mapping[str, object]],
+    org_id: str = "",
+    site_names: Mapping[str, str] | None = None,
+) -> list[ApScorecardRow]:
     """Build AP scorecard rows from raw AP statistics rows."""
     expected_versions = predominant_versions(rows)  # WHY: version compliance falls back to the predominant version.
-    return [_build_ap_row(row, expected_versions, org_id) for row in rows]  # WHY: create one output row for each AP.
+    site_lookup = site_names or {}  # WHY: tests can omit site enrichment while live runs pass names.
+    return [  # WHY: create one enriched output row for each AP.
+        _build_ap_row(row, expected_versions, org_id, site_lookup) for row in rows
+    ]
 
 
 def ap_rows_as_dicts(rows: Sequence[ApScorecardRow]) -> list[dict[str, object]]:
@@ -212,7 +221,12 @@ def build_organization_summary(rows: Sequence[ApScorecardRow]) -> OrganizationSu
     )
 
 
-def _build_ap_row(row: Mapping[str, object], expected_versions: Mapping[str, str], org_id: str) -> ApScorecardRow:
+def _build_ap_row(
+    row: Mapping[str, object],
+    expected_versions: Mapping[str, str],
+    org_id: str,
+    site_names: Mapping[str, str],
+) -> ApScorecardRow:
     """Build one AP scorecard row."""
     model = _text(row.get("model"))  # WHY: model scopes version compliance.
     version = _text(row.get("version"))  # WHY: version is compared to the expected version.
@@ -220,10 +234,10 @@ def _build_ap_row(row: Mapping[str, object], expected_versions: Mapping[str, str
     redundancy_count = normalize_switch_redundancy(row.get("switch_redundancy"))  # WHY: normalize source shape.
     lldp_stat = _mapping(row.get("lldp_stat"))  # WHY: missing LLDP must produce empty power fields.
     return ApScorecardRow(  # WHY: one typed row keeps exports and aggregations aligned.
-        site=_site_name(row),
+        site=_site_name(row, site_names),
         site_id=_text(row.get("site_id")),
         org_id=org_id,
-        ap_name=_text(row.get("name")),
+        ap_name=_device_name(row),
         mac=_text(row.get("mac")),
         model=model,
         version=version,
@@ -282,9 +296,15 @@ def _expected_version(row: Mapping[str, object], model: str, expected_versions: 
     return explicit or expected_versions.get(model, "")  # WHY: fallback supports payloads without upgrade target.
 
 
-def _site_name(row: Mapping[str, object]) -> str:
+def _site_name(row: Mapping[str, object], site_names: Mapping[str, str]) -> str:
     """Return the site display name for one AP row."""
-    return _text(row.get("site_name")) or _text(row.get("site_id"))  # WHY: site_id is the prompt-free fallback.
+    site_id = _text(row.get("site_id"))  # WHY: live stats reliably include site_id.
+    return _text(row.get("site_name")) or site_names.get(site_id, site_id)  # WHY: avoid empty site cells.
+
+
+def _device_name(row: Mapping[str, object]) -> str:
+    """Return the best available AP display name."""
+    return _text(row.get("name") or row.get("device_name") or row.get("hostname") or row.get("mac"))  # WHY: live.
 
 
 def _offline_reason(row: Mapping[str, object]) -> str:

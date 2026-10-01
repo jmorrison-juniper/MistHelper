@@ -98,6 +98,7 @@ class SiteScorecardRow:
     version_compliance_percent: float  # Score version compliance for this site.
     wan_edge_uptime_percent: float  # Score uptime for this site.
     potential_anomalies_percent: float  # Score potential anomalies for this site.
+    config_unknown_count: int  # Count gateways excluded from the configuration percentage.
 
     def as_dict(self) -> dict[str, object]:
         """Return the CSV and backend export shape."""
@@ -109,6 +110,7 @@ class SiteScorecardRow:
             "version_compliance_percent": self.version_compliance_percent,  # Preserve the version score.
             "wan_edge_uptime_percent": self.wan_edge_uptime_percent,  # Preserve the uptime score.
             "potential_anomalies_percent": self.potential_anomalies_percent,  # Preserve the anomaly score.
+            "config_unknown_count": self.config_unknown_count,  # Preserve the unknown configuration count.
         }
 
 
@@ -122,3 +124,4 @@ class OrganizationScorecard:
     version_compliance_percent: float  # Score organization version compliance.
     wan_edge_uptime_percent: float  # Score organization uptime.
     potential_anomalies_percent: float  # Score organization anomaly state.
+    config_unknown_count: int  # Count gateways excluded from the configuration percentage.

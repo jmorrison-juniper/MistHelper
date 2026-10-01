@@ -95,3 +95,23 @@ def test_site_rows_include_tile_percentages_and_counts():  # Verify FR-003, FR-0
     assert branch["config_success_percent"] == 0.0  # WHY: failed config status should lower the tile.
     assert branch["switch_uptime_count"] == 0  # WHY: zero uptime should not count as up.
     assert output.org_summary["switch_count"] == 3  # WHY: the organization summary covers all switches.
+
+
+def test_live_switch_shape_uses_site_lookup_and_config_unknown_count():  # Verify issue 3692 live payload shape.
+    switches = [  # WHY: live listOrgDevicesStats rows carry site_id and no config_status.
+        _switch(site_id="site-live", site_name=None, mac="aa", config_status=None),
+        _switch(site_id="site-live", site_name=None, mac="bb", config_status=None),
+    ]
+    output = SwitchScorecardBuilder.build(  # WHY: pass the same listOrgSites lookup used by the operation.
+        switches,
+        SwitchScorecardSettings.from_environment({}),
+        {"site-live": "Morrison House Site"},
+    )
+    detail = output.detail_rows[0]  # WHY: one row proves the lookup filled the detail site name.
+    site = output.site_rows[0]  # WHY: one site row proves unknown config handling.
+
+    assert detail["site_name"] == "Morrison House Site"  # WHY: live stats have no site_name field.
+    assert site["site_name"] == "Morrison House Site"  # WHY: site summaries must show the site name.
+    assert site["config_success_count"] == 0  # WHY: unknown rows are not counted as successes.
+    assert site["config_unknown_count"] == 2  # WHY: unknown rows are visible to the operator.
+    assert site["config_success_percent"] == 0.0  # WHY: no known config rows leaves no success score.
