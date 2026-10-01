@@ -19,35 +19,61 @@ Why:
 
 from __future__ import annotations
 
+import logging  # Record selected request fixtures without a live source.
+from collections.abc import Iterator  # Keep the request context active for each direct adapter test.
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
+from flask import Flask, session  # Supply explicit signed selection to the real source adapters.
 
 from src.upgrade_portal.app.routes import review
 
 SITE_ID = "cf36153a-97bb-4974-8f8f-e9cc25d64d83"
+ORG_ID = "org-review-store-seams"  # Use one explicit selected organization in this isolated unit file.
+logger = logging.getLogger(__name__)  # Keep fixture records separate from portal records.
+
+
+@pytest.fixture(autouse=True)
+def selected_request(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:  # Give direct adapters authorized scope.
+    """Supply a selected local request context with known permitted organization scope."""
+    logger.info("Prepare the selected synthetic store-seam request")  # Record fixture setup before the adapters run.
+    app = Flask(__name__)  # Create an isolated application without portal wiring or source probes.
+    app.config["SECRET_KEY"] = "synthetic-store-seam-request"  # Permit only this unit fixture's in-memory session.
+    monkeypatch.setattr(review.identity, "permitted_org_ids", lambda: frozenset((ORG_ID,)))  # Known permitted scope.
+    with app.test_request_context("/history"):  # No server, network, or credential is required.
+        session["selected_org_id"] = (  # Keep organization authority separate from caller window values.
+            ORG_ID  # Keep the derived query organization separate from caller site/window values.
+        )
+        logger.debug("Prepared one authorized synthetic store-seam request")  # Report no credential or owner key.
+        yield  # Existing successful and unavailable-reader assertions use the same explicit authorized context.
 
 
 class FakeQuery:
     """A stand-in for the query record that the store defines.
 
     Why:
-        The seam builds the query by keyword and hands it to the lister. The
-        stand-in keeps the three values, so a test reads what the seam built.
+        The seam builds the query by keyword and gives it to the lister.
+        The stand-in keeps the organization and three caller values.
     """
 
-    def __init__(self, site_id: str, limit: int, offset: int) -> None:
-        """Store the three query values.
+    def __init__(  # Preserve all four real query fields in the selected request fixture.
+        self, org_id: str, site_id: str, limit: int, offset: int
+    ) -> None:  # Match the existing real query fields.
+        """Store the selected organization and three caller values.
 
         Args:
+            org_id: The validated selected organization.
             site_id: The site to narrow to.
             limit: The largest number of rows to read.
             offset: The number of rows to step over first.
         """
-        self.site_id = site_id
-        self.limit = limit
-        self.offset = offset
+        logger.info("Build the synthetic scoped store query")  # Record query construction before assertions inspect it.
+        self.org_id = org_id  # A missing selected organization must not disappear in a stand-in query.
+        self.site_id = site_id  # Preserve the requested site restriction.
+        self.limit = limit  # Preserve the supplied page size.
+        self.offset = offset  # Preserve the supplied page start.
+        logger.debug("Built one synthetic query with four scope and window fields")  # Report no stored row.
 
 
 def store_with(**names: Any) -> ModuleType:
@@ -98,7 +124,7 @@ class TestFindAttribute:
         """A host with no store finds no callable."""
         assert review.find_attribute(None, ("list_captures",)) is None
 
-    def test_answers_the_first_name_that_matches(self) -> None:
+    def test_answers_the_first_name_that_matches(self) -> None:  # Verify the actual selected callable.
         """The first candidate wins, so a rename keeps the route working.
 
         Why:
@@ -106,10 +132,14 @@ class TestFindAttribute:
             order of preference, and a test must prove the order and not the
             set.
         """
-        module = store_with(second=lambda: "second", first=lambda: "first")
-        found = review.find_attribute(module, ("first", "second"))
-        assert found is not None
-        assert found() == "first"
+        logger.info("Prepare two synthetic callable candidates")  # Record the test setup before resolution.
+        module = store_with(second=lambda: "second", first=lambda: "first")  # Keep the original candidate order test.
+        logger.debug("Prepared two synthetic callable candidates")  # Report no stored record.
+        logger.info("Resolve the first actual callable candidate")  # Record the real attribute decision.
+        found = review.find_attribute(module, ("first", "second"))  # Ask the production resolver.
+        logger.debug("The resolver selected the first candidate: %s", found is module.first)  # Report a safe decision.
+        assert found is module.first  # Verify exact callable identity rather than only a non-None result.
+        assert found() == "first"  # Preserve the original successful callable result.
 
     def test_skips_a_name_that_is_not_callable(self) -> None:
         """A name that holds a value and not a function never wins.
@@ -157,7 +187,9 @@ class TestStoreCaptureRows:
         install_store(monkeypatch, store_with(list_captures=lambda query: ("row",)))
         assert review.store_capture_rows(SITE_ID) == ()
 
-    def test_builds_the_query_from_the_three_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_builds_the_query_from_the_three_values(  # Add the selected organization to all caller query values.
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """The seam hands the site, the limit, and the offset to the store.
 
         Why:
@@ -168,9 +200,20 @@ class TestStoreCaptureRows:
         Args:
             monkeypatch: The pytest patch helper.
         """
-        install_store(monkeypatch, store_with(list_captures=lambda query: query, CaptureQuery=FakeQuery))
-        built = review.store_capture_rows(SITE_ID, limit=5, offset=10)
-        assert (built.site_id, built.limit, built.offset) == (SITE_ID, 5, 10)
+        logger.info("Prepare the scoped synthetic capture query reader")  # Record the isolated test setup.
+        install_store(  # Preserve the query-construction seam without a database.
+            monkeypatch, store_with(list_captures=lambda query: query, CaptureQuery=FakeQuery)
+        )  # No database.
+        logger.debug("Prepared one synthetic capture query reader")  # Report no source content.
+        logger.info("Call the real capture adapter in the selected request")  # Record the direct source action.
+        built = review.store_capture_rows(SITE_ID, limit=5, offset=10)  # The real adapter derives organization itself.
+        logger.debug("The real capture adapter returned one synthetic query")  # Report no query values.
+        assert (built.org_id, built.site_id, built.limit, built.offset) == (  # Require all four exact query values.
+            ORG_ID,
+            SITE_ID,
+            5,
+            10,
+        )  # All fields survive.
 
 
 class TestStoreRunRows:
@@ -198,15 +241,26 @@ class TestStoreRunRows:
         install_store(monkeypatch, store_with(list_captures=lambda query: (), CaptureQuery=FakeQuery))
         assert review.store_run_rows(SITE_ID) == ()
 
-    def test_builds_the_query_from_the_three_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_builds_the_query_from_the_three_values(  # Preserve selected organization and all run window values.
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """The run seam mirrors the capture seam exactly.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
-        install_store(monkeypatch, store_with(list_runs=lambda query: query, RunQuery=FakeQuery))
-        built = review.store_run_rows(SITE_ID, limit=7, offset=14)
-        assert (built.site_id, built.limit, built.offset) == (SITE_ID, 7, 14)
+        logger.info("Prepare the scoped synthetic run query reader")  # Record the isolated test setup.
+        install_store(monkeypatch, store_with(list_runs=lambda query: query, RunQuery=FakeQuery))  # No database.
+        logger.debug("Prepared one synthetic run query reader")  # Report no source content.
+        logger.info("Call the real run adapter in the selected request")  # Record the direct source action.
+        built = review.store_run_rows(SITE_ID, limit=7, offset=14)  # The real adapter derives organization itself.
+        logger.debug("The real run adapter returned one synthetic query")  # Report no query values.
+        assert (built.org_id, built.site_id, built.limit, built.offset) == (  # Require all four exact query values.
+            ORG_ID,
+            SITE_ID,
+            7,
+            14,
+        )  # All fields survive.
 
 
 class TestCaptureLoader:
@@ -233,17 +287,26 @@ class TestCaptureLoader:
         monkeypatch.setattr(review, "injected_seam", lambda key: injected)
         assert review.capture_loader() is injected
 
-    def test_falls_back_to_the_store(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_falls_back_to_the_store(  # Verify exact fallback reader identity without a weak non-None assertion.
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """With no injection the seam reads the store.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
-        monkeypatch.setattr(review, "injected_seam", lambda key: None)
-        install_store(monkeypatch, store_with(load_capture_for_comparison=lambda capture_id: capture_id))
-        found = review.capture_loader()
-        assert found is not None
-        assert found("abc") == "abc"
+        logger.info("Prepare the synthetic comparison capture reader")  # Record safe unit setup.
+        monkeypatch.setattr(review, "injected_seam", lambda key: None)  # Require the existing real-store fallback.
+        module = store_with(load_capture_for_comparison=lambda capture_id: capture_id)  # No database source.
+        install_store(monkeypatch, module)  # Resolve only this synthetic module.
+        logger.debug("Prepared one synthetic comparison capture reader")  # Report no stored capture.
+        logger.info("Resolve the actual comparison capture fallback")  # Record the production loader decision.
+        found = review.capture_loader()  # Use the actual fallback selection implementation.
+        logger.debug(  # Report the safe exact-reader decision.
+            "The fallback selected its stored reader: %s", found is module.load_capture_for_comparison
+        )
+        assert found is module.load_capture_for_comparison  # Require exact reader identity, not only non-None state.
+        assert found("abc") == "abc"  # Preserve the original successful fallback result.
 
     def test_answers_none_with_no_injection_and_no_store(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A lean host with no injection reads nothing and raises nothing.

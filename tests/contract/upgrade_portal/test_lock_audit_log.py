@@ -15,12 +15,15 @@ Why:
 from __future__ import annotations
 
 import json
+import logging  # Record synthetic trail writes without operator addresses.
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from src.upgrade_portal.compare import lock_audit
+
+logger = logging.getLogger(__name__)  # Keep temporary fixture records separate from portal records.
 
 ORG_ID = "org-1"
 SITE_ID = "site-1"
@@ -53,7 +56,7 @@ def line(action: str, actor: str, moment: str, site: str = SITE_ID, previous: st
     }
 
 
-def write_trail(folder: Path, records: list[dict[str, Any]]) -> Path:
+def write_trail(folder: Path, records: list[dict[str, Any]]) -> Path:  # Keep all audit input temporary and synthetic.
     """Write one trail file.
 
     Args:
@@ -63,11 +66,13 @@ def write_trail(folder: Path, records: list[dict[str, Any]]) -> Path:
     Returns:
         The path of the trail.
     """
-    path = folder / "trail.jsonl"
-    with path.open("w", encoding="utf-8") as handle:
-        for record in records:
-            handle.write(json.dumps(record) + "\n")
-    return path
+    logger.info("Write the synthetic temporary lock audit trail")  # Record file creation before it starts.
+    path = folder / "trail.jsonl"  # Use only this test's isolated temporary directory.
+    with path.open("w", encoding="utf-8") as handle:  # Never open a checkout or production trail.
+        for record in records:  # Preserve stored order for expiry inference.
+            handle.write(json.dumps(record) + "\n")  # Write only synthetic records with explicit attribution.
+    logger.debug("Wrote %s synthetic lock audit records", len(records))  # Report no stored address or row.
+    return path  # Every reader call below supplies the matching organization explicitly.
 
 
 # ---------------------------------------------------------------------------
@@ -170,114 +175,139 @@ def test_a_row_written_before_this_change_reads_as_a_takeover() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_reader_answers_the_newest_action_first(tmp_path: Path) -> None:
+def test_the_reader_answers_the_newest_action_first(tmp_path: Path) -> None:  # Preserve matching event order.
     """The page shows the newest action at the top.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    path = write_trail(tmp_path, [line("take", FIRST_EMAIL, "t1"), line("release", FIRST_EMAIL, "t2")])
-    rows = lock_audit.read_audit_rows(path=path)
-    assert [row["action"] for row in rows] == ["release", "take"]
+    path = write_trail(tmp_path, [line("take", FIRST_EMAIL, "t1"), line("release", FIRST_EMAIL, "t2")])  # Temp input.
+    rows = lock_audit.read_audit_rows(path=path, org_id=ORG_ID)  # Keep the existing matching newest-first read.
+    assert [row["action"] for row in rows] == ["release", "take"]  # Preserve the original order expectation.
 
 
-def test_a_damaged_line_costs_that_line_alone(tmp_path: Path) -> None:
+def test_a_damaged_line_costs_that_line_alone(tmp_path: Path) -> None:  # Preserve damaged-line handling.
     """A process that stopped during a write can leave a partial last line.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    path = write_trail(tmp_path, [line("take", FIRST_EMAIL, "t1")])
-    with path.open("a", encoding="utf-8") as handle:
+    path = write_trail(tmp_path, [line("take", FIRST_EMAIL, "t1")])  # Keep valid synthetic context before damage.
+    logger.info("Append one damaged synthetic audit line")  # Record the temporary file action.
+    with path.open("a", encoding="utf-8") as handle:  # Append only to this test's temporary trail.
         handle.write('{"action": "release", "actor\n')  # A write that stopped partway.
-    assert [row["action"] for row in lock_audit.read_audit_rows(path=path)] == ["take"]
+    logger.debug("Appended one damaged synthetic audit line")  # Report no stored address.
+    assert [
+        row["action"] for row in lock_audit.read_audit_rows(path=path, org_id=ORG_ID)
+    ] == [  # Keep the valid action.
+        "take"
+    ]  # Valid row remains.
 
 
-def test_an_absent_trail_answers_an_empty_log(tmp_path: Path) -> None:
+def test_an_absent_trail_answers_an_empty_log(tmp_path: Path) -> None:  # Missing input must not widen scope.
     """No trail exists until the first action writes one.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    assert lock_audit.read_audit_rows(path=tmp_path / "no-such-file.jsonl") == []
+    assert (  # Preserve the authorized missing-file empty result.
+        lock_audit.read_audit_rows(path=tmp_path / "no-such-file.jsonl", org_id=ORG_ID) == []
+    )  # Preserve missing-file behavior.
 
 
-def test_the_read_holds_a_row_cap(tmp_path: Path) -> None:
+def test_the_read_holds_a_row_cap(tmp_path: Path) -> None:  # Preserve the original positive limit.
     """The trail appends for ever, so one read answers a page of it.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    records = [line("take", FIRST_EMAIL, f"t{index}") for index in range(20)]
-    path = write_trail(tmp_path, records)
-    assert len(lock_audit.read_audit_rows(limit=5, path=path)) == 5
+    logger.info("Build the synthetic capped audit sequence")  # Record the fixture transformation.
+    records = [line("take", FIRST_EMAIL, f"t{index}") for index in range(20)]  # Keep older matching inference context.
+    logger.debug("Built %s synthetic capped audit actions", len(records))  # Report only the fixture count.
+    path = write_trail(tmp_path, records)  # Persist only synthetic temporary input.
+    assert (  # Keep the same cap inside explicit organization scope.
+        len(lock_audit.read_audit_rows(limit=5, path=path, org_id=ORG_ID)) == 5
+    )  # Preserve the original positive cap.
 
 
-def test_the_capped_read_matches_the_full_expiry_inference(tmp_path: Path) -> None:
+def test_the_capped_read_matches_the_full_expiry_inference(tmp_path: Path) -> None:  # Keep bounded/full agreement.
     """A page read infers expiry rows from the full trail before it clips rows.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    records = [
-        line("take", FIRST_EMAIL, "t1", SITE_ID),
-        line("take", SECOND_EMAIL, "t2", SITE_ID),
-        line("take", FIRST_EMAIL, "t3", OTHER_SITE),
-        line("release", SECOND_EMAIL, "t4", SITE_ID),
-        line("take", SECOND_EMAIL, "t5", OTHER_SITE),
-        line("takeover", FIRST_EMAIL, "t6", SITE_ID, SECOND_EMAIL),
+    logger.info("Build the synthetic full audit inference sequence")  # Record fixture construction.
+    records = [  # Preserve all original matching sites and transition expectations.
+        line("take", FIRST_EMAIL, "t1", SITE_ID),  # Open the first site's earlier hold.
+        line("take", SECOND_EMAIL, "t2", SITE_ID),  # Infer an expiry before this matching take.
+        line("take", FIRST_EMAIL, "t3", OTHER_SITE),  # Keep the second site's independent hold.
+        line("release", SECOND_EMAIL, "t4", SITE_ID),  # Close only the first site's hold.
+        line("take", SECOND_EMAIL, "t5", OTHER_SITE),  # Infer the second site's matching expiry.
+        line("takeover", FIRST_EMAIL, "t6", SITE_ID, SECOND_EMAIL),  # A takeover creates no immediate expiry.
     ]
-    path = write_trail(tmp_path, records)
-    full_rows = lock_audit.mark_expiries(records)
-    expected = [lock_audit.audit_row(row) for row in reversed(full_rows)][:4]
-    assert lock_audit.read_audit_rows(limit=4, path=path) == expected
+    logger.debug("Built %s synthetic full audit actions", len(records))  # Report only a count.
+    path = write_trail(tmp_path, records)  # Persist only the temporary matching trail.
+    full_rows = lock_audit.mark_expiries(records)  # Retain the existing bounded/full comparison.
+    expected = [lock_audit.audit_row(row) for row in reversed(full_rows)][  # Preserve the original expected cap.
+        :4
+    ]  # Preserve the original expected representation.
+    assert (  # The new required organization must not change matching inference.
+        lock_audit.read_audit_rows(limit=4, path=path, org_id=ORG_ID) == expected
+    )  # Add scope without changing the cap.
 
 
-def test_a_one_row_trail_keeps_the_row_shape(tmp_path: Path) -> None:
+def test_a_one_row_trail_keeps_the_row_shape(tmp_path: Path) -> None:  # Preserve the existing public representation.
     """A short trail keeps the same row fields and types.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    path = write_trail(tmp_path, [line("take", FIRST_EMAIL, "t1")])
-    rows = lock_audit.read_audit_rows(path=path)
-    assert rows == [lock_audit.audit_row(line("take", FIRST_EMAIL, "t1"))]
-    assert {field: type(value) for field, value in rows[0].items()} == {
-        "action": str,
-        "site_id": str,
-        "org_id": str,
-        "occurred_at": str,
-        "actor_digest": str,
-        "previous_digest": str,
-        "inferred": bool,
+    path = write_trail(tmp_path, [line("take", FIRST_EMAIL, "t1")])  # Use the existing synthetic single action.
+    rows = lock_audit.read_audit_rows(path=path, org_id=ORG_ID)  # Preserve the public matching row.
+    assert rows == [lock_audit.audit_row(line("take", FIRST_EMAIL, "t1"))]  # Keep the existing digest representation.
+    assert {field: type(value) for field, value in rows[0].items()} == {  # Preserve every original field type.
+        "action": str,  # Actions remain public text.
+        "site_id": str,  # Site identifiers retain their original representation.
+        "org_id": str,  # Required reader scope does not change stored attribution output.
+        "occurred_at": str,  # Moments retain their original representation.
+        "actor_digest": str,  # Public output still excludes raw operator addresses.
+        "previous_digest": str,  # Public output still excludes raw previous-holder addresses.
+        "inferred": bool,  # Actual and inferred records remain distinguishable.
     }
 
 
-def test_a_trail_shorter_than_the_window_returns_every_row(tmp_path: Path) -> None:
+def test_a_trail_shorter_than_the_window_returns_every_row(tmp_path: Path) -> None:  # Keep complete short results.
     """A page larger than the trail returns the whole trail.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    records = [line("take", FIRST_EMAIL, "t1"), line("release", FIRST_EMAIL, "t2")]
-    path = write_trail(tmp_path, records)
-    expected = [lock_audit.audit_row(row) for row in reversed(records)]
-    assert lock_audit.read_audit_rows(limit=10, path=path) == expected
+    logger.info("Build the synthetic short audit sequence")  # Record the fixture transformation.
+    records = [  # Preserve the original matching take and release sequence.
+        line("take", FIRST_EMAIL, "t1"),
+        line("release", FIRST_EMAIL, "t2"),
+    ]  # Preserve matching take and release.
+    logger.debug("Built %s synthetic short audit actions", len(records))  # Report only a count.
+    path = write_trail(tmp_path, records)  # Use a temporary matching trail.
+    expected = [lock_audit.audit_row(row) for row in reversed(records)]  # Retain the existing expected digest shape.
+    assert lock_audit.read_audit_rows(limit=10, path=path, org_id=ORG_ID) == expected  # Preserve the larger window.
 
 
 @pytest.mark.parametrize("action", ["take", "release", "takeover", "expire"])
-def test_every_action_name_survives_the_read(tmp_path: Path, action: str) -> None:
+def test_every_action_name_survives_the_read(tmp_path: Path, action: str) -> None:  # Preserve all four action words.
     """The four actions that the issue names all reach the page.
 
     Args:
         tmp_path: The temporary folder of this test.
         action: The action under test.
     """
-    path = write_trail(tmp_path, [line(action, FIRST_EMAIL, "t1")])
-    assert lock_audit.read_audit_rows(path=path)[0]["action"] == action
+    path = write_trail(tmp_path, [line(action, FIRST_EMAIL, "t1")])  # Keep each original synthetic action case.
+    assert (  # Explicit scope must preserve each matching stored action.
+        lock_audit.read_audit_rows(path=path, org_id=ORG_ID)[0]["action"] == action
+    )  # Preserve each public action word.
 
 
-def test_a_site_read_answers_only_that_site(tmp_path: Path) -> None:
+def test_a_site_read_answers_only_that_site(tmp_path: Path) -> None:  # Keep the site intersection within organization.
     """A site read drops every row of another site.
 
     Why:
@@ -287,50 +317,70 @@ def test_a_site_read_answers_only_that_site(tmp_path: Path) -> None:
     Args:
         tmp_path: The temporary folder of this test.
     """
-    records = [
-        line("take", FIRST_EMAIL, "t1", SITE_ID),
-        line("take", SECOND_EMAIL, "t2", OTHER_SITE),
-        line("release", FIRST_EMAIL, "t3", SITE_ID),
+    logger.info("Build the synthetic two-site audit sequence")  # Record the fixture transformation.
+    records = [  # Keep both sites inside the explicit matching organization.
+        line("take", FIRST_EMAIL, "t1", SITE_ID),  # Open the requested site's matching hold.
+        line("take", SECOND_EMAIL, "t2", OTHER_SITE),  # Keep another site's action outside the requested intersection.
+        line("release", FIRST_EMAIL, "t3", SITE_ID),  # Close the requested site's matching hold.
     ]
-    path = write_trail(tmp_path, records)
-    rows = lock_audit.read_audit_rows(path=path, site_id=SITE_ID)
-    assert [row["site_id"] for row in rows] == [SITE_ID, SITE_ID]
+    logger.debug("Built %s synthetic two-site audit actions", len(records))  # Report a safe count.
+    path = write_trail(tmp_path, records)  # Persist only matching synthetic temporary data.
+    rows = lock_audit.read_audit_rows(path=path, site_id=SITE_ID, org_id=ORG_ID)  # Keep both scope restrictions.
+    assert [row["site_id"] for row in rows] == [SITE_ID, SITE_ID]  # Preserve the original exact site expectation.
 
 
-def test_an_empty_site_read_answers_every_site(tmp_path: Path) -> None:
-    """An empty site keeps the read that the portal used before issue #2596.
+def test_an_empty_site_read_answers_every_site(tmp_path: Path) -> None:  # Keep all sites within explicit organization.
+    """An empty site reads every site in the explicit selected organization.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    records = [line("take", FIRST_EMAIL, "t1", SITE_ID), line("take", SECOND_EMAIL, "t2", OTHER_SITE)]
-    path = write_trail(tmp_path, records)
-    assert lock_audit.read_audit_rows(path=path, site_id="") == lock_audit.read_audit_rows(path=path)
+    logger.info("Build the synthetic organization-wide audit sequence")  # Record fixture transformation.
+    records = [  # Populate two matching sites without foreign input.
+        line("take", FIRST_EMAIL, "t1", SITE_ID),
+        line("take", SECOND_EMAIL, "t2", OTHER_SITE),
+    ]  # Matching sites.
+    logger.debug("Built %s synthetic organization-wide audit actions", len(records))  # Report only a count.
+    path = write_trail(tmp_path, records)  # Use only the temporary matching trail.
+    assert lock_audit.read_audit_rows(
+        path=path, site_id="", org_id=ORG_ID
+    ) == lock_audit.read_audit_rows(  # Same scope.
+        path=path, org_id=ORG_ID
+    )  # The empty site changes no explicit organization scope.
 
 
-def test_a_site_read_keeps_the_expiry_that_the_full_read_infers(tmp_path: Path) -> None:
-    """A site read infers each expiry from the whole trail, never from one site.
+def test_a_site_read_keeps_the_expiry_that_the_full_read_infers(tmp_path: Path) -> None:  # Keep matching hold context.
+    """A site read retains the complete matching sequence before applying its result limit.
 
     Why:
-        The expiry inference reads the order of every site. A filter applied
-        before the inference would lose the take that closes a hold, and the
-        page would then show a hold that never ended.
+        The matching site's earlier hold supports its next take.
+        Another site's actions cannot change that inference.
 
     Args:
         tmp_path: The temporary folder of this test.
     """
-    records = [
-        line("take", FIRST_EMAIL, "t1", SITE_ID),
-        line("take", SECOND_EMAIL, "t2", OTHER_SITE),
-        line("take", SECOND_EMAIL, "t3", SITE_ID),
+    logger.info("Build the synthetic matching-site expiry sequence")  # Record fixture construction.
+    records = [  # Preserve the original matching-site transitions and another site's independent action.
+        line("take", FIRST_EMAIL, "t1", SITE_ID),  # Retain the earlier matching hold for inference.
+        line("take", SECOND_EMAIL, "t2", OTHER_SITE),  # Another site's hold cannot change the requested hold.
+        line("take", SECOND_EMAIL, "t3", SITE_ID),  # Infer the requested site's matching expiry.
     ]
-    path = write_trail(tmp_path, records)
-    full = [row for row in lock_audit.read_audit_rows(path=path) if row["site_id"] == SITE_ID]
-    assert lock_audit.read_audit_rows(path=path, site_id=SITE_ID) == full
-    assert [row["inferred"] for row in full] == [False, True, False]
+    logger.debug("Built %s synthetic matching-site expiry actions", len(records))  # Report only a count.
+    path = write_trail(tmp_path, records)  # Persist synthetic temporary context before the scoped read.
+    full = [  # Retain the original full-versus-site comparison in explicit organization scope.
+        row for row in lock_audit.read_audit_rows(path=path, org_id=ORG_ID) if row["site_id"] == SITE_ID
+    ]  # Match site.
+    assert (  # Another site's action cannot change matching expiry inference.
+        lock_audit.read_audit_rows(path=path, site_id=SITE_ID, org_id=ORG_ID) == full
+    )  # Preserve bounded/full agreement.
+    assert [row["inferred"] for row in full] == [  # Preserve exact inferred-event positions.
+        False,
+        True,
+        False,
+    ]  # Preserve the original exact inference expectation.
 
 
-def test_a_capped_site_read_matches_the_capped_full_read(tmp_path: Path) -> None:
+def test_a_capped_site_read_matches_the_capped_full_read(tmp_path: Path) -> None:  # Count only matching positions.
     """A capped site read answers the newest rows of that site only.
 
     Why:
@@ -340,11 +390,15 @@ def test_a_capped_site_read_matches_the_capped_full_read(tmp_path: Path) -> None
     Args:
         tmp_path: The temporary folder of this test.
     """
-    records = []
-    for index in range(10):
-        records.append(line("take", FIRST_EMAIL, f"a{index}", OTHER_SITE))
-        records.append(line("take", SECOND_EMAIL, f"b{index}", SITE_ID))
-    path = write_trail(tmp_path, records)
-    rows = lock_audit.read_audit_rows(limit=4, path=path, site_id=SITE_ID)
-    assert len(rows) == 4
-    assert {row["site_id"] for row in rows} == {SITE_ID}
+    logger.info("Build the synthetic interleaved capped-site sequence")  # Record the fixture transformation.
+    records = []  # Keep the original interleaved matching-organization input.
+    for index in range(10):  # Include more actions than the existing visible window.
+        records.append(  # Preserve the requested site's older matching context.
+            line("take", FIRST_EMAIL, f"a{index}", OTHER_SITE)
+        )  # Other sites consume no requested positions.
+        records.append(line("take", SECOND_EMAIL, f"b{index}", SITE_ID))  # Earlier matching context supports inference.
+    logger.debug("Built %s synthetic interleaved audit actions", len(records))  # Report a safe fixture count.
+    path = write_trail(tmp_path, records)  # Persist only the temporary matching organization trail.
+    rows = lock_audit.read_audit_rows(limit=4, path=path, site_id=SITE_ID, org_id=ORG_ID)  # Keep the original cap.
+    assert len(rows) == 4  # Preserve the existing exact visible row count.
+    assert {row["site_id"] for row in rows} == {SITE_ID}  # Preserve the existing exact site intersection.

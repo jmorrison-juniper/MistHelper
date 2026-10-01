@@ -54,7 +54,7 @@ from types import ModuleType
 from typing import Any
 from urllib.parse import urlencode
 
-from flask import Blueprint, Response, current_app, jsonify, render_template, request, session
+from flask import Blueprint, Response, abort, current_app, jsonify, render_template, request  # Carry existing refusals.
 from jinja2 import TemplateNotFound
 
 from ...api.run_controls.views import RunStalePolicy  # Use one stale decision for both portal pages.
@@ -68,6 +68,7 @@ from ...runtime.runs import RunStateMachine, RunTransitionError  # Use the canon
 from ...upgrade.org_history import OperationHistorySection, OrgOperationHistory  # Issue #3248: the section rules.
 from ..factory import json_error
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
+from . import select  # Reuse the signed organization resolver and existing refusal authority.
 
 logger = logging.getLogger(__name__)
 
@@ -366,54 +367,58 @@ def injected_seam(config_key: str) -> Callable[..., Any] | None:
     return stand_in  # The stand-in answers the same call the real callee answers.
 
 
-def store_capture_rows(site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET) -> Any:
-    """Read one page of capture rows from the capture store.
+def store_capture_rows(  # Preserve the existing site-only picker and site-and-window history interface.
+    site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET
+) -> Any:
+    """Read a scoped capture page through the existing site-and-window interface."""
+    logger.info("review: authorize the capture history source")  # Authorize before even resolving a store module.
+    chosen = (select.resolve_org(None) or "").strip()  # Only the signed selection can authorize stored history.
+    refusal = select.org_refusal(chosen)  # Preserve missing-selection and current privilege refusals.
+    logger.debug("review: the capture source scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # A direct adapter and the site-only picker need the same source boundary.
+        abort(current_app.make_response(refusal))  # Carry the authoritative refusal instead of an empty success.
+    logger.info("review: resolve the scoped capture history reader")  # Record optional source resolution.
+    module = load_optional_module(STORE_MODULE)  # Load only after the signed organization passes authorization.
+    lister = find_attribute(module, LISTER_ATTRIBUTES)  # Preserve the existing late-loaded source interface.
+    query_class = find_attribute(module, QUERY_ATTRIBUTES)  # Use the store's existing organization query field.
+    logger.debug("review: the reader is ready: %s", lister is not None and query_class is not None)  # Safe status.
+    if lister is None or query_class is None:  # An authorized host without a source retains its existing empty shape.
+        return ()  # Never retry an unscoped read when the reader is unavailable.
+    logger.info("review: read the scoped capture history page")  # Record query construction and the source read.
+    page = lister(query_class(org_id=chosen, site_id=site_id, limit=limit, offset=offset))  # Scope COUNT and LIMIT.
+    logger.debug(  # Report safe scoped counts after the capture read.
+        "review: the capture source returned %s rows of %s",
+        len(getattr(page, CAPTURES_FIELD, ())),
+        getattr(page, TOTAL_FIELD, 0),
+    )  # Report only safe counts.
+    return page  # Preserve the store page and the comparison picker's site-only call shape.
 
-    Why:
-        The store takes one query record rather than loose values. The
-        fallback builds that record here and keeps the store shape out of the
-        page code. The two window values carry a default, so the picker still
-        calls this reader with the site alone.
 
-    Args:
-        site_id: The site to narrow to. An empty value reads every site.
-        limit: The largest number of rows to read.
-        offset: The number of rows to step over first.
-
-    Returns:
-        The store page, or an empty tuple when the store is absent.
-    """
-    module = load_optional_module(STORE_MODULE)
-    lister = find_attribute(module, LISTER_ATTRIBUTES)
-    query_class = find_attribute(module, QUERY_ATTRIBUTES)
-    if lister is None or query_class is None:
-        return ()
-    return lister(query_class(site_id=site_id, limit=limit, offset=offset))
-
-
-def store_run_rows(site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET) -> Any:
-    """Read one page of run rows from the capture store.
-
-    Why:
-        The run history walks the same site index as the capture history, so
-        the fallback mirrors ``store_capture_rows`` exactly. The store owns the
-        query, and this route owns no count and no sort order of its own.
-
-    Args:
-        site_id: The site to narrow to. An empty value reads every site.
-        limit: The largest number of rows to read.
-        offset: The number of rows to step over first.
-
-    Returns:
-        The store page, or an empty tuple when the run list is absent.
-    """
-    module = load_optional_module(STORE_MODULE)
-    lister = find_attribute(module, RUN_LISTER_ATTRIBUTES)
-    query_class = find_attribute(module, RUN_QUERY_ATTRIBUTES)
-    if lister is None or query_class is None:  # The store has not grown the run list yet.
-        logger.info("review: the capture store offers no run list, so the run history is empty")
-        return ()
-    return lister(query_class(site_id=site_id, limit=limit, offset=offset))
+def store_run_rows(  # Preserve the existing trusted run lister interface.
+    site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET
+) -> Any:
+    """Read a scoped run page through the existing site-and-window interface."""
+    logger.info("review: authorize the run history source")  # Authorize before even resolving a store module.
+    chosen = (select.resolve_org(None) or "").strip()  # A caller-supplied organization cannot replace signed scope.
+    refusal = select.org_refusal(chosen)  # Reuse the current authorization policy without a duplicate rule.
+    logger.debug("review: the run source scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # The adapter must independently protect direct callers.
+        abort(current_app.make_response(refusal))  # Preserve the authoritative refusal status and envelope.
+    logger.info("review: resolve the scoped run history reader")  # Record optional source resolution.
+    module = load_optional_module(STORE_MODULE)  # Load only after signed scope passes authorization.
+    lister = find_attribute(module, RUN_LISTER_ATTRIBUTES)  # Preserve the existing late-loaded run interface.
+    query_class = find_attribute(module, RUN_QUERY_ATTRIBUTES)  # Use the existing RunQuery organization field.
+    logger.debug("review: the reader is ready: %s", lister is not None and query_class is not None)  # Safe status.
+    if lister is None or query_class is None:  # An authorized missing source retains its existing empty shape.
+        return ()  # Do not retry with a site-only or unrestricted real-store query.
+    logger.info("review: read the scoped run history page")  # Record query construction and the source read.
+    page = lister(query_class(org_id=chosen, site_id=site_id, limit=limit, offset=offset))  # Scope COUNT and LIMIT.
+    logger.debug(  # Report safe scoped counts after the run read.
+        "review: the run source returned %s rows of %s",
+        len(getattr(page, RUNS_FIELD, ())),
+        getattr(page, TOTAL_FIELD, 0),
+    )  # Report only safe counts.
+    return page  # Preserve source sorting, projection, page totals, and existing seam signatures.
 
 
 def store_operation_rows(org_id: str, site_id: str = "", limit: int = DEFAULT_HISTORY_LIMIT) -> Any:
@@ -2024,110 +2029,77 @@ def compare_page() -> str:
 
 @review_bp.get(HISTORY_API_PATH)
 @identity.require_session
-def capture_history(site_id: str) -> tuple[Response, int]:
-    """Answer the capture history of one site as JSON.
-
-    Why:
-        Section 6 of ``contracts/http-api.md`` names this path, sets the two
-        page defaults, and sets the two body names. FR-032 lets any person read
-        the record, so the route reads no lock and asks for no typed word.
-
-    Args:
-        site_id: The site of the path.
-
-    Returns:
-        The rows of this page and the count of the whole history.
-    """
-    limit, offset = read_window_values()
-    rows, total = read_store_page(capture_lister(), CAPTURES_FIELD, site_id, limit, offset)
-    logger.info("review: the portal listed %s capture rows of %s for one site", len(rows), total)
-    return jsonify({CAPTURES_FIELD: [history_row(row) for row in rows], TOTAL_FIELD: total}), OK_STATUS
+def capture_history(site_id: str) -> tuple[Response, int]:  # Keep the existing lock-free capture history endpoint.
+    """Return capture rows and a scoped total for the selected organization and requested site."""
+    logger.info("review: authorize the capture history request")  # Refuse before resolving any source.
+    chosen = (select.resolve_org(None) or "").strip()  # Read only the signed selection, never query scope.
+    refusal = select.org_refusal(chosen)  # Preserve the existing missing-selection and privilege decisions.
+    logger.debug("review: the capture request scope is permitted: %s", refusal is None)  # Safe decision.
+    if refusal is not None:  # An empty or unavailable store cannot authorize a request.
+        return refusal  # Keep the authoritative status, code, message, and envelope.
+    logger.info("review: read the selected organization capture history")  # Record the authorized source action.
+    limit, offset = read_window_values()  # Preserve the existing page defaults and clamps.
+    rows, total = read_store_page(capture_lister(), CAPTURES_FIELD, site_id, limit, offset)  # Keep seam call shapes.
+    logger.debug("review: the capture history returned %s rows of %s", len(rows), total)  # Safe scoped counts.
+    logger.info("review: shape the scoped capture history response")  # Record the response transformation.
+    response = jsonify({CAPTURES_FIELD: [history_row(row) for row in rows], TOTAL_FIELD: total})  # Existing wire shape.
+    logger.debug("review: the capture response contains %s rows", len(rows))  # Report no stored row content.
+    return response, OK_STATUS  # Empty authorized intersections retain the existing successful response.
 
 
 @review_bp.get(RUN_HISTORY_API_PATH)
 @identity.require_session
-def run_history(site_id: str) -> tuple[Response, int]:
-    """Answer the upgrade run history of one site as JSON.
-
-    Why:
-        Task T205 asks for this list, and ``data-model.md`` holds the
-        ``site_id`` and ``created_at`` index that answers it. The body mirrors
-        the capture history, so one browser page reads both lists the same
-        way. FR-032 keeps this read free of the lock as well.
-
-    Args:
-        site_id: The site of the path.
-
-    Returns:
-        The rows of this page and the count of the whole history.
-    """
-    limit, offset = read_window_values()
-    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)
-    logger.info("review: the portal listed %s run rows of %s for one site", len(rows), total)
-    return jsonify({RUNS_FIELD: rows, TOTAL_FIELD: total}), OK_STATUS
+def run_history(site_id: str) -> tuple[Response, int]:  # Keep the existing lock-free single-site run endpoint.
+    """Return run rows and a scoped total for the selected organization and requested site."""
+    logger.info("review: authorize the run history request")  # Refuse before resolving any source.
+    chosen = (select.resolve_org(None) or "").strip()  # Read the signed selection rather than caller-supplied scope.
+    refusal = select.org_refusal(chosen)  # Preserve the unchanged identity policy and refusal authority.
+    logger.debug("review: the run request scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # Known empty privileges and invalid selections must cause no source read.
+        return refusal  # Preserve the authoritative refusal envelope.
+    logger.info("review: read the selected organization run history")  # Record the authorized source action.
+    limit, offset = read_window_values()  # Preserve existing defaults, clamps, and nonnumeric behavior.
+    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)  # Keep existing seam signatures.
+    logger.debug("review: the run history returned %s rows of %s", len(rows), total)  # Report only scoped counts.
+    logger.info("review: shape the scoped run history response")  # Record the response transformation.
+    response = jsonify({RUNS_FIELD: rows, TOTAL_FIELD: total})  # Preserve the existing run projection and envelope.
+    logger.debug("review: the run response contains %s rows", len(rows))  # Report no stored address or record.
+    return response, OK_STATUS  # Foreign and unknown sites retain successful empty intersections.
 
 
-def audit_history_rows(site_id: str = "") -> list[dict[str, Any]]:
-    """Return the audit log rows that the history page paints.
-
-    Why:
-        Issue #2221 asks the history page for a record of every site lock
-        action. The reader lives in its own module, and this seam keeps the
-        page working through a build stage in which that module does not
-        import. That is the rule that every other seam of this route follows.
-
-        Every moment reads as UTC, which is the rule that the runs section
-        already follows.
-
-        Issue #2596 narrows the rows to the site that the page names. The run
-        list and the capture list already obey that site, so an audit log that
-        showed another site made the operator read the wrong record.
-
-    Args:
-        site_id: The site to narrow to. An empty value reads every site.
-
-    Returns:
-        One row for each action, newest first. An empty list when the reader is
-        absent or the trail holds nothing.
-    """
+def audit_history_rows(org_id: str, site_id: str = "") -> list[dict[str, Any]]:  # Receive validated route scope.
+    """Read scoped audit rows and preserve their existing UTC moment display."""
+    logger.info("review: resolve the scoped lock audit reader")  # Record optional source resolution.
     module = load_optional_module(AUDIT_MODULE)  # The reader may not be built yet.
-    reader = find_attribute(module, AUDIT_READER_ATTRIBUTES)
+    reader = find_attribute(module, AUDIT_READER_ATTRIBUTES)  # Preserve the existing late-loaded audit interface.
+    logger.debug("review: the lock audit reader is available: %s", reader is not None)  # Report no source data.
     if reader is None:  # A missing reader draws an empty section, never a fault page.
-        logger.info("review: the portal offers no lock audit reader, so the audit log is empty")
-        return []
-    logger.info("review: the portal reads the lock audit for %s", site_id or "every site")  # Before the read.
-    rows: Any = reader(site_id=site_id)  # Narrow the read to the site that the page names.
-    shaped = [dict(row, moment_text=short_moment(row.get("occurred_at"))) for row in rows]
-    logger.debug("review: the audit log holds %s row(s)", len(shaped))
-    return shaped
+        return []  # No unavailable-source fallback may widen organization scope.
+    logger.info("review: read the selected organization lock audit")  # Record the scoped source action.
+    rows: Any = reader(org_id=org_id, site_id=site_id)  # Keep the audit default limit independent from capture pages.
+    logger.debug("review: the scoped audit reader returned %s rows", len(rows))  # Report only a safe count.
+    logger.info("review: shape the scoped audit moments")  # Record the display transformation.
+    shaped = [dict(row, moment_text=short_moment(row.get("occurred_at"))) for row in rows]  # Keep existing row fields.
+    logger.debug("review: the audit log holds %s rows", len(shaped))  # Never log stored audit addresses or digests.
+    return shaped  # Actual and inferred rows keep the existing digest-only public representation.
 
 
-def operation_history_section(site_id: str, limit: int) -> OperationHistorySection:
-    """Return the multi-site section of the history page.
-
-    Why:
-        Issue #3248. A multi-site upgrade had no history entry. The section
-        lists the operations of the selected organization, because the job page
-        shows an operation only inside that organization. The owner key stays
-        on the server, and the shaper uses it for one comparison only.
-
-    Args:
-        site_id: The site to narrow to. An empty value reads every site.
-        limit: The page size of the history page.
-
-    Returns:
-        The section value that the template prints.
-    """
+def operation_history_section(org_id: str, site_id: str, limit: int) -> OperationHistorySection:  # One validated scope.
+    """Read the scoped operation section while keeping owner keys on the server."""
+    logger.info("review: resolve the operation history owner")  # Record the server-side ownership decision.
     record = identity.current_session()  # The server-side session holds the owner key.
     owner_key = record.owner.key if record is not None else ""  # An empty key owns no operation.
-    org_id = str(session.get("selected_org_id") or "")  # The organization that the picker stored.
+    logger.debug("review: the operation history has an active owner: %s", record is not None)  # Report no owner key.
+    logger.info("review: build the selected organization operation history")  # Record source read and shaping.
     history = OrgOperationHistory(owner_key, short_moment)  # One short moment rule for every section.
-    return history.section(operation_lister(), org_id, site_id, limit)  # One store read at most.
+    section = history.section(operation_lister(), org_id, site_id, limit)  # Use the route's validated scope directly.
+    logger.debug("review: the scoped operation section holds %s rows", len(section.rows))  # Report a safe count.
+    return section  # Preserve visibility and owner-only progress links for matching operations.
 
 
 @review_bp.get(HISTORY_PAGE_PATH)
 @identity.require_session
-def history_page() -> str:
+def history_page() -> str | tuple[Response, int]:  # An invalid selection returns the authoritative refusal.
     """Render the human view of the capture history.
 
     Why:
@@ -2139,30 +2111,43 @@ def history_page() -> str:
     Returns:
         The rendered page.
     """
-    site_id = request.args.get(SITE_ID_FIELD, "").strip()
-    limit, offset = read_window_values()
-    rows, total = read_store_page(capture_lister(), CAPTURES_FIELD, site_id, limit, offset)
-    shaped = [history_row(row) for row in rows]
-    logger.info("review: the portal is naming the device types of %s history rows", len(shaped))
-    page_view = build_page_view(build_history(shaped, build_window(site_id, limit, offset, total)), shaped)
-    logger.debug("review: the history page holds %s rows of %s", len(page_view.rows), page_view.total)
-    return render_page(
-        HISTORY_TEMPLATE,
-        page_title=HISTORY_PAGE_TITLE,
-        signed_in=True,
+    logger.info("review: authorize the history page request")  # Guard all four sources before any reader resolves.
+    chosen = (select.resolve_org(None) or "").strip()  # Never guess scope or accept a query organization override.
+    refusal = select.org_refusal(chosen)  # Reuse the current signed-selection and privilege authorities.
+    logger.debug("review: the history page scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # Invalid selections must not read even empty or unavailable history sources.
+        return refusal  # Preserve the existing status, code, message, and JSON envelope.
+    logger.info("review: read the selected organization capture page")  # Record the authorized source action.
+    site_id = request.args.get(SITE_ID_FIELD, "").strip()  # A site narrows the selected organization only.
+    limit, offset = read_window_values()  # Preserve the existing capture and run window rules.
+    rows, total = read_store_page(capture_lister(), CAPTURES_FIELD, site_id, limit, offset)  # Keep seam call shapes.
+    logger.debug("review: the scoped capture page returned %s rows of %s", len(rows), total)  # Safe source counts.
+    logger.info("review: shape the selected organization history page")  # Record the display transformation.
+    shaped = [history_row(row) for row in rows]  # Preserve device types, counts, and compatibility fields.
+    page_view = build_page_view(  # Preserve already scoped counts and page links.
+        build_history(shaped, build_window(site_id, limit, offset, total)), shaped
+    )  # Scoped pages.
+    logger.debug("review: the history page holds %s rows of %s", len(page_view.rows), page_view.total)  # Safe counts.
+    logger.info("review: render the selected organization history cards")  # Record scoped reads and rendering.
+    page = render_page(  # Render all four cards within the same validated organization.
+        HISTORY_TEMPLATE,  # Preserve the existing four-card presentation.
+        page_title=HISTORY_PAGE_TITLE,  # Keep unrelated history text unchanged.
+        signed_in=True,  # The existing identity guard remains the first request boundary.
         # Issue #3482. The scope names every site when the request names no site.
-        history_scope=HistoryScope.for_page(site_id, shaped),
+        history_scope=HistoryScope.for_page(site_id, shaped),  # Preserve legitimate requested-site context.
         # Issue #3486. The Captures table of every site names the site of each row.
-        history_columns=HistoryCaptureColumns(site_id=site_id),
-        history_view=page_view,
-        moment_texts=moment_texts(shaped),
+        history_columns=HistoryCaptureColumns(site_id=site_id),  # Keep site columns and device-type cells unchanged.
+        history_view=page_view,  # Totals and page links come from already scoped source queries.
+        moment_texts=moment_texts(shaped),  # Preserve the existing UTC moment shaper.
         # Issue #2199 adds the runs section beside the captures section.
-        run_rows=run_history_rows(site_id, limit, offset),
-        run_control_org_id=str(session.get("selected_org_id") or ""),
-        run_control_history_scope=f"site:{site_id}" if site_id else "all-sites",
+        run_rows=run_history_rows(site_id, limit, offset),  # The real run adapter independently enforces signed scope.
+        run_control_org_id=chosen,  # Bulk controls must use the same normalized validated organization.
+        run_control_history_scope=f"site:{site_id}" if site_id else "all-sites",  # Keep existing control scope.
         # Issue #3248 adds the multi-site operations of the selected organization.
-        operation_section=operation_history_section(site_id, limit),
+        operation_section=operation_history_section(chosen, site_id, limit),  # Pass one validated operation scope.
         # Issue #2221 adds the audit log of every site lock action.
         # Issue #2596 narrows that log to the site that this page names.
-        audit_rows=audit_history_rows(site_id),
+        audit_rows=audit_history_rows(chosen, site_id),  # Match organization and optional site before audit inference.
     )
+    logger.debug("review: rendered one scoped history page with %s capture rows", len(shaped))  # Safe result summary.
+    return page  # History remains read-only and independent from locks and typed confirmations.

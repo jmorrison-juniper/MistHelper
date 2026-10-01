@@ -19,6 +19,7 @@ so a late arrival never hangs the suite.
 
 from __future__ import annotations
 
+import logging  # Record fixture changes without a real history source.
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -29,6 +30,8 @@ from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
 from src.upgrade_portal.runtime import identity
+
+logger = logging.getLogger(__name__)  # Keep synthetic fixture records separate from portal records.
 
 # ---------------------------------------------------------------------------
 # The contract values
@@ -248,7 +251,9 @@ def run_lister() -> RecordingRunLister:
 
 
 @pytest.fixture
-def history_app(portal_app: Flask, capture_lister: RecordingCaptureLister, run_lister: RecordingRunLister) -> Flask:
+def history_app(  # A selected fixture must not activate an unused real operation source.
+    portal_app: Flask, capture_lister: RecordingCaptureLister, run_lister: RecordingRunLister
+) -> Flask:
     """Return the portal with both list seams replaced.
 
     Why:
@@ -264,9 +269,12 @@ def history_app(portal_app: Flask, capture_lister: RecordingCaptureLister, run_l
     Returns:
         The wired application.
     """
-    portal_app.config[CAPTURE_LISTER_KEY] = capture_lister
-    portal_app.config[RUN_LISTER_KEY] = run_lister
-    return portal_app
+    logger.info("Bind the synthetic history readers")  # Record in-memory fixture setup before selection can read.
+    portal_app.config[CAPTURE_LISTER_KEY] = capture_lister  # Preserve the existing site-and-window capture seam.
+    portal_app.config[RUN_LISTER_KEY] = run_lister  # Preserve the existing site-and-window run seam.
+    portal_app.config["OPERATION_LISTER"] = lambda org_id, site_id="", limit=25: []  # Keep unused operations in memory.
+    logger.debug("Bound three synthetic history readers")  # No selected fixture can activate a real operation store.
+    return portal_app  # The root fixture keeps audit reads in a temporary directory.
 
 
 @pytest.fixture
@@ -290,7 +298,9 @@ def owner() -> Iterator[identity.SessionOwner]:
 
 
 @pytest.fixture
-def signed_in_client(history_app: Flask, owner: identity.SessionOwner) -> Iterator[FlaskClient]:
+def signed_in_client(  # Keep the formatting contracts inside an explicit selected organization.
+    history_app: Flask, owner: identity.SessionOwner
+) -> Iterator[FlaskClient]:
     """Return a test client that holds a session and holds no lock.
 
     Args:
@@ -300,11 +310,14 @@ def signed_in_client(history_app: Flask, owner: identity.SessionOwner) -> Iterat
     Yields:
         The signed-in client.
     """
+    logger.info("Prepare the selected synthetic history client")  # Record signed-session fixture setup.
     with history_app.test_client() as client:  # The context manager holds the session across requests.
-        client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)
-        with client.session_transaction() as browser_session:
-            browser_session[identity.SESSION_OWNER_KEY] = owner.key
-        yield client
+        client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)  # Supply the synthetic browser pair.
+        with client.session_transaction() as browser_session:  # Keep authorization scope in the signed session.
+            browser_session[identity.SESSION_OWNER_KEY] = owner.key  # Match the registered synthetic session.
+            browser_session["selected_org_id"] = "00000000-0000-0000-0000-0000000000aa"  # Explicit permitted selection.
+        logger.debug("Prepared one selected synthetic history client")  # Report no address or owner key.
+        yield client  # Preserve every existing history assertion and lister call shape.
 
 
 # ---------------------------------------------------------------------------
@@ -847,7 +860,7 @@ def test_a_capture_of_a_later_release_reads_as_a_conflict() -> None:
     assert refusal.code == "schema_version_too_new", "The bare word `conflict` cannot name this fault."
 
 
-def test_the_compare_package_offers_the_history_view_builder() -> None:
+def test_the_compare_package_offers_the_history_view_builder() -> None:  # Check actual built row content.
     """`compare.render` holds `build_history_view`, and the page calls it.
 
     Why:
@@ -858,14 +871,23 @@ def test_the_compare_package_offers_the_history_view_builder() -> None:
         The view lane may land after this lane, so an absent builder skips
         with a plain reason rather than failing the suite.
     """
-    render = pytest.importorskip(RENDER_MODULE, reason="The compare render module is not importable on this host.")
+    logger.info("Resolve the history view builder for the contract")  # Record the actual module resolution.
+    render = pytest.importorskip(  # Preserve the existing explicit missing-module capability check.
+        RENDER_MODULE, reason="The compare render module is not importable on this host."
+    )
+    logger.debug("Resolved one history view builder module")  # Report no source rows.
     if not hasattr(render, HISTORY_VIEW_NAME):  # `pytest.skip` raises `Skipped`, which is not an `Exception`.
-        pytest.skip(f"`compare.render` does not hold `{HISTORY_VIEW_NAME}` yet, so the page shows the plain rows.")
+        pytest.skip(  # Preserve the existing missing-builder capability reason.
+            f"`compare.render` does not hold `{HISTORY_VIEW_NAME}` yet, so the page shows the plain rows."
+        )  # Existing skip.
 
-    rows: Sequence[Mapping[str, Any]] = [capture_row(1)]
-    view = getattr(render, HISTORY_VIEW_NAME)(list(rows))
-
-    assert view is not None, "The builder answers a view for one row."
+    logger.info("Build the real history view from one synthetic capture")  # Record the display transformation.
+    rows: Sequence[Mapping[str, Any]] = [capture_row(1)]  # Preserve the original synthetic capture input.
+    view = getattr(render, HISTORY_VIEW_NAME)(list(rows))  # Use the actual history view builder.
+    logger.debug("The real history view contains %s rows", len(view.rows))  # Report only a safe output count.
+    assert [row.capture_id for row in view.rows] == [  # Require exact output instead of only a non-None object.
+        "cap-ab12cd34-01"
+    ]  # Verify exact output content, not only non-None.
 
 
 # ---------------------------------------------------------------------------
