@@ -12,7 +12,6 @@ Both use pipelined batch operations for high-throughput bulk imports.
 from __future__ import annotations  # WHY: postpone annotations for cross-version dataclass slots.
 
 import os  # WHY: read env-driven retention/TTL knobs at import time.
-import socket  # WHY: pre-flight DNS resolution before opening the Redis socket.
 import time  # WHY: webhook path stamps points with wall-clock ms rather than server '*'.
 from collections import Counter  # WHY: tally the resolution branches without shared mutable state.
 from collections.abc import Callable  # WHY: type helper wrappers that swallow "already exists" errors.
@@ -23,7 +22,7 @@ from typing import Any, cast  # WHY: cast around redis-py's Any-typed client for
 import redis  # WHY: sync redis client + ResponseError type for "already exists" detection.
 import structlog  # WHY: structured logging for connection/pipeline lifecycle events.
 
-from . import DatabaseConfig, WriteResult  # WHY: shared config + result dataclasses across DB writers.
+from . import DatabaseConfig, WriteResult, host_resolver  # Keep Redis preflights on the shared finite DNS boundary.
 
 RAW_RETENTION_MS = (
     int(os.environ.get("REDIS_RAW_RETENTION_DAYS", "7")) * 86_400_000
@@ -113,11 +112,14 @@ class RedisTimeSeriesWriter:
 
     @staticmethod
     def _preflight_dns(host: str) -> None:  # WHY: shared behavior between TS and JSON writers.
-        """Raise ConnectionError with a clean message when DNS fails."""
-        try:
-            socket.getaddrinfo(host, None)  # WHY: cheap resolution check surfaces bad hosts before Redis handshake.
-        except socket.gaierror as dns_error:  # WHY: convert opaque gaierror into a caller-friendly type.
-            raise ConnectionError(f"Redis host '{host}' not resolvable") from dns_error
+        """Bound the DNS preflight without changing the Redis driver hostname."""
+        log = structlog.get_logger("redis_writer")
+        log.info("redis_dns_preflight_started", host=host)
+        resolved = host_resolver.DEFAULT_RESOLVER.resolve(host)
+        if not resolved.addresses:
+            log.warning("redis_dns_preflight_unavailable", host=host)
+            raise ConnectionError(f"Redis host '{host}' not resolvable") from resolved.error
+        log.debug("redis_dns_preflight_finished", host=host, addresses=len(resolved.addresses))
 
     def _verify_timeseries_module(self) -> None:  # WHY: writer is useless without the TimeSeries module.
         """Raise RuntimeError if the TimeSeries module is not loaded."""

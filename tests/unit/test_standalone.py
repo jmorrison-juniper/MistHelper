@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import socket
 from unittest.mock import patch
 
 import pytest  # WHY: parameterize the required credential checks without duplicate tests.
+
+from src.db.host_resolver import ResolutionResult
 
 REQUIRED_DB_ENV = {  # WHY: tests need safe placeholders that never reach a live connection.
     "ARANGO_USERNAME": "unit-user",  # WHY: the value proves the field is present without naming a real account.
@@ -190,12 +193,22 @@ class TestPolyglotHostProbe:
     def test_can_connect_reports_a_refused_socket(self) -> None:
         from src.db import _can_connect
 
-        with patch("src.db.socket.create_connection", side_effect=OSError("refused")):
+        resolved = ResolutionResult(((socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("192.0.2.1", 0)),))
+        with (
+            patch("src.db.host_resolver.DEFAULT_RESOLVER.resolve", return_value=resolved),
+            patch("src.db.socket.socket", side_effect=OSError("refused")),
+        ):
             assert _can_connect("db.example", 8529) is False  # nosec B101  # Pytest assertion in a unit test.
 
     def test_can_connect_closes_a_live_socket(self) -> None:
         from src.db import _can_connect
 
-        with patch("src.db.socket.create_connection") as create:
+        resolved = ResolutionResult(((socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("192.0.2.1", 0)),))
+        with (
+            patch("src.db.host_resolver.DEFAULT_RESOLVER.resolve", return_value=resolved),
+            patch("src.db.socket.socket") as create,
+        ):
             assert _can_connect("db.example", 8529) is True  # nosec B101  # Pytest assertion in a unit test.
-        create.assert_called_once()
+        create.assert_called_once_with(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        create.return_value.__enter__.return_value.connect.assert_called_once_with(("192.0.2.1", 8529))
+        create.return_value.__exit__.assert_called_once_with(None, None, None)

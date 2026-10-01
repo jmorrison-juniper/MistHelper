@@ -211,6 +211,24 @@ def _drop_cached_handle() -> Iterator[None]:
     store.reset_connection()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_store_dns(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Keep store client tests independent of operating system DNS."""
+    from src.db import host_resolver
+    from src.db.host_resolver import BoundedHostResolver
+    from tests.unit.db_discovery.fakes import ControlledResolver
+
+    lookup = ControlledResolver()
+    lookup.answers.update({"db.example.invalid": lookup.addresses(), "127.0.0.1": lookup.addresses()})
+    resolver = BoundedHostResolver(lookup=lookup)
+    monkeypatch.setattr(host_resolver, "DEFAULT_RESOLVER", resolver)
+    try:
+        yield
+    finally:
+        lookup.release.set()
+        resolver.close(timeout=1)
+
+
 def test_open_database_returns_none_when_arango_connection_fails(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

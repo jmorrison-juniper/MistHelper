@@ -31,7 +31,7 @@ from arango.client import ArangoClient
 from arango.exceptions import ArangoError  # WHY: narrow store handlers to python-arango driver failures
 
 from src.dataclasses.export_backend_options import ExportBackendOptions
-from src.db import DatabaseConfig
+from src.db import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, host_resolver
 from src.export.data_exporter import DataExporter
 
 logger = logging.getLogger(__name__)
@@ -544,6 +544,8 @@ def _open_database(config: DatabaseConfig) -> Any:
         handle fails here instead, so the caller names the backup file as the
         store. The store opens its own handle, because the shared writer runs
         a graph backfill in its constructor and a capture must not pay for it.
+        The DNS preflight shares the bounded central cache. The client keeps
+        its configured URL and its separate request timeout.
 
     Args:
         config: The connection settings.
@@ -554,14 +556,28 @@ def _open_database(config: DatabaseConfig) -> Any:
     if config.standalone_mode:
         logger.info("Upgrade portal found no document store, the backup file holds every record")
         return None
+    hostname = urlparse(config.arango_host).hostname or ARANGO_DEFAULT_HOSTNAME
+    logger.info("The upgrade portal checks the document store hostname %s.", hostname)
+    resolved = host_resolver.DEFAULT_RESOLVER.resolve(hostname)
+    logger.debug("The document store hostname has %d resolved addresses.", len(resolved.addresses))
+    if not resolved.addresses:
+        logger.warning(
+            "Caution: the document store hostname %s does not resolve. "
+            "The upgrade portal cannot open the document store.",
+            hostname,
+        )
+        return None
+    logger.info("The upgrade portal opens a verified document store connection at %s.", hostname)
     try:
         client = ArangoClient(hosts=config.arango_host, request_timeout=REQUEST_TIMEOUT_SECONDS)
-        return client.db(
+        database = client.db(
             config.arango_database,
             username=config.arango_username,
             password=config.arango_password,
             verify=True,
         )
+        logger.debug("The document store connection at %s passed verification.", hostname)
+        return database
     except ArangoError as error:  # The store must keep working without a database.
         logger.warning(
             "Upgrade portal cannot reach the document store at %s: %s",
