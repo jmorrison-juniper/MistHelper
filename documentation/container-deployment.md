@@ -376,6 +376,26 @@ Two build files exist. `Containerfile` builds with pip and is the file that
 `compose.build.yml` names. `Dockerfile` adds a health check and the UV package
 manager. Both verify every TLS certificate.
 
+## Gunicorn control sockets
+
+Two masters of Gunicorn run as the `misthelper` account.
+Each master has its own control socket.
+
+| Portal | Default port | Control socket |
+| - | - | - |
+| Web portal | 8055 | `/home/misthelper/.gunicorn/portal.ctl` |
+| Upgrade capture portal | 8056 | `/home/misthelper/.gunicorn/capture.ctl` |
+
+Use the socket of the intended portal for a Gunicorn control command.
+The two masters retain these separate paths after a SIGHUP reload.
+Gunicorn creates the socket directory and applies its default `0600` socket mode.
+
+Caution: a shared control socket can cause a command to reach the wrong portal.
+
+The repair needs a new image and an approved application container restart.
+An isolated process test does not authorize that restart.
+See [issue #3370](https://github.com/jmorrison-juniper/MistHelper/issues/3370).
+
 ## Remote access over SSH
 
 The container runs an SSH server on port 2200. A connection starts MistHelper
