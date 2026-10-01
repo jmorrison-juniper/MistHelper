@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}WebSockets - {{ config.PORTAL.title }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('websockets.static', filename='websockets.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h4 data-testid="websockets-title">WebSockets</h4>
+        <p class="text-muted portal-page-intro" data-testid="websockets-intro">
+            Start and watch Mist live streams from the operations portal.
+        </p>
+        <div class="alert alert-warning d-none" id="wsReadyAlert" data-testid="ws-ready-alert"></div>
+    </div>
+</div>
+
+<div class="row g-3 ws-page" data-testid="websockets-page">
+    <div class="col-lg-4">
+        <div class="portal-card h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Catalog</h5>
+                <span class="badge bg-secondary" id="wsCatalogCount" data-testid="ws-catalog-count">0</span>
+            </div>
+            <input type="search" class="form-control portal-search mb-3" id="wsCatalogFilter"
+                   data-testid="ws-catalog-filter" placeholder="Filter catalog">
+            <div class="accordion portal-accordion" id="wsCatalog" data-testid="ws-catalog">
+                <div class="text-center text-muted py-3" data-testid="ws-catalog-loading">Loading catalog...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="portal-card h-100" data-testid="ws-start-card">
+            <h5 id="wsSelectedTitle">Select a stream</h5>
+            <p class="text-muted" id="wsSelectedDescription">Choose a channel or a device utility from the catalog.</p>
+            <div class="alert alert-warning d-none" id="wsSafetyWarning" data-testid="ws-safety-warning"></div>
+            <form id="wsStartForm" data-testid="ws-start-form">
+                <div id="wsTargetFields" data-testid="ws-target-fields"></div>
+                <div id="wsParameterFields" data-testid="ws-parameter-fields"></div>
+                <div class="mb-3 d-none" id="wsConfirmationGroup" data-testid="ws-confirmation-group">
+                    <label class="form-label" for="wsConfirmation">Type the device name to confirm.</label>
+                    <input type="text" class="form-control" id="wsConfirmation" data-testid="ws-confirmation-input">
+                </div>
+                <button type="submit" class="btn btn-accent" id="wsStartButton" data-testid="ws-start-button" disabled>
+                    Start stream
+                </button>
+            </form>
+            <div class="alert alert-danger mt-3 d-none" id="wsStartError" data-testid="ws-start-error"></div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="portal-card h-100" data-testid="ws-session-list-card">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Sessions</h5>
+                <span class="badge bg-secondary" id="wsSessionLimit" data-testid="ws-session-limit">0 / 0</span>
+            </div>
+            <div id="wsSessionList" data-testid="ws-session-list">
+                <div class="text-muted">No session is available.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="portal-card mt-3 d-none" id="wsMessagePanel" data-testid="ws-message-panel">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h5 class="mb-1" id="wsSessionTitle" data-testid="ws-session-title">No session selected</h5>
+            <p class="text-muted mb-1" id="wsSessionState" data-testid="ws-session-state"></p>
+            <p class="text-muted mb-0" id="wsSessionReason" data-testid="ws-session-reason"></p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap" data-testid="ws-message-controls">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="wsPauseButton" data-testid="ws-pause-button">Pause</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="wsResumeButton" data-testid="ws-resume-button">Resume</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="wsClearButton" data-testid="ws-clear-button">Clear</button>
+            <a class="btn btn-sm btn-outline-secondary" id="wsDownloadLink" data-testid="ws-download-link" href="#">Download</a>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="wsStopButton" data-testid="ws-stop-button">Stop</button>
+        </div>
+    </div>
+    <div class="row g-2 mt-2">
+        <div class="col-md-4">
+            <input type="search" class="form-control form-control-sm" id="wsMessageFilter"
+                   data-testid="ws-message-filter" placeholder="Filter messages">
+        </div>
+        <div class="col-md-8 text-md-end text-muted small" id="wsCounters" data-testid="ws-counters"></div>
+    </div>
+    <div class="ws-output mt-3" id="wsOutput" data-testid="ws-output"></div>
+    <div class="ws-terminal-input d-none mt-3" id="wsTerminalInput" data-testid="ws-terminal-input">
+        <div class="alert alert-warning py-2" data-testid="ws-shell-warning">
+            Warning: A remote shell can change a device. Send only commands that you understand.
+        </div>
+        <div class="input-group mb-2">
+            <input type="text" class="form-control" id="wsShellLine" data-testid="ws-shell-line" placeholder="Command line">
+            <button type="button" class="btn btn-outline-secondary" id="wsShellSend" data-testid="ws-shell-send">Send line</button>
+        </div>
+        <div class="btn-group flex-wrap" role="group" aria-label="Shell keys" data-testid="ws-shell-keys">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="interrupt" data-testid="ws-key-interrupt">Interrupt</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="tab" data-testid="ws-key-tab">Tab</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="space" data-testid="ws-key-space">Space</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="q" data-testid="ws-key-q">q</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="enter" data-testid="ws-key-enter">Enter</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('websockets.static', filename='websockets.js') }}"></script>
+{% endblock %}

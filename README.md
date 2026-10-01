@@ -258,7 +258,7 @@ the wiki: its page-to-page links work only on the published wiki.
 | [Menu Reference](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference) | Every actionable menu operation |
 | [Menu API Endpoints](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-API-Endpoints) | The endpoints behind each menu option |
 | [Container Setup](https://github.com/jmorrison-juniper/MistHelper/wiki/Container-Setup) | Build strategies and local usage |
-| [Web Portal](https://github.com/jmorrison-juniper/MistHelper/wiki/Web-Portal) | Browser-based operations and the map viewer |
+| [Web Portal](https://github.com/jmorrison-juniper/MistHelper/wiki/Web-Portal) | Browser-based operations, the map viewer, and the live WebSockets streams |
 | [SSH Remote Access](https://github.com/jmorrison-juniper/MistHelper/wiki/SSH-Remote-Access) | SSH server deployment and session management |
 | [Data Model](https://github.com/jmorrison-juniper/MistHelper/wiki/Data-Model) | CSV, SQLite, and polyglot output details |
 | [MSP Support](https://github.com/jmorrison-juniper/MistHelper/wiki/MSP-Support) | Multi-org operations for a managed service provider |
