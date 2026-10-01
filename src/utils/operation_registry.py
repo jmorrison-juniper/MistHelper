@@ -390,7 +390,10 @@ class OperationRegistry:
         "280": {"category": "safe"},
         "281": {
             "category": "destructive",
-            "skip_reason": "Requires typed ACK <count> confirmation and supports --dry-run.",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 281 acknowledges Mist alarms; requires typed ACK <count> "
+                "confirmation and supports --dry-run."
+            ),
         },
         # WHY: Menu 282 is safe because it reads Mist rogue, WLAN, and site setting evidence,
         # then writes local evidence files only. PCI DSS 4.0 requires evidence of rogue and
@@ -427,8 +430,8 @@ class OperationRegistry:
         "286": {
             "category": "destructive",
             "skip_reason": (
-                "Destructive client session control requires typed target confirmation "
-                "and must not run in automated safe or fast tests."
+                "DESTRUCTIVE: Menu 286 disconnects or reauthenticates live client sessions; requires typed "
+                "target confirmation and must not run in automated safe or fast tests."
             ),
         },
         # WHY: Menu 287 moves an existing Mist device configuration to an unassigned
@@ -438,7 +441,10 @@ class OperationRegistry:
         # and supports --dry-run so an operator can prove the path without changing Mist.
         "287": {
             "category": "destructive",
-            "skip_reason": "Requires typed REPLACE confirmation and supports --dry-run.",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 287 moves a device configuration for an RMA; requires typed REPLACE "
+                "confirmation and supports --dry-run."
+            ),
         },
         # WHY: Menu 288 prints SSR registration commands for a NOC engineer who must manually
         # onboard a Session Smart Router. The read is safe and has no prompt, but the optional
@@ -471,7 +477,10 @@ class OperationRegistry:
         # reset requests from reaching Mist.
         "291": {
             "category": "destructive",
-            "skip_reason": "Requires typed OPTIMIZE or RESET confirmation and supports --dry-run.",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 291 changes AP radio state; requires typed OPTIMIZE or RESET "
+                "confirmation and supports --dry-run."
+            ),
         },
         # WHY: menu 292 imports PSKs, user MACs, and assets into Mist Cloud from CSV
         # files under data/. It creates or updates cloud records, so it is destructive
@@ -479,7 +488,10 @@ class OperationRegistry:
         # support.
         "292": {
             "category": "destructive",
-            "skip_reason": "Requires typed IMPORT <row_count> confirmation and supports --dry-run.",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 292 creates Mist records from CSV; requires typed IMPORT <row_count> "
+                "confirmation and supports --dry-run."
+            ),
         },
         # WHY: Menu 293 changes Mist Edge organization inventory, site assignment, tunnel
         # data ports, and firmware state. It is destructive, so the operator must use
@@ -487,8 +499,8 @@ class OperationRegistry:
         "293": {
             "category": "destructive",
             "skip_reason": (
-                "Mist Edge lifecycle actions change organization inventory, site assignment, "
-                "tunnel data ports, and firmware state; requires typed confirmation and a live Mist tenant."
+                "DESTRUCTIVE: Menu 293 changes Mist Edge inventory, site assignment, tunnel data ports, "
+                "and firmware state; requires typed confirmation and a live Mist tenant."
             ),
         },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
