@@ -20,7 +20,7 @@ class TestStreamSettings:
         assert settings.limits_payload() == {
             "max_sessions": 5,
             "idle_seconds": 120,
-            "capture_seconds": 60,
+            "capture_seconds": 3600,
         }  # The public payload is stable.
 
     def test_flags_accept_enabled_and_disabled_values(self) -> None:

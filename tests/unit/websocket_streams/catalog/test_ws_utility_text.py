@@ -50,7 +50,7 @@ class TestUtilityText:
     def test_sentence_uses_safety_curated_text_and_retrieve_rule(self) -> None:
         """A sentence states the result of the utility in plain words."""
         capture = UtilityText.sentence("remotePcap", Safety.CAPTURE)  # A capture shares one sentence.
-        assert capture == "Capture packets for 60 seconds and show each packet record."  # The capture sentence.
+        assert capture == "Capture packets for 60 to 3600 seconds and show each packet record."
         assert UtilityText.sentence("retrieveArpTable", Safety.READ) == "Get the ARP table from the device."  # Read.
         assert UtilityText.sentence("ping", Safety.READ).startswith("Send ping packets")  # A curated sentence.
         fallback = UtilityText.sentence("newThing", Safety.READ)  # A future SDK utility gets safe text.

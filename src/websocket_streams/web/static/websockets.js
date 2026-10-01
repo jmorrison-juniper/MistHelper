@@ -459,6 +459,7 @@
         var button = byId('wsStartButton');  // Block a second start while the request runs.
         event.preventDefault();  // The page sends JSON instead of a form post.
         if (!state.selectedEntry) return;  // No entry means nothing to start.
+        if (!validCaptureDuration()) return;
         button.disabled = true;  // One click starts one session.
         apiJson('/api/websockets/sessions', { method: 'POST', body: JSON.stringify(buildStartBody()) }).then(function(payload) {
             button.disabled = !state.catalog.ready || !!state.selectedEntry.locked;  // Allow the next start.
@@ -468,6 +469,18 @@
             selectSession(payload);  // Show the messages of the new session.
             byId('wsMessagePanel').scrollIntoView({ behavior: 'smooth', block: 'start' });  // Move the view to the output.
         });
+    }
+
+    function validCaptureDuration() {
+        var entry = state.selectedEntry;
+        if (!entry || entry.safety !== 'capture') return true;
+        var input = byId('wsField-duration');
+        var text = input ? input.value.trim() : '';
+        var value = Number(text);
+        if (/^[0-9]{2,4}$/.test(text) && value >= 60 && value <= 3600) return true;
+        showStartError({ error: 'Type a whole duration from 60 to 3600 seconds.', field: 'duration' });
+        if (input) input.focus();
+        return false;
     }
 
     function buildStartBody() {

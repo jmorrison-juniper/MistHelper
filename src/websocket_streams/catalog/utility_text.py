@@ -109,7 +109,7 @@ class UtilityText:
         """
         logger.debug("Building the WebSocket sentence for %s", name)  # Debug level: the catalog builds many texts.
         if safety is Safety.CAPTURE:  # All captures share one limit and one output.
-            return "Capture packets for 60 seconds and show each packet record."  # Describe the capture result.
+            return "Capture packets for 60 to 3600 seconds and show each packet record."
         if name in cls._SENTENCES:  # A curated sentence states the effect of the utility.
             return cls._SENTENCES[name]  # Return the curated sentence.
         if name.startswith("retrieve"):  # A retrieve utility reads one table or one summary.

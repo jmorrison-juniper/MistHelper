@@ -213,10 +213,19 @@ class FakeWebSocketServices:
             "maximum": 10000,
             "default": 5,
         }  # Packets.
+        duration = {
+            "name": "duration",
+            "label": "Duration (seconds)",
+            "kind": "integer",
+            "required": True,
+            "minimum": 60,
+            "maximum": 3600,
+            "default": 60,
+        }
         return [
             self._utility("ex.ping", "Ping", "read", "lines", targets, [host, count], False),
             self._utility("ex.retrieveRoutes", "Routes", "read", "lines", targets, [], False),
-            self._utility("ex.remotePcap", "Packet capture", "capture", "packets", targets, [packets], False),
+            self._utility("ex.remotePcap", "Packet capture", "capture", "packets", targets, [packets, duration], False),
             self._utility("ex.bouncePort", "Bounce port", "change", "lines", targets, [], True),
             self._utility("ex.shell", "Remote shell", "shell", "terminal", targets, [], False),
         ]  # Utilities.

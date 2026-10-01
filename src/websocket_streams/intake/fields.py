@@ -107,7 +107,7 @@ class FieldValueChecker:
         }:  # List kinds share list handling.
             return self._list_value(spec, raw)  # Return a list of checked strings.
         if spec.kind is FieldKind.INTEGER:  # Integer fields need range checks.
-            return self._integer(spec, raw)  # Return an int in range.
+            return IntegerFieldValue.check(spec, raw)
         if spec.kind is FieldKind.BOOLEAN:  # Boolean fields accept bool and text.
             return self._boolean(spec, raw)  # Return a bool.
         return self._string_value(spec, raw)  # All other kinds return checked text.
@@ -140,28 +140,6 @@ class FieldValueChecker:
         return (
             self._normalize_mac(value) if spec.kind is FieldKind.MAC else value
         )  # MAC values use compact lowercase text.
-
-    def _integer(self, spec: FieldSpec, raw: object) -> int:
-        """Check one integer value.
-
-        Args:
-            spec: The catalog field specification.
-            raw: The raw value from the request body.
-
-        Returns:
-            The checked integer value.
-        """
-        text = (
-            str(raw).strip() if isinstance(raw, (str, int)) and not isinstance(raw, bool) else ""
-        )  # Accept JSON numbers and number text.
-        if not text.isdecimal():  # Only whole positive numbers are valid.
-            raise self._error(spec, "The field must be a whole number.")  # Refuse non-number values.
-        value = int(text)  # Convert after the decimal check.
-        if (spec.minimum is not None and value < spec.minimum) or (
-            spec.maximum is not None and value > spec.maximum
-        ):  # Enforce the configured range.
-            raise self._error(spec, "The field is outside the allowed range.")  # Refuse values outside range.
-        return value  # The SDK expects an int.
 
     def _boolean(self, spec: FieldSpec, raw: object) -> bool:
         """Check one boolean value.
@@ -262,3 +240,27 @@ class FieldValueChecker:
         return StreamRequestError(
             "bad_request", message, {"field": spec.name}
         )  # The field key lets the page mark the input.
+
+
+class IntegerFieldValue:
+    """Own bounded ASCII integer parsing and catalog range checks."""
+
+    @classmethod
+    def check(cls, spec: FieldSpec, raw: object) -> int:
+        """Reject invalid shapes before conversion and apply the declared range."""
+        value = cls._parse(spec, raw)
+        if (spec.minimum is not None and value < spec.minimum) or (spec.maximum is not None and value > spec.maximum):
+            raise StreamRequestError("bad_request", "The field is outside the allowed range.", {"field": spec.name})
+        return value
+
+    @staticmethod
+    def _parse(spec: FieldSpec, raw: object) -> int:
+        """Keep oversized integers and Unicode digits out of the conversion path."""
+        if type(raw) is int:
+            if 0 <= raw <= 9999999999:
+                return raw
+            raise StreamRequestError("bad_request", "The field must be a whole number.", {"field": spec.name})
+        text = raw.strip() if isinstance(raw, str) else ""
+        if len(text) > 10 or not text.isascii() or not text.isdecimal():
+            raise StreamRequestError("bad_request", "The field must be a whole number.", {"field": spec.name})
+        return int(text)

@@ -19,6 +19,8 @@ from typing import Protocol, cast  # Web services and tests inject runner factor
 from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Audit decisions use utility safety.
 from src.websocket_streams.intake.fields import StreamRequestError  # The manager raises contract errors.
 from src.websocket_streams.intake.start_request import StartRequest  # The manager starts checked requests only.
+from src.websocket_streams.live.captures.model import CaptureDependencies
+from src.websocket_streams.live.captures.runner import CaptureScope, PacketCaptureRunner
 from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # Channel requests use this runner.
 from src.websocket_streams.live.runners.shell import ShellRunner  # Shell requests use this runner.
 from src.websocket_streams.live.runners.text import ShellAddressFilter  # The SDK can log a shell address.
@@ -72,13 +74,15 @@ class RunnerFactory:
     _filter_installed = False  # Install the Mist SDK shell redaction filter one time.
     _filter_lock = threading.Lock()  # Several apps can build at the same time in tests.
 
-    def __init__(self, apisession: object) -> None:
+    def __init__(self, apisession: object, capture_dependencies: CaptureDependencies | None = None) -> None:
         """Build one runner factory.
 
         Args:
             apisession: The Mist API session.
+            capture_dependencies: The optional clock and SDK client for packet captures.
         """
         self._apisession = apisession  # Each runner uses the same authenticated session.
+        self._capture_dependencies = capture_dependencies
 
     def build(self, request: StartRequest, sink: SessionSink) -> StreamRunner:
         """Build a runner for one checked request.
@@ -96,6 +100,8 @@ class RunnerFactory:
         elif request.kind == "shell":  # Shell streams need the shell address filter.
             self._install_shell_filter()  # Prevent SDK shell address leaks.
             runner = ShellRunner(self._apisession, request, sink)  # Build a shell runner.
+        elif CaptureScope.key(request) is not None:
+            runner = PacketCaptureRunner(self._apisession, request, sink, self._capture_dependencies)
         else:  # All non-shell utilities use the utility runner.
             runner = UtilityRunner(self._apisession, request, sink)  # Build a utility runner.
         logger.debug("Built WebSockets runner for key %s", request.key)  # Log safe metadata only.
@@ -329,6 +335,7 @@ class StreamSessionManager:
         Returns:
             The new stream session.
         """
+        CaptureScope.check(request, (session.request for session in self._sessions.values() if session.live))
         session_id = secrets.token_hex(8)  # The contract requires 16 hexadecimal characters.
         buffer = MessageBuffer(
             self._settings.buffer_messages, self._settings.buffer_bytes
@@ -420,14 +427,16 @@ class StreamSessionManager:
         now = self._clock()  # Use one time value for this session.
         if session.live and now - session.last_read_mono > self._settings.idle_seconds:  # The page stopped reading.
             self.stop(session.session_id, "The session stopped because no page read it.")  # Stop idle sessions.
-        if (
-            session.live and now - session.started_mono > self._settings.max_stream_seconds
-        ):  # The session lived too long.
+        life = CaptureScope.life_limit(session.runner, self._settings.max_stream_seconds)
+        if session.live and now - session.started_mono > life:
             self.stop(session.session_id, "The session reached its maximum life.")  # Stop old sessions.
         stopping_at = (
             session.stopping_mono if session.stopping_mono is not None else now
         )  # Stopping age starts at stop request.
         if session.state == SessionState.STOPPING and now - stopping_at > 15.0:  # A stuck stop must end.
+            if isinstance(session.runner, PacketCaptureRunner):
+                session.finish(SessionState.FAILED, "The capture stop did not finish. Mist can still capture packets.")
+                return
             session.finish(
                 SessionState.STOPPED, session.reason or "The session stopped."
             )  # Mark stuck stopping as stopped.

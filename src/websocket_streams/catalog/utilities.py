@@ -83,7 +83,7 @@ class UtilityCatalog:
         "interfaces": (FieldKind.NAME_LIST, True, None, None, None),
         "tcpdump_expression": (FieldKind.FILTER, False, None, 256, None),
         "num_packets": (FieldKind.INTEGER, False, 1, 10000, 1024),
-        "max_pkt_len": (FieldKind.INTEGER, False, 64, 2048, 512),
+        "max_pkt_len": (FieldKind.INTEGER, False, 64, 1536, 512),
         "band": (FieldKind.CHOICE, True, None, None, None),
     }
 
@@ -204,6 +204,19 @@ class UtilityCatalog:
             fields.insert(0, cls._field_named("port_ids", True, family))  # Add the derived capture field.
         if name in {"orgRemotePcap", "siteRemotePcap"}:  # Mist Edge captures take interfaces.
             fields.insert(0, cls._field_named("interfaces", True, family))  # Add the derived capture field.
+        if cls._safety(name) is Safety.CAPTURE:
+            fields.append(
+                FieldSpec(
+                    "duration",
+                    "Duration (seconds)",
+                    FieldKind.INTEGER,
+                    required=True,
+                    minimum=60,
+                    maximum=3600,
+                    default=60,
+                    hint="The capture can end earlier when it reaches the packet limit.",
+                )
+            )
         return tuple(fields)  # Return fields in SDK order with derived fields first.
 
     @classmethod

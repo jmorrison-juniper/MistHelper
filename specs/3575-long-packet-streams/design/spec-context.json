@@ -1,0 +1,18 @@
+{
+  "issue": 3575,
+  "feature_directory": "specs/3575-long-packet-streams",
+  "branch": "jmorrison-juniper-long-packet-streams",
+  "base_sha": "b7ce8eecea305c20b498e12b3f3446ae662663ea",
+  "app_session_id": "3cce9d38-d9c8-4ec2-a37f-a7c1ddbcec73",
+  "workflow": "file-only",
+  "workflow_reason": "PowerShell is unavailable. The app owns the existing branch. Shared feature state and branch hooks remain unchanged.",
+  "steps": {
+    "specify": "complete",
+    "clarify": "not_required",
+    "plan": "complete",
+    "tasks": "complete",
+    "implement": "complete",
+    "analyze": "complete"
+  },
+  "publication": "requires_explicit_parent_grant"
+}

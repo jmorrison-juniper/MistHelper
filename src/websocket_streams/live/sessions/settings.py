@@ -72,8 +72,8 @@ class StreamSettings:
         payload = {
             "max_sessions": self.max_sessions,
             "idle_seconds": self.idle_seconds,
-            "capture_seconds": 60,
-        }  # Keep the capture limit fixed.
+            "capture_seconds": 3600,
+        }
         logger.debug("Built WebSockets tab limits payload")  # Log after the payload is ready.
         return payload  # The catalog route adds this payload to its answer.
 

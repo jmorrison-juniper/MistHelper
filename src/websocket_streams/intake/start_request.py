@@ -279,7 +279,11 @@ class StartRequestChecker:
         """
         if isinstance(definition, ChannelDefinition):  # Channels have no parameters.
             return {}  # Keep the request shape consistent.
+        if definition.safety is Safety.CAPTURE and not isinstance(raw, Mapping):
+            raise StreamRequestError("bad_request", "The capture parameters must be an object.")
         parameter_map = raw if isinstance(raw, Mapping) else {}  # Missing parameters are an empty map.
+        if definition.safety is Safety.CAPTURE:
+            parameter_map = {"duration": 60, **parameter_map}
         specs = {field.name: field for field in definition.fields}  # Give lookup by parameter name.
         unknown = set(parameter_map) - set(specs)  # The body must not send unknown parameters.
         if unknown:  # Unknown parameter fields are bad requests.
