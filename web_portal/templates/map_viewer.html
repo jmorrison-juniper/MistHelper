@@ -53,6 +53,7 @@
 var currentDevices = [];
 // Count each map view. A late answer of an older view must not draw over a newer map.
 var mapViewNumber = 0;
+var siteChoiceNumber = 0; // Keep site choices independent of map views, including repeated site IDs.
 // The note for a map that holds no floor plan image, such as a Google map.
 var NO_IMAGE_NOTE = 'This floor plan has no image. The map shows the device positions only.';
 // The note for a floor plan image that did not load, such as an expired link.
@@ -86,17 +87,40 @@ function loadSites() {
 }
 
 function onSiteChange() {
+    console.info('The page will reset the floor plan controls for a new site choice.');
+    var choice = ++siteChoiceNumber; // Blank choices and repeated site IDs must also invalidate older requests.
     var siteId = document.getElementById('siteSelect').value;
     var mapSel = document.getElementById('mapSelect');
     mapSel.innerHTML = '<option value="">-- Select a map --</option>';
     mapSel.disabled = true;
     clearMap();
+    console.debug('The page reset the floor plan controls for site choice %s.', choice);
     if (!siteId) { return; }
 
+    console.info('The page will request the floor plan list for site choice %s.', choice);
     fetch('/api/maps/site/' + siteId + '/maps')
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            if (choice !== siteChoiceNumber) { return; }
+            console.debug('The page received the floor plan response for site choice %s.', choice);
+            if (!r.ok) { throw new Error('Failed to load floor plans.'); }
+            return r.json();
+        })
         .then(function(data) {
-            (data.maps || []).forEach(function(m) {
+            if (choice !== siteChoiceNumber) { return; }
+            console.info('The page will validate the floor plan list for site choice %s.', choice);
+            if (!data || typeof data !== 'object' || Array.isArray(data) || data.error || !Array.isArray(data.maps)) {
+                throw new Error('Failed to load floor plans.');
+            }
+            // Validate every record first, so a bad later record cannot leave a partial list.
+            if (data.maps.some(function(m) {
+                return !m || typeof m !== 'object' || Array.isArray(m) ||
+                    !['id', 'name', 'has_image', 'width', 'height'].every(function(field) {
+                        return Object.prototype.hasOwnProperty.call(m, field);
+                    });
+            })) { throw new Error('Failed to load floor plans.'); }
+            console.debug('The page validated %s floor plans for site choice %s.', data.maps.length, choice);
+            console.info('The page will add the floor plan options for site choice %s.', choice);
+            data.maps.forEach(function(m) {
                 var opt = document.createElement('option');
                 opt.value = m.id;
                 opt.textContent = m.name + (m.has_image ? '' : ' (no image)');
@@ -105,6 +129,15 @@ function onSiteChange() {
                 mapSel.appendChild(opt);
             });
             mapSel.disabled = false;
+            console.debug('The page enabled the controls with %s floor plans for site choice %s.', data.maps.length, choice);
+        })
+        .catch(function(error) {
+            if (choice !== siteChoiceNumber) { return; }
+            console.error('The floor plan request failed for site choice %s.', choice);
+            mapSel.innerHTML = '<option value="">-- Select a map --</option>';
+            mapSel.disabled = true;
+            document.getElementById('mapPlaceholder').textContent = 'Failed to load floor plans.';
+            console.debug('The floor plan controls are blank and disabled for site choice %s.', choice);
         });
 }
 
