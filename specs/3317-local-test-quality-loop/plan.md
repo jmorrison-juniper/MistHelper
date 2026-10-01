@@ -380,6 +380,22 @@ The 13-file Markdown link check passes.
 The complete hashed runtime audit checks 105 packages and finds no known vulnerabilities.
 Dictionary-backed writing coverage and native PowerShell execution remain unavailable.
 
+### Coupled CodeQL correction
+
+CodeQL alert 236 identifies an omitted HTML comment terminator in the new guard.
+The failed source is `2f931c69a867e1f914e347e8ae7f9a2e04ff04fd`.
+The correction recognizes both tokens and rejects unsupported outside-fence `--!>` syntax.
+This preserves CommonMark heading semantics rather than promote hidden commands.
+Standard comments, unclosed comments, and fenced literals retain their intended behavior.
+
+The 31 regression cases produced 18 failures before the correction and all pass afterward.
+The complete focused corpus passes 542 tests without skips.
+Coverage remains 98.22 percent across 843 guard and fixture statements.
+The five-file structure and 136 functions remain within the measured limits.
+All required local gates repeat before the authorized replacement push.
+No suppression or excluded file changes.
+Fresh CodeQL status and every other required check remain mandatory before merge.
+
 PowerShell prerequisite execution failed because `pwsh` is absent.
 The implementation used the explicit feature directory and checked-in context.
 The optional commit hook remains unauthorized and did not run.

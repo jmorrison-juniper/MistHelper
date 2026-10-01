@@ -217,9 +217,11 @@ class SectionCommands:  # Correct dormant text must not satisfy an active local 
 
             def comments(self, line: str) -> str:  # Preserve multiline outside-fence comment boundaries.
                 parts: list[str] = []  # Keep visible text on both sides of a real Markdown comment.
-                for part in re.split(r"(<!--|-->)", line):  # Keep delimiter state separate from content.
+                for part in re.split(r"(<!--|--!?>)", line):  # Recognize both HTML terminators before validation.
                     if part == "<!--":  # Open a real outside-fence comment.
                         self.comment = True  # Hide subsequent Markdown structure until the close.
+                    elif part == "--!>" and self.comment:
+                        raise ValueError("unsupported HTML comment terminator")
                     elif part == "-->" and self.comment:  # Close only a currently open comment.
                         self.comment = False  # Restore active Markdown structure.
                     elif not self.comment:  # Retain visible text without inventing content.

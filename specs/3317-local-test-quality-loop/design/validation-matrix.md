@@ -300,3 +300,25 @@ The authorized rebase uses devtools 0.6.0 without a feature-owned dependency cha
 All 514 ratchet cases pass again and retain 98.22 percent coverage.
 The exact committed comparison checks two files and finds zero new findings.
 The configured full-suite check reads 994 files and finds zero new findings.
+
+### Coupled comment-terminator correction
+
+CodeQL alert 236 blocked the published source `2f931c69a867e1f914e347e8ae7f9a2e04ff04fd`.
+Rule `py/bad-tag-filter` identified `guard.py:220`.
+The delimiter expression recognized `-->` but omitted `--!>`.
+The original source remains the red evidence.
+
+Real CommonMark parsing restores a heading after `-->`.
+It retains `--!>` and the subsequent Markdown inside a raw HTML block.
+The guard now recognizes both tokens and rejects that unsupported outside-fence form.
+It does not promote hidden commands.
+Unclosed comments remain inactive.
+Code fences preserve literal markers.
+
+The 31 selected regressions produced 18 failures and 13 passes before the correction.
+All 31 pass after the correction.
+They cover both terminators, hidden commands, subsequent active commands, fenced literals, and unclosed comments.
+All three document reads and decisions remain measurable.
+The complete corpus now passes 542 tests without skips.
+Guard and fixture coverage remains 98.22 percent across 843 statements.
+No suppression, analyzer, baseline, configuration, workflow, or hook changed.

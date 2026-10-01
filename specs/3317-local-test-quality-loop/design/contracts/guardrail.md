@@ -110,6 +110,12 @@ Single-quoted base variables fail.
 Command strings passed to `echo`, comments, and quoted whole scripts are not executable analyzer invocations.
 Preserve literal HTML markers and quote operators inside code fences.
 Remove Markdown comments and quoted procedures only outside those fences.
+Recognize both HTML comment terminators, `-->` and `--!>`.
+Accept `-->` as the supported Markdown terminator.
+If an outside-fence comment uses `--!>`, reject the input with a named error.
+That HTML form does not restore CommonMark headings.
+If a comment remains unclosed, keep its remaining text inactive.
+Preserve both literal forms inside executable fences.
 Remove shell comments only at a real unquoted token boundary.
 Reject quote concatenation, doubled quotes, and unsupported escape grammar.
 Do not guess PowerShell semantics from Bash concatenation.

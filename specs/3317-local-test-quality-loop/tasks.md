@@ -428,7 +428,7 @@ Guide edits can now use verified behavior.
 
 **Purpose**: Verify the complete allowed implementation without delivery actions.
 
-- [X] T037 Validate the new package with unchanged `tests/guardrails/test_quality_ratchet_files.py`. (delivered: tests/guardrails/local_test_quality_loop/, 514 passed including the existing 14 tests)
+- [X] T037 Validate the new package with unchanged `tests/guardrails/test_quality_ratchet_files.py`. (delivered: tests/guardrails/local_test_quality_loop/, 542 passed including the existing 14 tests)
 - [X] T038 Run syntax, Ruff, Black, and type checks for `tests/guardrails/local_test_quality_loop/guard.py` and its four package peers. (delivered: tests/guardrails/local_test_quality_loop/, global style gates and both type scopes passed)
 - [X] T039 Check STE, links, and structure using `specs/3317-local-test-quality-loop/design/quickstart.md` and the eight implementation files. (delivered: specs/3317-local-test-quality-loop/design/quickstart.md, 13 Markdown files and 136 functions checked)
 - [X] T040 Verify the allowed implementation and exclusions against `specs/3317-local-test-quality-loop/spec.md`. (delivered: specs/3317-local-test-quality-loop/spec.md, only the 18 authorized files changed)
@@ -436,8 +436,8 @@ Guide edits can now use verified behavior.
 ### Local proof and remaining parent work
 
 T001-T040 have local execution evidence.
-The complete package contains 500 new cases.
-All 514 combined cases passed without skips.
+The complete package contains 528 new cases.
+All 542 combined cases passed without skips.
 The final affected document and link guards passed 161 tests.
 One existing pull-request-only changelog test skipped outside a pull-request event.
 
@@ -464,6 +464,10 @@ The scoped ratchet checked two files and reported zero new findings.
 The full-suite ratchet checked 994 files and reported zero new findings.
 Current global style, types, links, writing structure, Bandit, and the 105-package hashed runtime audit pass.
 The parent retains the one-push, protected-merge, and exact-main proof requirements.
+The coordinator later authorized one necessary replacement push for the coupled CodeQL alert 236 correction.
+The original failed head remains red evidence.
+The new comment cases produce 18 failures before the correction and 31 passes afterward.
+Fresh required checks must pass on the replacement head before the protected merge.
 
 Before any push or pull request, the parent must receive a full verified stable `main` SHA.
 Only coordinator `6d71fd26-57c2-48c0-abc8-607af98f75d0` supplies that delivery permission.

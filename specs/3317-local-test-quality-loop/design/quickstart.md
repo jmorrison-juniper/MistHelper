@@ -115,6 +115,34 @@ The writing dictionary and native PowerShell remain unavailable.
 The required checks repeat after the local evidence commit and before push.
 Publication, the protected merge, and exact-main proof remain under the released coordinator sequence.
 
+### Coupled CodeQL correction
+
+The first published head is `2f931c69a867e1f914e347e8ae7f9a2e04ff04fd`.
+Its required CodeQL status reports alert 236 at `guard.py:220`.
+The analysis job and all other quality jobs pass.
+The original head remains the failed evidence.
+
+The guard detects `--!>` but rejects it outside code fences.
+CommonMark does not treat that form as a normal comment close.
+The guard continues to accept `-->` and to exclude commented commands.
+It retains the existing unclosed-comment policy and literal fenced content.
+
+| Correction check | Actual result |
+|------------------|---------------|
+| Terminator regression proof before the correction | 18 failed, 13 passed |
+| Same regression proof after the correction | 31 passed |
+| Full focused corpus | 542 passed, no skips |
+| Guard and fixture coverage | 98.22 percent across 843 statements |
+| Method and parameter limits | Five files and 136 functions checked |
+| Global Ruff, Black, and compilation | Passed, 2,005 files unchanged |
+| Exact CI and package types | 663 files and five files passed |
+| Configured Bandit and complete runtime audit | Passed without new exclusions |
+
+The coordinator authorized one necessary replacement push.
+All fresh quality, title, STE, CodeQL analysis, and CodeQL status checks must pass on the replacement head.
+No failed head can merge.
+This correction changes only the issue-owned guard, its tests, and its design evidence.
+
 ## Prerequisites
 
 1. Use an existing activated Python 3.13 or newer environment.

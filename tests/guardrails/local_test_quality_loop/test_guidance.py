@@ -162,6 +162,8 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
                 command += (  # A real inline comment cannot change active controls.
                     " # Do not use 'origin/$BASE_REF' as a literal."  # Prove quote handling ignores true comments.
                 )
+            if form == "html_comment_literal":
+                command += " # <!-- Literal shell note --!>"
             logging.debug("Prepared fixture continuation form %s", form)  # Record the completed transformation.
             return command  # Unsupported constructs remain outside positive fixtures.
 
@@ -192,6 +194,7 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
             "powershell_continuation",
             "braced_base",
             "comments",
+            "html_comment_literal",
         ),
         ids=lambda form: f"T16-equivalent-{form}",
     )
@@ -213,16 +216,35 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
         assert guard.ledger.errors == []  # A positive variant must not hide an unsupported check.
 
     @pytest.mark.parametrize("shell", ("bash", "sh", "powershell"), ids=lambda shell: f"T16-plain-{shell}")
-    def test_plain_cli(self, tmp_path: Path, shell: str) -> None:  # Accept the actual plain command forms.
+    @pytest.mark.parametrize(
+        "comment_case",
+        (
+            pytest.param((None, False, None), id="bare"),
+            pytest.param(("-->", False, None), id="standard-note"),
+            pytest.param(("-->", True, None), id="standard-procedure"),
+            pytest.param(("--!>", False, "unsupported HTML comment terminator"), id="alternate-note"),
+            pytest.param(("--!>", True, "unsupported HTML comment terminator"), id="alternate-procedure"),
+            pytest.param(("", True, "required section count=0"), id="unclosed-procedure"),
+        ),
+    )
+    def test_plain_cli(self, tmp_path: Path, shell: str, comment_case: tuple[str | None, bool, str | None]) -> None:
+        """Accept a standard Markdown comment without promoting malformed HTML."""
         fixture = GuidanceFixture(tmp_path)  # Keep all command input mutations local.
+        close, hidden_commands, reason = comment_case
         for path in TestInputLedger.paths[:3]:  # Require a complete independent procedure in every guide.
             text = fixture.Template.guide(path, fixture.contract, shell).replace(  # Remove only a prefix.
                 "rtk proxy ", ""
             )  # Remove only a prefix.
+            if close is not None:
+                hidden = text.replace("test-quality-analyzer", "other-analyzer") if hidden_commands else "Fixture note"
+                text = f"<!--\n{hidden}\n{close}\n{text}"
             fixture.files.write(path, text)  # Keep active base, preflight, and analyzer fences executable.
         guard = GuideGuard(tmp_path)  # Read the plain active procedure directly.
-        assert guard.run() is True, guard.summary()  # No RTK wrapper is required for semantic equivalence.
-        assert guard.counts()["input_validations"] == 6  # Require all six successful decisions.
+        assert guard.run() is (reason is None), guard.summary()
+        assert guard.counts()["input_validations"] == (6 if reason is None else 3)
+        assert guard.counts()["input_reads"] == 6 and guard.counts()["guide_checks"] == 3
+        if reason is not None:
+            assert len(guard.ledger.errors) == 3 and all(reason in error for error in guard.ledger.errors)
 
     def test_readable_empty_settings_and_baseline(  # Preserve readable empty input semantics.
         self, tmp_path: Path
@@ -412,6 +434,7 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
                 "missing_label",
                 "duplicate_label",
                 "comment_label",
+                "alternate_comment_label",
                 "quoted_label",
                 "fenced_label",
                 "unsupported_language",
@@ -436,6 +459,7 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
                     "missing_label": (label, "**Unused example:**"),  # Do not use a dormant label.
                     "duplicate_label": (label, label + "\n\n" + label),  # Reject ambiguous active labels.
                     "comment_label": (label, "<!-- " + label + " -->"),  # Ignore HTML comments.
+                    "alternate_comment_label": (label, "<!-- " + label + " --!>"),
                     "quoted_label": (label, "> " + label),  # Ignore quoted procedures.
                     "fenced_label": (label, "```text\n" + label + "\n```"),  # Ignore fenced labels.
                     "outside_section": (label, "## Outside the required section\n" + label),  # Respect the boundary.
@@ -548,8 +572,8 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
     @pytest.mark.parametrize("path", TestInputLedger.paths[:3])
     @pytest.mark.parametrize(
         "case",
-        tuple((index, form) for form in Cases.Inactive.forms[:6] for index in range(4))
-        + tuple((2, form) for form in Cases.Inactive.forms[6:]),
+        tuple((index, form) for form in Cases.Inactive.forms[:7] for index in range(4))
+        + tuple((2, form) for form in Cases.Inactive.forms[7:]),
         ids=lambda case: f"T16-inactive-{case}",
     )
     def test_inactive_text(  # Correct inactive text must not pass an active procedure.
@@ -559,6 +583,8 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
         self.Cases.Inactive.apply(fixture, path, case)  # Correct dormant text must not repair the active procedure.
         guard = GuideGuard(tmp_path)  # Retain the completed active-procedure decision.
         self.Cases.failure(guard, path)  # Require a named failure, not an accepted exception.
+        if case[1] == "alternate_comment_label":
+            assert "unsupported HTML comment terminator" in guard.ledger.errors[0]
         assert guard.ledger.errors[0].startswith(  # Require this exact active guide failure.
             path + ": validation_failed"
         )  # Require this exact active input failure.
