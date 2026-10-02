@@ -26,9 +26,9 @@ flowchart LR
     root --> f_orgs_jsi["orgs/jsi<br/>4 menu options"]
     root --> f_orgs_networktemplates["orgs/networktemplates<br/>4 menu options"]
     root --> f_sites_insights["sites/insights<br/>4 menu options"]
-    root --> f_const_alarm_defs["const/alarm_defs<br/>3 menu options"]
     root --> f_orgs_admins["orgs/admins<br/>3 menu options"]
     root --> f_orgs_alarms["orgs/alarms<br/>3 menu options"]
+    root --> f_orgs_apitokens["orgs/apitokens<br/>3 menu options"]
     root --> more["70 more families"]
 ```
 
@@ -732,57 +732,25 @@ flowchart LR
 - Title: Export Organization Insight Metrics (comprehensive operational insights)
 - Handler: `OrgExportUtils.insight_metrics`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 30
+- Endpoints: 5
 
 ```mermaid
 flowchart LR
     menu["Menu 53: Export<br/>Organization Insight<br/>Metrics c..."]
-    menu --> c1["ConstDefinitionsExporter"]
-    c1 --> e1["GET<br/>/api/v1/const<br/>/alarm_defs"]
-    c1 --> e2["GET<br/>/api/v1/const<br/>/ap_channels"]
-    c1 --> e3["GET<br/>/api/v1/const<br/>/ap_esl_versions"]
-    c1 --> e4["GET<br/>/api/v1/const<br/>/ap_led_status"]
-    c1 --> e5["GET<br/>/api/v1/const<br/>/app_categories"]
-    c1 --> e6["GET<br/>/api/v1/const<br/>/app_subcategories"]
-    c1 --> e7["GET<br/>/api/v1/const<br/>/applications"]
-    c1 --> e8["GET<br/>/api/v1/const<br/>/client_events"]
-    c1 --> e9["GET<br/>/api/v1/const<br/>/countries"]
-    c1 --> e10["GET<br/>/api/v1/const<br/>/default_gateway_config"]
-    c1 --> e11["GET<br/>/api/v1/const<br/>/device_events"]
-    c1 --> e12["GET<br/>/api/v1/const<br/>/device_models"]
-    menu --> more["18 more endpoints in<br/>the table"]
+    menu --> c1["OrgExportUtils"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/insight_metrics"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/insights<br/>/sites-sle"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/insights<br/>/{metric}"]
+    menu --> c2["ConstDefinitionsExporter"]
+    c2 --> e4["GET<br/>/api/v1/const<br/>/countries"]
+    c2 --> e5["GET<br/>/api/v1/const<br/>/device_models"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/ap_channels` | [`const.ap_channels.listApChannels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-channels) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/ap_esl_versions` | [`const.ap_esl_versions.listApLEslVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-l-esl-versions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/ap_led_status` | [`const.ap_led_status.listApLedDefinition`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-led-definition) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/app_categories` | [`const.app_categories.listAppCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-category-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/app_subcategories` | [`const.app_subcategories.listAppSubCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-sub-category-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/applications` | [`const.applications.listApplications`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-applications) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/client_events` | [`const.client_events.listClientEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-client-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
 | GET | `/api/v1/const/countries` | [`const.countries.listCountryCodes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-country-codes) | [`ConstDefinitionsExporter._get_channel_country_codes`](../../src/export/const_definitions_exporter.py) | Reference |
-| GET | `/api/v1/const/default_gateway_config` | [`const.default_gateway_config.getGatewayDefaultConfig`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/get-gateway-default-config) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/device_events` | [`const.device_events.listDeviceEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-device-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
 | GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) | [`ConstDefinitionsExporter._get_gateway_models_list`](../../src/export/const_definitions_exporter.py) | Reference |
-| GET | `/api/v1/const/fingerprint_types` | [`const.fingerprint_types.listFingerprintTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-fingerprint-types) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/gateway_applications` | [`const.gateway_applications.listGatewayApplications`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-gateway-applications) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
 | GET | `/api/v1/const/insight_metrics` | [`const.insight_metrics.listInsightMetrics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-insight-metrics) | [`OrgExportUtils._load_parameterized_metric_choices`](../../src/export/org_export_utils.py) | Call |
-| GET | `/api/v1/const/languages` | [`const.languages.listSiteLanguages`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-site-languages) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/license_types` | [`const.license_types.listLicenseTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-license-types) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/marvisclient_events` | [`const.marvisclient_events.listMarvisClientEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-marvis-client-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/marvisclient_versions` | [`const.marvisclient_versions.listMarvisClientVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-marvis-client-versions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/mxedge_events` | [`const.mxedge_events.listMxEdgeEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-mx-edge-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/mxedge_models` | [`const.mxedge_models.listMxEdgeModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-mx-edge-models) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/nac_events` | [`const.nac_events.listNacEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-nac-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/otherdevice_events` | [`const.otherdevice_events.listOtherDeviceEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-other-device-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/otherdevice_models` | [`const.otherdevice_models.listSupportedOtherDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-supported-other-device-models) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/states` | [`const.states.listStates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-states) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/system_events` | [`const.system_events.listSystemEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-system-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/traffic_types` | [`const.traffic_types.listTrafficTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-traffic-types) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/webhook_topics` | [`const.webhook_topics.listWebhookTopics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-webhook-topics) | [`ConstDefinitionsExporter._discover_endpoints`](../../src/export/const_definitions_exporter.py) | Curated |
 | GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) | [`OrgExportUtils._insight_fetch_sites_sle_summary`](../../src/export/org_export_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/insights/{metric}` | [`orgs.insights.getOrgSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sle) | [`OrgExportUtils._insight_fetch_default_metric`](../../src/export/org_export_utils.py) | Call |
 

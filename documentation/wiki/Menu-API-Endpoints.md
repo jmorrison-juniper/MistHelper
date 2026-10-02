@@ -139,7 +139,7 @@ pie showData
 | [50](Menu-API-Endpoints-Safe#menu-50) | Export MX Edge information for the organization | `safe` | 1 |
 | [51](Menu-API-Endpoints-Safe#menu-51) | Export Organization SLE Metrics (Service Level Experience) | `safe` | 2 |
 | [52](Menu-API-Endpoints-Safe#menu-52) | Export SLE summary metrics for all sites in the organization | `safe` | 1 |
-| [53](Menu-API-Endpoints-Safe#menu-53) | Export Organization Insight Metrics (comprehensive operational insights) | `safe` | 30 |
+| [53](Menu-API-Endpoints-Safe#menu-53) | Export Organization Insight Metrics (comprehensive operational insights) | `safe` | 5 |
 | [54](Menu-API-Endpoints-Safe#menu-54) | Export all available const definitions from the Mist API (comprehensive endpoint coverage) | `safe` | 28 |
 | [55](Menu-API-Endpoints-Safe#menu-55) | Export OSPF adjacency statistics for the organization | `safe` | 1 |
 | [56](Menu-API-Endpoints-Safe#menu-56) | Export JSI PBN (Product Bulletin Notifications) data | `safe` | 1 |
@@ -160,9 +160,9 @@ pie showData
 | [71](Menu-API-Endpoints-Interactive-Safe#menu-71) | Export MxEdge upgrade status for a selected site | `interactive_safe` | 2 |
 | [72](Menu-API-Endpoints-Interactive-Safe#menu-72) | Export auto-map assignment status for a selected site | `interactive_safe` | 2 |
 | [73](Menu-API-Endpoints-Interactive-Safe#menu-73) | Export SLE (Service Level Experience) metrics insights for a selected site | `interactive_safe` | 2 |
-| [74](Menu-API-Endpoints-Interactive-Safe#menu-74) | Export general insight metrics for a selected site | `interactive_safe` | 30 |
-| [75](Menu-API-Endpoints-Interactive-Safe#menu-75) | Export client-specific insight metrics for a selected site | `interactive_safe` | 30 |
-| [76](Menu-API-Endpoints-Interactive-Safe#menu-76) | Export device-specific insight metrics for a selected site | `interactive_safe` | 31 |
+| [74](Menu-API-Endpoints-Interactive-Safe#menu-74) | Export general insight metrics for a selected site | `interactive_safe` | 4 |
+| [75](Menu-API-Endpoints-Interactive-Safe#menu-75) | Export client-specific insight metrics for a selected site | `interactive_safe` | 4 |
+| [76](Menu-API-Endpoints-Interactive-Safe#menu-76) | Export device-specific insight metrics for a selected site | `interactive_safe` | 5 |
 | [77](Menu-API-Endpoints-Interactive-Safe#menu-77) | Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API) | `interactive_safe` | 2 |
 | [78](Menu-API-Endpoints-Interactive-Safe#menu-78) | Export Site Device Anomaly Events (device-specific anomaly detection) | `interactive_safe` | 3 |
 | [79](Menu-API-Endpoints-Interactive-Safe#menu-79) | Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput) | `interactive_safe` | 3 |
@@ -407,7 +407,6 @@ The map finds no Mist API request for 8 menu options.
 | 12 | GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) |
 | 10 | GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) |
 | 9 | GET | `/api/v1/sites/{site_id}` | [`sites.sites.getSiteInfo`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/get-site-info) |
-| 8 | GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) |
 | 8 | GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) |
 | 8 | GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) |
 | 8 | GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) |
@@ -417,11 +416,12 @@ The map finds no Mist API request for 8 menu options.
 | 7 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) |
 | 7 | GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) |
 | 7 | GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) |
-| 6 | GET | `/api/v1/const/ap_channels` | [`const.ap_channels.listApChannels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-channels) |
-| 6 | GET | `/api/v1/const/ap_esl_versions` | [`const.ap_esl_versions.listApLEslVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-l-esl-versions) |
-| 6 | GET | `/api/v1/const/ap_led_status` | [`const.ap_led_status.listApLedDefinition`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-led-definition) |
-| 6 | GET | `/api/v1/const/app_categories` | [`const.app_categories.listAppCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-category-definitions) |
-| 6 | GET | `/api/v1/const/app_subcategories` | [`const.app_subcategories.listAppSubCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-sub-category-definitions) |
+| 6 | GET | `/api/v1/const/countries` | [`const.countries.listCountryCodes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-country-codes) |
+| 6 | GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) |
+| 6 | GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) |
+| 5 | GET | `/api/v1/orgs/{org_id}/devices/versions` | [`orgs.devices.listOrgAvailableDeviceVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-device-versions) |
+| 5 | GET | `/api/v1/orgs/{org_id}/gatewaytemplates/{gatewaytemplate_id}` | [`orgs.gatewaytemplates.getOrgGatewayTemplate`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/get-org-gateway-template) |
+| 5 | GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) |
 
 ## Shared helpers
 
