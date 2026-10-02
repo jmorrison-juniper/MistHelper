@@ -593,10 +593,34 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         targets: Sequence[upgrade_service.DeviceTarget],
         site_names: Mapping[str, str],
     ) -> list[dict[str, Any]]:
-        """Build zero or one organization AP child."""
+        """Build organization or explicit site AP children."""
         if not targets:  # Do not create an empty cloud request.
             return []  # The non-AP plans can still form an operation.
+        versions = {
+            target.version_target for target in targets
+        }  # Issue #3204: one organization child accepts one version.
+        if len(versions) > 1:  # Different model versions need calls that name each device.
+            return self._site_ap_children(request, site_names)  # Reuse the proven type, family, and version planner.
         return [self._ap_child(request.org_id, targets, request.options, site_names)]  # Use one AP child.
+
+    def _site_ap_children(
+        self,
+        request: AggregateBuildInput,
+        site_names: Mapping[str, str],
+    ) -> list[dict[str, Any]]:
+        """Build explicit AP children for a mixed-version selection."""
+        children: list[dict[str, Any]] = []  # Preserve the selected site order and the planner group order.
+        for site_id, site_name in site_names.items():  # Plan each site because a site body names explicit devices.
+            members = tuple(  # Keep only the access points that belong to this selected site.
+                target
+                for target in request.targets  # Inspect every confirmed target.
+                if target.site_id == site_id and target.device_type == upgrade_service.DEVICE_TYPE_AP  # APs here.
+            )
+            logger.debug("Plan mixed-version access point children for site %s", site_id)  # Log before planning.
+            plans = upgrade_service.plan_upgrade(members, request.options, request.org_id, site_id) if members else ()
+            logger.debug("The mixed-version access point plan holds %s child job(s)", len(plans))  # Log result.
+            children.extend(self._plan_child(plan, request.org_id, site_name) for plan in plans)  # Store each call.
+        return children  # Every access point belongs to one explicit site child.
 
     def _non_ap_children(
         self,

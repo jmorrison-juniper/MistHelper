@@ -7,6 +7,8 @@ from typing import Any  # Playwright page objects have no local stub type.
 
 import pytest  # Use xfail markers for known parity gaps.
 
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Use real device choices.
+
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")  # Skip without Playwright.
 expect = sync_api.expect  # Use Playwright retrying assertions for rendered controls.
 
@@ -80,10 +82,8 @@ def _open_multi_options(page: Any, journey: str, step: int) -> int:
 
 
 def _fill_multi_options(page: Any) -> None:
-    """Fill all multi-site family versions with the stand-in target version."""
-    page.get_by_test_id("org-upgrade-version").fill(TARGET_VERSION)  # Set the AP target.
-    page.get_by_test_id("org-upgrade-switch-version").fill(TARGET_VERSION)  # Set the switch target.
-    page.get_by_test_id("org-upgrade-gateway-version").fill(TARGET_VERSION)  # Set the gateway target.
+    """Select all six device versions and keep the shared canary options."""
+    ModelVersionPicker(page).select(TARGET_VERSION, 6)  # Compare modes after a complete explicit device plan.
     page.get_by_test_id("org-strategy-canary").check()  # Use the staged strategy shared by both modes.
     page.get_by_test_id("org-upgrade-canary-phases").fill("1,10,50,100")  # Set explicit phases.
     page.get_by_test_id("org-upgrade-max-failures").fill("5")  # Set the visible failure threshold.

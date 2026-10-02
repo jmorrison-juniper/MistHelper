@@ -58,12 +58,16 @@ def _set_family_state(page: Any, ap: bool, switch: bool, gateway: bool) -> None:
     page.get_by_test_id("org-upgrade-type-gateway").set_checked(gateway)  # Set the gateway family state.
 
 
+def _target_selects(page: Any, device_type: str) -> Any:
+    """Return the device target controls of one family."""
+    return page.locator(f'[data-org-version-for][data-device-type="{device_type}"]')  # Use stable row metadata.
+
+
 def test_back_from_confirm_restores_every_multisite_choice(page: Any) -> None:
     """Back from confirmation must not reset saved organization choices."""
     _open_org_options(page)  # Open the multi-site form with the stand-in sites.
     page.get_by_test_id("org-upgrade-type-gateway").uncheck()  # Clear one family before the save.
-    page.get_by_test_id("org-upgrade-version").fill("0.15.1")  # Select the AP target version.
-    page.get_by_test_id("org-upgrade-switch-version").fill("0.15.1")  # Select the switch target version.
+    _target_selects(page, "ap").first.select_option("0.14.29216")  # Choose another supported AP version.
     page.get_by_test_id("org-reboot-no").check()  # Preserve the no-reboot safety choice.
     page.get_by_test_id("org-junos-no").check()  # Preserve the no-Junos-action safety choice.
     page.get_by_test_id("org-upgrade-force").check()  # Preserve the force checkbox state.
@@ -78,6 +82,7 @@ def test_back_from_confirm_restores_every_multisite_choice(page: Any) -> None:
     sync_api.expect(page.get_by_test_id("org-reboot-no")).to_be_checked()  # Reboot No must stay selected.
     sync_api.expect(page.get_by_test_id("org-junos-no")).to_be_checked()  # Junos No must stay selected.
     sync_api.expect(page.get_by_test_id("org-upgrade-force")).to_be_checked()  # Force must stay selected.
+    sync_api.expect(_target_selects(page, "ap").first).to_have_value("0.14.29216")  # Keep the device choice.
     assert _save_screenshot(page, "restore-saved-choices.png").exists()  # Keep visual proof of restored choices.
 
 
@@ -96,9 +101,9 @@ def test_family_controls_hide_for_each_selected_combination(page: Any) -> None:
     for ap, switch, gateway in combinations:  # Drive all seven supported combinations.
         _set_family_state(page, ap, switch, gateway)  # Apply one combination through real controls.
         has_junos_device = switch or gateway  # Switches and gateways use the Junos controls.
-        _expect_hidden(page, "org-upgrade-ap-version-group", not ap)  # AP target follows AP selection.
-        _expect_hidden(page, "org-upgrade-switch-version-group", not switch)  # Switch target follows switch selection.
-        _expect_hidden(page, "org-upgrade-gateway-version-group", not gateway)  # Gateway target follows gateway.
+        assert _target_selects(page, "ap").first.is_visible() is ap  # AP rows follow AP selection.
+        assert _target_selects(page, "switch").first.is_visible() is switch  # Switch rows follow switch selection.
+        assert _target_selects(page, "gateway").first.is_visible() is gateway  # Gateway rows follow gateway selection.
         _expect_hidden(page, "org-upgrade-reboot-group", not has_junos_device)  # Reboot follows Junos families.
         _expect_hidden(page, "org-upgrade-reboot-at-field", not has_junos_device)  # Delay follows Junos families.
         _expect_hidden(page, "org-upgrade-junos-file-action-group", not has_junos_device)  # File action follows Junos.
@@ -128,18 +133,18 @@ def test_reboot_delay_placeholder_is_guidance_not_a_value(page: Any) -> None:
 def test_refused_review_moves_the_message_into_view(page: Any) -> None:
     """A refused Review must focus the flash and name a control that the multi-site page paints."""
     _open_org_options(page)  # Open the multi-site form with the stand-in sites.
-    page.get_by_test_id("org-upgrade-version").fill("")  # Leave required targets empty to trigger a refusal.
-    page.get_by_test_id("org-upgrade-switch-version").fill("")  # Leave the switch target empty too.
-    page.get_by_test_id("org-upgrade-gateway-version").fill("")  # Leave the gateway target empty too.
+    selects = page.locator("[data-org-version-for]")  # Read every explicit device target control.
+    for index in range(selects.count()):  # Clear each selected device version.
+        selects.nth(index).select_option("")  # An empty explicit target list must trigger a refusal.
     page.get_by_test_id("org-upgrade-review").click()  # Submit an invalid request through the script path.
     flash = page.get_by_test_id("flash-message")  # Find the shared flash region.
-    # WHY: Issue #3273. The multi-site page paints no control with the label
-    # "Target version", so the refusal names the legend of the device types.
-    sync_api.expect(flash).to_contain_text('"Device types to upgrade"')  # The message must name a page label.
+    # WHY: Issue #3204. The multi-site page paints one target control for each
+    # device, so an empty selection names the heading above those controls.
+    sync_api.expect(flash).to_contain_text('"Device target versions"')  # The message must name a page label.
     sync_api.expect(flash).not_to_contain_text("Target version")  # The page paints no control with this label.
     sync_api.expect(flash).not_to_contain_text("version_target")  # The message must not name an internal field.
     active_text = page.evaluate("document.activeElement && document.activeElement.textContent")  # Read focused text.
-    assert "Device types to upgrade" in active_text  # Focus must move to the message so the refusal is in view.
+    assert "Device target versions" in active_text  # Focus must move to the message so the refusal is in view.
     assert _save_screenshot(page, "refused-review-focus.png").exists()  # Keep visual proof of the focused flash.
 
 
@@ -147,7 +152,6 @@ def test_a_past_start_time_names_the_multisite_control(page: Any) -> None:
     """Issue #3273: a past start time names the multi-site control and states the multi-site rule."""
     _open_org_options(page)  # Open the multi-site form with the stand-in sites.
     _set_family_state(page, True, False, False)  # Upgrade the access points alone.
-    page.get_by_test_id("org-upgrade-version").fill("0.15.1")  # Type a target that the stand-in site accepts.
     page.get_by_test_id("org-strategy-big_bang").check()  # Use a strategy with no phase list.
     page.get_by_test_id("org-upgrade-start-time").fill("2020-01-01T00:00")  # Choose a moment in the past.
     page.get_by_test_id("org-upgrade-review").click()  # Submit the request through the script path.

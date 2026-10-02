@@ -12,6 +12,7 @@ Why:
 
 from __future__ import annotations
 
+import logging  # Record the empty-site plan without session data.
 import re
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ from typing import Any
 import pytest
 
 from tests.e2e.upgrade_portal.empty_site_seeds import EMPTY_SITE_ID, EMPTY_SITE_NAME
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Check expected inventory counts.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -26,7 +28,6 @@ MODE_PATH = "/select/mode"  # The mode chooser, where the journey starts.
 SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first stand-in site, which holds one device of each type.
 TARGET_VERSION = "0.15.1"  # The newer version that the stand-in cloud offers for every model.
 DEVICE_TYPES = ("ap", "switch", "gateway")  # The three device types of the multi-site form.
-VERSION_FIELD_IDS = ("org-upgrade-version", "org-upgrade-switch-version", "org-upgrade-gateway-version")
 CHOSEN_STRATEGY = "serial"  # Neither the form default nor the service default, so a reset shows on the page.
 UNREAD_TEXT = f"The portal read no device at this site: {EMPTY_SITE_NAME}."  # Issue #3462: one site, one noun.
 SCREENSHOT_DIRECTORY = (  # The evidence folder of this journey.
@@ -73,16 +74,17 @@ def continue_to_the_options(page: Any) -> None:
 
 
 def fill_the_plan(page: Any) -> None:
-    """Check each device type, type one version for each type, and choose the serial strategy.
+    """Select each device target and choose the serial strategy.
 
     Args:
         page: The browser page.
     """
-    for device_type in DEVICE_TYPES:  # A checked type shows its version field.
+    logging.info("Select the device plan beside the empty site")  # Record the known inventory boundary.
+    for device_type in DEVICE_TYPES:  # A checked type enables its device rows.
         page.get_by_test_id(f"org-upgrade-type-{device_type}").check()  # A checked box stays checked.
-    for field_id in VERSION_FIELD_IDS:  # The first site holds one device of each type.
-        page.get_by_test_id(field_id).fill(TARGET_VERSION)  # The newer version of every stand-in model.
+    ModelVersionPicker(page).select(TARGET_VERSION, 3)  # Only the populated site contributes device rows.
     page.get_by_test_id(f"org-strategy-{CHOSEN_STRATEGY}").check()  # The choice that the old save lost.
+    logging.debug("Selected three device targets with strategy %s", CHOSEN_STRATEGY)  # Report the actual plan.
 
 
 def test_an_empty_last_site_stops_the_save_and_the_operator_recovers(empty_site_operator_page: Any) -> None:
@@ -95,6 +97,10 @@ def test_an_empty_last_site_stops_the_save_and_the_operator_recovers(empty_site_
     page.get_by_test_id(f"site-select-{EMPTY_SITE_ID}").check()  # Select the empty site, which comes last.
     assert save_screenshot(page, "picker-with-empty-site.png").exists()  # The two selected sites.
     continue_to_the_options(page)  # Open the shared options form.
+    empty_targets = (
+        page.get_by_test_id("org-upgrade-device-summary").locator("tbody tr").filter(has_text=EMPTY_SITE_NAME)
+    )  # The empty site's advertised count must not create a selectable device.
+    sync_api.expect(empty_targets).to_have_count(0)  # Keep the legitimate empty inventory explicit.
     fill_the_plan(page)  # Type the plan of the operator.
     page.get_by_test_id("org-upgrade-review").click()  # Try to save the plan.
     flash = page.get_by_test_id("flash-message")  # The shared message region of the layout.

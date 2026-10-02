@@ -139,6 +139,28 @@ def test_build_routes_each_family_and_keeps_explicit_targets() -> None:
     assert sum(len(child["target_ids"]) for child in record["children"]) == 4  # Every target is explicit.
 
 
+def test_mixed_ap_versions_use_explicit_site_children() -> None:
+    """Issue #3204: different AP versions must use calls that name each device."""
+    service = AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn())  # Keep every cloud boundary offline.
+    sites = ({"site_id": SITE_ONE, "name": "One"}, {"site_id": SITE_TWO, "name": "Two"})  # Two selected sites.
+    targets = (  # Four models use four supported versions.
+        target("001122334451", "ap", "AP12", SITE_ONE, "0.14.1"),
+        target("001122334452", "ap", "AP24", SITE_ONE, "0.14.2"),
+        target("001122334453", "ap", "AP37", SITE_TWO, "0.15.1"),
+        target("001122334454", "ap", "AP45", SITE_TWO, "0.15.2"),
+    )
+    request = AggregateBuildInput("owner", ORG_ID, sites, targets, UpgradeOptions(), "nonce")  # Build one plan.
+    record = service.build(request)  # Plan the children without a firmware write.
+    assert all(child["route"] == "upgradeSiteDevices" for child in record["children"])  # Use explicit site calls.
+    assert [child["body"]["version"] for child in record["children"]] == [  # Keep each chosen model version.
+        "0.14.1",
+        "0.14.2",
+        "0.15.1",
+        "0.15.2",
+    ]
+    assert sum(len(child["target_ids"]) for child in record["children"]) == 4  # Each AP appears one time.
+
+
 def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
     """One child refusal stays visible and no child write repeats."""
     org = OrgServiceStandIn()  # Record AP calls.

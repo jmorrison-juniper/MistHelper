@@ -39,6 +39,7 @@ from tests.e2e.upgrade_portal.later_check_seeds import (
     WEST_ID,
     WEST_NAME,
 )
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Preserve device choices.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -68,7 +69,11 @@ WHOLE_ROWS = 3  # A whole site read holds the two sites of page one and the site
 LOST_ROWS = 2  # A lost page two leaves the two sites of page one.
 TARGET_VERSION = "0.15.1"  # The newer version that the stand-in cloud offers for every model.
 DEVICE_TYPES = ("ap", "switch", "gateway")  # The three device types of the multi-site form.
-VERSION_FIELD_IDS = ("org-upgrade-version", "org-upgrade-switch-version", "org-upgrade-gateway-version")
+WEST_TARGET_VERSIONS = {  # Keep the saved choices explicit for the three West devices.
+    WEST_AP_MAC: TARGET_VERSION,  # Preserve the access point choice through a refused save.
+    "000000000502": TARGET_VERSION,  # Preserve the gateway choice through the same refusal.
+    "000000000503": TARGET_VERSION,  # Preserve the switch choice through the same refusal.
+}
 FETCH_SCRIPT = """async (path) => {
     const answer = await fetch(path, {headers: {Accept: "application/json"}});
     return {status: answer.status, body: await answer.json()};
@@ -239,16 +244,15 @@ class PlanSteps:
 
     @staticmethod
     def fill_the_plan(page: Any) -> None:
-        """Check each device type, type one version for each type, and choose the serial strategy.
+        """Select each West device target and choose the serial strategy.
 
         Args:
             page: The browser page, on the multi-site options form.
         """
         logger.info("Fill the multi-site plan")  # Record the step before the first control changes.
-        for device_type in DEVICE_TYPES:  # A checked type shows its version field.
+        for device_type in DEVICE_TYPES:  # A checked type enables its device rows.
             page.get_by_test_id(f"org-upgrade-type-{device_type}").check()  # A checked box stays checked.
-        for field_id in VERSION_FIELD_IDS:  # Each selected site holds one device of each type.
-            page.get_by_test_id(field_id).fill(TARGET_VERSION)  # The newer version of every stand-in model.
+        ModelVersionPicker(page).select(TARGET_VERSION, SITE_DEVICES)  # West must keep all three explicit targets.
         page.get_by_test_id("org-strategy-serial").check()  # One site at a time.
         logger.debug("The multi-site plan holds %s device type(s)", len(DEVICE_TYPES))  # Record the result.
 
@@ -443,7 +447,7 @@ class TestMultiSiteLaterChecks:
         PickerSteps.assert_the_script_refusal(page)  # The options page names the cause (US3, scenario 2).
         JourneyEvidence.record_timing("multi-site-options-save", started)  # The refusal answers at once.
         assert OPTIONS_PATH.match(page.url)  # A refused save opens no new page.
-        sync_api.expect(page.get_by_test_id("org-upgrade-version")).to_have_value(TARGET_VERSION)  # Kept value.
+        ModelVersionPicker(page).expect_values(WEST_TARGET_VERSIONS)  # Every device choice survives the refusal.
         sync_api.expect(page.get_by_test_id("org-upgrade-review")).to_be_enabled()  # The form opens again.
         assert JourneyEvidence.screenshot(page, "multi-site-save-refused.png").exists()  # The refusal.
         JourneyEvidence.lose_page(page, False)  # The cloud answers both pages again.

@@ -35,6 +35,7 @@ from tests.e2e.upgrade_portal.org_control_seeds import (
     SECOND_UNCERTAIN_ID,
     SITE_NAMES,
 )
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Verify retry targets by device.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -128,15 +129,23 @@ class TestMultiSiteRecoveryControls:
         sync_api.expect(page.get_by_test_id("org-upgrade-type-ap")).to_be_checked()
         sync_api.expect(page.get_by_test_id("org-upgrade-type-switch")).to_be_checked()
         sync_api.expect(page.get_by_test_id("org-upgrade-type-gateway")).not_to_be_checked()
-        sync_api.expect(page.get_by_test_id("org-upgrade-version")).to_have_value(NEW_VERSION)
-        sync_api.expect(page.get_by_test_id("org-upgrade-switch-version")).to_have_value(NEW_VERSION)
+        targets = ModelVersionPicker(page)  # Read the narrowed retry through the actual device controls.
+        targets.expect_values(
+            {FIRST_SWITCH_MAC: NEW_VERSION, SECOND_AP_MAC: NEW_VERSION}
+        )  # Both failed devices must keep their saved target versions.
+        targets.controls(0, "gateway")  # The retry contains no gateway, so no gateway select must exist.
+        targets.controls(0, mac=FIRST_AP_MAC)  # The healthy access point must not reenter the retry.
         page.screenshot(path=str(tmp_path / "retry-options.png"), full_page=True)
 
         page.get_by_test_id("org-upgrade-review").click()
         page.wait_for_url(CONFIRM_PATH)
         sync_api.expect(page.get_by_test_id("org-upgrade-confirm")).to_contain_text("Devices: 2")
-        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(f"Access points {NEW_VERSION}")
-        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(f"Switches {NEW_VERSION}")
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(
+            f"E2E-AP {NEW_VERSION}"
+        )  # The model summary must keep the failed access point's version.
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(
+            f"E2E-SWITCH {NEW_VERSION}"
+        )  # The model summary must keep the failed switch's version.
         page.screenshot(path=str(tmp_path / "retry-confirm.png"), full_page=True)
 
         page.goto("/upgrade/org/options", wait_until="domcontentloaded")  # The retry stays open until a clear.
@@ -156,14 +165,20 @@ class TestMultiSiteRecoveryControls:
         page.wait_for_url(OPTIONS_PATH)
         sync_api.expect(page.get_by_test_id("org-upgrade-retry-banner")).to_contain_text(RETRY_OPERATION_ID)
         page.get_by_test_id("org-upgrade-type-switch").uncheck()  # The failed switch waits for a later retry.
+        targets = ModelVersionPicker(page)  # Check the retry's selected and excluded rows explicitly.
+        targets.expect_state(1, "ap", True)  # The one failed access point remains available.
+        targets.expect_state(1, "switch", False)  # The excluded failed switch cannot send a target.
+        targets.controls(0, "gateway")  # This narrowed retry has no gateway row to select.
         page.screenshot(path=str(tmp_path / "retry-one-type-options.png"), full_page=True)
 
         page.get_by_test_id("org-upgrade-review").click()  # The first site now holds no retry device.
         page.wait_for_url(CONFIRM_PATH)
         sync_api.expect(page.get_by_test_id("org-upgrade-confirm")).to_contain_text("Devices: 1")
-        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(f"Access points {NEW_VERSION}")
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(
+            f"E2E-AP {NEW_VERSION}"
+        )  # The retained access point still names its model-compatible target.
         firmware = page.get_by_test_id("org-upgrade-firmware").inner_text()  # The firmware line of the plan.
-        assert "Switches" not in firmware  # The cleared switch type leaves the plan.
+        assert "E2E-SWITCH" not in firmware  # The model summary must omit the cleared switch type.
         page.screenshot(path=str(tmp_path / "retry-one-type-confirm.png"), full_page=True)
 
         page.goto("/upgrade/org/options", wait_until="domcontentloaded")  # The retry stays open until a clear.
@@ -219,8 +234,7 @@ class TestMultiSiteRecoveryControls:
         """The confirmation page moves the start time, and an empty field starts the upgrade at once."""
         page = controls_operator_page  # The operator that owns the saved plan.
         open_options_of_both_sites(page)
-        for field in ("org-upgrade-version", "org-upgrade-switch-version", "org-upgrade-gateway-version"):
-            page.get_by_test_id(field).fill(NEW_VERSION)
+        ModelVersionPicker(page).select(NEW_VERSION, 6)  # The reschedule must keep all six explicit device targets.
         first_start = utc_field(2)  # Two hours from now.
         page.get_by_test_id("org-upgrade-start-time").fill(first_start)
         page.get_by_test_id("org-upgrade-review").click()

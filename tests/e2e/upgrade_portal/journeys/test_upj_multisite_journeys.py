@@ -16,6 +16,7 @@ Why:
 from __future__ import annotations
 
 import json  # Build the fulfilled status answers.
+import logging  # Record device selections and invalid-option attempts without session data.
 import re  # Match the page addresses of the multi-site flow.
 from collections.abc import Callable, Sequence  # Type the helpers.
 from typing import Any  # Playwright objects carry no stub types here.
@@ -23,6 +24,7 @@ from typing import Any  # Playwright objects carry no stub types here.
 import pytest
 
 from tests.e2e.upgrade_portal.journeys.evidence import JourneyRecorder  # The evidence of each journey.
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Check actual device selects.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 expect = sync_api.expect  # The retrying assertion of Playwright.
@@ -34,12 +36,19 @@ SITE_NAMES = ("E2E Stand-In Site", "E2E Second Stand-In Site")  # The names that
 TARGET_VERSION = "0.15.1"  # The newer version that every stand-in model offers.
 UNKNOWN_VERSION = "9.9.9"  # A version that no stand-in model offers.
 FAMILIES = ("ap", "switch", "gateway")  # The three families of the options page.
-VERSION_FIELDS = {  # The version control of each family.
-    "ap": "org-upgrade-version",
-    "switch": "org-upgrade-switch-version",
-    "gateway": "org-upgrade-gateway-version",
+DEVICE_TARGET_MACS = (  # Bind value assertions to every device at the two known sites.
+    "000000000001",  # The first site's access point must keep its own target.
+    "000000000002",  # The first site's gateway must keep its own target.
+    "000000000003",  # The first site's switch must keep its own target.
+    "000000000101",  # The second site's access point must keep its own target.
+    "000000000102",  # The second site's gateway must keep its own target.
+    "000000000103",  # The second site's switch must keep its own target.
+)
+FAMILY_MODELS = {  # The current confirmation summary names each device model.
+    "ap": "E2E-AP",  # The access point model identifies the selected access point targets.
+    "switch": "E2E-SWITCH",  # The switch model identifies the selected switch targets.
+    "gateway": "E2E-GATEWAY",  # The gateway model identifies the selected gateway targets.
 }
-FAMILY_LABELS = {"ap": "Access points", "switch": "Switches", "gateway": "Gateways"}  # The confirm page words.
 COMBINATIONS = (  # Every non-empty family combination, single families first.
     ("ap",),
     ("switch",),
@@ -101,22 +110,21 @@ class MultiSiteJourney:
         self.page.wait_for_url(OPTIONS_URL)  # The options page follows the picker.
 
     def choose_families(self, families: Sequence[str], version: str = TARGET_VERSION) -> None:
-        """Select the families and fill the version of each selected family.
+        """Select the families and choose each selected device's offered version.
 
         Args:
             families: The families to upgrade.
-            version: The version for each selected family.
+            version: The offered version to select for each device.
         """
+        targets = ModelVersionPicker(self.page)  # Keep row-state and value checks on this journey's page.
         for family in FAMILIES:  # Walk all three, so a cleared family stays cleared.
             box = self.page.get_by_test_id(f"org-upgrade-type-{family}")  # The family bubble.
-            field = self.page.get_by_test_id(VERSION_FIELDS[family])  # The version control of the family.
-            if family in families:  # A selected family needs a version.
-                box.check()  # Keep or set the bubble.
-                field.fill(version)  # One version for the family.
-            else:  # A cleared family must not carry a version.
-                box.uncheck()  # Clear the bubble.
-                if field.is_visible() and field.is_enabled():  # A hidden control needs no clear.
-                    field.fill("")  # Clear any saved version.
+            logging.info("Set family %s to selected state %s", family, family in families)  # Record the choice.
+            box.set_checked(family in families)  # Preserve excluded values while disabling their submission.
+            logging.debug("Set family %s to selected state %s", family, box.is_checked())  # Report the actual state.
+            targets.expect_state(2, family, family in families)  # Each family has one row at each selected site.
+            if family in families:  # Only an enabled family may receive a target selection.
+                targets.select(version, 2, family)  # Select and verify both model-compatible device choices.
         self.recorder.step(f"families {'-'.join(families)}")  # Record the form state.
 
     def review(self, expect_confirm: bool = True) -> None:
@@ -235,9 +243,11 @@ class TestMultiSiteFamilyJourneys:
         firmware = operator.page.get_by_test_id("org-upgrade-firmware")  # The version line of the plan.
         for family in FAMILIES:  # Each selected family is named, and each cleared family is absent.
             if family in families:  # A selected family names its version.
-                expect(firmware).to_contain_text(f"{FAMILY_LABELS[family]} {TARGET_VERSION}")
+                expect(firmware).to_contain_text(
+                    f"{FAMILY_MODELS[family]} {TARGET_VERSION}"
+                )  # Keep each selected model and version visible in the plan.
             else:  # A cleared family must not appear in the plan.
-                expect(firmware).not_to_contain_text(FAMILY_LABELS[family])
+                expect(firmware).not_to_contain_text(FAMILY_MODELS[family])  # Excluded models must leave the plan.
         operator.start()  # The operator types the word and starts the operation.
         progress = operator.page.get_by_test_id("org-upgrade-site-progress")  # The child table.
         expect(progress).to_be_visible()  # The table shows at once.
@@ -300,6 +310,7 @@ class TestMultiSiteOptionsJourneys:
     def test_default_form_refusal_is_in_view(self, reader: MultiSiteJourney) -> None:
         """A refused default form shows its message where the operator looks."""
         reader.open_options()  # Both sites.
+        ModelVersionPicker(reader.page).select("", 6)  # The current form starts with model-compatible defaults.
         reader.page.get_by_test_id("org-upgrade-review").scroll_into_view_if_needed()  # The operator scrolls down.
         reader.review(expect_confirm=False)  # All families selected and no version.
         expect(reader.page.get_by_test_id(FLASH)).to_be_in_viewport()  # The message must be in view.
@@ -308,13 +319,24 @@ class TestMultiSiteOptionsJourneys:
 
     @pytest.mark.xfail(strict=True, reason="#3206: the refusal names the internal field version_target")
     def test_unknown_version_names_the_control(self, reader: MultiSiteJourney) -> None:
-        """An unknown version names the page control and not an internal field."""
+        """The selects refuse an unavailable version, and an empty plan names the device heading."""
         reader.open_options()  # Both sites.
-        reader.choose_families(("ap",), UNKNOWN_VERSION)  # AP only, with a version no model offers.
-        reader.review(expect_confirm=False)  # The server refuses the version.
+        reader.choose_families(("ap",))  # Begin with two real supported access point choices.
+        targets = ModelVersionPicker(reader.page)  # Verify invalid options without adding a production alias.
+        controls = targets.controls(2, "ap")  # An absent family must not make the refusal assertion pass.
+        expect(controls.locator(f'option[value="{UNKNOWN_VERSION}"]')).to_have_count(0)  # No model offers this value.
+        logging.info("Attempt an unavailable device target option")  # Record the expected browser refusal.
+        with pytest.raises(sync_api.Error, match="did not find some options"):  # Require the precise select refusal.
+            controls.first.select_option(UNKNOWN_VERSION)  # Use the real select without adding an invalid option.
+        logging.debug("The browser refused the unavailable target option")  # Record the unchanged selection.
+        targets.expect_values(
+            dict.fromkeys(DEVICE_TARGET_MACS, TARGET_VERSION)
+        )  # A refused option must not replace any saved device value.
+        targets.select("", 2, "ap")  # Clear the selected devices to test the current in-page refusal wording.
+        reader.review(expect_confirm=False)  # No selected target may reach confirmation.
         flash = reader.page.get_by_test_id(FLASH)  # The refusal message.
         expect(flash).not_to_contain_text("version_target")  # No internal name.
-        expect(flash).to_contain_text("Access point")  # The label of the control.
+        expect(flash).to_contain_text("Device target versions")  # Require the current device heading.
         assert "version_target" not in flash.inner_text()  # The same rule as a plain comparison.
 
     @pytest.mark.xfail(strict=True, reason="#3207: the controls of a cleared family stay visible")
@@ -322,10 +344,12 @@ class TestMultiSiteOptionsJourneys:
         """AP only hides the switch, gateway, reboot, and Junos controls."""
         reader.open_options()  # Both sites.
         reader.choose_families(("ap",))  # AP only.
-        for test_id in ("org-upgrade-switch-version", "org-upgrade-gateway-version", "org-upgrade-reboot-group"):
-            expect(reader.page.get_by_test_id(test_id)).to_be_hidden()  # A control of a cleared family.
+        targets = ModelVersionPicker(reader.page)  # Check each hidden device control, not a removed family field.
+        for family in ("switch", "gateway"):  # Both excluded families still have two inventory rows.
+            targets.expect_state(2, family, False)  # Require hidden and disabled selects for every excluded device.
+        expect(reader.page.get_by_test_id("org-upgrade-reboot-group")).to_be_hidden()  # No selected Junos family.
         expect(reader.page.get_by_test_id("org-upgrade-junos-file-action-group")).to_be_hidden()  # Junos only.
-        hidden = reader.page.get_by_test_id("org-upgrade-switch-version").is_hidden()  # The switch version control.
+        hidden = targets.controls(2, "switch").first.is_hidden()  # Preserve the direct visibility assertion.
         assert hidden is True  # The same rule as a plain comparison.
 
     @pytest.mark.xfail(strict=True, reason="#3221: the options page resets families, reboot, Junos action, and force")

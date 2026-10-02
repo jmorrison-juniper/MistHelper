@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Issue #3243: the pre-check gate.
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Count actual device controls.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -56,12 +57,12 @@ class TestOrganizationUpgradeBrowserFlow:
 
         for family in ("ap", "switch", "gateway"):
             sync_api.expect(page.get_by_test_id(f"org-upgrade-type-{family}")).to_be_checked()
-        page.get_by_test_id("org-upgrade-version").fill("")
-        page.get_by_test_id("org-upgrade-switch-version").fill("")
-        page.get_by_test_id("org-upgrade-gateway-version").fill("")
+        ModelVersionPicker(page).select("", 3)  # Explicitly clear each offered device choice before the refusal.
         page.get_by_test_id("org-upgrade-review").click()
 
-        sync_api.expect(page.get_by_test_id("flash-message")).to_contain_text("device type")
+        sync_api.expect(page.get_by_test_id("flash-message")).to_contain_text(
+            "Device target versions"
+        )  # The refusal must name the verified heading above the device controls.
         sync_api.expect(page.get_by_test_id("org-upgrade-options")).to_be_visible()
         assert page.url.endswith("/upgrade/org/options")
 
@@ -82,17 +83,19 @@ class TestOrganizationUpgradeBrowserFlow:
         sync_api.expect(page.get_by_test_id("org-upgrade-type-switch")).to_be_checked()
         sync_api.expect(page.get_by_test_id("org-upgrade-type-gateway")).to_be_checked()
 
-        page.get_by_test_id("org-upgrade-version").fill("0.15.1")
-        page.get_by_test_id("org-upgrade-switch-version").fill("0.15.1")
-        page.get_by_test_id("org-upgrade-gateway-version").fill("0.15.1")
+        ModelVersionPicker(page).select("0.15.1", 6)  # Preserve the homogeneous plan across all six device rows.
         page.get_by_test_id("org-strategy-canary").check()
         page.get_by_test_id("org-upgrade-canary-phases").fill("10,100")
         page.get_by_test_id("org-upgrade-max-failures").fill("0")
         page.get_by_test_id("org-upgrade-review").click()
         page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))
         sync_api.expect(page.get_by_test_id("org-upgrade-confirm")).to_be_visible()
-        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text("Access points 0.15.1")
-        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text("Switches 0.15.1")
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(
+            "E2E-AP 0.15.1"
+        )  # The current summary names the access point model and its version.
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(
+            "E2E-SWITCH 0.15.1"
+        )  # The current summary names the switch model and its version.
         sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()
 
         OrgPrecheckSteps.take_missing(page)  # Issue #3243: each site needs a verified pre-check before the submit.

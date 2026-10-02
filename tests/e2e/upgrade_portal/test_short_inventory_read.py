@@ -36,6 +36,7 @@ from tests.e2e.upgrade_portal.short_read_seeds import (
     SHORT_SITE_ID,
     SHORT_SITE_NAME,
 )
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Count the kept device rows.
 from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3511: the teardown.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
@@ -47,7 +48,6 @@ SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first stand-in site, whi
 SITE_NAME = "E2E Stand-In Site"  # The name of the first site, which the banner must not name.
 TARGET_VERSION = "0.15.1"  # The newer version that the stand-in cloud offers for every model.
 DEVICE_TYPES = ("ap", "switch", "gateway")  # The three device types of the multi-site form.
-VERSION_FIELD_IDS = ("org-upgrade-version", "org-upgrade-switch-version", "org-upgrade-gateway-version")
 CHOSEN_STRATEGY = "serial"  # Neither the form default nor the service default, so a reset shows on the page.
 ORG_BANNER_ID = "org-upgrade-partial-inventory"  # The Caution banner of the multi-site options page.
 SITE_BANNER_ID = "upgrade-partial-inventory"  # The Caution banner of the single-site options page.
@@ -131,17 +131,17 @@ def continue_to_the_options(page: Any) -> None:
     logger.debug("The multi-site options form owns the page")  # Record the result of the step.
 
 
-def fill_the_plan(page: Any) -> None:
-    """Check each device type, type one version for each type, and choose the serial strategy.
+def fill_the_plan(page: Any, device_count: int) -> None:
+    """Select the expected device targets and choose the serial strategy.
 
     Args:
         page: The browser page.
+        device_count: The exact count of device rows that this site set keeps.
     """
     logger.info("Fill the multi-site plan")  # Record the step before the first control changes.
-    for device_type in DEVICE_TYPES:  # A checked type shows its version field.
+    for device_type in DEVICE_TYPES:  # A checked type enables its device rows.
         page.get_by_test_id(f"org-upgrade-type-{device_type}").check()  # A checked box stays checked.
-    for field_id in VERSION_FIELD_IDS:  # Each selected site holds one device of each type.
-        page.get_by_test_id(field_id).fill(TARGET_VERSION)  # The newer version of every stand-in model.
+    ModelVersionPicker(page).select(TARGET_VERSION, device_count)  # A short read must not silently omit every target.
     page.get_by_test_id(f"org-strategy-{CHOSEN_STRATEGY}").check()  # A choice that a reset would lose.
     logger.debug("The multi-site plan holds %s device type(s)", len(DEVICE_TYPES))  # Record the result.
 
@@ -285,7 +285,11 @@ def test_the_multi_site_page_names_the_short_site_and_refuses_the_save(short_rea
     sync_api.expect(banner).not_to_contain_text(SITE_NAME)  # The complete site stays out of the banner.
     sync_api.expect(banner).to_have_text(ORG_BANNER_TEXT)  # Issue #3462: one site takes the singular nouns.
     assert save_screenshot(page, "multi-site-banner.png").exists()  # The banner above the form.
-    fill_the_plan(page)  # Type the plan of the operator.
+    short_targets = (
+        page.get_by_test_id("org-upgrade-device-summary").locator("tbody tr").filter(has_text=SHORT_SITE_NAME)
+    )  # Count the kept rows instead of the larger advertised inventory.
+    sync_api.expect(short_targets).to_have_count(KEPT_DEVICE_COUNT)  # The partial table holds three rows.
+    fill_the_plan(page, 2 * KEPT_DEVICE_COUNT)  # Both sites contribute the three rows that each read kept.
     page.get_by_test_id("org-upgrade-review").click()  # Try to save the plan.
     flash = page.get_by_test_id(FLASH_ID)  # The shared message region of the layout.
     sync_api.expect(flash).to_contain_text(ORG_REFUSAL_TEXT)  # The refusal names the short-read site.
@@ -299,7 +303,8 @@ def test_the_multi_site_page_names_the_short_site_and_refuses_the_save(short_rea
     short_box.uncheck()  # Clear the short-read site. A later reload can read it in full.
     continue_to_the_options(page)  # Open the form again with one site.
     sync_api.expect(page.get_by_test_id(ORG_BANNER_ID)).to_have_count(0)  # A complete read shows no banner.
-    fill_the_plan(page)  # The refused save stored no options, so the operator types the plan again.
+    sync_api.expect(short_targets).to_have_count(0)  # The excluded short-read site now contributes no row.
+    fill_the_plan(page, KEPT_DEVICE_COUNT)  # The recovered plan holds only the complete site's three devices.
     page.get_by_test_id("org-upgrade-review").click()  # Save the plan.
     page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # The save accepted the plan.
     confirm = page.get_by_test_id("org-upgrade-confirm")  # The summary card of the confirm page.
