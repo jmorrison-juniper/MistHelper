@@ -4,6 +4,8 @@
 
 **Input**: The specification in this directory.
 
+**Local Refresh**: 2026-10-02 on `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`.
+
 ## Summary
 
 Replace only the descriptions in the two selection templates.
@@ -51,7 +53,8 @@ That explicit sequence replaces the older automatic deployment instructions for 
 | Single-site workflow | `select.site_inventory_page` opens the inventory and its capture link. Run options and confirmation use `/runs/<run_id>/...`. |
 | Single-site cloud routes | `upgrade_service._build_plan` selects `upgradeSiteDevices` or `upgradeDevice`. SSR targets use `upgradeOrgSsrs`. |
 | Multi-site selection | `select.choose_sites` saves the ordered sites and opens `/upgrade/org/options`. |
-| Multi-site cloud routes | `AggregateUpgradeService` creates one AP organization child and the existing site or SSR plans for other targets. |
+| Multi-site cloud routes | `AggregateUpgradeService` creates one AP organization child for a shared version. Different AP versions use site children. Other targets use site or SSR plans. |
+| Target versions | Each device uses a version that its model supports. The accepted #3633 repair preserves different model versions through the stored plan. |
 | Shared pre-check adoption | `org_upgrade.precheck_gate` uses the same adopter as the single-site route. `StandalonePrecheckAdopter` reads the newest verified standalone capture. |
 | Missing pre-check captures | `/api/org-upgrades/prechecks/<site_id>` starts the selected site's capture from the confirmation page. |
 | Multi-site post-check | `OrgPostCheckStage` takes captures after the phases for sites with accepted writes. Manual mode holds those captures. |
@@ -100,3 +103,21 @@ This worktree has no PowerShell capability.
 Use the current specification, plan, and task templates as a file-only equivalent.
 Keep the app-managed branch, shared `.specify` files, and agent instructions unchanged.
 Record implementation and analysis in this issue's directory only.
+
+## Local Refresh Boundary
+
+Preserve the original local commit `7ee65990883fdb9e58db88254314b08ae9bba6eb`.
+The local tag `preservation/issue3215-local-7ee65990` keeps that commit.
+Rebase only this worktree on the accepted immutable base.
+The exact reserved file set stays unchanged.
+
+Repeat the real rendering cases and all six Chromium cases with strict mode and current CI defaults.
+Collect the complete E2E tree.
+Name every skipped case without counting it as a pass.
+Verify strict missing-package and wrong-owner failures with the existing direct tests.
+Keep all shared fixtures, product Python, firmware, authentication, confirmation, locks, styles, and scripts unchanged.
+
+Run the six-input, three-guide preflight before the clean committed-tree analyzer and the full ratchet.
+Record all 23 items from the current PR template offline.
+Create one new local follow-up commit without amendment.
+Then stop until the parent grants publication separately.

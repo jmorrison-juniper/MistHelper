@@ -5,9 +5,15 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from playwright.sync_api import Page, expect
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
+
+sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
+expect = sync_api.expect
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +26,7 @@ class TestModeDescriptionJourney:
             "Single-site: Open the inventory of one site. "
             "If no verified pre-check capture exists, take one. "
             "Set the upgrade options for that site. "
+            "For each device, select a target version that its model supports. "
             "Access points, switches, and Junos gateways use site routes "
             "(upgradeSiteDevices or upgradeDevice). "
             "Session Smart Router (SSR) gateways use the organization SSR route (upgradeOrgSsrs)."
@@ -27,8 +34,12 @@ class TestModeDescriptionJourney:
         "mode-multi-site-description": (
             "Multi-site: Select one or more sites. "
             "Set the upgrade options for the selected sites. "
+            "For each device, select a target version that its model supports. "
             "One portal operation tracks one or more child jobs. "
-            "Access points use an organization cloud job (upgradeOrgDevices). "
+            "If all selected access points use one target version, they use an organization cloud job "
+            "(upgradeOrgDevices). "
+            "If access points use different target versions, they use separate site jobs "
+            "(upgradeSiteDevices or upgradeDevice). "
             "Switches and Junos gateways use site routes (upgradeSiteDevices or upgradeDevice). "
             "Session Smart Router (SSR) gateways use the organization SSR route (upgradeOrgSsrs)."
         ),

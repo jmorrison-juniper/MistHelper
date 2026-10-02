@@ -52,3 +52,16 @@ Report the clean local SHA to the parent after the commit.
 Publication is not authorized.
 The parent must grant an explicit, fully verified main SHA after the preceding repair.
 Any later delivery requires a fresh rebase, repeated local gates, complete PR evidence, protected merge, and exact-main proof.
+
+## Local Refresh on 2026-10-02
+
+- [x] T015 Preserve the original commit and rebase only on the authorized immutable base. (delivered: specs/3215-upgrade-mode-descriptions/implementation.md)
+- [x] T016 Describe current per-device model choices and both AP routing cases. (delivered: src/upgrade_portal/app/assets/templates/select/mode.html)
+- [x] T017 Retain the browser import skip and prove strict and owner failure paths. (delivered: tests/e2e/upgrade_portal/test_mode_descriptions_journey.py)
+- [x] T018 Repeat real rendering, all six Chromium cases, full collection, and applicable local gates. (delivered: specs/3215-upgrade-mode-descriptions/implementation.md)
+- [x] T019 Record skipped cases and the current 23-item offline review requirement. (delivered: specs/3215-upgrade-mode-descriptions/analysis.md)
+
+The clean committed-tree analyzer and full ratchet run after the new local commit.
+Their session reports must state the measured counts and all new findings.
+The parent receives the clean SHA and those results.
+This local refresh does not authorize publication or delivery.
