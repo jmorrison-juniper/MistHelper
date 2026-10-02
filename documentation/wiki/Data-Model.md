@@ -8,7 +8,7 @@
 
 ## SQLite
 
-Set `--output-format sqlite` or `OUTPUT_FORMAT=sqlite` environment variable.
+Use `--output-format sqlite` to select SQLite output.
 
 Adaptive strategy (see `ENDPOINT_PRIMARY_KEY_STRATEGIES` mapping):
 
