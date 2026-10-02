@@ -10,6 +10,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any, ClassVar, NoReturn
 
 import pytest
@@ -301,6 +302,43 @@ class DeviceIndexRecorder:
         statistics: tuple[Mapping[str, object], ...]
         index: dict[str, dict[str, object]]
 
+        @staticmethod
+        def native_seeds(configuration: pytest.Config) -> ModuleType:
+            """Reuse the native fixture module instead of allocating a second run identity."""
+            path = Path(__file__).resolve().parents[2] / "e2e" / "upgrade_portal" / "conftest.py"
+            logger.info("Read the native capture fixture module")
+            candidates = [
+                plugin
+                for plugin in configuration.pluginmanager.get_plugins()
+                if isinstance(plugin, ModuleType) and Path(getattr(plugin, "__file__", "") or "").resolve() == path
+            ]
+            if not candidates:
+                candidates = [
+                    module
+                    for module in tuple(sys.modules.values())
+                    if isinstance(module, ModuleType) and Path(getattr(module, "__file__", "") or "").resolve() == path
+                ]
+            if not candidates:
+                candidates = [importlib.import_module("tests.e2e.upgrade_portal.conftest")]
+            assert len(candidates) == 1, f"Checked fixture modules={len(candidates)}. Expected one native identity."
+            logger.debug("Checked native capture fixture modules=1")
+            return candidates[0]
+
+        @staticmethod
+        def require_duplicate_refusal(configuration: pytest.Config, monkeypatch: pytest.MonkeyPatch) -> None:
+            """Prove that two fixture identities cannot pass the native reader."""
+            path = Path(__file__).resolve().parents[2] / "e2e" / "upgrade_portal" / "conftest.py"
+            modules = {ModuleType("first_native_fixture"), ModuleType("second_native_fixture")}
+            for module in modules:
+                module.__file__ = str(path)
+            logger.info("Check the native reader with two synthetic fixture identities")
+            with monkeypatch.context() as isolated:
+                isolated.setattr(configuration.pluginmanager, "get_plugins", lambda: modules)
+                with pytest.raises(AssertionError) as refusal:
+                    DeviceIndexRecorder.Call.native_seeds(configuration)
+            assert str(refusal.value).splitlines()[0] == "Checked fixture modules=2. Expected one native identity."
+            logger.debug("Checked fixture modules=2 duplicate refusals=1")
+
     def __init__(self) -> None:
         """Retain the shipped callable before pytest installs this recorder."""
         self.builder = devices.build_device_index
@@ -463,11 +501,16 @@ class TestCaptureStatisticsGuards:
             expected = "Checked inventory=2 statistics=0 index=2 fields=8"
         assert str(checked) == expected
 
-    @pytest.mark.parametrize("refusal", ["unknown-target", "missing-playwright"])
-    def test_fixture_refusals_are_explicit(self, refusal: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("refusal", ["unknown-target", "missing-playwright", "duplicate-native-module"])
+    def test_fixture_refusals_are_explicit(
+        self, refusal: str, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+    ) -> None:
         """An invalid fixture target or missing browser package must give an explicit refusal."""
         if refusal == "missing-playwright":
             self.Inputs.require_missing_playwright(monkeypatch)
+            return
+        if refusal == "duplicate-native-module":
+            DeviceIndexRecorder.Call.require_duplicate_refusal(request.config, monkeypatch)
             return
         inputs = self.Inputs.valid()
         with pytest.raises(AssertionError) as failure:
@@ -701,10 +744,11 @@ class TestGlobalCaptureStatistics:
     """Require all five real global seeds, exact counts, and unchanged stored fields."""
 
     @pytest.fixture
-    def capture_seeds(self, monkeypatch: pytest.MonkeyPatch) -> Iterator[DeviceIndexRecorder]:
+    def capture_seeds(
+        self, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+    ) -> Iterator[DeviceIndexRecorder]:
         """Observe five genuine global builds without starting a browser or server."""
-        from tests.e2e.upgrade_portal import conftest as seeds
-
+        seeds = DeviceIndexRecorder.Call.native_seeds(request.config)
         recorder = DeviceIndexRecorder()
         monkeypatch.setattr(devices, "build_device_index", recorder)
         logger.info("Read all five global capture seeds through the real device builder")
@@ -784,11 +828,10 @@ class TestGlobalCaptureStatistics:
         assert {record["version"] for record in capture["devices"]} == {version}
 
     def test_existing_pair_changes_three_versions_and_empty_site_stays_empty(
-        self, capture_seeds: DeviceIndexRecorder
+        self, capture_seeds: DeviceIndexRecorder, request: pytest.FixtureRequest
     ) -> None:
         """Preserve the empty site and require three actual version deltas."""
-        from tests.e2e.upgrade_portal import conftest as seeds
-
+        seeds = DeviceIndexRecorder.Call.native_seeds(request.config)
         empty = seeds.stand_in_capture(
             "e2e-empty-statistics-proof", "pre", "0.14.29216", seeds.PRE_CAPTURE_STAMP, EMPTY_SITE_ID
         )

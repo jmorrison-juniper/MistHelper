@@ -12,7 +12,62 @@
 
 **Baseline**: `ff3cc1bea8ab58026210a968ff1465f61c9fec78`.
 
+**Granted delivery baseline**: `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`.
+
 **Scope**: Test-only seed repair, direct contracts, negative guard proofs, and real Chromium assertions.
+
+## Delivery grant and current proof
+
+The original tasks and evidence describe the initial local preparation.
+The parent now grants this session sole position-19 publication and delivery.
+The seven-file scope remains unchanged.
+The live claim and complete open-PR file lists show no competing owner.
+The clean prepared commit rebased onto the exact delivery baseline without a conflict.
+
+The browser module no longer imports resource-bearing globals from another conftest identity.
+It selects the exact identifiers as contract literals.
+The unit reader first reuses the native pytest fixture module.
+If no native fixture is loaded, it reuses an existing matching module before importing one.
+Neither correction changes the shared store, fixture state, or product behavior.
+
+| Current-base proof | Exact result |
+| - | - |
+| Global seed red | All 16 required cases fail on unchanged granted-main seed input. |
+| Real Chromium red | All four cases fail on count `0` or `No field changed.`. |
+| Owned unit contracts | 87 passed, zero skips. The additional case proves duplicate native-module refusal. |
+| Current focused unit and contracts | 395 passed, zero skips. |
+| Native unit and real browser proof | 91 passed, including all four required browser cases. |
+| Complete current CI E2E collection | 594 collected, 542 passed, 52 existing skips, zero failures. |
+| Named capture-options skip | Reproduced on the exact delivery baseline, with 12 passes and one skip. |
+| Current changed regions | All 433 executable lines and 54 guard branch paths have complete coverage. |
+| Native runtime isolation | Four measured test/server processes have zero actual SDK transport calls and zero external connections. |
+| Required input preflight | Six attempted, read, and validated inputs. Three guides read and checked. |
+| Full unchanged ratchet | 1008 discovered files, 960 analyzed, 48 existing exclusions, 725 existing findings, zero new findings. |
+| Current local writing grade | Partial heuristic evidence only. The licensed dictionary and language model remain unavailable. |
+
+The full E2E command disables automatic tracing, screenshots, and video.
+The 51 opt-in policy skips remain named.
+The operator journey runner was not executed during this delivery phase.
+Its initial `ff3cc1` failures remain historical evidence, not a current-baseline claim.
+The separate lifecycle gap remains unchanged.
+The merged tier reader, model selectors, authentication seams, and refusal behavior remain unchanged.
+
+The exact commands, full outputs, XML, source hashes, and current measurements are in:
+
+```text
+/Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-delivery-0d1/
+```
+
+The machine receipt records the actual source and merged-main identities.
+Do not write a guessed future SHA into these documents.
+
+### Delivery stages
+
+- [X] D001 Verify the live claim, exact granted main, and complete open-PR file lists. Rebase only the seven-file repair.
+- [X] D002 Repeat current-base red, native green, focused contracts, full current E2E, exact changed coverage, and applicable local gates.
+- [ ] D003 Commit the current proof, run the clean committed-scope ratchet, push once, and open the current full-template PR.
+- [ ] D004 Require every fresh applicable quality, title, and CodeQL result. Merge only the full verified head through strict protection.
+- [ ] D005 Run the actual resulting-main local proof, verify cleanup, add the persistent PR receipt, and pause after the parent handoff.
 
 ## Format and completion evidence
 

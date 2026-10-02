@@ -10,7 +10,9 @@
 
 **Retained requirements**: [The comment that preserves #3359](https://github.com/jmorrison-juniper/MistHelper/issues/3494#issuecomment-5937045284)
 
-**Base**: `ff3cc1bea8ab58026210a968ff1465f61c9fec78`
+**Initial proof base**: `ff3cc1bea8ab58026210a968ff1465f61c9fec78`
+
+**Granted delivery base**: `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`
 
 ## User Scenarios & Testing
 
@@ -121,8 +123,13 @@ Do not address the separate lifecycle-state gap in issue #3375.
 Use only the isolated test server and synthetic records.
 Use no cloud credentials, live Mist requests, production stores, or containers.
 Keep new artifacts in the session directory or `tmp_path`.
-Commit locally only.
-Publication requires a separate parent release after position 18.
+The initial phase permitted a local commit only.
+The parent granted this session sole position-19 publication and delivery on the exact delivery base.
+Require fresh checks and a full-head-match protected squash merge.
+Use no administrative bypass, auto-merge request, or delete-branch flag.
+Stop if the live main advances before the authorized merge.
+Run the actual resulting-main local proof and record a persistent receipt.
+The parent alone releases the next issue.
 
 ## Workflow Constraints
 

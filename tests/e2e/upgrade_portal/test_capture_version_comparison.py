@@ -7,7 +7,6 @@ from typing import ClassVar
 
 import pytest
 
-from tests.e2e.upgrade_portal.conftest import POST_CAPTURE_ID, PRE_CAPTURE_ID
 from tests.e2e.upgrade_portal.test_comparison import _click_and_wait, _require_built_route
 
 try:
@@ -42,10 +41,10 @@ class CaptureVersionComparison:
         sync_api.expect(before).to_be_visible()
         sync_api.expect(after).to_be_visible()
         logger.info("Select the existing pre-check and post-check capture IDs")
-        before.select_option(PRE_CAPTURE_ID)
-        sync_api.expect(before).to_have_value(PRE_CAPTURE_ID)
-        after.select_option(POST_CAPTURE_ID)
-        sync_api.expect(after).to_have_value(POST_CAPTURE_ID)
+        before.select_option("e2e-capture-pre-0001")
+        sync_api.expect(before).to_have_value("e2e-capture-pre-0001")
+        after.select_option("e2e-capture-post-0001")
+        sync_api.expect(after).to_have_value("e2e-capture-post-0001")
         logger.debug("Selected capture IDs=2")
         cls.submit_pair(page)
 

@@ -6,6 +6,8 @@
 
 **Baseline**: `ff3cc1bea8ab58026210a968ff1465f61c9fec78`
 
+**Delivery baseline**: `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`
+
 **Stage output**: `specs/3494-browser-capture-statistics/plan.md` only.
 
 ## Summary
@@ -20,6 +22,30 @@ Prove the visible version-change count and each version-change row with Chromium
 Test guard failures with independent synthetic records and explicit checked counts.
 Retain every requirement from #3359 that #3494 preserves.
 Leave the separate #3375 lifecycle fields unchanged.
+
+### Granted delivery
+
+The original baseline and results below describe the initial preparation.
+The parent grants sole position-19 delivery on the exact delivery baseline.
+Rebase only this seven-file repair.
+Preserve the merged tier reader, model selectors, authentication seams, and native fixture identity.
+The browser assertions use explicit capture identifiers.
+The unit reader reuses the already-loaded native fixture module.
+It imports a fixture module only when no matching module exists.
+
+Repeat the red tests on the immutable delivery baseline.
+Run the complete current `tests/e2e/` collection with automatic tracing, screenshots, and video disabled.
+Use current-baseline evidence for each claimed existing skip or optional failure.
+Historical optional results do not prove current equivalence.
+
+Complete the current six-input and three-guide preflight.
+Run the full unchanged ratchet and the clean committed-scope ratchet.
+Publish once after the exact local proof.
+Require every fresh applicable check and all strict required contexts.
+Merge only the complete verified source head into the exact delivery baseline.
+Use no administrative bypass, auto-merge, or branch-deletion flag.
+Run the actual merged-main proof and add the persistent PR receipt.
+Pause after the parent receives the exact SHA, tree, and URL.
 
 ### File-only workflow
 
