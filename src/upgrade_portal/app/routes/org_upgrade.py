@@ -46,7 +46,7 @@ from ...upgrade.org_advanced_options import (  # Issue #3383: the advanced contr
     OrgAdvancedRules,
     OrgAdvancedSummary,
 )
-from ...upgrade.org_cancel_outcomes import OrgCancelOutcomes  # Issue #3246: the three lists of each cancel.
+from ...upgrade.org_cancel_outcomes import OrgCancelLists, OrgCancelOutcomes  # Share the known refusal evidence.
 from ...upgrade.org_cancel_text import OrgCancelText  # Issue #3225: one Cancellation text for the page and the poll.
 from ...upgrade.org_cascade.locks import OrgOperationLockLease  # Issue #3333: renew every selected site lock.
 from ...upgrade.org_cascade.readers import OrgSettleAnchors  # Issue #3245: the anchors before the first write.
@@ -2077,20 +2077,16 @@ def _aggregate_child_summary(child: Mapping[str, Any]) -> tuple[dict[str, Any], 
 
 
 def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
-    """Return explicit, upgraded, and failed counts for one child.
-
-    Why:
-        Issue #3457. A child job that the multi-site check proved holds an empty
-        cloud answer, so the cloud lists count no upgraded device. The counts of
-        that child job come from the proof, with the rule of the device table.
-    """
+    """Return explicit, upgraded, and failed counts from known outcome evidence."""
+    logger.info("Count outcomes for child job %s", child.get("child_id", ""))
+    total = len(child.get("target_ids", []))  # Preserve the existing explicit target total.
+    refused = child.get("status") == "rejected" and child.get("raw_status") in OrgCancelLists.REFUSED_STATUSES
+    if child.get("status") == "not_submitted" or refused:  # A legacy rejected word alone can hide an active job.
+        logger.debug("Child %s reports %s known failed targets", child.get("child_id", ""), total)
+        return total, 0, total  # Known no-write outcomes replace cloud lists without double counting.
     data = child.get("status_data") if isinstance(child.get("status_data"), Mapping) else {}  # Read status.
     targets = data.get("targets") if isinstance(data.get("targets"), Mapping) else {}  # Read root targets.
-    counts = (  # The target count and the two counts of the stored cloud lists.
-        len(child.get("target_ids", [])),  # Each target device of the child job.
-        _array_count(targets.get("upgraded")),  # The devices that the cloud lists as upgraded.
-        _array_count(targets.get("failed")),  # The devices that the cloud lists as failed.
-    )
+    counts = (total, _array_count(targets.get("upgraded")), _array_count(targets.get("failed")))
     if OrgChildDevices.is_proven(child):  # The check proved each device of this child job.
         upgraded, failed = OrgChildDevices(child).proven_counts(counts[0])  # The rule of the device table.
         child_id = child.get("child_id", "")  # Name the child job in the log line.
@@ -2098,7 +2094,9 @@ def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
         return counts[0], upgraded, failed  # The proof replaces the empty cloud lists.
     entries = data.get("site_upgrades", data.get("upgrades", []))  # Read organization site results.
     _, nested_counts, has_nested_targets = _site_summaries(entries)  # Count nested AP target arrays.
-    return (counts[0], nested_counts[1], nested_counts[2]) if has_nested_targets else counts  # Prefer nested counts.
+    result = (total, nested_counts[1], nested_counts[2]) if has_nested_targets else counts  # Prefer nested counts.
+    logger.debug("Child %s has counts %s", child.get("child_id", ""), result)
+    return result
 
 
 def owned_saved_operation(operation_id: str, org_id: str) -> dict[str, Any] | None:
