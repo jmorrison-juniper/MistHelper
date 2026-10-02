@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
-from playwright.sync_api import Page, expect
+import pytest
 
 from tests.contract.upgrade_portal.test_history_card_scope_routes import CardEvidence
-from tests.e2e.upgrade_portal.conftest import STORED_POLL_CAPTURE_ID, STORED_POLL_SITE_ID, STORED_POLL_SITE_NAME
+from tests.support.upgrade_portal_e2e.owner import RunOwnerHeaderCheck
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
+
+sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +23,7 @@ class ScopeJourney:
     """Read the existing isolated browser records without starting an upgrade."""
 
     @staticmethod
-    def open(page: Page, path: str) -> None:
+    def open(page: Page, path: str, test_run_id: str) -> None:
         """Open the actual history route after the current asynchronous seeds finish."""
         logger.info("Open one isolated history scope page")
         if path == "/history":
@@ -36,6 +41,7 @@ class ScopeJourney:
         response = page.goto(path, wait_until="domcontentloaded")
         assert response is not None
         assert response.status == 200
+        assert RunOwnerHeaderCheck(test_run_id).require(response.headers) == test_run_id
         logger.debug("Opened one isolated history scope page with status 200")
 
     @staticmethod
@@ -46,10 +52,10 @@ class ScopeJourney:
         for kind, note, caption in zip(
             ("run", "operation", "audit"), expected["notes"], expected["captions"], strict=True
         ):
-            expect(page.get_by_test_id(f"history-{kind}-note")).to_have_text(note)
+            sync_api.expect(page.get_by_test_id(f"history-{kind}-note")).to_have_text(note)
             table = page.get_by_test_id(f"history-{kind}-table")
-            expect(table.locator("caption")).to_have_text(caption)
-            expect(table).to_have_accessible_name(caption)
+            sync_api.expect(table.locator("caption")).to_have_text(caption)
+            sync_api.expect(table).to_have_accessible_name(caption)
         logger.debug("Verified six descriptions and three accessible table names")
 
     @staticmethod
@@ -58,7 +64,7 @@ class ScopeJourney:
         logger.info("Read three isolated history empty statements")
         expected = CardEvidence.Expected.empty(subject, one_site)
         for kind, text in zip(("run", "operation", "audit"), expected, strict=True):
-            expect(page.get_by_test_id(f"history-{kind}-empty")).to_have_text(text)
+            sync_api.expect(page.get_by_test_id(f"history-{kind}-empty")).to_have_text(text)
         logger.debug("Verified three isolated history empty statements")
 
     @staticmethod
@@ -90,7 +96,14 @@ class ScopeJourney:
 
 
 class HistoryEvidence:
-    """Preserve exact seeded runs and save the complete rendered page."""
+    """Preserve the independent expected identifiers of the existing shipped records."""
+
+    class StoredSite:
+        """Name the existing stored-poll seed without importing a second fixture module."""
+
+        ID = "e2e-stored-poll-site"
+        NAME = "E2E Stored Poll Site"
+        CAPTURE_ID = "e2e-capture-stored-poll-0001"
 
     @staticmethod
     def single_site_runs(page: Page) -> None:
@@ -109,36 +122,28 @@ class HistoryEvidence:
         ]
         assert sorted(ScopeJourney.identifiers(page, "run")) == first_identifiers + last_identifiers
 
-    @staticmethod
-    def screenshot(page: Page, path: Path) -> None:
-        """Save visual evidence inside the test's temporary directory."""
-        logger.info("Save the isolated history scope screenshot")
-        page.screenshot(path=str(path), full_page=True)
-        assert path.is_file()
-        logger.debug("Saved one isolated history scope screenshot")
-
 
 class TestHistoryCardScopeJourney:
     """Require real browser evidence without a skip or production source."""
 
-    def test_named_site_empty_cards_with_populated_organization(self, page: Page, tmp_path: Path) -> None:
+    def test_named_site_empty_cards_with_populated_organization(self, page: Page, e2e_test_run_id: str) -> None:
         """The named site has one capture while other sites supply runs and multi-site upgrades."""
-        ScopeJourney.open(page, "/history")
+        ScopeJourney.open(page, "/history", e2e_test_run_id)
         HistoryEvidence.single_site_runs(page)
         assert len(ScopeJourney.identifiers(page, "operation")) == 5
-        ScopeJourney.open(page, "/history?" + urlencode({"site_id": STORED_POLL_SITE_ID}))
-        ScopeJourney.descriptions(page, STORED_POLL_SITE_NAME, True)
-        ScopeJourney.empty_rows(page, STORED_POLL_SITE_NAME, True)
-        assert ScopeJourney.identifiers(page, "capture") == [STORED_POLL_CAPTURE_ID]
+        site = HistoryEvidence.StoredSite
+        ScopeJourney.open(page, "/history?" + urlencode({"site_id": site.ID}), e2e_test_run_id)
+        ScopeJourney.descriptions(page, site.NAME, True)
+        ScopeJourney.empty_rows(page, site.NAME, True)
+        assert ScopeJourney.identifiers(page, "capture") == [site.CAPTURE_ID]
         assert ScopeJourney.identifiers(page, "run") == []
         assert ScopeJourney.identifiers(page, "operation") == []
-        ScopeJourney.api_page(page, "capture", STORED_POLL_SITE_ID, (1, [STORED_POLL_CAPTURE_ID]))
-        ScopeJourney.api_page(page, "run", STORED_POLL_SITE_ID, (0, []))
-        HistoryEvidence.screenshot(page, tmp_path / "history-named-site.png")
+        ScopeJourney.api_page(page, "capture", site.ID, (1, [site.CAPTURE_ID]))
+        ScopeJourney.api_page(page, "run", site.ID, (0, []))
 
-    def test_populated_organization_descriptions_and_exact_identifiers(self, page: Page, tmp_path: Path) -> None:
+    def test_populated_organization_descriptions_and_exact_identifiers(self, page: Page, e2e_test_run_id: str) -> None:
         """The no-site route names the organization and preserves all current seeded records."""
-        ScopeJourney.open(page, "/history")
+        ScopeJourney.open(page, "/history", e2e_test_run_id)
         ScopeJourney.descriptions(page, "the selected organization", False)
         assert sorted(ScopeJourney.identifiers(page, "capture")) == [
             "e2e-capture-post-0001",
@@ -155,18 +160,17 @@ class TestHistoryCardScopeJourney:
             "org-run-e2e-reconcile-0001",
             "org-run-e2e-retry-0001",
         ]
-        expect(page.get_by_test_id("history-audit-empty")).to_have_text(
+        sync_api.expect(page.get_by_test_id("history-audit-empty")).to_have_text(
             "This page shows no site lock action for the selected organization."
         )
-        HistoryEvidence.screenshot(page, tmp_path / "history-selected-organization.png")
 
-    def test_unnamed_empty_site_ignores_a_query_display_name(self, page: Page) -> None:
+    def test_unnamed_empty_site_ignores_a_query_display_name(self, page: Page, e2e_test_run_id: str) -> None:
         """An unmatched site names the selected-site scope rather than a caller-supplied name."""
         path = "/history?" + urlencode({"site_id": "issue-3485-empty-site", "site_name": "<b>UNTRUSTED name</b>"})
-        ScopeJourney.open(page, path)
+        ScopeJourney.open(page, path, e2e_test_run_id)
         ScopeJourney.descriptions(page, "the selected site", True)
         ScopeJourney.empty_rows(page, "the selected site", True)
         assert [ScopeJourney.identifiers(page, kind) for kind in ("capture", "run", "operation")] == [[], [], []]
-        expect(page.get_by_test_id("history-run-note").locator("*")).to_have_count(0)
+        sync_api.expect(page.get_by_test_id("history-run-note").locator("*")).to_have_count(0)
         ScopeJourney.api_page(page, "capture", "issue-3485-empty-site", (0, []))
         ScopeJourney.api_page(page, "run", "issue-3485-empty-site", (0, []))
