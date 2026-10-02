@@ -24,12 +24,18 @@ No task-template override, preset, or extension template takes precedence.
 **Status**: The metadata removal and local gates pass.
 The coordinator confirmed offered-entry acceptance and authorized the validated local metadata commit.
 The separate documented-object defect does not authorize a response change in this branch.
-Publication remains blocked until the explicit position-16 verified-main grant.
+The explicit position-16 publication grant now names `df6889a40464db9dd7281765b5a58b993e33a7ed`.
+Fresh PR checks, protected exact-head squash, and actual-main proof remain pending.
 
 **Current Local Refresh Base**: `1a06f1516223a20eef715d91a32255e6219331db`.
 The coordinator permits local rebase, generation, validation, and offline preparation only.
 Issue #3366 and pull request #3727 retain the sole publication window.
 The original preparation remains preserved at `623a48c88feb4cf5716f3986587f4971a51ffb6a`.
+
+**Granted Publication Base**: `df6889a40464db9dd7281765b5a58b993e33a7ed`.
+This sole publication and delivery grant supersedes the earlier local-only boundary.
+The previous local refresh remains preserved at `bd962ceaa467b513cd2bac924135265bda3f80c6`.
+No other child holds publication authority for this position.
 
 ## Execution and ownership rules
 
@@ -1684,3 +1690,129 @@ It changes no production method, test behavior, generator, dependency, baseline,
 The original preparation remains preserved.
 The final clean local SHA belongs in the coordinator handoff after the commit succeeds.
 No push, pull request, workflow start, automatic merge, protected merge, deployment, or actual-main delivery is authorized.
+
+## Granted position-16 publication and delivery
+
+The coordinator explicitly grants publication and delivery on exact main `df6889a40464db9dd7281765b5a58b993e33a7ed`.
+This section supersedes earlier waiting boundaries for this issue only.
+It does not authorize issue #3699, another repair, source behavior, or production actions.
+Only the parent coordinator can release the next issue.
+
+### Delivery tasks and immutable boundaries
+
+- [X] T038 Verify the live grant, preserve both preparations, rebase the owned tree, and repeat current local proofs in `specs/3335-deprecated-sle-operations/tasks.md`. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; the measured granted-base evidence below passes.)
+- [ ] T039 Commit the exact reserved feature, run required-input preflight and both committed/current full ratchets, push once, and create the single-owner PR from the current 23-item template. Record exact results through the PR protocol comment and session receipt.
+- [ ] T040 Require all fresh latest-head quality, title, applicable STE, CodeQL analysis, and separate required CodeQL records. Recheck all 15 strict contexts, exact granted base, and full head before protected squash. Record the premerge proof in the PR.
+- [ ] T041 Prove the actual resulting main SHA, parent, complete tree, and local results. Preserve the checked source, clean up named temporary output, and post the persistent PR receipt. Report the full SHA/tree/receipt to the coordinator, then pause.
+
+These delivery tasks are incomplete in this pre-publication snapshot.
+Their later measured completion belongs in the persistent PR receipt.
+Do not push a post-merge bookkeeping commit to tick a historical snapshot.
+No old-base result, generic completion message, skipped check, or advisory alone establishes delivery.
+
+### Current grant and preservation proof
+
+Live main matches the exact grant and has parent `1a06f1516223a20eef715d91a32255e6219331db`.
+Its complete tree is `4f2460f125cd0c69379fc85cbf1a5616d4e54079`.
+The Maps actual-main receipt was read in full.
+The live inventory has zero open PRs, zero exact PR file entries, and no automatic merge request.
+The original public claim reserves all 23 paths and records the full grant.
+The companion issue remains open and unassigned.
+
+The original preservation tag remains unchanged.
+The following additional local tag preserves the completed local-only refresh:
+
+```text
+preservation/issue3335-refresh-bd962ceaa467b513cd2bac924135265bda3f80c6
+```
+
+The owned branch rebased cleanly onto the exact granted base.
+All dependency manifests remain unchanged, so no environment install was required.
+Five complete production AST comparisons permit only the two exact metadata removals and coupled count corrections.
+All 15 exporter method bodies remain unchanged, including `_run`.
+Sixteen protected inputs remain byte-identical to the granted base, including the corrected Maps template.
+Every unowned file and combined report/fingerprint repair remains intact.
+The complete feature difference is still exactly the original 23 reserved paths.
+
+### Current generators and guard decisions
+
+The complete live ownership check repeated immediately before generation.
+Both existing scripts then ran twice on the combined granted tree.
+All 18 generated outputs and 1,551,817 bytes match across both passes.
+Both wiki pages match each other.
+No output outside the reservation changed.
+The API map guard passes all 16 pages for 293 menus.
+The six owned hashes match the preceding local-refresh table.
+
+The fresh guard matrices pass all 96 selected cases without skips.
+The direct granted-base reconstruction rejects both obsolete names in all three sources.
+The current sources pass at 284, 284, and 569 measured records.
+Each exact shaped injection rejects at 285, 285, or 570 measured records.
+The granted-base red counts remain 286, 286, and 571.
+No production registration was modified during a guard proof.
+
+### Fresh local results on the granted tree
+
+The complete 1,206-case focused regression command passes without failures or skips.
+Its three metadata modules measure 93.99 percent combined coverage.
+That result is scoped metadata coverage, not full-repository coverage.
+The separate 736-case core command also passes without failures or skips.
+Both commands are the exact preceding selector sets, with publication-specific output paths.
+The current tests include all offered trend, absent-SDK-attribute, neighboring-family, key, temporary-upsert, and refusal cases.
+They do not repair or certify canonical object exports for the companion issue.
+
+| Fresh command on the granted tree | Result |
+| --- | --- |
+| `rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | Pass, six input reads/validations and three guide checks. |
+| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/export/endpoint_family_exporter.py src/export/endpoint_catalog.py src/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py` | Pass. |
+| `rtk proxy .venv/bin/ruff check .` | Pass. |
+| `rtk proxy .venv/bin/black --check --diff .` | Pass, 2,018 files. |
+| `rtk proxy .venv/bin/mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Pass, 665 source files. |
+| `rtk proxy .venv/bin/mypy tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py --config-file pyproject.toml` | Pass, both changed test files. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Pass, both inclusion samples. |
+| `rtk proxy .venv/bin/bandit -c pyproject.toml -r . --quiet --format json --output data/issue-3335/bandit-publication.json` | Pass, 788 file entries and 214,955 lines, zero findings/read errors. |
+| `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --log-level WARNING` | Pass, 1,003 discovered files and 725 old findings, zero new findings/parse errors. |
+| `rtk proxy .venv/bin/pylint src/ --fail-under=9.5 --reports=n` | Pass, score 9.83/10. Existing diagnostic messages remain visible. |
+| `rtk proxy .venv/bin/pydocstyle src/ wsgi.py web_portal` | Pass. |
+| `rtk proxy .venv/bin/interrogate src/ MistHelper.py wsgi.py wsgi_capture.py web_portal --fail-under 90 -v` | Pass, 99.6 percent across 13,213 definitions. |
+| `rtk proxy .venv/bin/vulture src/ MistHelper.py wsgi.py web_portal --min-confidence 70` | Pass, zero findings. |
+| `rtk proxy .venv/bin/radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j` into `rtk proxy .venv/bin/complexity-gate --max 10` | Pass at the exact current CI scope. |
+| `rtk proxy .venv/bin/diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt` | Pass, 153 references across 15 diagram files. |
+| `rtk proxy .venv/bin/check-citations src tests` | Pass, 251 citations and zero unresolved. |
+| `rtk proxy .venv/bin/markdown-link-check --exclude 'documentation/wiki/**'` | Pass, 4,275 tracked files and zero broken links. |
+| `rtk proxy .venv/bin/codeql-verdict-register check` | Pass, all 88 dismissed-alert records match. This is not a new CodeQL scan. |
+
+The full test-quality input preflight must repeat before the post-commit analyzer commands.
+The committed ratchet compares the fetched intended `origin/main` against `HEAD` with both explicit full-gate trigger paths.
+The complete local ratchet must also pass before push.
+Neither baseline nor settings changed.
+
+The standard runtime audit again stopped before scanning because macOS `ensurepip` aborted.
+The strict own-worktree hashed alternative passed all 105 current runtime packages without ignored advisories:
+
+```bash
+rtk proxy env UV_LINK_MODE=copy UV_NATIVE_TLS=1 UV_SYSTEM_CERTS=1 uv pip compile requirements.txt --python .venv/bin/python --generate-hashes --output-file data/issue-3335/publication-runtime-audit-lock.txt --quiet
+rtk proxy .venv/bin/python -m pip_audit --no-deps --disable-pip --require-hashes --strict -r data/issue-3335/publication-runtime-audit-lock.txt
+```
+
+The Git-only development tool remains outside that runtime audit.
+STE score validation retains the configured minimum and explicitly unavailable licensed dictionary.
+Dictionary checks, local full-suite coverage, live Mist, browser-agent, container, firmware, and deployment results are not claimed.
+Fresh PR quality/title/STE/CodeQL results and actual-main proof belong to the later receipts.
+
+### Protected publication conditions
+
+Main protection is strict and enforces administrators.
+All 15 required contexts retain their exact names and application constraints.
+The separate required CodeQL result must not be substituted by the workflow analysis job alone.
+Every fresh applicable check must report success on the exact latest source or verified test-merge revision.
+An unrelated main advance, conflicting PR owner, or incomplete required result stops the merge.
+The final merge must use the full checked head match and squash through normal protection.
+Never use administrator bypass, automatic merge, or branch deletion.
+No manual workflow dispatch is authorized.
+
+The actual resulting main must have the granted base as its parent.
+Its complete tree must equal the checked source tree.
+The actual-main local commands must execute on that exact resulting commit in this own worktree.
+The final PR receipt records all full SHAs, trees, fresh results, exact commands, limits, cleanup, and the unresolved companion.
+Only after that persistent receipt may this session report completion and pause.

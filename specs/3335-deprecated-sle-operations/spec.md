@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Metadata removal implemented. Local commit pending.
+**Status**: Metadata removal verified on the granted publication base. Fresh PR checks and actual-main proof remain pending.
 
 **Input**: User description: "Remove two deprecated site Service Level Expectations (SLE) operations for issue #3335. Preserve both supported trend operations and correct the coupled menu labels."
 
@@ -14,12 +14,21 @@
 
 **Base Revision**: `856e5065413d3026f9c0f6d5222d9d379ec79d8b`
 
-**Current Local Refresh Base**: `1a06f1516223a20eef715d91a32255e6219331db`
+**Previous Local Refresh Base**: `1a06f1516223a20eef715d91a32255e6219331db`
 
 The coordinator authorizes this immutable base for local refresh only.
 It does not authorize publication or actual-main delivery.
 The original preparation remains preserved at `623a48c88feb4cf5716f3986587f4971a51ffb6a`.
 The later publication grant must name the actual verified issue #3366 merge revision.
+
+**Granted Publication Base**: `df6889a40464db9dd7281765b5a58b993e33a7ed`
+
+The coordinator now grants sole position-16 publication and delivery on this exact verified Maps revision.
+This grant supersedes the earlier local-only permission.
+The coding session preserves both prior preparations and rebases only its own isolated worktree.
+Strict protection, all 15 required contexts, fresh quality/title/STE/CodeQL checks, and exact-head squash remain mandatory.
+Actual resulting main requires local verification and a persistent pull request receipt.
+The grant does not authorize source behavior, dependency, governance, production, or companion-defect changes.
 
 **Feature Directory**: `specs/3335-deprecated-sle-operations`
 
@@ -293,5 +302,6 @@ It MUST NOT create or change `.specify/feature.json`, `.spec-context.json`, or a
   Publication remains at queue position 16 after issue #3366.
 - The coordinator's scope decision excludes the documented object-output defect from this feature.
   The separate issue records the real SDK proof and the required future repair.
-- Local preparation can complete without publication.
-  Publication still requires the explicit position-16 grant after issue #3366.
+- The explicit position-16 grant now names the actual verified issue #3366 merge SHA above.
+  A different main revision or conflicting owner requires a new coordinator decision before publication.
+  Protected merge and actual-main verification remain required, not inferred from earlier local checks.
