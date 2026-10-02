@@ -12,8 +12,6 @@ import logging  # WHY: operators need an action trace for each export.
 from dataclasses import dataclass  # WHY: immutable rows keep the operation table clear.
 from typing import Any  # WHY: Mist SDK responses have dynamic row shapes.
 
-import mistapi  # WHY: the SDK supplies endpoint calls and the pagination helper.
-
 from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
@@ -21,6 +19,7 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: shared flatten and escape logic keeps exports consistent.
 from src.export.endpoint_catalog import menu_text  # WHY: one source for the description and the safety flag.
+from src.export.endpoint_family_response.reader import EndpointFamilyResponseContract, EndpointFamilyResponseReader
 from src.utils.input_utils import InputUtils  # WHY: MSP selection must use the EOF-safe prompt.
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
@@ -514,23 +513,10 @@ class EndpointFamilyExporter:
         return _EndpointArgumentSet(tuple(values), label)  # Return immutable call data to the runner.
 
     @staticmethod
-    def _normalize(rawdata: Any) -> list[Any]:
-        """Return response data as a list that the shared exporter can write."""
-        if rawdata is None:
-            return []
-        if isinstance(rawdata, list):
-            return rawdata
-        if isinstance(rawdata, tuple):
-            return list(rawdata)
-        if isinstance(rawdata, dict):
-            return [rawdata]
-        return [{"value": rawdata}]
-
-    @staticmethod
     def _persist(rawdata: Any, filename: str, operation: str) -> None:
         """Flatten and persist endpoint rows through the shared exporter."""
         mh = EndpointFamilyExporter._mist_helper()  # Load the shared DataExporter only when needed.
-        rows = EndpointFamilyExporter._normalize(rawdata)  # Convert single-object responses to one row.
+        rows = EndpointFamilyResponseReader.normalize(rawdata)
         logger.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
         if not rows:
             logger.info("! No %s data found", operation)  # Empty read results are valid.
@@ -544,7 +530,7 @@ class EndpointFamilyExporter:
         logger.debug("%s persisted %d rows to %s", operation, len(rows), filename)  # Record the write result.
 
     @staticmethod
-    def _run(operation: _EndpointFamilyOp) -> None:
+    def _run(operation: _EndpointFamilyOp, contract: EndpointFamilyResponseContract) -> None:
         """Call one endpoint and persist all returned rows."""
         mh = EndpointFamilyExporter._mist_helper()  # Load apisession only during execution.
         arguments = EndpointFamilyExporter._collect_arguments(operation)  # Prompt before the SDK call.
@@ -557,50 +543,57 @@ class EndpointFamilyExporter:
         try:
             logger.info("Calling %s for %s", operation.operation, arguments.label)  # Log before the SDK call.
             response = callable_obj(mh.apisession, *arguments.values)  # Call the SDK with identifiers in order.
-            rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Collect every page.
+            rawdata = EndpointFamilyResponseReader.read(response, mh.apisession, contract)
             filename = f"{operation.operation}_{arguments.label.replace(' ', '_')}.csv"  # Build a readable export name.
             EndpointFamilyExporter._persist(rawdata, filename, operation.operation)  # Write the selected output format.
         except Exception as exc:
-            logging.exception(
-                "Error running %s for %s", operation.operation, arguments.label
-            )  # Keep traceback details.
-            logging.info("! Error running %s: %s", operation.operation, exc)  # Show a short operator message.
+            failure = Exception(f"{type(exc).__name__}: Exception details omitted to protect secrets")
+            logging.error(
+                "Error running %s for %s",
+                operation.operation,
+                arguments.label,
+                exc_info=(Exception, failure, exc.__traceback__),
+            )
 
     @staticmethod
-    def _run_menu(operations: tuple[_EndpointFamilyOp, ...], scope_label: str) -> None:
+    def _run_menu(
+        operations: tuple[_EndpointFamilyOp, ...], scope_label: str, object_operations: frozenset[str]
+    ) -> None:
         """Choose and run one endpoint from a menu table."""
         logger.info("%s Endpoint Family:", scope_label.title())  # Show the menu header.
         operation = EndpointFamilyExporter._choose(operations, scope_label)  # Ask which endpoint to run.
         if operation is None:
             return
-        EndpointFamilyExporter._run(operation)  # Execute the selected endpoint.
+        contract = EndpointFamilyResponseContract(operation.operation, operation.operation in object_operations)
+        EndpointFamilyExporter._run(operation, contract)
 
     @staticmethod
     def site_sle_endpoints() -> None:
         """Run the site SLE endpoint family."""
-        EndpointFamilyExporter._run_menu(_SITE_SLE_OPS, "site SLE")  # Use one menu row for this endpoint family.
+        object_operations = frozenset(("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+        EndpointFamilyExporter._run_menu(_SITE_SLE_OPS, "site SLE", object_operations)
 
     @staticmethod
     def site_map_endpoints() -> None:
         """Run the site map endpoint family."""
-        EndpointFamilyExporter._run_menu(_SITE_MAP_OPS, "site map")  # Use one menu row for this endpoint family.
+        EndpointFamilyExporter._run_menu(_SITE_MAP_OPS, "site map", frozenset())
 
     @staticmethod
     def site_detail_endpoints() -> None:
         """Run the site detail endpoint family."""
-        EndpointFamilyExporter._run_menu(_SITE_DETAIL_OPS, "site detail")  # Use one menu row for this endpoint family.
+        EndpointFamilyExporter._run_menu(_SITE_DETAIL_OPS, "site detail", frozenset())
 
     @staticmethod
     def org_detail_endpoints() -> None:
         """Run the org detail endpoint family."""
-        EndpointFamilyExporter._run_menu(_ORG_DETAIL_OPS, "org detail")  # Use one menu row for this endpoint family.
+        EndpointFamilyExporter._run_menu(_ORG_DETAIL_OPS, "org detail", frozenset())
 
     @staticmethod
     def msp_detail_endpoints() -> None:
         """Run the MSP detail endpoint family."""
-        EndpointFamilyExporter._run_menu(_MSP_DETAIL_OPS, "MSP detail")  # Use one menu row for this endpoint family.
+        EndpointFamilyExporter._run_menu(_MSP_DETAIL_OPS, "MSP detail", frozenset())
 
     @staticmethod
     def other_endpoints() -> None:
         """Run the other endpoint family."""
-        EndpointFamilyExporter._run_menu(_OTHER_DETAIL_OPS, "other")  # Use one menu row for this endpoint family.
+        EndpointFamilyExporter._run_menu(_OTHER_DETAIL_OPS, "other", frozenset())
