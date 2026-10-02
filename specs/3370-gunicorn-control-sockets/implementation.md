@@ -177,3 +177,118 @@ The parent retains publication control.
 The parent did not grant a publication release.
 Do not push, create a pull request, merge, or deploy before that release.
 The isolated image proof does not replace approval for a production container restart.
+
+## Local Refresh on 2026-10-02
+
+The parent authorized a local refresh on `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`.
+This authorization does not permit publication or a protected merge.
+The original commit remains at the local tag `preservation/3370-a542f9-local`.
+That tag resolves to `a542f9aae7568ac3d040da81557e2f5eabcaa23e`.
+
+The rebase produced `59cba6e1d6c88e07ab165951731e06495af90526`.
+Its direct parent is the authorized base.
+The rebase had no conflict.
+The ten-file repair remains unchanged before this evidence update.
+
+The source difference still contains two socket options and two comments only.
+The preservation contract still checks all 15 other startup options.
+The accepted base's three output-default deletions remain intact.
+The image recipes, session script, shared guides, manifests, baseline, and compose policy match the authorized base.
+
+The public claim still names this app session and `jmorrison-juniper`.
+The refreshed public check found zero open pull requests.
+The parent received a request to recheck its local reservations.
+This refresh retains the original ten-file reservation.
+
+### Repeated Process and Container Proof
+
+The focused current suite passed 293 cases with zero skips.
+This count includes all previous 152 cases and 141 current output-default cases.
+The separate socket run passed all 22 cases with zero skips.
+The two real host cases verify both reload orders, owner permissions, collision-free logs, and complete process cleanup.
+The host evidence retains 12 identity readings.
+An independent cleanup check verified 12 absent master and worker PIDs and four removed sockets.
+
+The first expanded command named an absent test directory.
+Pytest stopped before collection with exit 4.
+The corrected command names the actual `tests/unit/container/output_defaults` directory.
+No source defect or suppression resulted from that command correction.
+
+```bash
+rtk proxy .venv/bin/python -m pytest tests/contract/container/test_gunicorn_control_sockets.py tests/unit/container/test_build_files_match.py tests/unit/container/test_startup_no_recursive_chown.py tests/unit/web_portal/test_portal_stream_thread_release.py tests/contract/packaging/test_compose_rebuild_warning.py tests/guardrails/test_container_policy_docs.py tests/guardrails/test_container_account_identifiers.py tests/guardrails/test_container_tls_verification.py tests/guardrails/test_compose_naming_policy.py tests/guardrails/test_shipped_artifacts.py tests/unit/web_portal/test_output_scan_runtime_files.py tests/unit/container/output_defaults -q --timeout=120 -W error::ResourceWarning --basetemp=/Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-refresh-verified
+rtk proxy .venv/bin/python -m pytest tests/contract/container/test_gunicorn_control_sockets.py -q --timeout=120 -W error::ResourceWarning --basetemp=/Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-refresh-contract
+```
+
+The respective results were 293 passes in 45.80 seconds and 22 passes in 2.99 seconds.
+
+The refreshed Linux arm64 image build passed without a recipe change.
+Its image SHA was `3834652357617501e2bf981db853e16511b942adc6f3bfbc296ddb67bdf7ddf4`.
+The existing issue-specific compose group ran one isolated test under UID 1000.
+The proof retained both exact socket paths and `0600` permissions through four SIGHUP events.
+Both log sets contained zero collisions and zero control server errors.
+The proof removed two masters, six workers, and both sockets.
+It passed in 1.688 seconds with no resource warning.
+
+```bash
+rtk proxy podman build --format docker --file Containerfile --tag localhost/misthelper-tmp-issue3370-control-proof:local .
+rtk proxy .venv/bin/python -m podman_compose -f /Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-compose.yml --profile test up --no-deps --exit-code-from misthelper misthelper
+```
+
+The test published zero host ports and started no production application or store.
+The exact owned container, volume, network, and image tag are removed.
+The final issue-specific resource lists are empty.
+The refresh did not use a bare container run, prune, or volume-removing compose shutdown.
+
+### Current Quality Results
+
+The required input preflight passed.
+It read and validated six inputs and checked all three guide procedures.
+It found two explicit paths, two automatic paths, and four effective paths.
+
+The full test-quality check discovered 1007 files.
+It analyzed 959 files and retained 48 configured exclusions.
+It found 725 accepted baseline findings, zero new findings, and zero parse errors.
+These analyzer exclusions are not skipped socket tests.
+The settings and baseline remain unchanged.
+
+| Command | Refresh result |
+| - | - |
+| `rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | Passed. One test verifies six inputs and three procedures. |
+| `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --report /Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-refresh-full-test-quality.json --summary /Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-refresh-full-test-quality.md --log-level WARNING` | Passed. The full scope has zero new findings. |
+| `rtk proxy .venv/bin/python -m ruff check .` | Passed. |
+| `rtk proxy .venv/bin/python -m black --check --diff .` | Passed. All 2026 files need no format change. |
+| `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed. All 665 files have no type errors. |
+| `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r .` | Passed. The scan checked 215141 code lines. It retained 64 existing suppressions and found no issues. |
+| `rtk proxy .venv/bin/python -m bandit tests/contract/container/gunicorn_control_support.py` | Passed. All 299 helper lines have no findings or suppressions. |
+| `rtk proxy .venv/bin/python -m mypy tests/contract/container/gunicorn_control_support.py tests/contract/container/test_gunicorn_control_sockets.py --config-file pyproject.toml` | Passed. Both files have no type errors. |
+| `rtk proxy bash -n container/scripts/start.sh` | Passed. |
+| `rtk proxy .venv/bin/python -m py_compile MistHelper.py tests/contract/container/gunicorn_control_support.py tests/contract/container/test_gunicorn_control_sockets.py` | Passed. |
+| `.venv/bin/python -m radon cc tests/contract/container -j \| .venv/bin/complexity-gate --max 10` | Passed. Every block meets the threshold. |
+| `rtk proxy .venv/bin/python -m pydocstyle tests/contract/container/gunicorn_control_support.py tests/contract/container/test_gunicorn_control_sockets.py` | Passed. |
+| `rtk proxy .venv/bin/markdown-link-check --root . documentation/container-deployment.md specs/3370-gunicorn-control-sockets changelog.d/issue-3370-gunicorn-control-sockets.md` | Passed. Seven Markdown files have zero broken links. |
+| `rtk proxy .venv/bin/ste-linter tests/contract/container/gunicorn_control_support.py tests/contract/container/test_gunicorn_control_sockets.py changelog.d/issue-3370-gunicorn-control-sockets.md --grade-logging-strings --grade-user-facing-strings` | Passed. All three files score 100. Dictionary coverage remains unavailable. |
+
+The post-commit ratchet uses the immutable authorized base for this local refresh.
+It is not the fresh intended-base check required before a future push.
+A later publication grant requires a new rebase and repeated checks.
+
+### Current Audit and Capability Limits
+
+The refreshed strict host audit checked 105 runtime packages.
+The refreshed strict Linux arm64 audit checked 107 runtime packages.
+Both fully hashed resolutions have zero known vulnerabilities and zero skipped packages.
+
+The direct `pip_audit -r requirements.txt` resolver is not a passing result here.
+The earlier run failed during `ensurepip` with SIGABRT.
+The refresh uses the previously verified strict hashed-resolution method.
+The Git-only development tool has no advisory proof from those runtime audits.
+
+ShellCheck and PowerShell are absent on this host.
+Bash syntax and native Linux process proof do not prove Windows or PowerShell behavior.
+The writing dictionary is absent.
+No full-suite coverage percentage, browser journey, live firmware action, or production startup result applies to this local proof.
+
+The offline pull request draft preserves all 23 template items.
+It states the measured results and leaves unmeasured items explicit.
+The draft remains only in the session artifact directory.
+No pull request or remote check exists for this refresh.
