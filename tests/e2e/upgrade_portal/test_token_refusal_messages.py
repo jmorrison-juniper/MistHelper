@@ -5,11 +5,16 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from playwright.sync_api import Page, Response, expect
 
-from tests.e2e.upgrade_portal.conftest import OWNER_CHECK, TEST_RUN_ID
+from tests.support.upgrade_portal_e2e.owner import RunOwnerHeaderCheck
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page, Response
+
+sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
 TOKEN_MESSAGE = "The portal could not sign you in. Check the token, then try again."
 EMPTY_MESSAGE = "The token field is empty. Type your token, then try again."
@@ -46,13 +51,16 @@ class TokenRefusalBrowser:
     """Read actual responses and safe server evidence without interception."""
 
     @staticmethod
-    def open_form(page: Page) -> None:
+    def open_form(context: TokenBrowserContext) -> None:
         """Require the owned portal before a sign-in interaction."""
+        page = context.page
         response = page.goto("/auth/signin", wait_until="domcontentloaded", timeout=TIMEOUT_MS)
         if response is None:
             raise AssertionError("The isolated portal returned no sign-in response.")
         assert response.status == 200
-        assert OWNER_CHECK.require(response.headers) == TEST_RUN_ID
+        # The fixture directory names its process owner without importing a second conftest instance.
+        expected_run = context.evidence.parent.name
+        assert RunOwnerHeaderCheck(expected_run).require(response.headers) == expected_run
         page.get_by_test_id("signin-mode-browser-token").check()
 
     @staticmethod
@@ -66,10 +74,10 @@ class TokenRefusalBrowser:
     def assert_alert(context: TokenBrowserContext, message: str, name: str) -> None:
         """Check visual text and the generated signal word for screen readers."""
         alert = context.page.get_by_test_id("signin-error")
-        expect(alert).to_be_visible(timeout=TIMEOUT_MS)
-        expect(alert).to_have_text(message)
+        sync_api.expect(alert).to_be_visible(timeout=TIMEOUT_MS)
+        sync_api.expect(alert).to_have_text(message)
         assert alert.aria_snapshot() == f'- alert: "Warning: {message}"'
-        expect(context.page.get_by_test_id("signin-browser-token")).to_have_value("")
+        sync_api.expect(context.page.get_by_test_id("signin-browser-token")).to_have_value("")
         alert.screenshot(path=str(context.artifacts / f"{name}.png"))
 
     @staticmethod
@@ -89,12 +97,13 @@ class TokenRefusalBrowser:
             assert submitted not in surface, "A browser token reached a response, cookie, log, or evidence file."
 
     @staticmethod
-    def assert_signed_out(page: Page) -> None:
+    def assert_signed_out(context: TokenBrowserContext) -> None:
         """A refused browser must not acquire access to a session route."""
-        response = page.request.get("/select/org", headers={"Accept": "application/json"})
+        response = context.page.request.get("/select/org", headers={"Accept": "application/json"})
         assert response.status == 401
         assert response.json()["error"]["code"] == "not_authenticated"
-        assert OWNER_CHECK.require(response.headers) == TEST_RUN_ID
+        expected_run = context.evidence.parent.name
+        assert RunOwnerHeaderCheck(expected_run).require(response.headers) == expected_run
 
 
 class TestTokenRefusalBrowserMessages:
@@ -105,7 +114,7 @@ class TestTokenRefusalBrowserMessages:
         page = token_browser.page
         before = TokenRefusalBrowser.evidence_rows(token_browser.evidence)
         submitted = f"{token_browser.token}-wrong"
-        TokenRefusalBrowser.open_form(page)
+        TokenRefusalBrowser.open_form(token_browser)
         page.get_by_test_id("signin-browser-token").fill(submitted)
         with page.expect_response(
             lambda response: response.request.method == "POST" and response.url.endswith("/auth/signin"),
@@ -119,16 +128,16 @@ class TestTokenRefusalBrowserMessages:
         rows = TokenRefusalBrowser.evidence_rows(token_browser.evidence)[len(before) :]
         assert [row["event"] for row in rows] == ["browser_token_session"]
         assert rows[0]["accepted"] is False
-        assert rows[0]["run_id"] == TEST_RUN_ID
+        assert rows[0]["run_id"] == token_browser.evidence.parent.name
         TokenRefusalBrowser.assert_private(token_browser, submitted, response)
-        TokenRefusalBrowser.assert_signed_out(page)
+        TokenRefusalBrowser.assert_signed_out(token_browser)
 
     def test_empty_token_keeps_client_cure(self, token_browser: TokenBrowserContext) -> None:
         """The existing client cure prevents a needless server request."""
         page = token_browser.page
         before = TokenRefusalBrowser.evidence_rows(token_browser.evidence)
         posts: list[str] = []
-        TokenRefusalBrowser.open_form(page)
+        TokenRefusalBrowser.open_form(token_browser)
         page.on(
             "request",
             lambda request: (
@@ -142,13 +151,13 @@ class TestTokenRefusalBrowserMessages:
         assert posts == []
         assert TokenRefusalBrowser.evidence_rows(token_browser.evidence) == before
         TokenRefusalBrowser.assert_private(token_browser, token_browser.token)
-        TokenRefusalBrowser.assert_signed_out(page)
+        TokenRefusalBrowser.assert_signed_out(token_browser)
 
     def test_empty_token_native_submit_renders_server_refusal(self, token_browser: TokenBrowserContext) -> None:
         """Native submission keeps CSRF and server validation active."""
         page = token_browser.page
         before = TokenRefusalBrowser.evidence_rows(token_browser.evidence)
-        TokenRefusalBrowser.open_form(page)
+        TokenRefusalBrowser.open_form(token_browser)
         # Native submission bypasses only the browser checks and the script's local empty-field cure.
         with page.expect_navigation(wait_until="domcontentloaded", timeout=TIMEOUT_MS) as navigation:
             page.get_by_test_id("signin-submit").evaluate(
@@ -162,4 +171,4 @@ class TestTokenRefusalBrowserMessages:
         TokenRefusalBrowser.assert_alert(token_browser, EMPTY_MESSAGE, "empty-token-server")
         assert TokenRefusalBrowser.evidence_rows(token_browser.evidence) == before
         TokenRefusalBrowser.assert_private(token_browser, token_browser.token, response)
-        TokenRefusalBrowser.assert_signed_out(page)
+        TokenRefusalBrowser.assert_signed_out(token_browser)
