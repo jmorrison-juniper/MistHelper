@@ -11,11 +11,18 @@ import logging
 import re
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from playwright.sync_api import Error as BrowserError
-from playwright.sync_api import Page, Route
 from requests.exceptions import ConnectionError, Timeout
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Error as BrowserError
+    from playwright.sync_api import Page, Route
+else:
+    logging.info("Checking the Playwright package for the Maps title tests")
+    BrowserError = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.").Error
+    logging.debug("The Playwright package is available for the Maps title tests")
 
 from tests.e2e import test_map_viewer_image as map_journeys
 from tests.e2e.test_map_viewer_image import cloud as cloud
