@@ -6,6 +6,8 @@ import hashlib
 import json
 import logging
 import os
+import re
+import socket
 import threading
 import uuid
 from collections.abc import Iterator
@@ -29,10 +31,10 @@ from web_portal.app import WebPortalApp
 from web_portal.menu_registry import build_static_menu_actions
 
 if TYPE_CHECKING:
-    from playwright.sync_api import CDPSession, Page
+    from playwright.sync_api import CDPSession, Page, Route
 
 try:
-    pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
+    sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 except pytest.skip.Exception as error:
     if os.environ.get("UPGRADE_PORTAL_E2E_STRICT") == "1":
         raise pytest.UsageError(
@@ -192,6 +194,81 @@ class MapSiteCoverage:
         self.session.detach()
 
 
+class MapSiteRequestMatcher:
+    """Intercept only traffic outside the exact process-owned origin."""
+
+    @staticmethod
+    def remote(portal: str) -> re.Pattern[str]:
+        """Serialize the origin exclusion so the driver permits local requests."""
+        return re.compile(r"^(?!" + re.escape(portal + "/") + ")")
+
+    @classmethod
+    def prove(cls, page: Page, portal: str, output: Path) -> None:
+        """Check exact-origin decisions and one real blocked remote request."""
+        logger.info("The request matcher will check the exact owned origin and one blocked request")
+        pattern = cls.remote(portal)
+        permitted = (f"{portal}/maps", f"{portal}/api/maps/sites", f"{portal}/api/maps/site/{MapSiteFacts.SITE_A}/maps")
+        denied = (
+            portal.replace("127.0.0.1", "localhost") + "/maps",
+            portal.replace("127.0.0.1", "127.0.0.2") + "/maps",
+            portal.replace("http://", "https://") + "/maps",
+            f"{portal}0/maps",
+            f"{portal}@misthelper-blocked.invalid/maps",
+            "http://misthelper-blocked.invalid/maps",
+        )
+        assert all(pattern.search(url) is None for url in permitted)
+        assert all(pattern.search(url) is not None for url in denied)
+        blocked = cls.block_remote(page, pattern)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(
+                {
+                    "origin": portal,
+                    "pattern": pattern.pattern,
+                    "permitted": permitted,
+                    "denied": denied,
+                    "blocked": blocked,
+                }
+            ),
+            encoding="utf-8",
+        )
+        logger.info("The request matcher checked 3 permitted URLs, 6 denied URLs, and 1 actual blocked request")
+
+    @staticmethod
+    def block_remote(page: Page, pattern: re.Pattern[str]) -> dict[str, object]:
+        """Prove that an unpermitted origin receives zero TCP connections."""
+        blocked: list[str] = []
+        probe = page.context.new_page()
+
+        def abort(route: Route) -> None:
+            """Record the intercepted request before the browser aborts it."""
+            blocked.append(route.request.url)
+            route.abort("blockedbyclient")
+
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+                listener.bind(("127.0.0.1", 0))
+                listener.listen(1)
+                listener.setblocking(False)
+                url = f"http://127.0.0.1:{listener.getsockname()[1]}/matcher-negative"
+                assert pattern.search(url) is not None
+                probe.route(pattern, abort)
+                with probe.expect_event("requestfailed", timeout=WAIT_SECONDS * 1000) as failure:
+                    with pytest.raises(sync_api.Error):
+                        probe.goto(url, timeout=WAIT_SECONDS * 1000)
+                assert failure.value.failure in (
+                    "net::ERR_BLOCKED_BY_CLIENT",
+                    "net::ERR_BLOCKED_BY_CLIENT.Inspector",
+                )
+                assert blocked == [url]
+                assert failure.value.response() is None
+                with pytest.raises(BlockingIOError):
+                    listener.accept()
+                return {"urls": blocked, "native_error": failure.value.failure, "outbound_connections": 0}
+        finally:
+            probe.close()
+
+
 class MapSiteBrowser:
     """Select real controls and observe complete page state without replacing behavior."""
 
@@ -207,13 +284,10 @@ class MapSiteBrowser:
     def open(self, portal: str) -> None:
         """Load the actual template and wait for its actual site request."""
         logger.info("The browser will open the Maps page at the isolated local server")
+        # Local traffic must not wait for a Python callback while the server condition waits.
         self.page.route(
-            "**/*",
-            lambda route: (
-                route.continue_()
-                if route.request.url.startswith(f"{portal}/")
-                else route.fulfill(status=502, body="The test blocked an unexpected remote request.")
-            ),
+            MapSiteRequestMatcher.remote(portal),
+            lambda route: route.abort("blockedbyclient"),
         )
         response = self.page.goto(f"{portal}/maps", wait_until="networkidle", timeout=WAIT_SECONDS * 1000)
         assert response is not None, "The owned Maps server returned no page response."
@@ -386,6 +460,7 @@ def journey(
     output = Path(request.config.getoption("output"))
     output = output if output.is_absolute() else request.config.rootpath / output
     directory = output / request.node.name.replace("/", "-")
+    MapSiteRequestMatcher.prove(page, maps_race_portal, directory / "matcher.json")
     browser = MapSiteBrowser(page, map_lists, directory)
     browser.open(maps_race_portal)
     try:

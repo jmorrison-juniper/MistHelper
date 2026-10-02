@@ -189,6 +189,86 @@ Current gate records remain below `data/issue-3366/release/gates/`.
 The original and repeated red receipts remain separate.
 The post-commit changed-scope ratchet and publication remain next.
 
+### Caused test regression and narrow correction
+
+The first checked publication is `8042621aa6b4ab4e9917a57d825281ffeaabc3bb`.
+Fresh Quality run 36993915078 marked 32 executed issue cases failed before the E2E job exceeded its fixed 15-minute limit.
+The other 27 jobs and all 22 executed adjacent Maps cases passed.
+The [public hold](https://github.com/jmorrison-juniper/MistHelper/pull/3727#issuecomment-5950684079) records each failed case and successful job.
+No newer same-head Quality run supersedes that evidence.
+These results do not justify an infrastructure-only retry.
+
+Unchanged-source local diagnosis disabled optional tracing and screenshots, as CI does.
+It kept all 590 collection members and stopped on the first actual failure.
+The result was one failure and 19 passes, not full acceptance.
+`MapSiteBrowser.choose` waited for actual request 2 while the wildcard Python route callback could not run.
+The request arrived only after teardown resumed Playwright event processing.
+Optional tracing had concealed that test-harness defect.
+Complete stdout, stderr, and JUnit remain in `data/issue-3366/release/ci-options.log` and `ci-options.xml`.
+
+The parent authorized a correction only in the issue-owned E2E file and these existing evidence records.
+A serialized regular expression excludes the exact owned local origin from Python route callbacks.
+The matcher permits no other host, port, scheme, or lookalike prefix.
+Direct decisions check three permitted and six denied URLs.
+A real browser navigation to a second owned loopback listener must abort before any TCP connection or response.
+Each process-owned case retains that negative proof in `matcher.json`.
+
+Production bytes, all cases, assertions, coverage observers, shared fixtures, and timeout budgets remain unchanged.
+The original checked head remains preserved in history.
+A new unamended corrective commit requires full default-option acceptance and repeated local gates before a substantive checked push.
+No workflow retry, timeout increase, protection change, new publication window, or trigger-only push is authorized.
+
+### Final default-option correction proof
+
+The parent recorded the narrow grant in [the public correction comment](https://github.com/jmorrison-juniper/MistHelper/pull/3727#issuecomment-5950881493).
+The final full collection ran without diagnostic stopping, tracing, or screenshots.
+It passed **538 of 590 cases**, with the same 52 named baseline skips.
+All 97 required Maps cases passed without skips.
+The unchanged offline selection passed all **441 cases** after the native abort-code correction.
+These results do not reuse the tracing-enabled proof or the failed diagnostic run.
+
+Every original test method and assertion matches the published `8042621aa6b4ab4e9917a57d825281ffeaabc3bb` version.
+All 590 collection identities match the earlier full collection.
+Only the issue-owned route matcher, its direct negative proof, and these evidence records changed.
+
+The matcher records cover 75 actual native aborts and 675 explicit URL decisions.
+Each actual request names its exact blocked URL once.
+Each probe receives no response and records zero accepted TCP connections at its separate loopback listener.
+Only `net::ERR_BLOCKED_BY_CLIENT` and `net::ERR_BLOCKED_BY_CLIENT.Inspector` satisfy the native failure assertion.
+Generic errors, timeouts, connection refusals, and substring matches cannot pass.
+Each socket and probe page closes in the same test.
+
+The earlier setup validation with a missing output parent did not execute valid acceptance.
+Its JUnit errors remain in `browser-setup-error.xml` and `offline-setup-error.xml`.
+The first native proof rejected Chromium's `.Inspector` suffix.
+Its 75 setup errors remain in `browser-negative-proof-error.xml`.
+Neither error set counts as passing evidence.
+The final prepared runs below supersede those local failures without deleting their records.
+
+| Final correction evidence | Result |
+| - | - |
+| `data/issue-3366/correction/final-browser.xml` | 590 collected, 538 passed, 52 named baseline skips, zero failures or errors. |
+| `data/issue-3366/correction/final-offline.xml` | 441 passed, zero skipped, failed, or errored. |
+| `data/issue-3366/correction/coverage-summary.json` | 75 records, 216 samples, all 30 changed statements and four guarded returns executed. |
+| Stale-window observation | All 47 windows have zero DOM mutations and page errors. |
+| Production and offline source comparison with `8042621aa6b4ab4e9917a57d825281ffeaabc3bb` | Byte-identical. The production SHA-256 remains `a4a09ecea9a52b47d311c4f5a1eba68b8f55e81ec45e39e43960559cdf35a7fb`. |
+| Syntax, full Ruff, full Black | Passed. Black checks 2,018 files. |
+| Exact CI MYPY_PATHS | Passed for 665 source files. |
+| Configured Bandit | Zero issues over 214,983 lines. No settings, exclusions, or annotations changed. |
+| Six-input preflight | Six required inputs read and validated, three guide procedures checked. |
+| Full unchanged quality ratchet | 1,003 discovered files, 725 existing findings, zero new findings or parse errors. |
+| Strict complete runtime audit | No known vulnerabilities or ignored findings. |
+
+The exact final browser command uses strict mode, private paths, and unreachable connector sentinels:
+
+```text
+rtk proxy .venv/bin/python -m pytest tests/e2e/ --browser chromium --timeout=180 --tracing=off --screenshot=off --basetemp=data/issue-3366/correction/socket-proof-full-tmp --output=data/issue-3366/correction/final-browser --junitxml=data/issue-3366/correction/final-browser.xml -p no:cacheprovider -q --tb=short -ra
+```
+
+Result: **538 passed, 52 named baseline skips**.
+The run reports zero leaked holds, zero leaked live runs, and an unchanged zero-line checkout audit trail.
+The new unamended commit, clean committed-scope ratchet, and fresh corrective-head CI results remain next.
+
 ## Exact Local Command Register
 
 Use this worktree's `.venv` and issue-owned artifacts.
