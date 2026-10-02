@@ -101,7 +101,7 @@ Keep existing image handling, current map-data errors, late view protection, tit
 - [X] T015 [P] Add `changelog.d/issue-3366-map-site-selection.md` without editing CHANGELOG.
 - [x] T016 Run configured local quality, runtime audit, Markdown link, and STE commands and record exact outcomes here.
 - [x] T017 Run final read-only SpecKit analyze and exact-manifest review using these issue-specific artifacts.
-- [ ] T018 Create the authorized local Conventional Commit and send the parent the exact SHA, files, red and green evidence.
+- [x] T018 Create the authorized local Conventional Commit and send the parent the exact SHA, files, red and green evidence.
 
 T014 requires T013. T015 requires T007 and T009. T016 requires T014 and T015.
 T017 requires T016. T018 requires T017.
@@ -109,9 +109,9 @@ An unavailable dictionary or PowerShell capability remains explicitly unmeasured
 Do not replace a missing capability with a success claim.
 Other local failures in changed code must be repaired before the commit.
 
-## Phase 8: Blocked Publication
+## Phase 8: Released Publication
 
-- [ ] T019 Record the parent's explicit full verified-main SHA release here. **BLOCKED** at position 15 after #3353.
+- [x] T019 Record the parent's explicit full verified-main SHA release here at position 15 after #3353.
 - [ ] T020 Rebase, read current manifests, repeat local proof, push once, and create the original-template pull request.
 - [ ] T021 Verify exact-head quality, title, CodeQL, strict base checks, and a protected squash merge without admin bypass or branch deletion.
 - [ ] T022 Run exact merged-main local proof in this isolated worktree and report persistent completion to the parent.
@@ -120,6 +120,74 @@ T019 requires T018 and explicit parent release. T020 requires T019.
 T021 requires T020 and all required checks. T022 requires T021.
 The initial SHA, observed main, and sibling reports do not release publication.
 No deployment, cloud login, firmware, production store, or container action is authorized.
+
+The parent granted sole publication and delivery on `1a06f1516223a20eef715d91a32255e6219331db`.
+The [predecessor receipt](https://github.com/jmorrison-juniper/MistHelper/pull/3725#issuecomment-5949473435) records the verified base.
+Live main and all open pull request file lists matched the grant before the rebase.
+The issue still belongs to this session, and no open pull request exists.
+The original clean local repair was `7f7f860908f1088952102df967ee5472705ea54b`.
+The clean rebased repair is `eba2ef4eb546562e9fd5d9f5e5432d3b4e29cefb`.
+Its exact parent is the granted full main.
+Current dependency manifests match the original manifests, so no dependency restoration is needed.
+
+Current-base proof will include the full CI collection, strict import decisions, and process-owned response evidence.
+The two issue tests keep all support inside the owned files.
+They import no `conftest` globals and change no shared browser support.
+
+### Current-base repeated proof
+
+The repeated red template matched the granted source byte-for-byte.
+Its SHA-256 remained `ac1bd1a420ed6f39b2923368edac2bac902290201459dfe30b65c4fda0efdf5f`.
+Full CI collection selected the primary actual Chromium race.
+It failed specifically on A's stale option, with **1 failed and 589 deselected**.
+The four offline race variants also failed on stale contamination.
+These red records remain under `data/issue-3366/release/red/`.
+
+The restored repair matches the original production repair byte-for-byte.
+Every rendering, map-data, image, and theme region matches the granted base.
+The issue-owned browser fixture now verifies the existing run-owner header.
+Each evidence record names its unique run and owning process.
+The fixture proves that every held response releases and its server thread stops.
+Five direct import-decision cases prove normal skips and strict missing-package failure.
+
+| Current-base measurement | Result |
+| - | - |
+| Full strict CI browser collection | **590 collected, 538 passed, 52 pre-existing skips**, zero failures or errors. |
+| Required Maps, image, and title cases within that collection | **97 passed**, zero skipped. All 75 issue cases and 22 adjacent cases executed. |
+| Complete offline Maps selection | **441 passed**, zero skipped. The original 436 cases plus five import-decision cases executed. |
+| Changed JavaScript coverage | All **30 statements and four guarded returns** executed across 75 records and 216 samples. |
+| Full Ruff and syntax | **Passed** on the current source. |
+| Full Black | **Passed** for 2,018 files. |
+| Exact current CI MYPY_PATHS | **Passed** for 665 source files. |
+| Configured Bandit | **Passed**, zero issues over 214,983 code lines. No exclusions or annotations changed. |
+| Required input preflight | **Passed**. Six inputs read and validated, three live guide procedures checked. |
+| Full unchanged quality ratchet | **Passed**. 1,003 files discovered, 725 existing findings, zero new findings or parse errors. |
+| Strict current runtime audit | **Passed** through the authorized complete hashed resolution. No known vulnerabilities. |
+
+The 52 pre-existing browser skips have two exact reasons.
+Fifty-one operator journeys run only on request.
+The adjacent capture walk says: `The options page offered no version, so the save would keep an empty plan.`
+Those skipped cases remain unverified, not passed.
+No required Maps case skipped.
+
+The full browser command used `UPGRADE_PORTAL_E2E_STRICT=1`, private `DATA_DIR`, private `TMPDIR`, and unreachable connector sentinels.
+It used the existing repository fixtures without edits or imported `conftest` globals.
+
+```text
+rtk proxy .venv/bin/python -m pytest tests/e2e/ --browser chromium --timeout=180 --basetemp=data/issue-3366/release/full-browser-tmp --output=data/issue-3366/release/full-browser --tracing=retain-on-failure --screenshot=on --junitxml=data/issue-3366/release/full-browser.xml -p no:cacheprovider -q --tb=short -ra
+```
+
+Result: **538 passed, 52 named pre-existing skips**.
+The run checked 134 audit records across eight sites, with zero leaked holds.
+The live-run guard read 363 history rows across 65 modules, with zero leaked live runs.
+The checkout audit trail stayed at zero lines.
+All 75 issue journey records show zero page errors.
+Every stale-completion assertion required zero DOM mutations.
+
+Current-base receipts are `data/issue-3366/release/full-browser.xml`, `offline.xml`, and `coverage-summary.json`.
+Current gate records remain below `data/issue-3366/release/gates/`.
+The original and repeated red receipts remain separate.
+The post-commit changed-scope ratchet and publication remain next.
 
 ## Exact Local Command Register
 
@@ -239,4 +307,4 @@ C1 is not a functional defect or a reason to violate the authorized scope.
 
 The local commit receipt remains next.
 The commit receipt belongs in the parent handoff, not in a self-referencing commit file.
-Publication, merge, and exact-main proof remain blocked on the explicit parent release.
+Publication, merge, and exact-main proof now require current-base verification under the explicit parent release.

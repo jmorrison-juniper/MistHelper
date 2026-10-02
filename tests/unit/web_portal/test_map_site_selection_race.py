@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import logging
@@ -532,3 +533,37 @@ class TestMapSiteObservationGuard:
         with pytest.raises(AssertionError, match="request count"):
             MapListObservation.check(expected, expected, ledger, (MapSiteFacts.SITE_A, MapSiteFacts.SITE_B))
         logger.info("The observation guard checked and rejected 2 request-order cases")
+
+    @pytest.mark.parametrize("mode", ("1", "0", "unset", "true", "available"))
+    def test_browser_import_guard_preserves_normal_skips_and_strict_failures(
+        self, monkeypatch: pytest.MonkeyPatch, mode: str
+    ) -> None:
+        """Execute the actual import decision without a browser or missing environment."""
+        path = Path(__file__).resolve().parents[2] / "e2e" / "test_map_site_selection_race_journey.py"
+        nodes = ast.parse(path.read_text(encoding="utf-8"), filename=str(path)).body
+        guards = [node for node in nodes if isinstance(node, ast.Try)]
+        assert len(guards) == 1, "The browser module must contain one required import decision."
+        code = compile(ast.Module(body=guards, type_ignores=[]), str(path), "exec")
+        calls: list[str] = []
+
+        def missing_package(name: str, **_options: object) -> object:
+            """Simulate only the package boundary, not the required import decision."""
+            calls.append(name)
+            if mode != "available":
+                pytest.skip("The Playwright package is not installed.", allow_module_level=True)
+            return object()
+
+        monkeypatch.setattr(pytest, "importorskip", missing_package)
+        monkeypatch.setenv("UPGRADE_PORTAL_E2E_STRICT", mode)
+        if mode == "unset":
+            monkeypatch.delenv("UPGRADE_PORTAL_E2E_STRICT")
+        import os
+
+        if mode == "available":
+            exec(code, {"pytest": pytest, "os": os})
+        else:
+            failure = pytest.UsageError if mode == "1" else pytest.skip.Exception
+            with pytest.raises(failure, match="Playwright package is not installed"):
+                exec(code, {"pytest": pytest, "os": os})
+        assert calls == ["playwright.sync_api"]
+        logger.info("The browser import guard checked 1 package decision in mode %s", mode)

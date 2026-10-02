@@ -130,6 +130,8 @@ The operator retains floor plan labels, dimensions, images, device positions, an
   Separate red and green evidence and record source identity.
 - **VR-007**: Run unchanged adjacent Maps, image-route, safe-text, title-theme, image-browser, and title-contrast tests.
   Do not edit shared fixtures or expectations.
+  Verify the required cases within the same full collection that CI uses.
+  Preserve normal missing-package skips and strict missing-package failures.
 - **VR-008**: Run full configured Ruff, Black, exact CI MYPY_PATHS, configured Bandit, and the unchanged quality ratchet.
   Run runtime dependency audit, owned Markdown links, and STE.
   Report missing STE dictionary or PowerShell capabilities as unavailable, not measured.
@@ -169,6 +171,7 @@ Do not edit README, CHANGELOG, dependencies, quality settings, exclusions, or sh
 
 Publication waits at position 15 after issue #3353.
 Only the parent's explicit full verified-main SHA releases publication.
+The parent now released `1a06f1516223a20eef715d91a32255e6219331db` for this sole position.
 After release, repeat local proof on the released base before publication and protected merge.
 Run exact merged-main tests in this same isolated worktree.
 No deployment or production service action is authorized.

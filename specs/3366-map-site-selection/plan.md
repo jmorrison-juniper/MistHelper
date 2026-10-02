@@ -179,8 +179,11 @@ Report them explicitly without a passing measurement.
 Do not manufacture a dictionary or start unapproved services.
 
 Full unrelated test suites and their store-dependent journeys remain remote CI requirements.
-They are not authorized local service actions for this issue.
-Run only the issue and adjacent behavioral suites locally.
+The explicit publication release also requires the full CI browser collection locally.
+Use its existing isolated process fixture and in-memory records.
+Do not provision stores or change shared browser support.
+Require all issue and adjacent Maps cases to execute without skips.
+Report each pre-existing optional skip by name.
 Keep all original required checks active after publication.
 
 ## Publication Contract
@@ -189,6 +192,7 @@ Complete the local repair, proofs, gates, analysis, and Conventional Commit firs
 Stop before push or pull request creation.
 Wait for the parent's explicit full verified-main SHA release at position 15 after issue #3353.
 An observed main revision, sibling report, or initial SHA is not release authority.
+The parent supplied the explicit release on `1a06f1516223a20eef715d91a32255e6219331db`.
 
 After release, rebase onto that verified SHA and read current manifests.
 Repeat local proof, push once, and use the original complete pull request template.

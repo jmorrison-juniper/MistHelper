@@ -5,16 +5,19 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import threading
+import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from flask import Response, jsonify, request
-from playwright.sync_api import CDPSession, Page
 from werkzeug.serving import make_server
 
+from tests.support.upgrade_portal_e2e.owner import RunOwnerHeaderCheck
 from tests.unit.web_portal.test_map_site_selection_race import (
     TEMPLATE_PATH,
     MapListObservation,
@@ -24,6 +27,19 @@ from tests.unit.web_portal.test_map_site_selection_race import (
 )
 from web_portal.app import WebPortalApp
 from web_portal.menu_registry import build_static_menu_actions
+
+if TYPE_CHECKING:
+    from playwright.sync_api import CDPSession, Page
+
+try:
+    pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
+except pytest.skip.Exception as error:
+    if os.environ.get("UPGRADE_PORTAL_E2E_STRICT") == "1":
+        raise pytest.UsageError(
+            "The Playwright package is not installed. UPGRADE_PORTAL_E2E_STRICT=1 forbids a skip. "
+            "Run python scripts/bootstrap_worktree.py, then python -m playwright install chromium."
+        ) from error
+    raise
 
 logger = logging.getLogger(__name__)
 WAIT_SECONDS = 15
@@ -61,6 +77,8 @@ class MapListServer:
         """Create a private request ledger and condition for one test."""
         self.calls: list[HeldMapList] = []
         self.condition = threading.Condition()
+        self.run_id = uuid.uuid4().hex
+        self.process_id = os.getpid()
 
     @staticmethod
     def sites() -> Response:
@@ -197,7 +215,9 @@ class MapSiteBrowser:
                 else route.fulfill(status=502, body="The test blocked an unexpected remote request.")
             ),
         )
-        self.page.goto(f"{portal}/maps", wait_until="networkidle", timeout=WAIT_SECONDS * 1000)
+        response = self.page.goto(f"{portal}/maps", wait_until="networkidle", timeout=WAIT_SECONDS * 1000)
+        assert response is not None, "The owned Maps server returned no page response."
+        RunOwnerHeaderCheck(self.server.run_id).require(response.all_headers())
         self.page.locator(f"#siteSelect option[value='{MapSiteFacts.SITE_B}']").wait_for(
             state="attached", timeout=WAIT_SECONDS * 1000
         )
@@ -231,6 +251,9 @@ class MapSiteBrowser:
             call.answer(reply)
         completed = event.value
         assert bool(completed.failure) == bool(reply.get("disconnect")), f"Unexpected completion: {completed.failure}."
+        response = completed.response()
+        assert response is not None, "The held map-list request returned no response headers."
+        RunOwnerHeaderCheck(self.server.run_id).require(response.all_headers())
         self.page.evaluate(FRAME_CHECKPOINT)
         self.coverage.require_completion()
         self.events["observations"].append(
@@ -317,6 +340,13 @@ def maps_race_portal(map_lists: MapListServer, tmp_path: Path, monkeypatch: pyte
     monkeypatch.setenv("WEBHOOK_ENABLED", "false")
     app = WebPortalApp.create_app(None, build_static_menu_actions(), "synthetic-map-org")
     app.config["TESTING"] = True
+
+    @app.after_request
+    def identify_maps_run(response: Response) -> Response:
+        """Name this process-owned test run on every local response."""
+        response.headers[RunOwnerHeaderCheck.HEADER] = map_lists.run_id
+        return response
+
     app.view_functions["maps.list_sites"] = map_lists.sites
     app.view_functions["maps.list_site_maps"] = map_lists.receive
     app.view_functions["maps.map_data"] = lambda site_id, map_id: jsonify(
@@ -343,6 +373,8 @@ def maps_race_portal(map_lists: MapListServer, tmp_path: Path, monkeypatch: pyte
         thread.join(timeout=WAIT_SECONDS)
         server.server_close()
         WebPortalApp.shutdown_app(app)
+        assert not thread.is_alive(), "The owned Maps server thread did not stop."
+        assert all(call.release.is_set() for call in map_lists.calls), "The Maps server retained a held response."
         logger.debug("The test server stopped")
 
 
@@ -362,7 +394,14 @@ def journey(
         browser.coverage.close()
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "journey.json").write_text(
-            json.dumps({"requests": map_lists.ledger(), "events": browser.events}), encoding="utf-8"
+            json.dumps(
+                {
+                    "owner": {"run_id": map_lists.run_id, "process_id": map_lists.process_id},
+                    "requests": map_lists.ledger(),
+                    "events": browser.events,
+                }
+            ),
+            encoding="utf-8",
         )
         page.evaluate("() => window.mapListObserver.disconnect()")
         remote = [call for call in browser.events["requests"] if not call["url"].startswith(f"{maps_race_portal}/")]
