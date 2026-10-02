@@ -48,7 +48,9 @@ Change no production behavior.
 
 - Use ASCII action logs. Comment only the non-obvious selection and conversion decisions.
 
-- Follow the user-directed local-only publication boundary.
+- Obey the parent's sole publication grant on main `5d38898af5639e90715ec57eb8d48d2985e1acf8`.
+- Preserve the approved `ModelVersionPicker` call from pull request #3633.
+- Keep the same three run-owned capture exclusions without importing a second conftest instance.
 
 ## Project Structure
 
@@ -82,6 +84,26 @@ changelog.d/issue-3353-precheck-tier-test-fidelity.md
 7. Record unavailable dictionary or PowerShell capabilities explicitly.
 8. Add the issue-owned release fragment and complete the task evidence.
 9. Commit the exact reserved file set and report its clean SHA to the parent.
+
+## Authorized Publication
+
+The parent released position 14 on 2026-10-02.
+The granted base is `5d38898af5639e90715ec57eb8d48d2985e1acf8`.
+The temporary browser-file handoff is complete. The seven issue-owned paths remain the full change scope.
+
+Repeat the red pair and rendered-cell failures on an owned export of that exact base.
+Keep its production source, stand-in selection, model controls, and conftest unchanged.
+Run the required green cases under full collection and the CI package name.
+Remove the temporary source export before the complete quality scan.
+
+Preserve the complete pull request template and record exact local results.
+Keep auto-merge disabled.
+Require all fresh protected statuses on the exact head and granted base.
+Use the protected squash merge without an administrator bypass or branch-deletion argument.
+
+After the merge, select and test the exact resulting main revision locally.
+Record its full SHA, tree, local results, and cleanup in a persistent pull request receipt.
+Only the parent can release the next issue.
 
 ## Complexity Tracking
 

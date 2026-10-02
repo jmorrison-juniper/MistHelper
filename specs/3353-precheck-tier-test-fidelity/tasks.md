@@ -49,9 +49,35 @@
 - [x] T012 Verify the exact reserved file set and prepare the local delivery evidence.
   (delivered: specs/3353-precheck-tier-test-fidelity/tasks.md)
 
-After these tasks, commit the seven reserved files.
-Report the clean SHA and the command results to the parent.
-Do not push or open a pull request.
+The first local delivery stopped at commit `c7bdb2f1464fb710f22368b282f7e477ef45c9ba`.
+The parent later grants sole publication on verified main `5d38898af5639e90715ec57eb8d48d2985e1acf8`.
+
+## Current-Base Evidence
+
+- [x] T013 Reclaim the temporary browser-file handoff and preserve the merged model controls during the authorized rebase.
+  Keep the same capture exclusions without importing a second conftest instance.
+  (delivered: tests/e2e/upgrade_portal/test_org_missing_precheck_journey.py)
+- [x] T014 Repeat the red and green pair, tier-cell, collection, and leak-guard evidence on the granted base.
+  The red unit run reports 23 failures and 10 passes.
+  The red browser reads tier 2 instead of 3 and reaches the unchanged one-hold teardown refusal.
+  Both source variants collect 515 E2E cases under the CI package name.
+  The required three tier cases pass without skips.
+  The complete E2E run reports 463 passes and 52 existing skips.
+  Its guards check 134 trail records, eight sites, and 363 history rows across 65 modules.
+  They report zero leaked holds, zero live runs, and an unchanged checkout trail.
+  (delivered: tests/e2e/upgrade_portal/test_org_missing_precheck_journey.py)
+- [x] T015 Verify current-base local checks without changing a quality input.
+  The focused run reports 173 passes. The reader covers all nine statements and both branches.
+  The complete portal unit run reports 4,407 passes and one Windows-only skip on macOS.
+  The preflight reads and validates six required inputs and checks three active guides.
+  The full ratchet checks 1,001 files and 725 existing findings. It reports zero new findings or parse errors.
+  The runtime audit checks 105 dependencies with zero skipped records or known vulnerabilities.
+  (delivered: specs/3353-precheck-tier-test-fidelity/tasks.md)
+
+After local verification, publish one checked head under the parent's exact-base grant.
+Keep auto-merge disabled and preserve all 23 template items.
+Require all current strict statuses before the protected exact-head squash merge.
+Test the exact resulting main revision locally and record a persistent pull request receipt.
 
 ## Confirmed Adjacent Limitation
 
@@ -65,6 +91,10 @@ The cleanup removed the owned baseline worktree after the check.
 
 The same adjacent walk remains unverified on the repaired tree.
 The issue changes no version wiring, shared factory, quality baseline, or unreserved journey.
+
+The unchanged granted base `5d38898af5639e90715ec57eb8d48d2985e1acf8` reproduces the same version-options skip.
+The current full run preserves that skip and the 51 operator journeys that run only on request.
+No required pair or tier-cell case is skipped.
 
 ## Dependencies
 

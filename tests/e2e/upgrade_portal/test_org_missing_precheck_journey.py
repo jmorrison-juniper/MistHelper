@@ -31,7 +31,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests.e2e.upgrade_portal.conftest import RUN_OWNED_CAPTURE_IDS
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import CAPTURE_PREFIX, OrgPrecheckSteps
 from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Select actual device versions.
@@ -48,6 +47,11 @@ SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first stand-in site of `
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second stand-in site. It holds no seeded capture.
 SITE_IDS = (SITE_ID, SECOND_SITE_ID)  # Both selected sites, in the page order.
 CHOSEN_TIER = "3"  # The operator reads the port state, the radio state, and the alarms too.
+RUN_OWNED_CAPTURE_IDS = (  # Preserve the seed exclusions without importing another conftest instance.
+    "e2e-capture-pre-0001",
+    "e2e-capture-post-0001",
+    "e2e-capture-tier3-0001",
+)
 
 
 def open_confirmation(page: Page) -> None:

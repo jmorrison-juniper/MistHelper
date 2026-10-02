@@ -62,6 +62,9 @@ The browser journey reads the tier cells after the operator takes and retakes st
 - **FR-006**: The adjacent single-site, standalone-adoption, and tier journeys must retain their behavior.
 - **FR-007**: Production code, shared factories, authentication, dependency files, and quality baselines must remain unchanged.
 
+- **FR-008**: Preserve the merged model-specific controls, browser capability guard, and fixture lifecycle.
+- **FR-009**: Import no conftest globals through a second package identity.
+
 ### Key Entities
 
 - A standalone pre-check contains a capture identifier, site identifier, tier, role, start time, and verification state.
@@ -76,11 +79,12 @@ The browser journey reads the tier cells after the operator takes and retakes st
 - **SC-003**: The focused unit tests cover every executable line and branch of the new method.
 - **SC-004**: Run the relevant journeys in isolated Chromium. Require no browser dependency skip.
 - **SC-005**: The local commit contains only the seven reserved issue-owned files.
+- **SC-006**: The full E2E scope collects successfully. The required tier cases pass under the CI package name without skips.
 
 ## Assumptions
 
-- The starting main revision is `856e5065413d3026f9c0f6d5222d9d379ec79d8b`.
-- That revision already contains the repair of standalone selection for issue #3360.
+- The initial local repair started at `856e5065413d3026f9c0f6d5222d9d379ec79d8b`.
+- Both source bases contain the repair of standalone selection for issue #3360.
 - The current tier 3 seed belongs to a run. The separate standalone seed stores tier 2.
-- This session stops after a clean local commit and an evidence report to the parent.
-- Remote publication requires the parent's explicit release after issue #3290.
+- The parent grants sole publication on verified main `5d38898af5639e90715ec57eb8d48d2985e1acf8` after issue #3290.
+- An unrelated main advance or substantive scope conflict stops delivery.
