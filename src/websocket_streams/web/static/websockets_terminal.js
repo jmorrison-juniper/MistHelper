@@ -11,6 +11,8 @@
     var EMPTY_LIVE_READ_DELAY_MS = 250; // Wait after an empty live read so idle terminals do not flood the portal.
     var MAX_READ_FAILURES = 5; // Hide transient read errors until repeated failures show a real problem.
     var FINAL_STATES = ['stopped', 'finished', 'timed_out', 'failed']; // Stop polling only when the backend reports a final state.
+    var NO_OUTPUT_NOTICE_SECONDS = 20; // Issue #3710: tell the operator about a silent device after this wait.
+    var WAITING_NOTICE = 'The portal waits for the first output from the device.'; // Show this text while a new terminal has no output.
 
     function testHookValue(name, fallback) { // Read browser test overrides for timing-sensitive terminal behavior.
         var hooks = window.MistWebSocketTerminalTestHooks || {}; // Read test hooks from the browser only when tests install them.
@@ -507,6 +509,7 @@
             this.term = null; // Start without xterm until a session opens.
             this.fitAddon = null; // Start without a fit addon until xterm exists.
             this.nextPosition = 0; // Start reading output from byte zero.
+            this.openedAt = 0; // Start without an open time until a session opens.
             this.stopped = true; // Start stopped so no read loop runs before open.
             this.readOnly = false; // Start in shell mode until a session says otherwise.
             this.inputClosed = false; // Start with input available until a session blocks it.
@@ -536,12 +539,14 @@
             this.readOnly = session.read_only === true || session.output === 'screen'; // Detect fixed screen output that must stay read-only.
             this.inputClosed = false; // Open the new session with input allowed until state says otherwise.
             this.nextPosition = 0; // Start the new session read at the first byte.
+            this.openedAt = Date.now(); // Count the wait for the first output from this open.
             this.readFailures = 0; // Failures of the previous session must not count against this session.
             this._showPanel(true); // Show the terminal panel before xterm attaches.
             this._createTerminal(); // Create xterm with the selected session mode.
             this._wireTerminal(); // Attach xterm input and keyboard handlers.
             if (!this.readOnly) this._fitAndResize(true); // Fit writable shell sessions before posting their size.
             if (!this.readOnly) this._startResizeObserver(); // Watch size changes only for writable shell sessions.
+            if (session.state === 'connecting') this.onState({ notice: WAITING_NOTICE }); // A new terminal shows that it waits for the device.
             this._readLoop(); // Begin long-poll reads for terminal output.
             this.focusTerminal(); // Move keyboard focus to the opened terminal.
         }
@@ -759,10 +764,22 @@
             this.onState({ // Send a compact state object to the host page.
                 state: payload.state || 'live', // Report live when the backend omits a state.
                 reason: payload.reason || '', // Pass through the backend finish reason when present.
+                notice: final ? '' : this._waitNotice(), // Tell the operator when the device sends no output.
                 read_only: this.readOnly, // Report whether the current session is read-only.
                 live: !final, // Mark the session live until final cleanup runs.
                 terminal_next: this.nextPosition // Report the next read position to the host page.
             });
+        }
+
+        _waitNotice() { // Return the header notice for a terminal that has no output yet.
+            if (this.nextPosition > 0) return ''; // Output arrived, so the operator needs no notice.
+            var limit = this._noOutputNoticeSeconds(); // Read the notice wait, which tests can shorten.
+            if ((Date.now() - this.openedAt) / 1000 < limit) return WAITING_NOTICE; // The device can still answer in normal time.
+            return 'The device sent no output in ' + limit + ' seconds. Stop this session. Start a new session after one minute.'; // Issue #3710: a busy device stays silent.
+        }
+
+        _noOutputNoticeSeconds() { // Return the wait before the silent device notice.
+            return testHookValue('noOutputNoticeSeconds', NO_OUTPUT_NOTICE_SECONDS); // Allow tests to shorten the notice wait.
         }
 
         _fitAndResize(force) { // Fit the shell terminal and post geometry changes.

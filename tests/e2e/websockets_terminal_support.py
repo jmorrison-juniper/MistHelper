@@ -135,6 +135,19 @@ class PushableShellDevice(ShellDevice):
         return self._connection  # Later sends use this shell connection.
 
 
+class SilentShellDevice(PushableShellDevice):
+    """Fake shell that accepts the connection and sends no output, like a busy Mist device."""
+
+    def on_connect(self, connection: Any) -> None:
+        """Keep the connection, and send no banner and no prompt."""
+        logger.info("Fake shell accepts the connection and stays silent")  # Record the issue #3710 device behavior.
+        self._connection = connection  # The test closes this connection later, as the Mist cloud does.
+
+    def _process_input(self, connection: Any, data: bytes) -> None:
+        """Ignore input, because a busy device does not echo."""
+        logger.debug("Fake silent shell ignores %d input bytes", len(data))  # Record the ignored input size.
+
+
 class TerminalPortalHarness:
     """Own one fake cloud and one portal server for terminal journeys."""
 
@@ -325,5 +338,15 @@ def pushable_terminal_harness() -> Iterator[TerminalPortalHarness]:
     harness = TerminalPortalHarness(shell=PushableShellDevice()).start()  # Let the test drive late shell output.
     try:
         yield harness  # Run the session switch journey.
+    finally:
+        harness.stop()  # Clean up all server threads.
+
+
+@pytest.fixture()
+def silent_terminal_harness() -> Iterator[TerminalPortalHarness]:
+    """Return a terminal harness whose shell accepts the connection and sends no output."""
+    harness = TerminalPortalHarness(shell=SilentShellDevice()).start()  # Act as a busy device for issue #3710.
+    try:
+        yield harness  # Run the silent device journey.
     finally:
         harness.stop()  # Clean up all server threads.

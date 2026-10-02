@@ -35,6 +35,9 @@ class DeviceTerminalRunner:
     OPENED_NOTE = "The terminal opened."  # Each subclass names its own open event.
     CLOSED_REASON = "The device closed the terminal."  # A close frame from the device is a normal end.
     DROPPED_REASON = "The connection to the device dropped."  # A loss with no close frame is a failure.
+    NO_ANSWER_REASON = (  # Issue #3710: a busy device can accept the terminal, send nothing, and then close.
+        "The device sent no output before the Mist cloud closed the terminal. Start a new session after one minute."
+    )
     STOPPED_REASON = "The operator stopped the session."  # The record keeps a more exact stop reason.
 
     def __init__(
@@ -102,8 +105,15 @@ class DeviceTerminalRunner:
             self._sink.mark_live(self.OPENED_NOTE)  # The page shows the terminal as open.
             self._read_loop()  # Read until the connection ends.
         except ConnectionClosed as closed:
+            logger.info(
+                "The terminal for key %s closed with code %s, output seen %s",
+                self._request.key,
+                closed.code,
+                self._output_seen,
+            )  # The close code and the output flag show a silent device in the portal log.
             state, reason = self._outcome(closed)  # Map the close to a final state.
             self._sink.finish(state, reason)  # The page shows the end reason.
+            logger.debug("Finished the terminal for key %s as %s", self._request.key, state.value)  # Log the result.
         except (TerminalOpenError, StreamRequestError) as error:
             self._fail(str(getattr(error, "message", "") or error))  # The reason is plain operator text.
         except Exception:  # A broad catch keeps one bad terminal from ending the portal worker.
@@ -202,6 +212,8 @@ class DeviceTerminalRunner:
         """
         if self._stopping.is_set() or not closed.dropped:  # The operator or the reaper closed the terminal.
             return SessionState.STOPPED, self.STOPPED_REASON  # The record keeps the exact stop reason.
+        if closed.code is not None and not self._output_seen:  # The cloud closed a terminal that never sent output.
+            return SessionState.FAILED, self.NO_ANSWER_REASON  # Issue #3710: the device was silent.
         if closed.code is not None:  # The device sent a close frame, for example after exit.
             return SessionState.FINISHED, self.CLOSED_REASON  # A normal end of the terminal.
         return SessionState.FAILED, self.DROPPED_REASON  # The network lost the connection.

@@ -119,6 +119,42 @@ is the `next` value from the latest terminal read. The session list item shows
 the state only for a terminal session. The Stop button is disabled after a
 final state.
 
+## Silent device notice
+
+Issue #3710 records this behavior. A device can accept a terminal and send no
+output. The Mist cloud then closes the terminal after approximately 90 seconds.
+
+The header reason line `ws-session-reason` shows a notice while a terminal has
+no output.
+
+- If the page opens a session in the `connecting` state, the line shows the
+  waiting notice.
+- After each read answer with no output, the page compares the time since the
+  open with the notice limit. The limit is 20 seconds. The test hook
+  `noOutputNoticeSeconds` changes the limit.
+- After the limit, the line shows the silent device notice.
+- The first output byte clears the notice.
+- A final state replaces the notice with the end reason.
+
+The waiting notice has this text.
+
+```text
+The portal waits for the first output from the device.
+```
+
+The silent device notice has this text.
+
+```text
+The device sent no output in 20 seconds. Stop this session. Start a new session after one minute.
+```
+
+If the Mist cloud closes a terminal that sent no output, the session ends in
+the `failed` state with this reason.
+
+```text
+The device sent no output before the Mist cloud closed the terminal. Start a new session after one minute.
+```
+
 ## Session switch
 
 A click on a `ws-session-<session_id>` button selects that session. The page

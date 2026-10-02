@@ -103,6 +103,29 @@ Stop button is disabled after a final state.
 Select a session in the session list to show its output. The page then scrolls
 to the terminal panel and replays the output that the portal holds.
 
+A new terminal can wait for the first output from the device. Until the output
+arrives, the header shows this notice.
+
+```text
+The portal waits for the first output from the device.
+```
+
+If no output arrives in 20 seconds, the header shows this notice.
+
+```text
+The device sent no output in 20 seconds. Stop this session. Start a new session after one minute.
+```
+
+A device can accept a terminal and send no output. This can occur after three
+or four quick shells on one device. The Mist cloud then closes the terminal
+after approximately 90 seconds. The session ends as `Failed` with this reason.
+
+```text
+The device sent no output before the Mist cloud closed the terminal. Start a new session after one minute.
+```
+
+Issue #3710 records this behavior.
+
 The time notice appears when less than two minutes remain. The gap notice shows
 how many terminal bytes the portal no longer holds.
 
@@ -155,6 +178,9 @@ sessions. This repairs two defects in the Mist software kit path.
 - Top and Monitor Traffic now use the terminal parser in xterm.js. This prevents
   split terminal control sequences from showing as stray text. Issue #3659
   records the defect.
+- A terminal that gets no output from the device now shows a notice and a
+  plain failed reason. Before this repair, the page showed `Live` and an empty
+  screen for 90 seconds. Issue #3710 records the defect.
 
 ## Environment Variables
 

@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit  # Read the after value of each term
 
 import pytest  # Use fixtures and skip support.
 
+from src.websocket_streams.live.runners.shell import ShellRunner  # The silent device journey reads the final reason.
 from tests.e2e import websockets_terminal_support as terminal_support  # Register and read the shared harness.
 
 pytest.importorskip("playwright", reason="playwright is absent, so the browser journey cannot run")  # Browser guard.
@@ -25,7 +26,21 @@ quiet_terminal_harness = terminal_support.quiet_terminal_harness  # Expose the q
 paste_echo_terminal_harness = terminal_support.paste_echo_terminal_harness  # Expose the visible paste fixture.
 monitor_terminal_harness = terminal_support.monitor_terminal_harness  # Expose the fixed monitor fixture.
 pushable_terminal_harness = terminal_support.pushable_terminal_harness  # Expose the late shell output fixture.
+silent_terminal_harness = terminal_support.silent_terminal_harness  # Expose the silent device fixture.
 RATE_LIMITED_BODY = '{"error":"rate limited","code":"rate_limited"}'  # The terminal HTTP rate limit answer.
+WAITING_NOTICE = "The portal waits for the first output from the device."  # The header notice before the first output.
+SILENT_NOTICE = (  # The header notice after the shortened test wait of 2 seconds.
+    "The device sent no output in 2 seconds. Stop this session. Start a new session after one minute."
+)
+REASON_RECORDER = """
+window.MistWebSocketTerminalTestHooks = {readWaitSeconds: 0.2};
+window.wsReasonTexts = [];
+document.addEventListener('DOMContentLoaded', function() {
+    var node = document.getElementById('wsSessionReason');
+    new MutationObserver(function() { window.wsReasonTexts.push(node.textContent); })
+        .observe(node, {childList: true, characterData: true, subtree: true});
+});
+"""  # Record each header reason text, so a short notice cannot escape the journey.
 
 
 def _open_shell(page: Any, harness: TerminalPortalHarness) -> None:
@@ -732,3 +747,42 @@ def test_review_21_session_list_shows_terminal_without_errors(
     _shot(page, harness, "review-21-list-click-shows-terminal.png")  # Save evidence.
     assert in_view is True  # The page moved the view to the terminal output.
     assert errors == []  # The page and xterm logged no error.
+
+
+def test_review_3710_silent_device_shows_notice_and_failed_reason(
+    page: Any, silent_terminal_harness: TerminalPortalHarness
+) -> None:
+    """Issue #3710: a silent device shows a notice, and the cloud close shows a failed reason."""
+    harness = silent_terminal_harness  # Use a short name for the harness.
+    page.add_init_script(
+        "window.MistWebSocketTerminalTestHooks = {readWaitSeconds: 0.5, noOutputNoticeSeconds: 2};"
+    )  # Shorten the read wait and the notice wait.
+    _open_shell(page, harness)  # Start a shell on the silent device.
+    page.locator("#wsSessionReason", has_text=WAITING_NOTICE).wait_for(timeout=READY_TIMEOUT_MS)  # First notice.
+    page.locator("#wsSessionReason", has_text=SILENT_NOTICE).wait_for(timeout=READY_TIMEOUT_MS)  # Silent notice.
+    page.locator("#wsSessionState", has_text="State: Live").wait_for(timeout=READY_TIMEOUT_MS)  # The socket is open.
+    _shot(page, harness, "review-3710-silent-device-notice.png")  # Save evidence of the notice.
+    harness.shell.close_shell()  # The Mist cloud closes the silent terminal with an empty close frame.
+    page.locator("#wsSessionState", has_text="State: Failed").wait_for(timeout=READY_TIMEOUT_MS)  # Final state.
+    page.locator("#wsSessionReason", has_text=ShellRunner.NO_ANSWER_REASON).wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # The final reason replaces the notice.
+    _shot(page, harness, "review-3710-silent-device-failed.png")  # Save evidence of the final reason.
+    assert page.locator("#wsStopButton").is_disabled() is True  # A failed session cannot stop again.
+
+
+def test_review_3710_first_output_clears_the_waiting_notice(
+    page: Any, delayed_terminal_harness: TerminalPortalHarness
+) -> None:
+    """Issue #3710: the waiting notice shows before the first output, and the output clears it."""
+    harness = delayed_terminal_harness  # Use a short name for the harness.
+    page.add_init_script(REASON_RECORDER)  # Shorten the read wait, and record each header reason text.
+    _open_shell(page, harness)  # Start a shell whose banner arrives after 0.8 seconds.
+    page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # The first output arrives.
+    page.wait_for_function(
+        "() => document.getElementById('wsSessionReason').textContent === ''", timeout=READY_TIMEOUT_MS
+    )  # The output clears the notice.
+    texts = page.evaluate("window.wsReasonTexts")  # Read each reason text that the page showed.
+    _shot(page, harness, "review-3710-first-output-clears-notice.png")  # Save evidence.
+    assert WAITING_NOTICE in texts  # The page told the operator that it waits for the device.
+    assert not any(text.startswith("The device sent no output") for text in texts)  # An answer gets no silent notice.

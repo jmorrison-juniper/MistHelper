@@ -118,6 +118,16 @@ class RaisingSession(StreamSession):
         raise RuntimeError("sink boom")  # The runner must convert this into a plain failure.
 
 
+class SilentDevice:
+    """A busy device that accepts the shell and sends no output."""
+
+    def on_connect(self, connection: FakeConnection) -> None:
+        """Send no output, then send the empty close frame that the Mist cloud sends."""
+        timer = threading.Timer(0.1, connection.send_close, args=(None,))  # Let the client enter its read loop.
+        timer.daemon = True  # A test failure must not keep the process alive.
+        timer.start()  # The real cloud closes a silent terminal after 90 seconds. The test uses a short delay.
+
+
 def test_shell_trigger_posts_expected_path_and_body() -> None:
     """The shell trigger uses the SDK path and an empty body."""
     with FakeMistCloud() as cloud:  # Start a bounded fake cloud.
@@ -292,3 +302,20 @@ def test_shell_history_preserves_raw_control_and_split_utf8_bytes() -> None:
         runner.start()  # Start the shell.
         _wait_for_state(session, {SessionState.FINISHED})  # The raw device closes normally.
     assert _history(session) == b"".join(chunks)  # The history keeps exact bytes.
+
+
+def test_shell_close_without_output_fails_with_the_silent_device_reason(caplog: pytest.LogCaptureFixture) -> None:
+    """Issue #3710: a close frame before any output is a failure with a plain next step."""
+    caplog.set_level(logging.INFO)  # The close record must show the code and the output flag.
+    with FakeMistCloud() as cloud:  # Start the fake server.
+        cloud.register("/shell/silent", SilentDevice())  # Route the silent device.
+        api = FakeApiSession(cloud)  # Build the fake REST session.
+        api.add_override("/shell", 200, {"url": f"{cloud.base_ws_url}/shell/silent"})  # Return the silent path.
+        session = _session()  # Build a real sink.
+        runner = _runner(api, session)  # Bind input.
+        runner.start()  # Start the shell.
+        _wait_for_state(session, {SessionState.FAILED})  # The silent close is a failure, not a normal end.
+    assert session.reason == ShellRunner.NO_ANSWER_REASON  # The page tells the operator to wait one minute.
+    assert session.input_ready is False  # No output means that the input never opened.
+    assert _history(session) == b""  # The device sent no byte.
+    assert "output seen False" in caplog.text  # The portal log shows the silent close.

@@ -690,7 +690,7 @@
     function updateSessionHeader(session) {
         setText('wsSessionTitle', session.title || session.key);  // Session title.
         setText('wsSessionState', 'State: ' + stateText(session));  // Plain state name.
-        setText('wsSessionReason', session.reason || '');  // The reason of the end state, if any.
+        setText('wsSessionReason', session.reason || session.notice || '');  // The end reason, or the notice of a terminal that waits for output.
         setText('wsCounters', countersText(session));  // Message counters.
         byId('wsDownloadLink').href = '/api/websockets/sessions/' + encodeURIComponent(session.session_id) + '/download';  // Buffer download.
         byId('wsStopButton').disabled = !session.live;  // A closed session cannot stop again.
