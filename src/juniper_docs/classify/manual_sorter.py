@@ -20,6 +20,8 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.juniper_docs.harvest.state_store import HarvestStateStore, StateStoreError
+
 _LOGGER = logging.getLogger(__name__)  # Module logger for the sort pass.
 
 # Each rule is a target folder and a pattern. The pattern reads the source URL
@@ -98,6 +100,7 @@ class ManualDocumentSorter:
         self.output_dir = output_dir  # The corpus root that holds every folder.
         self.apply_changes = apply_changes  # A dry run is the safe default.
         self.stats = SortStats()  # The counts that the caller reports.
+        self._store: HarvestStateStore | None = None
 
     def decide(self, source_url: str, file_name: str) -> str:
         """Return the target folder for one document, or the unsorted folder."""
@@ -110,9 +113,23 @@ class ManualDocumentSorter:
     def run(self, database: Path) -> SortStats:
         """Sort every uncategorized document and return the counts."""
         _LOGGER.info("Sorting the uncategorized documents under %s", self.output_dir)
-        rows = self._read_rows(database)  # Every uncategorized classified row.
-        for source_url, local_path in rows:  # Decide and place one document.
-            self._place_one(source_url, Path(local_path))  # Apply the rule.
+        self.stats = SortStats()
+        rows = self._read_rows(database)
+        self.stats.inspected = len(rows)
+        groups: dict[Path, tuple[str, str]] = {}
+        for source_url, local_path in rows:
+            groups.setdefault(Path(local_path).resolve(), (source_url, local_path))
+        if self.apply_changes:
+            if database.parent.resolve() != self.output_dir.resolve():
+                raise StateStoreError("The sorting output and state store belong to different corpus roots.")
+            self._store = HarvestStateStore(database)
+        try:
+            for source_url, local_path in groups.values():
+                self._place_one(source_url, Path(local_path))
+        finally:
+            if self._store is not None:
+                self._store.close()
+                self._store = None
         _LOGGER.debug("Sorted %d documents", self.stats.inspected)  # Result count.
         return self.stats  # The caller prints the summary.
 
@@ -124,7 +141,7 @@ class ManualDocumentSorter:
             found = connection.execute(
                 "SELECT root_url, local_path FROM documents "
                 "WHERE stage = 'classified' AND local_path IS NOT NULL "
-                "AND category = 'uncategorized'"
+                "AND category = 'uncategorized' ORDER BY root_url"
             ).fetchall()  # Only the uncategorized bucket needs a rule decision.
         finally:
             connection.close()  # Never hold the database open during the moves.
@@ -132,8 +149,8 @@ class ManualDocumentSorter:
 
     def _place_one(self, source_url: str, source: Path) -> None:
         """Move one document into its rule folder, or count it as unsorted."""
-        self.stats.inspected += 1  # Count every document the pass reads.
         if not source.exists():  # A sibling row may have moved the file already.
+            _LOGGER.warning("A manual sorting source is missing: %s", source)
             self.stats.missing += 1  # Count it and continue with the next row.
             return  # A missing file needs no move.
         folder = self.decide(source_url, source.name)  # The explicit rule decision.
@@ -149,13 +166,40 @@ class ManualDocumentSorter:
             return  # Never touch the disk during a dry run.
         target_dir.mkdir(parents=True, exist_ok=True)  # Ensure the target folder.
         target = self._free_name(target_dir, source)  # Never replace a real file.
-        source.replace(target)  # Move the file, which is atomic on one volume.
-        self.stats.moved += 1  # Count the completed move.
+        if source.resolve() == target.resolve():
+            _LOGGER.debug("Retained 1 already sorted canonical payload")
+            return
+        if self._store is None:
+            raise StateStoreError("A manual sorting write requires the durable state store.")
+        _LOGGER.info("Sorting 1 canonical payload")
+        source.replace(target)
+        self._record_placement(source, target)
+        self.stats.moved += 1  # Count only a physical placement with verified state.
+        _LOGGER.debug("Sorted and recorded 1 canonical payload")
+
+    def _record_placement(self, source: Path, target: Path) -> None:
+        """Record all aliases or restore a pre-commit physical move."""
+        if self._store is None:
+            raise StateStoreError("A manual sorting write requires the durable state store.")
+        try:
+            record = self._store._file_record(target)
+            self._store.relocate_content(str(self.output_dir.resolve()), str(source), str(target), record)
+        except (StateStoreError, OSError):
+            _LOGGER.exception("Cannot verify the manual sorting placement")
+            if not self._store.placement_is_recorded(str(target)):
+                if source.exists():
+                    raise StateStoreError(
+                        "The failed sorting placement cannot restore an occupied source path."
+                    ) from None
+                target.replace(source)
+            raise
 
     @staticmethod
     def _free_name(target_dir: Path, source: Path) -> Path:
         """Return a free path in the target folder, so no file is ever replaced."""
         target = target_dir / source.name  # The preferred name keeps the original.
+        if target.resolve() == source.resolve():
+            return target
         index = 2  # The first duplicate takes the suffix 2.
         while target.exists():  # Another document already holds this name.
             target = target_dir / f"{source.stem}-{index}{source.suffix}"  # Try next.

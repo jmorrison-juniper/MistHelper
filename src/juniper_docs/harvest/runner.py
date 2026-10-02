@@ -12,7 +12,6 @@ from __future__ import annotations  # Enable modern union syntax on every annota
 import argparse  # Parse the command-line arguments into the configuration.
 import logging  # Log the progress and the final summary.
 import re  # Sanitize a category or sub-category folder name.
-import shutil  # Move an uncategorized file into its sub-category folder.
 import sqlite3  # Type the document rows read from the store.
 import time  # Pace the requests so the crawl stays polite.
 import urllib.error  # Classify a per-document network failure.
@@ -138,7 +137,7 @@ class HarvestRunner:
         _LOGGER.info("Preparing the harvest runner")  # Log the intent.
         self.config = config  # The whole run configuration.
         self.store = HarvestStateStore(config.output_dir / "harvest_state.db")  # Durable store.
-        self._allocator = PdfPathAllocator(self.store.owner_of_path)  # Collision-safe path policy.
+        self._allocator = PdfPathAllocator(self.store.owner_of_path, self.store)
         http_client = client or self._build_client(config)  # One shared HTTP client for reads.
         self.acquire = self._build_acquire(http_client)  # Discovery and acquire collaborators.
         self.landing = ProductLandingReader(http_client)  # Product landing page reader.
@@ -294,6 +293,7 @@ class HarvestRunner:
 
     def _process_all(self) -> None:
         """Process every non-final document and log the progress."""
+        self._validate_completed()
         rows = self.store.resume_documents(self.config.retry_failed)  # The work list.
         self._load_folder_pdfs()  # Reuse every answer that an earlier run recorded.
         total = len(rows)  # The total count for the progress log.
@@ -301,6 +301,23 @@ class HarvestRunner:
         for index, row in enumerate(rows, start=1):  # Process one document at a time.
             _LOGGER.info("Processing %d of %d: %s", index, total, row["root_url"])  # Progress.
             self._process_document(row)  # Advance this document to a final stage.
+
+    def _validate_completed(self) -> None:
+        """Require recovery when a final alias no longer has its expected bytes."""
+        _LOGGER.info("Validating completed corpus documents")
+        checked = 0
+        for row in self.store.document_rows():
+            if row["stage"] != "classified" or row["local_path"] is None:
+                continue
+            checked += 1
+            try:
+                valid = self._allocator.valid_document(str(row["local_path"]), row["content_sha256"])
+            except OSError:
+                _LOGGER.exception("Cannot validate a completed corpus payload")
+                valid = False
+            if not valid:
+                self.store.require_recovery(str(row["root_url"]))
+        _LOGGER.debug("Validated %d completed corpus documents", checked)
 
     def _load_folder_pdfs(self) -> None:
         """Fill the folder map from every document that already resolved."""
@@ -336,8 +353,8 @@ class HarvestRunner:
             self.store.mark_failed(root, reason or "download failed")  # Mark failed with reason.
             self._counters["failed"] += 1  # Count the failure, and continue.
             return  # A failed download never reaches the classified stage.
-        self._counters[outcome] += 1  # Count the download or the skip.
         self.store.mark_downloaded(root, path, size)  # Record the durable download.
+        self._counters[outcome] += 1
         self._classify_content(row, root, path, pdf_url)  # Classify with the real resolved URL.
 
     def _resolved_url(self, row: sqlite3.Row, root: str) -> str | None:
@@ -404,7 +421,7 @@ class HarvestRunner:
             self.store.set_classified(root, None, None)  # Finalize a categorized document.
             return  # A categorized document needs no content sample.
         text = self.classify.sampler.sample(Path(local_path))  # In-memory sample only.
-        name_hint = Path(local_path).name  # The file name names the product, so it guides the score.
+        name_hint = self.store._original_name(pdf_url)  # A canonical alias can have another document's file name.
         result = self.classify.scorer.score(text, name_hint)  # Derive the label, discard the text.
         final_path = self._place(local_path, result.sub_category, pdf_url)  # Place with the caller's real URL.
         self.store.mark_downloaded(root, str(final_path), final_path.stat().st_size)  # Update.
@@ -414,25 +431,38 @@ class HarvestRunner:
     def _place(self, local_path: str, label: str, resolved_url: str) -> Path:
         """Move an uncategorized file into its label folder without destroying a file."""
         source = Path(local_path)  # The current file path in the uncategorized folder.
+        if self.store.path_is_shared(local_path):
+            _LOGGER.debug("Retained 1 shared canonical payload during classification")
+            return source
         final_dir = self.config.output_dir / UNCATEGORIZED / _sanitize(label)  # Label folder.
         final_dir.mkdir(parents=True, exist_ok=True)  # Ensure the sub-category folder.
         target = final_dir / source.name  # The preferred final path under the label.
         if source.resolve() == target.resolve():  # The file already sits at the final path.
             return target  # A repeated placement needs no move, so the file stays.
         final, move = self._allocator.plan_file(target, resolved_url, source)  # Resolve the path.
-        self._relocate(source, final, move)  # Move the file or drop the redundant duplicate.
+        self._relocate(source, final, move)
         return final  # The runner records this real final path in the store.
 
     def _relocate(self, source: Path, final: Path, move: bool) -> None:
-        """Move the source to the final path, or drop it when a copy already exists."""
-        if move:  # The final path is free, so this is a distinct document.
-            _LOGGER.info("Placing %s at %s", source.name, final)  # Log before the move.
-            shutil.move(str(source), str(final))  # Move the file into the unique label path.
-            _LOGGER.debug("Placed the file at %s", final)  # Report the completed move.
-            return  # The distinct document now lives at its own path.
-        _LOGGER.info("Dropping the redundant duplicate %s", source.name)  # Log before the delete.
-        source.unlink()  # Remove the redundant download, so one stored file remains.
-        _LOGGER.debug("Dropped the redundant duplicate of %s", final.name)  # One stored file remains.
+        """Move a unique payload and preserve historical equal-content files."""
+        if source.resolve() == final.resolve():
+            return
+        if not move:
+            _LOGGER.info("Retaining an existing equal-content source during placement")
+            self._allocator.record_move(source, final)
+            return
+        _LOGGER.info("Placing 1 canonical payload at %s", final)
+        source.replace(final)
+        try:
+            self._allocator.record_move(source, final)
+        except (StateStoreError, OSError):
+            _LOGGER.exception("Cannot verify the canonical placement")
+            if not self.store.placement_is_recorded(str(final)):
+                if source.exists():
+                    raise StateStoreError("The failed placement cannot restore an occupied source path.") from None
+                final.replace(source)
+            raise
+        _LOGGER.debug("Placed and recorded 1 canonical payload")
 
     def _pace(self) -> None:
         """Wait so at least the configured delay passes between two requests."""

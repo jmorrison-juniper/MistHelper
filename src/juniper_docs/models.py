@@ -87,3 +87,5 @@ class ManifestEntry:
     rejected_candidates: list[str] = field(default_factory=list)  # Rejected PDF URLs.
     drop_reason: str | None = None  # The reason a release note was dropped, or null.
     error_reason: str | None = None  # The failure or no-PDF reason, or null.
+    content_sha256: str | None = None
+    original_pdf_name: str | None = None

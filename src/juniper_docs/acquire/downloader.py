@@ -10,8 +10,10 @@ one local path (issue #2738). It rejects a body that does not start with the
 from __future__ import annotations  # Enable modern union syntax on every annotation.
 
 import logging  # Trace each download step for observability.
+import os
 import urllib.error  # Classify a URL error or an HTTP error during a read.
 from pathlib import Path  # Build every output path in a portable way.
+from urllib.parse import urlsplit
 
 from src.juniper_docs.acquire.catalog_client import JvdCatalogClient, is_transient_error  # Client.
 from src.juniper_docs.acquire.pdf_paths import PdfPathAllocator  # Collision-safe path policy.
@@ -56,29 +58,39 @@ class CorpusDownloader(JvdDownloader):
         """Store the client, the output directory, and the collision-safe allocator."""
         super().__init__(client, out_dir)  # Reuse the base client and output directory.
         self._allocator = allocator  # Choose a unique path so no write destroys a file.
+        self._allocator.index_corpus(out_dir)
 
     def download_document(self, pdf_url: str, category_dir: Path) -> tuple[str, str | None, int | None, str | None]:
         """Return the outcome, the local path, the size, and a failure reason."""
-        _LOGGER.info("Fetching %s into %s", pdf_url, category_dir)  # Log the intent.
-        target = self._prepare_target(pdf_url, category_dir)  # Build the clean target path.
-        reuse = self._allocator.existing_for_url(target, pdf_url)  # A same-URL file, if any.
-        if reuse is not None:  # This exact URL already produced a stored file.
-            _LOGGER.debug("Skipped existing %s", reuse.name)  # Report the resume skip.
-            return "skipped", str(reuse), reuse.stat().st_size, None  # Reuse it with no fetch.
-        payload, reason = self._fetch_valid(pdf_url)  # Fetch the bytes and check the marker.
-        if payload is None:  # The read failed or the body is not a PDF.
-            return "failed", None, None, reason  # A bad response reports its reason.
-        final, write = self._allocator.plan_bytes(target, pdf_url, payload)  # Resolve the path.
-        return self._store_payload(final, payload, write)  # Write or reuse, then report it.
+        _LOGGER.info("Acquiring 1 corpus document into %s", category_dir)
+        try:
+            target = self._prepare_target(pdf_url, category_dir)
+            return self._download_prepared(pdf_url, target)
+        except OSError as error:
+            _LOGGER.exception("The local corpus document operation failed")
+            return "failed", None, None, f"permanent: local corpus operation failed: {error}"
 
-    def _store_payload(self, final: Path, payload: bytes, write: bool) -> tuple[str, str, int, None]:
+    def _download_prepared(self, pdf_url: str, target: Path) -> tuple[str, str | None, int | None, str | None]:
+        """Reuse verified URL state or fetch and compare one new response."""
+        reuse = self._allocator.existing_for_url(target, pdf_url)
+        if reuse is not None:
+            self._allocator.record_download(reuse, pdf_url)
+            _LOGGER.debug("Skipped 1 verified existing payload")
+            return "skipped", str(reuse), reuse.stat().st_size, None
+        payload, reason = self._fetch_valid(pdf_url)
+        if payload is None:
+            return "failed", None, None, reason
+        final, write = self._allocator.plan_bytes(target, pdf_url, payload)
+        return self._store_payload(final, payload, write, pdf_url)
+
+    def _store_payload(self, final: Path, payload: bytes, write: bool, pdf_url: str) -> tuple[str, str, int, None]:
         """Write the payload when needed, then report the outcome, path, and size."""
-        if write:  # The resolved path is free, so this is a fresh distinct document.
-            self._atomic_write(final, payload)  # Write to a temp file, then rename onto it.
-            _LOGGER.debug("Downloaded %s (%d bytes)", final.name, len(payload))  # Report size.
-            return "downloaded", str(final), len(payload), None  # Count it as a fresh download.
-        _LOGGER.debug("Reused identical %s (%d bytes)", final.name, final.stat().st_size)  # Dedup.
-        return "skipped", str(final), final.stat().st_size, None  # An identical document is one file.
+        if write:
+            self._atomic_write(final, payload)
+        self._allocator.record_download(final, pdf_url)
+        outcome = "downloaded" if write else "skipped"
+        _LOGGER.debug("Acquired 1 document: outcome=%s bytes=%d", outcome, len(payload))
+        return outcome, str(final), len(payload), None
 
     @staticmethod
     def _atomic_write(target: Path, payload: bytes) -> None:
@@ -87,16 +99,35 @@ class CorpusDownloader(JvdDownloader):
         An interruption leaves the partial bytes in the temp file, never at the
         target path, so a resume never treats a partial download as complete.
         """
-        temp = target.parent / (target.name + ".part")  # The temporary write path.
-        temp.write_bytes(payload)  # Write the full payload to the temp file.
-        temp.replace(target)  # Rename the temp file onto the target atomically.
+        temp = target.with_name(target.name + ".part")
+        if temp.is_symlink():
+            raise OSError("The temporary corpus path cannot be a symbolic link.")
+        _LOGGER.info("Writing 1 temporary payload with %d bytes", len(payload))
+        try:
+            with temp.open("wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            _LOGGER.debug("Wrote 1 complete temporary payload with %d bytes", len(payload))
+            _LOGGER.info("Publishing 1 complete corpus payload")
+            if target.is_symlink() or (target.exists() and target.stat().st_size > 0):
+                raise FileExistsError("A complete corpus destination appeared before publication.")
+            temp.replace(target)
+            _LOGGER.debug("Published 1 complete corpus payload")
+        finally:
+            temp.unlink(missing_ok=True)  # Remove only this operation's transient file.
 
-    @staticmethod
-    def _prepare_target(pdf_url: str, category_dir: Path) -> Path:
+    def _prepare_target(self, pdf_url: str, category_dir: Path) -> Path:
         """Return the target path and make sure the category folder exists."""
-        category_dir.mkdir(parents=True, exist_ok=True)  # Ensure the category folder.
-        name = pdf_url.rsplit("/", 1)[-1].split("?")[0]  # Strip any query string.
-        return category_dir / name  # The full path of the saved file.
+        name = urlsplit(pdf_url).path.rsplit("/", 1)[-1]
+        if not name or name in (".", "..") or Path(name).suffix.lower() == ".part":
+            raise OSError("The corpus URL has no usable PDF file name.")
+        target = category_dir / name
+        self._allocator._key(target)
+        _LOGGER.info("Preparing 1 corpus category directory")
+        category_dir.mkdir(parents=True, exist_ok=True)
+        _LOGGER.debug("Prepared 1 corpus category directory")
+        return target
 
     def _fetch_valid(self, pdf_url: str) -> tuple[bytes | None, str | None]:
         """Return the PDF bytes and no reason, or None and a failure reason."""

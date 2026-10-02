@@ -34,6 +34,8 @@ _CSV_FIELDS = (
     "rejected_candidates",
     "drop_reason",
     "error_reason",
+    "content_sha256",
+    "original_pdf_name",
 )
 
 
@@ -70,6 +72,8 @@ class ManifestWriter:
             rejected_candidates=rejected,  # Each rejected PDF reference.
             drop_reason=self.store.dropped_reason(root),  # The drop reason or null.
             error_reason=_text(row["error_reason"]),  # The failure or no-PDF reason or null.
+            content_sha256=_text(row["content_sha256"]),
+            original_pdf_name=_text(row["original_pdf_name"]),
         )
 
     def _candidates(self, root_url: str) -> tuple[str | None, list[str]]:
@@ -110,6 +114,8 @@ def _to_dict(entry: ManifestEntry) -> dict[str, object]:
         "rejected_candidates": entry.rejected_candidates,  # Each rejected PDF reference.
         "drop_reason": entry.drop_reason,  # The drop reason or null.
         "error_reason": entry.error_reason,  # The failure or no-PDF reason or null.
+        "content_sha256": entry.content_sha256,
+        "original_pdf_name": entry.original_pdf_name,
     }
 
 

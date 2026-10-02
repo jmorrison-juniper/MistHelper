@@ -21,16 +21,15 @@ from __future__ import annotations  # Enable modern union syntax on every annota
 import argparse  # Parse the operator command into the reclassifier configuration.
 import logging  # Log every action before it runs and its result after it runs.
 import re  # Replace each Windows-invalid character in a label folder name.
-import shutil  # Move a reclassified file into its new label folder.
 import sqlite3  # Read the durable state database and write the updated rows.
 from dataclasses import dataclass, field  # Group the run counters into one record.
-from datetime import UTC, datetime  # Stamp each updated row with a UTC timestamp.
 from pathlib import Path  # Build every corpus path in a portable, Windows-safe way.
 
 from src.juniper_docs.acquire.pdf_paths import PdfPathAllocator  # Shared path policy.
 from src.juniper_docs.classify.content_sampler import DEFAULT_SAMPLE_PAGES, ContentSampler
 from src.juniper_docs.classify.signal_scorer import CONFIDENCE_THRESHOLD, SignalScorer
 from src.juniper_docs.classify.slug_classifier import UNCATEGORIZED  # The content bucket.
+from src.juniper_docs.harvest.state_store import HarvestStateStore, StateStoreError
 from src.juniper_docs.models import ContentAnalysisResult  # The derived label record.
 
 _LOGGER = logging.getLogger(__name__)  # Module logger for the reclassifier.
@@ -95,6 +94,7 @@ class CorpusReclassifier:
         self.sampler = sampler  # Read a bounded, in-memory text sample from one PDF.
         self.scorer = scorer  # Derive the current content sub-category label.
         self.dry_run = dry_run  # Write nothing when true, the safe default.
+        self._store: HarvestStateStore | None = None
 
     def run(self) -> ReclassifyStats:
         """Reclassify every candidate document and return the run counts."""
@@ -107,7 +107,11 @@ class CorpusReclassifier:
             if not self.dry_run:  # A real pass tidies the emptied label folders.
                 self._remove_empty_label_dirs()  # Remove each folder left empty by a move.
         finally:
-            connection.close()  # Always release the database file.
+            if self._store is None:
+                connection.close()
+            else:
+                self._store.close()
+                self._store = None
         self._log_summary(stats)  # Report the counts for the operator.
         return stats  # The caller reads the counts and the label sets.
 
@@ -119,7 +123,8 @@ class CorpusReclassifier:
             connection = sqlite3.connect(uri, uri=True)  # A connection that rejects writes.
         else:  # A real pass writes the updated rows.
             _LOGGER.info("Opening the state database read-write for a real pass")  # Intent.
-            connection = sqlite3.connect(str(self.db_path))  # A write-capable connection.
+            self._store = HarvestStateStore(self.db_path)
+            connection = self._store._conn
         connection.row_factory = sqlite3.Row  # Read each row by the column name.
         return connection  # The caller owns and closes the connection.
 
@@ -135,7 +140,10 @@ class CorpusReclassifier:
         stats.inspected += 1  # Count this document as inspected.
         stored_label = str(row["sub_category"])  # The label the harvester stored earlier.
         stats.before_labels.add(stored_label)  # Track the distinct labels before the pass.
-        local_path = Path(str(row["local_path"]))  # The file that the harvester saved.
+        current = connection.execute("SELECT * FROM documents WHERE root_url = ?", (row["root_url"],)).fetchone()
+        if current is None or current["local_path"] is None:
+            raise StateStoreError("A reclassification source record has no current payload path.")
+        local_path = Path(str(current["local_path"]))
         _LOGGER.info("Reclassifying %s", row["root_url"])  # Name the document under work.
         text = self.sampler.sample(local_path)  # Read a bounded, in-memory text sample.
         if not text.strip():  # A missing or unreadable file yields no text.
@@ -143,12 +151,12 @@ class CorpusReclassifier:
             stats.unreadable += 1  # Count the unreadable document and leave it alone.
             stats.after_labels.add(stored_label)  # The label does not change for it.
             return  # An unreadable file never moves and never stops the pass.
-        result = self.scorer.score(text, local_path.name)  # Derive the current label.
-        self._record_outcome(connection, row, result, stats)  # Compare and act.
+        name = HarvestStateStore._original_name(str(row["resolved_pdf_url"]))
+        result = self.scorer.score(text, name)
+        self._record_outcome(current, result, stats)
 
     def _record_outcome(
         self,
-        connection: sqlite3.Connection,
         row: sqlite3.Row,
         result: ContentAnalysisResult,
         stats: ReclassifyStats,
@@ -164,59 +172,55 @@ class CorpusReclassifier:
         stats.changed += 1  # Count the document as changed.
         stats.after_labels.add(result.sub_category)  # Track the new label after the pass.
         if not self.dry_run:  # A dry run reports the change and writes nothing.
-            self._apply(connection, row, result)  # Move the file and update the row.
+            self._apply(row, result)
 
-    def _apply(self, connection: sqlite3.Connection, row: sqlite3.Row, result: ContentAnalysisResult) -> None:
+    def _apply(self, row: sqlite3.Row, result: ContentAnalysisResult) -> None:
         """Move the file into the new label folder and update the stored row."""
-        source = Path(str(row["local_path"]))  # The file in its current label folder.
-        resolved_url = str(row["resolved_pdf_url"])  # The URL that identifies this document.
-        final_path = self._place(connection, source, result.sub_category, resolved_url)  # Move it.
-        self._update_row(connection, str(row["root_url"]), result, final_path)  # Persist it.
+        if self._store is None:
+            raise StateStoreError("A reclassification write requires the durable state store.")
+        source = Path(str(row["local_path"]))
+        resolved_url = str(row["resolved_pdf_url"])
+        final_path = self._place(source, result.sub_category, resolved_url)
+        try:
+            self._store.reclassify_document(str(row["root_url"]), result, str(source), str(final_path))
+        except (StateStoreError, sqlite3.DatabaseError, OSError):
+            _LOGGER.exception("Cannot record the corpus reclassification")
+            if (
+                source != final_path
+                and not source.exists()
+                and final_path.exists()
+                and not self._store.placement_is_recorded(str(final_path))
+            ):
+                final_path.replace(source)
+            raise
 
-    def _place(self, connection: sqlite3.Connection, source: Path, label: str, resolved_url: str) -> Path:
+    def _place(self, source: Path, label: str, resolved_url: str) -> Path:
         """Move one file into its new label folder without destroying a file."""
+        if self._store is None:
+            raise StateStoreError("A corpus placement requires the durable state store.")
+        if self._store.path_is_shared(str(source)):
+            _LOGGER.debug("Retained 1 shared canonical payload during reclassification")
+            return source
         final_dir = self.output_dir / UNCATEGORIZED / self._sanitize(label)  # The label folder.
         final_dir.mkdir(parents=True, exist_ok=True)  # Ensure the new label folder exists.
         target = final_dir / source.name  # The preferred final path under the label.
         if source.resolve() == target.resolve():  # The file already sits at the final path.
             return target  # A repeated placement needs no move, so the file stays.
-        allocator = PdfPathAllocator(lambda path: self._owner_of(connection, path))  # Shared policy.
+        allocator = PdfPathAllocator(self._store.owner_of_path)
         final, move = allocator.plan_file(target, resolved_url, source)  # Resolve a unique path.
         self._relocate(source, final, move)  # Move the file or drop a redundant duplicate.
         return final  # The caller records this real final path in the store.
 
     def _relocate(self, source: Path, final: Path, move: bool) -> None:
-        """Move the file to the final path, or drop it when a copy exists."""
-        if move:  # The final path is free, so this is a distinct document.
+        """Move one unique payload without deleting an equal historical source."""
+        if source.resolve() == final.resolve():
+            return
+        if move:
             _LOGGER.info("Placing %s at %s", source.name, final)  # Log before the move.
-            shutil.move(str(source), str(final))  # Move the file into the unique label path.
+            source.replace(final)
             _LOGGER.debug("Placed the file at %s", final)  # Report the completed move.
-            return  # The distinct document now lives at its own path.
-        _LOGGER.info("Dropping the redundant duplicate %s", source.name)  # Log before the delete.
-        source.unlink()  # Remove the redundant download, so one stored file remains.
-        _LOGGER.debug("Dropped the redundant duplicate of %s", final.name)  # One file remains.
-
-    def _update_row(
-        self,
-        connection: sqlite3.Connection,
-        root_url: str,
-        result: ContentAnalysisResult,
-        final_path: Path,
-    ) -> None:
-        """Update the label, the fallback flag, the local path, and the scores."""
-        _LOGGER.info("Updating the stored label for %s", root_url)  # Log before the write.
-        with connection:  # One atomic transaction commits every write together.
-            connection.execute(
-                "UPDATE documents SET sub_category = ?, is_fallback = ?, local_path = ?, "
-                "updated_at = ? WHERE root_url = ?",
-                (result.sub_category, int(result.is_fallback), str(final_path), _now(), root_url),
-            )
-            connection.execute("DELETE FROM content_scores WHERE root_url = ?", (root_url,))
-            connection.executemany(
-                "INSERT INTO content_scores (root_url, signal_group, signal_name, score) VALUES (?, ?, ?, ?)",
-                self._score_rows(root_url, result),
-            )
-        _LOGGER.debug("Updated the stored label to %s", result.sub_category)  # Report the result.
+        else:
+            _LOGGER.debug("Retained an existing equal-content source during reclassification")
 
     def _remove_empty_label_dirs(self) -> None:
         """Remove each label folder that a move left empty."""
@@ -245,25 +249,6 @@ class CorpusReclassifier:
         )
 
     @staticmethod
-    def _owner_of(connection: sqlite3.Connection, local_path: str) -> str | None:
-        """Return the resolved PDF URL that owns a stored local path, or None."""
-        row = connection.execute(
-            "SELECT resolved_pdf_url FROM documents WHERE local_path = ? LIMIT 1", (local_path,)
-        ).fetchone()  # The single document row that already claims this exact path.
-        if row is None or row["resolved_pdf_url"] is None:  # No row, or no resolved URL yet.
-            return None  # An unknown path has no recorded owner.
-        return str(row["resolved_pdf_url"])  # The resolved URL that produced the stored file.
-
-    @staticmethod
-    def _score_rows(root_url: str, result: ContentAnalysisResult) -> list[tuple[str, str, str, float]]:
-        """Return the numeric score rows, which hold no body text."""
-        rows: list[tuple[str, str, str, float]] = []  # The root, group, name, and score tuples.
-        for key, score in result.scores.items():  # Split each group-and-name key in turn.
-            group, name = key.split(":", 1)  # The key joins the group and the signal name.
-            rows.append((root_url, group, name, score))  # Add one numeric row per signal.
-        return rows  # The store records these numeric scores, never any body text.
-
-    @staticmethod
     def _sanitize(name: str) -> str:
         """Return a Windows-safe folder name for one label."""
         cleaned = _INVALID_NAME.sub("-", name)  # Replace each invalid character.
@@ -287,11 +272,6 @@ class CorpusReclassifier:
         parser.add_argument("--max-sample-pages", type=int, default=DEFAULT_SAMPLE_PAGES, help="Sample cap.")
         parser.add_argument("--confidence-threshold", type=float, default=CONFIDENCE_THRESHOLD, help="Floor.")
         return parser  # The caller parses the process arguments.
-
-
-def _now() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(UTC).isoformat()  # A stable, sortable timestamp for updated_at.
 
 
 if __name__ == "__main__":
