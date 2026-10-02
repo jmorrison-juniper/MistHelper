@@ -513,6 +513,7 @@
             this.stopped = true; // Start stopped so no read loop runs before open.
             this.readOnly = false; // Start in shell mode until a session says otherwise.
             this.inputClosed = false; // Start with input available until a session blocks it.
+            this.lastState = ''; // Start without a session state until a session opens.
             this.lastSize = { cols: 0, rows: 0 }; // Force the first shell resize to post geometry.
             this.resizeTimer = null; // Start without a resize debounce timer.
             this.resizeObserver = null; // Start without a resize observer.
@@ -538,6 +539,7 @@
             this.stopped = false; // Allow the read loop to run for the new session.
             this.readOnly = session.read_only === true || session.output === 'screen'; // Detect fixed screen output that must stay read-only.
             this.inputClosed = false; // Open the new session with input allowed until state says otherwise.
+            this.lastState = session.state || ''; // The footer shows this state until the first read answers.
             this.nextPosition = 0; // Start the new session read at the first byte.
             this.openedAt = Date.now(); // Count the wait for the first output from this open.
             this.readFailures = 0; // Failures of the previous session must not count against this session.
@@ -729,6 +731,7 @@
             this.nextPosition = payload.next === undefined ? this.nextPosition : payload.next; // Advance the next read position when the backend supplies it.
             this._showGap(payload.gap || 0); // Show a gap warning when the backend dropped old bytes.
             this._showExpiry(payload.expires_at); // Update the expiry warning from the backend timestamp.
+            this.lastState = payload.state || this.lastState; // A resize reuses this state for the footer.
             this.setStatus(this._statusText(payload)); // Refresh the footer with state and size.
             this._notifyState(payload, false); // Notify the page that the session is still live.
         }
@@ -790,6 +793,7 @@
             if (force || this.term.cols !== this.lastSize.cols || this.term.rows !== this.lastSize.rows) { // Send geometry only when it changed or is forced.
                 this.lastSize = { cols: this.term.cols, rows: this.term.rows }; // Remember the posted shell geometry.
                 this._postResize(this.term.cols, this.term.rows); // Post the new shell geometry to the backend.
+                this.setStatus(this._statusText({ state: this.lastState })); // An idle read waits up to 20 seconds, so show the size now.
             }
         }
 

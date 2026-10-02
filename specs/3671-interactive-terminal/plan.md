@@ -72,10 +72,10 @@ session. 256 KiB for each paste. 16 KiB for each input request.
 
 | Principle | Result | Evidence |
 | - | - | - |
-| I. Five-Item Rule | PASS | Each new folder holds 5 entries or fewer. Each new class keeps 5 public methods or fewer. The design moves code out of the manager. The branch adds no child to a noncompliant code folder. The tests moved into small packages in commit 40bc8e6e. See Complexity Tracking for the touched debt. |
+| I. Five-Item Rule | PASS | Each new folder holds 5 entries or fewer. Each new class keeps 5 public methods or fewer. The design moves code out of the manager. The branch adds no child to a noncompliant code folder. Task T062 moved the tests into the small packages `tests/e2e/websockets_tab/`, `tests/unit/websocket_streams/live/transport/fake_mist_cloud/`, and `tests/unit/websocket_streams/live/transport/clients/`. See Complexity Tracking for the touched debt. |
 | II. Class-Based Architecture | PASS | Each feature lives in a named class. The plan adds no wrapper function and no legacy shim. The old line input route goes away. |
 | III. Safety-First | PASS | The shell lock and the typed device name stay. The client refuses a shell address without TLS or outside the cloud domain. Each input route checks the session, the size, and the rate. |
-| IV. Full Deployment Pipeline | PASS | Every quality gate runs. The pull request adds a release note fragment. Tasks T057 to T061 hold the 12 pipeline steps, which include the container update after the merge. The commit subject uses Conventional Commits, because the title guard requires it. Issue #3720 records the conflict with step 4. |
+| IV. Full Deployment Pipeline | PASS | Every quality gate runs. The pull request adds a release note fragment. Tasks T057 to T061 hold the 12 pipeline steps, which include the container update after the merge. Each branch commit uses the step 4 subject `version YY.MM.DD.HH.MM - description`, with the time in UTC. The pull request title uses Conventional Commits, because the title guard reads the title. Issue #3720 records the conflict with the repository practice. |
 | V. Observability | PARTIAL | Each connection logs the host, the state, and the byte counts. A test scans the logs for secrets and keys. The new modules use standard logging with fixed templates and `%s` arguments, as the rest of the package does. Issue #3721 decides the structlog move for the package. |
 | VI. Inline Comments | PASS | Each executable line gets an inline comment. |
 | VII. Action Logging | PASS | Each action logs before and after. Logs for keys and output hold byte counts only. |
@@ -87,6 +87,9 @@ Re-check after the Phase 1 design: PASS. The data model and the contracts keep e
 
 Re-check after the SpecKit analysis on 2026-10-02: the five-item findings are fixed. The mistapi
 exception and the logging style are recorded above, and each one has an issue.
+
+The merge does not wait for issues #3718 and #3721. The owner gave a standing instruction to
+merge the work that is ready. The final report names both issues for an owner decision.
 
 ## Project Structure
 
@@ -180,18 +183,19 @@ terminal routes.
 
 The tests follow the same rule. The fake Mist cloud stays next to the transport tests that
 use it. The browser tests of the tab go into the new package `tests/e2e/websockets_tab/`.
-The move takes `test_websockets_page.py` out of `tests/e2e/`, so that folder keeps 17
+The move takes `test_websockets_page.py` out of `tests/e2e/`, so that folder keeps 18
 entries.
 
 ## Complexity Tracking
+
+The counts below come from `origin/main` at commit 0d1cfffb on 2026-10-02, with the
+branch rebased onto that commit.
 
 **Grandfathered debt that the branch touches**:
 
 | Folder | Entries before | Entries after | Remediation |
 | - | - | - | - |
-| `tests/e2e/` | 17 | 17 | One file moves out, and the new package `websockets_tab/` comes in. The count does not grow. Issue #3722 splits the folder. |
-| `changelog.d/` | 57 | 58 | The release note rule adds one fragment for each change. Issue #3720 asks for a constitution rule for process folders. |
-| `specs/` | 752 | 753 | The SpecKit rule adds one folder for each feature. Issue #3720 covers this folder too. |
+| `tests/e2e/` | 18 | 18 | One file moves out, and the new package `websockets_tab/` comes in. The count does not grow. Issue #3722 splits the folder. |
 
 **New design decisions that need a reason**:
 
@@ -199,3 +203,5 @@ entries.
 | - | - | - |
 | An own WebSocket client instead of the SDK WebSocket paths | The SDK paths lose the first output and split control sequences (#3659 and #3660). | Keep the SDK paths. The operator then sees missing or broken output. Issue #3718 records the exception. |
 | Standard logging in the new modules | The rest of `src/websocket_streams/` uses standard logging. One style in one package keeps the logs easy to read. | Move only the new modules to structlog. The package then mixes two log styles. Issue #3721 decides the move for the whole package. |
+| One release note fragment in `changelog.d/`, which grows from 69 to 70 entries | The release note rule requires one fragment for each change. | Edit `CHANGELOG.md` on the branch. The rule forbids that edit, because each parallel branch then conflicts on the same lines. Issue #3720 asks for a constitution rule for process folders. |
+| One feature folder in `specs/`, which grows from 761 to 762 entries | The SpecKit flow keeps one folder for each feature. | Keep the design in the issue only. The escalation rule requires the SpecKit flow for a change of this size. Issue #3720 covers this folder too. |

@@ -8,6 +8,7 @@ Why:
 from __future__ import annotations  # Keep annotations lazy for Playwright imports.
 
 import logging  # Capture log text for the leak scan journey.
+import time  # Bound the footer wait in the resize journey.
 from pathlib import Path  # Read the downloaded terminal history file.
 from typing import Any  # Playwright objects are duck typed in these tests.
 from urllib.parse import parse_qs, urlsplit  # Read the after value of each terminal read URL.
@@ -45,6 +46,7 @@ SPECIAL_KEY_BYTES = (  # xterm.js sends these bytes in normal cursor mode, and t
     ("PageDown", b"\x1b[6~"),
     ("Escape", b"\x1b"),
     ("F1", b"\x1bOP"),
+    ("F5", b"\x1b[15~"),  # F5 to F12 use the tilde form, not the SS3 form of F1 to F4.
 )
 RATE_LIMITED_BODY = '{"error":"rate limited","code":"rate_limited"}'  # The terminal HTTP rate limit answer.
 WAITING_NOTICE = "The portal waits for the first output from the device."  # The header notice before the first output.
@@ -178,13 +180,28 @@ def test_j4_ctrl_c_without_selection(page: Any, terminal_harness: TerminalPortal
     assert received.endswith(b"\x03") is True  # Ctrl+C sent 0x03.
 
 
+def _wait_footer_size(page: Any, harness: TerminalPortalHarness, timeout: float) -> tuple[str, str]:
+    """Wait until the footer shows the size of the newest resize frame."""
+    deadline = time.monotonic() + timeout  # Bound the wait.
+    while True:  # Poll, because one layout change can post more than one size.
+        size: Any = harness.shell.wait_for_resize(1, 0)[-1]["resize"]  # Read the newest size under the lock.
+        expected = f"Size: {size['width']} x {size['height']}"  # The footer text for that size.
+        footer = page.get_by_test_id("ws-terminal-status").inner_text()  # Read the visible footer.
+        if expected in footer or time.monotonic() >= deadline:  # Stop on a match or at the limit.
+            return expected, footer  # Return both texts for the assert.
+        page.wait_for_timeout(100)  # Let the page apply the next resize.
+
+
 def test_j5_resize(page: Any, terminal_harness: TerminalPortalHarness) -> None:
-    """J5: a terminal resize reaches the fake device."""
+    """J5: a resize reaches the fake device, and the footer shows the new size at once."""
     _open_shell(page, terminal_harness)  # Start the terminal.
-    page.set_viewport_size({"width": 1280, "height": 900})  # Change available terminal space.
-    frames = terminal_harness.shell.wait_for_resize(1, 2.0)  # Wait for at least one resize.
+    opened = terminal_harness.shell.wait_for_resize(1, 2.0)  # The open sends the first size.
+    page.set_viewport_size({"width": 1000, "height": 900})  # A new width changes the column count.
+    frames = terminal_harness.shell.wait_for_resize(len(opened) + 1, 2.0)  # Wait for the new size.
+    assert len(frames) > len(opened)  # The resize route sent a new size.
+    expected, footer = _wait_footer_size(page, terminal_harness, 2.0)  # A resize gets no echo, so no read helps.
     _shot(page, terminal_harness, "j05-resize.png")  # Save evidence.
-    assert len(frames) >= 1  # The resize route sent at least one size.
+    assert expected in footer  # The footer shows the new size before the next read answers.
 
 
 def test_j6_early_keys_queue(page: Any, terminal_harness: TerminalPortalHarness) -> None:

@@ -237,7 +237,8 @@ and SRX-1500, read-only commands, a host portal, and the test container
 | Show Route pause | With no protocol, SRX-1500 sends one table message, so the output has no pause. The table holds 0 rows, and the page shows "The device sent an empty table." A read-only probe on 2026-10-02 showed that the Mist cloud itself sends that empty table for an empty body, for Protocol `any`, and for VRF `default`. The request body equals the SDK body. Issue #3716 asks for a hint on the form. |
 | Show Route with a protocol | Protocol `direct` gave 5 of 5 full runs through the browser on 2026-10-02. Each run held 5,269 characters and 102 lines. With the digits masked, the 5 texts are equal, because only the route ages change. The cloud split the text into 39 to 65 messages, and each run took 7.8 to 9.1 seconds. |
 | Message rows | The page shows each cloud message as one row, and the cloud splits the text at random points. A word can start in one row and end in the next row. Issue #3723 records this defect, which also exists on `main`. |
-| Show ARP runs | SRX-1500 gave 5 of 5 finished runs, and each run took 8.7 to 9.8 seconds. The view held 134 to 162 lines. That count includes the header line of each message row, so it changes with the message count. |
+| Idle connection | After about 4 idle minutes, the first Mist API read of the host portal failed with a connection reset. The site list then showed the no-rows reason, and a new read worked. Issue #3732 records this defect. The branch does not change the site list route or the session setup. |
+| Show ARP runs | SRX-1500 gave 5 of 5 finished runs through the browser on 2026-10-02. Each run took 8.8 to 10.5 seconds and held 34 to 50 messages. Each run held 68 entries and the device line "Total entries: 68". After the digits are masked, the first table text is equal in all 5 runs. About 1 second after the table, the device starts a refreshed copy. In one earlier run, the first entry of that copy arrived before the quiet time ended, so that run held 69 entry lines. |
 | Test device runs | ARP and Route each gave 100 of 100 full runs against a fake device that answers at once. The 100 ARP runs took 6.84 seconds, and the 100 Route runs took 6.64 seconds. |
 | Quiet time | No pause is longer than 5 seconds, so the trigger table keeps a quiet time of 5 seconds. |
 | Screen size | Top and Monitor Traffic open at 80 x 40 and fill all 40 rows. |
@@ -252,8 +253,8 @@ round trip to the Mist cloud, so it does not measure the portal part.
 
 | Criterion | Target | Result |
 | - | - | - |
-| SC-001 echo | The portal adds less than 50 ms for 95 percent of keys | 200 keys: median 15.3 ms, 95th percentile 28.9 ms. The test fails above 500 ms, because a Windows test run can pause for a long time. |
-| SC-007 output | 1 MiB shows in less than 3 seconds | 0.29 seconds. The test waits until the counter shows 1,048,640 bytes and the prompt shows after the output. |
-| SC-005 load | A page loads in less than 2 seconds while 5 shells send output | 0.24 seconds |
+| SC-001 echo | The portal adds less than 50 ms for 95 percent of keys | Each run sends 200 keys. The first run gave a median of 15.3 ms and a 95th percentile of 28.9 ms. A later run gave 31.9 ms and 48.2 ms. A run while a lint job used the full processor gave 34.0 ms and 58.0 ms. The test fails when the median is 50 ms or more. It also fails when the 95th percentile is 500 ms or more, because a Windows test run can pause for a long time. |
+| SC-007 output | 1 MiB shows in less than 3 seconds | 0.29 to 0.33 seconds in 2 runs. The test waits until the counter shows 1,048,640 bytes and the prompt shows after the output. |
+| SC-005 load | Another page answers in less than 1 second while 5 shells send output | 0.24 to 0.34 seconds in 3 runs. The test fails at 1 second or more. |
 | Paste split | A 256 KiB paste splits in less than 50 ms | 0.50 ms for 64 parts of 4,096 characters |
 

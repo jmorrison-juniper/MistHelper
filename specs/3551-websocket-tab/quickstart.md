@@ -8,7 +8,7 @@ Run these commands in the worktree, with the virtual environment active.
 
 ```powershell
 python -m pytest tests/unit/websocket_streams tests/contract/websocket_streams -q
-python -m pytest tests/e2e/test_websockets_page.py -q
+python -m pytest tests/e2e/websockets_tab/test_websockets_page.py -q
 ```
 
 The unit tests and the contract tests open no Mist connection. The browser test starts the portal with a fake engine.

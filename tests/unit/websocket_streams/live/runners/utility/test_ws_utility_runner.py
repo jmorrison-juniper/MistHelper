@@ -205,8 +205,8 @@ def test_quiet_limit_finishes_after_output() -> None:
     assert reason == "The utility finished."  # Quiet completion keeps the current success reason.
 
 
-def test_total_limit_uses_existing_total_reason() -> None:
-    """End at the total limit with the existing total-limit reason."""
+def test_total_limit_reason_names_the_limit() -> None:
+    """End at the total limit with a reason that names that limit."""
     with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
         device = StreamDevice()  # Build one fake stream device.
         cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
@@ -217,7 +217,7 @@ def test_total_limit_uses_existing_total_reason() -> None:
         sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), ShortTriggerTable(timing))  # Run.
         state, reason = sink.wait_finished()  # Wait for total completion.
     assert state == SessionState.FINISHED  # Output arrived before the total limit.
-    assert reason == "The SDK 60 second limit ended the session."  # Keep the existing reason text.
+    assert reason == "The utility reached its time limit of 0.3 seconds."  # The reason names the limit of this run.
 
 
 def test_stop_closes_stream_within_three_seconds() -> None:

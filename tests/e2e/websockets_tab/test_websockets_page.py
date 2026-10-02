@@ -434,6 +434,7 @@ def reset_fake(fake_services: FakeWebSocketServices) -> Iterator[None]:
 def screenshot(page: Any, name: str) -> Path:
     """Save one full-page screenshot."""
     path = ARTIFACT_DIR / name  # Build the requested artifact path.
+    page.evaluate("window.scrollTo(0, 0)")  # Keep the sticky navigation at the top of full-page shots.
     page.screenshot(path=str(path), full_page=True)  # Save visual evidence.
     return path  # Return the path for assertions and reports.
 

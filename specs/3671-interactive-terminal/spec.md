@@ -52,7 +52,7 @@ and that the terminal shows the device output correctly.
    **Then** the device receives each character in order, and the terminal shows the output.
 3. **Given** an open shell, **When** the operator presses a special key, **Then** the
    device receives the standard terminal code for that key. The special keys are the arrow
-   keys, Tab, Backspace, Delete, Home, End, Esc, and the function keys.
+   keys, Tab, Backspace, Delete, Home, End, Page Up, Page Down, Esc, and the function keys.
 4. **Given** an open shell with no text selected, **When** the operator presses Ctrl+C,
    **Then** the device receives the interrupt character.
 5. **Given** an open shell, **When** the operator changes the window size, **Then** the

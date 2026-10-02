@@ -415,7 +415,8 @@ class UtilityRunner:
         """
         elapsed = time.monotonic() - started  # Compare actual run time to the trigger total.
         if self._state.trigger is not None and elapsed >= self._state.trigger.listen.timing.total_seconds:  # Total.
-            return "The SDK 60 second limit ended the session."  # Keep the existing reason text.
+            total = self._state.trigger.listen.timing.total_seconds  # The portal, not the SDK, enforces this limit.
+            return f"The utility reached its time limit of {total:g} seconds."  # A capture limit can differ from 60.
         return "The utility finished."  # Normal completion needs no extra detail.
 
     def _fail(self, reason: str) -> None:

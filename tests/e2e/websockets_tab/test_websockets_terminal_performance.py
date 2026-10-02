@@ -56,6 +56,7 @@ def test_sc001_echo_time_for_200_keys(page: Any, terminal_harness: TerminalPorta
     print(f"SC-001 echo median_ms={median_ms:.2f} p95_ms={p95_ms:.2f}")  # Report measurement.
     path = terminal_harness.screenshot(page, "perf-sc001-echo.png")  # Save evidence.
     assert path.exists() is True  # The screenshot must exist.
+    assert median_ms < 50.0  # SC-001 allows 50 ms, and one scheduler pause does not move the median.
     assert p95_ms < 500.0  # The browser E2E run allows Windows scheduler jitter but still bounds latency.
 
 
@@ -97,7 +98,7 @@ def test_sc005_five_busy_shells_with_page_loads(browser: Any, terminal_harness: 
         print(f"SC-005 busy_shell_page_load_seconds={elapsed:.2f}")  # Report measurement.
         path = terminal_harness.screenshot(probe, "perf-sc005-busy-shells.png")  # Save evidence.
         assert path.exists() is True  # The screenshot must exist.
-        assert elapsed < 2.0  # The Windows browser E2E run allows scheduler jitter but still bounds responsiveness.
+        assert elapsed < 1.0  # SC-005 requires an answer within 1 second while 5 shells send output.
         probe.close()  # Close the probe tab.
     finally:
         for page in pages:  # Clean each busy shell tab.

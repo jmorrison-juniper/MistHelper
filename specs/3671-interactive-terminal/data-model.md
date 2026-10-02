@@ -27,6 +27,7 @@ The session states do not change. A terminal session moves through these states.
 connecting --(socket open)--> live --(first output)--> live and input_ready
 live --(operator stop or reaper)--> stopping --> stopped
 live and input_ready --(device sends a close frame, for example after exit)--> finished
+live --(a screen command reaches its time limit)--> finished
 live and input_ready --(connection lost with no close frame)--> failed
 live without output --(far side ends the connection)--> failed
 connecting or live --(error)--> failed
@@ -42,6 +43,12 @@ ends. Each terminal session uses this order of rules.
    `CLOSED_REASON`.
 4. If the connection ended with no close frame, the state is `failed`. The reason is
    `DROPPED_REASON`.
+
+A screen command checks one rule before these rules. If its time limit closed the
+connection and no stop is in progress, the state is `finished`. The reason is
+`The screen command reached its time limit of N seconds.` N is the total time limit of the
+command in the trigger table, in whole seconds. The screen runner in
+`src/websocket_streams/live/runners/utility/screen.py` applies this rule.
 
 The page shows a notice when a shell sends no output for 20 seconds. The notice is a page
 value only. It does not change the session state.

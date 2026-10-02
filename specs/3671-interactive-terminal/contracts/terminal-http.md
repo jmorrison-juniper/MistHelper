@@ -63,6 +63,7 @@ Final states and reasons in the read answer:
 | The operator or the reaper stops the session | `stopped` | The stop reason |
 | The far side ends the connection before any output | `failed` | `The device sent no output before the Mist cloud closed the terminal. Start a new session after one minute.` |
 | The device sends output, then a close frame | `finished` | The runner close reason. A shell uses `The device closed the shell.` A screen command uses `The device ended the screen command.` |
+| A screen command reaches its time limit | `finished` | `The screen command reached its time limit of N seconds.` N is the total time limit of the command in the trigger table, in whole seconds. |
 | The connection ends with no close frame, after output | `failed` | `The connection to the device dropped.` |
 
 The second row is the server part of FR-019 and issue #3710. The page shows the 20-second

@@ -238,7 +238,9 @@ keys, and resize the panel. The fake device receives each byte in order.
   Use the real services, the real manager, the real runners, and the fake Mist cloud.
   Cover the banner, typed text, each special key, Ctrl+C with no selection, the resize,
   early keys, the device close, and a full-screen color program. Save a screenshot for
-  each journey in `test-artifacts/websockets-terminal/`, and read each screenshot.
+  each journey in `test-artifacts/websockets-terminal/`, and read each screenshot. The CI
+  workflow uploads no test artifacts, so the screenshots are local evidence. The pull
+  request body lists each screenshot.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`, `test-artifacts/websockets-terminal/`)
 - [x] T065 [US1] Keep 5,000 lines of scrollback in
   `src/websocket_streams/web/static/websockets_terminal.js` (FR-014). Prove it with the
@@ -254,8 +256,9 @@ keys, and resize the panel. The fake device receives each byte in order.
   shell before any output, end the session as failed with `NO_ANSWER_REASON` in
   `src/websocket_streams/live/runners/shell.py` (FR-019, issue #3710). Test the runner in
   `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`. Test the page with
-  the journey `test_review_3710_silent_device_shows_notice_and_failed_reason`.
-  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/live/runners/shell.py`, `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`)
+  the journey `test_review_3710_silent_device_shows_notice_and_failed_reason` in
+  `tests/e2e/websockets_tab/test_websockets_terminal.py`.
+  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/live/runners/shell.py`, `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`, `tests/e2e/websockets_tab/test_websockets_terminal.py`)
 - [x] T068 [US1] Keep the shell lock and the typed device name (FR-045). Prove both rules
   with `test_start_request_locks_shell_and_checks_confirmation` in
   `tests/unit/websocket_streams/intake/test_ws_start_request.py`.
@@ -330,7 +333,10 @@ Each run shows the full output.
 - [X] T039 [US3] Update the runner tests in
   `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`. Add the
   order test, the early event test, the three limit tests, and the stop test. Add 100 runs
-  of Show ARP against a fake device that answers at once (SC-003).
+  of Show ARP against a fake device that answers at once. Add 100 runs of Show Route
+  against the same fake device (SC-003). The test
+  `test_show_command_runs_one_hundred_times_with_full_output` holds one case for
+  `ex.retrieveArpTable` and one case for `srx.retrieveRoutes`.
   (delivered: `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`)
 
 **Checkpoint**: Each command keeps its first output lines.
@@ -430,8 +436,9 @@ Compare the messages, the states, and the end reasons.
 - [X] T053 [P] Add the release note `changelog.d/issue-3671-interactive-terminal.md`.
   (delivered: `changelog.d/issue-3671-interactive-terminal.md`)
 - [x] T054 Run the quality gates per `quickstart.md`. Also run mypy with `MYPY_PATHS`,
-  Bandit, Vulture, pydocstyle, and the complexity gate. Fix each finding.
-  (delivered: the gate results in the pull request body)
+  Bandit, Vulture, pydocstyle, and the complexity gate. Fix each finding. Record the
+  results in `research.md` section R14. The pull request body copies the same results.
+  (delivered: `specs/3671-interactive-terminal/research.md`, section R14)
 - [x] T055 Run the live checks per `quickstart.md` section 5. Record the shell host, the
   NUL prefix result, and the longest pause of Show ARP and Show Route. If a pause is longer
   than 5 seconds, change the quiet time in the trigger table.
@@ -440,8 +447,8 @@ Compare the messages, the states, and the end reasons.
   the analysis again.
 - [x] T062 Move the browser tests into `tests/e2e/websockets_tab/`, the fake Mist cloud
   into `tests/unit/websocket_streams/live/transport/fake_mist_cloud/`, and the client tests
-  into `tests/unit/websocket_streams/live/transport/clients/` (finding C1, commit
-  40bc8e6e).
+  into `tests/unit/websocket_streams/live/transport/clients/` (finding C1). The three
+  folders below are the evidence.
   (delivered: `tests/e2e/websockets_tab/`, `tests/unit/websocket_streams/live/transport/fake_mist_cloud/`, `tests/unit/websocket_streams/live/transport/clients/`)
 - [x] T069 Prove that no portal answer gives the shell address or a secret to the page
   (FR-048). Use the journey `test_review_fr048_page_gets_no_shell_address` in
@@ -455,16 +462,75 @@ T057 to T061 hold the 12 pipeline steps. T059 to T061 run after the push, so the
 stay clear in the merged file. The pull request and issue #3671 record their results.
 
 - [ ] T057 Run the local gates, build the manifest, stage the feature files, and commit.
-  Use Conventional Commits, because the title guard requires them (issue #3720).
+  Write each commit subject in the constitution step 4 format
+  `version YY.MM.DD.HH.MM - description`, with the time in UTC. The pull request title
+  keeps Conventional Commits, because the title guard reads the title (issue #3720).
 - [ ] T058 Fetch and rebase onto `origin/main`. Run the affected gates again.
 - [ ] T059 Push the branch. Open the pull request with `Closes #3671`, `Closes #3659`,
-  `Closes #3660`, and `Closes #3710`.
+  `Closes #3660`, and `Closes #3710`. The body also holds the changed-file summary, the
+  local gate results from R14, the CI status, and the deployment and rollback notes.
 - [ ] T060 Wait for each required check, CodeQL included. Squash-merge with a subject that
-  you write.
+  you write. Issues #3718 and #3721 stay open and do not block the merge. The owner gave
+  a standing instruction to merge the work that is ready, and the final report names
+  both issues for an owner decision.
 - [ ] T061 Wait for `.github/workflows/container-build.yml` on the merged revision. Make
   sure that the image revision label equals the merge SHA. Deploy with
   `.\scripts\compose.ps1 up -d --no-deps misthelper`, and check the container health and
   the portal health.
+
+---
+
+## Requirement Coverage
+
+This table maps each functional requirement and each success criterion in `spec.md` to
+the tasks that deliver it or prove it. The second speckit-analyze pass built the map.
+
+| Requirement | Tasks |
+| --- | --- |
+| FR-001 | T009, T010, T011, T012, T013, T014, T021, T024, T038, T041, T045, T046, T047 |
+| FR-002 | T011, T014, T038, T039 |
+| FR-003 | T035, T037, T038, T039, T046 |
+| FR-004 | T034, T035, T036 |
+| FR-005 | T009, T012, T014, T015, T063 |
+| FR-006 | T011, T014 |
+| FR-007 | T044, T045, T064 |
+| FR-008 | T009, T012, T021, T024, T041, T055 |
+| FR-009 | T009, T012, T025, T051 |
+| FR-010 | T003, T025, T029, T030 |
+| FR-011 | T011, T014, T023, T026, T027, T028, T029, T030, T055 |
+| FR-012 | T011, T014, T021, T022, T023, T024, T026, T028, T029, T030 |
+| FR-013 | T004, T016, T018, T020, T021, T022, T026, T030 |
+| FR-014 | T065 |
+| FR-015 | T005, T016, T017, T019, T022, T026, T028, T029 |
+| FR-016 | T019, T020, T021, T022, T026, T029, T030, T040, T064, T067 |
+| FR-017 | T029 |
+| FR-018 | T017, T027, T029, T066 |
+| FR-019 | T021, T030, T067 |
+| FR-020 | T031, T032 |
+| FR-021 | T031, T032 |
+| FR-022 | T030, T031, T032 |
+| FR-023 | T031, T032 |
+| FR-024 | T031, T032 |
+| FR-025 | T031, T032 |
+| FR-026 | T031, T032 |
+| FR-027 | T031, T032, T033 |
+| FR-028 | T031, T032 |
+| FR-029 | T031 |
+| FR-030 | T031, T032 |
+| FR-035 | T003, T004, T022, T026, T027, T040, T041, T042, T043, T055 |
+| FR-040 | T048, T049 |
+| FR-045 | T068 |
+| FR-046 | T004, T016, T018, T022, T023, T026, T028 |
+| FR-047 | T029 |
+| FR-048 | T069 |
+| SC-001 | T050 |
+| SC-002 | T032, T033 |
+| SC-003 | T036, T038, T039, T055 |
+| SC-004 | T030, T032 |
+| SC-005 | T050 |
+| SC-006 | T051 |
+| SC-007 | T050 |
+| SC-008 | T040, T043 |
 
 ---
 

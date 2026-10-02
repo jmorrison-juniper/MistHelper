@@ -183,14 +183,15 @@ class TestChannelStreamRunner:
         with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
             cloud.register("/api-ws/v1/stream", object())  # This handler never confirms subscription.
             sink = FakeSink()  # Record runner callbacks.
-            endpoint = self._endpoint(  # Use short waits so this failure test stays fast.
-                cloud, reconnect_delays=(0.01, 0.01, 0.01), subscribe_timeout=0.02
-            )  # Use short waits.
+            endpoint = self._endpoint(  # The same timeout bounds the handshake, so give a slow host room.
+                cloud, reconnect_delays=(0.01, 0.01, 0.01), subscribe_timeout=0.2
+            )  # Use short reconnect waits.
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
             try:  # Stop the runner after the retry-budget assertion.
                 runner.start()  # Start the daemon reader thread.
                 finished = sink.wait_for_finished(1, 5.0)  # Wait for the retry budget to end.
-                assert len(cloud.requests) == 4  # Initial attempt plus three retries.
+                requests = cloud.wait_for_requests(4, 1.0)  # The fake cloud records just after its 101 answer.
+                assert len(requests) == 4  # Initial attempt plus three retries.
                 assert finished == [  # Keep the retry failure result stable.
                     (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
                 ]
