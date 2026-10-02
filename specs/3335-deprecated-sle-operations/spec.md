@@ -14,6 +14,13 @@
 
 **Base Revision**: `856e5065413d3026f9c0f6d5222d9d379ec79d8b`
 
+**Current Local Refresh Base**: `1a06f1516223a20eef715d91a32255e6219331db`
+
+The coordinator authorizes this immutable base for local refresh only.
+It does not authorize publication or actual-main delivery.
+The original preparation remains preserved at `623a48c88feb4cf5716f3986587f4971a51ffb6a`.
+The later publication grant must name the actual verified issue #3366 merge revision.
+
 **Feature Directory**: `specs/3335-deprecated-sle-operations`
 
 ## User Scenarios & Testing *(mandatory)*

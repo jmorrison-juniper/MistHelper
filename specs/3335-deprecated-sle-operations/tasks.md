@@ -26,6 +26,11 @@ The coordinator confirmed offered-entry acceptance and authorized the validated 
 The separate documented-object defect does not authorize a response change in this branch.
 Publication remains blocked until the explicit position-16 verified-main grant.
 
+**Current Local Refresh Base**: `1a06f1516223a20eef715d91a32255e6219331db`.
+The coordinator permits local rebase, generation, validation, and offline preparation only.
+Issue #3366 and pull request #3727 retain the sole publication window.
+The original preparation remains preserved at `623a48c88feb4cf5716f3986587f4971a51ffb6a`.
+
 ## Execution and ownership rules
 
 - Use this explicit directory. Do not discover a feature through shared context.
@@ -1512,3 +1517,170 @@ Its full SHA and clean-status proof belong in the coordinator handoff after that
 Do not amend the commit to insert its own SHA into this file.
 The separate issue remains unassigned and unrepaired by this branch.
 Publication, protected merge, deployment, and exact merged-main proof remain conditional and unperformed.
+
+## Local refresh on the immutable authorized base
+
+This section records the later local refresh, not a publication receipt.
+The exact authorized base is `1a06f1516223a20eef715d91a32255e6219331db`.
+The coordinator did not grant push, PR creation, workflow execution, automatic merge, protected merge, or delivery.
+Issue #3366 and pull request #3727 retain the sole publication window.
+The later grant must identify the actual verified issue #3366 merge SHA.
+That grant requires a new rebase and fresh verification of the newer complete tree.
+
+### Preservation and reclaimed ownership
+
+The original clean preparation is preserved by this local tag:
+
+```text
+preservation/issue3335-local-623a48c88feb4cf5716f3986587f4971a51ffb6a
+```
+
+The tag resolves to `623a48c88feb4cf5716f3986587f4971a51ffb6a`.
+The owned branch rebased cleanly onto the authorized immutable base.
+No conflict, shared-checkout access, fetch, or publication occurred.
+Its rebased preparation is `5b1c40ab64253e4c27fec15575da3a1afcea4ec9`.
+
+The prerequisite issue #3709 is closed, and pull request #3713 is merged.
+The original claim again reserves all 23 feature paths.
+The exact four reclaimed paths are the two API-map indexes and two interactive-safe pages.
+The prerequisite is not republished.
+The unresolved companion issue #3699 remains open and unassigned.
+This branch does not repair or close it.
+
+The live check read one stable open pull request and all eight exact file entries.
+The check included renamed paths and matched each list against its declared file count.
+No reserved path overlapped.
+The same complete check ran immediately before generation.
+
+### Unchanged environment and exact source proof
+
+`requirements.txt`, `requirements-dev.txt`, and `pyproject.toml` match the original preparation and the immutable base.
+The own environment uses Python 3.13.13 and `mistapi` 0.64.0.
+The configured development tools remain installed at their current pins.
+No package install, manifest, dependency, suppression, exclusion, baseline, or governance change was needed.
+
+Five complete production AST comparisons permit only the two exact metadata removals and coupled counts.
+All five comparisons pass against the immutable base.
+All 15 `EndpointFamilyExporter` method bodies remain unchanged, including `_run`.
+Fifteen protected inputs remain byte-identical to that base.
+Those inputs include manifests, workflow settings, quality baselines, SDK index, shared records, and governance files.
+The complete branch difference contains exactly the original 23 reserved paths.
+Every unowned API reference page is byte-identical to the immutable base.
+This preserves the current report and fingerprint repairs.
+
+The refreshed guard proof reconstructs the two exact obsolete rows from the immutable base.
+The real guard rejects both names in all three reconstructed sources.
+It accepts all three current sources without changing any live registration.
+
+| Source | Immutable-base red count | Refreshed green count |
+| --- | ---: | ---: |
+| Selectable | 286 | 284 |
+| Catalog | 286 | 284 |
+| PK | 571 | 569 |
+
+Both documented top-level object responses still decode at HTTP 200 with no next page.
+The unchanged SDK collector returns zero rows, while the unchanged normalizer retains one raw-object row.
+This verifies that the separate companion defect remains unresolved.
+It does not establish working canonical object exports.
+
+### Combined generator proof
+
+Both documented generator commands ran twice:
+
+```bash
+rtk proxy .venv/bin/python scripts/generate_menu_wiki.py
+rtk proxy .venv/bin/python -m scripts.menu_api_map
+rtk proxy .venv/bin/python -m scripts.menu_api_map --check
+```
+
+The rebase already preserved the combined generated output.
+Both generator passes wrote zero changed API-map pages and removed zero pages.
+Both wiki outputs match.
+All 18 generated outputs were byte-identical across both passes, with 1,551,817 total bytes.
+No unowned output changed.
+The API map check passes all 16 pages for 293 menus.
+
+| Owned reference | Refreshed SHA-256 |
+| --- | --- |
+| `documentation/menu_reference.md` | `1e41d53f8281753396ab8f4fc3d253f00c171e2dd3761f7d20677e620f507a86` |
+| `documentation/wiki/Menu-Reference.md` | `1e41d53f8281753396ab8f4fc3d253f00c171e2dd3761f7d20677e620f507a86` |
+| `documentation/menu-api/README.md` | `ee825c0ec18bb432a8907b7b872d577f948f0a628c68a9adb6c3a87d8b5c0399` |
+| `documentation/menu-api/interactive-safe.md` | `648282509d7cbd040f666a990f37fafb8d51ffd3a33ae0fa62d3c575441f230f` |
+| `documentation/wiki/Menu-API-Endpoints.md` | `17d004917c13fc99b6ceffa07675f5b2445c13a83ff59d4203425d60d12158b8` |
+| `documentation/wiki/Menu-API-Endpoints-Interactive-Safe.md` | `e3b50bf36504c96825646e80a9f788b943649f65d2baae88e0a2c9c2300ad8b7` |
+
+### Repeated local gates and explicit limits
+
+The same 1,206 owned, neighboring, portal, key, upsert, refusal, and generator cases passed.
+No pytest case failed or skipped.
+The command used the complete E035 selector set with these additional arguments:
+
+```text
+--cov=src.export.endpoint_family_exporter
+--cov=src.export.endpoint_catalog
+--cov=src.refactors.endpoint_primary_key_strategies
+--cov-report=term-missing
+--cov-fail-under=80
+```
+
+The command set `COVERAGE_FILE=data/issue-3335/refresh-coverage`.
+The three metadata modules measured 93.99 percent combined coverage.
+The catalog and PK modules each measured 100 percent.
+The exporter module measured 93 percent.
+This scoped result does not measure full-repository coverage.
+
+| Exact repeated gate | Result |
+| --- | --- |
+| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/export/endpoint_family_exporter.py src/export/endpoint_catalog.py src/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py` | Pass. |
+| `rtk proxy .venv/bin/ruff check .` | Pass. |
+| `rtk proxy .venv/bin/black --check --diff .` | Pass, 2,016 files. |
+| `rtk proxy .venv/bin/mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Pass, 665 source files. |
+| `rtk proxy .venv/bin/mypy tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py --config-file pyproject.toml` | Pass, both changed test files. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Pass, both separator samples. |
+| `rtk proxy .venv/bin/bandit -c pyproject.toml -r . --quiet --format json --output data/issue-3335/bandit-refresh.json` | Pass, 788 file entries and 214,955 lines, zero findings or read errors. |
+| `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --log-level WARNING` | Pass, 1,001 files and 725 old findings, zero new findings or parse errors. |
+| `rtk proxy .venv/bin/diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt` | Pass, 153 references across 15 diagram files. |
+| `rtk proxy .venv/bin/check-citations src tests` | Pass, 251 citations and zero unresolved. |
+| `rtk proxy .venv/bin/markdown-link-check --exclude 'documentation/wiki/**'` | Pass, 4,270 tracked files and zero broken links. |
+| `rtk proxy .venv/bin/python -m pytest tests/guardrails/test_markdown_links.py -q --timeout=120` | Pass, three cases. |
+| `rtk proxy .venv/bin/ste-linter --config .ste-linter.toml --min-score 80 --quiet <all 23 exact feature paths>` | All scores pass at 85 through 99. Dictionary coverage is partial. |
+
+The test analyzer retains 48 configured skips.
+They are not skipped pytest cases.
+Bandit retains the existing 64 specific suppressions.
+No baseline, rule, suppression, threshold, or allowlist changed.
+The STE tool explicitly names `data/ste_dictionary.json` as unavailable.
+Dictionary validation did not run and is not a pass.
+
+The standard runtime audit again stopped during the known macOS `ensurepip` abort:
+
+```bash
+rtk proxy .venv/bin/python -m pip_audit -r requirements.txt
+```
+
+The authorized strict alternative passed:
+
+```bash
+rtk proxy env UV_LINK_MODE=copy UV_NATIVE_TLS=1 UV_SYSTEM_CERTS=1 uv pip compile requirements.txt --python .venv/bin/python --generate-hashes --output-file data/issue-3335/refresh-runtime-audit-lock.txt --quiet
+rtk proxy .venv/bin/python -m pip_audit --no-deps --disable-pip --require-hashes --strict -r data/issue-3335/refresh-runtime-audit-lock.txt
+```
+
+It checked all 105 resolved, fully hashed runtime packages and found zero advisories.
+No advisory was ignored.
+The Git-only development tool remains outside that runtime audit.
+The local lock and coverage file do not enter the commit.
+
+### Offline template and held publication
+
+The coding session read the current `.github/PULL_REQUEST_TEMPLATE.md`.
+The offline body preserves all headings, the issue-number comment, and all 23 original checklist items.
+It records exact current commands, results, and limits in the session artifact area.
+It is not a live pull request.
+Full-repository coverage, live Mist execution, browser journeys, container execution, CI, title checks, and CodeQL remain unperformed.
+No unmet or unperformed criterion is represented as passed.
+
+The refreshed local commit records only the current feature evidence within the existing reservation.
+It changes no production method, test behavior, generator, dependency, baseline, or governance file.
+The original preparation remains preserved.
+The final clean local SHA belongs in the coordinator handoff after the commit succeeds.
+No push, pull request, workflow start, automatic merge, protected merge, deployment, or actual-main delivery is authorized.
