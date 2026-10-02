@@ -1869,7 +1869,21 @@ def stand_in_capture(
     from src.upgrade_portal.capture import devices  # Late, so a plain collection never loads the portal.
 
     records = [{**device, "version": version} for device in stand_in_site_devices(site_id)]  # The site inventory.
-    index = devices.build_device_index(records, [])  # Issue #3494: no statistics list, so each state is empty.
+    logger.info("Build seed statistics for capture %s with inventory=%d", capture_id, len(records))
+    statistics = [  # Running fields must come from statistics, not configured inventory.
+        {
+            "mac": record["mac"],
+            "version": version,
+            "status": "connected",
+            "ip": record["ip"],
+            "uptime": 3600,
+        }
+        for record in records
+    ]
+    logger.debug("Built seed statistics. Checked inventory=%d statistics=%d", len(records), len(statistics))
+    logger.info("Build the seed device index with inventory=%d statistics=%d", len(records), len(statistics))
+    index = devices.build_device_index(records, statistics)
+    logger.debug("Built the seed device index. Checked statistics=%d index=%d", len(statistics), len(index))
     clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]  # Radios.
     site_name = SECOND_SITE_NAME if site_id == SECOND_SITE_ID else STAND_IN_SITE_NAME  # The name of the site row.
     capture: dict[str, Any] = {  # The stored shape. Issue #3492: the count map follows below.
