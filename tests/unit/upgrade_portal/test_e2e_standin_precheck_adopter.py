@@ -18,6 +18,7 @@ from typing import Any  # A capture record holds values of different types.
 
 import pytest  # Parametrize the rules that a capture can fail.
 
+from src.upgrade_portal.capture.store import CAPTURE_STATE_FIELD, CaptureState
 from tests.support.upgrade_portal_e2e.records import PortalRecordStore
 
 OWNER = "e2e-unit-precheck-owner"  # The test owner that the store binds to each record.
@@ -44,7 +45,8 @@ def capture(capture_id: str, started_at: str = OLDER_STAMP, **fields: Any) -> di
         "site_id": SITE_ID,  # The site that the read names.
         "role": "pre",  # The pre-check half of the upgrade.
         "run_id": "",  # A standalone capture names no run.
-        "capture_status": "verified",  # The field that the stand-in reads for a verified capture.
+        "capture_status": "complete",  # Content completeness does not decide pre-check eligibility.
+        CAPTURE_STATE_FIELD: CaptureState.VERIFIED.value,  # The shipped reader requires verified lifecycle.
         "started_at": started_at,  # The sort key of the shipped query.
     }
     record.update(fields)  # Apply the change that one test needs.
@@ -113,7 +115,7 @@ def test_a_capture_with_no_start_time_loses() -> None:
     "change",
     [
         {"role": "post"},  # A post-check is never a baseline.
-        {"capture_status": "failed"},  # A failed capture is not verified in either field.
+        {CAPTURE_STATE_FIELD: CaptureState.FAILED.value},  # An unverified lifecycle cannot supply the baseline.
         {"site_id": OTHER_SITE_ID},  # A capture of another site.
     ],
     ids=["post-check", "not-verified", "other-site"],
@@ -207,7 +209,7 @@ class TestPrecheckTierReader:
             (
                 capture("cap-other-site", tier=3, site_id=OTHER_SITE_ID),
                 capture("cap-post", tier=3, role="post"),
-                capture("cap-failed", tier=3, capture_status="failed"),
+                capture("cap-failed", tier=3, state=CaptureState.FAILED.value),
                 capture("cap-owned", tier=3, run_id=OWNING_RUN),
             ),
         ],

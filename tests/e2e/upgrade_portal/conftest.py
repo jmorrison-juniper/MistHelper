@@ -57,6 +57,7 @@ from src.firmware.org_upgrade_service import OrgUpgradeResult
 from src.firmware.upgrade_service import CancelOutcome, UpgradeSubmission  # Build stand-in site child results.
 from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the complete isolated dependency set.
 from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
+from src.upgrade_portal.capture.clients import ClientAttachment, ClientIdentity, ClientRecord, WirelessSignal
 from src.upgrade_portal.capture.devices import DeviceRead  # Issue #3438: the answer of a real picker read.
 from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
 from src.upgrade_portal.runtime.server import build_server_command  # Start the platform server safely.
@@ -314,10 +315,8 @@ RUN_OWNED_CAPTURE_IDS = (PRE_CAPTURE_ID, POST_CAPTURE_ID, TIER3_CAPTURE_ID)  # T
 # capture picker keeps its first choice and its last choice.
 STANDALONE_PRE_CAPTURE_ID = "e2e-capture-standalone-0001"  # The seeded pre-check that names no run.
 STANDALONE_PRE_CAPTURE_STAMP = "2026-08-19T10:15:00+00:00"  # Between the seeded pre-check and post-check.
-# WHY: Issue #3378. The shipped store writes `complete` into `capture_status`
-# and `verified` into `state`. Every other seed holds `verified` in
-# `capture_status`, which issue #3375 repairs. This seed holds the shipped shape,
-# so its page reads the stored status path that a page reads after a restart.
+# WHY: Issue #3378. This seed reads the stored status path after a restart.
+# Issue #3375 gives every seed separate content and lifecycle fields.
 # It sits on its own site and between the post-check and the Tier 3 capture, so
 # no count, no first or last picker choice, and no pre-check adopter reads it.
 STORED_POLL_CAPTURE_ID = "e2e-capture-stored-poll-0001"  # The seed in the shipped shape.
@@ -1825,7 +1824,7 @@ def stand_in_stop_runner(run_id: str) -> None:
     logger.info("The stand-in stop runner took the run %s and cancelled nothing", run_id)
 
 
-def stand_in_client(index: int, device_mac: str) -> dict[str, Any]:
+def stand_in_client(index: int, device_mac: str) -> ClientRecord:
     """Build one wireless client record that hangs off one device.
 
     Why:
@@ -1838,9 +1837,13 @@ def stand_in_client(index: int, device_mac: str) -> dict[str, Any]:
         device_mac: The address of the device that holds this client.
 
     Returns:
-        One client record, in the shape that the capture stores.
+        One native client record, ready for the serving device name join.
     """
-    return {"mac": f"aabbcc00000{index}", "hostname": f"e2e-client-{index}", "device_mac": device_mac}
+    return ClientRecord(
+        mac=f"aabbcc00000{index}",
+        identity=ClientIdentity(hostname=f"e2e-client-{index}"),
+        attachment=ClientAttachment(device_mac=device_mac),
+    )
 
 
 def stand_in_capture(
@@ -1866,7 +1869,8 @@ def stand_in_capture(
     Returns:
         One capture document, ready for the comparison and for the history.
     """
-    from src.upgrade_portal.capture import devices  # Late, so a plain collection never loads the portal.
+    from src.upgrade_portal.capture import assembly, devices  # Use the shipped content and device builders.
+    from src.upgrade_portal.capture.store import CAPTURE_STATE_FIELD, CaptureState
 
     records = [{**device, "version": version} for device in stand_in_site_devices(site_id)]  # The site inventory.
     logger.info("Build seed statistics for capture %s with inventory=%d", capture_id, len(records))
@@ -1884,7 +1888,9 @@ def stand_in_capture(
     logger.info("Build the seed device index with inventory=%d statistics=%d", len(records), len(statistics))
     index = devices.build_device_index(records, statistics)
     logger.debug("Built the seed device index. Checked statistics=%d index=%d", len(statistics), len(index))
-    clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]  # Radios.
+    clients = assembly.fill_device_names(
+        [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)], index
+    )
     site_name = SECOND_SITE_NAME if site_id == SECOND_SITE_ID else STAND_IN_SITE_NAME  # The name of the site row.
     capture: dict[str, Any] = {  # The stored shape. Issue #3492: the count map follows below.
         "capture_id": capture_id,
@@ -1895,7 +1901,8 @@ def stand_in_capture(
         "site_name": site_name,
         "role": role,
         "ordinal": 1 if role == "pre" else 2,
-        "capture_status": "verified",
+        "capture_status": assembly.resolve_status(assembly.CaptureSections(devices=records), ()),
+        CAPTURE_STATE_FIELD: CaptureState.VERIFIED.value,  # Verification does not describe content completeness.
         "actor_email": STAND_IN_EMAIL,
         "schema_version": 1,
         "tier": 2,
@@ -1953,20 +1960,23 @@ def stand_in_tier3_capture() -> dict[str, Any]:
     Returns:
         One capture with populated, empty, and unavailable Tier 3 sections.
     """
+    from src.upgrade_portal.capture import assembly
+
     capture = stand_in_capture(TIER3_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], TIER3_CAPTURE_STAMP)
     switch_mac = str(capture["devices"][1]["mac"])
     ap_mac = str(capture["devices"][0]["mac"])
     capture["tier"] = 3
-    capture["clients"]["guest"] = [
-        {
-            "mac": "aabbcc000099",
-            "hostname": "e2e-guest-1",
-            "username": "guest@example.invalid",
-            "device_mac": ap_mac,
-            "device_name": "e2e-ap-1",
-            "ssid": "guest-wifi",
-        }
-    ]
+    capture["clients"]["guest"] = assembly.fill_device_names(
+        [
+            ClientRecord(
+                mac="aabbcc000099",
+                identity=ClientIdentity(hostname="e2e-guest-1", username="guest@example.invalid"),
+                attachment=ClientAttachment(device_mac=ap_mac),
+                wireless=WirelessSignal(ssid="guest-wifi"),
+            )
+        ],
+        capture["device_index"],
+    )
     capture["counts"] = stand_in_counts(capture)  # Issue #3492: the count map now counts the guest client too.
     capture["extras"] = {
         "switch_ports": [{"mac": switch_mac, "port_id": "ge-0/0/1", "up": True, "speed": 1000}],
@@ -1977,6 +1987,9 @@ def stand_in_tier3_capture() -> dict[str, Any]:
         "alarms": [],
     }
     capture["partial_reasons"] = [{"section": "bgp_peers", "reason": "cloud_call_failed", "http_status": 0}]
+    capture["capture_status"] = assembly.resolve_status(
+        assembly.CaptureSections(devices=capture["devices"], clients=capture["clients"]), capture["partial_reasons"]
+    )
     return capture
 
 
@@ -2000,7 +2013,7 @@ def stand_in_standalone_precheck() -> dict[str, Any]:
 
 
 def stand_in_shipped_shape_capture() -> dict[str, Any]:
-    """Build the one seed that holds both status words of the shipped store.
+    """Build the stored-poll seed on its separate site.
 
     Why:
         Issue #3378. The status endpoint reads a stored capture after a restart.
@@ -2017,8 +2030,6 @@ def stand_in_shipped_shape_capture() -> dict[str, Any]:
     )
     capture["site_name"] = STORED_POLL_SITE_NAME  # The history row names the site of this seed.
     capture["run_id"] = ""  # No run owns this seed, so no run page reads it.
-    capture["capture_status"] = "complete"  # The content word that `resolve_status` writes.
-    capture["state"] = "verified"  # The lifecycle word that the store writes after the read-back.
     return capture  # The index stores it between the post-check and the Tier 3 capture.
 
 

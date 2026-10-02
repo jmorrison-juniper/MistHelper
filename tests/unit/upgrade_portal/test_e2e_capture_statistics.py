@@ -148,21 +148,24 @@ class CaptureStatisticsGuard:
                     "run_id": "e2e-run-0001",
                     "role": "pre",
                     "tier": 2,
-                    "capture_status": "verified",
+                    "capture_status": "complete",
+                    "state": "verified",
                     "started_at": "2026-08-19T10:00:00+00:00",
                 },
                 "e2e-capture-standalone-0001": {
                     "run_id": "",
                     "role": "pre",
                     "tier": 2,
-                    "capture_status": "verified",
+                    "capture_status": "complete",
+                    "state": "verified",
                     "started_at": "2026-08-19T10:15:00+00:00",
                 },
                 "e2e-capture-post-0001": {
                     "run_id": "e2e-run-0001",
                     "role": "post",
                     "tier": 2,
-                    "capture_status": "verified",
+                    "capture_status": "complete",
+                    "state": "verified",
                     "started_at": "2026-08-19T10:30:00+00:00",
                 },
                 "e2e-capture-stored-poll-0001": {
@@ -179,7 +182,8 @@ class CaptureStatisticsGuard:
                     "run_id": "e2e-run-0001",
                     "role": "pre",
                     "tier": 3,
-                    "capture_status": "verified",
+                    "capture_status": "partial",
+                    "state": "verified",
                     "started_at": "2026-08-19T11:00:00+00:00",
                 },
             },
@@ -200,7 +204,7 @@ class CaptureStatisticsGuard:
                     "hostname": "e2e-guest-1",
                     "username": "guest@example.invalid",
                     "device_mac": "000000000001",
-                    "device_name": "e2e-ap-1",
+                    "device_name": "E2E ap 1",
                     "ssid": "guest-wifi",
                 }
             ],
@@ -216,7 +220,7 @@ class CaptureStatisticsGuard:
 
         @classmethod
         def require_preserved(cls, capture: Mapping[str, Any]) -> None:
-            """Validate stored metadata, clients, extras, and unchanged lifecycle fields."""
+            """Validate preserved metadata and the migrated lifecycle, content, and parent fields."""
             logger.info("Check preserved capture metadata and client groups")
             capture_id = capture["capture_id"]
             preserved = cls.PRESERVED
@@ -238,8 +242,9 @@ class CaptureStatisticsGuard:
                     "mac": f"aabbcc00000{number}",
                     "hostname": f"e2e-client-{number}",
                     "device_mac": f"00000000000{number}",
+                    "device_name": f"E2E {kind} {number}",
                 }
-                for number in range(1, 4)
+                for number, kind in enumerate(("ap", "gateway", "switch"), start=1)
             ]
             assert capture["clients"] == {
                 "wired": [],
