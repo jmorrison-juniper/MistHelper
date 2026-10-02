@@ -29,9 +29,13 @@ from src.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     TransportProfile,
 )  # Real paste path uses loopback cloud.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Real paste path uses fake Mist triggers.
-from tests.support.fake_mist_cloud.devices import ShellDevice  # Real paste path uses fake shell device.
-from tests.support.fake_mist_cloud.server import (  # Loopback server for paste test.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Real paste path uses fake Mist triggers.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
+    ShellDevice,
+)  # Real paste path uses fake shell device.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (  # Loopback server for paste test.
     FakeConnection,
     FakeMistCloud,
     HandshakeFault,  # Fake cloud handshake failure control.

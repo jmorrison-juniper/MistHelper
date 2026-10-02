@@ -38,8 +38,10 @@ from src.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     TransportProfile,
 )  # Factory tests avoid real Mist sockets.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Factory tests need SDK-shaped session data.
-from tests.support.fake_mist_cloud.server import (
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Factory tests need SDK-shaped session data.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
     FakeMistCloud,  # Real runner tests use a loopback cloud.
     HandshakeFault,  # Fake cloud handshake failure control.
 )

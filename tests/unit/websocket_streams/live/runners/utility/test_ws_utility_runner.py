@@ -24,9 +24,17 @@ from src.websocket_streams.live.transport.endpoint import (
     TransportProfile,
 )  # Endpoint setup.
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Stop tests override open behavior.
-from tests.support.fake_mist_cloud.api import FakeApiCall, FakeApiSession  # Offline REST trigger fake.
-from tests.support.fake_mist_cloud.devices import StreamDevice  # Offline stream device fake.
-from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Offline WebSocket fake.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiCall,
+    FakeApiSession,
+)  # Offline REST trigger fake.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
+    StreamDevice,
+)  # Offline stream device fake.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeMistCloud,
+    HandshakeFault,
+)  # Offline WebSocket fake.
 
 SITE_ID = "11111111-1111-1111-1111-111111111111"  # Stable site identifier for trigger paths.
 DEVICE_ID = "22222222-2222-2222-2222-222222222222"  # Stable device identifier for trigger paths.

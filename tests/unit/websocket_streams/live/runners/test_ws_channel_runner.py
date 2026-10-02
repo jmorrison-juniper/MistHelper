@@ -21,9 +21,14 @@ from src.websocket_streams.live.transport.endpoint import (
     MistStreamEndpoint,
     TransportProfile,
 )  # Transport setup.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake endpoint authentication.
-from tests.support.fake_mist_cloud.devices import StreamDevice  # Fake stream device.
-from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Loopback WebSocket server.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Fake endpoint authentication.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import StreamDevice  # Fake stream device.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeMistCloud,
+    HandshakeFault,
+)  # Loopback WebSocket server.
 
 
 class FakeSink:

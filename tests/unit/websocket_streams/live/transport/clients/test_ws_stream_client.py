@@ -12,9 +12,16 @@ import websocket  # Socket fakes raise websocket-client timeout errors.
 from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Need endpoints.
 from src.websocket_streams.live.transport.frames import ConnectionClosed, SubscribeError  # Test structured errors.
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Test the stream transport client.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions provide endpoint fields.
-from tests.support.fake_mist_cloud.devices import StreamDevice  # Stream tests need a fake stream endpoint.
-from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Fake cloud provides WebSocket I/O.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Fake sessions provide endpoint fields.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
+    StreamDevice,
+)  # Stream tests need a fake stream endpoint.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeMistCloud,
+    HandshakeFault,
+)  # Fake cloud provides WebSocket I/O.
 
 
 class SilentSubscribeSocket:

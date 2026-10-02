@@ -19,18 +19,18 @@ import pytest  # Skip journeys until lead-owned code is present.
 from src.websocket_streams.intake.start_request import DeviceFacts  # Fake picker returns real device facts.
 from src.websocket_streams.live.sessions.settings import StreamSettings  # Tests enable shell starts.
 from src.websocket_streams.web.services import WebSocketsServiceParts, WebSocketsServices  # Install real services.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake Mist REST seam.
-from tests.support.fake_mist_cloud.devices import (
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession  # Fake Mist REST seam.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
     MonitorFramingScreenDevice,
     ScreenDevice,
     ShellDevice,
     StreamDevice,
 )  # Fake live devices.
-from tests.support.fake_mist_cloud.server import FakeMistCloud  # Fake WebSocket cloud.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import FakeMistCloud  # Fake WebSocket cloud.
 
 logger = logging.getLogger(__name__)  # Keep helper logs under this module.
 
-ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "test-artifacts" / "websockets-terminal"  # Screenshot folder.
+ARTIFACT_DIR = Path(__file__).resolve().parents[3] / "test-artifacts" / "websockets-terminal"  # Screenshot folder.
 ORG_ID = "99999999-8888-7777-6666-555555555555"  # Fake organization identifier.
 SITE_ID = "11111111-2222-3333-4444-555555555555"  # Fake site identifier.
 DEVICE_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"  # Fake EX switch identifier.

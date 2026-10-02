@@ -15,8 +15,13 @@ from src.websocket_streams.live.transport.endpoint import (  # Build endpoint po
     TransportProfile,
 )
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Fake-cloud fault tests open a stream.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions expose the SDK private attributes.
-from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Fault tests use loopback failures.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Fake sessions expose the SDK private attributes.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeMistCloud,
+    HandshakeFault,
+)  # Fault tests use loopback failures.
 
 
 class TestMistStreamEndpoint:

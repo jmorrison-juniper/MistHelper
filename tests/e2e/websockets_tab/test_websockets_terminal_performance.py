@@ -13,7 +13,7 @@ from typing import Any  # Playwright objects are duck typed in these tests.
 
 import pytest  # Use Playwright import guard.
 
-from tests.e2e import websockets_terminal_support as terminal_support  # Register and read the shared harness.
+from tests.e2e.websockets_tab import terminal_support  # Register and read the shared harness.
 
 pytest.importorskip("playwright", reason="playwright is absent, so the browser journey cannot run")  # Browser guard.
 READY_TIMEOUT_MS = terminal_support.READY_TIMEOUT_MS  # Use one browser wait boundary for terminal tests.

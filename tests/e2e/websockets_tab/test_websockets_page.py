@@ -29,7 +29,7 @@ pytest.importorskip("playwright", reason="playwright is absent, so the browser j
 
 READY_TIMEOUT_MS = 15000  # Bound every browser wait.
 # The container mounts data/, so the screenshots stay in the test-artifacts/ folder instead.
-ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "test-artifacts" / "websockets"  # Git ignores this folder.
+ARTIFACT_DIR = Path(__file__).resolve().parents[3] / "test-artifacts" / "websockets"  # Git ignores this folder.
 ORG_ID = "99999999-8888-7777-6666-555555555555"  # Fake organization identifier.
 SITE_ID = "11111111-2222-3333-4444-555555555555"  # First fake site identifier.
 SITE_ID_2 = "22222222-3333-4444-5555-666666666666"  # Second fake site identifier.

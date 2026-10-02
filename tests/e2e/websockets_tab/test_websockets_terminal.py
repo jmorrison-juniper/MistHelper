@@ -16,8 +16,10 @@ import pytest  # Use fixtures and skip support.
 
 from src.websocket_streams.live.runners.shell import ShellRunner  # The silent device journey reads the final reason.
 from src.websocket_streams.live.transport.endpoint import ConnectFailure  # Open failure journeys read the reasons.
-from tests.e2e import websockets_terminal_support as terminal_support  # Register and read the shared harness.
-from tests.support.fake_mist_cloud.server import HandshakeFault  # Open failure journeys fail one handshake.
+from tests.e2e.websockets_tab import terminal_support  # Register and read the shared harness.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    HandshakeFault,
+)  # Open failure journeys fail one handshake.
 
 pytest.importorskip("playwright", reason="playwright is absent, so the browser journey cannot run")  # Browser guard.
 READY_TIMEOUT_MS = terminal_support.READY_TIMEOUT_MS  # Use one browser wait boundary for terminal tests.

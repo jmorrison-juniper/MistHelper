@@ -22,9 +22,11 @@ from src.websocket_streams.live.transport.endpoint import (
     MistStreamEndpoint,
     TransportProfile,
 )  # Test endpoint.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Offline SDK-shaped session.
-from tests.support.fake_mist_cloud.devices import ShellDevice  # Fake shell endpoint.
-from tests.support.fake_mist_cloud.server import (  # Fake RFC 6455 server.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Offline SDK-shaped session.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import ShellDevice  # Fake shell endpoint.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (  # Fake RFC 6455 server.
     FakeConnection,
     FakeMistCloud,
     HandshakeFault,  # Fake cloud handshake failure control.

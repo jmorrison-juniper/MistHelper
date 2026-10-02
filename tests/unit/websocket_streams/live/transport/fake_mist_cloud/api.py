@@ -9,7 +9,9 @@ from typing import Any  # Overrides can return different data shapes.
 
 import requests  # The fake session exposes a real requests.Session object.
 
-from tests.support.fake_mist_cloud.server import FakeMistCloud  # Default shell URLs come from the fake cloud.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeMistCloud,
+)  # Default shell URLs come from the fake cloud.
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,9 +16,17 @@ from src.websocket_streams.live.transport.endpoint import (  # Build client endp
 )
 from src.websocket_streams.live.transport.frames import ConnectionClosed  # Read errors use this structured close.
 from src.websocket_streams.live.transport.shell_client import ShellClient  # Test the shell transport client.
-from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions provide endpoint fields.
-from tests.support.fake_mist_cloud.devices import ShellDevice  # Shell tests need a fake terminal endpoint.
-from tests.support.fake_mist_cloud.server import FakeConnection, FakeMistCloud, HandshakeFault  # Fake WebSocket I/O.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Fake sessions provide endpoint fields.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
+    ShellDevice,
+)  # Shell tests need a fake terminal endpoint.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeConnection,
+    FakeMistCloud,
+    HandshakeFault,
+)  # Fake WebSocket I/O.
 
 
 class SplitUtf8Device:

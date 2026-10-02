@@ -7,7 +7,9 @@ import threading  # Devices expose wait helpers and protect records.
 import time  # Some tests need delayed fake output.
 from collections.abc import Iterable  # Output helper methods accept line iterables.
 
-from tests.support.fake_mist_cloud.server import FakeConnection  # Device handlers send through server connections.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeConnection,
+)  # Device handlers send through server connections.
 
 
 class StreamDevice:
