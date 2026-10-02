@@ -66,6 +66,28 @@ class CloudLog:
         return [family for family, _site, _at in self.reads]  # The caller receives the family order.
 
 
+class StandInLockLease:
+    """Record the lifecycle of one multi-site lock lease."""
+
+    def __init__(self) -> None:
+        """Start with no lifecycle call."""
+        self.started = False  # The registry sets this before the first phase.
+        self.released = False  # The walk sets this after every post-check capture.
+        self.stopped = False  # The registry sets this when the watch thread ends.
+
+    def start(self) -> None:
+        """Record the start of lock renewal."""
+        self.started = True  # A scheduled wait and every later stage now hold renewal.
+
+    def release(self) -> None:
+        """Record the release after the post-check stage."""
+        self.released = True  # No later operation stage needs the selected sites.
+
+    def stop(self) -> None:
+        """Record the end of the renewal thread."""
+        self.stopped = True  # The registry always stops the lease during cleanup.
+
+
 def attach(monkeypatch: pytest.MonkeyPatch, clock: RehearsalClock, fleet: FleetScript) -> CloudLog:
     """Attach the stand-in cloud, and record each statistics read."""
     cloud = RehearsalHarness(RehearsalDeps(clock=clock, fleet=fleet)).attach(monkeypatch)  # The stand-in answers.
@@ -460,6 +482,27 @@ def test_the_walk_takes_each_postcheck_after_the_last_phase(monkeypatch: pytest.
     assert [site for site, _key, _tier in taker.taken] == list(SITE_IDS)  # One capture for each site.
     assert post_rows(store) == ["verified", "verified"]  # Both rows verified.
     assert watch(store)["note"] == FINISHED_NOTE  # No failure, so the finished note stays.
+
+
+def test_the_registry_renews_through_postchecks_and_releases_after_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3333: the lease covers the full watch and releases after the last post-check capture."""
+    clock = RehearsalClock()  # The clock controls the test time.
+    fleet = cascade_fleet(clock.now())  # The fleet defines the test devices.
+    attach(monkeypatch, clock, fleet)  # The stand-in cloud handles the reads.
+    record = OrgRecordBuilder.with_site_plan(OrgRecordBuilder.build(fleet))  # The plan holds two selected sites.
+    store = VersionedStore(record)  # The store holds the durable operation.
+    taker = StandInPostCheckTaker()  # Every post-check capture verifies.
+    lease = StandInLockLease()  # The lifecycle stand-in reaches no lock store.
+    taker.on_take = lambda _site: (
+        pytest.fail("The lease released before the post-check stage ended.") if lease.released else None
+    )  # Each capture must run while the selected sites stay protected.
+    deps = dataclasses.replace(deps_of(store, clock), post_check=taker, lock_lease=lease)  # Add both close seams.
+    assert OrgCascadeRegistry.ensure_running(record, deps) is True  # The registry starts the watch and the lease.
+    join_watch()  # The driven clock lets the complete watch end quickly.
+    assert lease.started is True  # Renewal started before the first phase.
+    assert [site for site, _key, _tier in taker.taken] == list(SITE_IDS)  # Both post-check captures ran.
+    assert lease.released is True  # The final capture ended before the release.
+    assert lease.stopped is True  # The registry stopped the renewal thread during cleanup.
 
 
 def test_a_cancellation_during_a_phase_still_takes_each_postcheck(monkeypatch: pytest.MonkeyPatch) -> None:

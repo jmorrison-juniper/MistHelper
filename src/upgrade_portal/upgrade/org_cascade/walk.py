@@ -31,6 +31,7 @@ from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState
 from src.upgrade_portal.upgrade import driver, events, gate, phase_gate
 from src.upgrade_portal.upgrade.driver import CLIENT_PHASE, PhaseOutcome
 from src.upgrade_portal.upgrade.org_cascade.close import OrgCascadeClose
+from src.upgrade_portal.upgrade.org_cascade.locks import OrgOperationLockLease
 from src.upgrade_portal.upgrade.org_cascade.readers import BudgetSleep, OrgStatisticsReader
 from src.upgrade_portal.upgrade.org_cascade.record import (
     FAILED_NOTE,
@@ -71,6 +72,7 @@ class OrgCascadeDeps:
         sleep: The wait. A test passes a callable that moves the fake clock.
         deadline_seconds: The time limit of one phase.
         post_check: The seam that takes the post-check capture of one site, or None (issue #3244).
+        lock_lease: The site lock renewal and release scope, or None for an older caller.
     """
 
     store: Any  # The durable record of the operation lives in this store.
@@ -79,6 +81,7 @@ class OrgCascadeDeps:
     sleep: Callable[[float], None] = time.sleep  # A test moves the fake clock instead of a real wait.
     deadline_seconds: int = phase_gate.PHASE_DEADLINE_SECONDS  # The single-site time limit of one phase.
     post_check: PostCheckTaker | None = None  # Last member, so every existing keyword call still builds.
+    lock_lease: OrgOperationLockLease | None = None  # Issue #3333: renew through the post-check stage.
 
 
 class OrgPhaseGates:
@@ -157,12 +160,26 @@ class OrgCascade:
             return state  # The caller logs the state and ends the thread.
         gates = OrgPhaseGates(self._deps, str(record.get("org_id", "")), self._stop_signal)  # One event window.
         if not self._wait_for_start():  # FR-010: a scheduled upgrade starts later.
-            return self._close.stop()  # The operator cancelled the schedule.
+            return self._stop()  # The operator cancelled the schedule and the post-check stage ended.
         self._write_watch(WatchState.RUNNING, RUNNING_NOTE, None)  # The page shows the active watch.
         for name in PHASE_ORDER:  # FR-005: the fixed cascade order.
             if not self._run_phase(name, gates):  # A cancellation stops the walk at once.
-                return self._close.stop()  # The page shows the stopped watch.
-        return self._close.finish()  # Every phase ended.
+                return self._stop()  # The page shows the stopped watch after the post-check stage.
+        return self._finish()  # Every phase and every post-check capture ended.
+
+    def _finish(self) -> str:
+        """Finish the watch, then release every site lock."""
+        state = self._close.finish()  # The post-check stage and final record write come before the release.
+        if self._deps.lock_lease is not None:  # An older test or caller can still pass no lease.
+            self._deps.lock_lease.release()  # The operation no longer reads or writes a selected site.
+        return state  # The registry logs the final watch state.
+
+    def _stop(self) -> str:
+        """Stop the watch, then release every site lock."""
+        state = self._close.stop()  # A cancelled watch still takes each post-check capture first.
+        if self._deps.lock_lease is not None:  # An older test or caller can still pass no lease.
+            self._deps.lock_lease.release()  # The post-check scope ended, so the sites can return.
+        return state  # The registry logs the stopped watch state.
 
     def fail(self) -> None:
         """Write the failed watch state after an internal error, and never raise."""
@@ -380,6 +397,8 @@ class OrgCascadeRegistry:
     def _run(cls, deps: OrgCascadeDeps, operation_id: str) -> None:
         """Run one walk, and write the failed state after an internal error."""
         walk = OrgCascade(deps, operation_id)  # One walk for the life of this thread.
+        if deps.lock_lease is not None:  # Issue #3333: a closed browser must not drop a live multi-site lock.
+            deps.lock_lease.start()  # The lease covers the start wait, every phase, and every post-check capture.
         try:  # The guard makes sure that the thread always ends.
             state = walk.run()  # Blocks until every phase ended or the operator cancelled.
             logger.info("org cascade: the watch thread of %s ended in state %s", operation_id, state)  # After.
@@ -389,6 +408,8 @@ class OrgCascadeRegistry:
             )
             walk.fail()  # FR-004: the page shows the failed watch.
         finally:
+            if deps.lock_lease is not None:  # A failed watch stops renewal but leaves the last lease to expire.
+                deps.lock_lease.stop()  # A finished or stopped watch already released its locks.
             cls._forget(operation_id)  # A later poll may start a new thread.
 
     @classmethod

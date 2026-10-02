@@ -48,8 +48,15 @@ from ...upgrade.org_advanced_options import (  # Issue #3383: the advanced contr
 )
 from ...upgrade.org_cancel_outcomes import OrgCancelOutcomes  # Issue #3246: the three lists of each cancel.
 from ...upgrade.org_cancel_text import OrgCancelText  # Issue #3225: one Cancellation text for the page and the poll.
+from ...upgrade.org_cascade.locks import OrgOperationLockLease  # Issue #3333: renew every selected site lock.
 from ...upgrade.org_cascade.readers import OrgSettleAnchors  # Issue #3245: the anchors before the first write.
-from ...upgrade.org_cascade.record import WATCH_KEY, OrgPhaseEntries, OrgPhaseWatch  # Issue #3245: the watch.
+from ...upgrade.org_cascade.record import (  # Issue #3245: the durable phase watch.
+    FINAL_WATCH_STATES,
+    WATCH_KEY,
+    OrgPhaseEntries,
+    OrgPhaseTargets,
+    OrgPhaseWatch,
+)
 from ...upgrade.org_cascade.view import OrgPhaseView  # Issue #3245: the phase card of the page and the poll.
 from ...upgrade.org_cascade.walk import OrgCascadeDeps, OrgCascadeRegistry  # Issue #3245: one watch thread.
 from ...upgrade.org_child_controls import OrgControlsView, OrgScheduleView  # Issue #3247: the recovery controls.
@@ -1465,7 +1472,14 @@ def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
     if not children:  # A damaged record with no child keeps the conservative state rule.
         return str(operation.get("state", "")) in SETTLED_OPERATION_STATES  # Only a final aggregate state.
     states = [str(child.get("status", "")).strip().lower() for child in children]  # One word for each child.
-    return all(state in FINAL_WRITE_STATES for state in states)  # Every child must be past any write.
+    if not all(state in FINAL_WRITE_STATES for state in states):  # One child can still write firmware.
+        return False  # The operation keeps every selected site.
+    watch = operation.get(WATCH_KEY)  # Issue #3333: the watch includes every post-check capture.
+    if not isinstance(watch, Mapping):  # An earlier record has no phase watch or post-check stage.
+        return True  # The final child states remain the complete release proof.
+    if OrgPhaseTargets.accepted_count(operation) == 0:  # No accepted child starts a phase watch.
+        return True  # The operation has no post-check scope to protect.
+    return OrgPhaseWatch.state_of(operation) in FINAL_WATCH_STATES  # Release only after the watch closes.
 
 
 def _release_one_lock(org_id: str, site_id: str, value: object) -> None:
@@ -1616,9 +1630,13 @@ def _start_phase_watch(cloud_session: Any, operation: Mapping[str, Any]) -> None
     logger.info("Check the phase watch of aggregate upgrade %s", operation.get("operation_id", ""))  # Before.
     post_check = _bind_post_check(operation, cloud_session)  # Issue #3244: None when the seam cannot bind.
     try:  # The page must answer even when the watch cannot start.
+        store = upgrade_routes.run_store()  # The watch and the lock lease must read the same durable record.
+        lock_lease = OrgOperationLockLease(  # Issue #3333: renew all locks outside the browser request.
+            store, str(operation.get("operation_id", "")), select_routes.lock_client()
+        )
         deps = OrgCascadeDeps(
-            store=upgrade_routes.run_store(), session=cloud_session, post_check=post_check
-        )  # The wall clock, the wait, and the post-check seam.
+            store=store, session=cloud_session, post_check=post_check, lock_lease=lock_lease
+        )  # The wall clock, the wait, the post-check seam, and the lock lease.
         started = starter(operation, deps)  # FR-012: at most one thread for each operation.
     except Exception as error:  # Keep broad: a fault in the watch start must not hide the progress page.
         logger.warning("The phase watch start failed with %s", type(error).__name__)  # Name the type only.
