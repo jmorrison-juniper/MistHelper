@@ -274,6 +274,26 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
         logger.debug("The E2E pre-check search found a capture: %s", bool(result))  # Report no identifier.
         return result  # An empty value means that no reusable pre-check exists.
 
+    def newest_precheck_tier(self, site_id: str) -> tuple[str, int]:
+        """Return the selected standalone pre-check identifier and its stored tier.
+
+        Why:
+            Issue #3353. The browser routes need the production pair API.
+            Reuse the existing selection and production conversion so neither
+            the capture-origin rule nor the tier fallback changes.
+        """
+        # Import the wiring only when the reader needs it.
+        from src.upgrade_portal.app.wiring import DEFAULT_TIER, precheck_tier_number
+
+        logger.info("Read the tier of the newest E2E standalone pre-check")
+        capture_id = self.newest_precheck(site_id)  # The existing reader owns the origin and time rules.
+        stored = self._captures.get(capture_id)
+        tier = DEFAULT_TIER
+        if stored is not None:
+            tier = precheck_tier_number(stored.get("tier"))
+        logger.debug("The E2E pre-check tier read found a capture: %s with tier %s", bool(capture_id), tier)
+        return capture_id, tier
+
     @staticmethod
     def _start_moment(record: dict[str, Any]) -> str:  # Read the sort key of the shipped query.
         """Return the start time text, or an empty text that sorts below every start time."""

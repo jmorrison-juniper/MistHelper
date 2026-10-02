@@ -16,6 +16,9 @@ Why:
     run. The first stand-in site holds one seeded pre-check of that kind and
     three seeds that a run owns. The journey proves that the card adopts no
     capture that a run owns.
+
+    Issue #3353. The tier cells must show the stored tier after each capture.
+    A POST does not prove the displayed tier.
 """
 
 from __future__ import annotations
@@ -24,14 +27,16 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import pytest
 
-from tests.e2e.upgrade_portal.conftest import RUN_OWNED_CAPTURE_IDS
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import CAPTURE_PREFIX, OrgPrecheckSteps
 from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Select actual device versions.
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page, Request
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -42,9 +47,14 @@ SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first stand-in site of `
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second stand-in site. It holds no seeded capture.
 SITE_IDS = (SITE_ID, SECOND_SITE_ID)  # Both selected sites, in the page order.
 CHOSEN_TIER = "3"  # The operator reads the port state, the radio state, and the alarms too.
+RUN_OWNED_CAPTURE_IDS = (  # Preserve the seed exclusions without importing another conftest instance.
+    "e2e-capture-pre-0001",
+    "e2e-capture-post-0001",
+    "e2e-capture-tier3-0001",
+)
 
 
-def open_confirmation(page: Any) -> None:
+def open_confirmation(page: Page) -> None:
     """Select both stand-in sites, save a plan, and open the confirmation page.
 
     Args:
@@ -63,7 +73,7 @@ def open_confirmation(page: Any) -> None:
     page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # The confirmation page must open.
 
 
-def capture_of(page: Any, site: str) -> str:
+def capture_of(page: Page, site: str) -> str:
     """Return the capture identifier that the row of one site names.
 
     Args:
@@ -73,7 +83,7 @@ def capture_of(page: Any, site: str) -> str:
     return page.get_by_test_id(CAPTURE_PREFIX + site).inner_text().strip()  # The link text is the identifier.
 
 
-def is_precheck_start(request: Any) -> bool:
+def is_precheck_start(request: Request) -> bool:
     """Return True for the request that starts one multi-site pre-check capture.
 
     Args:
@@ -86,7 +96,7 @@ class TestMultiSitePrecheckGate:
     """Take each missing pre-check, start the operation, and read the stored captures."""
 
     def test_the_gate_locks_the_start_until_each_site_holds_a_pre_check(
-        self, firmware_operator_page: Any, tmp_path: Path
+        self, firmware_operator_page: Page, tmp_path: Path
     ) -> None:
         """The operator takes the missing pre-check, retakes both, and starts the upgrade."""
         page = firmware_operator_page  # This path starts firmware, so it needs a reachable operator address.
@@ -96,9 +106,11 @@ class TestMultiSitePrecheckGate:
         first_capture = capture_of(page, SITE_ID)  # The capture that the card adopted for the first site.
         owned_message = f"The card adopted a capture that a run owns: {first_capture}"  # Name the wrong capture.
         assert first_capture not in RUN_OWNED_CAPTURE_IDS, owned_message
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-tier-{SITE_ID}")).to_have_text("2")
         second_row = page.get_by_test_id(f"org-upgrade-precheck-row-{SECOND_SITE_ID}")  # The second site row.
         sync_api.expect(second_row).to_have_attribute("data-ready", "false")  # No seeded capture exists.
         sync_api.expect(page.get_by_test_id(CAPTURE_PREFIX + SECOND_SITE_ID)).to_have_text("None saved")
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-tier-{SECOND_SITE_ID}")).to_have_text("-")
         sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-state-{SECOND_SITE_ID}")).to_have_text("missing")
         sync_api.expect(page.get_by_test_id("org-upgrade-precheck-hint")).to_be_visible()  # The page names the rule.
         sync_api.expect(page.get_by_test_id("org-upgrade-confirmation")).to_be_disabled()  # No word before a capture.
@@ -114,6 +126,8 @@ class TestMultiSitePrecheckGate:
         OrgPrecheckSteps.wait_until_ready(page)  # The card loads the page again after the capture verifies.
         sync_api.expect(second_row).to_have_attribute("data-ready", "true")  # The server stored the capture.
         sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-state-{SECOND_SITE_ID}")).to_have_text("verified")
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-tier-{SECOND_SITE_ID}")).to_have_text(CHOSEN_TIER)
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-tier-{SITE_ID}")).to_have_text("2")
         assert page.get_by_test_id("org-upgrade-precheck-hint").count() == 0  # The rule holds, so no hint shows.
         sync_api.expect(page.get_by_test_id("org-upgrade-precheck-missing")).to_be_disabled()  # Nothing is missing.
         sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # The word is still missing.
@@ -127,6 +141,8 @@ class TestMultiSitePrecheckGate:
         OrgPrecheckSteps.take_all(page)  # The card captures both sites again and loads the page again.
         after = {site: capture_of(page, site) for site in SITE_IDS}  # The captures after the retake.
         assert all(after[site] != before[site] for site in SITE_IDS), f"The retake kept a capture: {after}"
+        for site in SITE_IDS:
+            sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-tier-{site}")).to_have_text("2")
         page.screenshot(path=str(tmp_path / "precheck-03-retaken.png"), full_page=True)
 
         page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # The operator confirms the write.
