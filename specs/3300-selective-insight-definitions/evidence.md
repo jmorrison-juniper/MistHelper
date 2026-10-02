@@ -2,6 +2,7 @@
 
 The [publication evidence](publication.md) records the later sole publication grant and exact current-base proof.
 This document retains the earlier local-only preparation record.
+The publication record also retains the later authorized six-page generator repair and additional checked-push condition.
 
 ## Scope and environment
 

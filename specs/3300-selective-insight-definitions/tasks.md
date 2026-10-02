@@ -455,6 +455,7 @@ Historical preparation records remain intact.
   - **Dependencies**: T020.
   - Preserve all 23 template items, exact commands, results, and conditional capability limits.
   - Post the single-owner protocol in PR comments.
+  - The later six-page grant authorizes one additional new commit and checked push after the first run completes.
 - [ ] T022 Verify fresh exact-head quality, final title, applicable STE, CodeQL analysis, separate required CodeQL, and all 15 strict contexts.
   - **Dependencies**: T021.
   - Preserve application bindings, the authorized current base, and the complete checked source.
@@ -467,6 +468,14 @@ Historical preparation records remain intact.
   - Use only this own worktree and own environment.
   - Never edit the main checkout or push after squash.
   - Pause after the receipt. The parent alone releases the next issue.
+- [x] T025 Regenerate exactly six newly authorized pages with both existing generators and prove all 18 byte-idempotent outputs. (delivered: specs/3300-selective-insight-definitions/publication.md)
+  - The public claim names the six paths before generation.
+  - The actual six-of-16 red decision becomes a complete 16-page, 293-menu green decision.
+  - Preserve menu 54's full 28-definition coverage and every other menu identity, category, source body, and unowned page.
+  - Inspect all generated changes and repeat local added-page links, diagrams, STE, source tests, configured gates, and input preflight.
+  - Create one new unamended commit only after the first run completes.
+  - The sole additional checked push requires the unchanged authorized base, exact ownership/head lease, and clean committed ratchet.
+  - All final checks must be fresh on the additional head before T022 through T024.
 
 ### Red caller and timing selectors
 
