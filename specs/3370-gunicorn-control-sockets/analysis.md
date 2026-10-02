@@ -72,3 +72,28 @@ No unresolved implementation defect remains in the local repair.
 Publication still requires the parent's verified-main release after issue #3215.
 The proof starts fake applications in an isolated image.
 It does not start the complete production entrypoint or authorize a production restart.
+
+## Local Refresh Review
+
+The authorized refresh base is `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`.
+The original `a542f9aae7568ac3d040da81557e2f5eabcaa23e` remains in a local preservation tag.
+The rebased repair still changes only its ten reserved files.
+The runtime difference remains two socket options and two comments.
+The accepted output-default cleanup remains intact.
+
+The repeated suite passed 293 cases, including all 22 required socket cases.
+The additional 141 cases prove the current container output-default contracts.
+The native image proof passed four SIGHUP events under UID 1000.
+Both exact sockets retained their correct master identities and `0600` permissions.
+Cleanup removed all owned masters, workers, sockets, containers, volumes, networks, and the image tag.
+
+The current preflight validates six inputs and three guide procedures.
+The full test-quality ratchet reports zero new findings across 1007 discovered files.
+It retains 725 accepted findings and 48 configured exclusions.
+The full Ruff, Black, configured mypy, and configured Bandit checks pass.
+The new helper also passes the direct checks outside the test exclusions.
+
+All evidence applies only to the immutable local refresh boundary.
+The local-only commit comparison is not a fresh remote-base publication check.
+No workflow, pull request, merge, deployment, or actual-main delivery result exists for this refresh.
+The parent must grant publication after the actual verified issue #3215 result.

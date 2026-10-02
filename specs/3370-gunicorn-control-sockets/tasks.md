@@ -33,6 +33,14 @@ T008 can run after T006 without changing the test implementation.
 T009 requires T007 and T008.
 T010 and T011 require T009.
 
+## Local Refresh on 2026-10-02
+
+- [x] T012 Preserve the original commit and rebase onto the authorized `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`. (delivered: `specs/3370-gunicorn-control-sockets/implementation.md`)
+- [x] T013 Repeat all 22 socket cases and the 293-case current regression scope. (delivered: `specs/3370-gunicorn-control-sockets/implementation.md`)
+- [x] T014 Repeat the isolated native image proof and verify complete cleanup. (delivered: `specs/3370-gunicorn-control-sockets/analysis.md`)
+- [x] T015 Run the current gates and prepare the complete offline template. (delivered: `specs/3370-gunicorn-control-sockets/implementation.md`)
+- [x] T016 Record the complete local-only refresh evidence and its publication boundary. (delivered: `specs/3370-gunicorn-control-sockets/implementation.md`)
+
 ## Publication Boundary
 
 Publication is not a local implementation task.
