@@ -134,6 +134,31 @@ def test_a_quiet_state_with_no_mismatch_needs_no_retry(state: str) -> None:
     assert OrgRetrySelection.needs_retry({"state": state, "version_outcome": "version_mismatch"}) is True
 
 
+@pytest.mark.parametrize("state", ["rebooting", "upgrading", "downloading"])
+def test_an_active_write_state_never_needs_a_retry(state: str) -> None:
+    """A stale version mismatch must not offer a second write while the first write stays active."""
+    row = {"state": state, "version_outcome": "version_mismatch"}  # The running version stays old during the write.
+    assert OrgRetrySelection.needs_retry(row) is False  # A second write can damage an active firmware operation.
+
+
+def test_cancel_evidence_holds_a_device_until_a_later_state_settles() -> None:
+    """A cancellation writing list blocks the retry until a later cloud read shows a settled device state."""
+    operation = settled_record()  # Start with the gateway as a normal settled mismatch.
+    gateway = operation["children"][1]  # The gateway child owns the mismatched device.
+    gateway["status_data"] = {}  # No later cloud list proves that the device settled after the cancellation.
+    gateway["cancellation"] = {"status": "cancelled", "already_writing": [GATEWAY]}  # The cancel saw an active write.
+    held = OrgRetrySelection.plan(operation)  # Build the selection while the cancellation evidence stays current.
+    assert isinstance(held, OrgRetryPlan)  # The refused switch still gives the operator one safe retry device.
+    assert [device["mac"] for device in held.held_back] == [GATEWAY]  # The gateway stays out of the new plan.
+    assert [device["mac"] for device in held.devices] == [SWITCH]  # The independent refused switch stays retryable.
+
+    gateway["status_data"] = {"targets": {"failed": [GATEWAY]}}  # A later cloud read now proves a settled failure.
+    settled = OrgRetrySelection.plan(operation)  # Build the selection again from the durable current state.
+    assert isinstance(settled, OrgRetryPlan)  # Both failed devices now belong to a safe retry plan.
+    assert settled.held_back == ()  # The later settled state releases the cancellation hold.
+    assert sorted(device["mac"] for device in settled.devices) == [GATEWAY, SWITCH]  # Both failures can retry.
+
+
 def test_the_prefill_narrows_the_families_and_drops_the_old_start() -> None:
     """The retry form keeps the earlier choices, narrows the families, and drops the start and the identity."""
     plan = OrgRetrySelection.plan(settled_record())
@@ -309,7 +334,14 @@ def test_the_controls_show_the_last_reconciliation_evidence() -> None:
     controls = OrgControlsView.build(checked, None)
     assert controls["reconcile"]["children"][0]["evidence"] == "The target version runs on 0 of 1 device."
     assert controls["reconcile"]["children"][1]["evidence"] == ""
-    assert controls["retry"] == {"available": False, "count": 0, "devices": []}
+    assert controls["retry"] == {  # No retry device and no safety hold exists for this reconciliation result.
+        "visible": False,
+        "available": False,
+        "count": 0,
+        "devices": [],
+        "held_count": 0,
+        "held_back": [],
+    }
 
 
 def test_the_signature_follows_the_controls_only() -> None:
