@@ -2128,6 +2128,7 @@ def _aggregate_job_page(upgrade_id: str, operation: Mapping[str, Any]) -> str:
         upgrade_id=upgrade_id,
         site_count=len(operation.get("site_ids", [])),
         status=summary,
+        cancel_status=OrgCancelText,  # Issue #3538: render plain labels from the shared status table.
         poll_interval_seconds=current_app.config.get("POLL_INTERVAL_SECONDS", 30),
     )
 
@@ -2163,6 +2164,7 @@ def _org_progress_page(upgrade_id: str, summary: Mapping[str, Any]) -> str:
         upgrade_id=upgrade_id,
         site_count=site_count,
         status=summary,
+        cancel_status=OrgCancelText,  # Issue #3538: render plain labels from the shared status table.
         poll_interval_seconds=current_app.config.get("POLL_INTERVAL_SECONDS", 30),
     )
 

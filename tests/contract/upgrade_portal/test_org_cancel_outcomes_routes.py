@@ -247,9 +247,18 @@ def items(page: str, test_id: str) -> list[str]:
 
 def text_of(page: str, test_id: str) -> str:
     """Return the text of one element of the page."""
-    match = re.search(rf'data-testid="{re.escape(test_id)}">([^<]*)<', page)  # The element text.
+    match = re.search(rf'data-testid="{re.escape(test_id)}"[^>]*>([^<]*)<', page)  # The element text.
     assert match is not None, f"The page shows no element with the identifier {test_id}."
     return match.group(1).strip()  # The text without the indentation.
+
+
+def attribute_of(page: str, test_id: str, name: str) -> str:
+    """Return one attribute of an element with a test identifier."""
+    match = re.search(rf'<[a-z]+[^>]*data-testid="{re.escape(test_id)}"[^>]*>', page)  # The opening tag.
+    assert match is not None, f"The page shows no element with the identifier {test_id}."
+    value = re.search(rf'{re.escape(name)}="([^"]*)"', match.group(0))  # The requested attribute.
+    assert value is not None, f"The element {test_id} has no {name} attribute."
+    return value.group(1)  # The stored attribute value.
 
 
 def panel_of(page: str) -> str:
@@ -282,7 +291,9 @@ def test_the_cancel_sorts_each_child_job_into_three_lists(harness: CancelHarness
     assert text_of(page, f"org-cancel-outcome-message-{switch_id}") == SWITCH_TEXT  # The exact sentence.
     assert items(page, f"org-cancel-outcome-writing-{gateway_id}") == ["No device writes firmware."]
     assert text_of(page, f"org-cancel-outcome-note-{gateway_id}") == NEVER_STARTED_NOTE  # No cloud job exists.
-    assert text_of(page, f"org-cancel-outcome-status-{gateway_id}") == "unavailable"  # The cancel had no job.
+    assert text_of(page, f"org-cancel-outcome-status-{gateway_id}") == "Not possible"  # The cancel had no job.
+    status_id = f"org-cancel-outcome-status-{gateway_id}"  # The status element keeps the raw value.
+    assert attribute_of(page, status_id, "data-cancel-status") == "unavailable"  # Keep the raw status for tests.
     assert panel_of(page_of(harness)) == panel_of(page)  # A reload shows the same stored lists.
 
 
@@ -294,7 +305,7 @@ def test_the_json_answer_and_the_poll_carry_the_same_rows(harness: CancelHarness
     ap_id, switch_id, gateway_id = (child_id(harness, family) for family in ("ap", "switch", "gateway"))
     assert answer["cancel_outcomes"] == poll["cancel_outcomes"]  # One rule builds both answers.
     assert [row["child_id"] for row in poll["cancel_outcomes"]] == [ap_id, switch_id, gateway_id]  # Plan order.
-    signature = f"cancel={ap_id}:requested,{switch_id}:requested,{gateway_id}:unavailable"  # Each status.
+    signature = f"cancel={ap_id}:requested,{switch_id}:requested,{gateway_id}:unavailable"  # Each raw status.
     assert poll["controls"]["signature"].endswith(signature)  # A second tab loads the page again.
 
 
@@ -326,15 +337,15 @@ def test_an_ended_child_job_gets_no_cancel_and_shows_no_list(harness: CancelHarn
     page = page_of(harness)  # The progress page after the cancel.
     poll = harness.client.get(f"/api/org-upgrades/{harness.operation_id}").get_json()  # The status poll.
     assert (answer.status_code, harness.org.cancels) == (303, [])  # The completed job got no cancel request.
-    assert text_of(page, f"org-cancel-outcome-status-{ap_id}") == "already_ended"  # The word of the result.
+    assert text_of(page, f"org-cancel-outcome-status-{ap_id}") == "Not sent"  # The plain label of the result.
     assert text_of(page, f"org-cancel-outcome-message-{ap_id}") == ENDED_MESSAGE  # The sentence of the result.
     assert text_of(page, f"org-cancel-outcome-note-{ap_id}") == ENDED_NOTE  # The note explains the missing lists.
     assert f'data-testid="org-cancel-outcome-cancelled-{ap_id}"' not in page  # The panel hides the three lists.
     ap_section = re.search(rf'data-testid="org-cancel-outcome-{ap_id}".*?</div>', page, re.DOTALL)  # One section.
     assert ap_section and AP_ONE not in ap_section.group(0) and AP_TWO not in ap_section.group(0)  # No device.
-    assert f"<td>Status: already_ended. {ENDED_MESSAGE}</td>" in page  # The Cancellation cell of the site table.
+    assert f"<td>Status: Not sent. {ENDED_MESSAGE}</td>" in page  # The Cancellation cell uses the plain label.
     ap_row = next(row for row in poll["site_upgrades"] if row["child_id"] == ap_id)  # The poll row of the job.
-    assert ap_row["cancellation_text"] == f"Status: already_ended. {ENDED_MESSAGE}"  # The poll prints the same text.
+    assert ap_row["cancellation_text"] == f"Status: Not sent. {ENDED_MESSAGE}"  # The poll prints the same text.
     assert next(row for row in poll["cancel_outcomes"] if row["child_id"] == ap_id)["ended"] is True  # The flag.
     assert items(page, f"org-cancel-outcome-cancelled-{switch_id}") == [SWITCH_ONE]  # The running job stopped.
     assert panel_of(page_of(harness)) == panel_of(page)  # A reload shows the same stored panel.
@@ -348,7 +359,7 @@ def test_a_refused_access_point_cancel_lists_each_access_point_as_writing(harnes
     page = page_of(harness)  # The progress page after the refused cancel.
     assert items(page, f"org-cancel-outcome-cancelled-{ap_id}") == ["The portal canceled no device."]
     assert items(page, f"org-cancel-outcome-writing-{ap_id}") == [AP_ONE, AP_TWO]  # Each one can still write.
-    assert text_of(page, f"org-cancel-outcome-status-{ap_id}") == "failed"  # The request failed.
+    assert text_of(page, f"org-cancel-outcome-status-{ap_id}") == "Failed"  # The request failed.
     assert text_of(page, f"org-cancel-outcome-message-{ap_id}").startswith("The cloud returned HTTP 404.")
 
 

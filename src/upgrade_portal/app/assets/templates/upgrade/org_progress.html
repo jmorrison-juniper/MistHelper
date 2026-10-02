@@ -158,7 +158,7 @@
     {% for outcome in status.cancel_outcomes %}
       <div class="status-panel" data-testid="org-cancel-outcome-{{ outcome.child_id }}">
         <h3 class="status-panel-title">{{ outcome.label }} ({{ outcome.device_family | default('unknown', true) }})</h3>
-        <p><strong>Status:</strong> <span data-testid="org-cancel-outcome-status-{{ outcome.child_id }}">{{ outcome.status }}</span></p>
+        <p><strong>Cancel request:</strong> <span data-testid="org-cancel-outcome-status-{{ outcome.child_id }}" data-cancel-status="{{ outcome.status }}">{{ cancel_status.label(outcome.status) }}</span></p>
         <p class="status-message" data-testid="org-cancel-outcome-message-{{ outcome.child_id }}">{{ outcome.message }}</p>
         {% if outcome.note %}
           <p class="portal-card-note" data-testid="org-cancel-outcome-note-{{ outcome.child_id }}">{{ outcome.note }}</p>
