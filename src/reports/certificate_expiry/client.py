@@ -199,15 +199,9 @@ class CertificateExpiryClient:
         """Read CRL metadata sources for completeness evidence only."""
         payloads: dict[str, Any] = {}  # Keep CRL evidence separate from expiry rows.
         failed_sources: list[str] = []  # Track CRL sources that fail.
-        crl_payload, crl_failure = self._read_single(
-            "getOrgCrlFile", mistapi.api.v1.orgs.crl.getOrgCrlFile
-        )  # Read org CRL evidence.
         nac_payload, nac_failure = self._read_nac_crl_metadata()  # Read NAC CRL metadata through mist_get.
-        payloads["getOrgCrlFile"] = {"available": bool(crl_payload)}  # Store metadata only, never the CRL body.
         payloads["getOrgNacCrl"] = {"available": bool(nac_payload)}  # Store metadata only, never URLs or bodies.
-        failed_sources.extend(
-            [failure for failure in (crl_failure, nac_failure) if failure]
-        )  # Keep failed CRL sources visible.
+        failed_sources.extend([failure for failure in (nac_failure,) if failure])  # Keep NAC CRL failures visible.
         return payloads, failed_sources  # Return metadata evidence and any failures.
 
     def collect_sources(self) -> CertificateSourceReadResult:

@@ -26,6 +26,7 @@ class FakeClient:
     """Fake alert digest client that never uses the network."""
 
     definitions: list[dict[str, Any]] = field(default_factory=lambda: [definition()])  # Default category map.
+    sites: list[dict[str, Any]] = field(default_factory=lambda: [{"id": "site-1", "name": "Lab Site"}])  # Sites.
     alarms: list[dict[str, Any]] = field(default_factory=list)  # Alarm rows returned by search.
     ack_status: int | None = 200  # Bulk acknowledgement status.
     ack_problem: str = ""  # Bulk acknowledgement problem text.
@@ -35,6 +36,10 @@ class FakeClient:
     def list_alarm_definitions(self) -> list[dict[str, Any]]:
         """Return fake alarm definitions."""
         return self.definitions  # Return a direct fake constants response.
+
+    def list_org_sites(self) -> list[dict[str, Any]]:
+        """Return fake organization sites."""
+        return self.sites  # Return a direct fake site list response.
 
     def search_alarms(self, hours: int) -> AlertDigestListResult:
         """Return fake alarm search rows."""
@@ -114,6 +119,18 @@ def test_run_digest_keeps_unknown_category(monkeypatch: Any) -> None:
     writer = FakeWriter()  # Capture output rows.
     operation(client, writer).execute_digest()  # Run the digest path.
     assert writer.digest_groups[0].category == "unknown"  # Confirm unknown category.
+
+
+def test_run_digest_uses_site_name_and_not_reported_ack_state(monkeypatch: Any) -> None:
+    """Menu 280 converts live alarm site ids and absent acked fields into clear output."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    site_id = "cf36153a-97bb-4974-8f8f-e9cc25d64d83"  # Match the live site id shape from issue #3696.
+    live_alarm = alarm(1, site_id=site_id, site=site_id, site_name=None, acked=None)  # Match the live search shape.
+    client = FakeClient(sites=[{"id": site_id, "name": "Morrison House Site"}], alarms=[live_alarm])  # Site map.
+    writer = FakeWriter()  # Capture digest groups without file I/O.
+    assert operation(client, writer).execute_digest() is True  # Run the digest path.
+    assert writer.digest_groups[0].site == "Morrison House Site"  # Verify the CSV and Markdown site value.
+    assert writer.digest_groups[0].acknowledged_state == "not_reported"  # Verify absent acked state wording.
 
 
 def test_writer_creates_csv_request_and_ascii_markdown(tmp_path: Path) -> None:

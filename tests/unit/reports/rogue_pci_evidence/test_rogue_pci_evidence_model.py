@@ -65,6 +65,20 @@ def test_rogue_classification_is_default_for_unknown_on_lan_ap():
     assert evidence["classification"] == CLASS_ROGUE  # Verify the default rogue label.
 
 
+def test_detection_row_converts_epoch_milliseconds_to_utc_iso_text():
+    """Epoch millisecond fields become UTC ISO timestamps."""
+    row = {
+        "site_id": "site-1",
+        "ssid": "Guest",
+        "bssid": "11:22:33:44:55:66",
+        "first_seen": 1_789_249_851_000,
+        "last_seen": 1_789_249_911_000,
+    }  # Match the live rogue evidence timestamp shape.
+    evidence = RoguePciEvidenceModel.detection_row(row, _context())  # Build the evidence row.
+    assert evidence["first_seen"] == "2026-09-12T21:50:51Z"  # Verify first_seen is UTC ISO text.
+    assert evidence["last_seen"] == "2026-09-12T21:51:51Z"  # Verify last_seen is UTC ISO text.
+
+
 def test_detection_off_site_is_counted_in_summary():
     """A site with rogue detection off appears in the summary count."""
     sites = [{"id": "site-1", "name": "HQ"}]  # Define one site for settings output.

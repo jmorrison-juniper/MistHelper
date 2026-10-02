@@ -135,8 +135,8 @@ def test_client_returns_5xx_response_for_operation_handling() -> None:
     assert session.calls == [("/api/v1/orgs/org-1/128routers/register_cmd", None)]
 
 
-def test_operation_prints_before_prompt_and_writes_only_after_yes(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
-    """The operation prints commands first and writes only after a yes answer."""
+def test_operation_prints_and_writes_only_after_yes(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    """The operation prints after the show answer and writes after the write answer."""
     prompts: list[str] = []  # WHY: record prompt order without using stdin.
     FakeClient.response = FakeResponse(200, sample_payload())  # WHY: provide successful command text.
     monkeypatch.setattr(
@@ -146,8 +146,26 @@ def test_operation_prints_before_prompt_and_writes_only_after_yes(monkeypatch: p
     SsrRegistrationCommands.run()  # WHY: execute the full menu handler.
     output = capsys.readouterr().out  # WHY: capture console text and prompt-free read behavior.
     assert output.index("SSR registration commands") < len(output)  # WHY: command text reached the console.
-    assert prompts == ["Write registration commands to data/SsrRegistrationCommands.txt? (y/N): "]
+    assert prompts == [  # WHY: the show consent comes first, and the write consent is a separate gate.
+        "The registration commands hold a sensitive code. Print them to the console? (y/N): ",
+        "Write registration commands to data/SsrRegistrationCommands.txt? (y/N): ",
+    ]
     assert SsrRegistrationCommands.output_path.read_text(encoding="utf-8").count(SECRET_CODE) == 3
+
+
+def test_operation_prints_without_writing_when_only_show_is_approved(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    """The operator can read the code on the console and still refuse the file."""
+    answers = iter(["y", "N"])  # WHY: approve the console print, decline the file write.
+    FakeClient.response = FakeResponse(200, sample_payload())  # WHY: provide successful command text.
+    monkeypatch.setattr(
+        "src.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: next(answers)
+    )
+    SsrRegistrationCommands.run()  # WHY: execute the show-only path.
+    output = capsys.readouterr().out  # WHY: capture the console copy.
+    assert output.count(SECRET_CODE) == 3  # WHY: the console copy is the reason the operation exists.
+    assert not SsrRegistrationCommands.output_path.exists()  # WHY: a declined write answer leaves no file.
 
 
 def test_operation_skips_write_when_answer_is_no(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
@@ -155,8 +173,9 @@ def test_operation_skips_write_when_answer_is_no(monkeypatch: pytest.MonkeyPatch
     FakeClient.response = FakeResponse(200, sample_payload())  # WHY: provide successful command text.
     monkeypatch.setattr("src.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: "N")
     SsrRegistrationCommands.run()  # WHY: execute the declined write path.
-    output = capsys.readouterr().out  # WHY: prove the console still shows the commands.
-    assert SECRET_CODE in output  # WHY: console output is allowed to hold the code.
+    output = capsys.readouterr().out  # WHY: prove the console did not expose the commands.
+    assert SECRET_CODE not in output  # WHY: a declined answer must not expose the registration code.
+    assert "sensitive code" in output  # WHY: footer explains why command text was withheld.
     assert not SsrRegistrationCommands.output_path.exists()  # WHY: no answer other than y may write the file.
 
 

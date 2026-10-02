@@ -37,6 +37,7 @@ VALUE_PEM = "pem"  # Value kind for PEM text.
 VALUE_EPOCH = "epoch"  # Value kind for epoch expiry values.
 VALUE_PENDING_EPOCH = "pending_epoch"  # Value kind for pending certificate epoch values.
 NOTE_UNPARSABLE = "unparsable"  # Required note for values that cannot parse.
+NOTE_DEVICE_STATS_EXPIRY_ONLY = "device stats reports cert_expiry only"  # Explain blank certificate metadata fields.
 
 OUTPUT_COLUMNS = (  # Keep the export column order under one source of truth.
     "org_id",
@@ -322,8 +323,9 @@ class CertificateExpiryNormalizer:
     def _record_from_value(self, source: CertificateSource, owner_name: str, value: Any) -> CertificateExpiryRecord:
         """Return one record from one source value."""
         if source.value_kind == VALUE_EPOCH:  # Device stats report epoch expiry.
+            note = NOTE_DEVICE_STATS_EXPIRY_ONLY if source.source_name == "device_stats" else ""  # Explain blanks.
             return self._record_from_date(
-                source.source_name, source.scope, owner_name, CertificateTimeCalculator.from_epoch(value)
+                source.source_name, source.scope, owner_name, CertificateTimeCalculator.from_epoch(value), note
             )  # Normalize epoch.
         if source.value_kind == VALUE_PENDING_EPOCH:  # Organization certificates can expose pending expiry only.
             return self._record_from_date(

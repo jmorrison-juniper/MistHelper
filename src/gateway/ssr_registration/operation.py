@@ -16,6 +16,9 @@ from src.utils.input_utils import InputUtils  # WHY: use EOF-safe input for the 
 logger = logging.getLogger(__name__)  # WHY: let operators filter operation log records by module.
 
 FILE_NAME = "SsrRegistrationCommands.txt"  # WHY: the assignment requires this exact file name.
+SHOW_PROMPT = (  # WHY: the console copy can land in a redirected stdout file, so the operator approves it first.
+    "The registration commands hold a sensitive code. Print them to the console? (y/N): "
+)
 PROMPT = "Write registration commands to data/SsrRegistrationCommands.txt? (y/N): "  # WHY: protect sensitive text.
 
 
@@ -38,8 +41,11 @@ class SsrRegistrationCommands:
         if not text:  # WHY: an empty body cannot help the operator onboard a router.
             print("No SSR registration commands were returned.")  # WHY: give a clear operator result.
             return  # WHY: no text means no file should be written.
-        SsrRegistrationCommands._print_commands(text)  # WHY: print before asking about the file write.
-        if SsrRegistrationCommands._confirm_write():  # WHY: explicit consent protects the registration code.
+        if not SsrRegistrationCommands._confirm_show():  # WHY: the console copy is as sensitive as the file copy.
+            SsrRegistrationCommands._print_declined_footer()  # WHY: explain why no sensitive code was printed.
+            return  # WHY: an operator who declines the print also gets no file prompt.
+        SsrRegistrationCommands._print_commands(text)  # WHY: print sensitive commands only after consent.
+        if SsrRegistrationCommands._confirm_write():  # WHY: the file write is a second, separate consent.
             SsrRegistrationCommands._write_commands(text)  # WHY: persist the text only after confirmation.
         logger.debug("Menu #288: Finished SSR registration command read")  # WHY: action summary without secrets.
 
@@ -88,6 +94,15 @@ class SsrRegistrationCommands:
         logger.debug("Printed SSR registration commands to the console lines=%d", line_count)  # WHY: summary only.
 
     @staticmethod
+    def _confirm_show() -> bool:
+        """Return whether the operator approved the console print."""
+        logger.info("Prompting for SSR registration command console print approval")  # WHY: action log before prompt.
+        answer = InputUtils.safe_input(SHOW_PROMPT, default_value="N", context="ssr_registration_commands_show")
+        approved = answer.strip().lower() == "y"  # WHY: only y or Y approves the sensitive console print.
+        logger.debug("SSR registration command console print approved=%s", approved)  # WHY: log the decision only.
+        return approved  # WHY: caller uses this guard before printing the code.
+
+    @staticmethod
     def _confirm_write() -> bool:
         """Return whether the operator approved the file write."""
         logger.info("Prompting for SSR registration command file write approval")  # WHY: action log before prompt.
@@ -104,3 +119,9 @@ class SsrRegistrationCommands:
         path.parent.mkdir(parents=True, exist_ok=True)  # WHY: a fresh worktree may not hold a data directory.
         path.write_text(text, encoding="utf-8")  # WHY: persist exact command text after approval.
         logger.debug("Wrote SSR registration commands to %s", path)  # WHY: confirm write without the secret.
+
+    @staticmethod
+    def _print_declined_footer() -> None:
+        """Print the declined sensitive-output footer."""
+        logger.info("SSR registration commands were not printed because write approval was declined")  # WHY: audit.
+        print("Registration commands were not printed or written because they include a sensitive code.")  # WHY.

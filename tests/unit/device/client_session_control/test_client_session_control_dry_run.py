@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field  # WHY: fakes keep test state explicit.
 from typing import Any  # WHY: fake API signature accepts a broad session object.
 
+from src.device.client_session_control import handler  # WHY: monkeypatch the default site prompt path.
 from src.device.client_session_control.handler import ClientSessionControl, HandlerDependencies  # WHY: exercise run().
 
 
@@ -49,3 +50,18 @@ def test_dry_run_prints_preview_and_sends_nothing() -> None:  # WHY: dry run is 
     assert "aabbccddeeff" in preview  # WHY: operator must see the normalized target.
     assert len(fake_audit.rows) == 1  # WHY: dry run must write one audit row.
     assert len(prompts) == 3  # WHY: known site flow prompts only for action, target, and confirmation.
+
+
+def test_default_site_prompt_returns_site_name_from_site_list(monkeypatch: Any) -> None:
+    """Default site selection preserves the name from SiteList.csv."""
+    site_id = "cf36153a-97bb-4974-8f8f-e9cc25d64d83"  # WHY: match the live site id shape.
+    site_row = {"id": site_id, "name": "Morrison House Site"}  # WHY: match the SiteList.csv row shape.
+    monkeypatch.setattr(
+        handler.PromptUtils, "select_site_with_logging", staticmethod(lambda: site_id)
+    )  # WHY: simulate the live selector returning only an id.
+    monkeypatch.setattr(
+        handler.PromptUtils, "_load_site_csv_maps", staticmethod(lambda _csv: ({85: site_row}, {}))
+    )  # WHY: provide the selected site name without file I/O.
+    selected = ClientSessionControl._select_site_from_prompt("session", "org-1")  # WHY: exercise default selector.
+    coerced = ClientSessionControl._coerce_site(selected)  # WHY: use the same normalization as run().
+    assert coerced == (site_id, "Morrison House Site")  # WHY: preview and CSV must show the readable name.

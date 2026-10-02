@@ -120,3 +120,30 @@ def test_client_records_http_5xx_source_failure(monkeypatch) -> None:
     result = client.collect_sources()  # Collect with one server-error source.
     assert "getOrgSettings" in result.failed_sources  # Verify 5xx failed-source collection.
     assert result.payloads["getOrgSettings"] == []  # Verify 5xx data is not exported.
+
+
+def test_client_does_not_read_binary_org_crl_file(monkeypatch) -> None:
+    """The client omits the binary CRL source that the SDK cannot JSON decode."""
+    session = SimpleNamespace(mist_get=Mock(return_value=SimpleNamespace(data=[])))  # Use a non-network fake session.
+    client = CertificateExpiryClient(session, "org-1", page_limit=1000)  # Build the client under test.
+    org_crl = Mock(side_effect=AssertionError("binary CRL source must not be read"))  # Fail if the SDK source runs.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.stats, "listOrgDevicesStats", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch device stats.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.setting, "getOrgSettings", Mock(return_value=SimpleNamespace(data={"device_cert": {}}))
+    )  # Patch settings.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.cert, "listOrgCertificates", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch certificates.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.ssos, "listOrgSsos", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch SSO reads.
+    monkeypatch.setattr(
+        mistapi.api.v1.orgs.pskportals, "listOrgPskPortals", Mock(return_value=SimpleNamespace(data=[]))
+    )  # Patch PSK portals.
+    monkeypatch.setattr(mistapi.api.v1.orgs.crl, "getOrgCrlFile", org_crl)  # Guard the binary SDK source.
+    result = client.collect_sources()  # Collect sources through the live client logic.
+    org_crl.assert_not_called()  # Verify the binary DER endpoint is not read through the JSON SDK path.
+    assert result.payloads["getOrgNacCrl"] == {"available": False}  # Verify NAC CRL metadata still reports.
+    assert "getOrgCrlFile" not in result.failed_sources  # Verify the dropped source cannot create a false failure.

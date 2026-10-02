@@ -45,3 +45,12 @@ def test_absent_api_token_expiration_returns_review() -> None:
     result = ApiTokenExpirationCheck().run(source_data)  # Evaluate token expiration posture.
     assert result.verdict == "review"  # Missing token evidence requires review.
     assert "absent" in result.reason.lower()  # The reason must state that evidence is absent.
+
+
+def test_api_token_review_uses_count_summary_not_raw_records() -> None:
+    source_data = ApiPostureCases.token_with_absent_expiration()  # Use live-shaped token data with no expiration.
+    result = ApiTokenExpirationCheck().run(source_data)  # Evaluate token expiration posture.
+    assert result.verdict == "review"  # Missing token expiration evidence requires review.
+    assert result.check_id == "ORGSEC-API-002"  # Keep the stable check identifier unchanged.
+    assert result.current_value == "1 token records checked, 1 missing expiration values"  # Export counts only.
+    assert "raw-secret" not in result.current_value  # The raw token record must not reach the CSV cell.

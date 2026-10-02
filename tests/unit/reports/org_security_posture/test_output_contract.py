@@ -15,11 +15,11 @@ def test_runner_exports_required_columns_and_minimum_rows() -> None:
         assert kwargs["output_format"] == "csv"  # The branch stays CSV-only until integration applies the PK.
         assert kwargs["api_function_name"] == "orgSecurityPostureChecklist"  # Use the registered primary key strategy.
         assert kwargs["fieldnames"] == [
-            "check id",
+            "check_id",
             "area",
-            "setting path",
-            "current value",
-            "recommended value",
+            "setting_path",
+            "current_value",
+            "recommended_value",
             "verdict",
             "reason",
         ]
@@ -29,11 +29,11 @@ def test_runner_exports_required_columns_and_minimum_rows() -> None:
     OrgSecurityPostureChecklist.run(test_mode=True, source_data=source_data, write_fn=write_fn)  # Run without network.
     assert len(captured_rows) >= 12  # The output must include at least twelve checks.
     assert set(captured_rows[0]) == {
-        "check id",
+        "check_id",
         "area",
-        "setting path",
-        "current value",
-        "recommended value",
+        "setting_path",
+        "current_value",
+        "recommended_value",
         "verdict",
         "reason",
     }

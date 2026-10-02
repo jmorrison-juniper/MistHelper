@@ -109,7 +109,16 @@ class MxEdgeLifecycleOperation:
         if handler is None:  # WHY: invalid choice must not guess a destructive action.
             logger.error("Invalid Mist Edge lifecycle menu choice: %s", choice[:20])  # WHY: clear refusal.
             return  # WHY: no request selected.
-        handler()  # WHY: execute one selected step.
+        try:
+            handler()  # WHY: execute one selected step.
+        except ValueError as error:
+            self._print_input_error(error)  # WHY: replace validation tracebacks with one safe sentence.
+
+    @staticmethod
+    def _print_input_error(error: ValueError) -> None:
+        """Print a concise validation error and stop before any request."""
+        logger.error("Mist Edge lifecycle input was invalid: %s", error)  # WHY: log validation failure without trace.
+        print(f"No Mist request was sent because {error}.")  # WHY: one sentence replaces an operator traceback.
 
     def _handlers(self) -> dict[str, Any]:
         """Return sub-menu handlers by numeric choice."""
@@ -274,7 +283,11 @@ class MxEdgeLifecycleOperation:
     def _ask_ids(self, prompt: str, context: str) -> list[str]:
         """Read a comma-separated identifier list."""
         answer = self._ask(prompt, context)  # WHY: shared prompt helper.
-        return [part.strip() for part in answer.split(",") if part.strip()]  # WHY: model validates non-empty list.
+        values = [part.strip() for part in answer.split(",") if part.strip()]  # WHY: remove accidental blanks.
+        if not values:  # WHY: stop before later prompts when targets are absent.
+            field_name = "ports" if "ports" in context else "mxedge_ids"  # WHY: name the field that failed.
+            raise ValueError(f"{field_name} must contain at least one value")  # WHY: match model validation wording.
+        return values  # WHY: request builders still validate the cleaned identifiers.
 
     def _ask_dry_run(self) -> bool:
         """Return True when the operator chooses dry-run."""

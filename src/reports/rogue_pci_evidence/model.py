@@ -74,6 +74,17 @@ class RoguePciEvidenceModel:
         return text.replace(":", "").replace("-", "").replace(".", "")  # Remove common separators for matching.
 
     @classmethod
+    def normalize_time(cls, value: Any) -> str:
+        """Return a UTC ISO timestamp for epoch values."""
+        try:
+            epoch_value = float(value)  # Parse seconds or milliseconds from the Mist source.
+        except (TypeError, ValueError):
+            return cls.normalize_text(value)  # Preserve non-epoch text without raising during export.
+        if epoch_value > 10_000_000_000:  # Mist rogue rows can use epoch milliseconds.
+            epoch_value = epoch_value / 1000.0  # Convert milliseconds to seconds for datetime.
+        return datetime.fromtimestamp(epoch_value, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")  # Export UTC ISO text.
+
+    @classmethod
     def build_context(
         cls, org_id: str, wlans: list[dict[str, Any]], sites: list[dict[str, Any]], rows: list[dict[str, Any]]
     ) -> EvidenceContext:
@@ -115,8 +126,8 @@ class RoguePciEvidenceModel:
             "channel": cls.normalize_text(row.get("channel")),
             "band": cls.normalize_text(row.get("band")),
             "rssi": cls.normalize_text(row.get("rssi", row.get("avg_rssi"))),
-            "first_seen": cls.normalize_text(row.get("first_seen", row.get("timestamp"))),
-            "last_seen": cls.normalize_text(row.get("last_seen", row.get("timestamp"))),
+            "first_seen": cls.normalize_time(row.get("first_seen", row.get("timestamp"))),
+            "last_seen": cls.normalize_time(row.get("last_seen", row.get("timestamp"))),
             "client_count": int(row.get("num_clients") or row.get("client_count") or 0),
             "impersonated_org_ssid": impersonated_ssid,
         }

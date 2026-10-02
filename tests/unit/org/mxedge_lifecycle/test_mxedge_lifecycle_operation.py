@@ -180,6 +180,19 @@ def test_mxedge_lifecycle_prompted_assign_sends_after_confirmation(
     assert _read_rows(path)[0]["status"] == "sent"  # WHY: CSV receives one sent row.
 
 
+def test_mxedge_lifecycle_empty_assign_ids_prints_one_sentence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Empty assign targets print one sentence and send no request."""
+    client = FakeClient()  # WHY: record whether any request is sent.
+    _, path = _run_prompted_menu(monkeypatch, tmp_path, ["2", ""], client)  # WHY: reproduce empty live answer.
+    output = capsys.readouterr().out  # WHY: inspect the operator-facing validation message.
+    assert client.calls == []  # WHY: empty IDs must stop before any API request.
+    assert not path.exists()  # WHY: no request object means no lifecycle evidence row.
+    assert "No Mist request was sent because mxedge_ids must contain at least one value." in output  # WHY.
+    assert "Traceback" not in output  # WHY: validation must not expose a Python traceback.
+
+
 def test_mxedge_lifecycle_prompted_unassign_sends_after_confirmation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

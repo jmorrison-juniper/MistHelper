@@ -7,7 +7,9 @@ from datetime import date  # Build deterministic report contexts.
 
 from src.reports.subscription_expiry.client import JsiAccountNotLinkedError
 from src.reports.subscription_expiry.model import (
+    CONTRACT_RECORD_ABSENT_NOTE,
     MISSING_VALUE,
+    STATE_UNSUPPORTED,
     JsiContractSource,
     LicenseSummarySource,
     LicenseUsageSource,
@@ -93,5 +95,8 @@ def test_report_continues_with_empty_contracts_for_no_linked_jsi_account(capsys:
     captured = capsys.readouterr().out  # Capture the operator message and summary.
     assert "No Juniper account is linked" in captured  # The operator sees the clear JSI condition.
     assert exporter.calls[1][1] == CONTRACT_FILENAME  # The contract export still runs.
-    assert exporter.calls[1][0][0]["serial"] == MISSING_VALUE  # DataExporter gets a header-safe placeholder row.
+    contract_row = exporter.calls[1][0][0]  # Read the empty-contract placeholder row from the export payload.
+    assert contract_row["serial"] == MISSING_VALUE  # Identity stays visibly absent when JSI returns no records.
+    assert contract_row["contract_state"] == STATE_UNSUPPORTED  # The row states that contract support is absent.
+    assert contract_row["note"] == CONTRACT_RECORD_ABSENT_NOTE  # The row explains the missing JSI contract record.
     assert "Expired: 0" in captured  # Empty contract rows produce zero bucket counts.

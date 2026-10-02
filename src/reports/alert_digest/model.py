@@ -56,7 +56,12 @@ class AlarmRecord:
     acked_time: float | None  # Preserve acknowledgement time when present.
 
     @classmethod
-    def from_raw(cls, row: Mapping[str, Any], definitions: Mapping[str, AlarmDefinition]) -> AlarmRecord:
+    def from_raw(
+        cls,
+        row: Mapping[str, Any],
+        definitions: Mapping[str, AlarmDefinition],
+        site_names: Mapping[str, str] | None = None,
+    ) -> AlarmRecord:
         """Create one alarm record from a raw Mist alarm row."""
         logger.info("Normalizing one alarm row")  # Log before the transform.
         alarm_type = AlertDigestFieldReader.text(row.get("type"), UNKNOWN_TEXT)  # Use type as the grouping key.
@@ -65,7 +70,7 @@ class AlarmRecord:
             alarm_id=AlertDigestFieldReader.text(row.get("id")),  # Preserve the ID for acknowledgement.
             alarm_type=alarm_type,  # Store the normalized type key.
             site_id=AlertDigestFieldReader.text(row.get("site_id")),  # Keep a fallback site value.
-            site_name=AlertDigestFieldReader.site(row),  # Prefer a site name when present.
+            site_name=AlertDigestFieldReader.site(row, site_names or {}),  # Prefer a site name when present.
             severity=AlertDigestFieldReader.severity(definition.severity if definition else row.get("severity")),
             category=definition.group if definition else UNKNOWN_TEXT,  # Definitions own the category contract.
             count=AlertDigestFieldReader.integer(row.get("count"), 1),  # Missing count means one recurrence.
@@ -195,10 +200,14 @@ class AlertDigestFieldReader:
         return labels.get(raw, "Informational" if raw in {"info", "informational"} else cls.text(value, UNKNOWN_TEXT))
 
     @classmethod
-    def site(cls, row: Mapping[str, Any]) -> str:
+    def site(cls, row: Mapping[str, Any], site_names: Mapping[str, str] | None = None) -> str:
         """Return the best site display value from an alarm row."""
-        site_name = cls.text(row.get("site_name") or row.get("site"))  # Prefer a human-readable site name.
-        return site_name or cls.text(row.get("site_id"), UNKNOWN_TEXT)  # Fall back to the site id or unknown.
+        site_label = cls.text(row.get("site_name"))  # Prefer the explicit human-readable site name.
+        site_field = cls.text(row.get("site"))  # Read the generic site field because some APIs send it.
+        site_id = cls.text(row.get("site_id"))  # Read the source site identifier for the lookup.
+        mapped_name = cls.text((site_names or {}).get(site_id))  # Read the organization site name when available.
+        field_name = "" if site_field == site_id else site_field  # Do not treat a repeated site id as a name.
+        return site_label or mapped_name or field_name or cls.text(site_id, UNKNOWN_TEXT)  # Fall back safely.
 
     @classmethod
     def sample(cls, row: Mapping[str, Any]) -> str:
@@ -259,13 +268,27 @@ class AlertDigestModel:
 
     @staticmethod
     def records_from_rows(
-        rows: Iterable[Mapping[str, Any]], definitions: Mapping[str, AlarmDefinition]
+        rows: Iterable[Mapping[str, Any]],
+        definitions: Mapping[str, AlarmDefinition],
+        site_names: Mapping[str, str] | None = None,
     ) -> list[AlarmRecord]:
         """Return normalized alarm records from raw Mist rows."""
         logger.info("Normalizing alarm rows")  # Log before the transform.
-        records = [AlarmRecord.from_raw(row, definitions) for row in rows]  # Normalize each row.
+        records = [AlarmRecord.from_raw(row, definitions, site_names) for row in rows]  # Normalize each row.
         logger.debug("Normalized %d alarm rows", len(records))  # Log result count.
         return records  # Return typed alarm records.
+
+    @staticmethod
+    def site_names_by_id(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+        """Return organization site names keyed by site id."""
+        logger.info("Building the alert digest site-name map")  # Log before the transform.
+        site_names = {
+            AlertDigestFieldReader.text(row.get("id")): AlertDigestFieldReader.text(row.get("name"))
+            for row in rows
+            if AlertDigestFieldReader.text(row.get("id")) and AlertDigestFieldReader.text(row.get("name"))
+        }  # Keep only complete site id and name pairs.
+        logger.debug("Built %d alert digest site-name entries", len(site_names))  # Log map size.
+        return site_names  # Return the site-name lookup.
 
     @classmethod
     def group_records(cls, records: Iterable[AlarmRecord]) -> list[AlarmGroup]:
@@ -346,4 +369,4 @@ class AlertDigestModel:
             return "acknowledged"  # State is complete.
         if states == {False}:  # Every row is unacknowledged.
             return "unacknowledged"  # State is actionable.
-        return "unknown" if states == {None} else "mixed"  # Mixed true, false, or unknown states need review.
+        return "not_reported" if states == {None} else "mixed"  # Missing acked data means the API did not report it.
