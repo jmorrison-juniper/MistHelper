@@ -72,17 +72,21 @@ session. 256 KiB for each paste. 16 KiB for each input request.
 
 | Principle | Result | Evidence |
 | - | - | - |
-| I. Five-Item Rule | PASS | Each new folder holds 5 entries or fewer. Each new class keeps 5 public methods or fewer. The design moves code out of the manager. |
+| I. Five-Item Rule | PASS | Each new folder holds 5 entries or fewer. Each new class keeps 5 public methods or fewer. The design moves code out of the manager. The branch adds no child to a noncompliant code folder. The tests moved into small packages in commit 40bc8e6e. See Complexity Tracking for the touched debt. |
 | II. Class-Based Architecture | PASS | Each feature lives in a named class. The plan adds no wrapper function and no legacy shim. The old line input route goes away. |
 | III. Safety-First | PASS | The shell lock and the typed device name stay. The client refuses a shell address without TLS or outside the cloud domain. Each input route checks the session, the size, and the rate. |
-| IV. Full Deployment Pipeline | PASS | Every quality gate runs. The pull request adds a release note fragment. The container update follows the merge. |
-| V. Observability | PASS | Each connection logs the host, the state, and the byte counts. A test scans the logs for secrets and keys. |
+| IV. Full Deployment Pipeline | PASS | Every quality gate runs. The pull request adds a release note fragment. Tasks T057 to T061 hold the 12 pipeline steps, which include the container update after the merge. The commit subject uses Conventional Commits, because the title guard requires it. Issue #3720 records the conflict with step 4. |
+| V. Observability | PARTIAL | Each connection logs the host, the state, and the byte counts. A test scans the logs for secrets and keys. The new modules use standard logging with fixed templates and `%s` arguments, as the rest of the package does. Issue #3721 decides the structlog move for the package. |
 | VI. Inline Comments | PASS | Each executable line gets an inline comment. |
 | VII. Action Logging | PASS | Each action logs before and after. Logs for keys and output hold byte counts only. |
+| Technology: mistapi sole interface | EXCEPTION | REST requests use mistapi. The WebSocket transport is own code, because the SDK WebSocket paths lose output (#3659 and #3660). The client reads 4 private session attributes, and a contract test pins them. Issue #3718 holds the amendment decision and the return path to the SDK. |
 | Security: Fix Over Suppress | PASS | The plan adds no suppression comment. |
 | SpecKit Escalation | PASS | This feature uses the full SpecKit flow. |
 
 Re-check after the Phase 1 design: PASS. The data model and the contracts keep each rule.
+
+Re-check after the SpecKit analysis on 2026-10-02: the five-item findings are fixed. The mistapi
+exception and the logging style are recorded above, and each one has an issue.
 
 ## Project Structure
 
@@ -133,8 +137,8 @@ src/websocket_streams/live/
 |   `-- gateway.py          (TerminalGateway)
 `-- transport/              (new package)
     |-- __init__.py
-    |-- endpoint.py         (MistStreamEndpoint and ShellAddressPolicy)
-    |-- frames.py           (FrameDecoder)
+    |-- endpoint.py         (MistStreamEndpoint, ShellAddressPolicy, and ConnectFailure)
+    |-- frames.py           (FrameReader and FrameDecoder)
     |-- stream_client.py    (StreamClient)
     `-- shell_client.py     (ShellClient)
 
@@ -145,22 +149,27 @@ src/websocket_streams/web/
 |   |-- websockets.js       (changed: hands shell and screen sessions to the terminal)
 |   |-- websockets_terminal.js   (new: TerminalController and its helper classes)
 |   |-- websockets.css      (changed: terminal panel styles)
-|   `-- vendor/xterm/       (new: xterm.min.js, addon-fit.min.js, xterm.css, LICENSE)
+|   `-- vendor/xterm/       (new: xterm.min.js, addon-fit.min.js, xterm.css, LICENSE, README.md)
 `-- templates/
     `-- websockets_page.html     (changed: terminal panel, menu, and dialogs)
 
 tests/
-|-- support/fake_mist_cloud/    (new: server.py, devices.py, api.py)
 |-- unit/websocket_streams/live/
 |   |-- transport/              (new)
+|   |   |-- test_ws_endpoint.py and test_ws_frames.py
+|   |   |-- clients/            (new: the stream client and shell client tests)
+|   |   `-- fake_mist_cloud/    (new: server.py, devices.py, api.py)
 |   |-- terminal/               (new)
 |   `-- runners/utility/        (new, replaces test_ws_utility_runner.py)
 |-- contract/websocket_streams/
 |   |-- test_ws_utility_trigger_parity.py   (new)
 |   `-- test_ws_sdk_contract.py             (changed: pins the private session attributes)
-`-- e2e/
-    |-- test_websockets_page.py             (changed: the shell card uses the terminal)
-    `-- test_websockets_terminal.py         (new: journeys J1 to J21)
+`-- e2e/websockets_tab/                     (new package)
+    |-- __init__.py
+    |-- terminal_support.py                 (new: the fake portal harness and the helpers)
+    |-- test_websockets_page.py             (moved and changed: the shell card uses the terminal)
+    |-- test_websockets_terminal.py         (new: journeys J1 to J22 and the review checks)
+    `-- test_websockets_terminal_performance.py   (new: SC-001, SC-005, and SC-007)
 ```
 
 **Structure Decision**: The new code stays inside `src/websocket_streams/live/`. The top
@@ -169,8 +178,24 @@ grows from 3 to 5 entries. The `runners/` folder keeps 5 entries, because the ut
 becomes a package. The manager loses the line input code, and the terminal gateway takes the
 terminal routes.
 
+The tests follow the same rule. The fake Mist cloud stays next to the transport tests that
+use it. The browser tests of the tab go into the new package `tests/e2e/websockets_tab/`.
+The move takes `test_websockets_page.py` out of `tests/e2e/`, so that folder keeps 17
+entries.
+
 ## Complexity Tracking
+
+**Grandfathered debt that the branch touches**:
+
+| Folder | Entries before | Entries after | Remediation |
+| - | - | - | - |
+| `tests/e2e/` | 17 | 17 | One file moves out, and the new package `websockets_tab/` comes in. The count does not grow. Issue #3722 splits the folder. |
+| `changelog.d/` | 57 | 58 | The release note rule adds one fragment for each change. Issue #3720 asks for a constitution rule for process folders. |
+| `specs/` | 752 | 753 | The SpecKit rule adds one folder for each feature. Issue #3720 covers this folder too. |
+
+**New design decisions that need a reason**:
 
 | Item | Reason | Simpler option that the plan does not use |
 | - | - | - |
-| `tests/support/` gets a sixth folder | The folder already holds 11 entries before this feature. It is the shared location for test support code, so the fake Mist cloud server goes there. | A new support folder under `tests/unit/websocket_streams/` makes that folder hold 6 entries. A move of the old entries is out of scope. |
+| An own WebSocket client instead of the SDK WebSocket paths | The SDK paths lose the first output and split control sequences (#3659 and #3660). | Keep the SDK paths. The operator then sees missing or broken output. Issue #3718 records the exception. |
+| Standard logging in the new modules | The rest of `src/websocket_streams/` uses standard logging. One style in one package keeps the logs easy to read. | Move only the new modules to structlog. The package then mixes two log styles. Issue #3721 decides the move for the whole package. |

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: User description: "Use our own code for the Mist live connections instead of the
 Mist software kit. Give the WebSockets tab a terminal that works like SecureCRT. The terminal
@@ -215,6 +215,9 @@ the screen text.
   refuses the address and ends the session with a reason.
 - The operator switches between sessions in the session list. Each terminal shows its
   history again.
+- The device opens the shell but sends no output. After 20 seconds, the terminal shows a
+  notice that the device sent no output. If the cloud then closes the shell before any
+  output, the session fails with a reason (issue #3710).
 
 ## Requirements *(mandatory)*
 
@@ -250,8 +253,9 @@ the screen text.
 - **FR-011**: Each key that the operator presses in the terminal MUST go to the device in
   the order typed. This includes control keys, Esc, arrows, function keys, Tab, Backspace,
   Delete, Home, End, Page Up, and Page Down.
-- **FR-012**: The terminal MUST send its size when the session starts and each time the
-  panel size changes. The column count MUST be 20 to 500. The row count MUST be 5 to 200.
+- **FR-012**: The shell terminal MUST send its size when the session starts and each time
+  the panel size changes. The column count MUST be 20 to 500. The row count MUST be 5 to
+  200. A screen command view does not send a size (see FR-035).
 - **FR-013**: The portal MUST keep up to 4,096 characters that the operator types before
   the first output. It MUST send them in order when the first output arrives.
 - **FR-014**: The terminal MUST keep at least 5,000 lines of history.
@@ -263,6 +267,10 @@ the screen text.
   MUST show a notice.
 - **FR-018**: When the operator returns to a session in the session list, the terminal
   MUST show the history that the portal holds for that session.
+- **FR-019**: If a shell sends no output for 20 seconds after it opens, the terminal MUST
+  show a notice. If the cloud then closes the shell before any output, the session MUST end
+  as failed with a reason. If the device closes the shell after some output, the session
+  MUST end as finished.
 
 **Copy and paste**
 
@@ -293,7 +301,8 @@ the screen text.
 **Screen commands**
 
 - **FR-035**: Top and Monitor Traffic MUST show in a read-only terminal view. The view MUST
-  interpret control sequences that arrive in more than one part.
+  use a fixed size of 80 columns and 40 rows, because the device draws the screen for that
+  size. The view MUST interpret control sequences that arrive in more than one part.
 
 **History file**
 

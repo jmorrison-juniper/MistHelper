@@ -31,6 +31,21 @@ paste_echo_terminal_harness = terminal_support.paste_echo_terminal_harness  # Ex
 monitor_terminal_harness = terminal_support.monitor_terminal_harness  # Expose the fixed monitor fixture.
 pushable_terminal_harness = terminal_support.pushable_terminal_harness  # Expose the late shell output fixture.
 silent_terminal_harness = terminal_support.silent_terminal_harness  # Expose the silent device fixture.
+SPECIAL_KEY_BYTES = (  # xterm.js sends these bytes in normal cursor mode, and the fake shell keeps that mode.
+    ("ArrowUp", b"\x1b[A"),
+    ("ArrowDown", b"\x1b[B"),
+    ("ArrowLeft", b"\x1b[D"),
+    ("ArrowRight", b"\x1b[C"),
+    ("Tab", b"\t"),
+    ("Backspace", b"\x7f"),
+    ("Delete", b"\x1b[3~"),
+    ("Home", b"\x1b[H"),
+    ("End", b"\x1b[F"),
+    ("PageUp", b"\x1b[5~"),
+    ("PageDown", b"\x1b[6~"),
+    ("Escape", b"\x1b"),
+    ("F1", b"\x1bOP"),
+)
 RATE_LIMITED_BODY = '{"error":"rate limited","code":"rate_limited"}'  # The terminal HTTP rate limit answer.
 WAITING_NOTICE = "The portal waits for the first output from the device."  # The header notice before the first output.
 SILENT_NOTICE = (  # The header notice after the shortened test wait of 2 seconds.
@@ -142,16 +157,15 @@ def test_j2_typed_text(page: Any, terminal_harness: TerminalPortalHarness) -> No
 
 
 def test_j3_special_keys(page: Any, terminal_harness: TerminalPortalHarness) -> None:
-    """J3: special keys send terminal control bytes."""
+    """J3: each special key sends its exact terminal control bytes (FR-011)."""
     _open_shell(page, terminal_harness)  # Start the terminal.
     page.get_by_test_id("ws-terminal-screen").click()  # Focus xterm.
-    keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab", "Backspace"]  # First key group.
-    keys += ["Delete", "Home", "End", "Escape", "F1"]  # Second key group keeps the line short.
-    for key in keys:  # Send each special key once.
+    for key, _sequence in SPECIAL_KEY_BYTES:  # Send each special key once, in table order.
         page.keyboard.press(key)  # Send one special key.
-    received = terminal_harness.shell.wait_for_input(10, 2.0)  # Wait for several control bytes.
+    expected = b"".join(sequence for _key, sequence in SPECIAL_KEY_BYTES)  # The device must get every key in order.
+    received = terminal_harness.shell.wait_for_input(len(expected), 2.0)  # Wait for all control bytes.
     _shot(page, terminal_harness, "j03-special-keys.png")  # Save evidence.
-    assert len(received) >= 10  # Several special keys must reach the fake device.
+    assert received.endswith(expected) is True  # A lost, changed, or reordered key fails here.
 
 
 def test_j4_ctrl_c_without_selection(page: Any, terminal_harness: TerminalPortalHarness) -> None:
@@ -428,6 +442,50 @@ def test_j22_log_safety(page: Any, terminal_harness: TerminalPortalHarness, capl
     assert "secret-pasted-marker" not in logs  # Pasted text must not appear.
 
 
+def test_review_fr048_page_gets_no_shell_address(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """FR-048: no portal answer to the page holds the shell address or the API token."""
+    finished: list[Any] = []  # Keep each request that the page completed.
+    page.add_init_script("window.MistWebSocketTerminalTestHooks = {readWaitSeconds: 0.2};")  # Short reads finish.
+    page.on("requestfinished", lambda request: finished.append(request))  # Keep each request after its body arrives.
+    _open_shell(page, terminal_harness)  # Start the shell, so the portal reads the shell address.
+    page.get_by_test_id("ws-terminal-screen").click()  # Focus xterm.
+    page.keyboard.type("show version")  # Send input through the input route.
+    page.keyboard.press("Enter")  # Complete the command line.
+    page.get_by_text("ran: show version").wait_for(timeout=READY_TIMEOUT_MS)  # Read answers carried output.
+    page.set_viewport_size({"width": 1100, "height": 800})  # Send one size through the resize route.
+    terminal_harness.shell.wait_for_resize(1, 2.0)  # The resize route answered before the scan.
+    session_list = page.evaluate("async () => (await fetch('/api/websockets/sessions')).text()")  # Read the list.
+    api_requests = [request for request in finished if "/api/websockets/" in request.url]  # Keep the API answers.
+    answers = [request.response().text() for request in api_requests if request.response() is not None]  # Bodies.
+    text = "\n".join([*answers, session_list, page.content()])  # Scan the answers and the page together.
+    shell_path = f"/shell/{terminal_support.DEVICE_ID}"  # The path part of the shell address.
+    _shot(page, terminal_harness, "review-fr048-no-shell-address.png")  # Save evidence.
+    assert len(answers) >= 5  # The scan read the start, the input, the size, and several read answers.
+    assert terminal_harness.cloud.base_ws_url + shell_path not in text  # The full shell address never arrives.
+    assert shell_path not in text  # The shell address path never arrives.
+    assert terminal_harness.cloud.base_ws_url not in text  # The cloud WebSocket host never arrives.
+    assert "fake-token" not in text  # The API token never arrives.
+
+
+def test_review_fr014_history_keeps_five_thousand_lines(
+    page: Any, pushable_terminal_harness: TerminalPortalHarness
+) -> None:
+    """FR-014: the terminal keeps at least 5,000 lines of history."""
+    harness = pushable_terminal_harness  # Use a short name for the harness.
+    _open_shell(page, harness)  # Start the shell.
+    page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # The shell is live.
+    numbered = b"".join(b"history-line-%05d\r\n" % number for number in range(1, 5001))  # 5,000 numbered lines.
+    harness.shell.push_output(numbered + b"END-OF-HISTORY\r\n")  # The device sends all lines in one frame.
+    page.get_by_text("END-OF-HISTORY").wait_for(timeout=READY_TIMEOUT_MS)  # xterm drew the last line.
+    with page.expect_download() as download_info:  # Capture the history file.
+        page.get_by_test_id("ws-terminal-download").click()  # The file holds each row of the xterm buffer.
+    text = Path(download_info.value.path()).read_text(encoding="utf-8")  # Read the history file.
+    _shot(page, harness, "review-fr014-five-thousand-lines.png")  # Save evidence.
+    assert "history-line-00001" in text  # The first numbered line is still in the history.
+    assert "history-line-05000" in text  # The last numbered line is in the history.
+    assert text.count("history-line-") == 5000  # No numbered line is lost or repeated.
+
+
 def test_review_non_final_state_keeps_terminal_live(page: Any, delayed_terminal_harness: TerminalPortalHarness) -> None:
     """Review 1: connecting without output keeps accepting input."""
     page.add_init_script("window.MistWebSocketTerminalTestHooks = {readWaitSeconds: 0.2};")  # Shorten long read.
@@ -666,6 +724,7 @@ def test_review_17_session_switch_drops_stale_read(page: Any, pushable_terminal_
     assert any(shell_id in url and "/terminal" in url for url in aborted) is True  # The old long read was cancelled.
     page.locator(f'[data-session-id="{shell_id}"]').click()  # Show shell A again.
     page.get_by_text("STALE-SHELL-OUTPUT").wait_for(timeout=READY_TIMEOUT_MS)  # Shell A replays its own output.
+    page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # FR-018: all history replays.
     _shot(page, harness, "review-17-switch-back-shows-shell.png")  # Save evidence.
 
 

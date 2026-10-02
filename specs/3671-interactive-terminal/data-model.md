@@ -26,9 +26,25 @@ The session states do not change. A terminal session moves through these states.
 ```text
 connecting --(socket open)--> live --(first output)--> live and input_ready
 live --(operator stop or reaper)--> stopping --> stopped
-live --(device closes, for example after exit)--> finished
+live and input_ready --(device sends a close frame, for example after exit)--> finished
+live and input_ready --(connection lost with no close frame)--> failed
+live without output --(far side ends the connection)--> failed
 connecting or live --(error)--> failed
 ```
+
+The `_outcome()` method of the terminal runner selects the final state when the connection
+ends. Each terminal session uses this order of rules.
+
+1. If the operator or the reaper closed the connection, the state is `stopped`.
+2. If the device sent no output before the far side ended the connection, the state is
+   `failed`. The reason is `NO_ANSWER_REASON` (issue #3710, FR-019).
+3. If the device sent output and then a close frame, the state is `finished`. The reason is
+   `CLOSED_REASON`.
+4. If the connection ended with no close frame, the state is `failed`. The reason is
+   `DROPPED_REASON`.
+
+The page shows a notice when a shell sends no output for 20 seconds. The notice is a page
+value only. It does not change the session state.
 
 When the session leaves the live states, the history closes. Each waiting read then gets an
 answer at once.
@@ -135,9 +151,9 @@ The page keeps the preferences under the local storage key `misthelper.wsTermina
 | - | - | - | - |
 | `copyOnSelect` | boolean | true | Copy by selection |
 | `confirmPaste` | boolean | true | The paste confirmation for text with more than one line |
-| `ctrlVBehavior` | text | paste | Ctrl+V uses the native paste event |
-| `fontSize` | integer | 14 | 10 to 28 |
-| `rightClickAction` | text | menu | Right-click opens the terminal menu |
+| `ctrlVBehavior` | text | paste | Ctrl+V and Cmd+V use the native paste event when the value is `paste` |
+| `fontSize` | integer | 14 | The A+ and A- buttons keep the value from 10 through 28 |
+| `rightClickAction` | text | menu | Right-click opens the terminal menu. If the value is `paste`, right-click on a shell reads the clipboard. A read-only screen still opens the menu. |
 
 If the stored value is not valid JSON, the page uses the defaults.
 

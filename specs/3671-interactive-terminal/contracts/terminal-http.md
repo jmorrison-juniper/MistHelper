@@ -56,6 +56,18 @@ Answer 200:
 
 Refusals: `bad_request` for a bad `after` or `wait` value, `not_found`, and `not_terminal`.
 
+Final states and reasons in the read answer:
+
+| Event | `state` | `reason` |
+| - | - | - |
+| The operator or the reaper stops the session | `stopped` | The stop reason |
+| The far side ends the connection before any output | `failed` | `The device sent no output before the Mist cloud closed the terminal. Start a new session after one minute.` |
+| The device sends output, then a close frame | `finished` | The runner close reason. A shell uses `The device closed the shell.` A screen command uses `The device ended the screen command.` |
+| The connection ends with no close frame, after output | `failed` | `The connection to the device dropped.` |
+
+The second row is the server part of FR-019 and issue #3710. The page shows the 20-second
+notice by itself. The read answer holds no notice field.
+
 ## POST /api/websockets/sessions/{session_id}/input
 
 Send keys or pasted text to a shell session.
@@ -126,6 +138,10 @@ The session payload of the list route and the start route gets one more field.
 
 The page uses this field to show the terminal panel instead of the message list.
 The terminal read route tells the page whether the session is read-only.
+
+No answer of these routes holds the shell address, the API token, or a cookie (FR-048).
+The browser journey `test_review_fr048_page_gets_no_shell_address` scans each answer of a
+shell session for them.
 
 ## Log rule
 

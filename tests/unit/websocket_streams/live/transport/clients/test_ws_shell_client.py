@@ -6,6 +6,7 @@ import threading  # Send from another thread is part of the contract.
 from collections.abc import Callable  # The client helper accepts fake factories.
 
 import pytest  # Tests assert expected transport errors.
+from websocket._url import get_proxy_info  # FR-005: the pinned library reads the proxy of the host.
 
 import websocket  # Socket fakes raise websocket-client write errors.
 from src.websocket_streams.intake.fields import StreamRequestError  # Sends use the request error contract.
@@ -93,16 +94,18 @@ class WriteFailSocket:
 
 
 class RecordingFactory:
-    """A shell WebSocket factory that records the connect timeout."""
+    """A shell WebSocket factory that records the connect timeout and the options."""
 
     def __init__(self, socket: WriteFailSocket) -> None:
         """Build a factory for one socket."""
         self.socket = socket  # The factory returns this socket.
         self.timeout: float | None = None  # Tests assert the timeout argument.
+        self.options: dict[str, object] = {}  # Tests assert the other keyword arguments.
 
-    def __call__(self, *_args: object, timeout: float | None = None, **_kwargs: object) -> WriteFailSocket:
+    def __call__(self, *_args: object, timeout: float | None = None, **options: object) -> WriteFailSocket:
         """Return the configured socket."""
         self.timeout = timeout  # Record the connect timeout.
+        self.options = dict(options)  # Record the options that websocket-client would get.
         return self.socket  # Return the fake socket.
 
 
@@ -343,6 +346,25 @@ class TestShellClient:
             assert factory.timeout == 0.6  # The factory received the connect timeout.
             assert socket.timeout_value == 0.6  # The stable socket timeout matches the profile.
             assert socket.shutdown_called is True  # close() shut down the socket after close.
+
+    def test_open_leaves_the_proxy_to_the_host_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Use the proxy settings of the host for the shell connection (FR-005)."""
+        for name in ("no_proxy", "NO_PROXY"):  # Start with no proxy exception on the host.
+            monkeypatch.delenv(name, raising=False)  # Remove each spelling, because Linux keeps both.
+        monkeypatch.setenv("https_proxy", "http://proxy.example.net:3128")  # The host names a proxy for TLS.
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud for a safe shell URL.
+            factory = RecordingFactory(WriteFailSocket())  # Record the factory arguments.
+            client = self._client(cloud, factory=factory)  # Use the recording factory.
+            client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open through the fake factory.
+            client.close()  # Close the fake socket.
+        proxy_keys = [key for key in factory.options if "proxy" in key]  # A proxy key would hide the host setting.
+        host, port, _auth = get_proxy_info("api-ws.mist.com", True)  # websocket-client reads the host setting.
+        monkeypatch.setenv("no_proxy", "api-ws.mist.com")  # The host skips the proxy for the shell host.
+        skipped = get_proxy_info("api-ws.mist.com", True)  # websocket-client reads the exception list.
+        assert "sslopt" in factory.options  # The factory got the normal connection options.
+        assert proxy_keys == []  # The client never replaces the proxy of the host.
+        assert (host, port) == ("proxy.example.net", 3128)  # The shell connection uses the host proxy.
+        assert skipped == (None, 0, None)  # The exception list of the host still applies.
 
     def test_send_write_error_closes_client_and_returns_not_open(self) -> None:
         """Close the shell client after a failed input write."""

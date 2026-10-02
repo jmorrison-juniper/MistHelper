@@ -179,8 +179,8 @@ A switch obeys these rules.
 | Ctrl+C | No | Send `\x03` for a shell. Do nothing for a read-only screen. |
 | Ctrl+Shift+C or Ctrl+Insert | Any | Copy |
 | Cmd+C on macOS | Yes | Copy |
-| Ctrl+V or Cmd+V | Any | Use the native paste event when `ctrlVBehavior` is `paste` |
-| Ctrl+Shift+V or Shift+Insert | Any | Read the clipboard directly, then paste |
+| Ctrl+V or Cmd+V | Any | Use the native paste event when `ctrlVBehavior` is `paste`. That value is the default. |
+| Ctrl+Shift+V or Shift+Insert | Any | Read the clipboard on a secure page, then paste. On a page without TLS, or when the browser refuses the read, open the paste dialog. |
 | Any other key | Any | xterm.js makes the key bytes, and the page sends them for a shell |
 
 For a read-only screen, paste keys do nothing. Other keys do not send input.
@@ -229,16 +229,7 @@ shell. A read-only screen still opens the menu.
 
 ## Preferences
 
-The page keeps these preferences under the local storage key
-`misthelper.wsTerminal.prefs`.
-
-| Key | Default | Rule |
-| - | - | - |
-| `copyOnSelect` | `true` | Copy by selection |
-| `confirmPaste` | `true` | Confirm paste text with more than 1 line |
-| `ctrlVBehavior` | `paste` | Ctrl+V and Cmd+V use the native paste event |
-| `fontSize` | `14` | The A+ and A- buttons keep it from 10 through 28 |
-| `rightClickAction` | `menu` | Right-click opens the menu unless the value is `paste` |
-
-The visible settings show `copyOnSelect`, `confirmPaste`, and `fontSize`. The
-other settings can exist in local storage.
+The page keeps the terminal preferences under the local storage key
+`misthelper.wsTerminal.prefs`. The `TerminalPreferences` section of
+[data-model.md](../data-model.md) is the only list of the keys, the defaults, and
+the rules. This contract adds no other key.

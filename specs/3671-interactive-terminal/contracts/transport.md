@@ -49,13 +49,31 @@ The runners use the reason in these ways.
   An address policy refusal keeps its own reason.
 - The device command runner ends the session as `Failed` with the reason.
 - The channel runner ends the session at once for HTTP status 400 through 499, but not
-  for 408 or 429. It tries the other failures again. When the retry budget ends, the
-  final reason is the reason of the last failed open. A subscribe timeout or a drop
-  after a subscribe clears that reason, so the final reason is then the general text.
+  for 408 or 429. It connects again after each other failure. When the retry budget ends,
+  the final reason is the reason of the last failed open. A subscribe timeout or a drop
+  after a subscribe clears that reason. The final reason is then
+  `The WebSocket connection failed after retry attempts.`
 
-The fake cloud in `tests/support/fake_mist_cloud/server.py` can fail one handshake path in
-three ways: `HandshakeFault("refuse", status_code)`, `HandshakeFault("stall")`, and
-`HandshakeFault("reset")`.
+The fake cloud in
+`tests/unit/websocket_streams/live/transport/fake_mist_cloud/server.py` can fail one
+handshake path in three ways: `HandshakeFault("refuse", status_code)`,
+`HandshakeFault("stall")`, and `HandshakeFault("reset")`.
+
+## ConnectionClosed and SubscribeError
+
+| Class | Fields | Meaning |
+| - | - | - |
+| `ConnectionClosed` | `code`, `dropped` | The connection ended. `code` is the close code, 1005 for a close frame with no payload, or `None` when no close frame arrived. `dropped` is true when the far side or the network ended the connection. |
+| `SubscribeError` | `channel`, `detail` | A channel subscription failed. `detail` is the refusal detail, or `timeout`. |
+
+## FrameReader
+
+`FrameReader` reads the frames of one socket for `StreamClient` and `ShellClient`.
+
+| Method | Result |
+| - | - |
+| `read(timeout)` | Return one data frame as `FrameRead(opcode, payload)`. Return `None` after a quiet interval or a control frame. Send a ping after one quiet interval. Raise `ConnectionClosed` after 2 silent intervals or when the socket closes. |
+| `close_socket(socket)` | Abort, close, and shut down one socket. |
 
 ## FrameDecoder
 
@@ -71,7 +89,8 @@ than one site or device, so the client takes a list of channel paths.
 
 | Method | Behavior |
 | - | - |
-| `open()` | Connect, send one subscribe frame for each channel, and wait for `channel_subscribed` for each channel. The wait is 10 seconds. Raise on `subscribe_failed` or on the timeout. |
+| `open()` | Connect, send one subscribe frame for each channel, and wait for `channel_subscribed` for each channel. The wait is 10 seconds. Raise `SubscribeError` on `subscribe_failed` or on the timeout. |
+| `next_event(timeout)` | Return the next decoded data event, or `None` when the wait ends. The device command runner uses this method. |
 | `run(on_event)` | Read until the connection closes. Call `on_event` for each data event. Send a ping after 20 quiet seconds. Close after 2 silent intervals. |
 | `close()` | Close the socket from any thread. `run` then returns. |
 
@@ -84,7 +103,7 @@ One connection to a shell address or a screen command address.
 | Method | Behavior |
 | - | - |
 | `open(url, cols, rows)` | Check the address with the policy, connect, and send the size. |
-| `read()` | Return the next output bytes, or `None` on a quiet interval. Raise `ConnectionClosed` at the end. |
+| `read()` | Return the next output bytes, or `None` on a quiet interval. Remove exactly one leading NUL byte from each output frame, because the Mist cloud puts one before each frame. Raise `ConnectionClosed` at the end. |
 | `send(text)` | Send one binary frame: a NUL byte, then the UTF-8 text. |
 | `resize(cols, rows)` | Send the text frame `{"resize": {"width": cols, "height": rows}}`. |
 | `close()` | Close the socket from any thread. |

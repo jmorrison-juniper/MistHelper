@@ -21,6 +21,19 @@ TerminalPortalHarness = terminal_support.TerminalPortalHarness  # Keep type hint
 terminal_harness = terminal_support.terminal_harness  # Expose the shared fixture to this test module.
 
 
+ONE_MIB = 1_048_576  # The fake shell sends this many bytes for the big command.
+OUTPUT_DRAWN = """(minimum) => {
+    const counter = document.getElementById('wsCounters');
+    const match = counter ? counter.textContent.match(/Output: (\\d+) bytes/) : null;
+    if (!match || Number(match[1]) < minimum) return false;
+    const rows = Array.from(document.querySelectorAll('[data-testid="ws-terminal-screen"] .xterm-rows > div'))
+        .map((row) => row.textContent.replace(/\\s+$/, ''))
+        .filter((row) => row.length > 0);
+    const last = rows.length ? rows[rows.length - 1] : '';
+    return rows.some((row) => row.includes('XXXXXXXXXX')) && last.endsWith('device>');
+}"""  # True only when the page read all output and xterm drew the prompt after the output.
+
+
 def _open_shell(page: Any, harness: TerminalPortalHarness) -> None:
     """Open one terminal shell."""
     harness.open_page(page)  # Load the WebSockets page.
@@ -50,12 +63,14 @@ def test_sc007_one_mb_output(page: Any, terminal_harness: TerminalPortalHarness)
     """SC-007: show 1 MB of device output within 3 seconds."""
     _open_shell(page, terminal_harness)  # Start terminal.
     page.get_by_test_id("ws-terminal-screen").click()  # Focus xterm.
+    page.get_by_text("device>").first.wait_for(timeout=READY_TIMEOUT_MS)  # Wait for the first prompt before timing.
     start = time.perf_counter()  # Start before the command.
     page.keyboard.type("big")  # Ask fake shell for large output.
     page.keyboard.press("Enter")  # Send command.
-    page.get_by_test_id("ws-terminal-status").wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Wait.
+    page.wait_for_function(OUTPUT_DRAWN, arg=ONE_MIB, timeout=READY_TIMEOUT_MS)  # Wait for all output and the prompt.
     elapsed = time.perf_counter() - start  # Measure output display time.
-    print(f"SC-007 one_mb_seconds={elapsed:.2f}")  # Report measurement.
+    output_text = page.locator("#wsCounters").inner_text(timeout=READY_TIMEOUT_MS)  # Read the byte counter.
+    print(f"SC-007 one_mb_seconds={elapsed:.2f} counter={output_text!r}")  # Report measurement.
     path = terminal_harness.screenshot(page, "perf-sc007-one-mb.png")  # Save evidence.
     assert path.exists() is True  # The screenshot must exist.
     assert elapsed < 3.0  # The success criterion limits display time.

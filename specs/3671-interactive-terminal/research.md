@@ -140,8 +140,11 @@ version 5.5.0.
 - The key handler of the terminal decides each copy key and each paste key.
 - Ctrl+C copies when the terminal holds a selection, and it sends no interrupt. With no
   selection, Ctrl+C sends the interrupt character.
-- Ctrl+Shift+C and Ctrl+Insert copy. Ctrl+V, Ctrl+Shift+V, and Shift+Insert use the native
-  paste event of the browser.
+- Ctrl+Shift+C and Ctrl+Insert copy.
+- Ctrl+V and Cmd+V without Shift use the native paste event of the browser when the
+  `ctrlVBehavior` preference is `paste`. That value is the default.
+- Ctrl+Shift+V and Shift+Insert read the clipboard on a secure page. On a page without TLS,
+  or when the browser refuses the read, these keys open the paste dialog.
 - Copy by selection runs on mouse up.
 - The page uses `navigator.clipboard` when the page is a secure context. If not, the page
   uses a hidden text area and `document.execCommand('copy')`.
@@ -152,7 +155,7 @@ version 5.5.0.
   the device asks for them.
 
 **Reason**: A browser blocks the clipboard API on a plain HTTP page from another computer.
-The native paste event and `execCommand('copy')` work in that case.
+The native paste event, the paste dialog, and `execCommand('copy')` work in that case.
 
 ## R8. Server byte history and input queue
 
@@ -191,6 +194,14 @@ different Mist domain, the rule gets that domain with the evidence in the pull r
   After 2 silent intervals, the client closes the connection as dead.
 - A channel stream connects again up to 3 times, after 1, 2, and 4 seconds. After the third
   failure, the session fails with a reason.
+- A channel stream does not connect again after an HTTP 4xx refusal of the WebSocket
+  handshake, because a retry cannot heal it. The session fails at once with the refusal
+  reason. HTTP 408 and HTTP 429 are the exceptions, because a wait can heal them. They use
+  the normal retry rule.
+- The `ConnectFailure` class in `transport/endpoint.py` changes each open error to a plain
+  reason. The reasons name an HTTP refusal with its status, a timeout, a TLS failure, a name
+  lookup failure, or a network failure. If the last attempt fails to open, the final session
+  reason names that open failure.
 - A command, a capture, a screen command, and a shell do not connect again. A new
   connection starts a new device session.
 
@@ -211,3 +222,38 @@ plain text with no control codes.
 
 **Reason**: The buffer holds the screen text after the control codes ran. The server
 history holds raw bytes with control codes.
+
+## R13. Live check results (task T055)
+
+The live checks ran on 2026-10-01 against the lab organization. They used Morrison-Switch
+and SRX-1500, read-only commands, a host portal, and the test container
+`misthelper-tmp-issue3671-live`.
+
+| Question | Result |
+| - | - |
+| Shell host | `api-ws.mist.com`. The host is inside the `mist.com` base domain, so the R9 rule needs no change. |
+| NUL prefix | Each shell and screen output frame starts with one NUL byte. The shell client removes that byte. After `exit`, the Mist cloud sends a close frame with no payload. The reader reports that frame as code 1005. |
+| Show ARP pause | The first message arrives after about 7.4 seconds on SRX-1500. All rows then arrive within 1 second. The rows from Morrison-Switch also arrive within 1 second. |
+| Show Route pause | With no protocol, SRX-1500 sends one table message, so the output has no pause. The table holds 0 rows, and the page shows "The device sent an empty table." A read-only probe on 2026-10-02 showed that the Mist cloud itself sends that empty table for an empty body, for Protocol `any`, and for VRF `default`. The request body equals the SDK body. Issue #3716 asks for a hint on the form. |
+| Show Route with a protocol | Protocol `direct` gave 5 of 5 full runs through the browser on 2026-10-02. Each run held 5,269 characters and 102 lines. With the digits masked, the 5 texts are equal, because only the route ages change. The cloud split the text into 39 to 65 messages, and each run took 7.8 to 9.1 seconds. |
+| Message rows | The page shows each cloud message as one row, and the cloud splits the text at random points. A word can start in one row and end in the next row. Issue #3723 records this defect, which also exists on `main`. |
+| Show ARP runs | SRX-1500 gave 5 of 5 finished runs, and each run took 8.7 to 9.8 seconds. The view held 134 to 162 lines. That count includes the header line of each message row, so it changes with the message count. |
+| Test device runs | ARP and Route each gave 100 of 100 full runs against a fake device that answers at once. The 100 ARP runs took 6.84 seconds, and the 100 Route runs took 6.64 seconds. |
+| Quiet time | No pause is longer than 5 seconds, so the trigger table keeps a quiet time of 5 seconds. |
+| Screen size | Top and Monitor Traffic open at 80 x 40 and fill all 40 rows. |
+| Silent shell | A quick fourth shell on the switch can stay silent. The page shows a notice after 20 seconds. The Mist cloud closes the terminal after about 90 seconds, and the page shows the no-answer reason (issue #3710). |
+| Echo time | The host portal measured a median of 212 ms and a 95th percentile of 239 ms. The test container measured a median of about 212 ms over 80 samples. One sample took 530 ms. |
+
+### Browser measurements against the fake device (task T050)
+
+The measurements ran on 2026-10-02 on the Windows workstation. They used headless Chromium,
+the real portal routes, and the fake Mist cloud. The live echo time above includes the
+round trip to the Mist cloud, so it does not measure the portal part.
+
+| Criterion | Target | Result |
+| - | - | - |
+| SC-001 echo | The portal adds less than 50 ms for 95 percent of keys | 200 keys: median 15.3 ms, 95th percentile 28.9 ms. The test fails above 500 ms, because a Windows test run can pause for a long time. |
+| SC-007 output | 1 MiB shows in less than 3 seconds | 0.29 seconds. The test waits until the counter shows 1,048,640 bytes and the prompt shows after the output. |
+| SC-005 load | A page loads in less than 2 seconds while 5 shells send output | 0.24 seconds |
+| Paste split | A 256 KiB paste splits in less than 50 ms | 0.50 ms for 64 parts of 4,096 characters |
+

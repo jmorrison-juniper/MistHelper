@@ -21,12 +21,16 @@ Expected result: every test passes. The parity test reports 52 compared commands
 ## 3. Run the browser journeys
 
 ```powershell
-python -m pytest tests/e2e/test_websockets_terminal.py tests/e2e/test_websockets_page.py -q
+python -m pytest tests/e2e/websockets_tab -q
 ```
 
-The journeys start the portal and the fake Mist cloud server on free local ports. The
-screenshots go to `test-artifacts/websockets-terminal/`. Open each screenshot and check the
-terminal panel, the menu, and the dialogs.
+The folder holds the page journeys, the terminal journeys J1 to J22 with the review
+journeys, and the performance journeys. The journeys start the portal and the fake Mist
+cloud server on free local ports. The screenshots go to `test-artifacts/websockets-terminal/`.
+Open each screenshot and check the terminal panel, the menu, and the dialogs.
+
+The performance journeys print their numbers. Add `-s` to see them. Section R13 of
+`research.md` records the last results.
 
 ## 4. Check the logs for secrets and keys
 

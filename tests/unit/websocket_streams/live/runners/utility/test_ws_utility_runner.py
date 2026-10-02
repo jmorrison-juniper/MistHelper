@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # The Show Route fake output is one JSON text line, as on the live SRX.
 import threading  # The fake sink waits for the background runner thread.
 import time  # Reliability tests report measured run time.
 from dataclasses import replace  # Short timing tables replace immutable trigger records.
@@ -347,8 +348,17 @@ def test_unexpected_output_exception_fails_session_safely() -> None:
     assert reason == "The utility failed. Read the portal log for the cause."  # The page reason is safe.
 
 
-def test_show_arp_runs_one_hundred_times_with_full_output(capsys: pytest.CaptureFixture[str]) -> None:
-    """Run Show ARP one hundred times against a fast fake device."""
+@pytest.mark.parametrize(
+    ("key", "trigger_path", "label"),
+    [
+        ("ex.retrieveArpTable", "/show_arp", "show_arp"),
+        ("srx.retrieveRoutes", "/show_route", "show_route"),
+    ],
+)  # SC-003 names Show ARP and Show Route.
+def test_show_command_runs_one_hundred_times_with_full_output(
+    key: str, trigger_path: str, label: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Run one show command one hundred times against a fast fake device."""
     started = time.perf_counter()  # Measure only the loop run time.
     with FakeMistCloud() as cloud:  # Reuse one loopback server to keep the reliability test bounded.
         for index in range(100):  # Repeat the SC-003 reliability path.
@@ -356,16 +366,16 @@ def test_show_arp_runs_one_hundred_times_with_full_output(capsys: pytest.Capture
             cloud.register("/api-ws/v1/stream", device)  # Replace the stream route for this run.
             api = FakeApiSession(cloud)  # Build a fake API session.
             session_id = f"session-{index}"  # Give each run an exact filter value.
-            lines = [f"run {index} header", f"run {index} detail"]  # Full output expected from the device.
-            api.add_override("/show_arp", data={"session": session_id})  # Force the filter identifier.
+            lines = _show_output(label, index)  # Full output expected from the device.
+            api.add_override(trigger_path, data={"session": session_id})  # Force the filter identifier.
             _set_before_post_return(api, _publish_lines(device, session_id, lines))  # Publish during trigger.
-            sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _very_fast_table())  # Run once.
+            sink = _run_utility(cloud, api, _request(key), _very_fast_table())  # Run once.
             state, _reason = sink.wait_finished()  # Wait for the utility to finish.
             assert state == SessionState.FINISHED  # Each fast run finishes cleanly.
             assert [message[1] for message in sink.messages] == lines  # Each run preserves full output.
     elapsed = time.perf_counter() - started  # Compute the reliability measurement.
-    print(f"show_arp_100_run_seconds={elapsed:.3f}")  # Report the runtime for the builder report.
-    assert "show_arp_100_run_seconds" in capsys.readouterr().out  # Prove the measurement printed.
+    print(f"{label}_100_run_seconds={elapsed:.3f}")  # Report the runtime for the builder report.
+    assert f"{label}_100_run_seconds" in capsys.readouterr().out  # Prove the measurement printed.
 
 
 def test_capture_filters_capture_id_and_adds_packet_summary() -> None:
@@ -489,6 +499,24 @@ def _publish_lines(device: StreamDevice, session_id: str, lines: list[str]):
         device.publish_command_lines(COMMAND_CHANNEL, session_id, lines)  # Publish each command line.
 
     return publish  # FakeApiSession calls this hook before returning.
+
+
+def _show_output(label: str, index: int) -> list[str]:
+    """Return the device output for one show command run.
+
+    Args:
+        label: The show command label.
+        index: The run number.
+
+    Returns:
+        The raw output lines. The SRX sends the route table as one JSON text line.
+    """
+    if label != "show_route":  # Show ARP sends plain text lines.
+        return [f"run {index} header", f"run {index} detail"]  # Two lines prove the order.
+    columns = [{"id": name, "display_name": name, "type": "string"} for name in ("Table", "Destination")]  # Live shape.
+    rows = [{"Table": "inet.0", "Destination": f"10.{index}.0.0/16"}]  # One route row for each run.
+    table = {"columns": columns, "rows": rows, "finished": True, "status": "SUCCESS", "message": ""}  # Live keys.
+    return [json.dumps(table)]  # The device sends the table as one raw text line.
 
 
 def _publish_capture_pair(device: StreamDevice):
