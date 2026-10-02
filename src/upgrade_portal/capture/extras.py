@@ -30,6 +30,7 @@ from typing import Any
 
 import mistapi
 
+from src.upgrade_portal.capture import devices
 from src.upgrade_portal.runtime.pools import BoundedFanOut, FanOutCall
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ _MESSAGES: dict[str, str] = {
     REASON_CALL_FAILED: "The cloud call for this section failed. " + _OPTIONAL_SENTENCE,
     REASON_ERROR_STATUS: "The cloud refused the call for this section. " + _OPTIONAL_SENTENCE,
     REASON_SOURCE_ABSENT: "The read that carries this section is absent. " + _OPTIONAL_SENTENCE,
+    devices.REASON_SHORT_READ: "The cloud read lost a page of this section. " + _OPTIONAL_SENTENCE,
 }
 
 # The device scope of the port read. The enum holds switch, gateway, and all.
@@ -201,17 +203,18 @@ class _PagedResponse:
 
     Why:
         A search call answers with one page, and a read needs every page. The
-        page walk returns a plain list and drops the status, so this holder
-        carries the status of the first page beside the joined rows. Every read
-        then classifies one shape.
+        checked walk retains earlier pages after a loss. This holder carries
+        the failed page's status and reason beside those rows.
 
     Attributes:
-        status_code: The HTTP status of the first page.
-        data: The joined rows of every page.
+        status_code: The failed page's status, or the first page's status after a complete read.
+        data: The joined rows of every valid page before a failure.
+        reason: The partial reason, or an empty string after a complete read.
     """
 
     status_code: int
     data: list[dict[str, Any]]
+    reason: str
 
 
 def _page_limit() -> int:
@@ -254,41 +257,35 @@ def _records_of(payload: Any) -> tuple[dict[str, Any], ...]:
     return tuple(dict(row) for row in rows if isinstance(row, Mapping))
 
 
-def _paged(session: Any, response: Any, scope: SiteScope) -> _PagedResponse:
+def _paged(session: Any, response: Any, scope: SiteScope, section: str) -> _PagedResponse:
     """Walk every page of one search call.
 
     Why:
         A large site holds more ports than one page. ``mistapi.get_all``
-        answers with an empty list, no error, and no log when the payload shape
-        surprises it. Such an answer would drop a whole section without a word.
-        The first page is therefore the floor, so a surprise loses no row. A
-        silent floor would show a short section that reads as whole. The floor
-        therefore writes a log record that names the site and both counts.
+        drops a later page's status. The checked walk keeps earlier valid
+        rows and reports the lost page. Returning the first page's status
+        after a loss would still make the section appear complete.
 
     Args:
         session: The mistapi session that made the call.
         response: The response of the first page.
         scope: The organization and the site to read. The log record names the site.
+        section: The source name of the page walk.
 
     Returns:
-        The status of the first page beside the rows of every page.
+        The available rows, the applicable status, and the partial reason.
     """
-    first = _records_of(getattr(response, "data", None))
+    logger.info("Upgrade portal reads every page of %s for site %s", section, scope.site_id)
+    walk = devices.read_every_page(session, section, response)
+    reasons = walk.partial_reasons or devices.guard_page_count(section, len(walk.records), response)
     status = int(getattr(response, "status_code", 0) or 0)
-    try:
-        rows = _records_of(mistapi.get_all(response=response, mist_session=session))
-    except Exception as error:  # A failed page walk must not lose the rows that already arrived
-        logger.warning("Upgrade portal could not walk every page of site %s: %s", scope.site_id, type(error).__name__)
-        rows = ()
-    if len(rows) < len(first):  # The walk gave up, so the first page holds every row that this call can report.
-        logger.warning(
-            "Upgrade portal kept the first page of %s row(s) for site %s because the page walk returned %s",
-            len(first),
-            scope.site_id,
-            len(rows),
-        )
-        return _PagedResponse(status, list(first))
-    return _PagedResponse(status, list(rows))
+    reason = REASON_READ
+    if reasons:
+        status, reason = reasons[0]["http_status"], reasons[0]["reason"]
+    if not walk.partial_reasons and not _STATUS_FLOOR <= status < _STATUS_CEILING:
+        reason = REASON_ERROR_STATUS  # Preserve the existing first-page status classification.
+    logger.debug("Upgrade portal read %s records for %s at site %s", len(walk.records), section, scope.site_id)
+    return _PagedResponse(status, walk.records, reason)
 
 
 def _fetch_ports(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -308,7 +305,7 @@ def _fetch_ports(session: Any, scope: SiteScope) -> _PagedResponse:
     response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
         session, scope.site_id, device_type=PORT_DEVICE_TYPE, limit=_page_limit()
     )
-    return _paged(session, response, scope)
+    return _paged(session, response, scope, SOURCE_PORTS)
 
 
 def _fetch_tunnels(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -328,7 +325,7 @@ def _fetch_tunnels(session: Any, scope: SiteScope) -> _PagedResponse:
     response = mistapi.api.v1.orgs.stats.searchOrgTunnelsStats(
         session, scope.org_id, site_id=scope.site_id, limit=_page_limit()
     )
-    return _paged(session, response, scope)
+    return _paged(session, response, scope, SECTION_TUNNELS)
 
 
 def _fetch_bgp_peers(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -342,7 +339,7 @@ def _fetch_bgp_peers(session: Any, scope: SiteScope) -> _PagedResponse:
         Every BGP peer record of the site.
     """
     response = mistapi.api.v1.sites.stats.searchSiteBgpStats(session, scope.site_id, limit=_page_limit())
-    return _paged(session, response, scope)
+    return _paged(session, response, scope, SECTION_BGP_PEERS)
 
 
 def _fetch_alarms(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -362,7 +359,7 @@ def _fetch_alarms(session: Any, scope: SiteScope) -> _PagedResponse:
     response = mistapi.api.v1.sites.alarms.searchSiteAlarms(
         session, scope.site_id, acked=ALARM_ACKED, limit=_page_limit()
     )
-    return _paged(session, response, scope)
+    return _paged(session, response, scope, SECTION_ALARMS)
 
 
 # The four cloud calls of tier 3. A test replaces any entry, so no test opens a
@@ -383,8 +380,11 @@ def _section_from_response(name: str, response: Any) -> ExtraSection:
         response: The cloud response, or the joined pages of one.
 
     Returns:
-        The section. A status outside the 200 range holds no record.
+        The section. A checked partial result keeps its available records.
+        An unpaged refusal holds no record.
     """
+    if isinstance(response, _PagedResponse):
+        return ExtraSection(name, tuple(response.data), response.reason, response.status_code)
     status = int(getattr(response, "status_code", 0) or 0)
     if not _STATUS_FLOOR <= status < _STATUS_CEILING:
         logger.warning("Upgrade portal read no %s. The cloud answered with status %s", name, status)

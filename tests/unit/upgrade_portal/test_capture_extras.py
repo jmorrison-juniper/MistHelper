@@ -26,7 +26,9 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import extras
+from src.upgrade_portal.capture import devices, extras
+from tests.support.sdk_pages import PagedSession
+from tests.unit.upgrade_portal.capture_page_loss.cases import Cases, NativePages, OfflineSession
 
 _SCOPE = extras.SiteScope("org-0001", "site-0001")  # WHY: One scope serves every test in this module.
 _FAULT_MESSAGE = "The page walk failed."  # WHY: No log record may repeat this, so one test asserts its absence.
@@ -398,64 +400,40 @@ def test_the_payload_reader_covers_the_search_shape_and_the_list_shape() -> None
     assert extras._records_of({"error": "no results key"}) == ()
 
 
-def test_the_page_walk_keeps_the_first_page_when_the_walk_returns_nothing(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """A silent empty answer from the page walk never drops the first page.
-
-    Why:
-        ``mistapi.get_all`` returns an empty list with no error and no log when
-        the payload shape surprises it. Without this floor a whole section
-        would vanish and nobody would know. The floor writes a warning that
-        names the site, because a short section with no warning reads as whole.
-    """
-    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=lambda response, mist_session: []))
-    with caplog.at_level(logging.WARNING, logger=extras.logger.name):
-        walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
-    assert walked.data == [_PORT_ROW]
-    assert walked.status_code == 200
-    assert [record for record in caplog.records if record.levelno == logging.WARNING]
-    assert _SCOPE.site_id in caplog.text  # The logging rule wants a site identifier on every record.
+def test_the_page_walk_keeps_prior_rows_and_the_failed_page_status(caplog: pytest.LogCaptureFixture) -> None:
+    """A lost page keeps prior rows and must not report the first page's success."""
+    endpoint = Cases.ENDPOINTS["ports"]
+    first = endpoint.answer([_PORT_ROW], 1, 2)
+    session = PagedSession([NativePages.failure(endpoint, Cases.FAILURES[4], total=2)])
+    with caplog.at_level(logging.INFO):
+        walked = extras._paged(session, first, _SCOPE, extras.SOURCE_PORTS)
+    assert (walked.data, walked.status_code, walked.reason) == ([_PORT_ROW], 503, devices.REASON_SHORT_READ)
+    assert session.links == [endpoint.link(2)]
+    assert _SCOPE.site_id in caplog.text
+    assert any(record.levelno == logging.WARNING and "1 record(s)" in record.getMessage() for record in caplog.records)
 
 
-def test_the_page_walk_keeps_every_row_of_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The page walk replaces the first page when it returns more rows."""
+def test_the_page_walk_keeps_every_row_of_every_page() -> None:
+    """A complete native walk retains every row and no partial reason."""
     pages = [_PORT_ROW, dict(_PORT_ROW, port_id="ge-0/0/2")]
-    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=lambda response, mist_session: pages))
-    walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
-    assert walked.data == pages
+    endpoint = Cases.ENDPOINTS["ports"]
+    first = endpoint.answer([pages[0]], 1, 2)
+    session = PagedSession([endpoint.answer([pages[1]], 2, 2)])
+    walked = extras._paged(session, first, _SCOPE, extras.SOURCE_PORTS)
+    assert (walked.data, walked.status_code, walked.reason) == (pages, 200, extras.REASON_READ)
+    assert session.links == [endpoint.link(2)]
 
 
-def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """A failed page walk keeps the rows that already arrived.
-
-    Why:
-        The log record of the fault must carry the class name alone. A driver
-        message can hold a connection string, and a connection string can hold
-        a credential, so no log record may repeat one.
-    """
-
-    def _raise(response: Any, mist_session: Any) -> list[dict[str, Any]]:
-        """Fail the page walk.
-
-        Args:
-            response: The first page. The stand-in ignores it.
-            mist_session: The session. The stand-in ignores it.
-
-        Returns:
-            Nothing. The stand-in always raises.
-
-        Raises:
-            RuntimeError: Always, because the walk must fail.
-        """
-        raise RuntimeError(_FAULT_MESSAGE)
-
-    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=_raise))
-    with caplog.at_level(logging.WARNING, logger=extras.logger.name):
-        walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
-    assert walked.data == [_PORT_ROW]
+def test_the_page_walk_keeps_prior_rows_when_the_transport_raises(caplog: pytest.LogCaptureFixture) -> None:
+    """A raised transport fault keeps rows, status zero, and safe diagnostics."""
+    endpoint = Cases.ENDPOINTS["ports"]
+    first = endpoint.answer([_PORT_ROW], 1, 2)
+    session = OfflineSession()
+    session.faults[endpoint.link(2)] = RuntimeError(_FAULT_MESSAGE)
+    with caplog.at_level(logging.WARNING):
+        walked = extras._paged(session, first, _SCOPE, extras.SOURCE_PORTS)
+    assert (walked.data, walked.status_code, walked.reason) == ([_PORT_ROW], 0, devices.REASON_SHORT_READ)
+    assert session.links == [endpoint.link(2)]
     assert "RuntimeError" in caplog.text
     assert _FAULT_MESSAGE not in caplog.text
 

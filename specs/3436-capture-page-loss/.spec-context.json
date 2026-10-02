@@ -1,0 +1,23 @@
+{
+  "workflow": "speckit",
+  "specName": "Capture reads report a lost page",
+  "branch": "jmorrison-juniper-capture-page-loss-reporting",
+  "featureDirectory": "specs/3436-capture-page-loss",
+  "currentStep": "analyze",
+  "status": "implemented",
+  "baseCommit": "5d38898af5639e90715ec57eb8d48d2985e1acf8",
+  "history": [
+    {"step": "specify", "kind": "complete", "by": "agent", "method": "feature-only template equivalent"},
+    {"step": "plan", "kind": "complete", "by": "agent", "method": "feature-only template equivalent"},
+    {"step": "tasks", "kind": "complete", "by": "agent", "method": "feature-only template equivalent"},
+    {"step": "implement", "kind": "complete", "by": "agent", "method": "native SDK and caller-output proofs"},
+    {"step": "analyze", "kind": "complete", "by": "agent", "method": "feature-only consistency and boundary review"}
+  ],
+  "capabilities": {
+    "powershellHook": "unavailable: pwsh is not installed",
+    "branchHook": "restricted: the application owns the current branch",
+    "companionHooks": "feature-only completion records, no shared state",
+    "publication": "not authorized",
+    "humanReview": "required"
+  }
+}

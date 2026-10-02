@@ -19,7 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.upgrade_portal.capture import clients
+from src.upgrade_portal.capture import clients, devices
+from tests.unit.upgrade_portal.capture_page_loss.cases import Cases, NativePages, OfflineSession
 
 # WHY: A site key in the shape of the data model, so a reader sees a realistic
 # identifier rather than a bare word.
@@ -126,7 +127,6 @@ GUEST_ROW: dict[str, Any] = {
 SEARCH_WINDOW: dict[str, Any] = {"duration": clients.SEARCH_DURATION}
 FETCH_CASES = [
     ("wired_client_api", "searchSiteWiredClients", clients.fetch_wired_rows, SEARCH_WINDOW),
-    ("stats_api", "listSiteWirelessClientsStats", clients.fetch_wireless_stats_rows, {}),
     ("wireless_client_api", "searchSiteWirelessClients", clients.fetch_wireless_search_rows, SEARCH_WINDOW),
     ("guest_api", "searchSiteGuestAuthorization", clients.fetch_guest_rows, SEARCH_WINDOW),
 ]
@@ -571,6 +571,26 @@ def test_each_fetch_reads_its_own_endpoint_and_keeps_the_mappings(
         rows = fetch(session, SITE_ID)
     getattr(api, call_name).assert_called_once_with(session, SITE_ID, limit=clients.page_limit(), **extra)
     assert rows == [WIRED_ROW]
+
+
+@pytest.mark.parametrize("fault", [Cases.FAILURES[0], Cases.FAILURES[5]])
+def test_wireless_stats_fetch_keeps_the_native_http_4xx_5xx_reason(
+    monkeypatch: pytest.MonkeyPatch, fault: tuple[Any, ...]
+) -> None:
+    """The actual statistics source returns rows and reasons to its collector."""
+    monkeypatch.setenv(clients.PAGE_LIMIT_VARIABLE, "1")
+    endpoint = Cases.ENDPOINTS["wireless"]
+    session = OfflineSession()
+    session.install(endpoint, NativePages.series(endpoint, fault))
+    with patch.object(
+        clients.stats_api, "listSiteWirelessClientsStats", wraps=clients.stats_api.listSiteWirelessClientsStats
+    ) as call:
+        result = clients.fetch_wireless_stats_rows(session, Cases.SITE_ID)
+    call.assert_called_once_with(session, Cases.SITE_ID, limit=1)
+    assert result == devices.DeviceRead(
+        "wireless_statistics", [Cases.row("wireless")], [NativePages.reason("wireless_statistics", fault[1])]
+    )
+    assert session.links == [endpoint.link(2)]
 
 
 @pytest.mark.parametrize(

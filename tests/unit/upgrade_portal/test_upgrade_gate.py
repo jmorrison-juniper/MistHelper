@@ -288,8 +288,7 @@ def test_a_missing_reading_leaves_the_device_unsettled() -> None:
 def test_a_null_uptime_record_reads_as_no_reading() -> None:
     """A record with a null uptime becomes a reading with a null uptime."""
     reading = gate.reading_from_record({"mac": SWITCH_MAC, "version": VERSION_AFTER, "uptime": None})
-    assert reading is not None
-    assert reading.uptime is None
+    assert reading == gate.GateReading(mac=SWITCH_MAC, version=VERSION_AFTER, uptime=None)
 
 
 def test_a_record_with_no_address_is_dropped() -> None:
@@ -467,7 +466,6 @@ def test_the_fleet_poll_sends_the_type_and_the_fields(monkeypatch: pytest.Monkey
         return fake_response([])
 
     monkeypatch.setattr(mistapi.api.v1.orgs.stats, "listOrgDevicesStats", fake_call)
-    monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: [])
     gate.read_fleet_statistics(SimpleNamespace(), ORG_ID, SITE_ID, PAGE_LIMIT)
     assert seen["org_id"] == ORG_ID
     assert seen["type"] == "all"
@@ -484,7 +482,6 @@ def test_the_fleet_poll_sends_no_device_address(monkeypatch: pytest.MonkeyPatch)
         return fake_response([])
 
     monkeypatch.setattr(mistapi.api.v1.orgs.stats, "listOrgDevicesStats", fake_call)
-    monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: [])
     gate.read_fleet_statistics(SimpleNamespace(), ORG_ID, page_limit=PAGE_LIMIT)
     assert "mac" not in seen
 
@@ -496,7 +493,6 @@ def test_the_fleet_poll_keys_the_readings_by_address(monkeypatch: pytest.MonkeyP
         {"mac": ACCESS_POINT_MAC, "version": VERSION_BEFORE, "uptime": None},
     ]
     monkeypatch.setattr(mistapi.api.v1.orgs.stats, "listOrgDevicesStats", lambda *a, **k: fake_response(rows))
-    monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: rows)
     result = gate.read_fleet_statistics(SimpleNamespace(), ORG_ID, page_limit=PAGE_LIMIT)
     assert set(result.readings) == {SWITCH_MAC, ACCESS_POINT_MAC}
     assert result.readings[SWITCH_MAC].uptime == 45
@@ -521,7 +517,6 @@ def test_a_short_poll_becomes_a_partial_reason(monkeypatch: pytest.MonkeyPatch) 
     """A page count below the reported total marks the round partial."""
     body = {"results": [{"mac": SWITCH_MAC}], "total": 4}
     monkeypatch.setattr(mistapi.api.v1.orgs.stats, "listOrgDevicesStats", lambda *a, **k: fake_response(body))
-    monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: [{"mac": SWITCH_MAC}])
     result = gate.read_fleet_statistics(SimpleNamespace(), ORG_ID, page_limit=PAGE_LIMIT)
     assert result.partial_reasons[0]["reason"] == "page_count_mismatch"
 
@@ -529,7 +524,6 @@ def test_a_short_poll_becomes_a_partial_reason(monkeypatch: pytest.MonkeyPatch) 
 def test_an_unknown_answer_shape_becomes_a_partial_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     """The page helper answers with an empty list for a shape it cannot read."""
     monkeypatch.setattr(mistapi.api.v1.orgs.stats, "listOrgDevicesStats", lambda *a, **k: fake_response({"x": 1}))
-    monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: [])
     result = gate.read_fleet_statistics(SimpleNamespace(), ORG_ID, page_limit=PAGE_LIMIT)
     assert result.partial_reasons[0]["reason"] == "unexpected_response_shape"
 

@@ -120,7 +120,7 @@ def _response(payload: Any, status_code: int = HTTP_OK) -> SimpleNamespace:
 
 @pytest.fixture
 def cloud(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    """Replace all three cloud entry points with mock objects.
+    """Replace both initial cloud endpoints with mock objects.
 
     Why:
         The reader looks up each SDK function on the module at call time, so a
@@ -136,12 +136,9 @@ def cloud(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """
     inventory = MagicMock(name="getOrgInventory", return_value=_response([]))
     statistics = MagicMock(name="listSiteDevicesStats", return_value=_response([]))
-    pages = MagicMock(name="get_all", return_value=[])
-
     monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", inventory)
     monkeypatch.setattr(mistapi.api.v1.sites.stats, "listSiteDevicesStats", statistics)
-    monkeypatch.setattr(mistapi, "get_all", pages)
-    return SimpleNamespace(inventory=inventory, statistics=statistics, pages=pages)
+    return SimpleNamespace(inventory=inventory, statistics=statistics)
 
 
 @pytest.fixture
@@ -384,7 +381,6 @@ class TestReadInventory:
             chassis_inventory: The inventory records of one stack.
         """
         cloud.inventory.return_value = _response({"results": chassis_inventory, "total": MEMBER_COUNT})
-        cloud.pages.return_value = chassis_inventory
         result = devices.read_inventory(fake_mist_session, ORG_ID, SITE_ID, page_limit=PAGE_LIMIT)
         assert result.section == devices.SECTION_INVENTORY
         assert (result.records, result.partial_reasons) == (chassis_inventory, [])
@@ -583,7 +579,6 @@ class TestGuardPageCount:
             fake_mist_session: The stand-in cloud session.
         """
         cloud.inventory.return_value = _response({"results": [], "total": 40})
-        cloud.pages.return_value = []
         result = devices.read_inventory(fake_mist_session, ORG_ID, SITE_ID, page_limit=PAGE_LIMIT)
         assert result.records == []
         assert result.partial_reasons[0]["reason"] == devices.REASON_SHORT_READ
@@ -868,7 +863,7 @@ class TestBuildDeviceIndex:
             chassis_statistics: The statistics record of one stack.
         """
         index = devices.build_device_index(chassis_inventory, chassis_statistics)
-        assert index
+        assert set(index) == {MASTER_MAC, MEMBER_MAC}
         for entry in index.values():
             assert set(entry) == INDEX_KEYS
 
@@ -887,7 +882,7 @@ class TestBuildDeviceIndex:
         """
         index = devices.build_device_index(chassis_inventory, chassis_statistics)
         keys = {key for entry in index.values() for key in entry}
-        assert keys
+        assert keys == INDEX_KEYS
         assert [key for key in keys if any(token in key for token in TIMESTAMP_TOKENS)] == []
 
     def test_a_record_without_an_address_joins_no_entry(self) -> None:

@@ -129,7 +129,7 @@ ProgressReport = Callable[[str, Mapping[str, Any]], None]  # Writes one change i
 SessionProvider = Callable[[Mapping[str, Any]], Any]  # Finds a cloud session for one job.
 DeviceCall = Callable[[Any, str, str], tuple[Any, Any]]  # The inventory read and the statistics read.
 ClientCall = Callable[[Any, str], tuple[Any, Any]]  # The wired read and the guest read.
-RowCall = Callable[[Any, str], list[dict[str, Any]]]  # One paged row read.
+RowCall = Callable[[Any, str], list[dict[str, Any]] | devices.DeviceRead]  # Statistics also carry partial reasons.
 ExtraCall = Callable[[Any, extras.SiteScope, Any], dict[str, extras.ExtraSection]]  # Every tier 3 section.
 WriteCall = Callable[[Mapping[str, Any]], Any]  # Writes one capture document.
 LoadCall = Callable[[str], Any]  # Reads one stored capture by identifier.
@@ -803,6 +803,8 @@ def wireless_records(results: Mapping[str, Any]) -> list[Any]:
         One record for each address in either read.
     """
     stats = assembly.group_value(results, assembly.GROUP_WIRELESS_STATISTICS, [])  # Empty after a lost group.
+    if isinstance(stats, devices.DeviceRead):
+        stats = stats.records
     search = assembly.group_value(results, assembly.GROUP_WIRELESS_SEARCH, [])  # Empty after a lost group.
     return clients.read_wireless_clients(  # Both sources are bound rows, so the reader calls no cloud.
         None, "", functools.partial(already_read_rows, stats), functools.partial(already_read_rows, search)
@@ -946,6 +948,9 @@ def collect_reasons(results: Mapping[str, Any]) -> list[dict[str, Any]]:
     inventory, statistics = device_reads(results)
     raw = list(assembly.group_reasons(results))  # One reason for each group that raised or was lost.
     raw.extend(device_reasons(inventory, statistics))  # A short read and a lost device type.
+    wireless = assembly.group_value(results, assembly.GROUP_WIRELESS_STATISTICS)
+    if isinstance(wireless, devices.DeviceRead):
+        raw.extend(wireless.partial_reasons)
     raw.extend(extra_reasons_of(results))  # One reason for each failed tier 3 sub-read.
     reasons = [named for entry in raw for named in row_reasons(entry)]
     logger.info("capture collector: the capture holds %s partial reasons", len(reasons))

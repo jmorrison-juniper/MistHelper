@@ -292,18 +292,19 @@ def fake_clients(session: Any, site_id: str) -> tuple[list[Any], list[Any]]:
     return wired, guest
 
 
-def fake_wireless_stats(session: Any, site_id: str) -> list[dict[str, Any]]:
-    """Answer with the wireless statistics rows of the fake site.
+def fake_wireless_stats(session: Any, site_id: str) -> devices.DeviceRead:
+    """Answer with the real wireless statistics result shape of the fake site.
 
     Args:
         session: Unused.
         site_id: Unused.
 
     Returns:
-        One statistics row.
+        One statistics row and no partial reason.
     """
     del session, site_id
-    return [{"mac": WIRELESS_CLIENT_MAC, "ap_mac": ACCESS_POINT_MAC, "rssi": -55, "snr": 38, "ssid": "corp"}]
+    rows = [{"mac": WIRELESS_CLIENT_MAC, "ap_mac": ACCESS_POINT_MAC, "rssi": -55, "snr": 38, "ssid": "corp"}]
+    return devices.DeviceRead(assembly.GROUP_WIRELESS_STATISTICS, rows, [])
 
 
 def fake_wireless_search(session: Any, site_id: str) -> list[dict[str, Any]]:

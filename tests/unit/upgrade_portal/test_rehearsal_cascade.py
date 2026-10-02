@@ -13,7 +13,9 @@ import threading
 import time
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import MagicMock, call
 
+import mistapi
 import pytest
 
 from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunState
@@ -29,6 +31,7 @@ from tests.support.rehearsal import (
     cascade_fleet,
 )
 from tests.support.rehearsal.cloud import FIRMWARE_WRITE_NAMES, STATISTICS_NAME
+from tests.unit.upgrade_portal.capture_page_loss.cases import Cases, NativePages, OfflineChecks, OfflineSession
 from tests.unit.upgrade_portal.conftest import NetworkAttemptCounter
 
 # WHY: The cascade order of the run record. The test states it here so a change
@@ -73,7 +76,21 @@ def _hold(reached: threading.Event, holding: threading.Event) -> None:
 
 
 @pytest.fixture
-def cascade(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> RehearsalHarness:
+def sdk_page_calls(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock, MagicMock]:
+    """Record real checked walks, native next calls, and converted rows without replacing their behavior."""
+    walk = MagicMock(wraps=gate.read_every_page)
+    next_page = MagicMock(wraps=mistapi.get_next)
+    readings = MagicMock(wraps=gate._readings_of)
+    monkeypatch.setattr(gate, "read_every_page", walk)
+    monkeypatch.setattr(mistapi, "get_next", next_page)
+    monkeypatch.setattr(gate, "_readings_of", readings)
+    return walk, next_page, readings
+
+
+@pytest.fixture
+def cascade(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sdk_page_calls: tuple[MagicMock, MagicMock, MagicMock]
+) -> RehearsalHarness:
     """Return one finished cascade run.
 
     Args:
@@ -228,7 +245,9 @@ def test_a_record_read_answers_while_a_poll_round_is_in_flight(monkeypatch: pyte
     harness.join()  # The run ends inside the join guard.
 
 
-def test_every_cloud_call_carries_the_keyword_names_of_the_contract(cascade: RehearsalHarness) -> None:
+def test_every_cloud_call_carries_the_keyword_names_of_the_contract(
+    cascade: RehearsalHarness, sdk_page_calls: tuple[MagicMock, MagicMock, MagicMock]
+) -> None:
     """FR-007 and FR-008 ask each stand-in to answer the call the caller makes.
 
     Args:
@@ -236,7 +255,11 @@ def test_every_cloud_call_carries_the_keyword_names_of_the_contract(cascade: Reh
     """
     statistics = cascade.cloud.calls_named(STATISTICS_NAME)[0]  # One fleet statistics read.
     assert statistics.keywords >= {"type", "site_id", "fields", "limit"}  # Section 1 of the cloud contract.
-    assert cascade.cloud.calls_named("get_all")[0].keywords == {"mist_session", "response"}  # Section 2, keywords only.
+    walk, next_page, _ = sdk_page_calls
+    assert walk.call_count == cascade.cloud.calls_of(STATISTICS_NAME)
+    assert all(entry.args[1] == gate.SECTION_GATE_STATISTICS and entry.kwargs == {} for entry in walk.call_args_list)
+    assert next_page.call_count == 0  # Each rehearsal answer is one complete page.
+    assert cascade.cloud.calls_of("get_all") == 0  # The fleet reader must not return to the unchecked helper.
     events = cascade.cloud.calls_named("searchOrgDeviceEvents")[0]  # One device event search.
     assert events.keywords >= {"device_type", "start", "end", "limit", "search_after"}  # Section 3.
     assert cascade.cloud.calls_named("listDeviceEventsDefinitions")[0].keywords == frozenset()  # Section 4.
@@ -253,15 +276,52 @@ def test_the_event_search_always_names_the_device_family(cascade: RehearsalHarne
     assert all("device_type" in call.keywords for call in searches)  # The keyword that defect class 1 drops.
 
 
-def test_the_statistics_answer_drives_the_shipped_page_guard(cascade: RehearsalHarness) -> None:
+def test_the_statistics_answer_drives_the_shipped_page_guard(
+    cascade: RehearsalHarness, sdk_page_calls: tuple[MagicMock, MagicMock, MagicMock]
+) -> None:
     """FR-009 asks the stand-in to answer a real page count.
 
     Args:
         cascade: The finished harness.
     """
     reasons = [entry for entry in cascade.record().get("phases", []) if entry.get("note")]  # Any noted phase.
-    assert not reasons  # A full page reports no short read, so no phase carries a note.
-    assert cascade.cloud.calls_of(STATISTICS_NAME) == cascade.cloud.calls_of("get_all")  # One walk for each read.
+    assert reasons == []  # A full page reports no short read, so no phase carries a note.
+    walk, next_page, readings = sdk_page_calls
+    assert walk.call_count == readings.call_count == cascade.cloud.calls_of(STATISTICS_NAME)
+    expected_macs = {script.mac for script in cascade.fleet.scripts}
+    for walked, converted in zip(walk.call_args_list, readings.call_args_list, strict=True):
+        expected = walked.args[2].data["results"]
+        assert converted == call(expected)
+        assert {row["mac"] for row in converted.args[0]} == expected_macs
+        assert len(converted.args[0]) == len(expected_macs)
+    assert next_page.call_count == 0
+
+
+class TestRehearsalNativeStatistics(OfflineChecks):
+    """Prove positive later-page counts beside the unchanged complete cascade trace."""
+
+    @pytest.mark.parametrize("fault", [None, Cases.FAILURES[0], Cases.FAILURES[5]])
+    def test_native_pages_report_http_403_and_http_503_with_counted_gate_reads(
+        self, fault: tuple | None, sdk_page_calls: tuple[MagicMock, MagicMock, MagicMock]
+    ) -> None:
+        """A real next call supplies either a complete fleet or its exact partial reason."""
+        endpoint = Cases.ENDPOINTS["fleet"]
+        session = OfflineSession()
+        pages = NativePages.series(endpoint, fault, good=2 if fault is None else 1)
+        session.install(endpoint, pages)
+        result = gate.read_fleet_statistics(session, Cases.ORG_ID, Cases.SITE_ID, page_limit=1)
+        walk, next_page, converted = sdk_page_calls
+        rows = [Cases.row("fleet", number) for number in range(1, 3 if fault is None else 2)]
+        expected = {
+            row["mac"]: gate.GateReading(row["mac"], row["version"], row["uptime"], row["last_seen"]) for row in rows
+        }
+        assert result.readings == expected
+        assert result.partial_reasons == ([] if fault is None else [NativePages.reason(endpoint.section, fault[1])])
+        assert walk.call_args_list == [call(session, gate.SECTION_GATE_STATISTICS, pages[0])]
+        assert next_page.call_args_list == [call(mist_session=session, response=pages[0])]
+        assert converted.call_args_list == [call(rows)]
+        assert session.first_calls == [(endpoint.path, endpoint.query)]
+        assert session.links == [endpoint.link(2)]
 
 
 def test_a_short_page_marks_the_round_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

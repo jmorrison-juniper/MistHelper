@@ -25,9 +25,10 @@ Why:
     name of the serving device. The assembler fills the name from the device
     index, which holds one name for each device address.
 
-    A failed cloud call raises. This module catches nothing, because the
-    assembler owns ``partial_reasons`` and needs the error to record a partial
-    capture.
+    The wireless statistics source carries its records and partial reasons
+    to the collector. The three map sources keep their visible exceptions.
+    The direct wireless reader raises on a partial statistics result, because
+    a bare client list cannot carry that result's partial reason.
 """
 
 from __future__ import annotations
@@ -36,13 +37,16 @@ import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from typing import Any
+from typing import TYPE_CHECKING, Any, overload
 
 import mistapi
 from mistapi.api.v1.sites import clients as wireless_client_api
 from mistapi.api.v1.sites import guests as guest_api
 from mistapi.api.v1.sites import stats as stats_api
 from mistapi.api.v1.sites import wired_clients as wired_client_api
+
+if TYPE_CHECKING:
+    from src.upgrade_portal.capture.devices import DeviceRead
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +259,7 @@ def fetch_wired_rows(session: Any, site_id: str) -> list[dict[str, Any]]:
     return _collect(session, response)
 
 
-def fetch_wireless_stats_rows(session: Any, site_id: str) -> list[dict[str, Any]]:
+def fetch_wireless_stats_rows(session: Any, site_id: str) -> DeviceRead:
     """Read the connected wireless clients of one site.
 
     Why:
@@ -267,10 +271,10 @@ def fetch_wireless_stats_rows(session: Any, site_id: str) -> list[dict[str, Any]
         site_id: The site to read.
 
     Returns:
-        Every row of every page.
+        The available rows and the reasons of the statistics read.
     """
     response = stats_api.listSiteWirelessClientsStats(session, site_id, limit=page_limit())
-    return _collect(session, response)
+    return _collect(session, response, "wireless_statistics")
 
 
 def fetch_wireless_search_rows(session: Any, site_id: str) -> list[dict[str, Any]]:
@@ -330,7 +334,15 @@ def page_limit() -> int:
     return max(MIN_PAGE_LIMIT, min(MAX_PAGE_LIMIT, int(raw)))
 
 
-def _collect(session: Any, response: Any) -> list[dict[str, Any]]:
+@overload
+def _collect(session: Any, response: Any) -> list[dict[str, Any]]: ...
+
+
+@overload
+def _collect(session: Any, response: Any, section: str) -> DeviceRead: ...
+
+
+def _collect(session: Any, response: Any, section: str | None = None) -> list[dict[str, Any]] | DeviceRead:
     """Return every row of a paged response.
 
     Why:
@@ -342,14 +354,28 @@ def _collect(session: Any, response: Any) -> list[dict[str, Any]]:
     Args:
         session: The mistapi session.
         response: The first response of the read.
+        section: The statistics source name. None keeps the existing map reader.
 
     Returns:
-        Every row that is a mapping.
+        Mapping rows for a map source, or a checked statistics result.
     """
-    rows = mistapi.get_all(session, response)
-    kept = [row for row in rows if isinstance(row, dict)]
-    logger.debug("Upgrade capture read %s client rows.", len(kept))
-    return kept
+    if section is None:
+        rows = mistapi.get_all(session, response)
+        kept = [row for row in rows if isinstance(row, dict)]
+        logger.debug("Upgrade capture read %s client rows.", len(kept))
+        return kept
+    from src.upgrade_portal.capture import devices  # The existing device reader imports this client module.
+
+    logger.info("Upgrade capture reads every page of section %s", section)
+    try:
+        walk = devices.read_every_page(session, section, response)
+        reasons = walk.partial_reasons or devices.guard_page_count(section, len(walk.records), response)
+    except Exception as error:
+        logger.warning("Upgrade capture failed the %s read: %s", section, type(error).__name__)
+        reason = {"section": section, "reason": devices.REASON_READ_FAILED, "http_status": devices.HTTP_STATUS_NONE}
+        return devices.DeviceRead(section, [], [reason])
+    logger.debug("Upgrade capture read %s client rows for section %s", len(walk.records), section)
+    return devices.DeviceRead(section, walk.records, reasons)
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +402,7 @@ def read_wired_clients(session: Any, site_id: str, source: RowReader | None = No
 def read_wireless_clients(
     session: Any,
     site_id: str,
-    stats_source: RowReader | None = None,
+    stats_source: Callable[[Any, str], DeviceRead | list[dict[str, Any]]] | None = None,
     search_source: RowReader | None = None,
 ) -> list[ClientRecord]:
     """Read the wireless clients of one site from both sources.
@@ -397,8 +423,18 @@ def read_wireless_clients(
 
     Returns:
         One record for each address in either source, in address order.
+
+    Raises:
+        RuntimeError: When a statistics result carries a partial reason.
     """
+    from src.upgrade_portal.capture.devices import DeviceRead  # Avoid the normalizer's existing import cycle.
+
     stats_rows = (stats_source or fetch_wireless_stats_rows)(session, site_id)
+    if isinstance(stats_rows, DeviceRead):
+        if stats_rows.partial_reasons:
+            logger.warning("The direct wireless statistics read is partial after %s rows", len(stats_rows.records))
+            raise RuntimeError("The wireless statistics read is partial.")
+        stats_rows = stats_rows.records
     search_rows = (search_source or fetch_wireless_search_rows)(session, site_id)
     stats_records = _build_records(stats_rows, _wireless_stats_record)
     search_records = _build_records(search_rows, _wireless_search_record)

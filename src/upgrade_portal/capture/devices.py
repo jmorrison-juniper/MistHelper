@@ -75,13 +75,37 @@ class DeviceRead:
 
     Attributes:
         section: The section name that each partial reason entry carries.
-        records: The records that the cloud returned. Empty after a failure.
+        records: The records of every valid page before a failure.
         partial_reasons: One entry for each fault. Empty after a whole read.
     """
 
     section: str
     records: list[dict[str, Any]]
     partial_reasons: list[dict[str, Any]]
+
+    def read_next(self, session: Any, response: Any) -> Any:
+        """Read one native next page and keep a lost page beside prior records."""
+        current = None
+        logger.info("Upgrade portal reads the next page of section %s", self.section)
+        try:
+            current = mistapi.get_next(mist_session=session, response=response)
+            page = _page_records(current)
+        except Exception as error:  # The SDK can raise before it returns a response.
+            logger.warning("Upgrade portal failed a later page of section %s: %s", self.section, type(error).__name__)
+            page = None
+        if page is None:
+            status = _status_code(current)
+            logger.warning(
+                "Upgrade portal lost a later page of section %s at status %s after %s record(s)",
+                self.section,
+                status,
+                len(self.records),
+            )
+            self.partial_reasons.append(_partial_reason(self.section, REASON_SHORT_READ, status))
+        else:
+            self.records.extend(page)
+        logger.debug("Upgrade portal holds %s records for section %s", len(self.records), self.section)
+        return current
 
 
 def normalize_device_mac(value: Any) -> str:
@@ -225,7 +249,7 @@ def _known_shape(response: Any) -> bool:
     payload = _payload(response)
     if isinstance(payload, list):
         return True
-    return isinstance(payload, dict) and "results" in payload
+    return isinstance(payload, dict) and isinstance(payload.get("results"), list)
 
 
 def _reported_total(response: Any) -> int | None:
@@ -302,7 +326,7 @@ def guard_page_count(section: str, collected: int, response: Any) -> list[dict[s
     return [_partial_reason(section, REASON_SHORT_READ, status)]
 
 
-def _page_records(response: Any) -> list[Any] | None:
+def _page_records(response: Any) -> list[dict[str, Any]] | None:
     """Return the records that one page holds, or None for a lost page.
 
     Why:
@@ -317,13 +341,17 @@ def _page_records(response: Any) -> list[Any] | None:
 
     Returns:
         The records of the page, or None when the page holds no readable list.
+
+    Raises:
+        TypeError: When a record cannot become a dictionary.
+        ValueError: When a record holds malformed dictionary entries.
     """
     if _status_reason(_status_code(response)) is not None:  # A refused page or a lost connection holds no record.
         return None
     payload = _payload(response)  # The parsed body of the page.
     if isinstance(payload, dict):  # A search answer holds its records under "results".
         payload = payload.get("results")
-    return list(payload) if isinstance(payload, list) else None  # Every other body is a lost page.
+    return [dict(record) for record in payload] if isinstance(payload, list) else None
 
 
 def read_every_page(session: Any, section: str, response: Any) -> DeviceRead:
@@ -346,20 +374,21 @@ def read_every_page(session: Any, section: str, response: Any) -> DeviceRead:
 
     Returns:
         The records of each page that arrived, and one reason for a lost page.
+
+    Raises:
+        TypeError: When an initial record cannot become a dictionary.
+        ValueError: When an initial record holds malformed dictionary entries.
     """
-    records = _page_records(response) or []  # A lost first page holds no record, and the guard names it.
+    records = _page_records(response)
+    walk = DeviceRead(section, records or [], [])
+    if records is None:  # A first-page fault belongs to the existing guard, not a later-page reason.
+        return walk
     current = response  # The page that holds the link to the next page.
     while getattr(current, "next", None):  # The SDK sets "next" while the cloud holds more pages.
-        logger.info("Upgrade portal reads the next page of section %s", section)  # Log before the page call.
-        current = mistapi.get_next(mist_session=session, response=current)  # Read one page through the SDK.
-        page = _page_records(current)  # The records of that page, or None for a lost page.
-        if page is None:  # The cloud refused the page, or the page holds no list.
-            status = _status_code(current)  # The status of the lost page, or zero.
-            logger.warning("Upgrade portal lost a later page of section %s. The cloud answered %s", section, status)
-            return DeviceRead(section, records, [_partial_reason(section, REASON_SHORT_READ, status)])
-        records.extend(page)  # Keep the rows of a whole page.
-        logger.debug("Upgrade portal holds %s records for section %s", len(records), section)  # Log the count only.
-    return DeviceRead(section, records, [])  # Every page arrived.
+        current = walk.read_next(session, current)
+        if walk.partial_reasons:
+            break
+    return walk
 
 
 def _read_group(session: Any, section: str, response_factory: Any) -> DeviceRead:
@@ -380,13 +409,14 @@ def _read_group(session: Any, section: str, response_factory: Any) -> DeviceRead
     """
     try:
         response = response_factory()
-        records = mistapi.get_all(mist_session=session, response=response)
+        walk = read_every_page(session, section, response)
+        rows = [dict(record) for record in walk.records]
+        reasons = walk.partial_reasons or guard_page_count(section, len(rows), response)
     except Exception as error:  # A cloud fault marks one section partial and never stops the capture.
         logger.warning("Upgrade portal failed the %s read: %s", section, type(error).__name__)
         return DeviceRead(section, [], [_partial_reason(section, REASON_READ_FAILED, HTTP_STATUS_NONE)])
-    logger.debug("Upgrade portal read %s records for section %s", len(records), section)
-    rows = [dict(record) for record in records]
-    return DeviceRead(section, rows, guard_page_count(section, len(rows), response))
+    logger.debug("Upgrade portal read %s records for section %s", len(rows), section)
+    return DeviceRead(section, rows, reasons)
 
 
 def read_inventory(session: Any, org_id: str, site_id: str, page_limit: int | None = None) -> DeviceRead:
