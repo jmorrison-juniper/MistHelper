@@ -10,6 +10,7 @@ from typing import Any  # Accept heterogeneous Mist API dictionaries.
 logger = logging.getLogger(__name__)  # Keep log records tied to this module.
 _TOKEN_PATTERN = re.compile(r"{{\s*([A-Za-z0-9_]+)\s*}}")  # Match valid Mist site variable tokens.
 _JOIN_TEXT = ", "  # Keep joined report fields consistent across rows.
+_PORTAL_MESSAGE_PLACEHOLDER_PATHS = ("MessageFormat",)  # Identify Mist-owned guest portal message token fields.
 
 
 @dataclass(frozen=True)
@@ -170,11 +171,11 @@ class SiteVariableAuditModel:
         """Return assigned templates from each supported Mist source."""
         logger.info("Normalizing assigned templates")  # Log before template normalization.
         site_records = records.get("sites", [])  # Keep full site records so site-level assignments are visible.
+        template_records = records.get("templates", [])  # Keep WLAN template scope records for org WLAN resolution.
         sources = (  # Define each Mist source and its normalized type.
             ("gateway_templates", "gateway_template"),
             ("network_templates", "network_template"),
             ("templates", "template"),
-            ("wlans", "wlan"),
             ("device_profiles", "device_profile"),
         )
         templates: list[TemplateReference] = []  # Collect assigned template references.
@@ -182,6 +183,9 @@ class SiteVariableAuditModel:
             templates.extend(
                 cls._references_from_records(records.get(record_key, []), template_type, sites, site_records)
             )  # Add references.
+        templates.extend(
+            cls._wlan_references(records.get("wlans", []), template_records, sites, site_records)
+        )  # Add org WLAN references resolved through WLAN template scope.
         templates.sort(key=cls._template_sort_key)  # Keep deterministic ordering across runs.
         logger.debug("Normalized %s assigned templates", len(templates))  # Log assigned template count.
         return templates  # Return all assigned template references.
@@ -248,6 +252,101 @@ class SiteVariableAuditModel:
         return any(
             template_id in cls._ids_from_value(site_record.get(field)) for field in reference_fields
         )  # Test all known fields.
+
+    @classmethod
+    def _wlan_references(
+        cls,
+        records: list[dict[str, Any]],
+        template_records: list[dict[str, Any]],
+        sites: dict[str, str],
+        site_records: list[dict[str, Any]],
+    ) -> list[TemplateReference]:
+        """Return org WLAN references resolved through WLAN template scope."""
+        template_lookup = cls._wlan_template_lookup(template_records)  # Build template ID to scope lookup.
+        references: list[TemplateReference] = []  # Collect WLAN references with real site assignments.
+        for index, record in enumerate(records):  # Walk each organization WLAN once.
+            template_id = str(record.get("template_id") or record.get("wlan_template_id") or "")  # Find owner.
+            site_ids = cls._wlan_site_ids(
+                record, template_lookup.get(template_id), sites, site_records
+            )  # Resolve sites.
+            if site_ids:  # Only scoped WLANs can affect a real site.
+                references.append(cls._wlan_reference(record, index, site_ids))  # Store resolved scan input.
+        logger.debug("Resolved %s organization WLANs through WLAN template scope", len(references))  # Log count.
+        return references  # Return resolved org WLAN references only.
+
+    @staticmethod
+    def _wlan_template_lookup(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """Return WLAN template records keyed by template ID."""
+        return {str(record["id"]): record for record in records if record.get("id")}  # Keep scoped templates only.
+
+    @classmethod
+    def _wlan_site_ids(
+        cls,
+        record: dict[str, Any],
+        template_record: dict[str, Any] | None,
+        sites: dict[str, str],
+        site_records: list[dict[str, Any]],
+    ) -> set[str]:
+        """Return real site IDs for an organization WLAN."""
+        direct_site_ids = cls._record_site_ids(record) & set(sites)  # Preserve real direct site scope when present.
+        if direct_site_ids:  # Direct site rows already name their scope.
+            return direct_site_ids  # Return real direct site assignments only.
+        if template_record is None:  # A WLAN without template scope cannot be joined to sites safely.
+            return set()  # Skip unscoped org WLAN rows instead of using a placeholder site.
+        return {
+            site_id for site_id in sites if cls._wlan_template_applies_to_site(template_record, site_id, site_records)
+        }  # Resolve through WLAN template scope.
+
+    @classmethod
+    def _wlan_template_applies_to_site(
+        cls,
+        template: dict[str, Any],
+        site_id: str,
+        site_records: list[dict[str, Any]],
+    ) -> bool:
+        """Return whether one WLAN template applies to one site."""
+        site_record = cls._site_record(site_id, site_records)  # Read site group and tag context.
+        exceptions = cls._template_scope(template, "exceptions")  # Read negative template scope first.
+        if cls._template_scope_matches(exceptions, site_id, site_record):  # Mist exceptions override applies.
+            return False  # Exclude this site from the WLAN template.
+        applies = cls._template_scope(template, "applies")  # Read positive template scope.
+        return cls._template_scope_matches(applies, site_id, site_record)  # Include sites covered by applies.
+
+    @staticmethod
+    def _template_scope(template: dict[str, Any], field_name: str) -> dict[str, Any]:
+        """Return a normalized WLAN template scope dictionary."""
+        scope = template.get(field_name) or template.get(f"{field_name}_to") or {}  # Support common field aliases.
+        return scope if isinstance(scope, dict) else {}  # Ignore malformed scope values safely.
+
+    @staticmethod
+    def _site_record(site_id: str, site_records: list[dict[str, Any]]) -> dict[str, Any]:
+        """Return one site record by ID."""
+        return next((record for record in site_records if record.get("id") == site_id), {})  # Return empty if absent.
+
+    @classmethod
+    def _template_scope_matches(cls, scope: dict[str, Any], site_id: str, site_record: dict[str, Any]) -> bool:
+        """Return whether a WLAN template scope covers one site."""
+        if scope.get("org_id"):  # Mist uses org_id to mean all sites in the organization.
+            return True  # Match all sites when the scope is organization-wide.
+        if site_id in cls._ids_from_value(scope.get("site_ids")):  # Site IDs give explicit site scope.
+            return True  # Match direct site scope.
+        if cls._sets_overlap(scope.get("sitegroup_ids"), site_record.get("sitegroup_ids")):  # Match site groups.
+            return True  # Match indirect site group scope.
+        return cls._sets_overlap(scope.get("wxtag_ids"), site_record.get("wxtag_ids"))  # Match Mist tags when present.
+
+    @staticmethod
+    def _sets_overlap(left: Any, right: Any) -> bool:
+        """Return whether two common Mist ID values overlap."""
+        left_ids = SiteVariableAuditModel._ids_from_value(left)  # Normalize the left value to string IDs.
+        right_ids = SiteVariableAuditModel._ids_from_value(right)  # Normalize the right value to string IDs.
+        return bool(left_ids and right_ids and not left_ids.isdisjoint(right_ids))  # Match non-empty overlap only.
+
+    @staticmethod
+    def _wlan_reference(record: dict[str, Any], index: int, site_ids: set[str]) -> TemplateReference:
+        """Return one organization WLAN template reference."""
+        template_id = str(record.get("id") or f"wlan-{index}")  # Use a stable fallback ID for malformed records.
+        template_name = str(record.get("name") or record.get("ssid") or template_id)  # Prefer readable names.
+        return TemplateReference(template_id, "wlan", template_name, record, site_ids)  # Store resolved evidence.
 
     @classmethod
     def _ids_from_value(cls, value: Any) -> set[str]:
@@ -394,11 +493,20 @@ class SiteVariableAuditModel:
         uses = []  # Collect valid tokens from one string field.
         for match in _TOKEN_PATTERN.finditer(value):  # Find each complete valid token.
             name = cls.normalize_variable_name(match.group(1))  # Normalize the token name before comparing.
-            if name:  # Empty or invalid names are ignored.
+            if name and not cls._is_mist_portal_placeholder(path):  # Ignore only empty and cloud-owned tokens.
                 uses.append(
                     VariableTokenUse(name, path, template.template_type, template.template_name, template.template_id)
                 )  # Preserve token evidence.
         return uses  # Return all valid token uses in the string.
+
+    @staticmethod
+    def _is_mist_portal_placeholder(path: str) -> bool:
+        """Return whether a token is a Mist-owned guest portal placeholder."""
+        if ".portal." not in path:  # The allowlist applies only to guest portal text fields.
+            return False  # Keep same token names as site variables outside portal text.
+        if not path.endswith(_PORTAL_MESSAGE_PLACEHOLDER_PATHS):  # Only message formats use cloud placeholders.
+            return False  # Keep other portal fields subject to the site-variable audit.
+        return True  # Ignore every token in Mist-owned portal message format text.
 
     @staticmethod
     def _child_path(parent: str, key: str) -> str:
