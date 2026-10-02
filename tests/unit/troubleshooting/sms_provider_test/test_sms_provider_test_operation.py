@@ -13,6 +13,13 @@ from src.troubleshooting.sms_provider_test.model import SMSGLOBAL_PROVIDER, TWIL
 from src.troubleshooting.sms_provider_test.operation import SmsProviderTest
 
 
+@pytest.fixture(autouse=True)
+def interactive_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make operation tests run as if a terminal is attached."""
+    fake_stdin = SimpleNamespace(isatty=lambda: True)  # WHY: most operation tests exercise the interactive path.
+    monkeypatch.setattr(operation_module.sys, "stdin", fake_stdin)  # WHY: pytest may not provide a real TTY.
+
+
 class FakePrompts:
     """Prompt stand-in for operation tests."""
 
@@ -87,6 +94,24 @@ def test_confirmation_refusal_sends_no_request(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(operation_module, "SmsProviderTestClient", FakeClient)  # WHY: fail if operation sends.
     SmsProviderTest.run()  # WHY: run the menu flow with confirmation refused.
     assert FakeClient.calls == []  # WHY: no API request may be sent after refusal.
+
+
+def test_non_tty_stops_before_hidden_prompt(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """A piped run must stop before hidden provider prompts."""
+    FakeClient.calls = []  # WHY: reset the class-level call recorder.
+    fake_stdin = SimpleNamespace(isatty=lambda: False)  # WHY: simulate a pipe or scheduled job.
+    monkeypatch.setattr(operation_module.sys, "stdin", fake_stdin)  # WHY: avoid the real terminal state.
+    monkeypatch.setattr(operation_module, "SmsProviderTestClient", FakeClient)  # WHY: prove no request is sent.
+    caplog.set_level("ERROR")  # WHY: capture the guard log line.
+
+    SmsProviderTest.run()  # WHY: exercise the non-interactive guard.
+
+    message = SmsProviderTest._non_interactive_message()  # WHY: assert the exact operator output.
+    assert capsys.readouterr().out.strip() == message  # WHY: piped operators must see one clear sentence.
+    assert message in caplog.text  # WHY: the stop reason must be logged.
+    assert FakeClient.calls == []  # WHY: no SMS provider API request may be sent.
 
 
 def test_non_2xx_response_is_exported_without_secret(

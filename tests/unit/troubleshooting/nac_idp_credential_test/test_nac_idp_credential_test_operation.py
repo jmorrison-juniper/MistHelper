@@ -3,7 +3,10 @@
 from __future__ import annotations  # WHY: keep annotations consistent with source modules.
 
 import logging  # WHY: caplog checks that passwords do not reach logs.
+from types import SimpleNamespace  # WHY: tests simulate stdin without touching the real terminal.
 from typing import Any  # WHY: fake classes accept dynamic runtime values.
+
+import pytest  # WHY: autouse fixtures keep operation tests off the real stdin state.
 
 from src.troubleshooting.nac_idp_credential_test import operation as operation_module  # WHY: patch operation seams.
 from src.troubleshooting.nac_idp_credential_test.model import (
@@ -12,6 +15,13 @@ from src.troubleshooting.nac_idp_credential_test.model import (
     IdentityProviderChoice,
 )
 from src.troubleshooting.nac_idp_credential_test.prompts import NacIdpCredentialPrompts
+
+
+@pytest.fixture(autouse=True)
+def interactive_stdin(monkeypatch: Any) -> None:
+    """Make operation tests run as if a terminal is attached."""
+    fake_stdin = SimpleNamespace(isatty=lambda: True)  # WHY: most operation tests exercise the interactive path.
+    monkeypatch.setattr(operation_module.sys, "stdin", fake_stdin)  # WHY: pytest may not provide a real TTY.
 
 
 class FakeDataExporter:
@@ -209,6 +219,24 @@ def test_nac_idp_credential_test_decline_sends_no_credential(monkeypatch: Any) -
     assert isinstance(client, FakeClient)
     assert (client.session, client.org_id) == ("session", "org-1")  # WHY: read providers in the active API scope.
     assert client.requests == []  # WHY: declined confirmation sends no credential.
+    assert FakeDataExporter.calls == []  # WHY: no API result means no export row.
+
+
+def test_nac_idp_credential_test_non_tty_stops_before_hidden_prompt(monkeypatch: Any, capsys: Any, caplog: Any) -> None:
+    """A piped run must stop before the hidden password prompt."""
+    fake_stdin = SimpleNamespace(isatty=lambda: False)  # WHY: simulate a pipe or scheduled job.
+    install_operation_fakes(monkeypatch, FakeClient, FakePrompts)  # WHY: allow only the provider list read.
+    monkeypatch.setattr(operation_module.sys, "stdin", fake_stdin)  # WHY: avoid the real terminal state.
+    caplog.set_level(logging.ERROR)  # WHY: capture the guard log line.
+
+    operation_module.NacIdpCredentialTest.run()  # WHY: exercise the non-interactive guard.
+
+    message = operation_module.NacIdpCredentialTest._non_interactive_message()  # WHY: assert exact output.
+    client = FakeClient.last_instance  # WHY: inspect requests after the allowed provider list read.
+    assert isinstance(client, FakeClient)  # WHY: the provider list read still creates a scoped client.
+    assert capsys.readouterr().out.strip() == message  # WHY: piped operators must see one clear sentence.
+    assert message in caplog.text  # WHY: the stop reason must be logged.
+    assert client.requests == []  # WHY: no credential validation API request may be sent.
     assert FakeDataExporter.calls == []  # WHY: no API result means no export row.
 
 
