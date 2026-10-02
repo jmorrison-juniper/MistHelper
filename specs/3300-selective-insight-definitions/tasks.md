@@ -438,6 +438,36 @@ Use the current session artifact directory for coverage metadata and gate report
 The evidence records the exact commands and report paths that ran.
 Do not use a report directory as an application output directory.
 
+## Authorized publication continuation
+
+The parent granted sole position 17 on exact main `77699c7483c1e90df14f9650ed90e98e512bee97`.
+This grant supersedes the earlier local-only hold for this continuation.
+The [publication evidence](publication.md) records the exact current-base commands and results.
+Historical preparation records remain intact.
+
+- [x] T020 Rebase only this clean branch onto the exact authorized base and repeat native current-base local proof. (delivered: specs/3300-selective-insight-definitions/publication.md)
+  - Recheck authenticated claim, complete open PR file lists, and strict protection.
+  - Repeat four actual caller red and green decisions, code-object execution, 40 controlled durations, cache and fault paths, and full export.
+  - Measure all changed statements, branches, and 27 changed methods.
+  - Run current configured gates and the six-input, three-guide preflight.
+  - Preserve all protected source and policy inputs.
+- [ ] T021 Commit the bounded publication record, prove the clean committed ratchet, push once, and create the current full-template PR.
+  - **Dependencies**: T020.
+  - Preserve all 23 template items, exact commands, results, and conditional capability limits.
+  - Post the single-owner protocol in PR comments.
+- [ ] T022 Verify fresh exact-head quality, final title, applicable STE, CodeQL analysis, separate required CodeQL, and all 15 strict contexts.
+  - **Dependencies**: T021.
+  - Preserve application bindings, the authorized current base, and the complete checked source.
+  - Stop on unrelated main advance or substantive scope conflict.
+- [ ] T023 Perform protected full-head-match squash without administrator bypass, automatic merge, or a branch-deletion flag.
+  - **Dependencies**: T022.
+  - Verify actual-main parent and complete tree against the authorized base and checked source.
+- [ ] T024 Prove exact actual main locally, persist the PR receipt, perform named cleanup, and send the full SHA, tree, and proof URL.
+  - **Dependencies**: T023.
+  - Use only this own worktree and own environment.
+  - Never edit the main checkout or push after squash.
+  - Pause after the receipt. The parent alone releases the next issue.
+
 ### Red caller and timing selectors
 
 ```bash

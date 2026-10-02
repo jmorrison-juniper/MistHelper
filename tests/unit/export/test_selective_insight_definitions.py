@@ -11,11 +11,12 @@ import logging
 import os
 import pkgutil
 import statistics
+import sys
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import SimpleNamespace
+from types import FrameType, SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -92,11 +93,11 @@ EXPECTED_SCOPES = {
     "device": ["bytes", "rssi"],
     "org": ["bytes", "site-count"],
 }
-BEFORE_MEDIANS = {
-    "site": 1.799229208,
-    "client": 1.796314792,
-    "device": 1.786930666,
-    "org": 1.815521417,
+BEFORE_MEDIANS = {  # Recorded native medians from granted base 77699c7483c1e90df14f9650ed90e98e512bee97.
+    "site": 1.793526709,
+    "client": 1.819329208,
+    "device": 1.792747167,
+    "org": 1.789901208,
 }
 
 
@@ -241,6 +242,33 @@ class DefinitionCacheSnapshot:
         return cls(files)
 
 
+class NativeRefreshTrace:
+    """Prove execution of source-owned callbacks rather than their names alone."""
+
+    def __init__(self, caller: str) -> None:
+        callers = {
+            "site": SiteMetricOperation._refresh_const_metrics,
+            "client": SiteClientInsightsService._print_intro_and_refresh,
+            "device": DeviceMetricOperation._refresh_const_metrics,
+            "org": OrgExportUtils._insight_setup_or_empty,
+        }
+        self.codes = {
+            "caller": callers[caller].__code__,
+            "helper": InsightMetricsUtils.export_const_insight_metrics.__code__,
+            "selected": ConstDefinitionsExporter.export_endpoint.__code__,
+            "processing": ConstDefinitionsExporter._process_single_endpoint.__code__,
+            "full_export": ConstDefinitionsExporter.export_all.__code__,
+        }
+        self.counts = dict.fromkeys(self.codes, 0)
+
+    def capture(self, frame: FrameType, event: str, argument: Any) -> None:
+        """Count only identical code objects from the actual source callbacks."""
+        if event == "call":
+            for name, code in self.codes.items():
+                if frame.f_code is code:
+                    self.counts[name] += 1
+
+
 @pytest.fixture
 def offline_dependencies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """Bind isolated request and CSV boundaries without replacing refresh behavior."""
@@ -311,6 +339,23 @@ def test_actual_stale_caller_refresh_is_selective(scenario: InsightRefreshScenar
     assert scenario.cache_accesses() == {INSIGHT_FILE}
     assert scenario.enumeration.call_count == 0
     assert result == (EXPECTED_SCOPES["org"] if caller == "org" else None)
+
+
+@pytest.mark.parametrize("caller", CALLERS)
+def test_actual_caller_executes_native_selected_callbacks(scenario: InsightRefreshScenario, caller: str) -> None:
+    """Each actual caller must execute the shared source path once and never execute the full exporter."""
+    scenario.seed()
+    trace = NativeRefreshTrace(caller)
+    previous = sys.getprofile()
+    sys.setprofile(trace.capture)
+    try:
+        scenario.invoke(caller)
+    finally:
+        sys.setprofile(previous)
+    print(f"Checked native callback code objects: {len(trace.codes)}. Counts: {trace.counts}")
+    assert trace.counts == {"caller": 1, "helper": 1, "selected": 1, "processing": 1, "full_export": 0}
+    assert scenario.deps.apisession.requests == [(INSIGHT_URI, {})]
+    assert scenario.deps.DataExporter.attempts[0][0] == INSIGHT_FILE
 
 
 def test_export_endpoint_selection_reuses_real_helpers(

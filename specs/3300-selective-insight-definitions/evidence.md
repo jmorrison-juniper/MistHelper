@@ -1,5 +1,8 @@
 # Evidence: Selective Insight Definitions
 
+The [publication evidence](publication.md) records the later sole publication grant and exact current-base proof.
+This document retains the earlier local-only preparation record.
+
 ## Scope and environment
 
 Issue [#3300](https://github.com/jmorrison-juniper/MistHelper/issues/3300) owns this repair.
