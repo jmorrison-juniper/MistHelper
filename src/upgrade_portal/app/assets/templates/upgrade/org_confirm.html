@@ -76,7 +76,7 @@
 
   {% if not writes_enabled %}
     <div class="alert alert-warning" role="alert" data-testid="org-upgrade-write-disabled">
-      Caution: organization upgrade writes are disabled. Complete the multi-site safety gates before you enable this operation.
+      Caution: organization upgrade writes are disabled. Set ORG_UPGRADE_WRITES_ENABLED=true only after you complete the multi-site safety checks.
     </div>
   {% endif %}
 
