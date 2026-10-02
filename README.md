@@ -21,57 +21,6 @@ It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
 
-On the Maps page, each floor plan title uses the selected theme text color.
-A theme change preserves the map and its viewing range.
-
-Menu 271 exports subscription and contract expiry reports. Use it to find
-license and support renewal risk.
-
-Menu 272 exports a certificate expiry report. Use it to plan certificate renewal
-work across Mist sources.
-
-Menu 273 exports admin and API token hygiene reports. Use it to review broad
-admin access and idle tokens.
-
-Menu 274 exports a PSK hygiene report. Use it to find expired, weak, and
-unmatched organization PSKs.
-
-Menu 275 audits site variable coverage. Use it to find missing and unused site
-variables before a template change.
-
-Menu 276 exports an organization security posture checklist. Use it to compare
-key organization settings with recommended values.
-
-Menu 277 exports an organization switch scorecard. Use it to find switch health
-and configuration risks across sites.
-
-Menu 278 exports an organization access point scorecard. Use it to review AP
-health and version status across sites.
-
-Menu 279 exports an organization WAN Edge scorecard. Use it to review gateway
-health, VPN peers, BGP peers, and DHCP pool status.
-
-Menu 282 exports a rogue and PCI evidence pack. Use it to collect rogue AP
-detection evidence for a PCI DSS review.
-
-Menu 283 triggers one synthetic test on demand. Use it when you must validate a
-site test path before a larger repair.
-
-Menu 284 tests a guest portal SMS provider. Use it to verify external SMS
-credentials before you troubleshoot guest access.
-
-Menu 285 validates one NAC identity provider credential. Use it before an
-Access Assurance cutover.
-
-Menu 288 shows Session Smart Router registration commands. Use it when you must
-onboard a router manually.
-
-Menu 289 exports a site client fingerprint census. Use it to plan NAC policy
-groups from observed client attributes.
-
-Menu 290 runs bounded RF diagnostics. Use it to start AP spectrum analysis or a
-client RF diagnostic recording.
-
 Menu 280 exports the alert digest handover report. Use it to group recent alarms
 for a shift change.
 
