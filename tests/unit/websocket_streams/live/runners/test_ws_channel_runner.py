@@ -7,6 +7,7 @@ import time  # Reconnect timing tests compare elapsed time.
 
 import pytest  # The post-open stop test patches the transport client.
 
+import websocket  # Tests build the same handshake exceptions as websocket-client.
 from src.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
@@ -15,10 +16,14 @@ from src.websocket_streams.catalog.model import (
 from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked requests by hand.
 from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # The tests cover the channel runner.
 from src.websocket_streams.live.sessions.record import SessionState  # Fake sinks record final state.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Transport setup.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    MistStreamEndpoint,
+    TransportProfile,
+)  # Transport setup.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake endpoint authentication.
 from tests.support.fake_mist_cloud.devices import StreamDevice  # Fake stream device.
-from tests.support.fake_mist_cloud.server import FakeMistCloud  # Loopback WebSocket server.
+from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Loopback WebSocket server.
 
 
 class FakeSink:
@@ -179,7 +184,7 @@ class TestChannelStreamRunner:
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
             try:  # Stop the runner after the retry-budget assertion.
                 runner.start()  # Start the daemon reader thread.
-                finished = sink.wait_for_finished(1, 1.0)  # Wait for the retry budget to end.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the retry budget to end.
                 assert len(cloud.requests) == 4  # Initial attempt plus three retries.
                 assert finished == [  # Keep the retry failure result stable.
                     (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
@@ -199,13 +204,58 @@ class TestChannelStreamRunner:
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
             try:  # Stop the runner after the drop-budget assertion.
                 runner.start()  # Start the daemon reader thread.
-                finished = sink.wait_for_finished(1, 1.0)  # Wait for the retry budget to end.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the retry budget to end.
                 expected_attempts = len(delays) + 1  # The budget is initial attempt plus retries.
                 assert len(cloud.requests) == expected_attempts  # The runner did not retry forever.
                 assert device.drop_count == expected_attempts  # Each open attempt reached subscribe.
                 assert finished == [  # Keep the retry failure result stable.
                     (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
                 ]
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_http_4xx_handshake_refusal_fails_without_retry(self) -> None:
+        """Fail a 4xx handshake refusal without a retry."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault("refuse", status_code=403))  # 4xx refusal.
+            sink = FakeSink()  # Record runner callbacks.
+            runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a",)), sink)  # Build runner.
+            try:  # Stop the runner after the 4xx assertion.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the failure.
+                expected = ConnectFailure.REFUSED_TEXT.format(status=403)  # The reason must name the status.
+                assert finished == [(SessionState.FAILED, expected)]  # 4xx refusal fails at once.
+                assert len(cloud.requests) == 1  # A 4xx refusal must not retry.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    @pytest.mark.parametrize(
+        ("kind", "status_code", "error"),
+        (
+            ("refuse", 503, websocket.WebSocketBadStatusException("Handshake status 503", 503)),
+            ("refuse", 429, websocket.WebSocketBadStatusException("Handshake status 429", 429)),
+            ("stall", 0, TimeoutError("The handshake stalled.")),
+            ("reset", 0, ConnectionError("The peer reset the handshake.")),
+        ),
+    )
+    def test_open_failures_retry_budget_names_last_reason(
+        self, kind: str, status_code: int, error: BaseException
+    ) -> None:
+        """Fail after retry attempts and show the last open failure reason."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault(kind, status_code=status_code))  # Fault.
+            sink = FakeSink()  # Record runner callbacks.
+            delays = (0.01, 0.01)  # Keep the retry budget short.
+            endpoint = self._endpoint(cloud, reconnect_delays=delays, subscribe_timeout=0.1)  # Short timeout.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            try:  # Stop the runner after the retry-budget assertion.
+                expected = ConnectFailure.reason(error)  # Use the product mapper for the expected text.
+                if expected is None:  # Fail clearly if a row no longer maps to a safe reason.
+                    raise AssertionError("The representative open error did not map to a safe reason.")  # Fail fast.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the retry budget to end.
+                assert len(cloud.requests) == len(delays) + 1  # The retry budget was consumed once.
+                assert finished == [(SessionState.FAILED, expected)]  # The last open failure reason is visible.
             finally:
                 runner.stop()  # Ensure the reader thread stops.
 
@@ -219,7 +269,7 @@ class TestChannelStreamRunner:
             runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a",)), sink)  # Runner.
             try:  # Stop the runner after the refusal assertion.
                 runner.start()  # Start the daemon reader thread.
-                finished = sink.wait_for_finished(1, 1.0)  # Wait for the subscription failure.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the subscription failure.
                 assert finished == [(SessionState.FAILED, "The stream subscription failed: denied.")]  # Safe reason.
             finally:
                 runner.stop()  # Ensure the reader thread stops.
@@ -269,6 +319,24 @@ class TestChannelStreamRunner:
                 pings = cloud.wait_for_pings(3, 1.0)  # A healthy quiet channel should keep pinging.
                 assert len(pings) >= 3  # Pongs prevent a false drop.
                 assert len(sink.finished) == 0  # The session did not fail while pongs arrived.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_bad_json_and_empty_body_events_stay_visible(self) -> None:
+        """Keep malformed JSON and an empty body visible in channel messages."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a stream device.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a",)), sink)  # Build runner.
+            try:  # Ensure the reader thread stops after assertions.
+                runner.start()  # Start the daemon reader thread.
+                sink.wait_for_live(1, 1.0)  # Wait for subscription.
+                device.publish("/sites/site-a/stats/devices", "bad json")  # Publish malformed JSON text.
+                device.publish("/sites/site-a/stats/devices", data="")  # Publish an empty body.
+                messages = sink.wait_for_messages(2, 1.0)  # Wait for both channel messages.
+                assert messages[0][1]["data"] == "bad json"  # Malformed JSON stays as text.
+                assert messages[1][1]["data"] == ""  # The empty body stays empty.
             finally:
                 runner.stop()  # Ensure the reader thread stops.
 

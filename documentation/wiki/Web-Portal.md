@@ -126,6 +126,21 @@ The device sent no output before the Mist cloud closed the terminal. Start a new
 
 Issue #3710 records this behavior.
 
+If the portal cannot open the WebSocket connection, the session ends as
+`Failed`. The reason names one of these causes.
+
+```text
+The Mist cloud refused the WebSocket connection with HTTP status N.
+The Mist cloud did not answer the WebSocket connection in time.
+The TLS check of the Mist cloud connection failed.
+The portal could not find the address of the Mist cloud.
+The portal could not connect to the Mist cloud.
+```
+
+A stream session tries the connection again before it ends. A refusal with an
+HTTP status from 400 through 499 ends the session at once. HTTP status 408 and
+429 get a new try. The operator guide gives the next step for each cause.
+
 The time notice appears when less than two minutes remain. The gap notice shows
 how many terminal bytes the portal no longer holds.
 

@@ -30,6 +30,19 @@ class RequestRecord:
     connection: int  # The connection number.
 
 
+@dataclass(frozen=True, slots=True)
+class HandshakeFault:
+    """One opening handshake failure that the fake cloud sends for one path.
+
+    The kind "refuse" sends an HTTP error status. The kind "stall" sends no answer, so the client
+    times out. The kind "reset" closes the TCP connection with a reset, so the client gets a
+    ConnectionError.
+    """
+
+    kind: str  # One of "refuse", "stall", or "reset".
+    status_code: int = 0  # The HTTP status that the "refuse" kind sends.
+
+
 class FakeConnection:
     """One accepted WebSocket connection."""
 
@@ -93,6 +106,7 @@ class FakeMistCloud:
         self._threads: list[threading.Thread] = []  # Per-connection worker threads.
         self._connections: list[FakeConnection] = []  # Active handles can be dropped on stop.
         self._routes: dict[str, Any] = {}  # Request paths map to device handlers.
+        self._faults: dict[str, HandshakeFault] = {}  # Request paths map to handshake failures.
         self._lock = threading.Lock()  # Shared records and counters need protection.
         self._condition = threading.Condition(self._lock)  # Tests wait for requests and pings with a bound.
         self._connection_count = 0  # Each connection gets a stable number.
@@ -110,6 +124,15 @@ class FakeMistCloud:
     def register(self, path: str, handler: Any) -> None:
         """Register a device handler for a request path."""
         self._routes[path] = handler  # The accept worker uses this route table.
+
+    def fail_handshake(self, path: str, fault: HandshakeFault) -> None:
+        """Make each opening handshake for one path fail in one way.
+
+        Args:
+            path: The request path, for example "/shell/default".
+            fault: The failure that the fake cloud sends instead of the 101 answer.
+        """
+        self._faults[path] = fault  # The accept worker reads this table before it answers.
 
     def wait_for_requests(self, expected_count: int, timeout: float) -> list[RequestRecord]:
         """Wait until the fake cloud records enough requests."""
@@ -187,6 +210,11 @@ class FakeMistCloud:
         lines = request.decode("iso-8859-1").split("\r\n")  # HTTP headers are ISO-8859-1 bytes.
         path = lines[0].split(" ")[1]  # The request line is GET <path> HTTP/1.1.
         headers = self._parse_headers(lines[1:])  # Keep lower-case header names for assertions.
+        fault = self._faults.get(path)  # Tests can make this path fail before the 101 answer.
+        if fault is not None:  # Send the failure instead of the handshake answer.
+            self._record_request(path, headers)  # Tests can still assert that the request arrived.
+            self._send_fault(client, fault)  # Refuse, stall, or reset the connection.
+            raise OSError(f"handshake fault {fault.kind}")  # End the worker. The worker closes the socket.
         accept = self._accept_value(headers["sec-websocket-key"])  # RFC 6455 accept value.
         response = (
             "HTTP/1.1 101 Switching Protocols\r\n"
@@ -222,13 +250,39 @@ class FakeMistCloud:
         digest = hashlib.sha1((key + magic).encode("ascii")).digest()  # RFC 6455 uses SHA-1 here.
         return base64.b64encode(digest).decode("ascii")  # The response header is base64 text.
 
-    def _new_connection(self, client: socket.socket, path: str, headers: dict[str, str]) -> FakeConnection:
-        """Record and return one connection."""
+    def _send_fault(self, client: socket.socket, fault: HandshakeFault) -> None:
+        """Send one handshake failure to the client."""
+        if fault.kind == "refuse":  # Send an HTTP error status instead of 101.
+            answer = f"HTTP/1.1 {fault.status_code} Refused\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            client.sendall(answer.encode("ascii"))  # The client raises a bad status error.
+        elif fault.kind == "reset":  # A zero linger time makes close() send a TCP reset.
+            client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))  # Set the reset.
+        elif fault.kind == "stall":  # Send no answer until the client gives up.
+            self._wait_for_client_close(client)  # The client handshake read times out.
+
+    def _wait_for_client_close(self, client: socket.socket) -> None:
+        """Wait until the client closes the socket or the fake cloud stops."""
+        while not self._stop.is_set():  # stop() ends the wait.
+            try:  # The worker socket uses a short timeout, so the loop can check stop.
+                if client.recv(1) == b"":  # The client closed the connection.
+                    return  # The client gave up on the handshake.
+            except TimeoutError:
+                continue  # Keep the connection open with no answer.
+            except OSError:
+                return  # The client reset the connection.
+
+    def _record_request(self, path: str, headers: dict[str, str]) -> int:
+        """Record one opening request and return its connection number."""
         with self._lock:  # Protect the counter and request records.
             self._connection_count += 1  # Assign the next connection number.
             number = self._connection_count  # Keep the number stable outside the lock.
             self.requests.append(RequestRecord(path, headers, number))  # Tests can assert headers later.
             self._condition.notify_all()  # Wake tests that wait for a connection.
+        return number  # The caller uses this number for the connection handle.
+
+    def _new_connection(self, client: socket.socket, path: str, headers: dict[str, str]) -> FakeConnection:
+        """Record and return one connection."""
+        number = self._record_request(path, headers)  # Tests can assert the request headers later.
         connection = FakeConnection(client, path, number)  # Device handlers use this connection handle.
         self._connections.append(connection)  # stop() closes each active connection.
         return connection  # The worker uses this object for frames.

@@ -18,7 +18,7 @@ from src.websocket_streams.live.transport.frames import ConnectionClosed  # Read
 from src.websocket_streams.live.transport.shell_client import ShellClient  # Test the shell transport client.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions provide endpoint fields.
 from tests.support.fake_mist_cloud.devices import ShellDevice  # Shell tests need a fake terminal endpoint.
-from tests.support.fake_mist_cloud.server import FakeConnection, FakeMistCloud  # Fake cloud provides WebSocket I/O.
+from tests.support.fake_mist_cloud.server import FakeConnection, FakeMistCloud, HandshakeFault  # Fake WebSocket I/O.
 
 
 class SplitUtf8Device:
@@ -96,6 +96,14 @@ class RecordingFactory:
         """Return the configured socket."""
         self.timeout = timeout  # Record the connect timeout.
         return self.socket  # Return the fake socket.
+
+
+class BadJsonShellDevice:
+    """A shell device that sends malformed JSON text as terminal output."""
+
+    def on_connect(self, connection: FakeConnection) -> None:
+        """Send malformed JSON text after connect."""
+        connection.send_text("bad json")  # ShellClient must return these bytes unchanged.
 
 
 class TestShellClient:
@@ -269,17 +277,52 @@ class TestShellClient:
                 client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Loopback is not allowed here.
             assert caught.value.code == "bad_request"  # Unsafe addresses are bad requests.
 
-    def test_connection_error_from_factory_surfaces(self) -> None:
-        """Raise a connection error when the socket cannot open."""
-        with FakeMistCloud() as cloud:  # Start a loopback fake cloud for the endpoint profile only.
-            client = self._client(cloud)  # Build a shell client.
-            with pytest.raises(Exception) as caught:  # websocket-client raises its own connection error type.
-                client.open("ws://127.0.0.1:1/shell/default", 80, 24)  # Port 1 should not accept.
-            assert caught.value.__class__.__name__ in {  # The bounded connect can refuse or time out.
-                "ConnectionRefusedError",
-                "TimeoutError",
-                "WebSocketProxyException",
-            }
+    def test_connection_error_from_fake_cloud_reset_surfaces(self) -> None:
+        """Raise a connection error when the fake cloud resets the handshake."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/shell/default", HandshakeFault("reset"))  # Force a TCP reset.
+            client = self._client(cloud, subscribe_timeout=0.5)  # Use a bounded connect timeout.
+            with pytest.raises(ConnectionError) as caught:  # Reset is a ConnectionError subclass.
+                client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Attempt the opening handshake.
+            requests = cloud.wait_for_requests(1, 1.0)  # The fake cloud recorded the request.
+            assert requests[0].path == "/shell/default"  # The handshake reached the fake cloud.
+            assert caught.value.__class__.__name__ == "ConnectionResetError"  # The reset path is exact.
+
+    def test_connection_timeout_from_fake_cloud_stall_surfaces(self) -> None:
+        """Raise a timeout when the fake cloud stalls the handshake."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/shell/default", HandshakeFault("stall"))  # Force a stalled handshake.
+            client = self._client(cloud, subscribe_timeout=0.5)  # Keep the stall test fast.
+            with pytest.raises(websocket.WebSocketTimeoutException) as caught:  # TimeoutError family.
+                client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Attempt the opening handshake.
+            requests = cloud.wait_for_requests(1, 1.0)  # The fake cloud recorded the request.
+            assert requests[0].path == "/shell/default"  # The handshake reached the fake cloud.
+            assert "Timeout" in caught.value.__class__.__name__  # The failure is a timeout.
+
+    @pytest.mark.parametrize(("status_code",), [(403,), (503,)])
+    def test_http_refusal_from_fake_cloud_surfaces_status(self, status_code: int) -> None:
+        """Raise a bad status error for HTTP handshake refusal."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake(
+                "/shell/default", HandshakeFault("refuse", status_code=status_code)
+            )  # Force an HTTP refusal.
+            client = self._client(cloud, subscribe_timeout=0.5)  # Use a bounded connect timeout.
+            with pytest.raises(websocket.WebSocketBadStatusException) as caught:  # HTTP refusal.
+                client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Attempt the opening handshake.
+            requests = cloud.wait_for_requests(1, 1.0)  # The fake cloud recorded the request.
+            assert requests[0].path == "/shell/default"  # The handshake reached the fake cloud.
+            assert caught.value.status_code == status_code  # The HTTP status is observable.
+
+    def test_bad_json_shell_output_returns_unchanged_bytes(self) -> None:
+        """Return malformed JSON shell output without parsing it."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.register("/shell/default", BadJsonShellDevice())  # Route a text-output shell.
+            client = self._client(cloud, subscribe_timeout=0.5)  # Build a fast shell client.
+            try:  # Always close the client after the malformed-output path.
+                client.open(f"{cloud.base_ws_url}/shell/default", 80, 24)  # Open the shell socket.
+                assert client.read(1.0) == b"bad json"  # Shell output stays byte-for-byte.
+            finally:
+                client.close()  # Ensure the socket and server thread stop.
 
     def test_open_passes_connect_timeout_to_factory(self) -> None:
         """Pass a bounded connect timeout to websocket-client."""

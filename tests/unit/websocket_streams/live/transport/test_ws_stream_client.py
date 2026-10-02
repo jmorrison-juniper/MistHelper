@@ -14,7 +14,7 @@ from src.websocket_streams.live.transport.frames import ConnectionClosed, Subscr
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Test the stream transport client.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions provide endpoint fields.
 from tests.support.fake_mist_cloud.devices import StreamDevice  # Stream tests need a fake stream endpoint.
-from tests.support.fake_mist_cloud.server import FakeMistCloud  # Fake cloud provides WebSocket I/O.
+from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Fake cloud provides WebSocket I/O.
 
 
 class SilentSubscribeSocket:
@@ -73,6 +73,23 @@ class BlockingFactory:
         self.started.set()  # Tell the test the factory is active.
         self.release.wait(timeout=1.0)  # Simulate a slow connect without hanging the suite.
         return self.socket  # Return the fake socket after the stop request.
+
+
+class BadThenValidStreamDevice(StreamDevice):
+    """A stream device that sends one bad frame before one valid event."""
+
+    def __init__(self, first_frame: bytes) -> None:
+        """Build a stream device with one raw first frame."""
+        super().__init__()  # Keep normal subscription behavior.
+        self._first_frame = first_frame  # The first frame exercises decoder failure handling.
+
+    def receive(self, connection: object, opcode: int, payload: bytes) -> None:
+        """Subscribe, then send one invalid frame and one valid data frame."""
+        super().receive(connection, opcode, payload)  # Confirm the subscription first.
+        if opcode != 0x1:  # Only subscription frames should trigger test output.
+            return  # Ignore non-subscription frames.
+        connection.send_text_bytes(self._first_frame)  # Send the malformed or empty frame through the socket.
+        self.publish("/one", {"value": 1})  # Send one valid data event after the bad frame.
 
 
 class TestStreamClient:
@@ -194,16 +211,69 @@ class TestStreamClient:
             assert thread.is_alive() is False  # run() returned after local close.
             assert events == [{"event": "data", "channel": "/events", "data": '{"value": 1}'}]  # Full event.
 
-    def test_connection_error_from_factory_surfaces(self) -> None:
-        """Raise a connection error when the socket cannot open."""
-        client = self._client_for_url("ws://127.0.0.1:1/api-ws/v1/stream", ["/one"])  # Port 1 should not accept.
-        with pytest.raises(Exception) as caught:  # websocket-client raises its own connection error type.
-            client.open()  # Attempt a connection to an unused port.
-        assert caught.value.__class__.__name__ in {  # The bounded connect can refuse or time out.
-            "ConnectionRefusedError",
-            "TimeoutError",
-            "WebSocketProxyException",
-        }
+    def test_connection_error_from_fake_cloud_reset_surfaces(self) -> None:
+        """Raise a connection error when the fake cloud resets the handshake."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault("reset"))  # Force a TCP reset.
+            client = self._client(cloud, ["/one"], subscribe_timeout=0.5)  # Use a bounded connect timeout.
+            with pytest.raises(ConnectionError) as caught:  # Reset is a ConnectionError subclass.
+                client.open()  # Attempt the opening handshake.
+            requests = cloud.wait_for_requests(1, 1.0)  # The fake cloud recorded the request.
+            assert requests[0].path == "/api-ws/v1/stream"  # The handshake reached the fake cloud.
+            assert caught.value.__class__.__name__ == "ConnectionResetError"  # The reset path is exact.
+
+    def test_connection_timeout_from_fake_cloud_stall_surfaces(self) -> None:
+        """Raise a timeout when the fake cloud stalls the handshake."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault("stall"))  # Force a stalled handshake.
+            client = self._client(cloud, ["/one"], subscribe_timeout=0.5)  # Keep the stall test fast.
+            with pytest.raises(websocket.WebSocketTimeoutException) as caught:  # TimeoutError family.
+                client.open()  # Attempt the opening handshake.
+            requests = cloud.wait_for_requests(1, 1.0)  # The fake cloud recorded the request.
+            assert requests[0].path == "/api-ws/v1/stream"  # The handshake reached the fake cloud.
+            assert "Timeout" in caught.value.__class__.__name__  # The failure is a timeout.
+
+    @pytest.mark.parametrize(("status_code",), [(403,), (503,)])
+    def test_http_refusal_from_fake_cloud_surfaces_status(self, status_code: int) -> None:
+        """Raise a bad status error for HTTP handshake refusal."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake(
+                "/api-ws/v1/stream", HandshakeFault("refuse", status_code=status_code)
+            )  # Force an HTTP refusal.
+            client = self._client(cloud, ["/one"], subscribe_timeout=0.5)  # Use a bounded connect timeout.
+            with pytest.raises(websocket.WebSocketBadStatusException) as caught:  # HTTP refusal.
+                client.open()  # Attempt the opening handshake.
+            requests = cloud.wait_for_requests(1, 1.0)  # The fake cloud recorded the request.
+            assert requests[0].path == "/api-ws/v1/stream"  # The handshake reached the fake cloud.
+            assert caught.value.status_code == status_code  # The HTTP status is observable.
+
+    def test_bad_json_frame_is_skipped_before_valid_stream_event(self) -> None:
+        """Skip malformed JSON and return the next valid stream event."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = BadThenValidStreamDevice(b"bad json")  # Send malformed JSON after subscribe.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            client = self._client(cloud, ["/one"], subscribe_timeout=0.5)  # Build a fast client.
+            try:  # Always close the client after the frame skip path.
+                client.open()  # Subscribe before the device sends frames.
+                event = client.next_event(1.0)  # Skip the bad frame and read the valid event.
+                assert event == {"event": "data", "channel": "/one", "data": '{"value": 1}'}  # Valid event.
+                assert client.next_event(0.05) is None  # The connection stays open after the bad frame.
+            finally:
+                client.close()  # Ensure the socket and server thread stop.
+
+    def test_empty_text_frame_is_skipped_before_valid_stream_event(self) -> None:
+        """Skip an empty text frame and return the next valid stream event."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = BadThenValidStreamDevice(b"")  # Send an empty body after subscribe.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            client = self._client(cloud, ["/one"], subscribe_timeout=0.5)  # Build a fast client.
+            try:  # Always close the client after the empty-frame path.
+                client.open()  # Subscribe before the device sends frames.
+                event = client.next_event(1.0)  # Skip the empty frame and read the valid event.
+                assert event == {"event": "data", "channel": "/one", "data": '{"value": 1}'}  # Valid event.
+                assert client.next_event(0.05) is None  # The connection stays open after the empty frame.
+            finally:
+                client.close()  # Ensure the socket and server thread stop.
 
     def test_stop_during_connect_raises_local_close_and_sends_no_subscribe(self) -> None:
         """Stop during connect before any subscribe frame can leave."""

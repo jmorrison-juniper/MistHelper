@@ -4,9 +4,11 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import json  # The read test decodes the joined JSON text.
 import logging  # caplog checks the audit line.
+import time  # Real runner failure tests use bounded waits.
 
 import pytest  # The tests check contract errors.
 
+import websocket  # Failure tests build the same exception type as websocket-client.
 from src.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
@@ -27,8 +29,20 @@ from src.websocket_streams.live.sessions.manager import (
 )  # The tests cover the manager.
 from src.websocket_streams.live.sessions.record import SessionState  # Tests finish sessions directly.
 from src.websocket_streams.live.sessions.settings import StreamSettings  # The manager needs limits.
-from src.websocket_streams.live.transport.endpoint import TransportProfile  # Factory tests avoid real Mist sockets.
+from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests assert the shell queue type.
+from src.websocket_streams.live.terminal.state import (
+    TerminalSize,
+    TerminalState,
+)  # Tests assert terminal values.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    TransportProfile,
+)  # Factory tests avoid real Mist sockets.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Factory tests need SDK-shaped session data.
+from tests.support.fake_mist_cloud.server import (
+    FakeMistCloud,  # Real runner tests use a loopback cloud.
+    HandshakeFault,  # Fake cloud handshake failure control.
+)
 
 
 class FakeClock:
@@ -183,13 +197,15 @@ class TestStreamSessionManager:
         manager, factory, _clock = self._manager(max_sessions=1)  # Build one manager.
         payload = manager.start(self._shell_request())  # Start a shell session.
         session = manager.session(str(payload["session_id"]))  # Read the public session handle.
-        assert session.terminal is not None  # Shell sessions get a terminal state.
-        assert session.terminal.input is not None  # Shell sessions get a writable input queue.
-        first = session.terminal.input.submit("show ")  # Queue early input before first output.
-        second = session.terminal.input.submit("version\r")  # Queue another part to verify order.
+        terminal = session.terminal  # Store terminal state for type narrowing.
+        assert isinstance(terminal, TerminalState)  # Shell sessions get a terminal state.
+        terminal_input = terminal.input  # Store the input queue for type narrowing.
+        assert isinstance(terminal_input, TerminalInput)  # Shell sessions get a writable input queue.
+        first = terminal_input.submit("show ")  # Queue early input before first output.
+        second = terminal_input.submit("version\r")  # Queue another part to verify order.
         session.mark_live()  # Mark the shell as live.
         session.mark_input_ready()  # Open input after first output.
-        third = session.terminal.input.submit("exit\r")  # Later input sends at once.
+        third = terminal_input.submit("exit\r")  # Later input sends at once.
         assert (first, second, third) == (True, True, False)  # Only input before readiness is queued.
         assert factory.runners[0].inputs == ["show ", "version\r", "exit\r"]  # The runner receives exact order.
         assert "ex.shell" in caplog.text  # The audit line names the key.
@@ -214,12 +230,52 @@ class TestStreamSessionManager:
         screen = manager.session(str(manager.start(self._screen_request())["session_id"]))  # Start screen session.
         channel = manager.session(str(manager.start(self._channel_request("channel"))["session_id"]))  # Channel.
         utility = manager.session(str(manager.start(self._utility_request())["session_id"]))  # Start utility.
-        assert shell.terminal is not None and shell.terminal.input is not None  # Shell accepts input.
-        assert screen.terminal is not None and screen.terminal.input is None  # Screen is read-only.
+        assert shell.terminal is not None and shell.terminal.read_only is False  # Shell accepts input.
+        assert shell.terminal.input.submit("show version\r") is True  # Shell input queues before first output.
+        assert screen.terminal is not None and screen.terminal.read_only is True  # Screen is read-only.
+        assert shell.terminal.size() == TerminalSize(80, 24)  # Shell keeps the normal terminal default size.
+        assert screen.terminal.size() == TerminalSize(80, 40)  # Screen uses the fixed Mist screen size.
         assert channel.terminal is None  # Channel sessions use the message list.
         assert utility.terminal is None  # Non-screen utility sessions use the message list.
         assert shell.terminal.expires_mono == clock.value + 1800.0  # The monotonic expiry uses settings.
         assert shell.terminal.expires_at.endswith("Z")  # The public expiry is UTC text.
+
+    @pytest.mark.parametrize(
+        ("fault", "error"),
+        [
+            (
+                HandshakeFault("refuse", status_code=403),
+                websocket.WebSocketBadStatusException("Handshake status 403", 403),
+            ),
+            (
+                HandshakeFault("refuse", status_code=503),
+                websocket.WebSocketBadStatusException("Handshake status 503", 503),
+            ),
+            (HandshakeFault("stall"), TimeoutError("The handshake stalled.")),
+            (HandshakeFault("reset"), ConnectionError("The peer reset the handshake.")),
+        ],
+    )
+    def test_real_factory_terminal_open_failures_update_session(
+        self,
+        fault: HandshakeFault,
+        error: BaseException,
+    ) -> None:
+        """Real shell open failures become failed sessions with plain reasons."""
+        expected = ConnectFailure.reason(error)  # Compute expected text through the production mapper.
+        assert isinstance(expected, str)  # Each table row must map to public operator text.
+        with FakeMistCloud() as cloud:  # The fake cloud drives the real WebSocket open path.
+            cloud.fail_handshake("/shell/fail", fault)  # Force this shell path to fail its handshake.
+            api = FakeApiSession(cloud)  # Build a fake Mist API session.
+            api.add_override("/shell", status_code=200, data={"url": f"{cloud.base_ws_url}/shell/fail"})  # Route.
+            manager = self._real_manager(api, cloud)  # Use the real RunnerFactory and manager path.
+            payload = manager.start(self._shell_request())  # Start returns before the runner fails.
+            session = self._wait_for_state(
+                manager, str(payload["session_id"]), {SessionState.FAILED}, timeout=5.0
+            )  # Wait for the mapped open failure.
+            requests = cloud.wait_for_requests(1, 5.0)  # Prove that the WebSocket path was attempted.
+        assert requests[0].path == "/shell/fail"  # The fake cloud recorded the failed open.
+        assert session.reason == expected  # The selected session receives the mapped reason.
+        assert "fake-token" not in session.reason  # The reason must not expose secrets.
 
     def test_reaper_stops_idle_and_prunes_old_ended(self) -> None:
         """Stop idle sessions, keep 5 ended sessions at most, and remove them after 10 minutes."""
@@ -306,6 +362,48 @@ class TestStreamSessionManager:
             stream_url="ws://127.0.0.1:1/api-ws/v1/stream", allow_loopback=True
         )  # Avoid deriving a production address in the test.
         return RunnerFactory(FakeApiSession(), profile)  # Return a factory with SDK-shaped attributes.
+
+    def _real_manager(self, api: FakeApiSession, cloud: FakeMistCloud) -> StreamSessionManager:
+        """Build a manager that uses the real runner factory.
+
+        Args:
+            api: The fake Mist API session.
+            cloud: The fake Mist cloud that owns loopback URLs.
+
+        Returns:
+            A session manager with short WebSocket waits.
+        """
+        profile = TransportProfile(
+            stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
+            allow_loopback=True,
+            read_timeout_seconds=0.05,
+            subscribe_timeout_seconds=0.2,
+            reconnect_delays=(),
+        )  # Keep all failure paths fast and loopback-only.
+        settings = StreamSettings(max_sessions=1)  # One session is enough for each failure case.
+        return StreamSessionManager(settings, RunnerFactory(api, profile), time.monotonic)  # Return manager.
+
+    def _wait_for_state(
+        self, manager: StreamSessionManager, session_id: str, states: set[SessionState], timeout: float = 2.0
+    ) -> object:
+        """Wait until one session reaches an expected state.
+
+        Args:
+            manager: The manager that owns the session.
+            session_id: The selected session identifier.
+            states: Acceptable final states.
+            timeout: Maximum wait seconds.
+
+        Returns:
+            The session after it reaches one expected state.
+        """
+        deadline = time.monotonic() + timeout  # Bound each async assertion.
+        while time.monotonic() < deadline:  # Poll for a short time.
+            session = manager.session(session_id)  # Read the current session state.
+            if session.state in states:  # The background runner reached the target state.
+                return session  # The caller can assert the reason.
+            time.sleep(0.01)  # Avoid a busy loop while the runner thread works.
+        return manager.session(session_id)  # Return the observed state for assertion failure context.
 
     def _manager(
         self, max_sessions: int, buffer_messages: int = 500, idle_seconds: int = 120

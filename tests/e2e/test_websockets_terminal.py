@@ -15,7 +15,9 @@ from urllib.parse import parse_qs, urlsplit  # Read the after value of each term
 import pytest  # Use fixtures and skip support.
 
 from src.websocket_streams.live.runners.shell import ShellRunner  # The silent device journey reads the final reason.
+from src.websocket_streams.live.transport.endpoint import ConnectFailure  # Open failure journeys read the reasons.
 from tests.e2e import websockets_terminal_support as terminal_support  # Register and read the shared harness.
+from tests.support.fake_mist_cloud.server import HandshakeFault  # Open failure journeys fail one handshake.
 
 pytest.importorskip("playwright", reason="playwright is absent, so the browser journey cannot run")  # Browser guard.
 READY_TIMEOUT_MS = terminal_support.READY_TIMEOUT_MS  # Use one browser wait boundary for terminal tests.
@@ -120,7 +122,10 @@ def test_j1_banner(page: Any, terminal_harness: TerminalPortalHarness) -> None:
     """J1: the terminal shows the shell banner and prompt."""
     _open_shell(page, terminal_harness)  # Start the terminal.
     page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # Banner.
+    screen = _screen_text(page)  # Read the visible terminal text after the banner arrives.
     _shot(page, terminal_harness, "j01-banner.png")  # Save evidence.
+    assert "Welcome to Fake Mist Shell" in screen  # The banner bytes reached the screen.
+    assert "device>" in screen  # The prompt follows the banner, so the operator can type.
 
 
 def test_j2_typed_text(page: Any, terminal_harness: TerminalPortalHarness) -> None:
@@ -185,7 +190,12 @@ def test_j7_exit_finishes(page: Any, terminal_harness: TerminalPortalHarness) ->
     page.get_by_test_id("ws-terminal-status").get_by_text("State: finished").wait_for(
         timeout=READY_TIMEOUT_MS
     )  # Finished.
+    received = terminal_harness.shell.wait_for_input(len("exit\r"), 2.0)  # Read the bytes that the device got.
+    status = page.get_by_test_id("ws-terminal-status").inner_text(timeout=READY_TIMEOUT_MS)  # Read the footer.
     _shot(page, terminal_harness, "j07-exit-finished.png")  # Save evidence.
+    assert received.endswith(b"exit\r") is True  # The device got the close command before it closed.
+    assert "state: finished" in status.lower()  # The footer shows the normal end, not a failure.
+    assert "The device closed the shell." in status  # The footer names the device close as the reason.
 
 
 def test_j8_full_screen_program(page: Any, terminal_harness: TerminalPortalHarness) -> None:
@@ -197,7 +207,10 @@ def test_j8_full_screen_program(page: Any, terminal_harness: TerminalPortalHarne
     page.get_by_test_id("ws-terminal-screen").get_by_text("RED", exact=True).wait_for(
         timeout=READY_TIMEOUT_MS
     )  # The alternate screen text is visible.
+    screen = _screen_text(page)  # Read the visible terminal text of the full-screen program.
     _shot(page, terminal_harness, "j08-fullscreen.png")  # Save evidence.
+    assert "RED" in screen  # The full-screen program drew its colored text.
+    assert "Welcome to Fake Mist Shell" not in screen  # The alternate screen hides the normal screen.
 
 
 def test_j9_copy_by_selection_on(page: Any, terminal_harness: TerminalPortalHarness) -> None:
@@ -300,7 +313,9 @@ def test_j17_paste_limit(page: Any, terminal_harness: TerminalPortalHarness) -> 
     page.evaluate("(value) => navigator.clipboard.writeText(value)", "x" * (257 * 1024))  # Too large.
     page.get_by_test_id("ws-terminal-paste").click()  # Attempt paste.
     page.get_by_text("Paste refused. The limit is 256 KiB.").wait_for(timeout=READY_TIMEOUT_MS)  # Limit notice.
+    received = terminal_harness.shell.wait_for_input(1024, 1.0)  # Give a sent paste time to reach the device.
     _shot(page, terminal_harness, "j17-paste-limit.png")  # Save evidence.
+    assert b"xxxx" not in received  # The refused paste did not reach the device.
 
 
 def test_j18_kept_settings(page: Any, terminal_harness: TerminalPortalHarness) -> None:
@@ -786,3 +801,33 @@ def test_review_3710_first_output_clears_the_waiting_notice(
     _shot(page, harness, "review-3710-first-output-clears-notice.png")  # Save evidence.
     assert WAITING_NOTICE in texts  # The page told the operator that it waits for the device.
     assert not any(text.startswith("The device sent no output") for text in texts)  # An answer gets no silent notice.
+
+
+def test_review_open_refusal_shows_plain_reason(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """Issue #3671: a refused shell open shows the HTTP status in a plain reason."""
+    harness = terminal_harness  # Use a short name for the harness.
+    shell_path = "/shell/" + terminal_support.DEVICE_ID  # The shell trigger answer points at this path.
+    harness.cloud.fail_handshake(shell_path, HandshakeFault("refuse", status_code=503))  # The cloud answers 503.
+    _open_shell(page, harness)  # Start a shell that the fake cloud refuses.
+    page.locator("#wsSessionState", has_text="State: Failed").wait_for(timeout=READY_TIMEOUT_MS)  # Final state.
+    reason = ConnectFailure.REFUSED_TEXT.format(status=503)  # The plain reason names the HTTP status.
+    page.locator("#wsSessionReason", has_text=reason).wait_for(timeout=READY_TIMEOUT_MS)  # The header shows it.
+    _shot(page, harness, "review-open-refusal-503.png")  # Save evidence of the plain reason.
+    assert page.locator("#wsStopButton").is_disabled() is True  # A failed session cannot stop again.
+    assert "Read the portal log" not in page.get_by_test_id("ws-terminal-status").inner_text()  # No vague reason.
+
+
+def test_review_screen_reset_shows_plain_reason(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """Issue #3671: a reset during the screen open shows the network reason."""
+    harness = terminal_harness  # Use a short name for the harness.
+    screen_path = "/screen/" + terminal_support.DEVICE_ID  # The Top trigger answer points at this path.
+    harness.cloud.fail_handshake(screen_path, HandshakeFault("reset"))  # The cloud resets the TCP connection.
+    harness.open_page(page)  # Load the WebSockets page.
+    _start_top(page)  # Start the Top screen command.
+    page.locator("#wsSessionState", has_text="State: Failed").wait_for(timeout=READY_TIMEOUT_MS)  # Final state.
+    page.locator("#wsSessionReason", has_text=ConnectFailure.NETWORK_TEXT).wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # The header shows the network reason.
+    _shot(page, harness, "review-screen-reset-network.png")  # Save evidence of the plain reason.
+    assert page.locator("#wsStopButton").is_disabled() is True  # A failed session cannot stop again.
+    assert len(harness.cloud.requests) >= 1  # The open reached the fake cloud before the reset.

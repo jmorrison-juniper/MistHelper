@@ -14,6 +14,7 @@ from dataclasses import dataclass  # TransportProfile is immutable configuration
 from http.cookiejar import Cookie  # Cookie iteration uses the standard cookie type.
 from urllib.parse import urlparse  # URL parsing avoids unsafe string checks.
 
+import websocket  # ConnectFailure reads the websocket-client open errors.
 from src.websocket_streams.intake.fields import StreamRequestError  # Address refusals use the HTTP contract.
 
 logger = logging.getLogger(__name__)  # Keep transport logs under this module.
@@ -253,3 +254,53 @@ class ShellAddressPolicy:
             True when the host is the base domain or a subdomain.
         """
         return host == self._domain or host.endswith(f".{self._domain}")  # The leading dot blocks look-alike domains.
+
+
+class ConnectFailure:
+    """Turn a WebSocket open error into a plain reason for the operator.
+
+    Why:
+        A failed open used to show "Read the portal log for the cause", or a raw
+        operating system message. The operator needs to know if the Mist cloud
+        refused the connection, did not answer, or could not be reached.
+    """
+
+    REFUSED_TEXT = "The Mist cloud refused the WebSocket connection with HTTP status {status}."  # Handshake refusal.
+    TIMEOUT_TEXT = "The Mist cloud did not answer the WebSocket connection in time."  # Connect or handshake timeout.
+    TLS_TEXT = "The TLS check of the Mist cloud connection failed."  # Certificate or TLS handshake failure.
+    ADDRESS_TEXT = "The portal could not find the address of the Mist cloud."  # Name lookup failure.
+    NETWORK_TEXT = "The portal could not connect to the Mist cloud."  # Refused, reset, or lost TCP connection.
+
+    @classmethod
+    def reason(cls, error: BaseException) -> str | None:
+        """Return the plain reason for one open error.
+
+        Args:
+            error: The exception from the WebSocket open.
+
+        Returns:
+            The plain reason, or None when the error is not a connection failure.
+        """
+        if isinstance(error, websocket.WebSocketBadStatusException):  # The cloud answered with an HTTP error.
+            return cls.REFUSED_TEXT.format(status=error.status_code)  # The status helps the operator and support.
+        for error_types, text in cls._rules():  # The first matching rule wins, so the order matters.
+            if isinstance(error, error_types):  # This rule names the error family.
+                return text  # Return the plain reason for this family.
+        return None  # Other errors are program errors, so the caller keeps its own handling.
+
+    @classmethod
+    def _rules(cls) -> tuple[tuple[tuple[type[BaseException], ...], str], ...]:
+        """Return the error families in match order.
+
+        Returns:
+            Pairs of error types and plain reasons. A timeout and a TLS error are also an OSError, so they come first.
+        """
+        return (
+            ((TimeoutError, websocket.WebSocketTimeoutException), cls.TIMEOUT_TEXT),  # Connect or handshake wait.
+            ((ssl.SSLError,), cls.TLS_TEXT),  # Certificate and TLS handshake errors.
+            ((websocket.WebSocketAddressException,), cls.ADDRESS_TEXT),  # The name lookup failed.
+            (
+                (OSError, websocket.WebSocketProxyException, websocket.WebSocketConnectionClosedException),
+                cls.NETWORK_TEXT,
+            ),  # ConnectionError and other socket errors.
+        )

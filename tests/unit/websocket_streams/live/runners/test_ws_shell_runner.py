@@ -8,6 +8,7 @@ import time  # Tests use bounded waits for the reader thread.
 
 import pytest  # The tests use fixtures and exception assertions.
 
+import websocket  # Failure tests build the same exception type as websocket-client.
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec, Safety, UtilityDefinition  # Build requests.
 from src.websocket_streams.intake.start_request import StartRequest  # Runner input is already checked.
 from src.websocket_streams.live.runners.shell import ShellRunner  # The device shell runner under test.
@@ -16,10 +17,18 @@ from src.websocket_streams.live.sessions.record import SessionState, StreamSessi
 from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Terminal output is byte history.
 from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Shell input queues until output.
 from src.websocket_streams.live.terminal.state import TerminalState  # The terminal stores size and history.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Test endpoint.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    MistStreamEndpoint,
+    TransportProfile,
+)  # Test endpoint.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Offline SDK-shaped session.
 from tests.support.fake_mist_cloud.devices import ShellDevice  # Fake shell endpoint.
-from tests.support.fake_mist_cloud.server import FakeConnection, FakeMistCloud  # Fake RFC 6455 server.
+from tests.support.fake_mist_cloud.server import (  # Fake RFC 6455 server.
+    FakeConnection,
+    FakeMistCloud,
+    HandshakeFault,  # Fake cloud handshake failure control.
+)
 
 
 def _definition() -> UtilityDefinition:
@@ -64,15 +73,21 @@ def _session(terminal: TerminalState | None = None) -> StreamSession:
     )  # Return a real session sink, as the manager would.
 
 
-def _endpoint(api: FakeApiSession) -> MistStreamEndpoint:
+def _endpoint(api: FakeApiSession, subscribe_timeout_seconds: float = 10.0) -> MistStreamEndpoint:
     """Return a loopback-capable endpoint with short waits."""
-    profile = TransportProfile(allow_loopback=True, read_timeout_seconds=0.05)  # Keep each test wait short.
+    profile = TransportProfile(
+        allow_loopback=True,
+        read_timeout_seconds=0.05,
+        subscribe_timeout_seconds=subscribe_timeout_seconds,
+    )  # Keep each test wait short.
     return MistStreamEndpoint(api, profile)  # The runner passes it to ShellClient.
 
 
-def _runner(api: FakeApiSession, session: StreamSession) -> ShellRunner:
+def _runner(api: FakeApiSession, session: StreamSession, subscribe_timeout_seconds: float = 10.0) -> ShellRunner:
     """Return a bound shell runner."""
-    runner = ShellRunner(api, _endpoint(api), session.request, session)  # Construct without RunnerFactory.
+    runner = ShellRunner(
+        api, _endpoint(api, subscribe_timeout_seconds), session.request, session
+    )  # Construct without RunnerFactory.
     assert session.terminal is not None and session.terminal.input is not None  # Shell sessions must be writable.
     session.terminal.input.bind(runner.send_input)  # Match the manager input binding.
     return runner  # Tests start and stop this runner directly.
@@ -105,7 +120,7 @@ class RawOutputDevice:
         """Send configured chunks to the client."""
         for chunk in self._chunks:  # Each chunk becomes one text frame.
             connection.send_binary(chunk)  # Binary frames keep split UTF-8 bytes exact.
-        timer = threading.Timer(0.05, connection.send_close, args=(1000,))  # Let the client enter its read loop.
+        timer = threading.Timer(0.2, connection.send_close, args=(1000,))  # Let the client read every output frame.
         timer.daemon = True  # A test failure must not keep the process alive.
         timer.start()  # End the shell normally after the output frames.
 
@@ -122,8 +137,8 @@ class SilentDevice:
     """A busy device that accepts the shell and sends no output."""
 
     def on_connect(self, connection: FakeConnection) -> None:
-        """Send no output, then send the empty close frame that the Mist cloud sends."""
-        timer = threading.Timer(0.1, connection.send_close, args=(None,))  # Let the client enter its read loop.
+        """Send no output, then send a close frame."""
+        timer = threading.Timer(0.1, connection.send_close, args=(None,))  # Mist sends an empty close frame.
         timer.daemon = True  # A test failure must not keep the process alive.
         timer.start()  # The real cloud closes a silent terminal after 90 seconds. The test uses a short delay.
 
@@ -156,6 +171,51 @@ def test_shell_trigger_refusal_or_missing_url_fails_without_websocket(status: in
         _wait_for_state(session, {SessionState.FAILED})  # The open must fail.
     assert cloud.requests == []  # The runner never opened a WebSocket.
     assert "terminal" in session.reason  # The reason stays plain and operator-facing.
+
+
+@pytest.mark.parametrize(
+    ("fault", "error"),
+    [
+        (
+            HandshakeFault("refuse", status_code=503),
+            websocket.WebSocketBadStatusException("Handshake status 503", 503),
+        ),
+        (HandshakeFault("stall"), TimeoutError("The handshake stalled.")),
+        (HandshakeFault("reset"), ConnectionError("The peer reset the handshake.")),
+    ],
+)
+def test_shell_open_failure_maps_to_plain_reason(
+    fault: HandshakeFault,
+    error: BaseException,
+) -> None:
+    """WebSocket open failures end the shell with the ConnectFailure reason."""
+    expected = ConnectFailure.reason(error)  # Compute expected text through the production mapper.
+    assert isinstance(expected, str)  # Each table row must map to public operator text.
+    with FakeMistCloud() as cloud:  # The fake cloud drives the real WebSocket open path.
+        cloud.fail_handshake("/shell/fail", fault)  # Force this shell path to fail its handshake.
+        api = FakeApiSession(cloud)  # Build a fake Mist API session.
+        api.add_override("/shell", 200, {"url": f"{cloud.base_ws_url}/shell/fail"})  # Return the failed path.
+        session = _session()  # Build a real session sink.
+        runner = _runner(api, session, subscribe_timeout_seconds=0.2)  # Keep the stall case fast.
+        runner.start()  # Start the runner so the real client opens the fake URL.
+        _wait_for_state(session, {SessionState.FAILED}, timeout=5.0)  # Wait for the mapped open failure.
+        requests = cloud.wait_for_requests(1, 5.0)  # Prove that the WebSocket path was attempted.
+    assert requests[0].path == "/shell/fail"  # The fake cloud recorded the failed open.
+    assert session.reason == expected  # The operator sees the mapped connection reason.
+    assert "fake-token" not in session.reason  # The reason must not expose secrets.
+
+
+def test_shell_trigger_bad_json_body_fails_with_no_address_reason() -> None:
+    """A non-JSON trigger body fails with the plain no-address reason."""
+    with FakeMistCloud() as cloud:  # The fake cloud proves that no WebSocket open happens.
+        api = FakeApiSession(cloud)  # Build a fake Mist API session.
+        api.add_override("/shell", status_code=200, data="bad json")  # Model JSONDecodeError output from Mist SDK.
+        session = _session()  # Build a real session sink.
+        runner = _runner(api, session)  # Build a runner with normal timing.
+        runner.start()  # Start the trigger path.
+        _wait_for_state(session, {SessionState.FAILED})  # Wait for the trigger-body failure.
+    assert cloud.requests == []  # A malformed trigger body must not open a WebSocket.
+    assert session.reason == "The Mist cloud did not return a terminal address."  # The page gets a plain reason.
 
 
 def test_shell_address_policy_refuses_non_mist_non_loopback_url() -> None:
@@ -319,3 +379,28 @@ def test_shell_close_without_output_fails_with_the_silent_device_reason(caplog: 
     assert session.input_ready is False  # No output means that the input never opened.
     assert _history(session) == b""  # The device sent no byte.
     assert "output seen False" in caplog.text  # The portal log shows the silent close.
+
+
+class SilentDropDevice:
+    """A busy device whose connection drops before it sends output."""
+
+    def on_connect(self, connection: FakeConnection) -> None:
+        """Send no output, then drop TCP with no close frame."""
+        timer = threading.Timer(0.1, connection.drop)  # A lost close frame looks like this to the client.
+        timer.daemon = True  # A test failure must not keep the process alive.
+        timer.start()  # Let the client enter its read loop first.
+
+
+def test_shell_drop_without_output_fails_with_the_silent_device_reason() -> None:
+    """Issue #3710: a lost connection before any output gets the same plain next step."""
+    with FakeMistCloud() as cloud:  # Start the fake server.
+        cloud.register("/shell/silent-drop", SilentDropDevice())  # Route the device that drops first.
+        api = FakeApiSession(cloud)  # Build the fake REST session.
+        api.add_override("/shell", 200, {"url": f"{cloud.base_ws_url}/shell/silent-drop"})  # Return the path.
+        session = _session()  # Build a real sink.
+        runner = _runner(api, session)  # Bind input.
+        runner.start()  # Start the shell.
+        _wait_for_state(session, {SessionState.FAILED})  # A drop before output is a failure.
+    assert session.reason == ShellRunner.NO_ANSWER_REASON  # The device never answered, so the step is the same.
+    assert session.input_ready is False  # No output means that the input never opened.
+    assert _history(session) == b""  # The device sent no byte.

@@ -148,8 +148,9 @@ The silent device notice has this text.
 The device sent no output in 20 seconds. Stop this session. Start a new session after one minute.
 ```
 
-If the Mist cloud closes a terminal that sent no output, the session ends in
-the `failed` state with this reason.
+If the far side ends a terminal that sent no output, the session ends in the
+`failed` state with this reason. This covers an empty close frame from the Mist
+cloud and a lost connection.
 
 ```text
 The device sent no output before the Mist cloud closed the terminal. Start a new session after one minute.

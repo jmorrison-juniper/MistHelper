@@ -6,13 +6,17 @@ import ssl  # TLS option tests compare ssl constants.
 
 import pytest  # The policy tests assert refusal errors.
 
+import websocket  # ConnectFailure tests use real websocket-client exceptions.
 from src.websocket_streams.intake.fields import StreamRequestError  # Policy refusals use this contract error.
 from src.websocket_streams.live.transport.endpoint import (  # Build endpoint policies for these tests.
+    ConnectFailure,
     MistStreamEndpoint,
     ShellAddressPolicy,
     TransportProfile,
 )
+from src.websocket_streams.live.transport.stream_client import StreamClient  # Fake-cloud fault tests open a stream.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Fake sessions expose the SDK private attributes.
+from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Fault tests use loopback failures.
 
 
 class TestMistStreamEndpoint:
@@ -122,3 +126,84 @@ class TestShellAddressPolicy:
         assert (  # Loopback works only when tests allow it.
             allowed.check("ws://127.0.0.1:1234/shell/default") == "ws://127.0.0.1:1234/shell/default"
         )
+
+
+class TestConnectFailure:
+    """Verify WebSocket open failure reasons."""
+
+    @pytest.mark.parametrize(
+        ("error", "expected"),
+        [
+            (
+                websocket.WebSocketBadStatusException("refused", status_code=403),
+                "The Mist cloud refused the WebSocket connection with HTTP status 403.",
+            ),
+            (
+                websocket.WebSocketBadStatusException("server", status_code=503),
+                "The Mist cloud refused the WebSocket connection with HTTP status 503.",
+            ),
+            (
+                websocket.WebSocketTimeoutException("Timeout during open"),
+                "The Mist cloud did not answer the WebSocket connection in time.",
+            ),
+            (
+                TimeoutError("The socket read timed out."),
+                "The Mist cloud did not answer the WebSocket connection in time.",
+            ),
+            (
+                ssl.SSLCertVerificationError("certificate verify failed"),
+                "The TLS check of the Mist cloud connection failed.",
+            ),
+            (
+                websocket.WebSocketAddressException("The name lookup failed."),
+                "The portal could not find the address of the Mist cloud.",
+            ),
+            (
+                ConnectionError("ConnectionError reset by peer"),
+                "The portal could not connect to the Mist cloud.",
+            ),
+            (
+                ConnectionRefusedError("The port is closed."),
+                "The portal could not connect to the Mist cloud.",
+            ),
+            (
+                websocket.WebSocketProxyException("The proxy refused the tunnel."),
+                "The portal could not connect to the Mist cloud.",
+            ),
+            (
+                websocket.WebSocketConnectionClosedException("The socket closed."),
+                "The portal could not connect to the Mist cloud.",
+            ),
+        ],
+    )
+    def test_reason_maps_websocket_open_failures(self, error: BaseException, expected: str) -> None:
+        """Map each connection failure family to a plain reason."""
+        assert ConnectFailure.reason(error) == expected  # Operators need a safe reason for failed opens.
+
+    def test_reason_returns_none_for_other_errors(self) -> None:
+        """Ignore errors that are not WebSocket connection failures."""
+        assert ConnectFailure.reason(RuntimeError("other")) is None  # Program errors keep their own handling.
+
+    def test_fake_cloud_http_5xx_fault_reaches_connect_failure_reason(self) -> None:
+        """Exercise the fake-cloud HTTP refusal through the stream client."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault("refuse", status_code=503))  # HTTP 5xx.
+            profile = TransportProfile(
+                stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
+                allow_loopback=True,
+                subscribe_timeout_seconds=0.5,
+            )  # Keep the end-to-end open fast.
+            endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Build endpoint for fake cloud.
+            client = StreamClient(endpoint, ["/one"])  # Open through real websocket-client.
+            try:  # Always close the client after the failed open.
+                with pytest.raises(websocket.WebSocketBadStatusException) as caught:  # HTTP refusal.
+                    client.open()  # The fake cloud refuses the opening handshake.
+                requests = cloud.wait_for_requests(1, 1.0)  # The fake records the failed request.
+                assert caught.value.status_code == 503  # The client preserves the HTTP status.
+                assert requests[0].path == "/api-ws/v1/stream"  # The request reached the fake cloud.
+                assert (
+                    ConnectFailure.reason(caught.value)
+                    == "The Mist cloud refused the WebSocket connection with HTTP status 503."
+                )  # The reason is safe.
+            finally:
+                client.close()  # Ensure the client releases any socket state.

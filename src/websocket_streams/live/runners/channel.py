@@ -20,7 +20,7 @@ from src.websocket_streams.live.sessions.record import (
     SessionSink,
     SessionState,
 )  # The runner writes through this protocol.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint  # The endpoint owns transport settings.
+from src.websocket_streams.live.transport.endpoint import ConnectFailure, MistStreamEndpoint  # Connection reasons.
 from src.websocket_streams.live.transport.frames import ConnectionClosed, SubscribeError  # Transport errors.
 from src.websocket_streams.live.transport.stream_client import StreamClient  # The owned stream client.
 
@@ -36,10 +36,13 @@ class _ChannelRunnerState:
     stop: threading.Event = field(default_factory=threading.Event)  # stop() wakes loops and waits.
     finish_lock: threading.Lock = field(default_factory=threading.Lock)  # Only one final state can win.
     finished: bool = False  # The first finish call wins.
+    last_open_failure: str | None = None  # Retry exhaustion reports the last connection failure.
 
 
 class ChannelStreamRunner:
     """Drive the owned WebSocket client for one channel request."""
+
+    _RETRYABLE_CLIENT_STATUSES = (408, 429)  # Mist can heal timeout and rate-limit refusals after a wait.
 
     def __init__(self, endpoint: MistStreamEndpoint, request: StartRequest, sink: SessionSink) -> None:
         """Build one channel runner.
@@ -84,6 +87,7 @@ class ChannelStreamRunner:
                 return  # No reconnect after a local stop.
             if result == "subscribed":  # A successful subscribe means future drops start a new retry budget.
                 failures = 0  # Reset failure count after the stream became live.
+                self._state.last_open_failure = None  # Post-subscribe drops use the generic retry reason.
             failures += 1  # Count this drop or open failure.
             if not self._wait_before_retry(failures):  # Retry budget exhausted or stop occurred.
                 return  # The helper recorded the final state when needed.
@@ -109,6 +113,7 @@ class ChannelStreamRunner:
             if error.detail == "timeout":  # A missing subscribe answer is an open failure that can retry.
                 logger.info("WebSockets channel subscription timed out")  # Do not log the channel path.
                 logger.debug("WebSockets channel subscription timeout will retry")  # Safe retry state.
+                self._state.last_open_failure = None  # Do not report an older open failure after subscribe timeout.
                 return "dropped"  # The outer loop applies the retry budget.
             self._finish(SessionState.FAILED, f"The stream subscription failed: {error.detail}.")  # Hide path.
             return "final"  # Subscribe refusal does not retry.
@@ -117,11 +122,43 @@ class ChannelStreamRunner:
                 return "stopped"  # The outer loop maps this to stopped.
             return "subscribed" if subscribed else "dropped"  # Only subscribed drops reset the budget.
         except Exception as error:
-            logger.info("WebSockets channel runner connection attempt failed")  # Log before retry handling.
-            logger.debug("WebSockets channel runner connection failure type=%s", type(error).__name__)  # Safe detail.
-            return "dropped"  # Open failures retry through the outer loop.
+            return self._open_failure_result(error)  # Fail at once or retry, by the cause of the failure.
         finally:
             client.close()  # Ensure each attempt releases its socket.
+
+    def _open_failure_result(self, error: Exception) -> str:
+        """Map one failed open to a final failure or a retry.
+
+        Args:
+            error: The exception from the open or the read.
+
+        Returns:
+            "final" for a refusal that a retry cannot heal, else "dropped".
+        """
+        logger.info("WebSockets channel runner connection attempt failed")  # Log before retry handling.
+        logger.debug("WebSockets channel runner connection failure type=%s", type(error).__name__)  # Safe detail.
+        reason = ConnectFailure.reason(error)  # Map open failures to operator-safe reasons.
+        if reason is not None and self._is_client_refusal(error):  # A 4xx handshake will not heal by retrying.
+            self._finish(SessionState.FAILED, reason)  # Show the safe HTTP refusal reason.
+            return "final"  # Do not retry a client-side refusal.
+        self._state.last_open_failure = reason  # Retry exhaustion can name the last open failure.
+        return "dropped"  # Open failures retry through the outer loop.
+
+    def _is_client_refusal(self, error: BaseException) -> bool:
+        """Return whether a 4xx failure should fail without retry.
+
+        Args:
+            error: The WebSocket open exception.
+
+        Returns:
+            True when the status is 4xx, except retryable 408 and 429.
+        """
+        status_code = getattr(error, "status_code", 0)  # websocket-client stores handshake status here.
+        return (
+            isinstance(status_code, int)
+            and 400 <= status_code <= 499
+            and status_code not in self._RETRYABLE_CLIENT_STATUSES
+        )  # Most 4xx refusals do not heal.
 
     def _wait_before_retry(self, failures: int) -> bool:
         """Wait before the next retry.
@@ -139,7 +176,8 @@ class ChannelStreamRunner:
             self._finish(SessionState.STOPPED, "The operator stopped the session.")  # Keep existing stop reason.
             return False  # Do not retry after stop.
         if failures > len(delays):  # The runner already used every retry delay.
-            self._finish(SessionState.FAILED, "The WebSocket connection failed after retry attempts.")  # Plain reason.
+            reason = self._state.last_open_failure or "The WebSocket connection failed after retry attempts."  # Reason.
+            self._finish(SessionState.FAILED, reason)  # Plain reason.
             return False  # End after the retry budget.
         delay = delays[failures - 1]  # Delay indexes start at zero.
         logger.info("Waiting before WebSockets channel reconnect attempt")  # Do not log paths.

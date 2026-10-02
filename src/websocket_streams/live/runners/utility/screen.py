@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)  # Keep screen runner records under this mo
 class ScreenRunner(DeviceTerminalRunner):
     """Run one screen command as a read-only terminal with a time limit."""
 
+    SCREEN_COLS = 80  # Mist screen commands render correctly at exactly 80 columns.
+    SCREEN_ROWS = 40  # Mist screen commands render correctly at exactly 40 rows.
     OPENED_NOTE = "The screen command started."  # The page shows this event.
     CLOSED_REASON = "The device ended the screen command."  # The device can end the command first.
 

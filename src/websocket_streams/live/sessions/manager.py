@@ -366,7 +366,8 @@ class StreamSessionManager:
             The terminal state, or None for a session that shows a message list.
         """
         shell = request.kind == "shell"  # Only a shell accepts keys from the page.
-        if not shell and not RunnerFactory.is_screen(request):  # Lines and packets use the message list.
+        screen = RunnerFactory.is_screen(request)  # Screen commands need fixed full-screen dimensions.
+        if not shell and not screen:  # Lines and packets use the message list.
             return None  # The session keeps no byte history.
         logger.debug("Building the terminal state for key %s", request.key)  # Log before the build.
         history = ByteHistory(self._settings.terminal_history_bytes)  # The setting bounds the kept bytes.
@@ -374,7 +375,10 @@ class StreamSessionManager:
         life = float(self._settings.max_stream_seconds)  # The reaper stops the session at this age.
         expires = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=life)  # The page warns before it.
         expires_at = expires.isoformat().replace("+00:00", "Z")  # Use the public UTC format of the payload.
-        return TerminalState(history, keys, self._clock() + life, expires_at)  # One state for the session.
+        state = TerminalState(history, keys, self._clock() + life, expires_at)  # One state for the session.
+        if screen:  # Mist sends Top and Monitor Traffic for a fixed 80 by 40 screen.
+            state.set_size(ScreenRunner.SCREEN_COLS, ScreenRunner.SCREEN_ROWS)  # Store the required screen size.
+        return state  # Return the terminal state after any screen-specific sizing.
 
     @staticmethod
     def _bind_input(session: StreamSession) -> None:

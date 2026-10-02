@@ -8,6 +8,7 @@ from dataclasses import replace  # Short timing tables replace immutable trigger
 
 import pytest  # The tests verify request errors and time bounds.
 
+import websocket  # Tests build the same handshake exceptions as websocket-client.
 from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Tests build utility definitions.
 from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked start requests.
 from src.websocket_streams.live.runners.utility.runner import UtilityRunner  # The stream runner under test.
@@ -17,11 +18,15 @@ from src.websocket_streams.live.runners.utility.triggers import (
     UtilityTriggerTable,
 )  # Tests shorten timing without changing trigger data.
 from src.websocket_streams.live.sessions.record import SessionState  # Sink assertions use final states.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Endpoint setup.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    MistStreamEndpoint,
+    TransportProfile,
+)  # Endpoint setup.
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Stop tests override open behavior.
 from tests.support.fake_mist_cloud.api import FakeApiCall, FakeApiSession  # Offline REST trigger fake.
 from tests.support.fake_mist_cloud.devices import StreamDevice  # Offline stream device fake.
-from tests.support.fake_mist_cloud.server import FakeMistCloud  # Offline WebSocket fake.
+from tests.support.fake_mist_cloud.server import FakeMistCloud, HandshakeFault  # Offline WebSocket fake.
 
 SITE_ID = "11111111-1111-1111-1111-111111111111"  # Stable site identifier for trigger paths.
 DEVICE_ID = "22222222-2222-2222-2222-222222222222"  # Stable device identifier for trigger paths.
@@ -258,6 +263,63 @@ def test_subscribe_refusal_does_not_leak_channel_path() -> None:
     assert state == SessionState.FAILED  # Subscribe refusal fails the session.
     assert reason == "The stream subscription failed: denied."  # The reason uses only safe detail.
     assert "/sites/" not in reason  # The channel path must not reach the page.
+
+
+@pytest.mark.parametrize(
+    ("kind", "status_code", "error"),
+    (
+        ("refuse", 403, websocket.WebSocketBadStatusException("Handshake status 403", 403)),
+        ("refuse", 503, websocket.WebSocketBadStatusException("Handshake status 503", 503)),
+        ("stall", 0, TimeoutError("The handshake stalled.")),
+        ("reset", 0, ConnectionError("The peer reset the handshake.")),
+    ),
+)
+def test_open_failures_report_connect_failure_reason(kind: str, status_code: int, error: BaseException) -> None:
+    """Show the operator-safe connection failure reason for utility open failures."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault(kind, status_code=status_code))  # Fault open.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        expected = ConnectFailure.reason(error)  # Use the product mapper for the expected text.
+        if expected is None:  # Fail clearly if a row no longer maps to a safe reason.
+            raise AssertionError("The representative open error did not map to a safe reason.")  # Fail fast.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _fast_table())  # Start the runner.
+        state, actual_reason = sink.wait_finished(5.0)  # Wait for the open failure.
+    assert state == SessionState.FAILED  # Open failures fail the utility session.
+    assert actual_reason == expected  # The page shows the safe transport reason.
+
+
+@pytest.mark.parametrize(
+    ("status_code", "data"),
+    (
+        (403, {}),
+        (503, {}),
+        (200, "bad json"),
+    ),
+)
+def test_trigger_failure_bodies_fail_safely(status_code: int, data: object) -> None:
+    """Fail safely when the trigger returns an HTTP error or a non-JSON body."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", status_code=status_code, data=data)  # Return the trigger failure shape.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _fast_table())  # Start the runner.
+        state, reason = sink.wait_finished()  # Wait for failure.
+    assert state == SessionState.FAILED  # Trigger failures fail the utility session.
+    assert reason == f"The utility failed with status {status_code}."  # The page reason is stable.
+
+
+def test_empty_trigger_body_fails_safely() -> None:
+    """Fail safely when the trigger returns an empty body."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_arp", status_code=200, data="")  # Return the empty trigger body.
+        sink = _run_utility(cloud, api, _request("ex.retrieveArpTable"), _fast_table())  # Start the runner.
+        state, reason = sink.wait_finished()  # Wait for failure.
+    assert state == SessionState.FAILED  # Empty trigger bodies fail the utility session.
+    assert reason == "The utility failed with status 200."  # The page reason is stable.
 
 
 def test_unexpected_output_exception_fails_session_safely() -> None:

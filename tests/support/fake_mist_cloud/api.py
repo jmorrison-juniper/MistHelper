@@ -26,7 +26,7 @@ class FakeApiResponse:
     """A small APIResponse-compatible object."""
 
     status_code: int  # HTTP status code.
-    data: dict[str, object] | list[object]  # Parsed response data.
+    data: object  # Parsed response data. The SDK keeps the raw text when the body is not JSON.
     url: str = ""  # SDK APIResponse exposes this attribute.
     raw_data: str = ""  # SDK APIResponse exposes this attribute.
     next: str | None = None  # SDK APIResponse exposes this attribute.
@@ -40,7 +40,7 @@ class FakeApiOverride:
 
     pattern: str  # A substring matched against the request URI.
     status_code: int  # The response status.
-    data: dict[str, object] | list[object]  # The response data.
+    data: object  # The response data. A string models a body that is not JSON.
     exception: Exception | None = None  # Optional exception to raise instead.
 
 
@@ -62,11 +62,19 @@ class FakeApiSession:
         self,
         pattern: str,
         status_code: int = 200,
-        data: dict[str, object] | list[object] | None = None,
+        data: object | None = None,
         exception: Exception | None = None,
     ) -> None:
-        """Add one response override."""
-        self.overrides.append(FakeApiOverride(pattern, status_code, data or {}, exception))  # New overrides append.
+        """Add one response override.
+
+        Args:
+            pattern: A substring of the request URI.
+            status_code: The response status.
+            data: The response data, or None for an empty object. An empty string models an empty body.
+            exception: An exception to raise instead of the answer.
+        """
+        answer = {} if data is None else data  # Keep an empty string, because it models an empty body.
+        self.overrides.append(FakeApiOverride(pattern, status_code, answer, exception))  # New overrides append.
 
     def mist_post(self, uri: str, body: object | None = None) -> FakeApiResponse:
         """Record a POST and return a fake response."""

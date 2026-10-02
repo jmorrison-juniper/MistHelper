@@ -2,10 +2,13 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # The cut-frame test proves that the frame is not valid JSON.
 import threading  # FrameReader needs a close event for close-origin decisions.
 import time  # The TLS buffer test measures the read wait.
 from socket import socket as RealSocket  # The TLS buffer fake waits on a real idle socket.
 from socket import socketpair  # select needs a real socket that holds no data.
+
+import pytest  # The cut-frame test asserts the parser error.
 
 from src.websocket_streams.live.transport.frames import (  # Test frame contracts.
     ConnectionClosed,
@@ -83,6 +86,13 @@ class TestFrameDecoder:
     def test_event_wraps_text_that_is_not_json(self) -> None:
         """Wrap non-JSON text as raw text."""
         assert FrameDecoder.event("plain text") == {"raw": "plain text"}  # Match the SDK fallback shape.
+
+    def test_event_wraps_cut_json_frame_as_raw_text(self) -> None:
+        """Wrap a cut JSON frame as raw text."""
+        frame = '{"event": "data", "data": '  # A dropped connection can cut a frame in the middle.
+        with pytest.raises(json.JSONDecodeError):  # Prove that the frame is malformed JSON.
+            json.loads(frame)  # The standard parser refuses the cut frame.
+        assert FrameDecoder.event(frame) == {"raw": frame}  # The decoder keeps the cut frame visible as text.
 
     def test_event_wraps_empty_body(self) -> None:
         """Wrap an empty text frame as raw text."""

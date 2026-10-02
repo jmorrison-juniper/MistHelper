@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor  # Gateway wait tests run read
 
 import pytest  # The tests assert contract refusals.
 
+import websocket  # Failure tests build the same exception type as websocket-client.
 from src.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
@@ -24,10 +25,17 @@ from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Test
 from src.websocket_streams.live.terminal.gateway import TerminalGateway  # The tests cover this class.
 from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests build writable state.
 from src.websocket_streams.live.terminal.state import TerminalState  # Tests build terminal state.
-from src.websocket_streams.live.transport.endpoint import TransportProfile  # Real paste path uses loopback cloud.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    TransportProfile,
+)  # Real paste path uses loopback cloud.
 from tests.support.fake_mist_cloud.api import FakeApiSession  # Real paste path uses fake Mist triggers.
 from tests.support.fake_mist_cloud.devices import ShellDevice  # Real paste path uses fake shell device.
-from tests.support.fake_mist_cloud.server import FakeConnection, FakeMistCloud  # Loopback server for paste test.
+from tests.support.fake_mist_cloud.server import (  # Loopback server for paste test.
+    FakeConnection,
+    FakeMistCloud,
+    HandshakeFault,  # Fake cloud handshake failure control.
+)
 
 
 class FakeClock:
@@ -268,6 +276,60 @@ class TestTerminalGateway:
             finally:  # End the shell thread before the context manager closes sockets.
                 manager.shutdown()  # Stop the real shell runner and any reaper thread.
 
+    @pytest.mark.parametrize(
+        ("fault", "error"),
+        [
+            (
+                HandshakeFault("refuse", status_code=403),
+                websocket.WebSocketBadStatusException("Handshake status 403", 403),
+            ),
+            (
+                HandshakeFault("refuse", status_code=503),
+                websocket.WebSocketBadStatusException("Handshake status 503", 503),
+            ),
+            (HandshakeFault("stall"), TimeoutError("The handshake stalled.")),
+            (HandshakeFault("reset"), ConnectionError("The peer reset the handshake.")),
+        ],
+    )
+    def test_real_manager_open_failures_are_readable_through_gateway(
+        self,
+        fault: HandshakeFault,
+        error: BaseException,
+    ) -> None:
+        """Terminal reads show final state after real shell open failures."""
+        expected = ConnectFailure.reason(error)  # Compute expected text through the production mapper.
+        assert isinstance(expected, str)  # Each table row must map to public operator text.
+        clock = FakeClock()  # Use deterministic rate time for the gateway.
+        with FakeMistCloud() as cloud:  # The fake cloud drives the real WebSocket open path.
+            cloud.fail_handshake("/shell/fail", fault)  # Force this shell path to fail its handshake.
+            api = FakeApiSession(cloud)  # Build a fake Mist API session.
+            api.add_override("/shell", status_code=200, data={"url": f"{cloud.base_ws_url}/shell/fail"})  # Route.
+            manager = self._real_manager(cloud, clock, api)  # Use the real manager and shell runner.
+            gateway = TerminalGateway(manager)  # Read the terminal through the gateway under test.
+            session_id = str(manager.start(self._shell_request())["session_id"])  # Start returns before failure.
+            session = self._wait_for_state(manager, session_id, {SessionState.FAILED}, timeout=5.0)  # Wait.
+            payload = gateway.read(session_id, 0, 0.0)  # Read the final terminal state through gateway.
+            requests = cloud.wait_for_requests(1, 5.0)  # Prove that the WebSocket path was attempted.
+        assert requests[0].path == "/shell/fail"  # The fake cloud recorded the failed open.
+        assert session.reason == expected  # The stored session has the mapped reason.
+        assert payload["reason"] == expected  # The gateway answer exposes the mapped reason.
+        assert "fake-token" not in payload["reason"]  # The reason must not expose secrets.
+
+    def test_bad_json_trigger_body_is_readable_through_gateway(self) -> None:
+        """A malformed trigger body reaches the gateway as a failed terminal."""
+        clock = FakeClock()  # Use deterministic gateway time.
+        with FakeMistCloud() as cloud:  # The fake cloud proves no WebSocket open happens.
+            api = FakeApiSession(cloud)  # Build a fake Mist API session.
+            api.add_override("/shell", status_code=200, data="bad json")  # Model JSONDecodeError output.
+            manager = self._real_manager(cloud, clock, api)  # Use the real manager and shell runner.
+            gateway = TerminalGateway(manager)  # Read the final terminal state through gateway.
+            session_id = str(manager.start(self._shell_request())["session_id"])  # Start returns before failure.
+            session = self._wait_for_state(manager, session_id, {SessionState.FAILED})  # Wait for failure.
+            payload = gateway.read(session_id, 0, 0.0)  # Read the failure through the gateway.
+        assert cloud.requests == []  # A malformed trigger body must not open a WebSocket.
+        assert session.reason == "The Mist cloud did not return a terminal address."  # Plain reason is stored.
+        assert payload["reason"] == "The Mist cloud did not return a terminal address."  # Gateway reports it.
+
     def _gateway(self, clock: FakeClock | None = None) -> tuple[TerminalGateway, StreamSession, FakeRunner]:
         """Build a gateway with one writable terminal session.
 
@@ -333,12 +395,15 @@ class TestTerminalGateway:
             time.sleep(0.01)  # Sleep briefly so worker threads can enter the wait.
         raise AssertionError(f"expected {count} waiters")  # Fail with the expected count.
 
-    def _real_manager(self, cloud: FakeMistCloud, clock: FakeClock) -> StreamSessionManager:
+    def _real_manager(
+        self, cloud: FakeMistCloud, clock: FakeClock, api: FakeApiSession | None = None
+    ) -> StreamSessionManager:
         """Build a real session manager for loopback shell testing.
 
         Args:
             cloud: The started fake Mist cloud.
             clock: The fake monotonic clock for terminal rate checks.
+            api: The fake API session, or None for a default session.
 
         Returns:
             A manager that uses real shell runners against the fake cloud.
@@ -350,9 +415,32 @@ class TestTerminalGateway:
             subscribe_timeout_seconds=0.2,
             reconnect_delays=(),
         )  # Keep transport waits short and allow the loopback shell URL.
-        factory = RunnerFactory(FakeApiSession(cloud), profile)  # Build real runners with fake Mist triggers.
+        api_session = api if api is not None else FakeApiSession(cloud)  # Use caller overrides when provided.
+        factory = RunnerFactory(api_session, profile)  # Build real runners with fake Mist triggers.
         settings = StreamSettings(max_sessions=1, max_stream_seconds=120)  # One reused shell keeps the test fast.
         return StreamSessionManager(settings, factory, clock)  # Return the real manager under test.
+
+    def _wait_for_state(
+        self, manager: StreamSessionManager, session_id: str, states: set[SessionState], timeout: float = 2.0
+    ) -> StreamSession:
+        """Wait until one session reaches an expected state.
+
+        Args:
+            manager: The manager that owns the session.
+            session_id: The selected session identifier.
+            states: Acceptable final states.
+            timeout: Maximum wait seconds.
+
+        Returns:
+            The session after it reaches one expected state.
+        """
+        deadline = time.monotonic() + timeout  # Bound each async assertion.
+        while time.monotonic() < deadline:  # Poll for a short time.
+            session = manager.session(session_id)  # Read the current session state.
+            if session.state in states:  # The background runner reached the target state.
+                return session  # The caller can assert the reason.
+            time.sleep(0.01)  # Avoid a busy loop while the runner thread works.
+        return manager.session(session_id)  # Return the observed state for assertion failure context.
 
     def _shell_request(self) -> StartRequest:
         """Build a checked shell request for the paste test.

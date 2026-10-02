@@ -50,7 +50,7 @@ class TestMessageText:
 
     def test_empty_body_stays_empty(self) -> None:
         """Keep an empty channel body empty."""
-        kind, content, _source = MessageShaper().channel_message({"data": ""})  # Shape an event with an empty body.
+        kind, content, _source = MessageShaper().channel_message(dict(data=""))  # Shape an empty body.
         assert kind == "json"  # Mappings still render as JSON.
         assert content["data"] == ""  # The empty body stays an empty string.
 

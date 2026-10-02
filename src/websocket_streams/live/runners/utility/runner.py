@@ -31,7 +31,7 @@ from src.websocket_streams.live.sessions.record import (
     SessionSink,
     SessionState,
 )  # The runner writes through this protocol.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint  # The stream client needs endpoint values.
+from src.websocket_streams.live.transport.endpoint import ConnectFailure, MistStreamEndpoint  # Open failure reasons.
 from src.websocket_streams.live.transport.frames import ConnectionClosed, FrameDecoder, SubscribeError  # Stream errors.
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Owned WebSocket stream client.
 
@@ -153,19 +153,37 @@ class UtilityRunner:
         except SubscribeError as exc:
             self._fail(f"The stream subscription failed: {exc.detail}.")  # Do not leak the channel path.
         except ConnectionClosed as exc:
-            if self._state.stopping.is_set() and not exc.dropped:  # A local close during open is an operator stop.
-                self._finish_stopped()  # Map the interrupted open to stopped.
-            else:
-                self._fail(str(exc) or "The utility failed.")  # Return a safe failure reason.
-        except (StreamRequestError, RuntimeError, OSError) as exc:
-            self._fail(str(exc) or "The utility failed.")  # Return a safe failure reason.
-        except Exception:
-            logger.exception("WebSockets utility runner crashed for key %s", self._request.key)  # Log traceback.
-            self._sink.finish(
-                SessionState.FAILED, "The utility failed. Read the portal log for the cause."
-            )  # Keep page reason safe.
+            self._end_on_close(exc)  # Map a local close to stopped and a remote close to failed.
+        except Exception as exc:
+            self._end_on_error(exc)  # Give a plain reason, and log a traceback only for a program error.
         finally:
             self._close_client()  # Ensure stop() has no stale client reference.
+
+    def _end_on_close(self, closed: ConnectionClosed) -> None:
+        """End the session after the stream closed before the utility finished.
+
+        Args:
+            closed: The close that ended the open or the read.
+        """
+        if self._state.stopping.is_set() and not closed.dropped:  # A local close during open is an operator stop.
+            self._finish_stopped()  # Map the interrupted open to stopped.
+            return  # The stop reason is final.
+        self._fail(str(closed) or "The utility failed.")  # Return a safe failure reason.
+
+    def _end_on_error(self, error: Exception) -> None:
+        """End the session after an open error, a trigger error, or a program error.
+
+        Args:
+            error: The exception that stopped the utility.
+        """
+        reason = ConnectFailure.reason(error)  # Open failures use operator-safe text.
+        if reason is None and isinstance(error, (StreamRequestError, RuntimeError)):  # These errors hold safe text.
+            reason = str(error) or "The utility failed."  # Keep the request or trigger reason for the page.
+        if reason is not None:  # An expected failure gets a plain reason and no traceback.
+            self._fail(reason)  # The page shows the plain reason.
+            return  # The failure is recorded.
+        logger.exception("WebSockets utility runner crashed for key %s", self._request.key)  # Log the traceback.
+        self._sink.finish(SessionState.FAILED, "The utility failed. Read the portal log for the cause.")  # Safe.
 
     @staticmethod
     def _api_session(apisession: object) -> _ApiSessionProtocol:

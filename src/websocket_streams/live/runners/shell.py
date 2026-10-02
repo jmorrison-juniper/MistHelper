@@ -18,7 +18,11 @@ from src.websocket_streams.intake.start_request import StartRequest  # The reque
 from src.websocket_streams.live.runners.utility.triggers import UtilityRequest, UtilityTriggerTable  # REST triggers.
 from src.websocket_streams.live.sessions.record import SessionSink, SessionState  # The runner writes to the sink.
 from src.websocket_streams.live.terminal.state import TerminalSize  # The default size when no terminal exists.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, ShellAddressPolicy  # Connection values.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    MistStreamEndpoint,
+    ShellAddressPolicy,
+)  # Connection values.
 from src.websocket_streams.live.transport.frames import ConnectionClosed  # The client reports each end with it.
 from src.websocket_streams.live.transport.shell_client import ShellClient  # The own shell WebSocket client.
 
@@ -157,7 +161,20 @@ class DeviceTerminalRunner:
         opened = terminal.size() if terminal is not None else TerminalSize()  # Copy the size before the open.
         if self._stopping.is_set():  # The operator stopped the session during the REST trigger.
             raise ConnectionClosed(dropped=False)  # Do not open a connection that nobody wants.
-        self._client.open(url, opened.cols, opened.rows)  # Check the address, connect, and send the size.
+        try:  # Keep address policy errors on the current path, but translate network open errors.
+            self._client.open(url, opened.cols, opened.rows)  # Check the address, connect, and send the size.
+        except StreamRequestError:  # The address policy already gave the operator a safe reason.
+            raise  # Preserve the current refusal path and text.
+        except Exception as error:  # WebSocket open errors must become plain terminal reasons.
+            reason = ConnectFailure.reason(error)  # Map known connection failures to operator text.
+            if reason is None:  # Unknown program errors keep the existing broad handler.
+                raise  # Preserve the original exception for logging and failure handling.
+            logger.info(
+                "The terminal open for key %s failed with %s",
+                self._request.key,
+                type(error).__name__,
+            )  # Log the error family without address, token, or cookies.
+            raise TerminalOpenError(reason) from error  # Show the plain connection reason in the session.
         if self._stopping.is_set():  # A stop arrived while the connection opened.
             raise ConnectionClosed(dropped=False)  # The finally block closes the new socket.
         current = terminal.size() if terminal is not None else opened  # A resize can arrive during the open.
@@ -212,7 +229,7 @@ class DeviceTerminalRunner:
         """
         if self._stopping.is_set() or not closed.dropped:  # The operator or the reaper closed the terminal.
             return SessionState.STOPPED, self.STOPPED_REASON  # The record keeps the exact stop reason.
-        if closed.code is not None and not self._output_seen:  # The cloud closed a terminal that never sent output.
+        if not self._output_seen:  # A remote end before output means the device accepted but did not answer.
             return SessionState.FAILED, self.NO_ANSWER_REASON  # Issue #3710: the device was silent.
         if closed.code is not None:  # The device sent a close frame, for example after exit.
             return SessionState.FINISHED, self.CLOSED_REASON  # A normal end of the terminal.
