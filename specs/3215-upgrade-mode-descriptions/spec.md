@@ -6,6 +6,8 @@
 
 **Status**: Specified
 
+**Local Refresh**: 2026-10-02 on `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`.
+
 **Input**: Repair [issue #3215](https://github.com/jmorrison-juniper/MistHelper/issues/3215) without a product behavior change.
 
 ## User Scenarios & Testing
@@ -57,7 +59,9 @@ The explanation stays correct after a saved selection.
 - **FR-002**: Single-site guidance must describe the inventory, pre-check, and upgrade options workflow for one site.
 - **FR-003**: Single-site guidance must name the site routes for access points, switches, and Junos gateways.
 - **FR-004**: Multi-site guidance must distinguish one portal operation from its separate child jobs.
-- **FR-005**: Multi-site guidance must name the organization AP route and the site routes for switches and Junos gateways.
+- **FR-005**: Multi-site guidance must name the organization AP route for one shared target version.
+  It must name site jobs for access points with different target versions.
+  It must also name the site routes for switches and Junos gateways.
 - **FR-006**: Both modes must name the organization SSR route.
 - **FR-007**: Both pages must describe the newest verified standalone pre-check capture of each site.
 - **FR-008**: Multi-site guidance must name the confirmation page as the place to take missing pre-check captures.
@@ -65,6 +69,8 @@ The explanation stays correct after a saved selection.
 - **FR-010**: Form actions, route destinations, mode values, CSRF fields, selected states, and typed confirmations must remain unchanged.
 - **FR-011**: New descriptions must have stable test identifiers and use Simplified Technical English.
 - **FR-012**: All new test cases must run offline without live credentials, cloud writes, or production stores.
+- **FR-013**: Both modes must describe a supported target version choice for each device's model.
+- **FR-014**: The browser module must retain its import skip, and strict mode must reject a missing browser package.
 
 ### Key Entities
 
@@ -85,4 +91,6 @@ No entity, schema, primary key, lock, or stored record changes.
 The live implementation takes precedence over the issue's older missing-feature statement.
 Issues #3243 and #3244 added multi-site pre-check and post-check features after the original report.
 Spec 2200 and the current services establish the cloud routing rules.
+The accepted repair in [#3633](https://github.com/jmorrison-juniper/MistHelper/pull/3633) adds per-device version choices and mixed-version AP site jobs.
 The parent controls publication and any later protected merge.
+The local refresh does not authorize a push, pull request, workflow, merge, or delivery.

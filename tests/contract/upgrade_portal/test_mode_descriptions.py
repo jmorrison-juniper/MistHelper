@@ -85,6 +85,7 @@ class TestModeDescriptions:
             "Single-site: Open the inventory of one site. "
             "If no verified pre-check capture exists, take one. "
             "Set the upgrade options for that site. "
+            "For each device, select a target version that its model supports. "
             "Access points, switches, and Junos gateways use site routes "
             "(upgradeSiteDevices or upgradeDevice). "
             "Session Smart Router (SSR) gateways use the organization SSR route (upgradeOrgSsrs)."
@@ -92,8 +93,12 @@ class TestModeDescriptions:
         "mode-multi-site-description": (
             "Multi-site: Select one or more sites. "
             "Set the upgrade options for the selected sites. "
+            "For each device, select a target version that its model supports. "
             "One portal operation tracks one or more child jobs. "
-            "Access points use an organization cloud job (upgradeOrgDevices). "
+            "If all selected access points use one target version, they use an organization cloud job "
+            "(upgradeOrgDevices). "
+            "If access points use different target versions, they use separate site jobs "
+            "(upgradeSiteDevices or upgradeDevice). "
             "Switches and Junos gateways use site routes (upgradeSiteDevices or upgradeDevice). "
             "Session Smart Router (SSR) gateways use the organization SSR route (upgradeOrgSsrs)."
         ),
