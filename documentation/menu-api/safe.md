@@ -17,7 +17,7 @@ That diagram links the menu option to the classes that send the requests, and ea
 ```mermaid
 flowchart LR
     root["safe: 84 menu<br/>options"]
-    root --> f_orgs_sites["orgs/sites<br/>20 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>23 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>5 menu options"]
@@ -1274,22 +1274,24 @@ flowchart LR
 
 - Title: Export the organization switch scorecard
 - Handler: `SwitchScorecard.run`
-- Shared helpers: [`APIDataFetcher`](README.md#apidatafetcher), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter)
-- Endpoints: 1
+- Shared helpers: [`APIDataFetcher`](README.md#apidatafetcher), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 2
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`SwitchScorecardClient.list_switch_stats`](../../src/reports/switch_scorecard/client.py) | Reference |
 
 ## Menu 278
 
 - Title: Export the organization access point scorecard
 - Handler: `ApScorecard.run`
-- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter)
-- Endpoints: 1
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 2
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ApScorecardClient.list_ap_stats`](../../src/reports/ap_scorecard/client.py) | Call |
 
 ## Menu 279
@@ -1297,10 +1299,11 @@ flowchart LR
 - Title: Organization WAN Edge Scorecard
 - Handler: `WanEdgeScorecard.run`
 - Shared helpers: [`APIDataFetcher`](README.md#apidatafetcher), [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 1
+- Endpoints: 2
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`WanEdgeGatewayStatsClient.fetch_gateway_stats`](../../src/reports/wan_edge_scorecard/client.py) | Reference |
 
 ## Menu 280
