@@ -101,6 +101,8 @@ BAD_CREDENTIALS_MESSAGE = "The portal could not sign you in. Check the address a
 # The sentence asks for a password, and it holds no password value. The line
 # carries the suppression alone, because the sentence fills the whole line.
 MISSING_PASSWORD_MESSAGE = "The portal received no password. Type your password, then try again."  # nosec B105
+API_REFUSAL_MESSAGE = "The portal could not sign you in. Check the token, then try again."
+EMPTY_API_FIELD_MESSAGE = "The token field is empty. Type your token, then try again."
 RATE_LIMITED_MESSAGE = "The cloud refused more sign-in attempts for now. Wait a short time, then try again."
 BAD_CODE_MESSAGE = "The portal could not accept that code. Read the current code, then try again."
 EXPIRED_MESSAGE = "The second factor step is no longer open. Start the sign-in again."
@@ -1042,7 +1044,7 @@ def finish_token_session(
         identity.sign_in_with_environment_token(owner, builder(host))  # The registry holds the reference.
     except Exception as fault:  # A missing variable and a refused token both end the sign-in here.
         logger.warning("auth: the token sign-in of %s failed (%s)", owner.email_digest, type(fault).__name__)
-        return credential_refusal()  # The same envelope as a refused pair, so no probe learns the difference.
+        return credential_refusal(API_REFUSAL_MESSAGE)  # The selected mode names its input, not the failed check.
     logger.info("auth: operator %s signed in with a token variable", owner.email_digest)  # No value in the log.
     return with_browser_id(next_answer(NEXT_AFTER_SIGNIN), browser_id)  # The cookie travels with this answer.
 
@@ -1050,9 +1052,9 @@ def finish_token_session(
 def start_browser_token_session() -> Response | tuple[Response, int]:
     """Sign in with a browser token when startup permits the credential mode."""
     if not current_app.config.get("BROWSER_TOKEN_SIGNIN_ALLOWED", False):
-        return credential_refusal()
+        return credential_refusal(API_REFUSAL_MESSAGE)
     if not read_field(TOKEN_FIELD):
-        return credential_refusal()
+        return credential_refusal(EMPTY_API_FIELD_MESSAGE)
     host = resolve_host(read_field(HOST_FIELD))
     browser_id = browser_identifier()
     builder = injected_seam(BROWSER_TOKEN_SESSION_KEY) or default_browser_token_session
@@ -1063,7 +1065,7 @@ def start_browser_token_session() -> Response | tuple[Response, int]:
         identity.sign_in_with_browser_token(owner, cloud_session)
     except Exception as fault:
         logger.warning("auth: the browser token sign-in failed (%s)", type(fault).__name__)
-        return credential_refusal()
+        return credential_refusal(API_REFUSAL_MESSAGE)
     logger.info("auth: token-name operator %s signed in with a browser token", owner.email_digest)
     return with_browser_id(next_answer(NEXT_AFTER_SIGNIN), browser_id)
 
