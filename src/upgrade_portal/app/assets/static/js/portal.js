@@ -2172,7 +2172,8 @@
             return;
         }
         var form = tokenInput.closest("form");
-        if (!form) {
+        var tokenGroup = tokenInput.closest(".signin-token-group");
+        if (!form || !tokenGroup) {
             return;
         }
         var emailInput = byTestId(SIGNIN_EMAIL_TESTID, form);  /* The browser-token mode does not use an address. */
@@ -2204,6 +2205,8 @@
             var browserTokenMode = usesBrowserToken();  /* The selected mode drives native validation. */
             setRequired(emailInput, emailWasRequired && !browserTokenMode);  /* Keep the address guard for provider modes. */
             setRequired(passwordInput, passwordWasRequired && !browserTokenMode);  /* Keep the password guard for provider modes. */
+            tokenGroup.hidden = !browserTokenMode;
+            tokenInput.disabled = !browserTokenMode;  /* Exclude an inactive token from native form data without clearing it. */
         }
 
         function showSigninError(message) {

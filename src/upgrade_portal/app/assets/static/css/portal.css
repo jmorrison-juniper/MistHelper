@@ -196,6 +196,15 @@
     font-size: 0.85rem;
 }
 
+/* Keep the token field separate from the credential mode buttons. */
+.signin-token-group {
+    margin-top: 0.75rem;
+}
+
+.signin-token-group > .form-label {
+    display: block;
+}
+
 /* ==========================================================================
  * 4. Tables
  * ========================================================================== */
@@ -1102,7 +1111,8 @@
  * word. Issue #3277 records the sign-in alert "Warning:The portal could not
  * sign you in". A browser removes a space at the end of a line, so a flex item
  * and a block prefix keep the same look. */
-.flash-item::before {
+.flash-item::before,
+.flash-danger.alert::before {
     font-weight: 700;
     white-space: nowrap;
 }
