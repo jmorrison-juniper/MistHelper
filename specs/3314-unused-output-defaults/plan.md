@@ -553,3 +553,33 @@ Later implementation stops at a clean local commit until the parent grants publi
 The initial SHA, an observed `main`, and sibling reports are not grants.
 Any authorized base change requires the relevant local gates again.
 This plan claims no implementation, test, coverage, STE score, or image-build result.
+
+## Authorized delivery on 2026-10-02
+
+The parent explicitly granted sole position-18 publication and delivery.
+The granted main is `7a4435bdf8ceff7e1dd527e4d2fd854e79542f37`.
+The grant supersedes the historical local-only pause.
+It changes no product requirement or file reservation.
+
+Rebase only this worktree onto the granted main.
+Recheck the live claim and every open pull request's complete file list.
+Repeat the six-input red and green decisions and all 342 current focused cases.
+Repeat the current configured local gates and the six-input, three-guide preflight.
+Build both current image files with owned local tags and remove only owned resources.
+Commit the final evidence before the required clean-commit ratchet.
+Fetch, resolve, and compare the intended `origin/main` base consistently.
+Push once after the complete local proof.
+
+Use the complete current pull request template with accurate commands and results.
+Post one public ownership comment.
+Require fresh quality, title, applicable STE, CodeQL analysis, and separate required CodeQL results.
+Require all 15 current strict contexts and the exact granted base.
+Stop if an unrelated change advances main.
+
+Use a protected full-head-match squash merge without `--admin`, `--auto`, or `--delete-branch`.
+Verify the actual resulting main SHA and tree.
+Run local proof with this worktree at that exact main commit.
+Persist the final receipt in the pull request and session artifacts.
+Do not change the production stack, stores, ports, or named volumes.
+Pause after the handoff.
+The parent alone releases the next issue.

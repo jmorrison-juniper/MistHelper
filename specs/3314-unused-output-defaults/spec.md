@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Ready for planning.
+**Status**: The local repair is verified. Authorized publication is in progress.
 
 **Input**: Repair existing issue #3314 with option 2. Remove three unused settings and correct the SQLite selection instruction.
 
@@ -347,6 +347,14 @@ An observed `main` revision is not permission.
 The initial SHA is not permission.
 Sibling reports are not permission.
 Do not commit shared feature state in any later phase.
+
+The parent granted sole position-18 publication and delivery on 2026-10-02.
+The granted main is `7a4435bdf8ceff7e1dd527e4d2fd854e79542f37`.
+This explicit grant opens the publication boundary after the required current-base proof.
+Stop if main advances for an unrelated change or a reserved path has another owner.
+Use a protected full-head-match squash merge without an administrative bypass or auto-merge.
+Verify the actual resulting main locally and record the delivery receipt.
+The parent alone releases the next issue.
 
 ## Success Criteria *(mandatory)*
 

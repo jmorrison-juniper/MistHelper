@@ -741,3 +741,153 @@ The handoff must include the full prepared SHA and exact manifest.
 It must state the original red counts, final green counts, gate commands, image results, and capability limits.
 Push, pull request creation, protected merge, and exact-main local proof remain deferred.
 Only an explicit parent grant against a verified current base can open publication.
+
+## Authorized current-base proof on 2026-10-02
+
+The parent explicitly granted sole position-18 publication and full delivery after issue #3300.
+The exact granted main is `7a4435bdf8ceff7e1dd527e4d2fd854e79542f37`.
+The grant includes a protected merge and actual resulting-main local proof.
+It does not authorize any unrelated source change or the next issue.
+
+The live main matched the grant.
+The issue retains `jmorrison-juniper`, the required labels, and the original exact session reservation.
+The complete open pull request inventory was empty.
+No reserved path has another owner.
+The clean prepared commit rebased without a conflict.
+Its rebased SHA is `43cb8a6216eda25f202c7f44eadb2375291e9e7e`.
+The final evidence commit is a separate Conventional Commit, not an amendment.
+
+The current product diff remains exactly three declaration deletions and one sentence replacement.
+Raw-byte comparison against the granted main confirms each permitted edit.
+The two image files remain identical.
+Eleven protected inputs remain unchanged, including the CLI, session writer, compose, readiness, dependencies, settings, and primary-key strategies.
+No existing test or helper changed during this delivery phase.
+
+### Current bounded guard and focused proof
+
+All six hash-verified original copies match the granted main's actual bytes.
+The original success decision returns **1**, with six checked inputs and four rejections.
+It names the session script, both images, and the false SQLite instruction.
+The live green checks the same six inputs and rejects none.
+All 14 required negative controls and the additional malformed, unreadable, CRLF, and failed-process controls pass.
+
+The current run uses an empty inherited environment, owned HOME and temporary paths, and no production application or service.
+It retains the 30-second test and subprocess bounds.
+Credential tests compare synthetic values internally and retain no token value in output, records, or logs.
+The current focused command is:
+
+```text
+rtk proxy env -i PATH=/Users/jmorrison/GitHub/copilot-worktrees/MistHelper/jmorrison-juniper-glowing-potato/.venv/bin:/usr/bin:/bin:/usr/sbin:/sbin HOME=/Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant/home LANG=en_US.UTF-8 TMPDIR=/Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 MISTHELPER_STANDALONE=true .venv/bin/python -B -m coverage run --rcfile /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-guards.coveragerc -m pytest -p no:cacheprovider --basetemp /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant/focused --timeout=30 tests/unit/container tests/unit/test_container_health_probe.py tests/guardrails/test_container_tls_verification.py tests/guardrails/test_container_account_identifiers.py tests/unit/web_portal/test_dashboard_readiness.py tests/unit/export/test_data_exporter.py tests/unit/test_exports.py tests/test_exports.py -q
+rtk proxy .venv/bin/python -m coverage report --rcfile /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-guards.coveragerc --fail-under=90
+rtk proxy .venv/bin/python -m coverage json --rcfile /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-guards.coveragerc -o /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant/coverage.json
+```
+
+All commands pass.
+The test run passes **342 cases** in 53.35 seconds, with zero failures and zero skips.
+It covers actual parser and local writer behavior, all 23 readiness outcomes, and actual Bash session controls.
+The audit guard checks one trail with zero lines before and after the run.
+Helper coverage remains 338 of 338 lines and 66 of 66 branches.
+The combined helper denominator is 404, with 100 percent coverage and no missing lines or arcs.
+This result is not whole-source coverage.
+
+### Current configured local gates
+
+| Command | Current result |
+| --- | --- |
+| `rtk proxy .venv/bin/python -B -m py_compile MistHelper.py tests/unit/container/output_defaults/contract.py tests/unit/container/output_defaults/session.py tests/unit/container/output_defaults/test_contract.py tests/unit/container/output_defaults/test_session.py` | Passed. |
+| `rtk proxy .venv/bin/python -m ruff check .` | Passed with the full configured scope. |
+| `rtk proxy .venv/bin/python -m black --check --diff .` | Passed. 2,024 files need no change. |
+| `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed for the exact CI scope of 665 source files. Tests remain excluded. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Passed for both samples. |
+| `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed without a severity filter. |
+| `rtk proxy .venv/bin/python -m pylint src/ --fail-under=9.5` | Passed with 9.83 of 10. |
+| `rtk proxy .venv/bin/python -m radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j \| rtk proxy .venv/bin/complexity-gate --max 10` | Passed. No function exceeds the threshold. |
+| `rtk proxy .venv/bin/python -m vulture src/ MistHelper.py wsgi.py web_portal --min-confidence 70` | Passed with no finding. |
+| `rtk proxy .venv/bin/python -m pydocstyle src/ wsgi.py web_portal` | Passed. |
+| `rtk proxy .venv/bin/interrogate src/ MistHelper.py wsgi.py wsgi_capture.py web_portal --fail-under 90 -v` | Passed with 99.6 percent, covering 13,177 of 13,225 docstrings. |
+| `rtk proxy .venv/bin/diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt` | Passed for 153 references across 15 diagrams. |
+| `rtk proxy .venv/bin/check-citations src tests` | Passed for 251 citations, with zero unresolved references. |
+| `rtk proxy .venv/bin/python -m scripts.menu_api_map --check` | Passed. Sixteen pages match the source for 293 operations. No generated file changed. |
+| `rtk proxy .venv/bin/codeql-verdict-register check` | Passed. The existing register matches all 88 dismissed alerts. |
+
+The required input preflight ran before the full ratchet:
+
+```text
+rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+```
+
+The actual run also uses the clean environment, owned temporary root, and 30-second timeout above.
+It passes one test.
+It reports six attempted, read, and validated inputs.
+It also reports three read and checked guide procedures.
+The effective trigger set contains four paths.
+
+```text
+rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --report /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-ratchet-full.json --summary /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-ratchet-full.md --log-level WARNING
+```
+
+The full ratchet passes.
+It checks 1,006 files and 725 findings.
+It reports zero new findings and zero parse errors.
+The unchanged SDK predicate excludes 48 files.
+The final required clean-commit ratchet compares the consistently fetched and resolved `origin/main`, not the historical preparation base.
+
+### Current runtime audit and capability limits
+
+The exact `pip-audit -r requirements.txt` attempt again aborts in temporary macOS `ensurepip`.
+It scans no dependency.
+The complete current hashed-runtime alternative passes:
+
+```text
+rtk proxy uv pip compile --python .venv/bin/python --generate-hashes --output-file /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-runtime-hashed.txt requirements.txt --quiet
+rtk proxy .venv/bin/python -m pip_audit -r /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-runtime-hashed.txt --no-deps --disable-pip --strict --progress-spinner off --format json --output /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-grant-runtime-audit.json
+```
+
+The current JSON measures 105 audited runtime dependencies and zero vulnerabilities.
+No advisory is ignored.
+The Git-sourced development tools and revision remain unaudited.
+The dependency manifests and pins remain unchanged.
+
+PowerShell remains unavailable.
+The configured licensed STE dictionary remains unavailable.
+The current heuristic STE checks cover all twelve owned Python and Markdown files and pass with scores from 92 through 100.
+The current offline link scan checks all seven owned Markdown files and finds no broken local link.
+External links and dictionary-backed scores remain unmeasured.
+The optional SARIF formatter remains unavailable locally.
+The configured text-mode Bandit scan passes.
+
+### Current local image proof
+
+The local Podman machine remains owned, reachable, and rootless on UID 501.
+The explicit connection is `podman-machine-default`, on `127.0.0.1:57437`.
+The machine reports Linux arm64.
+No machine, container, service, or production resource starts or restarts.
+
+```text
+rtk proxy podman --connection podman-machine-default build --format docker --file Dockerfile --tag localhost/misthelper-tmp-issue3314-grant-dockerfile .
+rtk proxy podman --connection podman-machine-default build --format docker --file Containerfile --tag localhost/misthelper-tmp-issue3314-grant-containerfile .
+rtk proxy podman --connection podman-machine-default image inspect localhost/misthelper-tmp-issue3314-grant-dockerfile localhost/misthelper-tmp-issue3314-grant-containerfile --format '{{.Id}} {{.Architecture}} {{range .Config.Env}}{{println .}}{{end}}'
+rtk proxy podman --connection podman-machine-default image rm localhost/misthelper-tmp-issue3314-grant-dockerfile:latest localhost/misthelper-tmp-issue3314-grant-containerfile:latest
+```
+
+Both current 54-step builds pass.
+Both tags name arm64 image `7f3f8218fed7f809e49845ff80489a83cf867085fafb0b676acab353f7f6f9a3`.
+Both actual environment inspections contain no `OUTPUT_FORMAT`.
+The exact owned tags are removed.
+The owned image, container, volume, and network inventories are empty.
+No production stack, datastore, published port, or named volume changes.
+The historical image proof above is not used as current-base proof.
+
+### Required delivery checks
+
+Live branch protection requires strict up-to-date checks and enforces them for administrators.
+It names 15 required contexts.
+The current-main CodeQL analysis has ID `1881586629`, 43 rules, 13 actual results, and no analysis error.
+The complete actual SARIF is retained as the comparison baseline.
+These 13 existing results are not described as absent.
+
+Fresh pull request quality, title, applicable STE, CodeQL analysis, and separate required CodeQL results remain pending before publication.
+The protected merge must match the complete approved head.
+No administrative bypass, auto-merge, or delete-branch flag is permitted.
+The final actual-main local proof and public receipt remain pending.
+The parent alone releases the next issue.

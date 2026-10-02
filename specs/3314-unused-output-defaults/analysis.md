@@ -12,8 +12,9 @@ The analysis found two defects in the new test helpers.
 Both defects are repaired and have direct failure-path tests.
 No product defect remains within this repair.
 The final writing checks pass.
-The local commit remains pending at this analysis revision.
-Publication requires the parent's separate verified-base grant.
+The local commit and clean-state receipt are complete.
+The parent granted authorized delivery on exact main `7a4435bdf8ceff7e1dd527e4d2fd854e79542f37`.
+Fresh pull request checks and actual resulting-main proof remain pending.
 
 ## Artifact consistency
 
@@ -66,7 +67,8 @@ No suppression or baseline change hides these repairs.
 
 Planned requirement coverage is 22 of 22.
 No task lacks an associated requirement.
-The local commit and its post-commit checks remain pending until their operations succeed.
+The local commit and its post-commit checks succeeded before the publication grant.
+The granted-base publication checks remain separate.
 
 ## Final measured evidence
 
@@ -143,9 +145,15 @@ The missing dictionary remains an explicit skipped capability.
 
 ## Local completion boundary
 
-The base remains `ff3cc1bea8ab58026210a968ff1465f61c9fec78`.
-The authorized local commit remains pending.
-The parent must separately grant publication against a verified current base.
-Publication remains position 18 after #3300.
-The closed parent PR does not grant that permission.
-Protected merge and exact-main local proof remain deferred.
+The historical preparation base is `ff3cc1bea8ab58026210a968ff1465f61c9fec78`.
+Prepared commit `8c358db8f26f27b3e61f5c29765c10f8b4302241` completed the local phase.
+The parent separately granted sole position-18 delivery after #3300.
+The granted main is `7a4435bdf8ceff7e1dd527e4d2fd854e79542f37`.
+The rebase completed without a conflict.
+The new local run again passes all 342 focused cases and all helper lines and branches.
+Fresh local image proof uses image `7f3f8218fed7f809e49845ff80489a83cf867085fafb0b676acab353f7f6f9a3`.
+Both current owned image tags are removed.
+The old image proof is not presented as current-base evidence.
+The six-input, three-guide preflight passes.
+The current full ratchet measures 1,006 files and zero new findings.
+The final clean-commit ratchet, fresh remote checks, protected merge, and exact-main proof remain separate delivery gates.
