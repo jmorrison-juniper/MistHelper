@@ -17,7 +17,7 @@ That diagram links the menu option to the classes that send the requests, and ea
 ```mermaid
 flowchart LR
     root["safe: 84 menu<br/>options"]
-    root --> f_orgs_sites["orgs/sites<br/>20 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>24 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>5 menu options"]
@@ -29,7 +29,7 @@ flowchart LR
     root --> f_const_alarm_defs["const/alarm_defs<br/>3 menu options"]
     root --> f_orgs_admins["orgs/admins<br/>3 menu options"]
     root --> f_orgs_alarms["orgs/alarms<br/>3 menu options"]
-    root --> more["71 more families"]
+    root --> more["70 more families"]
 ```
 
 ## Menu 1
@@ -1158,25 +1158,23 @@ flowchart LR
 - Title: Export the certificate expiry report
 - Handler: `CertificateExpiryReport.run`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter)
-- Endpoints: 7
+- Endpoints: 6
 
 ```mermaid
 flowchart LR
     menu["Menu 272: Export the<br/>certificate expiry<br/>report"]
     menu --> c1["CertificateExpiry<br/>Client"]
     c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/cert"]
-    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/crl"]
-    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/pskportals"]
-    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
-    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/setting<br/>/mist_nac_crls"]
-    c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/ssos"]
-    c1 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/pskportals"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/setting<br/>/mist_nac_crls"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/ssos"]
+    c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/cert` | [`orgs.cert.listOrgCertificates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/cert/list-org-certificates) | [`CertificateExpiryClient.read_org_certificates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/crl` | [`orgs.crl.getOrgCrlFile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/crl/get-org-crl-file) | [`CertificateExpiryClient.read_crl_metadata`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
 | GET | `/api/v1/orgs/{org_id}/pskportals` | [`orgs.pskportals.listOrgPskPortals`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psk-portals/list-org-psk-portals) | [`CertificateExpiryClient._read_org_psk_portals_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`CertificateExpiryClient.read_org_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
 | GET | `/api/v1/orgs/{org_id}/setting/mist_nac_crls` | [`orgs.setting.getOrgNacCrl`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-crl/get-org-nac-crl) | [`CertificateExpiryClient.read_crl_metadata`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Name |
@@ -1274,22 +1272,24 @@ flowchart LR
 
 - Title: Export the organization switch scorecard
 - Handler: `SwitchScorecard.run`
-- Shared helpers: [`APIDataFetcher`](Menu-API-Endpoints#apidatafetcher), [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter)
-- Endpoints: 1
+- Shared helpers: [`APIDataFetcher`](Menu-API-Endpoints#apidatafetcher), [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
+- Endpoints: 2
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`SwitchScorecardClient.list_switch_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/switch_scorecard/client.py) | Reference |
 
 ## Menu 278
 
 - Title: Export the organization access point scorecard
 - Handler: `ApScorecard.run`
-- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter)
-- Endpoints: 1
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
+- Endpoints: 2
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ApScorecardClient.list_ap_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/ap_scorecard/client.py) | Call |
 
 ## Menu 279
@@ -1297,10 +1297,11 @@ flowchart LR
 - Title: Organization WAN Edge Scorecard
 - Handler: `WanEdgeScorecard.run`
 - Shared helpers: [`APIDataFetcher`](Menu-API-Endpoints#apidatafetcher), [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 1
+- Endpoints: 2
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`WanEdgeGatewayStatsClient.fetch_gateway_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/wan_edge_scorecard/client.py) | Reference |
 
 ## Menu 280
@@ -1308,12 +1309,22 @@ flowchart LR
 - Title: Export the alert digest handover report
 - Handler: `AlertDigestOperation.run_digest`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 2
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 280: Export the<br/>alert digest<br/>handover report"]
+    menu --> c1["AlertDigestClient"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/alarm_defs"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/alarms<br/>/search"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`AlertDigestClient.list_alarm_definitions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/alert_digest/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`AlertDigestClient._read_first_alarm_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/alert_digest/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`AlertDigestClient.list_org_sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/alert_digest/client.py) | Call |
 
 ## Menu 282
 

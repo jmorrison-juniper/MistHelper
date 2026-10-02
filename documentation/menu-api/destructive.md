@@ -20,7 +20,7 @@ That diagram links the menu option to the classes that send the requests, and ea
 flowchart LR
     root["destructive: 48 menu<br/>options"]
     root --> f_sites_devices["sites/devices<br/>26 menu options"]
-    root --> f_orgs_sites["orgs/sites<br/>21 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>22 menu options"]
     root --> f_sites_stats["sites/stats<br/>16 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>12 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>11 menu options"]
@@ -984,7 +984,7 @@ flowchart LR
 - Title: DESTRUCTIVE: Acknowledge recent unacknowledged alarms (Requires typing 'ACK <count>' to confirm, supports --dry-run)
 - Handler: `lambda dry_run=False: AlertDigestOperation.run_acknowledge(dry_run=dry_run)`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 3
+- Endpoints: 4
 
 ```mermaid
 flowchart LR
@@ -993,6 +993,7 @@ flowchart LR
     c1 --> e1["GET<br/>/api/v1/const<br/>/alarm_defs"]
     c1 --> e2["POST<br/>/api/v1/orgs<br/>/{org_id}/alarms/ack"]
     c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/alarms<br/>/search"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1000,6 +1001,7 @@ flowchart LR
 | GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`AlertDigestClient.list_alarm_definitions`](../../src/reports/alert_digest/client.py) | Call |
 | POST | `/api/v1/orgs/{org_id}/alarms/ack` | [`orgs.alarms.ackOrgMultipleAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/ack-org-multiple-alarms) | [`AlertDigestClient.acknowledge_alarms`](../../src/reports/alert_digest/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`AlertDigestClient._read_first_alarm_page`](../../src/reports/alert_digest/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`AlertDigestClient.list_org_sites`](../../src/reports/alert_digest/client.py) | Call |
 
 ## Menu 286
 
