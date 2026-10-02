@@ -53,6 +53,22 @@ The later authorized rebase must retain issue #3395's bounded numeric reader.
 No change to `assembly.py`, firmware writes, settle decisions, confirmations, or live services is necessary.
 A human must review this firmware-evidence repair before merge.
 
+## Decision 6: Keep the shared result passive
+
+The first implementation placed a checked SDK operation on `DeviceRead`.
+Three existing tests import that result type without a cloud operation.
+The pinned analyzer inspects the complete body of an imported class.
+The added operation therefore created three HTTP failure-mode obligations.
+
+Two immutable main-tree exports passed the exact full gate.
+Only the candidate added those three complete finding identities.
+Test-file equality alone did not prove an unchanged baseline failure.
+
+Keep `DeviceRead` passive.
+The existing `read_every_page` owns the checked SDK operation.
+This responsibility correction preserves the real guard and every native request.
+It removes no genuine analyzer finding or previous test scope.
+
 ## Rejected alternatives
 
 | Alternative | Reason for rejection |

@@ -12,6 +12,8 @@ The existing `DeviceRead` carries these fields.
 
 The raw wireless statistics read uses this same record.
 No persisted field changes.
+The result is passive.
+Only the existing page reader performs an SDK operation.
 
 ## Partial reason
 

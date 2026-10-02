@@ -83,30 +83,6 @@ class DeviceRead:
     records: list[dict[str, Any]]
     partial_reasons: list[dict[str, Any]]
 
-    def read_next(self, session: Any, response: Any) -> Any:
-        """Read one native next page and keep a lost page beside prior records."""
-        current = None
-        logger.info("Upgrade portal reads the next page of section %s", self.section)
-        try:
-            current = mistapi.get_next(mist_session=session, response=response)
-            page = _page_records(current)
-        except Exception as error:  # The SDK can raise before it returns a response.
-            logger.warning("Upgrade portal failed a later page of section %s: %s", self.section, type(error).__name__)
-            page = None
-        if page is None:
-            status = _status_code(current)
-            logger.warning(
-                "Upgrade portal lost a later page of section %s at status %s after %s record(s)",
-                self.section,
-                status,
-                len(self.records),
-            )
-            self.partial_reasons.append(_partial_reason(self.section, REASON_SHORT_READ, status))
-        else:
-            self.records.extend(page)
-        logger.debug("Upgrade portal holds %s records for section %s", len(self.records), self.section)
-        return current
-
 
 def normalize_device_mac(value: Any) -> str:
     """Return the index key for one address value.
@@ -385,9 +361,23 @@ def read_every_page(session: Any, section: str, response: Any) -> DeviceRead:
         return walk
     current = response  # The page that holds the link to the next page.
     while getattr(current, "next", None):  # The SDK sets "next" while the cloud holds more pages.
-        current = walk.read_next(session, current)
-        if walk.partial_reasons:
-            break
+        following = None  # A raised transport fault has no response and must report status zero.
+        logger.info("Upgrade portal reads the next page of section %s", section)
+        try:
+            following = mistapi.get_next(mist_session=session, response=current)
+            page = _page_records(following)
+        except Exception as error:
+            logger.warning("Upgrade portal failed a later page of %s: %s", section, type(error).__name__)
+            page = None
+        if page is None:
+            status = _status_code(following)
+            logger.warning(
+                "Upgrade portal lost a page: %s, %s record(s), status %s", section, len(walk.records), status
+            )
+            return DeviceRead(section, walk.records, [_partial_reason(section, REASON_SHORT_READ, status)])
+        walk.records.extend(page)
+        logger.debug("Upgrade portal holds %s records for section %s", len(walk.records), section)
+        current = following
     return walk
 
 

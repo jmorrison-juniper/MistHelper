@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 import logging
 from typing import Any
@@ -23,6 +25,14 @@ from tests.unit.upgrade_portal.capture_page_loss.cases import (
 
 class TestPageWalkGuard(OfflineChecks):
     """Prove actual failure decisions without changing a source file or a baseline."""
+
+    def test_the_shared_result_stays_a_passive_record(self) -> None:
+        """Importing the result type must not add a cloud-operation obligation."""
+        declaration = ast.parse(inspect.getsource(devices.DeviceRead)).body[0]
+        assert isinstance(declaration, ast.ClassDef)
+        assert [node.name for node in declaration.body if isinstance(node, ast.FunctionDef)] == []
+        assert set(devices.DeviceRead.__annotations__) == {"section", "records", "partial_reasons"}
+        print("Checked 1 result class: 3 data fields, 0 declared operations.")
 
     @pytest.mark.parametrize("record", [None, "not a record", 5])
     def test_malformed_individual_later_record_keeps_prior_valid_pages(self, record: Any) -> None:

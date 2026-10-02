@@ -11,7 +11,8 @@
     {"step": "plan", "kind": "complete", "by": "agent", "method": "feature-only template equivalent"},
     {"step": "tasks", "kind": "complete", "by": "agent", "method": "feature-only template equivalent"},
     {"step": "implement", "kind": "complete", "by": "agent", "method": "native SDK and caller-output proofs"},
-    {"step": "analyze", "kind": "complete", "by": "agent", "method": "feature-only consistency and boundary review"}
+    {"step": "analyze", "kind": "complete", "by": "agent", "method": "feature-only consistency and boundary review"},
+    {"step": "analyze", "kind": "complete", "by": "agent", "method": "paired immutable full-gate comparison and passive result responsibility repair"}
   ],
   "capabilities": {
     "powershellHook": "unavailable: pwsh is not installed",

@@ -90,15 +90,15 @@ Human review is mandatory for this firmware-evidence repair.
 
 The unchanged-source red run checked 159 cases.
 It reported 129 failures and 30 successful controls across all five surfaces.
-The final native run passed 216 cases.
+The final native run passed 217 cases.
 The removed-walk mutation failed its acceptance decision as required.
 Every native case counted zero live HTTP, store, and firmware callbacks.
 
-The complete relevant selections passed 6,207 tests.
+The complete relevant selections passed 6,208 tests.
 One existing Windows-only real import test skipped on macOS.
 That skip is not a pass.
-The five changed modules reached 96.84 percent combined coverage with branch measurement.
-All 146 operational statements and 32 branch transitions of the changed reader regions have coverage.
+The five changed modules reached 96.83 percent combined coverage with branch measurement.
+All 142 operational statements and 30 branch transitions of the changed reader regions have coverage.
 No operational result surface has an exclusion.
 The type-only import and two overload stubs are not runtime reader regions.
 
@@ -130,3 +130,32 @@ It found zero broken links.
 The session evidence holds the offline PR draft.
 It preserves all 23 template items and records exact commands, results, and unperformed actions.
 The final commit SHA, clean committed-scope results, and handoff follow after the local commit.
+
+## Result responsibility and complete gate proof
+
+The initial local commit remains in history.
+Its result class carried an SDK operation.
+The pinned analyzer then inferred HTTP risk when three existing tests imported that result class.
+Those three new findings were candidate-induced, not pre-existing.
+
+The corrected `DeviceRead` is a passive result with three data fields and no declared operation.
+The existing `read_every_page` owns the checked SDK call, response validation, and lost-page reason.
+No compatibility alias or wrapper remains.
+No outside test, applicability rule, scope, baseline, threshold, or suppression changed.
+
+The exact full default gates on two own immutable main exports each passed.
+Each gate discovered 1,001 files, analyzed 953, and checked 725 findings.
+Both gates reported zero new findings.
+The exports held 6,736 and 6,740 files.
+Every file hash remained unchanged during the runs.
+
+The corrected full default gate discovered 1,006 files and analyzed 957.
+It checked the same 725 complete finding identities and reported zero new findings.
+Only the three candidate-induced obligations disappeared.
+Every previous analyzed test and genuine finding remained.
+The rehearsal SDK import stays local to its spy fixture, so the normal analyzer still reads that existing test file.
+
+A direct test checks the passive result declaration.
+The removed-walk test still rejects the lost-page acceptance decision.
+The native and full rehearsal selection passed 235 cases with no live transport or write callback.
+The passive result change therefore does not remove a real page-reader guard.

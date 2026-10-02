@@ -15,7 +15,6 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, call
 
-import mistapi
 import pytest
 
 from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunState
@@ -78,6 +77,8 @@ def _hold(reached: threading.Event, holding: threading.Event) -> None:
 @pytest.fixture
 def sdk_page_calls(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock, MagicMock]:
     """Record real checked walks, native next calls, and converted rows without replacing their behavior."""
+    import mistapi
+
     walk = MagicMock(wraps=gate.read_every_page)
     next_page = MagicMock(wraps=mistapi.get_next)
     readings = MagicMock(wraps=gate._readings_of)
