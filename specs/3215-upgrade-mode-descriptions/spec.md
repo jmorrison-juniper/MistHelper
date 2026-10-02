@@ -8,6 +8,8 @@
 
 **Local Refresh**: 2026-10-02 on `0d1cfffbcdef3f1f66cb49b5abcfbbd3d90e0b95`.
 
+**Publication Grant**: 2026-10-02 on `a11c1189d8e861bd3683e669bfdb9b654ec1eeab`, after the accepted repair for #3494.
+
 **Input**: Repair [issue #3215](https://github.com/jmorrison-juniper/MistHelper/issues/3215) without a product behavior change.
 
 ## User Scenarios & Testing
@@ -71,6 +73,8 @@ The explanation stays correct after a saved selection.
 - **FR-012**: All new test cases must run offline without live credentials, cloud writes, or production stores.
 - **FR-013**: Both modes must describe a supported target version choice for each device's model.
 - **FR-014**: The browser module must retain its import skip, and strict mode must reject a missing browser package.
+- **FR-015**: All six required Chromium cases must pass after complete E2E collection with screenshots, tracing, and video off.
+  Artifact processing must not determine a test result.
 
 ### Key Entities
 

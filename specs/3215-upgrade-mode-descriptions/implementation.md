@@ -299,3 +299,94 @@ rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-c
 This comparison uses the parent's immutable local refresh base.
 It is not a before-push comparison or publication permission.
 Any later publication grant requires its own current-base comparison and fresh CI.
+
+## Authorized Publication on the Accepted #3494 Revision
+
+The parent grants the sole publication window on `a11c1189d8e861bd3683e669bfdb9b654ec1eeab`.
+The live issue claim remains assigned to this app session.
+The complete paged PR list is empty before publication.
+The fetched `origin/main` matches the granted revision.
+
+The original repair and refresh commits remain at their local preservation tags.
+The rebase preserves both patches without a conflict.
+The accepted #3494 statistics, tier reader, and model controls remain byte-identical to the granted base.
+No shared fixture, production Python, firmware, authentication, confirmation, lock, query, control, style, or script changes.
+
+The owned browser module no longer writes screenshots unconditionally.
+This removal lets the required cases use the actual CI defaults.
+The six earlier optional screenshots remain visual evidence only.
+Screenshot, trace, or video processing never determines an assertion result.
+
+### Current Required Tests
+
+| Check | Result on the granted base |
+| - | - |
+| Focused route, model, capture, safety, and lock proof | 398 passed with zero skips. |
+| Selection route coverage | 85.55 percent against the 80 percent floor. |
+| Required six after complete E2E collection | 600 collected, 594 deselected, and six passed without a skip. |
+| All owned cases after complete E2E collection | 615 collected, 594 deselected, and 21 passed without a skip. |
+| Complete current E2E run | 600 collected, 548 passed, and 52 explicitly skipped. |
+| Native statistics, tier, strict, and owner proof | 139 passed without a skip. |
+
+The complete run retains 51 optional journey skips and one unchanged capture journey with no available version.
+The available-version skip is unverified, not a successful case.
+No required case skips or uses a changed catalog rule.
+
+The required run creates zero screenshots, traces, and videos.
+The full run creates no trace or video, but 97 manually captured images remain in unchanged existing tests.
+The full run reads 134 audit records across eight sites and reports zero leaked holds.
+Its live-run checks inspect five sites after each of 71 modules.
+They read 379 history rows and report zero leaked live runs.
+The worktree audit trail remains unchanged.
+
+The exact commands are:
+
+```bash
+rtk proxy .venv/bin/python -m pytest tests/contract/upgrade_portal/test_mode_descriptions.py tests/contract/upgrade_portal/test_select.py tests/contract/upgrade_portal/test_upgrade_start.py tests/contract/upgrade_portal/test_org_upgrade_routes.py tests/contract/upgrade_portal/test_org_precheck_routes.py tests/contract/upgrade_portal/test_run_create_adopts_precheck.py tests/contract/upgrade_portal/test_lock.py tests/unit/upgrade_portal/test_select_lock_helpers.py tests/unit/upgrade_portal/test_confirm_warning.py tests/unit/upgrade_portal/test_org_postcheck_view.py tests/unit/upgrade_portal/test_org_postcheck.py tests/unit/upgrade_portal/test_org_postcheck_bridge.py tests/unit/upgrade_portal/test_upgrade_service_plan.py tests/unit/firmware/test_aggregate_upgrade_service.py --timeout=120 --cov=src.upgrade_portal.app.routes.select --cov-report=term-missing:skip-covered --cov-report=json:/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-coverage.json --cov-report=xml:/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-coverage.xml --cov-fail-under=80 --tb=short --show-capture=no -q
+rtk proxy env UPGRADE_PORTAL_E2E_STRICT=1 .venv/bin/python -m pytest tests/e2e/ -k TestModeDescriptionJourney -v --base-url=http://127.0.0.1:8056 --timeout=180 --screenshot=off --tracing=off --video=off --output=/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-browser-off --basetemp=/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-browser-off-temp
+rtk proxy env UPGRADE_PORTAL_E2E_STRICT=1 .venv/bin/python -m pytest tests/contract/upgrade_portal/test_mode_descriptions.py tests/e2e/ -k 'TestModeDescriptions or TestSiteDescriptions or TestModeDescriptionJourney' -v --base-url=http://127.0.0.1:8056 --timeout=180 --screenshot=off --tracing=off --video=off --output=/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-owned-off --basetemp=/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-owned-temp
+rtk proxy env UPGRADE_PORTAL_E2E_STRICT=1 .venv/bin/python -m pytest tests/e2e/ -v --base-url=http://127.0.0.1:8056 --timeout=180 --screenshot=off --tracing=off --video=off --output=/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-full-e2e-off --basetemp=/Users/jmorrison/.copilot/session-state/463f83b1-ff82-4ada-9e60-ba359652884c/files/issue3215-pub-full-e2e-temp -ra
+rtk proxy env UPGRADE_PORTAL_E2E_STRICT=1 .venv/bin/python -m pytest tests/unit/upgrade_portal/test_e2e_strict_guard.py tests/unit/upgrade_portal/test_e2e_run_owner_header.py tests/unit/upgrade_portal/test_e2e_capture_statistics.py tests/unit/upgrade_portal/test_e2e_standin_precheck_adopter.py -v --timeout=120
+```
+
+### Current Configured Gates and Boundary
+
+Complete Ruff and Black pass.
+Black leaves 2,028 files unchanged.
+The source type scope passes for 665 files, and both owned test modules also pass.
+The full configured Bandit scan checks 788 files and 215,141 lines without a finding or input error.
+The configured Pylint score is 9.83 against the 9.5 floor.
+The configured source Radon, Vulture, pydocstyle, and Interrogate gates pass.
+Interrogate reports 99.6 percent against its 90 percent floor.
+The citation gate checks 251 references without an unresolved citation.
+The Bandit exclusion check preserves both production path spellings.
+
+The strict complete hashed runtime audit checks 105 dependencies with zero vulnerabilities and zero skips.
+It does not audit the pinned Git-only development tools revision.
+The six Markdown files contain no broken local link.
+The complete STE dictionary and licensed source remain absent.
+The structural linter result remains partial, and no report treats it as the complete dictionary gate.
+Native PowerShell also remains unavailable.
+
+The boundary proof checks 6,793 tracked paths and finds zero changes across 6,783 unowned paths.
+The 689 production Python files and their 12,458 class and function nodes remain unchanged.
+Every checked firmware, control, script, and shared-fixture path remains unchanged.
+
+Before the single push, run each required preflight and analyzer separately on the clean committed tree.
+The fetched `origin/main` must still equal `a11c1189d8e861bd3683e669bfdb9b654ec1eeab`.
+The current-base analyzer and default full ratchet use the unchanged rules and baseline.
+Their post-commit reports record measured counts and every finding.
+
+### Protected Delivery
+
+The live main protection enforces administrators and strict current-base checks.
+It requires 15 contexts.
+The accepted main CodeQL analysis contains 13 existing signatures.
+Fresh PR and actual-main analysis must match those signatures.
+
+Use the complete current 23-item PR template and exact command results.
+Do not add an auto-merge label or use an administrative bypass.
+Match the full checked head for a protected squash merge without a branch-delete flag.
+Read the actual resulting main SHA, compare its tree, and verify that exact revision locally.
+Record all final check, source, test, and cleanup evidence in a persistent PR receipt.
+Then pause for the parent's next grant.

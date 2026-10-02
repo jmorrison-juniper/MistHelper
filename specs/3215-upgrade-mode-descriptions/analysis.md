@@ -23,6 +23,7 @@
 | FR-012 | All 21 new cases run without a skip against offline readers and the isolated browser harness. |
 | FR-013 | Both modes describe a version choice for each device that its model supports. |
 | FR-014 | The browser module uses `pytest.importorskip`. The existing strict and owner tests prove both missing-package and wrong-owner failures. |
+| FR-015 | Full E2E collection finds 600 cases. All six required Chromium cases pass with screenshots, tracing, and video off. |
 
 ## Consistency Review
 
@@ -74,3 +75,32 @@ The complete STE dictionary and licensed source remain unavailable.
 The clean committed-tree analyzer and full ratchet run after the local follow-up commit.
 Publication and protected merge still require the parent's separate explicit main SHA grant.
 The analysis claims no push, pull request, merge, deployment, or exact-main proof.
+
+## Authorized Publication Evidence
+
+The parent grants the exact main revision `a11c1189d8e861bd3683e669bfdb9b654ec1eeab`.
+The candidate retains the ten-file reservation and all previous local history.
+Only the owned browser module changes after the rebase.
+It no longer writes unconditional screenshots.
+Its assertions, selectors, mode controls, model choices, and route destinations remain unchanged.
+
+The current route proof passes 398 cases at 85.55 percent selection coverage.
+All 21 owned cases pass after full E2E collection.
+The full E2E run collects 600 cases, passes 548, and records the same 52 old skips.
+The 139 native statistics, tier, strict, and owner checks also pass.
+The required six cases create zero screenshot, trace, or video files.
+The full suite retains 97 manual images from unchanged existing tests.
+Those images do not change the plugin defaults and do not determine the required results.
+
+The source-boundary proof checks 6,793 tracked paths.
+It finds zero byte changes across the 6,783 unowned paths.
+The 689 production Python files contain 12,458 class and function nodes and remain unchanged.
+All 58 checked firmware, control, script, and shared-fixture paths also remain unchanged.
+
+The current source gates pass with no configuration, exclusion, baseline, or suppression edit.
+The fresh accepted-main CodeQL analysis has 13 existing result signatures.
+Publication must compare fresh analysis results with those signatures, not claim that the baseline has no results.
+The complete STE dictionary and native PowerShell capability remain unavailable.
+
+The final merge and exact-main proof belong in the persistent PR receipt.
+This pre-publication record does not claim that those later actions occurred.

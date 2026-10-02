@@ -47,9 +47,9 @@ T014 requires the delivered files and their recorded evidence.
 Commit the exact manifest after the local review.
 Report the clean local SHA to the parent after the commit.
 
-## Publication Boundary
+## Original Publication Boundary
 
-Publication is not authorized.
+The original preparation did not authorize publication.
 The parent must grant an explicit, fully verified main SHA after the preceding repair.
 Any later delivery requires a fresh rebase, repeated local gates, complete PR evidence, protected merge, and exact-main proof.
 
@@ -65,3 +65,14 @@ The clean committed-tree analyzer and full ratchet run after the new local commi
 Their session reports must state the measured counts and all new findings.
 The parent receives the clean SHA and those results.
 This local refresh does not authorize publication or delivery.
+
+## Authorized Publication Preparation
+
+- [x] T020 Preserve all original local commits and rebase on the granted main SHA. (delivered: specs/3215-upgrade-mode-descriptions/implementation.md)
+- [x] T021 Verify the six required Chromium cases after full collection with all optional artifacts off. (delivered: tests/e2e/upgrade_portal/test_mode_descriptions_journey.py)
+- [x] T022 Repeat current route, native statistics, safety, guard, and source-boundary evidence. (delivered: specs/3215-upgrade-mode-descriptions/analysis.md)
+
+The sole grant uses `a11c1189d8e861bd3683e669bfdb9b654ec1eeab`.
+Publication must use the clean current-base comparison, full ratchet, and complete PR template.
+The protected merge must match the full checked head without an administrative or automatic bypass.
+The final persistent PR receipt must identify the actual main SHA, tree, checks, local proof, and cleanup.

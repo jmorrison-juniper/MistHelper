@@ -121,3 +121,29 @@ Run the six-input, three-guide preflight before the clean committed-tree analyze
 Record all 23 items from the current PR template offline.
 Create one new local follow-up commit without amendment.
 Then stop until the parent grants publication separately.
+
+## Authorized Publication
+
+The parent grants the sole position-20 publication window on `a11c1189d8e861bd3683e669bfdb9b654ec1eeab`.
+The merged #3494 statistics are the current baseline, not a borrowed fixture.
+The original `7ee65990`, `74fbd4ec`, and `e33eec29` commits remain at local preservation tags.
+
+Remove unconditional screenshots from the owned browser module.
+Run the same six cases with the CI defaults for screenshots, tracing, and video.
+Keep the optional earlier images as visual evidence only.
+The exact template text, routes, controls, model choices, and all shared fixtures remain unchanged.
+
+Run local gates, then commit the exact reserved files.
+Before the single push, check the clean committed difference against the fetched `origin/main`.
+Require that reference to remain the exact granted SHA.
+Run the unchanged full ratchet after its six-input, three-guide preflight.
+
+The pull request uses all 23 current template items and states every inapplicable or unavailable capability.
+Wait for fresh quality, title, applicable STE, CodeQL analysis, and all 15 strict required contexts.
+Do not add an auto-merge label or use an administrative merge.
+Match the complete PR head for the protected squash merge.
+
+Read the actual resulting main SHA and tree.
+Verify that exact revision locally in this worktree.
+Record the merge and local proof in a persistent PR comment.
+Then report the receipt and pause without taking another issue.

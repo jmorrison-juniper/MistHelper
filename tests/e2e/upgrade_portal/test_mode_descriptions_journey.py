@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -68,7 +67,7 @@ class TestModeDescriptionJourney:
         logger.debug("The mode selection reached the site page")
 
     @pytest.mark.parametrize("mode", ("single_site", "multi_site"))
-    def test_mode_descriptions(self, page: Page, tmp_path: Path, mode: str) -> None:
+    def test_mode_descriptions(self, page: Page, mode: str) -> None:
         """Read both mode descriptions after either mode is selected."""
         self._choose_mode(page, mode)
         response = page.goto("/select/mode", wait_until="domcontentloaded")
@@ -81,11 +80,10 @@ class TestModeDescriptionJourney:
         selected = "mode-single-site" if mode == "single_site" else "mode-multi-site"
         expect(page.get_by_test_id(selected)).to_be_checked()
         expect(page.get_by_test_id("mode-single-site")).to_have_attribute("required", "")
-        page.screenshot(path=str(tmp_path / f"{mode}-descriptions.png"), full_page=True)
         logger.debug("The browser read both modes and saved the selected state")
 
     @pytest.mark.parametrize("count", (0, 1, 2))
-    def test_multi_site_descriptions(self, page: Page, tmp_path: Path, count: int) -> None:
+    def test_multi_site_descriptions(self, page: Page, count: int) -> None:
         """Retain correct guidance with zero, one, or two saved sites."""
         self._choose_mode(page, "single_site")
         self._choose_mode(page, "multi_site")
@@ -107,10 +105,9 @@ class TestModeDescriptionJourney:
         expect(page.get_by_test_id("multi-site-form")).to_have_attribute("method", "post")
         for position, site_id in enumerate(site_ids):
             expect(page.get_by_test_id(f"site-select-{site_id}")).to_be_checked(checked=position < count)
-        page.screenshot(path=str(tmp_path / f"multi-site-{count}-descriptions.png"), full_page=True)
         logger.debug("The browser retained %d selected sites", count)
 
-    def test_single_site_description_and_capture_route(self, page: Page, tmp_path: Path) -> None:
+    def test_single_site_description_and_capture_route(self, page: Page) -> None:
         """Keep the existing inventory and pre-check route after the description changes."""
         self._choose_mode(page, "single_site")
         expect(page.get_by_test_id("site-mode-description")).to_have_text(
@@ -120,7 +117,6 @@ class TestModeDescriptionJourney:
             self.descriptions["mode-capture-description"]
         )
         expect(page.get_by_test_id("multi-site-form")).to_have_count(0)
-        page.screenshot(path=str(tmp_path / "single-site-descriptions.png"), full_page=True)
         site_id = "22222222-2222-2222-2222-222222222222"
         page.get_by_test_id(f"site-open-{site_id}").click()
         expect(page).to_have_url(re.compile(rf".*/select/site/{site_id}$"))
