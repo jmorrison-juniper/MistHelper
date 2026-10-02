@@ -26,6 +26,7 @@ from src.export.endpoint_family_exporter import (
 from src.export.endpoint_family_exporter import (
     EndpointFamilyExporter as FailureModeEndpointFamilyExporter,
 )
+from src.export.endpoint_family_response.reader import EndpointFamilyResponseContract
 from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 EXPECTED_BUCKET_COUNTS = {
@@ -176,8 +177,11 @@ def test_resolve_returns_none_for_a_missing_module() -> None:
 
 def test_run_uses_identifiers_in_order() -> None:
     """Endpoint calls must receive identifiers in table order."""
+    from mistapi.__api_response import APIResponse
+
     fake = _fake_mist_helper()
-    callable_obj = MagicMock(return_value=MagicMock())
+    url = "https://api.issue3699.test/api/v1/local"
+    callable_obj = MagicMock(return_value=APIResponse(_trend_response(url, []), url))
     entry = _SITE_MAP_OPS[0]
     with (
         patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake),
@@ -187,9 +191,8 @@ def test_run_uses_identifiers_in_order() -> None:
             "_collect_arguments",
             return_value=MagicMock(values=("site-one", "map-one"), label="target"),
         ),
-        patch("src.export.endpoint_family_exporter.mistapi.get_all", return_value=[]),
     ):
-        EndpointFamilyExporter._run(entry)
+        EndpointFamilyExporter._run(entry, EndpointFamilyResponseContract(entry.operation, False))
     callable_obj.assert_called_once_with(fake.apisession, "site-one", "map-one")
 
 
@@ -206,16 +209,21 @@ def test_run_reports_sdk_errors_without_raising() -> None:
             return_value=MagicMock(values=("org-one", "sso-one"), label="target"),
         ),
     ):
-        EndpointFamilyExporter._run(_ORG_DETAIL_OPS[0])
+        entry = _ORG_DETAIL_OPS[0]
+        EndpointFamilyExporter._run(entry, EndpointFamilyResponseContract(entry.operation, False))
     callable_obj.assert_called_once_with(fake.apisession, "org-one", "sso-one")
 
 
 @pytest.mark.parametrize("status_code", [404, 503])
 def test_run_logs_http_status_sdk_errors_without_raising(caplog: pytest.LogCaptureFixture, status_code: int) -> None:
     """An HTTP 404 or HTTP 503 SDK failure must be logged and contained."""
+    from mistapi.__api_response import APIResponse
+
     fake = _fake_mist_helper()  # Build the MistHelper double used by the exporter.
-    error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the SDK error.
-    callable_obj = MagicMock(side_effect=error)  # Force the selected SDK call to fail.
+    url = "https://api.issue3699.test/api/v1/local"
+    wire = _trend_response(url, {"error": "The request was refused."})
+    wire.status_code = status_code
+    callable_obj = MagicMock(return_value=APIResponse(wire, url))
     with (
         patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake),
         patch.object(EndpointFamilyExporter, "_resolve", return_value=callable_obj),
@@ -226,7 +234,8 @@ def test_run_logs_http_status_sdk_errors_without_raising(caplog: pytest.LogCaptu
         ),
         caplog.at_level("ERROR"),
     ):
-        FailureModeEndpointFamilyExporter._run(FAILURE_MODE_ORG_DETAIL_OPS[0])  # Call the real src path.
+        entry = FAILURE_MODE_ORG_DETAIL_OPS[0]
+        FailureModeEndpointFamilyExporter._run(entry, EndpointFamilyResponseContract(entry.operation, False))
     assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
     assert "Error running" in caplog.text  # Prove the product logged the failure.
     callable_obj.assert_called_once_with(fake.apisession, "org-one", "sso-one")  # Prove the API path ran.
@@ -586,13 +595,13 @@ def trend_empty_payload(trend_case: tuple[str, str, str], empty_body: object) ->
 
 
 @pytest.mark.parametrize("trend_case", TREND_ROUTES, indirect=True, ids=[row[0] for row in TREND_ROUTES])
-@pytest.mark.parametrize("empty_body", ([], {"results": []}, {"summary": {"value": 42}}))
+@pytest.mark.parametrize("empty_body", ([], {"results": []}, {}, None))
 def test_real_trend_empty_results_skip_output(
     trend_answers: list[str],
     trend_empty_payload: tuple[dict[str, Response], list[str]],
     local_trend_boundaries: tuple[APISession, MagicMock, MagicMock],
 ) -> None:
-    """Preserve current SDK collection behavior, not the separate object-response repair."""
+    """Valid empty native documents and results must not create an export."""
     from unittest.mock import call
 
     _session, transport, writer = local_trend_boundaries
