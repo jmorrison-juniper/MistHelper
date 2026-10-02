@@ -79,7 +79,7 @@ This page names the operations that arrived most recently.
 | 260 | Run any org-scoped Mist get or list endpoint (55 operations) | `interactive_safe` |
 | 261 | Run any site-scoped simple Mist read endpoint (58 operations) | `interactive_safe` |
 | 262 | Run any MSP-scoped Mist get or list endpoint (10 operations) | `interactive_safe` |
-| 263 | Run any site SLE endpoint with scope prompts (17 operations) | `interactive_safe` |
+| 263 | Run any site SLE endpoint with scope prompts (15 operations) | `interactive_safe` |
 | 264 | Run any site map endpoint with map prompts (7 operations) | `interactive_safe` |
 | 265 | Run any site detail endpoint with identifier prompts (33 operations) | `interactive_safe` |
 | 266 | Run any org detail endpoint with identifier prompts (61 operations) | `interactive_safe` |

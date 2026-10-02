@@ -55,9 +55,6 @@ _SITE_SLE_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getSiteSleImpactSummary", "mistapi.api.v1.sites.sle", ("site_id", "scope", "scope_id", "metric"), (1215,)
     ),  # Issue #1215.
     _EndpointFamilyOp(
-        "getSiteSleSummary", "mistapi.api.v1.sites.sle", ("site_id", "scope", "scope_id", "metric"), (1216,)
-    ),  # Issue #1216.
-    _EndpointFamilyOp(
         "getSiteSleSummaryTrend", "mistapi.api.v1.sites.sle", ("site_id", "scope", "scope_id", "metric"), (1217,)
     ),  # Issue #1217.
     _EndpointFamilyOp(
@@ -99,12 +96,6 @@ _SITE_SLE_OPS: tuple[_EndpointFamilyOp, ...] = (
     _EndpointFamilyOp(
         "listSiteSleMetricClassifiers", "mistapi.api.v1.sites.sle", ("site_id", "scope", "scope_id", "metric"), (1348,)
     ),  # Issue #1348.
-    _EndpointFamilyOp(
-        "getSiteSleClassifierDetails",
-        "mistapi.api.v1.sites.sle",
-        ("site_id", "scope", "scope_id", "metric", "classifier"),
-        (1212,),
-    ),  # Issue #1212.
     _EndpointFamilyOp(
         "getSiteSleClassifierSummaryTrend",
         "mistapi.api.v1.sites.sle",

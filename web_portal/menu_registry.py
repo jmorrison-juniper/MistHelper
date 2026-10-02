@@ -174,7 +174,7 @@ MENU_DESCRIPTIONS = {
     "260": "Run any org-scoped Mist get or list endpoint (55 operations)",
     "261": "Run any site-scoped simple Mist read endpoint (58 operations)",
     "262": "Run any MSP-scoped Mist get or list endpoint (10 operations)",
-    "263": "Run any site SLE endpoint with scope prompts (17 operations)",
+    "263": "Run any site SLE endpoint with scope prompts (15 operations)",
     "264": "Run any site map endpoint with map prompts (7 operations)",
     "265": "Run any site detail endpoint with identifier prompts (33 operations)",
     "266": "Run any org detail endpoint with identifier prompts (61 operations)",

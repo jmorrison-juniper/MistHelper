@@ -348,7 +348,7 @@ pie showData
 | [260](Menu-API-Endpoints-Interactive-Safe#menu-260) | Run any org-scoped Mist get or list endpoint (55 operations) | `interactive_safe` | 55 |
 | [261](Menu-API-Endpoints-Interactive-Safe#menu-261) | Run any site-scoped simple Mist read endpoint (58 operations) | `interactive_safe` | 58 |
 | [262](Menu-API-Endpoints-Interactive-Safe#menu-262) | Run any MSP-scoped Mist get or list endpoint (10 operations) | `interactive_safe` | 10 |
-| [263](Menu-API-Endpoints-Interactive-Safe#menu-263) | Run any site SLE endpoint with scope prompts (17 operations) | `interactive_safe` | 18 |
+| [263](Menu-API-Endpoints-Interactive-Safe#menu-263) | Run any site SLE endpoint with scope prompts (15 operations) | `interactive_safe` | 16 |
 | [264](Menu-API-Endpoints-Interactive-Safe#menu-264) | Run any site map endpoint with map prompts (7 operations) | `interactive_safe` | 8 |
 | [265](Menu-API-Endpoints-Interactive-Safe#menu-265) | Run any site detail endpoint with identifier prompts (33 operations) | `interactive_safe` | 34 |
 | [266](Menu-API-Endpoints-Interactive-Safe#menu-266) | Run any org detail endpoint with identifier prompts (61 operations) | `interactive_safe` | 61 |
