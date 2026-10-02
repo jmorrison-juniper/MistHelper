@@ -11,6 +11,7 @@
 {% set selected_strategy = options.strategy | default('canary', true) %}
 {% set uses_canary = selected_strategy == 'canary' %}
 {% set uses_rrm = selected_strategy == 'rrm' %}
+{% set uses_failure_percentage = selected_strategy in ['canary', 'rrm', 'serial'] %}
 {% set p2p_chosen = options.enable_p2p | default(false, true) %}
 {% set stable_chosen = options.stable_version | default(false, true) %}
 {% set shows_p2p_sizes = has_ap and p2p_chosen %}
@@ -225,7 +226,9 @@
       <label class="form-check-label" for="org-upgrade-force">Write the firmware when a device already runs it</label>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-3"
+         data-org-requires-strategy="canary rrm serial"
+         {{ '' if uses_failure_percentage else 'hidden' }}>
       <label class="form-label" for="max-failure-percentage">Maximum failure percentage</label>
       <input class="form-control"
              type="number"
@@ -235,7 +238,8 @@
              name="max_failure_percentage"
              data-testid="org-upgrade-max-failures"
              value="{{ options.max_failure_percentage | default(5) }}"
-             required>
+             required
+             {{ '' if uses_failure_percentage else 'disabled' }}>
     </div>
 
     <div class="mb-3">
