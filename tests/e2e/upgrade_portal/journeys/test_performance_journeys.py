@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import json
+import logging  # Record the measured form save and its explicit target count.
 import statistics
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any  # Type the browser preparation without changing optional imports.
 
 import pytest
+
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Measure actual device controls.
+
+if TYPE_CHECKING:  # Preserve the existing missing-browser capability reason.
+    from playwright.sync_api import Page  # Read actual browser request and page values.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -133,8 +139,8 @@ def _read_static_asset(request_context: Any, path: str) -> dict[str, Any]:
     }  # Keep cache and compression evidence.
 
 
-def _prepare_multisite(page: Any) -> str:
-    """Create one organization job and return its identifier."""
+def _prepare_multisite(page: Page) -> tuple[str, dict[str, Any]]:
+    """Create one organization job and retain its actual explicit options body."""
     page.goto("/select/mode", wait_until="domcontentloaded")  # Open the mode chooser with the signed session.
     page.get_by_test_id("mode-multi-site").check()  # Choose the organization workflow.
     page.get_by_test_id("mode-continue").click()  # Store the mode in the signed session.
@@ -143,15 +149,19 @@ def _prepare_multisite(page: Any) -> str:
     page.get_by_test_id(f"site-select-{SECOND_SITE_ID}").check()  # Select the second stand-in site.
     page.get_by_test_id("multi-site-continue").click()  # Store the selected sites.
     page.wait_for_url("**/upgrade/org/options")  # Wait until the organization options page opens.
-    page.get_by_test_id("org-upgrade-version").fill("0.15.1")  # Pick the AP target version.
-    page.get_by_test_id("org-upgrade-switch-version").fill("0.15.1")  # Pick the switch target version.
-    page.get_by_test_id("org-upgrade-gateway-version").fill("0.15.1")  # Pick the gateway target version.
-    page.get_by_test_id("org-upgrade-review").click()  # Save the organization options.
+    ModelVersionPicker(page).select("0.15.1", 6)  # Require every expected device before measuring the job.
+    logging.info("Save the six-device performance plan")  # Record the request before measuring the same body.
+    with page.expect_request("**/api/org-upgrades/options") as sent:  # Capture the real per-device submit.
+        page.get_by_test_id("org-upgrade-review").click()  # Save the organization options.
+    body = sent.value.post_data_json  # Reuse explicit MAC/version pairs instead of a legacy family payload.
+    assert isinstance(body, dict), "The performance plan must send a JSON object."  # Type the request boundary.
+    logging.debug("The performance plan sent %s targets", len(body["targets"]))  # Report only the target count.
+    assert len(body["targets"]) == 6  # Preserve all six device choices in later option-save measurements.
     page.wait_for_url("**/upgrade/org/confirm")  # Wait until the confirmation page opens.
     page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # Unlock the organization start button.
     page.get_by_test_id("org-upgrade-start").click()  # Submit against the stand-in service only.
     page.wait_for_url("**/upgrade/org/jobs/*")  # Wait until the job page opens.
-    return page.url.rsplit("/", 1)[-1]  # Return the generated job identifier.
+    return page.url.rsplit("/", 1)[-1], body  # Measure the same generated job and its verified options body.
 
 
 def _poll_intervals() -> dict[str, int]:
@@ -180,7 +190,7 @@ def test_upgrade_portal_performance_measurement(firmware_operator_page: Any) -> 
         "bad_responses": [],
     }  # Collect browser faults.
     _install_monitors(page, faults)  # Attach the browser fault collectors.
-    org_job_id = _prepare_multisite(page)  # Create one durable organization job for the job page and API.
+    org_job_id, org_options = _prepare_multisite(page)  # Keep the measured plan coupled to the durable job.
     pages = [
         ("select-org", "/select/org"),
         ("select-mode", "/select/mode"),
@@ -209,7 +219,9 @@ def test_upgrade_portal_performance_measurement(firmware_operator_page: Any) -> 
         _measure_api(request_context, "run-status", "GET", f"/api/runs/{START_READY_RUN_ID}/status"),
         _measure_api(request_context, "run-versions", "GET", f"/api/runs/{PREPARED_RUN_ID}/versions"),
         _measure_api(request_context, "capture-status", "GET", f"/api/captures/{TIER3_CAPTURE_ID}/status"),
-        _measure_api(request_context, "org-options", "POST", "/api/org-upgrades/options", {"version": "0.15.1"}),
+        _measure_api(
+            request_context, "org-options", "POST", "/api/org-upgrades/options", org_options
+        ),  # Measure the real explicit device plan without a family-wide compatibility payload.
         _measure_api(request_context, "org-status", "GET", f"/api/org-upgrades/{org_job_id}"),
         _measure_api(request_context, "lock", "POST", f"/api/sites/{SITE_ID}/lock", {"takeover": ""}),
     ]  # Cover JSON readers and control-like paths.

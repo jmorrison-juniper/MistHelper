@@ -32,3 +32,18 @@ That planner groups devices by type, gateway family, and target version.
 
 Run the focused contract, browser, and aggregate service tests.
 Run py_compile, Ruff, Black, mypy, STE, and the applicable portal test shards.
+
+## Integration browser migration
+
+The combined integration run found browser journeys that still use removed family-wide version controls.
+Sixteen browser modules require per-device control updates.
+Keep the existing production controls and their stable row metadata.
+Do not restore the removed controls or add compatibility aliases.
+
+Reuse an existing shared browser helper when its scope fits.
+Otherwise, add one class-based helper for target selection and value assertions.
+Require real per-device selections and explicit counts, so an empty selector cannot pass unnoticed.
+Preserve empty-site, excluded-family, refusal, retry, restoration, and cancellation behavior.
+
+Run the full strict upgrade-portal browser suite after the migration.
+Keep existing capability skips explicit, and do not change a timeout or an assertion threshold.

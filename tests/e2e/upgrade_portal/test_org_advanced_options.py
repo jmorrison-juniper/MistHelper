@@ -18,6 +18,8 @@ from typing import Any
 
 import pytest
 
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Verify actual device choices.
+
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
 MODE_PATH = "/select/mode"  # The mode chooser, where each multi-site journey starts.
@@ -71,14 +73,16 @@ def open_org_options(page: Any) -> None:
 
 
 def plan_access_points_and_switches(page: Any) -> None:
-    """Choose a plan of the access points and the switches, with a typed version for each type.
+    """Choose each access point and switch target while excluding gateway targets.
 
     Args:
         page: The browser page.
     """
     page.get_by_test_id("org-upgrade-type-gateway").uncheck()  # The journeys plan two device types.
-    page.get_by_test_id("org-upgrade-version").fill(TARGET_VERSION)  # The access point target version.
-    page.get_by_test_id("org-upgrade-switch-version").fill(TARGET_VERSION)  # The switch target version.
+    targets = ModelVersionPicker(page)  # Keep the family and selection assertions on the same page.
+    targets.expect_state(2, "gateway", False)  # Excluded gateway rows must hide and disable both selects.
+    targets.select(TARGET_VERSION, 2, "ap")  # Select both model-compatible access point targets.
+    targets.select(TARGET_VERSION, 2, "switch")  # Select both model-compatible switch targets.
 
 
 def expect_shown(page: Any, test_id: str, shown: bool) -> None:

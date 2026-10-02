@@ -29,6 +29,7 @@ from tests.e2e.upgrade_portal.lost_page_seeds import (
     LOST_SOUTH_ID,
     LOST_SOUTH_NAME,
 )
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Require actual target rows.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -54,7 +55,6 @@ COUNT_CELL_SELECTOR = "td.cell-number"  # The device count cell of one site row.
 KEPT_SITES = {LOST_NORTH_ID: LOST_NORTH_DEVICES, LOST_SOUTH_ID: LOST_SOUTH_DEVICES}  # The rows of page one.
 TARGET_VERSION = "0.15.1"  # The newer version that the stand-in cloud offers for every model.
 DEVICE_TYPES = ("ap", "switch", "gateway")  # The three device types of the multi-site form.
-VERSION_FIELD_IDS = ("org-upgrade-version", "org-upgrade-switch-version", "org-upgrade-gateway-version")
 CHOSEN_STRATEGY = "serial"  # Neither the form default nor the service default, so a reset shows on the page.
 FETCH_SCRIPT = """async (path) => {
     const answer = await fetch(path, {headers: {Accept: "application/json"}});
@@ -132,16 +132,15 @@ def assert_the_kept_rows(page: Any) -> None:
 
 
 def fill_the_plan(page: Any) -> None:
-    """Check each device type, type one version for each type, and choose the serial strategy.
+    """Select the kept site's device targets and choose the serial strategy.
 
     Args:
         page: The browser page, on the multi-site options form.
     """
     logger.info("Fill the multi-site plan")  # Record the step before the first control changes.
-    for device_type in DEVICE_TYPES:  # A checked type shows its version field.
+    for device_type in DEVICE_TYPES:  # A checked type enables its device rows.
         page.get_by_test_id(f"org-upgrade-type-{device_type}").check()  # A checked box stays checked.
-    for field_id in VERSION_FIELD_IDS:  # The selected site holds one device of each type.
-        page.get_by_test_id(field_id).fill(TARGET_VERSION)  # The newer version of every stand-in model.
+    ModelVersionPicker(page).select(TARGET_VERSION, LOST_NORTH_DEVICES)  # Require the kept site's advertised rows.
     page.get_by_test_id(f"org-strategy-{CHOSEN_STRATEGY}").check()  # A choice that a reset would lose.
     logger.debug("The multi-site plan holds %s device type(s)", len(DEVICE_TYPES))  # Record the result.
 

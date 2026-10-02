@@ -14,11 +14,14 @@ Why:
 
 from __future__ import annotations
 
+import logging  # Record the site-count boundary of each device plan.
 import re
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Count targets at each site.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -27,7 +30,6 @@ SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first stand-in site, whi
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second stand-in site.
 TARGET_VERSION = "0.15.1"  # The newer version that the stand-in cloud offers for every model.
 DEVICE_TYPES = ("ap", "switch", "gateway")  # The three device types of the multi-site form.
-VERSION_FIELD_IDS = ("org-upgrade-version", "org-upgrade-switch-version", "org-upgrade-gateway-version")
 NOTE_ID = "org-upgrade-site-count"  # The test identifier of the note.
 SECOND_SENTENCE = "The portal selects the safe route for each device family."  # The second sentence stays.
 ONE_SITE_NOTE = f"One operation targets 1 selected site. {SECOND_SENTENCE}"  # The singular noun.
@@ -83,16 +85,18 @@ def open_the_options(page: Any, first: bool, second: bool) -> None:
     page.wait_for_url(re.compile(r".*/upgrade/org/options$"))  # Wait until the form script is ready.
 
 
-def fill_the_plan(page: Any) -> None:
-    """Check each device type, and type one version for each type.
+def fill_the_plan(page: Any, site_count: int) -> None:
+    """Select each device target at the stated number of sites.
 
     Args:
         page: The browser page.
+        site_count: The explicit number of sites selected by this journey.
     """
-    for device_type in DEVICE_TYPES:  # A checked type shows its version field.
+    logging.info("Select device targets at %s sites", site_count)  # Record the intended inventory scope.
+    for device_type in DEVICE_TYPES:  # A checked type enables its device rows.
         page.get_by_test_id(f"org-upgrade-type-{device_type}").check()  # A checked box stays checked.
-    for field_id in VERSION_FIELD_IDS:  # The first site holds one device of each type.
-        page.get_by_test_id(field_id).fill(TARGET_VERSION)  # The newer version of every stand-in model.
+    ModelVersionPicker(page).select(TARGET_VERSION, 3 * site_count)  # Each selected site contributes all three types.
+    logging.debug("Selected %s device targets", 3 * site_count)  # Report the verified device count.
 
 
 def open_the_confirm_page(page: Any, site_count: int) -> None:
@@ -102,7 +106,7 @@ def open_the_confirm_page(page: Any, site_count: int) -> None:
         page: The browser page.
         site_count: The count of the selected sites.
     """
-    fill_the_plan(page)  # Type the plan of the operator.
+    fill_the_plan(page, site_count)  # Keep the device count coupled to the explicit site count.
     page.get_by_test_id("org-upgrade-review").click()  # Save the plan.
     page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # The save accepted the plan.
     confirm = page.get_by_test_id("org-upgrade-confirm")  # The summary card of the confirm page.

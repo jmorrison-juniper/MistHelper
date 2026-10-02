@@ -27,6 +27,7 @@ import pytest  # Skip the module when Playwright is not installed.
 from src.upgrade_portal.app.routes.upgrade import LOCK_STORE_DOWN_CODE, LOCK_STORE_DOWN_MESSAGE
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, RELOAD_TIMEOUT_MS, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Issue #3243: the pre-check gate.
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Select actual targets.
 
 sync_api = pytest.importorskip(
     "playwright.sync_api", reason="Playwright is not installed."
@@ -94,7 +95,7 @@ class OrgFormSteps:
 
     @staticmethod
     def open_options(page: Any) -> None:
-        """Select both stand-in sites, and fill the options form with one version for each family.
+        """Select both stand-in sites and choose the target version for each device.
 
         Args:
             page: The browser page of the firmware operator.
@@ -107,9 +108,7 @@ class OrgFormSteps:
         page.get_by_test_id(f"site-select-{SECOND_SITE_ID}").check()  # The plan includes the second site.
         page.get_by_test_id("multi-site-continue").click()  # The selected sites must persist.
         page.wait_for_url(OPTIONS_PAGE)  # The options page must open.
-        page.get_by_test_id("org-upgrade-version").fill("0.15.1")  # The access point version is fixed.
-        page.get_by_test_id("org-upgrade-switch-version").fill("0.15.1")  # The switch version is fixed.
-        page.get_by_test_id("org-upgrade-gateway-version").fill("0.15.1")  # The gateway version is fixed.
+        ModelVersionPicker(page).select("0.15.1", 6)  # Count and select all six targets before the double click.
 
     @staticmethod
     def open_confirm(page: Any) -> None:

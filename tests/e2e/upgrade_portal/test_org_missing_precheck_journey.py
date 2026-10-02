@@ -31,6 +31,7 @@ import pytest
 from tests.e2e.upgrade_portal.conftest import RUN_OWNED_CAPTURE_IDS
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import CAPTURE_PREFIX, OrgPrecheckSteps
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Select actual device versions.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -57,9 +58,7 @@ def open_confirmation(page: Any) -> None:
         page.get_by_test_id(f"site-select-{site}").check()
     page.get_by_test_id("multi-site-continue").click()  # The selected sites must persist.
     page.wait_for_url(re.compile(r".*/upgrade/org/options$"))  # The options page must open.
-    page.get_by_test_id("org-upgrade-version").fill("0.15.1")  # The access point version is fixed.
-    page.get_by_test_id("org-upgrade-switch-version").fill("0.15.1")  # The switch version is fixed.
-    page.get_by_test_id("org-upgrade-gateway-version").fill("0.15.1")  # The gateway version is fixed.
+    ModelVersionPicker(page).select("0.15.1", 6)  # Both sites must contribute all three device types.
     page.get_by_test_id("org-upgrade-review").click()  # The review page must use the plan.
     page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # The confirmation page must open.
 

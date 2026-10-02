@@ -22,6 +22,7 @@ import pytest
 
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Issue #3243: the pre-check gate.
+from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Preserve explicit targets.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
@@ -51,9 +52,7 @@ def start_operation(page: Any) -> str:
     page.get_by_test_id(f"site-select-{SECOND_SITE_ID}").check()
     page.get_by_test_id("multi-site-continue").click()
     page.wait_for_url(re.compile(r".*/upgrade/org/options$"))
-    page.get_by_test_id("org-upgrade-version").fill("0.15.1")
-    page.get_by_test_id("org-upgrade-switch-version").fill("0.15.1")
-    page.get_by_test_id("org-upgrade-gateway-version").fill("0.15.1")
+    ModelVersionPicker(page).select("0.15.1", 6)  # Both sites must keep all three families in the history plan.
     page.get_by_test_id("org-strategy-canary").check()
     page.get_by_test_id("org-upgrade-canary-phases").fill("10,100")
     page.get_by_test_id("org-upgrade-max-failures").fill("0")
