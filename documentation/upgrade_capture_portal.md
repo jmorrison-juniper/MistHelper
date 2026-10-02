@@ -117,7 +117,7 @@ offers the browser token mode.
 | --- | --- | --- |
 | `CAPTURE_PORT` | `8056` | The listen port. Text that is not a number falls back to 8056. |
 | `CAPTURE_HOST` | loopback, or every address in a container | The listen address of the launcher. |
-| `CAPTURE_SECRET_KEY` | none | The key that signs the session cookie. |
+| `CAPTURE_SECRET_KEY` | random at each start | The private key that signs the session cookie. |
 | `CAPTURE_POLL_SECONDS` | `30` | The wait between two browser status calls. The range is 5 to 3600. |
 | `CAPTURE_THEMES` | `magenta,default` | The stylesheet names that the portal offers. The first name is the default. |
 | `CAPTURE_ALLOWED_IPS` | none | A comma list of networks that may reach the portal. |
@@ -151,6 +151,39 @@ site lock and names the operator. It does not stop a stranger. If you set
 `CAPTURE_HOST` to an address of your network, add an authenticating proxy in
 front of the portal. You can also set `CAPTURE_ALLOWED_IPS` to the networks that
 may reach the portal.
+
+### Keep a stable signing key
+
+1. Generate your own private key with this command:
+
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+2. In your private `.env` file, remove the comment marker from `CAPTURE_SECRET_KEY=`.
+3. Enter the generated value after `=`.
+4. Keep the same value for every portal start and every worker.
+
+Never commit or share the `.env` file or the generated key.
+
+The `misthelper` service reads `.env` through Compose `env_file`.
+Its `environment` list does not override `CAPTURE_SECRET_KEY`.
+Do not add an empty `CAPTURE_SECRET_KEY` override to that list.
+An empty entry replaces the private value from `.env`.
+
+**Caution:** If you change or lose `CAPTURE_SECRET_KEY`, you invalidate existing
+signed sessions. Sign in again after a key change.
+
+An unset or blank value remains supported for local development.
+The portal writes a warning that names `CAPTURE_SECRET_KEY`, not its value.
+Each application start then creates a new random key.
+
+The key protects the signed cookie only.
+It does not preserve the cloud authentication record in `SessionRegistry`.
+A worker restart clears that in-memory record.
+The cookie can remain valid, but the operator must sign in again.
+Stable signing does not change the address policy or the secure-cookie policy.
+[The authentication issue](https://github.com/jmorrison-juniper/MistHelper/issues/3714) records the separate restart requirement.
 
 ## Give your identity
 
