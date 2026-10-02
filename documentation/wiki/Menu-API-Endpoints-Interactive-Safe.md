@@ -1963,9 +1963,20 @@ The map finds no Mist API request for this menu option.
 - Title: Export the client fingerprint census for a site
 - Handler: `ClientFingerprintCensus.run`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 2
+- Endpoints: 3
+
+```mermaid
+flowchart LR
+    menu["Menu 289: Export the<br/>client fingerprint<br/>census..."]
+    menu --> c1["ClientFingerprint<br/>CensusClient"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{_org_id}/insights<br/>/fingerprints/count"]
+    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/fingerprints/count"]
+    menu --> c2["APICoreFetchUtils"]
+    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{_org_id}/insights/fingerprints/count` | None (raw request) | [`ClientFingerprintCensusClient._count_org_path`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/client_fingerprint_census/client.py) | Path |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/insights/fingerprints/count` | [`sites.insights.countSiteClientFingerprints`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/nac-fingerprints/count-site-client-fingerprints) | [`ClientFingerprintCensusClient.count`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/client_fingerprint_census/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/insights/fingerprints/count` | [`sites.insights.countSiteClientFingerprints`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/nac-fingerprints/count-site-client-fingerprints) | [`ClientFingerprintCensusClient._count_site_path`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/client_fingerprint_census/client.py) | Call |

@@ -357,16 +357,16 @@ pie showData
 | [269](safe.md#menu-269) | Scan the organization for rogue DHCP servers on switches (30 days) | `safe` | 6 |
 | [270](interactive-safe.md#menu-270) | Export or resolve Marvis Actions by category and subcategory | `interactive_safe` | 3 |
 | [271](safe.md#menu-271) | Export the subscription and contract expiry report | `safe` | 3 |
-| [272](safe.md#menu-272) | Export the certificate expiry report | `safe` | 7 |
+| [272](safe.md#menu-272) | Export the certificate expiry report | `safe` | 6 |
 | [273](safe.md#menu-273) | Admin and API Token Hygiene Report | `safe` | 3 |
 | [274](safe.md#menu-274) | Export the PSK hygiene report | `safe` | 0 |
 | [275](safe.md#menu-275) | Audit site variable coverage | `safe` | 7 |
 | [276](safe.md#menu-276) | Export the organization security posture checklist | `safe` | 5 |
-| [277](safe.md#menu-277) | Export the organization switch scorecard | `safe` | 1 |
-| [278](safe.md#menu-278) | Export the organization access point scorecard | `safe` | 1 |
-| [279](safe.md#menu-279) | Organization WAN Edge Scorecard | `safe` | 1 |
-| [280](safe.md#menu-280) | Export the alert digest handover report | `safe` | 2 |
-| [281](destructive.md#menu-281) | DESTRUCTIVE: Acknowledge recent unacknowledged alarms (Requires typing 'ACK <count>' to confirm, supports --dry-run) | `destructive` | 3 |
+| [277](safe.md#menu-277) | Export the organization switch scorecard | `safe` | 2 |
+| [278](safe.md#menu-278) | Export the organization access point scorecard | `safe` | 2 |
+| [279](safe.md#menu-279) | Organization WAN Edge Scorecard | `safe` | 2 |
+| [280](safe.md#menu-280) | Export the alert digest handover report | `safe` | 3 |
+| [281](destructive.md#menu-281) | DESTRUCTIVE: Acknowledge recent unacknowledged alarms (Requires typing 'ACK <count>' to confirm, supports --dry-run) | `destructive` | 4 |
 | [282](safe.md#menu-282) | Export the rogue and PCI evidence pack | `safe` | 5 |
 | [283](interactive.md#menu-283) | Trigger a synthetic test on demand | `interactive` | 5 |
 | [284](interactive.md#menu-284) | Test the guest portal SMS provider | `interactive` | 3 |
@@ -374,7 +374,7 @@ pie showData
 | [286](destructive.md#menu-286) | DESTRUCTIVE: Client CoA, reauthentication, and disconnect (Requires typing the target to confirm, supports --dry-run) | `destructive` | 5 |
 | [287](destructive.md#menu-287) | DESTRUCTIVE: Replace a Mist inventory device for RMA (Requires typing 'REPLACE' to confirm, supports --dry-run) | `destructive` | 3 |
 | [288](interactive-safe.md#menu-288) | Show the SSR registration commands | `interactive_safe` | 0 |
-| [289](interactive-safe.md#menu-289) | Export the client fingerprint census for a site | `interactive_safe` | 2 |
+| [289](interactive-safe.md#menu-289) | Export the client fingerprint census for a site | `interactive_safe` | 3 |
 | [290](interactive.md#menu-290) | Run spectrum analysis and RF diagnostic recording | `interactive` | 4 |
 | [291](destructive.md#menu-291) | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run) | `destructive` | 2 |
 | [292](destructive.md#menu-292) | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run) | `destructive` | 10 |
@@ -397,7 +397,7 @@ The map finds no Mist API request for 8 menu options.
 
 | Menu options | Method | Path | SDK function |
 | - | - | - | - |
-| 114 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) |
+| 119 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) |
 | 41 | GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) |
 | 35 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) |
 | 28 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) |
