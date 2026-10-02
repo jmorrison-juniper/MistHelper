@@ -46,3 +46,15 @@ T010 and T011 require T009.
 Publication is not a local implementation task.
 The parent must grant a verified-main release after issue #3215.
 Do not push, create a pull request, merge, or deploy before that release.
+
+## Granted Publication on 2026-10-02
+
+The parent grants publication on actual main `66b1a1832e069a467d25034bc6024c2c7353e11e`.
+The earlier local-only restrictions no longer block this sole position 21 window.
+The production deployment restriction remains unchanged.
+
+- [x] T017 Rebase onto the exact granted base and prove all unowned bytes remain unchanged. (delivered: `specs/3370-gunicorn-control-sockets/analysis.md`)
+- [x] T018 Repeat the current host, native image, negative guard, cleanup, and configured quality proof. (delivered: `specs/3370-gunicorn-control-sockets/implementation.md`)
+
+The persistent PR receipt will record the protected merge and actual-main proof.
+Those later results must name the actual full revisions and complete source tree.

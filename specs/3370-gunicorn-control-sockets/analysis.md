@@ -97,3 +97,30 @@ All evidence applies only to the immutable local refresh boundary.
 The local-only commit comparison is not a fresh remote-base publication check.
 No workflow, pull request, merge, deployment, or actual-main delivery result exists for this refresh.
 The parent must grant publication after the actual verified issue #3215 result.
+
+## Authorized Publication Review
+
+The parent now grants sole position 21 publication on actual main `66b1a1832e069a467d25034bc6024c2c7353e11e`.
+The current public claim still names this session.
+All open pull request pages contain zero competing pull requests before publication.
+The rebase preserves both earlier commits.
+All original and refresh boundaries remain in local preservation tags.
+
+The current proof passes all 293 adjacent cases and all 22 separate socket cases without a skip.
+The source comparison checks 6801 tracked paths and finds zero byte changes across 6791 unowned paths.
+The complete startup script matches its base after removal of exactly the four authorized added lines.
+The native image retains both control identities through four SIGHUP events under UID 1000.
+All owned processes, listeners, sockets, containers, volumes, networks, and the image tag are absent after cleanup.
+
+The current full ratchet checks 1011 discovered files and reports zero new findings.
+It retains the same 725 baseline findings and 48 configured exclusions.
+All configured local Python source gates pass.
+The strict runtime audits cover 105 host and 107 Linux arm64 packages with zero known vulnerabilities and zero skips.
+The direct normal audit resolver still fails during `ensurepip`.
+The licensed dictionary, ShellCheck, native PowerShell, and Git-only advisory proof remain unavailable.
+
+The live protection requires strict checks, administrator enforcement, and 15 required contexts.
+The accepted parent main has 13 existing CodeQL result signatures.
+Those signatures remain visible and must match the fresh actual-main analysis after this repair.
+No pre-merge result or local warmup substitutes for actual-main verification.
+The [implementation record](implementation.md) states the complete current proof and protected delivery procedure.

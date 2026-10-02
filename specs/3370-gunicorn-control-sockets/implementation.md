@@ -171,7 +171,7 @@ The development manifest installs `misthelper-devtools` from a pinned Git commit
 The runtime audit supplies no PyPI advisory proof for that Git-only tool.
 No dependency, baseline, suppression, exclusion, migration, or store configuration changed.
 
-## Publication
+## Initial Publication Boundary
 
 The parent retains publication control.
 The parent did not grant a publication release.
@@ -292,3 +292,131 @@ The offline pull request draft preserves all 23 template items.
 It states the measured results and leaves unmeasured items explicit.
 The draft remains only in the session artifact directory.
 No pull request or remote check exists for this refresh.
+
+## Authorized Publication on 2026-10-02
+
+The parent grants sole position 21 publication and protected delivery.
+The exact granted main is `66b1a1832e069a467d25034bc6024c2c7353e11e`.
+The actual issue #3215 receipt confirms this revision.
+This grant replaces the earlier local-only boundary.
+It does not authorize a production restart, store operation, or firmware action.
+
+The original repair, original base, local refresh, and refresh base remain in local preservation tags.
+The rebase had no conflict.
+Its range comparison preserves both earlier commits without a source change.
+The source guard checks 6801 tracked paths.
+All 6791 unowned paths match the granted base.
+Removing the four authorized added lines restores the complete startup script byte for byte.
+The two socket options and two comments remain the only startup changes.
+All 15 other startup options remain unchanged.
+The accepted output-default deletions remain intact.
+
+### Current-Base Test Results
+
+The current equivalent suite passes 293 cases with zero skips.
+The separate socket run passes all 22 required cases with zero skips.
+The host proof verifies both SIGHUP orders, user and master identities, socket ownership, and `0600` permissions.
+The log guards find zero socket collisions or control server errors.
+The failure cases reject invalid, shared, repeated, disabled, or unreadable configurations.
+The resource guard proves closure after a failed control connection.
+
+An independent cleanup reading checks 12 recorded identities, 12 master and worker PIDs, four sockets, and two listeners.
+It finds zero remaining owned PIDs, sockets, or listeners.
+The test deadlines remain unchanged.
+The run treats resource warnings as errors.
+
+```bash
+rtk proxy .venv/bin/python -m pytest tests/contract/container/test_gunicorn_control_sockets.py tests/unit/container/test_build_files_match.py tests/unit/container/test_startup_no_recursive_chown.py tests/unit/web_portal/test_portal_stream_thread_release.py tests/contract/packaging/test_compose_rebuild_warning.py tests/guardrails/test_container_policy_docs.py tests/guardrails/test_container_account_identifiers.py tests/guardrails/test_container_tls_verification.py tests/guardrails/test_compose_naming_policy.py tests/guardrails/test_shipped_artifacts.py tests/unit/web_portal/test_output_scan_runtime_files.py tests/unit/container/output_defaults -q --timeout=120 -W error::ResourceWarning --basetemp=/Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-publication-tests
+rtk proxy .venv/bin/python -m pytest tests/contract/container/test_gunicorn_control_sockets.py -q --timeout=120 -W error::ResourceWarning --basetemp=/Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-publication-contract
+```
+
+The respective results are 293 passes in 44.65 seconds and 22 passes in 2.31 seconds.
+
+### Current Native Image Proof
+
+The unchanged current `Containerfile` builds the owned Linux arm64 image.
+The image SHA is `443bb1ca9d97d665744261450ee7be401d4c8accb96a699c6ce54a93e97053fa`.
+The existing issue-specific compose group and test profile run the proof under UID 1000.
+The command uses `--no-deps` and publishes zero host ports.
+The internal network has no production dependency.
+Only fake WSGI applications run.
+
+The proof reads the actual `/start.sh` from this image.
+Both exact socket paths retain their own master identities through four SIGHUP events.
+Both sockets retain UID 1000 and mode `0600`.
+Both master log sets contain zero collisions or control errors.
+The proof reaps two masters and six workers and removes both sockets.
+One image test passes in 2.049 seconds.
+
+```bash
+rtk proxy podman build --format docker --file Containerfile --tag localhost/misthelper-tmp-issue3370-control-proof:local .
+rtk proxy .venv/bin/python -m podman_compose -f /Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-compose.yml --profile test up --no-deps --exit-code-from misthelper misthelper
+```
+
+The exact owned container, volume, network, and image tag are removed.
+The final issue-specific lists are empty.
+The production entrypoint, production stack, stores, and service bindings remain untouched.
+
+### Current Configured Quality Gates
+
+The required preflight reads and validates six inputs and checks three guide procedures.
+The current default full ratchet discovers 1011 files and analyzes 963.
+It retains 48 configured exclusions and 725 accepted findings.
+It reports zero new findings and zero parse errors.
+No required socket case is excluded or skipped.
+
+| Exact command | Result |
+| - | - |
+| `rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | Passed. Six inputs and three procedures. |
+| `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --report /Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-publication-full-quality.json --summary /Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-publication-full-quality.md --log-level WARNING` | Passed. Zero new findings. |
+| `rtk proxy .venv/bin/python -m ruff check .` | Passed. |
+| `rtk proxy .venv/bin/python -m black --check --diff .` | Passed. All 2030 files need no format change. |
+| `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed. All 665 files have no errors. |
+| `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r .` | Passed. The scan checks 215141 code lines and retains 64 existing suppressions. |
+| `rtk proxy .venv/bin/python -m bandit tests/contract/container/gunicorn_control_support.py` | Passed. The 299 helper lines have zero findings or suppressions. |
+| `rtk proxy .venv/bin/python -m mypy tests/contract/container/gunicorn_control_support.py tests/contract/container/test_gunicorn_control_sockets.py --config-file pyproject.toml` | Passed. Both files have no type errors. |
+| `rtk proxy .venv/bin/python -m pylint src/ --fail-under=9.5` | Passed. The score is 9.83. |
+| `.venv/bin/python -m radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py tests/contract/container -j \| .venv/bin/complexity-gate --max 10` | Passed. Every measured block meets the threshold. |
+| `rtk proxy .venv/bin/python -m vulture src/ MistHelper.py wsgi.py web_portal --min-confidence 70` | Passed. |
+| `rtk proxy .venv/bin/python -m pydocstyle src/ wsgi.py web_portal tests/contract/container/gunicorn_control_support.py tests/contract/container/test_gunicorn_control_sockets.py` | Passed. |
+| `rtk proxy .venv/bin/interrogate src/ MistHelper.py wsgi.py wsgi_capture.py web_portal --fail-under 90 -v --generate-badge /Users/jmorrison/.copilot/session-state/e638e16d-2ef1-48fd-ad36-1534e659d6ec/files/3370-publication-interrogate.svg` | Passed. Coverage is 99.6 percent. |
+| `rtk proxy .venv/bin/check-citations src tests` | Passed. All 251 citations resolve. |
+| `rtk proxy .venv/bin/diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt` | Passed. All 153 references resolve across 15 diagrams. |
+| `rtk proxy .venv/bin/codeql-verdict-register check --repository jmorrison-juniper/MistHelper` | Passed. The register matches all 88 dismissed alerts. |
+| `rtk proxy .venv/bin/bandit-exclude-check --pyproject pyproject.toml` | Passed. The unchanged exclusions retain both path separator forms. |
+| `rtk proxy bash -n container/scripts/start.sh` | Passed. |
+| `rtk proxy .venv/bin/python -m py_compile MistHelper.py tests/contract/container/gunicorn_control_support.py tests/contract/container/test_gunicorn_control_sockets.py` | Passed. |
+| `rtk proxy .venv/bin/markdown-link-check --root . documentation/container-deployment.md specs/3370-gunicorn-control-sockets changelog.d/issue-3370-gunicorn-control-sockets.md` | Passed. Seven files have zero broken links. |
+
+The direct normal runtime audit again fails during `ensurepip` with SIGABRT.
+Its exact command is `rtk proxy .venv/bin/python -m pip_audit -r requirements.txt --progress-spinner off`.
+The strict fully hashed replacement audits cover all 105 host and 107 Linux arm64 runtime dependencies.
+Both report zero known vulnerabilities and zero skipped packages.
+The normal resolver failure remains explicit.
+The runtime audits do not supply advisory proof for the Git-only development tool.
+
+ShellCheck, native PowerShell, and the licensed writing dictionary remain unavailable.
+The available helper, test, and release-note writing checks each score 100.
+The unchanged configured writing guide scores 96 against the workflow threshold of 80.
+That structural result does not prove dictionary compliance or Windows behavior.
+This branch changes no UI flow.
+No browser journey or complete local-suite coverage percentage is claimed.
+
+### Protected Delivery Procedure
+
+The complete pull request body preserves all 23 template items, headings, comments, and ordering.
+Each measured item names its exact command and result.
+Unmeasured or conditional items remain explicit.
+
+Before the single push, the clean committed candidate must pass a fresh `origin/main` comparison.
+The fetched base must equal the granted full revision.
+The current main must not advance unexpectedly.
+All fresh Quality, title, applicable STE, and CodeQL checks must pass.
+The separate required CodeQL result must pass with its required app identifier.
+All 15 protected strict contexts must match the complete current head.
+
+The merge must use a protected exact-head squash.
+Do not use an administrative, automatic, or branch-delete flag.
+After the merge, verify the exact resulting main revision locally.
+The persistent PR receipt must record its actual parent, source head, tree, checks, local proof, and counted cleanup.
+Only the parent may grant the next issue.
