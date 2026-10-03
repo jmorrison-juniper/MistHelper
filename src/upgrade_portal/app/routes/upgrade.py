@@ -2198,6 +2198,13 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
             upgrade_input.message,
         )
 
+    if not isinstance(body, Mapping):  # The validator refused this shape, so keep the scope check explicit.
+        return json_error(BAD_REQUEST_STATUS, "invalid_parameters", "json_body is required for upgrade start")
+    org_id = str(body.get("org_id", "")).strip()  # The service needs the organization scope for cloud validation.
+    site_id = str(body.get("site_id", "")).strip()  # The service needs the site scope for device upgrades.
+    if not org_id or not site_id:  # Missing scope cannot safely start a firmware change.
+        return json_error(BAD_REQUEST_STATUS, "invalid_parameters", "org_id and site_id are required for upgrade start")
+
     try:  # UpgradeService call may fail due to validation, API, or transient errors
         logger.info(
             "upgrade: start upgrade for run %s with strategy=%s on %d devices",
@@ -2210,20 +2217,25 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
         # Returns upgrade_run record with initial status and per-device state tracking
         upgrade_result = upgrade_service.start_upgrade(
             run_id=run_id,
+            org_id=org_id,
+            site_id=site_id,
             device_ids=upgrade_input.device_ids,
             firmware_version=upgrade_input.firmware_version,
             strategy=upgrade_input.strategy,
             rollback_enabled=upgrade_input.rollback_enabled,
+            user_id=actor_address(),
         )
 
         logger.debug(
-            "upgrade: upgrade started for run %s with status %s", run_id, upgrade_result.get("status")
+            "upgrade: upgrade started for run %s with result %s", run_id, bool(upgrade_result)
         )  # AFTER service call
+        if not upgrade_result:  # A false result means the service did not persist the upgrade request.
+            return json_error(SERVER_ERROR_STATUS, "upgrade_failed", "UpgradeService could not start the upgrade")
 
         # WHY: Build response with upgrade ID and initial status for browser polling
         response_body = {
             "upgrade_id": run_id,  # Use run_id as upgrade identifier
-            "status": upgrade_result.get("status", "pending"),  # Current upgrade status
+            "status": "pending",  # The service returns the run identifier, while the status route owns progress reads.
             "devices_count": len(upgrade_input.device_ids),  # Total devices in this upgrade
             "strategy": upgrade_input.strategy,  # Echo back the strategy used
             "rollback_enabled": upgrade_input.rollback_enabled,  # Confirm rollback setting
@@ -2235,7 +2247,6 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
         return json_error(SERVER_ERROR_STATUS, "upgrade_failed", str(fault))  # Return error to browser
 
 
-@upgrade_bp.get(STATUS_PATH)  # Phase 2 T-009: GET /api/runs/<run_id>/status (also serves real-time upgrade status)
 @identity.require_session  # Ensure operator is authenticated
 def upgrade_status_via_service(run_id: str) -> tuple[Response, int]:
     """Poll the real-time status of an upgrade run via UpgradeService.
@@ -2305,16 +2316,18 @@ def cancel_upgrade_via_service(run_id: str) -> tuple[Response, int]:
 
         # WHY: Invoke UpgradeService.cancel_upgrade() to stop firmware operation and optionally rollback
         # Returns cancel result with updated device statuses and final upgrade state
-        cancel_result = upgrade_service.cancel_upgrade(run_id)
+        cancel_result = upgrade_service.cancel_upgrade(run_id, user_id=actor_address())
 
         logger.debug("upgrade: cancel completed for run %s with result", run_id)  # AFTER service call
+        if not cancel_result:  # A false result means the service did not persist the cancellation.
+            return json_error(SERVER_ERROR_STATUS, "cancel_failed", "UpgradeService could not cancel the upgrade")
 
         # WHY: Build response confirming cancel operation for the browser
         response_body = {
             "upgrade_id": run_id,  # Echo back the run ID
-            "status": cancel_result.get("status", "cancelled"),  # Updated upgrade status after cancel
-            "message": cancel_result.get("message", "Upgrade cancelled"),  # Status message for the browser
-            "devices_rolled_back": cancel_result.get("devices_rolled_back", 0),  # Count of devices that rolled back
+            "status": "cancelled",  # The service returns a boolean success result.
+            "message": "Upgrade cancelled",  # The route owns the stable confirmation text.
+            "devices_rolled_back": 0,  # The service does not expose a rollback count.
         }
         return jsonify(response_body), OK_STATUS  # 200 OK: cancel completed
 
