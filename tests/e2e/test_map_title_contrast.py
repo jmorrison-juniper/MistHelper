@@ -13,9 +13,21 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Error as BrowserError
-from playwright.sync_api import Page, Route
 from requests.exceptions import ConnectionError, Timeout
+
+try:  # Import the browser types before the Maps test helpers need them.
+    from playwright.sync_api import Error as BrowserError
+    from playwright.sync_api import Page, Route
+except ModuleNotFoundError as error:  # Handle only an unavailable Playwright capability.
+    if error.name not in {
+        "playwright",
+        "playwright.sync_api",
+    }:  # Preserve failures from broken Playwright dependencies.
+        raise  # Report a real dependency failure instead of an incorrect skip.
+    pytest.skip(  # State the missing capability in the collection report.
+        "The Playwright synchronous API is not installed, so the Maps contrast test cannot run.",
+        allow_module_level=True,
+    )
 
 from tests.e2e import test_map_viewer_image as map_journeys
 from tests.e2e.test_map_viewer_image import cloud as cloud
