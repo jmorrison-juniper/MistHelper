@@ -380,13 +380,15 @@ def _read_group(session: Any, section: str, response_factory: Any) -> DeviceRead
     """
     try:
         response = response_factory()
-        records = mistapi.get_all(mist_session=session, response=response)
+        walk = read_every_page(session, section, response)
+        rows = [dict(record) for record in walk.records]
     except Exception as error:  # A cloud fault marks one section partial and never stops the capture.
         logger.warning("Upgrade portal failed the %s read: %s", section, type(error).__name__)
         return DeviceRead(section, [], [_partial_reason(section, REASON_READ_FAILED, HTTP_STATUS_NONE)])
-    logger.debug("Upgrade portal read %s records for section %s", len(records), section)
-    rows = [dict(record) for record in records]
-    return DeviceRead(section, rows, guard_page_count(section, len(rows), response))
+    logger.debug("Upgrade portal read %s records for section %s", len(rows), section)
+    reasons = guard_page_count(section, len(rows), response)
+    reasons.extend(walk.partial_reasons)
+    return DeviceRead(section, rows, reasons)
 
 
 def read_inventory(session: Any, org_id: str, site_id: str, page_limit: int | None = None) -> DeviceRead:

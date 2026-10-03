@@ -329,7 +329,6 @@ class RehearsalHarness:
         """
         logger.info("Attach the stand-in cloud of run %s", self.record_body["run_id"])  # The action.
         monkeypatch.setattr(mistapi.api.v1.orgs.stats, "listOrgDevicesStats", self.cloud.list_org_devices_stats)
-        monkeypatch.setattr(mistapi, "get_all", self.cloud.get_all)  # The page walk of the statistics read.
         monkeypatch.setattr(mistapi.api.v1.orgs.devices, "searchOrgDeviceEvents", self.cloud.search_org_device_events)
         monkeypatch.setattr(
             mistapi.api.v1.const.device_events,

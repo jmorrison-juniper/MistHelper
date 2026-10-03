@@ -236,7 +236,7 @@ def test_every_cloud_call_carries_the_keyword_names_of_the_contract(cascade: Reh
     """
     statistics = cascade.cloud.calls_named(STATISTICS_NAME)[0]  # One fleet statistics read.
     assert statistics.keywords >= {"type", "site_id", "fields", "limit"}  # Section 1 of the cloud contract.
-    assert cascade.cloud.calls_named("get_all")[0].keywords == {"mist_session", "response"}  # Section 2, keywords only.
+    assert cascade.cloud.calls_of("get_all") == 0  # The checked page walk no longer calls the lossy helper.
     events = cascade.cloud.calls_named("searchOrgDeviceEvents")[0]  # One device event search.
     assert events.keywords >= {"device_type", "start", "end", "limit", "search_after"}  # Section 3.
     assert cascade.cloud.calls_named("listDeviceEventsDefinitions")[0].keywords == frozenset()  # Section 4.
@@ -261,7 +261,8 @@ def test_the_statistics_answer_drives_the_shipped_page_guard(cascade: RehearsalH
     """
     reasons = [entry for entry in cascade.record().get("phases", []) if entry.get("note")]  # Any noted phase.
     assert not reasons  # A full page reports no short read, so no phase carries a note.
-    assert cascade.cloud.calls_of(STATISTICS_NAME) == cascade.cloud.calls_of("get_all")  # One walk for each read.
+    assert cascade.cloud.calls_of(STATISTICS_NAME) > 0  # The gate still reads the fleet statistics.
+    assert cascade.cloud.calls_of("get_all") == 0  # The gate uses the checked next-link walk.
 
 
 def test_a_short_page_marks_the_round_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

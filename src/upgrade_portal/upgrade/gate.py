@@ -64,6 +64,7 @@ from src.upgrade_portal.capture.devices import (
     REASON_READ_FAILED,
     guard_page_count,
     normalize_device_mac,
+    read_every_page,
     resolve_page_limit,
 )
 
@@ -877,13 +878,15 @@ def read_fleet_statistics(
     )
     try:
         response = call()
-        records = mistapi.get_all(mist_session=session, response=response)
+        walk = read_every_page(session, SECTION_GATE_STATISTICS, response)
+        rows = [dict(record) for record in walk.records]
     except Exception as error:  # A failed poll marks the round partial and never stops the run.
         logger.warning("Upgrade gate failed the fleet statistics read: %s", type(error).__name__)
         return FleetRead({}, [_partial_reason(REASON_READ_FAILED, HTTP_STATUS_NONE)])
-    rows = [dict(record) for record in records]
     logger.debug("Upgrade gate read %s device statistics records", len(rows))
-    return FleetRead(_readings_of(rows), guard_page_count(SECTION_GATE_STATISTICS, len(rows), response))
+    reasons = guard_page_count(SECTION_GATE_STATISTICS, len(rows), response)
+    reasons.extend(walk.partial_reasons)
+    return FleetRead(_readings_of(rows), reasons)
 
 
 def reboot_hint(status: Mapping[str, Any]) -> frozenset[str]:
