@@ -1,14 +1,11 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.6.0 -> 1.7.0
+  Version change: 1.7.0 -> 1.7.1
   Modified principles:
-    - I. Five-Item Rule (Structural Discipline): clarified the exception for
-      required unique process records in established process folders. Each
-      change may add only its own record and must track existing folder debt.
-  Modified constraints:
-    - Data Directory: permitted generated test evidence in the established,
-      git-ignored test-artifacts/ folder. Product outputs remain under data/.
+    - IV. Full Deployment Pipeline: replaced the release-version commit format
+      with the Conventional Commit format that the pull request title guard
+      accepts.
   Added sections: None.
   Removed sections: None.
   Governance updated: None.
@@ -138,8 +135,11 @@ be skipped.
    unstaged changes, and feature-owned untracked files.
 3. **Stage the feature** — Stage every file in the explicit feature manifest.
    Do not stage unrelated files.
-4. **Commit** — Use `version YY.MM.DD.HH.MM - description` with a UTC
-   timestamp.
+4. **Commit** — Use a Conventional Commit subject that the pull request title
+   guard accepts. Use `type: description`, `type(scope): description`,
+   `type!: description`, or `type(scope)!: description`. Use one of these
+   types: `fix`, `feat`, `chore`, `refactor`, `test`, `docs`, `ci`, `style`,
+   or `perf`.
 5. **Rebase** — Fetch and rebase the committed feature branch onto
    `origin/main`. Rerun affected local gates after the rebase.
 6. **Push the feature branch** — Push the rebased branch to its remote branch.
@@ -533,4 +533,4 @@ patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.7.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-03
+**Version**: 1.7.1 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-03

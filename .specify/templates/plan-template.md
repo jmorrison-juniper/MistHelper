@@ -44,6 +44,8 @@
 
 For repository structure and generated files:
 
+- Confirm that the commit subject and pull request title use a Conventional
+  Commit form that the pull request title guard accepts.
 - If repository workflow requires a direct child in an established process
   folder, confirm that the change adds only its own unique record.
 - Record existing process-folder debt and a separate incremental remediation
