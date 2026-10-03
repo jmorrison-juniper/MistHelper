@@ -77,6 +77,11 @@ class UtilityText:
         "service_ids": "Type one or more service IDs. Put a comma between the IDs.",
         "tcpdump_expression": "Type a tcpdump filter of 256 characters or fewer. Example: port 53",
     }
+    _UTILITY_HINTS = {
+        ("srx.retrieveRoutes", "protocol"): (
+            "Choose a protocol on an SRX device. An empty table can occur when no protocol is selected."
+        ),
+    }
 
     @classmethod
     def label(cls, name: str) -> str:
@@ -118,14 +123,18 @@ class UtilityText:
         return f"Run {cls.label(name)} on the device and show the output."  # Safe text for a new SDK utility.
 
     @classmethod
-    def hint(cls, name: str) -> str:
+    def hint(cls, name: str, utility_key: str = "") -> str:
         """Return the input hint for one field.
 
         Args:
             name: The SDK parameter name.
+            utility_key: The catalog key of the utility that owns the field.
 
         Returns:
             One short hint, or an empty text when the field needs no hint.
         """
         logger.debug("Building the WebSocket hint for %s", name)  # Debug level: the catalog builds many hints.
+        utility_hint = cls._UTILITY_HINTS.get((utility_key, name))  # Read only utility-specific guidance.
+        if utility_hint is not None:  # Keep shared fields unchanged for other utilities.
+            return utility_hint  # Return the SRX route guidance for this field only.
         return cls._HINTS.get(name, "")  # Most fields need no extra text.

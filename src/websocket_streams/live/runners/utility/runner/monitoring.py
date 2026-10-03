@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Mapping
@@ -47,11 +48,26 @@ class UtilityOutput:
         definition = self._definition()
         self.mark_live()
         if definition.output == "packets":
-            packet = self._packet(payload)
+            packet = payload["pcap_dict"] if isinstance(payload, Mapping) and "pcap_dict" in payload else payload
             summary = PacketSummary.summarize(packet)
             self.context.sink.add_message("packet", packet, summary=summary)
             return
-        self.context.sink.add_message("text", str(payload))
+        output = self._annotate_empty_srx_routes(payload, definition)  # Add route guidance before page display.
+        self.context.sink.add_message("text", output)  # Preserve the existing text message contract.
+
+    def _annotate_empty_srx_routes(self, payload: object, definition: UtilityDefinition) -> str:
+        """Add guidance when SRX route retrieval returns an empty table."""
+        text = str(payload)
+        if definition.key != "srx.retrieveRoutes" or self.context.request.parameters.get("protocol"):
+            return text
+        try:
+            table = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return text
+        if not isinstance(table, dict) or not isinstance(table.get("rows"), list) or table["rows"]:
+            return text
+        table["message"] = "Choose a protocol on the SRX device and run Retrieve routes again."
+        return json.dumps(table)
 
     def mark_live(self) -> None:
         """Mark the session live one time."""
@@ -66,13 +82,6 @@ class UtilityOutput:
         if not isinstance(definition, UtilityDefinition):
             raise StreamRequestError("bad_request", "The utility definition is not valid.")
         return definition
-
-    @staticmethod
-    def _packet(payload: object) -> object:
-        """Return packet content from a capture payload."""
-        if isinstance(payload, Mapping) and "pcap_dict" in payload:
-            return payload["pcap_dict"]
-        return payload
 
 
 @dataclass(slots=True)

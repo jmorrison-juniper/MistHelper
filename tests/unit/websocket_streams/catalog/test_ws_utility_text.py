@@ -61,6 +61,13 @@ class TestUtilityText:
         assert "comma" in UtilityText.hint("port_ids")  # A list field explains the separator.
         assert UtilityText.hint("count") == ""  # Most fields need no extra text.
 
+    def test_hint_for_srx_routes_is_scoped_to_that_utility(self) -> None:
+        """The SRX route hint does not change the traceroute protocol field."""
+        route_hint = UtilityText.hint("protocol", "srx.retrieveRoutes")  # Read the SRX route field hint.
+        trace_hint = UtilityText.hint("protocol", "ex.traceroute")  # Read the traceroute field hint.
+        assert "Choose a protocol" in route_hint  # The route form warns about the empty-table behavior.
+        assert trace_hint == ""  # Traceroute keeps its existing field text.
+
 
 class TestSdkAnnotation:
     """Verify the SDK annotation reader."""
@@ -88,6 +95,7 @@ class TestUtilityChoices:
         assert routes is not None and trace is not None  # Both entries exist in the SDK.
         route_fields = {field.name: field for field in routes.fields}  # Look up the fields by name.
         assert route_fields["protocol"].choices == ("any", "bgp", "direct", "evpn", "ospf", "static")  # Route enum.
+        assert "Choose a protocol" in route_fields["protocol"].hint  # The SRX route form explains the empty table.
         assert route_fields["route_type"].kind is FieldKind.NAME  # The SDK types this value as free text.
         assert route_fields["node"].choices == ("node0", "node1")  # The node enum comes from the SDK.
         trace_protocol = next(field for field in trace.fields if field.name == "protocol")  # The traceroute field.

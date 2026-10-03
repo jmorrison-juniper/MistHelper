@@ -370,6 +370,33 @@ def test_show_command_runs_one_hundred_times_with_full_output(
     assert f"{label}_100_run_seconds" in capsys.readouterr().out  # Prove the measurement printed.
 
 
+def test_srx_routes_empty_table_explains_protocol_filter() -> None:
+    """Tell the operator to choose a protocol when SRX sends no route rows."""
+    empty_table = {
+        "columns": [{"id": "Table", "display_name": "Table", "type": "string"}],
+        "rows": [],
+        "finished": True,
+        "status": "SUCCESS",
+        "message": "",
+    }  # Match the empty table shape returned by the SRX utility.
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Use the same stream transport as the live path.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/show_route", data={"session": "session-empty"})  # Force the session identifier.
+        _set_before_post_return(api, _publish_lines(device, "session-empty", [json.dumps(empty_table)]))
+        sink = _run_utility(
+            cloud,
+            api,
+            _request("srx.retrieveRoutes", params={"protocol": ""}, family="srx"),
+            _fast_table(),
+        )  # Run the empty-table path.
+        state, _reason = sink.wait_finished()  # Wait for the utility to finish.
+    assert state == SessionState.FINISHED  # An empty table is a valid device response.
+    rendered = json.loads(str(sink.messages[0][1]))  # Read the JSON text that reaches the page.
+    assert "Choose a protocol" in rendered["message"]  # The page can show the guidance under the table.
+
+
 def test_capture_filters_capture_id_and_adds_packet_summary() -> None:
     """Emit only matching capture packets and include a packet summary."""
     with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
@@ -415,12 +442,19 @@ def test_screen_utility_is_refused() -> None:
     assert sink.live_calls == 0  # Refused screen utilities never become live.
 
 
-def _request(key: str, output: str = "lines") -> StartRequest:
+def _request(
+    key: str,
+    output: str = "lines",
+    params: dict[str, object] | None = None,
+    family: str = "ex",
+) -> StartRequest:
     """Build a checked utility request for tests."""
-    definition = UtilityDefinition(key, "ex", "unused", key, key, (), Safety.READ, output, ())  # Catalog entry.
+    definition = UtilityDefinition(key, family, "unused", key, key, (), Safety.READ, output, ())  # Catalog entry.
     targets = {"site_id": (SITE_ID,), "device_id": (DEVICE_ID,), "org_id": (ORG_ID,)}  # Stable targets.
-    params = {"duration": 60, "port_id": "ge-0/0/1", "protocol": "tcp"}  # Common trigger parameters.
-    return StartRequest("utility", definition, targets, params, key)  # Return checked request shape.
+    values = {"duration": 60, "port_id": "ge-0/0/1", "protocol": "tcp"}  # Common trigger parameters.
+    if params is not None:  # Allow a test to model one exact utility request.
+        values.update(params)  # Preserve defaults that the trigger builder expects.
+    return StartRequest("utility", definition, targets, values, key)  # Return checked request shape.
 
 
 def _build_runner(
