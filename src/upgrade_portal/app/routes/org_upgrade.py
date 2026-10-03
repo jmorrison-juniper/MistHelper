@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from functools import partial  # Issue #3243: bind the adopter seam to the pre-check reader.
 from typing import Any
 
-from flask import Blueprint, Response, current_app, g, jsonify, request, session
+from flask import Blueprint, Response, current_app, g, has_request_context, jsonify, request, session
 from requests.exceptions import RequestException  # Name the transport faults that the Mist SDK can raise.
 
 from ....firmware.aggregate_upgrade_service import (  # Issue #3225: the final states and their cancel refusal.
@@ -160,7 +160,7 @@ UNREACHABLE_OPERATOR_MESSAGE = (  # The cure is a reachable address, not a diffe
 )
 JOB_NOT_OWNED = "org_upgrade_job_not_owned"
 SITE_LOCK_WRONG_RUN = "site_lock_wrong_run"  # The operator holds the site for another run.
-SITE_LOCK_WRONG_RUN_MESSAGE = "Your existing site lock belongs to another run."  # The cure is the other run.
+SITE_LOCK_WRONG_RUN_MESSAGE = "The selected site is held by another operation."  # The response adds the safe job link.
 PRECHECK_MISSING_MESSAGE = (  # Issue #3243 and issue #3462: the cure, then the noun and each site with no capture.
     "Save a verified pre-check capture for each selected site before you start the upgrade. "
     "The portal found no pre-check capture for {place}: {names}."
@@ -1440,8 +1440,73 @@ def _operation_site_lock(
     except lock.SiteLockError as fault:  # Map the lock error to a safe API response.
         return _lock_fault(fault)  # Preserve the code and the message of the lock module.
     if record is None:  # The operator holds the site for another run.
-        return json_error(CONFLICT_STATUS, SITE_LOCK_WRONG_RUN, SITE_LOCK_WRONG_RUN_MESSAGE)  # Refuse unsafe reuse.
+        refusal = _busy_site_refusal(operation, scope.org_id, site_id)  # Name the owner job without exposing identity.
+        _discard_unconfirmed_operation(operation)  # Remove this browser's unconfirmed plan and release its locks.
+        return refusal  # Refuse unsafe reuse with the owning progress page.
     return _store_site_lock(operation, site_id, record)  # Persist this lock before the next site.
+
+
+def _busy_site_refusal(
+    operation: Mapping[str, Any],
+    org_id: str,
+    site_id: str,
+) -> tuple[Response, int]:
+    """Build a safe refusal that names the owning operation and held sites."""
+    held = lock.read_lock(org_id, site_id, select_routes.lock_client())  # Read the lock that blocked this plan.
+    owner_id = str(held.run_id) if held is not None else ""  # The lock carries only the operation identifier.
+    owner = _read_operation(owner_id) if owner_id else None  # Read the owning job from durable storage.
+    if not isinstance(owner, Mapping) or str(owner.get("org_id", "")) != org_id:  # Enforce organization scope.
+        logger.warning("The busy site %s names no readable operation in organization %s", site_id, org_id)
+        return json_error(CONFLICT_STATUS, SITE_LOCK_WRONG_RUN, SITE_LOCK_WRONG_RUN_MESSAGE)  # Hide invalid links.
+    held_ids = (  # Name the locks that the owning operation already holds.
+        [str(value) for value in owner.get("site_locks", {}).keys()]
+        if isinstance(owner.get("site_locks"), Mapping)
+        else []
+    )
+    if site_id not in held_ids:  # Include the blocking site even if its owner record is one write behind.
+        held_ids.append(site_id)  # Keep the operator's refusal complete.
+    names = owner.get("site_names", {})  # Read the safe display names stored with the owning operation.
+    name_map = (  # Index the safe names without exposing operator identity.
+        {str(site_id): str(name) for site_id, name in names.items()} if isinstance(names, Mapping) else {}
+    )
+    held_sites = [  # Expose site identifiers and names, but no credentials.
+        {"site_id": value, "name": name_map.get(value, value)} for value in held_ids
+    ]
+    next_page = f"/upgrade/org/jobs/{owner_id}"  # Link only the validated aggregate progress route.
+    message = f"Site {name_map.get(site_id, site_id)} is held by operation {owner_id}."  # Name the cure.
+    details = {  # Give the browser structured facts.
+        "operation_id": owner_id,
+        "held_sites": held_sites,
+        "next": next_page,
+    }
+    return json_error(CONFLICT_STATUS, SITE_LOCK_WRONG_RUN, message, details)  # Return one safe error envelope.
+
+
+def _discard_unconfirmed_operation(operation: MutableMapping[str, Any]) -> None:
+    """Release and delete one plan that never reached a submission claim."""
+    children = operation.get("children", [])  # Read the durable child states before deleting anything.
+    planned = (
+        operation.get("state") == "planned"
+        and isinstance(children, list)
+        and all(  # Prove no write started.
+            isinstance(child, Mapping) and child.get("status") == "planned" for child in children
+        )
+    )
+    if not planned:  # A claimed or changed child must remain durable for reconciliation.
+        return  # Never delete evidence of a started operation.
+    stored = operation.get("site_locks", {})  # Read locks acquired by this browser before the refusal.
+    if isinstance(stored, Mapping):  # Release only locks recorded for this operation.
+        org_id = str(operation.get("org_id", ""))  # Build safe keys inside the operation organization.
+        for site_id, value in list(stored.items()):  # Release each partial lock before deletion.
+            _release_one_lock(org_id, str(site_id), value)  # Compare the token before freeing a site.
+    run_id = str(operation.get("run_id", ""))  # Delete the exact planned record.
+    store = upgrade_routes.run_store()  # Use the same store that wrote the plan.
+    delete = getattr(store, "delete_run", None)  # Stand-ins may not support cleanup.
+    if callable(delete) and delete(run_id):  # Remove only after the store confirms deletion.
+        if has_request_context():  # A route cleanup can clear stale signed browser state.
+            session.pop(OPTIONS_SESSION_KEY, None)  # Remove the browser reference to the deleted plan.
+            session.pop(OPTIONS_NONCE_SESSION_KEY, None)  # Prevent a deleted plan from passing replay checks.
+        logger.debug("Deleted unconfirmed aggregate upgrade %s", run_id)  # Report the cleanup result.
 
 
 def _operation_lock_record(

@@ -285,7 +285,12 @@ def build_error_envelope(code: str, message: str, details: dict[str, Any] | None
     return {"error": body}  # The contract wraps the body under one key.
 
 
-def json_error(status: int, code: str | None = None, message: str | None = None) -> tuple[Response, int]:
+def json_error(
+    status: int,
+    code: str | None = None,
+    message: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> tuple[Response, int]:
     """Build one JSON error response.
 
     Args:
@@ -298,7 +303,7 @@ def json_error(status: int, code: str | None = None, message: str | None = None)
     """
     chosen_code = code or ERROR_CODES.get(status, ERROR_CODES[500])  # An unknown status reads as a fault.
     chosen_message = message or ERROR_MESSAGES.get(status, ERROR_MESSAGES[500])  # The matching sentence.
-    return jsonify(build_error_envelope(chosen_code, chosen_message)), status  # The one shape, every time.
+    return jsonify(build_error_envelope(chosen_code, chosen_message, details)), status  # The one shape, every time.
 
 
 def error_page(

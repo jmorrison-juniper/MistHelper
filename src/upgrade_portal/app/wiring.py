@@ -142,6 +142,13 @@ def mirror_run(run: dict[str, Any]) -> None:
             _MIRROR.pop(next(iter(_MIRROR)))  # A dictionary holds its keys in write order.
 
 
+def forget_run(run_id: str) -> None:
+    """Remove one run from the process mirror after durable cleanup."""
+    key = str(run_id)  # Use the same key as the document store.
+    with _MIRROR_GUARD:  # The poll thread may read while cleanup removes the entry.
+        _MIRROR.pop(key, None)  # An absent key already satisfies the cleanup result.
+
+
 def mirrored_run(run_id: str) -> dict[str, Any] | None:
     """Return one run record from the memory of the present process.
 
@@ -260,6 +267,20 @@ class DocumentRunStore:
         if landed:  # The record is durable, so this process may also answer it from memory.
             mirror_run(run)  # The poll then reads the run back with no database at all.
         return landed
+
+    def delete_run(self, run_id: str) -> bool:
+        """Delete one planned run and remove its process mirror."""
+        store = load_module(STORE_MODULE)  # Load the production database boundary only when cleanup runs.
+        if store is None:  # A missing store cannot prove durable cleanup.
+            return False  # Fail closed and retain the plan.
+        try:  # The store owns the database delete operation.
+            deleted = bool(store.delete_run(run_id))  # Remove only the requested durable run.
+        except Exception as fault:  # A cleanup fault must remain visible to the caller.
+            logger.warning("wiring: the delete of run %s failed with %s", run_id, type(fault).__name__)
+            return False  # Do not remove the mirror after an unverified delete.
+        if deleted:  # The durable record no longer exists.
+            forget_run(run_id)  # Prevent a database outage from resurrecting the deleted plan.
+        return deleted  # Report the verified cleanup result.
 
     def compare_and_set_run(
         self,

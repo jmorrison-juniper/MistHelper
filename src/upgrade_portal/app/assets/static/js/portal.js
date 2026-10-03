@@ -131,6 +131,7 @@
     var ORG_FORM_SENDING = "sending";  /* Issue #3242: one request of the form is in flight. */
     var ORG_FORM_CLOSED = "closed";  /* Issue #3242: a replay refusal closed the form for this page. */
     var ORG_REPLAY_CODE = "org_upgrade_already_submitted";  /* Issue #3242: the code of a repeated start. */
+    var ORG_BUSY_CODE = "site_lock_wrong_run";  /* Issue #3224: another operation owns a selected site. */
     var ORG_JOB_PATH = /^\/upgrade\/org\/jobs\/[A-Za-z0-9_-]{1,128}$/;  /* Issue #3242: the one safe link target. */
     var ORG_JOB_LINK_TESTID = "org-upgrade-job-link";  /* Issue #3242: the link to the job of the first start. */
     var ORG_FORM_CONTROLS = 'button:not([type]), button[type="submit"], input[type="submit"], [data-confirm-word]';  /* Issue #3242: each control that can send a form. */
@@ -3376,6 +3377,20 @@
         if (item && typeof next === "string" && ORG_JOB_PATH.test(next)) {  /* FR-006: link only a job page. */
             appendOrgJobLink(item, next);  /* The operator can open the job that runs. */
         }
+
+        function showOrgBusyRefusal(form, error) {
+            form.setAttribute(ORG_FORM_STATE, ORG_FORM_CLOSED);  /* The refused plan must not be submitted again. */
+            form.querySelectorAll("[data-confirm-word]").forEach(function (input) {
+                input.value = "";  /* The typed confirmation must not remain armed. */
+                input.disabled = true;  /* The operator must open a new plan before another start. */
+                applyConfirmGate(input);  /* Keep the submit control disabled with the cleared word. */
+            });
+            var item = showRequestError(error);  /* Show the held-site and owning-job message. */
+            var next = error.details && error.details.next;  /* Read the validated owning progress path. */
+            if (item && typeof next === "string" && ORG_JOB_PATH.test(next)) {  /* Reject unsafe link targets. */
+                appendOrgJobLink(item, next);  /* Link the operation that holds the site. */
+            }
+        }
     }
 
     /**
@@ -3417,6 +3432,10 @@
                 console.error("The organization upgrade request failed.", error && error.code, error && error.status);  /* FR-008: no body. */
                 if (error && error.code === ORG_REPLAY_CODE) {  /* The first request already started a job. */
                     showOrgReplayRefusal(form, error);  /* Keep the form closed, and link the job. */
+                    return;
+                }
+                if (error && error.code === ORG_BUSY_CODE) {  /* Issue #3224: a different job holds a selected site. */
+                    showOrgBusyRefusal(form, error);  /* Keep confirmation closed and link the owning job. */
                     return;
                 }
                 openOrgForm(form, closed);  /* Nothing started, so the operator can try again. */
