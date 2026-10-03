@@ -217,15 +217,15 @@ class TestCoverageGapTargets:
     Lines covered here: 56-57 (DNS failure), 189 (ts_value_fields path), 341 (key cache hit).
     """
 
-    def test_init_dns_resolution_failure_raises_connection_error(self, config) -> None:
+    def test_init_dns_resolution_failure_raises_connection_error(self, config, isolated_redis_dns) -> None:
         """Lines 56-57: ConnectionError must be raised when Redis host DNS fails."""
         import socket  # Import for socket.gaierror exception type
 
         from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
 
-        with patch(
-            "src.db.redis_writer.socket.getaddrinfo", side_effect=socket.gaierror("Name or service not known")
-        ):  # Patch only getaddrinfo
+        with patch.dict(
+            isolated_redis_dns.answers, {"localhost": socket.gaierror("Name or service not known")}
+        ):  # Limit the controlled failure to this constructor check.
             with pytest.raises(ConnectionError, match="not resolvable"):  # Must raise ConnectionError
                 RedisTimeSeriesWriter(config)  # Constructor must propagate DNS failure as ConnectionError
 
@@ -445,3 +445,21 @@ class TestResolutionSummaryLogging:
         counts = writer._log.debug.call_args_list[0].kwargs  # WHY: the summary reports the counts as keywords.
         assert counts["fallback"] == 10000  # WHY: every record resolves through the fallback list.
         assert counts["strategy"] + counts["fallback"] + counts["unknown"] == 10000  # WHY: the merge loses no count.
+
+
+@pytest.fixture(autouse=True)
+def isolated_redis_dns(monkeypatch: pytest.MonkeyPatch):
+    """Keep Redis tests on controlled DNS and close their finite worker pool."""
+    from src.db import host_resolver
+    from src.db.host_resolver import BoundedHostResolver
+    from tests.unit.db_discovery.fakes import ControlledResolver
+
+    lookup = ControlledResolver()
+    lookup.answers["localhost"] = lookup.addresses()
+    resolver = BoundedHostResolver(lookup=lookup)
+    monkeypatch.setattr(host_resolver, "DEFAULT_RESOLVER", resolver)
+    try:
+        yield lookup
+    finally:
+        lookup.release.set()
+        resolver.close(timeout=1)

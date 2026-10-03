@@ -9,17 +9,20 @@ from __future__ import annotations
 
 import os
 import socket
+import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import structlog
+
+from . import host_resolver
 
 ARANGO_DEFAULT_URL = "http://misthelper-arangodb:9529"  # Compose service URL used when ARANGO_HOST is unset.
 ARANGO_DEFAULT_HOSTNAME = "misthelper-arangodb"  # Host applied when a URL carries no host of its own.
 ARANGO_DEFAULT_PORT = 9529  # Port applied when ARANGO_HOST carries no explicit port.
 REDIS_DEFAULT_HOST = "misthelper-redis"  # Compose service name used when REDIS_HOST is unset.
 REDIS_DEFAULT_PORT = 9379  # Port applied when REDIS_PORT is unset or unreadable.
-PROBE_TIMEOUT_SECONDS = 0.5  # Short TCP budget so a dead host never stalls an export.
+PROBE_TIMEOUT_SECONDS = 0.5  # Bound the TCP phase separately from the shared DNS caller budget.
 ARANGO_USERNAME_FIELD = "ARANGO_USERNAME"  # Name the ArangoDB account environment variable.
 ARANGO_PASSWORD_FIELD = "ARANGO_ROOT_PASSWORD"  # nosec B105  # Name the ArangoDB password variable.
 REDIS_PASSWORD_FIELD = "REDIS_PASSWORD"  # nosec B105  # Name the Redis password variable.
@@ -65,8 +68,10 @@ class DatabaseConfig:
     def from_env(cls) -> DatabaseConfig:
         """Build config from environment variables.
 
-        Auto-detects standalone mode when database hosts are unreachable,
-        preventing noisy retry loops when running outside a container.
+        Both unresolved names select standalone mode. One resolved name keeps
+        the existing partial-backend and required-credential behavior.
+        Central DNS callers use a one-second budget and a 30-second result cache.
+        DNS success does not prove that a database service is ready.
         """
         explicit_standalone = os.environ.get("MISTHELPER_STANDALONE", "").lower() == "true"  # Read CSV-only override.
         arango_host = os.environ.get("ARANGO_HOST", ARANGO_DEFAULT_URL)  # Use the compose host unless overridden.
@@ -96,21 +101,25 @@ class DatabaseConfig:
 
 
 def _hosts_unreachable(arango_url: str, redis_host: str) -> bool:
-    """Return True if both ArangoDB and Redis hostnames fail DNS resolution.
+    """Return True when both database names lack a recent resolved address.
 
-    Uses a fast DNS-only check (no TCP connection) with a short timeout
-    so the caller never blocks on retries.
+    Each DNS caller waits at most one second. Positive and negative results
+    expire after 30 monotonic seconds. No TCP connection occurs here.
+    A timed-out operating system lookup retains its finite worker slot.
     """
+    log = structlog.get_logger(__name__)
     arango_hostname = urlparse(arango_url).hostname or ARANGO_DEFAULT_HOSTNAME
-    arango_ok = _can_resolve(arango_hostname)
-    redis_ok = _can_resolve(redis_host)
+    log.info("database_host_discovery_started")
+    arango_ok = bool(host_resolver.DEFAULT_RESOLVER.resolve(arango_hostname).addresses)
+    redis_ok = bool(host_resolver.DEFAULT_RESOLVER.resolve(redis_host).addresses)
+    log.debug("database_host_discovery_finished", arango_resolved=arango_ok, redis_resolved=redis_ok)
     if not arango_ok and not redis_ok:
-        log = structlog.get_logger(__name__)
         log.info(
             "standalone_auto_detected",
             msg="Database hosts unreachable, using CSV/SQLite only",
             arango_host=arango_hostname,
             redis_host=redis_host,
+            checked_hosts=2,
         )
         return True
     return False
@@ -133,15 +142,6 @@ def _optional_env(name: str) -> str:
     return str(raw or "").strip()  # Empty means not configured, and no authenticated call uses it.
 
 
-def _can_resolve(hostname: str) -> bool:
-    """Check whether a hostname resolves via DNS (no connection attempt)."""
-    try:
-        socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        return True
-    except socket.gaierror:
-        return False
-
-
 def _env_int(name: str, default: int) -> int:
     """Return an integer environment variable, or the default when the value is absent or unreadable."""
     raw = os.environ.get(name, "")  # Read the raw value so an empty string keeps the default.
@@ -152,12 +152,28 @@ def _env_int(name: str, default: int) -> int:
 
 
 def _can_connect(hostname: str, port: int) -> bool:
-    """Return True when a TCP connect to the host and port succeeds inside the probe timeout."""
-    try:
-        with socket.create_connection((hostname, port), timeout=PROBE_TIMEOUT_SECONDS):  # Open and close one socket.
-            return True  # A service listens on that address.
-    except OSError:
-        return False  # A refused, filtered, or unresolvable address counts as silent.
+    """Probe resolved numeric addresses within one aggregate TCP budget."""
+    log = structlog.get_logger(__name__)
+    log.info("database_tcp_probe_started", hostname=hostname, port=port)
+    resolved = host_resolver.DEFAULT_RESOLVER.resolve(hostname)
+    deadline = time.monotonic() + PROBE_TIMEOUT_SECONDS
+    checked_count = 0
+    for family, socket_type, protocol, _canonical_name, address in resolved.addresses:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        endpoint = (address[0], port, address[2], address[3]) if len(address) == 4 else (address[0], port)
+        checked_count += 1
+        try:
+            with socket.socket(family, socket_type, protocol) as connection:
+                connection.settimeout(remaining)
+                connection.connect(endpoint)
+            log.debug("database_tcp_probe_finished", hostname=hostname, reachable=True, checked_addresses=checked_count)
+            return True
+        except (OSError, OverflowError) as error:
+            log.debug("database_tcp_address_failed", hostname=hostname, error_type=type(error).__name__)
+    log.debug("database_tcp_probe_finished", hostname=hostname, reachable=False, checked_addresses=checked_count)
+    return False
 
 
 def polyglot_hosts_unreachable() -> bool:
@@ -165,7 +181,9 @@ def polyglot_hosts_unreachable() -> bool:
 
     The probe reads the same environment variables as ``DatabaseConfig.from_env``.
     It opens a TCP connection because a hostname can resolve while no service listens.
-    A caller must cache the answer, because each call costs up to two timeouts.
+    DNS uses the shared one-second caller budget and 30-second result cache.
+    Each service then has one separate 0.5-second aggregate TCP budget.
+    The function does not cache service readiness.
     """
     log = structlog.get_logger(__name__)  # Bind the package logger for the probe record.
     arango_url = os.environ.get("ARANGO_HOST", ARANGO_DEFAULT_URL)  # Read the configured ArangoDB URL.
@@ -179,6 +197,7 @@ def polyglot_hosts_unreachable() -> bool:
         arango_reachable=arango_ok,
         redis_host=redis_host,
         redis_reachable=redis_ok,
+        checked_hosts=2,
     )  # Record both verdicts so a dropped write is traceable.
     return not arango_ok and not redis_ok  # Only total silence makes the polyglot backend unusable.
 

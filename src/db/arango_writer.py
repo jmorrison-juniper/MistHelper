@@ -9,7 +9,6 @@ from __future__ import annotations  # WHY: enable postponed annotation evaluatio
 
 import hashlib  # WHY: deterministic keys and snapshot hashes rely on sha256
 import json  # WHY: canonical serialisation for snapshot hash comparison
-import socket  # WHY: pre-flight DNS check before opening ArangoDB client
 import time  # WHY: epoch timestamps stamp every write and snapshot doc
 import uuid  # WHY: fallback random keys for auto-increment strategies
 from typing import Any  # WHY: type hints for python-arango dynamic returns
@@ -19,7 +18,7 @@ import structlog  # WHY: structured logging for observability of writes and edge
 from arango import ArangoClient  # type: ignore[attr-defined]  # WHY: python-arango client entrypoint
 from arango.collection import StandardCollection
 
-from . import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, WriteResult  # WHY: shared config and result dataclasses
+from . import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, WriteResult, host_resolver
 from .database_schema_utils import ArangoIndexManager, ArangoIndexState
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger tags every event
@@ -3914,11 +3913,18 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
 
     @staticmethod
     def _preflight_dns(hostname: str) -> None:  # WHY: guard clause factored out of __init__ to keep it short
-        """Raise ConnectionError early if the ArangoDB hostname does not resolve."""
-        try:
-            socket.getaddrinfo(hostname, None)  # WHY: cheap DNS lookup surfaces misconfigurations up-front
-        except socket.gaierror as dns_error:  # WHY: convert socket-level failure into a domain error
-            raise ConnectionError(f"ArangoDB host '{hostname}' not resolvable") from dns_error
+        """Bound the DNS preflight and retain the configured client URL."""
+        logger.info("arango_dns_preflight_started", hostname=ascii(hostname))
+        resolved = host_resolver.DEFAULT_RESOLVER.resolve(hostname)
+        if not resolved.addresses:
+            logger.warning("arango_dns_preflight_unavailable", hostname=ascii(hostname), checked_hosts=1)
+            raise ConnectionError(f"ArangoDB host '{hostname}' not resolvable") from resolved.error
+        logger.debug(
+            "arango_dns_preflight_finished",
+            hostname=ascii(hostname),
+            addresses=len(resolved.addresses),
+            checked_hosts=1,
+        )
 
     def _ensure_database(self) -> None:  # WHY: idempotent bootstrap of the misthelper database
         """Create the misthelper database if it does not exist."""
