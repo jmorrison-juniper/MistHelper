@@ -9,7 +9,7 @@ import sys  # Use the active virtual environment for each child process.
 from pathlib import Path  # Build repository paths without hardcoded separators.
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Run each probe against this worktree.
-TARGET = "tests/e2e/test_map_title_contrast.py"  # Limit each probe to the repaired Maps module.
+TARGET = "tests/e2e/web_portal/test_map_title_contrast.py"  # Limit each probe to the repaired Maps module.
 SKIP_REASON = (  # Keep the expected operator-facing reason exact.
     "The Playwright synchronous API is not installed, so the Maps contrast test cannot run."
 )
