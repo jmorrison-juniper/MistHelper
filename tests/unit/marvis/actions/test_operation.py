@@ -418,9 +418,16 @@ class TestResolve:
 
     RAWS = (make_raw(1), make_raw(2), make_raw(3, status="validated"))
 
-    def resolve_answers(self, confirmation: str = "RESOLVE 2", code: str = "", comment: str = "") -> tuple[str, ...]:
-        """Return the six answers of one mode 3 run."""
-        return ("3", *DEFAULT_FILTERS, code, comment, confirmation)
+    def resolve_answers(
+        self,
+        confirmation: str = "RESOLVE 2",
+        code: str = "",
+        comment: str = "",
+        alarm_confirmation: str | None = None,
+    ) -> tuple[str, ...]:
+        """Return the mode 3 answers, with the optional alarm confirmation when a joined alarm exists."""
+        answers = ("3", *DEFAULT_FILTERS, code, comment, confirmation)  # The six resolve prompt answers.
+        return answers if alarm_confirmation is None else (*answers, alarm_confirmation)  # Add prompt seven if used.
 
     def test_the_confirmed_run_resolves_each_open_action(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
         """Each open action gets one request, and the verify read confirms it."""
@@ -454,6 +461,67 @@ class TestResolve:
             SITE_NAME,
             "switch/sw_offline",
         )
+        assert [(row["alarm_ack_outcome"], row["alarm_ack_http_status"]) for row in rows] == [
+            ("no_alarm", None),
+            ("no_alarm", None),
+        ]
+
+    def test_the_exact_alarm_confirmation_acknowledges_only_verified_resolves(
+        self,
+        harness: Any,
+        site_api: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The second guard sends explicit joined alarm IDs after the verify read."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), make_alarm(2)])
+        built = harness(list(self.RAWS), *self.resolve_answers(alarm_confirmation="ACKNOWLEDGE 2"))
+        text = run_menu(caplog)
+        site_api.api.v1.orgs.alarms.ackOrgMultipleAlarms.assert_called_once_with(
+            built.session,
+            ORG_ID,
+            body={
+                "alarm_ids": [make_alarm(1)["id"], make_alarm(2)["id"]],
+                "note": "MistHelper resolve code: suggested. Comment: No comment.",
+            },
+        )
+        rows = only_write(built)[0]
+        assert [(row["alarm_id"], row["alarm_ack_outcome"], row["alarm_ack_http_status"]) for row in rows] == [
+            (make_alarm(1)["id"], "acknowledged", 200),
+            (make_alarm(2)["id"], "acknowledged", 200),
+        ]
+        assert "Marvis alarm acknowledge summary: acknowledged=2 error=0 not_sent=0 no_alarm=0" in text
+
+    def test_a_blank_alarm_confirmation_records_not_sent_and_calls_no_ack_endpoint(
+        self,
+        harness: Any,
+        site_api: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The optional acknowledge step stays off unless the operator types the exact alarm count."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), make_alarm(2)])
+        built = harness(list(self.RAWS), *self.resolve_answers(alarm_confirmation=""))
+        run_menu(caplog)
+        assert site_api.api.v1.orgs.alarms.ackOrgMultipleAlarms.call_count == 0
+        assert {row["alarm_ack_outcome"] for row in only_write(built)[0]} == {"not_sent"}
+
+    def test_a_failed_resolve_never_acknowledges_its_alarm(
+        self,
+        harness: Any,
+        site_api: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Only an action that the verify read reports as closed can make its alarm eligible."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), make_alarm(2)])
+        built = harness(list(self.RAWS), *self.resolve_answers(alarm_confirmation="ACKNOWLEDGE 1"))
+        built.session.put_statuses.extend([400, 200])
+        run_menu(caplog)
+        body = site_api.api.v1.orgs.alarms.ackOrgMultipleAlarms.call_args.kwargs["body"]
+        assert body["alarm_ids"] == [make_alarm(2)["id"]]
+        rows = only_write(built)[0]
+        assert [(row["outcome"], row["alarm_ack_outcome"]) for row in rows] == [
+            ("error", ""),
+            ("resolved", "acknowledged"),
+        ]
 
     def test_the_preview_lists_the_oldest_action_first(self, harness: Any, caplog: pytest.LogCaptureFixture) -> None:
         """The operator reads each action before the confirmation, in request order."""
@@ -698,7 +766,7 @@ class TestOutputTarget:
 
 
 class TestAlarmJoin:
-    """Issue #3339: modes 1, 2, and 4 add the Marvis alarm of each action, and mode 3 sends no alarm search."""
+    """Issue #3339 and #3357: every mode joins the Marvis alarm before its output or write step."""
 
     ALARM_VALUES = {  # The alarm columns of action 1, from the default make_alarm(1) row.
         "alarm_id": make_alarm(1)["id"],
@@ -771,14 +839,14 @@ class TestAlarmJoin:
         assert (kwargs["group"], kwargs["limit"]) == ("marvis", 1000)
         assert int(kwargs["end"]) - int(kwargs["start"]) == ALARM_MAX_WINDOW_SECONDS
 
-    def test_mode_3_sends_no_alarm_search(
+    def test_mode_3_searches_the_alarms_before_the_resolve(
         self, harness: Any, site_api: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """The resolve writes its results file only, so it needs no alarm value."""
+        """The resolve joins explicit alarm IDs before it can offer the optional acknowledge step."""
         harness(list(TestResolve.RAWS), "3", *DEFAULT_FILTERS, "", "", "RESOLVE 2")
         text = run_menu(caplog)
-        assert self.search(site_api).call_count == 0
-        assert "Marvis alarm join" not in text
+        assert self.search(site_api).call_count == 1
+        assert "Marvis alarm join: 0 of 2 exported actions have a Marvis alarm. 2 have no alarm." in text
         assert text.rstrip().endswith(RESOLVE_DONE)
 
     @pytest.mark.parametrize(

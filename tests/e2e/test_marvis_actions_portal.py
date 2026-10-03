@@ -6,7 +6,7 @@ Why:
     in prompt order. The guardrail test
     ``tests/guardrails/test_marvis_actions_portal_exposure.py`` pins the Python
     registry. These tests prove the part that the registry test cannot see: the
-    browser draws the six controls, selects the report mode first, and sends
+    browser draws the seven controls, selects the report mode first, and sends
     the answers in the order that the CLI reads them.
 
     Warning: a control that the page draws out of order moves every later
@@ -50,13 +50,14 @@ RUN_BUTTON = '[data-testid="run-btn"]'  # The Run button of the operations panel
 RUN_ROUTE_GLOB = "**/api/operations/run"  # The run request that the browser sends.
 PLACEHOLDER_OPTIONS = 1  # Each choice list starts with one "-- Select --" option.
 MODE_COUNT = 4  # The CLI offers four modes: three reports and one resolve.
-CONTROL_NAMES = (  # The six controls, in the order of the six CLI prompts.
+CONTROL_NAMES = (  # The seven controls, in the order of the seven CLI prompts.
     "marvis_mode",
     "marvis_category",
     "marvis_subcategory",
     "marvis_resolution_code",
     "marvis_comment",
     "marvis_confirmation",
+    "marvis_alarm_ack_confirmation",
 )
 STOPPED_RUN = {"error": "The browser test stopped the run before the server."}  # The canned run answer.
 
@@ -96,7 +97,7 @@ def portal_url(flask_app: Any) -> Iterator[str]:
 
 @pytest.fixture
 def marvis_page(page: Any, portal_url: str) -> Any:
-    """Return the operations page with menu 270 selected and its six controls drawn.
+    """Return the operations page with menu 270 selected and its seven controls drawn.
 
     The accordion starts collapsed. An operator expands the group before a
     selection, and this fixture performs the same steps in the same order.
@@ -108,7 +109,7 @@ def marvis_page(page: Any, portal_url: str) -> Any:
     row.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Wait for the accordion animation to end.
     row.click()  # Select the operation, which fetches its parameters.
     last_control = f"#param-{CONTROL_NAMES[-1]}"  # The page draws this control last.
-    page.wait_for_selector(last_control, state="attached", timeout=READY_TIMEOUT_MS)  # Wait for all six.
+    page.wait_for_selector(last_control, state="attached", timeout=READY_TIMEOUT_MS)  # Wait for all seven.
     logger.debug("Menu %s shows its controls", MARVIS_MENU)  # Log after the controls appear.
     return page  # Hand the prepared page to the test.
 
@@ -161,7 +162,7 @@ class TestMenu270Controls:
         assert group_count == "1", "The Marvis Actions group must hold menu 270 only."
         assert MARVIS_MENU in title, "The panel must name the selected menu number."
 
-    def test_the_panel_draws_six_controls_in_prompt_order(self, marvis_page: Any) -> None:
+    def test_the_panel_draws_seven_controls_in_prompt_order(self, marvis_page: Any) -> None:
         """FR-032. The browser sends one answer for each control, in the order of the controls."""
         script = "groups => groups.map(group => group.id)"  # Read the id of each drawn control group.
         drawn = marvis_page.eval_on_selector_all("#parameterFields > div", script)  # Read the drawn order.
@@ -178,6 +179,7 @@ class TestMenu270Controls:
             "marvis_resolution_code": RESOLUTION_CODES[0].key,
             "marvis_comment": "",
             "marvis_confirmation": "",
+            "marvis_alarm_ack_confirmation": "",
         }
         assert marvis_page.locator(RUN_BUTTON).is_enabled(), "A report run needs no comment and no confirmation."
 
@@ -209,7 +211,7 @@ class TestMenu270Controls:
         marvis_page.select_option("#param-marvis_category", "ap")  # Choose the Wireless category.
         body = send_run(marvis_page)  # Click Run and read the body that the browser sent.
         assert str(body["menu_number"]) == MARVIS_MENU
-        assert body["parameters"]["input_answers"] == ["4", "ap", "all", RESOLUTION_CODES[0].key, "", ""]
+        assert body["parameters"]["input_answers"] == ["4", "ap", "all", RESOLUTION_CODES[0].key, "", "", ""]
 
     def test_a_report_run_sends_the_answers_in_prompt_order(self, marvis_page: Any) -> None:
         """Mode 2 with one topic sends the pair key, because two categories share a subcategory key."""
@@ -225,14 +227,16 @@ class TestMenu270Controls:
             RESOLUTION_CODES[0].key,
             "",
             "",
+            "",
         ]
 
-    def test_a_resolve_run_sends_the_code_the_comment_and_the_confirmation(self, marvis_page: Any) -> None:
-        """Mode 3 reads all six answers. The comment must reach prompt 5 and the confirmation prompt 6."""
+    def test_a_resolve_run_sends_the_code_and_both_confirmations(self, marvis_page: Any) -> None:
+        """Mode 3 can read all seven answers in the same order as the CLI prompts."""
         marvis_page.select_option("#param-marvis_mode", "3")  # Choose the resolve mode.
         marvis_page.select_option("#param-marvis_resolution_code", "nonsuggested")  # Choose the "other" code.
         marvis_page.fill("#param-marvis_comment", "Bounced the switch port")  # Type the required comment.
         marvis_page.fill("#param-marvis_confirmation", "RESOLVE 2")  # Type the confirmation text.
+        marvis_page.fill("#param-marvis_alarm_ack_confirmation", "ACKNOWLEDGE 2")  # Type the second guard.
         body = send_run(marvis_page)  # Click Run and read the body that the browser sent.
         assert body["parameters"]["input_answers"] == [
             "3",
@@ -241,4 +245,5 @@ class TestMenu270Controls:
             "nonsuggested",
             "Bounced the switch port",
             "RESOLVE 2",
+            "ACKNOWLEDGE 2",
         ]

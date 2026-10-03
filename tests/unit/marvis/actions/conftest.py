@@ -235,6 +235,7 @@ def site_api() -> Iterator[MagicMock]:
         mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = FakeResponse(200, [])
         mistapi_module.get_all.return_value = [{"id": SITE_ID, "name": SITE_NAME}]
         mistapi_module.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([])  # No alarm by default.
+        mistapi_module.api.v1.orgs.alarms.ackOrgMultipleAlarms.return_value = FakeResponse(200, {})  # Accept fake ack.
         yield mistapi_module
 
 
