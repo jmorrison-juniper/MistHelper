@@ -109,7 +109,10 @@ class JourneyRecorder:
         seconds = round(time.perf_counter() - started, 3)  # Keep millisecond precision.
         number = len(self.steps) + 1  # Count the steps from one.
         path = self.folder / f"{number:02d}-{SAFE_NAME.sub('-', name.lower()).strip('-')}.png"  # The screenshot file.
-        self.page.screenshot(path=str(path), full_page=True)  # The full page, so no section hides below the fold.
+        self.page.screenshot(  # Use the fixture retry boundary once for full-page evidence.
+            path=str(path),
+            full_page=True,
+        )
         timing = self.page.evaluate(NAVIGATION_TIMING) or {}  # The browser measure of the last navigation.
         ttfb = round(float(timing["ttfb"]), 1) if timing.get("ttfb") is not None else None  # Server time.
         recorded = JourneyStep(number, name, self.page.url, seconds, str(path), ttfb)  # Join the evidence.
