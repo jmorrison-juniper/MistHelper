@@ -26,6 +26,7 @@ from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
 )  # Fake endpoint authentication.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import StreamDevice  # Fake stream device.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeConnection,
     FakeMistCloud,
     HandshakeFault,
 )  # Loopback WebSocket server.
@@ -101,6 +102,34 @@ class DropDuringSubscribeDevice:
         with self._lock:  # Protect the drop count.
             self.drop_count += 1  # Count the subscribe attempt before dropping.
         connection.drop()  # Drop before any channel_subscribed answer.
+
+
+class DropAfterSubscribeDevice:
+    """A fake stream device that drops each connection after subscription."""
+
+    def __init__(self) -> None:
+        """Build a subscribed-drop counter."""
+        self.drop_count = 0  # Tests verify that every connection completed subscription.
+        self._lock = threading.Lock()  # The fake server can call this handler from several threads.
+
+    def receive(self, connection: FakeConnection, opcode: int, payload: bytes) -> None:
+        """Confirm a subscription, then drop the connection.
+
+        Args:
+            connection: The fake WebSocket connection.
+            opcode: The frame opcode.
+            payload: The frame payload.
+        """
+        _payload_size = len(payload)  # Read the payload without exposing the channel path.
+        if opcode != 0x1:  # Subscribe frames use text frames.
+            return  # Ignore non-text frames.
+        with self._lock:  # Protect the drop count.
+            self.drop_count += 1  # Count the completed subscribe request before the drop.
+        answer = '{"event":"channel_subscribed","channel":"/sites/site-a/stats/devices"}'  # Confirm subscribe.
+        connection.send_text(answer)  # Let the client complete open() before the endpoint drops.
+        drop_timer = threading.Timer(0.005, connection.drop)  # Drop before healthy operation can occur.
+        drop_timer.daemon = True  # Do not keep the test process alive for a delayed drop.
+        drop_timer.start()  # Run the drop after the subscribe answer reaches the client.
 
 
 class StopAfterOpenClient:
@@ -217,6 +246,49 @@ class TestChannelStreamRunner:
                 assert finished == [  # Keep the retry failure result stable.
                     (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
                 ]
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_post_subscription_flapping_consumes_retry_budget(self) -> None:
+        """Fail after five subscribed connections drop before healthy operation."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = DropAfterSubscribeDevice()  # Build a device that drops after each subscription.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            delays = (0.01, 0.01, 0.01, 0.01)  # Permit four retries and five total subscribed connections.
+            endpoint = self._endpoint(cloud, reconnect_delays=delays, subscribe_timeout=0.2)  # Use short waits.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            try:  # Stop the runner after the retry-budget assertion.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the final failed state.
+                expected_attempts = len(delays) + 1  # The initial connection and all retries must subscribe.
+                assert device.drop_count == expected_attempts  # At least five subscribed connections dropped.
+                assert len(sink.live_notes) == expected_attempts  # Every dropped connection reached live state.
+                assert finished == [  # The flapping endpoint must not open connections forever.
+                    (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
+                ]
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_stable_quiet_connections_receive_fresh_retry_budgets(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Recover repeatedly when each quiet connection operates long enough."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a quiet stream device.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            endpoint = self._endpoint(cloud, reconnect_delays=(0.01, 0.01))  # Use a two-retry budget.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            monkeypatch.setattr(ChannelStreamRunner, "_HEALTHY_OPERATION_SECONDS", 0.02)  # Bound this test.
+            try:  # Stop the runner after repeated healthy recovery.
+                runner.start()  # Start the daemon reader thread.
+                for live_count in range(1, 5):  # Exceed one retry budget with healthy connections.
+                    live_notes = sink.wait_for_live(live_count, 1.0)  # Wait for the current subscription.
+                    assert len(live_notes) == live_count  # Confirm that this connection reached live state.
+                    time.sleep(0.03)  # Let the quiet connection pass the health duration.
+                    device.drop()  # Drop the healthy connection to require another recovery.
+                recovered_notes = sink.wait_for_live(5, 1.0)  # Wait for recovery after the fourth healthy drop.
+                assert len(recovered_notes) == 5  # Healthy operation renewed the retry budget each time.
+                assert sink.finished == []  # The session remains active after genuine healthy recovery.
             finally:
                 runner.stop()  # Ensure the reader thread stops.
 

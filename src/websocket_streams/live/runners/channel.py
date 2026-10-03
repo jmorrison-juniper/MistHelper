@@ -10,6 +10,7 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import logging  # The runner logs connection state without secrets.
 import threading  # The reader runs in a daemon thread.
+import time  # The monotonic clock measures stable connection operation.
 from dataclasses import dataclass, field  # Runner mutable state stays grouped.
 
 from src.websocket_streams.catalog.model import ChannelDefinition  # Channel runners need channel-only methods.
@@ -37,12 +38,14 @@ class _ChannelRunnerState:
     finish_lock: threading.Lock = field(default_factory=threading.Lock)  # Only one final state can win.
     finished: bool = False  # The first finish call wins.
     last_open_failure: str | None = None  # Retry exhaustion reports the last connection failure.
+    attempt_received_event: bool = False  # A data event proves that the current connection operated.
 
 
 class ChannelStreamRunner:
     """Drive the owned WebSocket client for one channel request."""
 
     _RETRYABLE_CLIENT_STATUSES = (408, 429)  # Mist can heal timeout and rate-limit refusals after a wait.
+    _HEALTHY_OPERATION_SECONDS = 5.0  # A quiet connection must stay stable before retries reset.
 
     def __init__(self, endpoint: MistStreamEndpoint, request: StartRequest, sink: SessionSink) -> None:
         """Build one channel runner.
@@ -79,15 +82,18 @@ class ChannelStreamRunner:
 
     def _run(self) -> None:
         """Run connection attempts until stop or final failure."""
-        failures = 0  # Failure count resets after a successful subscription.
+        failures = 0  # Failure count resets only after measurable healthy operation.
         while not self._state.stop.is_set():  # stop() ends reconnect and read loops.
+            logger.info("Opening a WebSockets channel connection attempt")  # Log before the connection action.
             result = self._connect_once()  # Open and read one connection attempt.
+            logger.debug("WebSockets channel connection attempt ended with result=%s", result)  # Log safe state.
             if result == "stopped":  # The operator stopped the runner.
                 self._finish(SessionState.STOPPED, "The operator stopped the session.")  # Keep existing stop reason.
                 return  # No reconnect after a local stop.
-            if result == "subscribed":  # A successful subscribe means future drops start a new retry budget.
-                failures = 0  # Reset failure count after the stream became live.
-                self._state.last_open_failure = None  # Post-subscribe drops use the generic retry reason.
+            if result == "healthy_drop":  # Useful data or stable operation earns a new retry budget.
+                logger.info("Resetting the WebSockets channel retry count after healthy operation")  # Log reset.
+                failures = 0  # Reset only after the connection proved that it operated.
+                logger.debug("Reset the WebSockets channel retry count")  # Confirm the state change.
             failures += 1  # Count this drop or open failure.
             if not self._wait_before_retry(failures):  # Retry budget exhausted or stop occurred.
                 return  # The helper recorded the final state when needed.
@@ -100,15 +106,23 @@ class ChannelStreamRunner:
         """
         client = StreamClient(self._endpoint, tuple(self._source_by_path))  # One client watches all channel paths.
         self._state.client = client  # stop() can close this client from another thread.
-        subscribed = False  # Drops before subscribe must count as failed opens.
+        subscribed_at: float | None = None  # Drops before subscribe cannot qualify as healthy operation.
+        self._state.attempt_received_event = False  # Each connection must prove its own healthy operation.
         try:  # Convert subscribe and read outcomes into retry state.
+            logger.info("Opening the WebSockets channel transport")  # Log before the network action.
             client.open()  # Subscribe before declaring the session live.
+            logger.debug("Opened and subscribed the WebSockets channel transport")  # Confirm subscription.
             if self._state.stop.is_set():  # A stop after subscribe must not leave a live stream.
                 return "stopped"  # The outer loop records the stopped state.
-            subscribed = True  # open() returned only after every channel subscribed.
+            subscribed_at = time.monotonic()  # Start the measurable healthy-operation interval.
+            self._state.last_open_failure = None  # A completed subscribe supersedes an older open failure.
+            logger.info("Marking the WebSockets channel session live")  # Log before the sink state change.
             self._sink.mark_live("The WebSocket connection opened.")  # The page can show the connection state.
+            logger.debug("Marked the WebSockets channel session live")  # Confirm the sink state change.
+            logger.info("Reading WebSockets channel events")  # Log before the long-running read action.
             client.run(self._on_event)  # Read until local close or drop.
-            return "stopped" if self._state.stop.is_set() else "dropped"  # A normal return after stop is local.
+            logger.debug("WebSockets channel event reading ended")  # Confirm the read action ended.
+            return "stopped" if self._state.stop.is_set() else self._drop_result(subscribed_at)  # Classify return.
         except SubscribeError as error:
             if error.detail == "timeout":  # A missing subscribe answer is an open failure that can retry.
                 logger.info("WebSockets channel subscription timed out")  # Do not log the channel path.
@@ -120,11 +134,35 @@ class ChannelStreamRunner:
         except ConnectionClosed as error:
             if not error.dropped:  # Local close is a stop.
                 return "stopped"  # The outer loop maps this to stopped.
-            return "subscribed" if subscribed else "dropped"  # Only subscribed drops reset the budget.
+            return self._drop_result(subscribed_at)  # Only healthy subscribed operation resets the budget.
         except Exception as error:
             return self._open_failure_result(error)  # Fail at once or retry, by the cause of the failure.
         finally:
+            logger.info("Closing the WebSockets channel transport attempt")  # Log before resource cleanup.
             client.close()  # Ensure each attempt releases its socket.
+            logger.debug("Closed the WebSockets channel transport attempt")  # Confirm resource cleanup.
+
+    def _drop_result(self, subscribed_at: float | None) -> str:
+        """Classify a dropped connection by its measured operation.
+
+        Args:
+            subscribed_at: The monotonic subscription completion time.
+
+        Returns:
+            "healthy_drop" after useful or stable operation, else "dropped".
+        """
+        if subscribed_at is None:  # A connection that never subscribed did not operate.
+            return "dropped"  # Preserve the retry count for an opening failure.
+        operation_seconds = time.monotonic() - subscribed_at  # Measure stable subscribed operation.
+        received_event = self._state.attempt_received_event  # Read the current attempt signal once.
+        healthy = received_event or operation_seconds >= self._HEALTHY_OPERATION_SECONDS  # Apply bounded signals.
+        logger.debug(
+            "Classified WebSockets channel drop healthy=%s operation_seconds=%.3f received_event=%s",
+            healthy,
+            operation_seconds,
+            received_event,
+        )  # Record safe health evidence.
+        return "healthy_drop" if healthy else "dropped"  # Reset retries only after measurable operation.
 
     def _open_failure_result(self, error: Exception) -> str:
         """Map one failed open to a final failure or a retry.
@@ -194,9 +232,14 @@ class ChannelStreamRunner:
         Args:
             message: The decoded stream data event.
         """
+        logger.info("Shaping a WebSockets channel data event")  # Log before the data transformation.
         kind, content, path = self._shaper.channel_message(message)  # Decode the message.
+        logger.debug("Shaped a WebSockets channel data event with kind=%s", kind)  # Log safe result metadata.
         source = self._source_by_path.get(path or "")  # Convert the path to an identifier.
+        self._state.attempt_received_event = True  # A delivered data event proves useful stream operation.
+        logger.info("Adding a WebSockets channel data event to the session")  # Log before the sink action.
         self._sink.add_message(kind, content, source=source)  # Store the page-safe message.
+        logger.debug("Added a WebSockets channel data event to the session")  # Confirm the sink action.
 
     def _finish(self, state: SessionState, reason: str) -> None:
         """Send one final state to the sink.
