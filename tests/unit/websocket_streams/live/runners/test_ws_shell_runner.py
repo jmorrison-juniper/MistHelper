@@ -118,6 +118,36 @@ def _wait_for_input_ready(session: StreamSession, timeout: float = 2.0) -> None:
     assert session.input_ready  # Report the observed state on timeout.
 
 
+class ShellLogCompletion:
+    """Wait for the reader's final outcome record before a log snapshot."""
+
+    @staticmethod
+    def inspect(caplog: pytest.LogCaptureFixture) -> tuple[bool, int]:
+        """Check one capture snapshot and return its exact measured count."""
+        records = tuple(caplog.records)
+        events = {
+            json.loads(record.getMessage()).get("event")
+            for record in records
+            if record.name == "src.websocket_streams.live.runners.shell.lifecycle.outcomes"
+        }
+        return "terminal_outcome_completed" in events, len(records)
+
+    @classmethod
+    def wait(cls, caplog: pytest.LogCaptureFixture) -> None:
+        """Require the completion record within the existing two-second bound."""
+        logger = logging.getLogger(__name__)
+        logger.info("Waiting for the shell outcome record.")
+        deadline = time.monotonic() + 2.0
+        complete, checked = cls.inspect(caplog)
+        while not complete and time.monotonic() < deadline:
+            time.sleep(0.01)
+            complete, checked = cls.inspect(caplog)
+        if not complete:
+            logger.error("Checked %d captured records. The shell outcome record is missing.", checked)
+            raise AssertionError(f"Checked {checked} captured records. The shell outcome record is missing.")
+        logger.debug("Checked %d captured records. The shell outcome record is complete.", checked)
+
+
 def _history(session: StreamSession) -> bytes:
     """Return all terminal history bytes."""
     assert session.terminal is not None  # Shell sessions always hold a terminal.
@@ -406,6 +436,7 @@ def test_shell_logs_do_not_hold_address_input_or_output(caplog: pytest.LogCaptur
         device.wait_for_input(len("SECRET-TYPED"), 2.0)  # Ensure the input was sent.
         runner.stop()  # Stop the shell.
         _wait_for_state(session, {SessionState.STOPPED})  # Wait for shutdown.
+        ShellLogCompletion.wait(caplog)  # STOPPED precedes the reader's final outcome log.
     assert cloud.base_ws_url not in caplog.text  # Logs must not hold the shell address.
     assert "/shell/default" not in caplog.text  # Logs must not hold the URL path.
     assert "SECRET-TYPED" not in caplog.text  # Logs must not hold typed text.
