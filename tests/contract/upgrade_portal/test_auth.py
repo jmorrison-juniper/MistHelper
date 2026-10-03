@@ -421,6 +421,9 @@ def test_signin_browser_refusal_shows_the_form_again(auth_client: FlaskClient, p
         SIGNIN_PATH, data={"email": PROBE_EMAIL, "password": PROBE_PASSWORD}, headers=BROWSER_HEADERS
     )
     assert response.status_code == 400  # WHY: The contract status holds for both clients.
+    assert (  # WHY: Access logs need the fixed refusal code.
+        response.headers["X-MistHelper-Refusal-Code"] == BAD_CREDENTIALS
+    )
     page = response.get_data(as_text=True)
     assert 'data-testid="signin-error"' in page  # WHY: The identifier contract names this region.
     assert PROBE_PASSWORD not in page  # WHY: FR-009 keeps the password out of the markup.

@@ -167,6 +167,7 @@ def assert_error_envelope(response: TestResponse) -> dict[str, Any]:
     assert set(body) in ALLOWED_KEY_SETS, f"The envelope holds {sorted(body)}."
     code = body["code"]
     assert isinstance(code, str) and CODE_PATTERN.match(code), f"The code {code!r} is not a lower-case word."
+    assert response.headers["X-MistHelper-Refusal-Code"] == code  # The access log must carry the same refusal code.
     message = body["message"]
     assert isinstance(message, str) and message.strip(), "The message is empty."
     assert_no_internal_detail(response)
