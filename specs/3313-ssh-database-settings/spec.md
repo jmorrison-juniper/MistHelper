@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Implemented locally. Protected delivery awaits the parent grant.
+**Status**: Refreshed locally on the accepted predecessor. Publication remains prohibited.
 
 **Input**: Repair [issue #3313](https://github.com/jmorrison-juniper/MistHelper/issues/3313).
 
@@ -108,3 +108,17 @@ The requirements define one concern and measurable outcomes.
 Each scenario has a local test plan.
 No unresolved scope decision remains.
 The app owns the branch, so this workflow uses feature-only files instead of the legacy branch and shared-state hooks.
+
+## Local Refresh Authorization
+
+The [local-only grant](https://github.com/jmorrison-juniper/MistHelper/issues/3313#issuecomment-5967867728) authorizes the original twelve paths only.
+The accepted predecessor is `18127a874259732e9e6770de027e9485388b7592`.
+Its complete tree is `203ead4ef7c0a9e51f53b459193c6b410c811732`.
+
+The original two commits remain in a verified local bundle, two patches, and an owned preservation tag.
+The migrated writer and fixtures retain their original bytes.
+No coupled fixture correction is necessary.
+The current DNS resolver, cache, constructor refusals, indexes, natural keys, and unrelated settings remain unchanged.
+
+This grant authorizes no push, pull request, Actions request, merge, branch deletion, or production action.
+The coordinator must make a separate protected publication decision.
