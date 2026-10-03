@@ -369,10 +369,13 @@ class DataExporter:  # Multi-backend export facade.
         filename_or_table: str,
         fieldnames: list[str] | None = None,
     ) -> bool:
-        """Write data to CSV format.  Pass fieldnames to preserve a specific column order."""
-        csv_filename = filename_or_table if filename_or_table.endswith(".csv") else f"{filename_or_table}.csv"
+        """Write CSV rows while preserving an existing suffix and explicit column order."""
+        csv_filename = (
+            filename_or_table if filename_or_table[-4:].lower().endswith(".csv") else f"{filename_or_table}.csv"
+        )  # Compare only the suffix so the original filename remains unchanged.
         logger.info("Writing %s rows to CSV file: %s", len(data), csv_filename)  # Log CSV write.
         DataExporter.write_to_csv(data, csv_filename, fieldnames=fieldnames)  # Thread explicit column order through
+        logger.debug("CSV write completed: rows=%s", len(data))
         return True  # CSV written.
 
     @staticmethod
