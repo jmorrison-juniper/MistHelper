@@ -167,7 +167,8 @@ FORMAT_ARGUMENT = "format"  # The query argument that names the file format of t
 ATTACHMENT_HEADER = "Content-Disposition"  # The header that makes the browser save the file.
 ATTACHMENT_PATTERN = 'attachment; filename="{name}"'  # The browser reads the name from this header.
 
-START_MESSAGE = "The portal queued the capture."  # The first panel text.
+INITIAL_MESSAGE = ""  # No capture exists before the operator starts one.
+START_MESSAGE = "The portal queued the capture."  # The first panel text after a capture starts.
 COLLECTING_MESSAGE = "The portal is reading the site."  # The panel text while the worker runs.
 NO_COLLECTOR_MESSAGE = "The portal cannot read a site yet, because the collection module is missing."  # Gap.
 FAILED_MESSAGE = "The capture stopped. Read the portal log for the cause."  # The cause stays in the log.
@@ -240,7 +241,7 @@ def blank_status(capture_id: str, tier: int) -> dict[str, Any]:
         "counts": {},
         "partial_reasons": [],
         "verified": False,
-        "message": START_MESSAGE,
+        "message": INITIAL_MESSAGE,
     }
 
 
@@ -259,6 +260,7 @@ def opening_record(job: dict[str, Any]) -> dict[str, Any]:
         The progress record.
     """
     record = blank_status(str(job["capture_id"]), int(job[TIER_FIELD]))  # The empty shape first.
+    record["message"] = START_MESSAGE  # A real capture can show that the worker is queued.
     record.update({name: job[name] for name in (TIER_FIELD, RUN_FIELD, ROLE_FIELD, "site_id")})  # Page fields.
     return record  # The poll drops the four page fields again.
 

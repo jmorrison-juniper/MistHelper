@@ -704,6 +704,7 @@
         }
         box.textContent = String(text);
         box.hidden = false;
+        box.scrollIntoView({ block: "center" });
     }
 
     /**
@@ -1024,6 +1025,8 @@
                 console.error("The capture start failed.", error && error.code, error && error.status);
                 button.disabled = false;
                 setText(button, startLabel);
+                setText(region.querySelector('[data-capture-field="state"]'), "pending");
+                setText(region.querySelector('[data-capture-field="message"]'), "");
                 showCaptureError((error && error.message) || "The capture did not start.");
                 return null;
             });
@@ -3521,6 +3524,22 @@
     }
 
     /**
+     * Restores the pre-check states that the server painted before the press.
+     *
+     * Why: A refused start creates no capture, so optimistic "queued" and
+     * "starting" text must not remain on any selected site.
+     *
+     * @param {Element} card The pre-check card.
+     * @param {Object} states The original state text by site identifier.
+     * @returns {void}
+     */
+    function restoreOrgPrecheckStates(card, states) {
+        Object.keys(states).forEach(function (siteId) {
+            setText(byTestId(ORG_PRECHECK_STATE_PREFIX + siteId, card), states[siteId]);
+        });
+    }
+
+    /**
      * Reads the state of one pre-check capture until it ends.
      *
      * Why: The start answers 202 before the capture reads the cloud. The card
@@ -3606,6 +3625,11 @@
         }
         var tierSelect = byTestId(ORG_PRECHECK_TIER_TESTID, card);  /* The tier control of the card. */
         var tier = tierSelect ? Number(tierSelect.value) : 2;  /* Tier 2 matches the single-site default. */
+        var originalStates = {};  /* Preserve server-painted states for a refused sequence. */
+        sites.forEach(function (siteId) {
+            var stateCell = byTestId(ORG_PRECHECK_STATE_PREFIX + siteId, card);
+            originalStates[siteId] = stateCell ? stateCell.textContent : "";
+        });
         paintOrgPrecheckError(card, "");  /* Clear an old refusal before a new sequence. */
         setOrgPrecheckBusy(card, true);  /* Lock both buttons while the sequence runs. */
         sites.forEach(function (siteId) {
@@ -3622,6 +3646,7 @@
             return true;
         }).catch(function (error) {
             console.error("The pre-check sequence stopped.", error && error.code, error && error.status);
+            restoreOrgPrecheckStates(card, originalStates);
             paintOrgPrecheckError(card, (error && error.message) || "The pre-check capture did not start.");
             setOrgPrecheckBusy(card, false);  /* Let the operator try again. */
             return false;
