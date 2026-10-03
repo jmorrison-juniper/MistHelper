@@ -275,6 +275,14 @@ def test_j9_copy_by_selection_on(page: Any, terminal_harness: TerminalPortalHarn
     """J9: copy by selection is on by default."""
     _open_shell(page, terminal_harness)  # Start the terminal.
     page.get_by_test_id("ws-terminal-copy-on-select").wait_for(state="attached", timeout=READY_TIMEOUT_MS)  # Setting.
+    page.wait_for_function(
+        """(selector) => {
+            const control = document.querySelector(selector); // Find the preference control.
+            return control instanceof HTMLInputElement && control.checked; // Require a checked input.
+        }""",
+        arg='[data-testid="ws-terminal-copy-on-select"]',
+        timeout=READY_TIMEOUT_MS,
+    )  # Wait for the terminal to apply the checked preference.
     checked = page.get_by_test_id("ws-terminal-copy-on-select").is_checked()  # Read default.
     _shot(page, terminal_harness, "j09-copy-on-select.png")  # Save evidence.
     assert checked is True  # The default matches the contract.
