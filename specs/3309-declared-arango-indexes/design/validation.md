@@ -1,5 +1,8 @@
 # Validation Record: Declared ArangoDB indexes
 
+The sections before the local refresh record contain the historical measurements from 2026-10-01.
+The local refresh record contains the repeated measurements on the accepted base.
+
 ## Initial evidence
 
 The issue was open, unassigned, and had no comments before the claim.
@@ -192,3 +195,148 @@ The tracked task list keeps local commit reporting and remote delivery condition
 The coordinator has not granted remote work.
 The repair must stop after its verified local commit.
 A push, pull request, protected merge, and exact-main local tests remain blocked until the explicit grant.
+
+## Local refresh on 2026-10-03 UTC
+
+The [public grant](https://github.com/jmorrison-juniper/MistHelper/issues/3309#issuecomment-5965138986) authorizes local work only.
+The accepted base is `f48f653ae6145b0ea3aa82a76ffa4c6cf86897c0`.
+Only issue #3311 and pull request #3746 hold publication permission.
+The single open pull request contains nine paths.
+None overlaps the corrected twenty-file reservation.
+The authenticated account and active issue claim remain `jmorrison-juniper`.
+
+### Exact source preservation and rebase
+
+The worktree started clean at `7da4424c8ad36941937d6462ac766cfbe730b9ad`.
+The raw commit contains exactly one parent, `ff3cc1bea8ab58026210a968ff1465f61c9fec78`.
+The exact source range contains one commit and the corrected twenty paths.
+The source, source parent, and accepted target objects are available.
+
+Git reports a shallow repository.
+The target has no traversable parent, and the initial merge-base command returned status 1.
+The session reported those facts before the rebase.
+It restored no shared history and reconstructed no patch.
+
+The local tag `preservation/3309-local-refresh-20261002-source` preserves the original source.
+The explicit rebase used this command:
+
+```bash
+rtk proxy git -c rebase.updateRefs=false -c rebase.autoStash=false rebase --no-fork-point --no-autosquash --no-autostash --onto f48f653ae6145b0ea3aa82a76ffa4c6cf86897c0 ff3cc1bea8ab58026210a968ff1465f61c9fec78
+```
+
+The rebase completed without a conflict.
+The rebased repair is `bbbaf6ec5b13fcc02f29b032ef621928dee15a12`.
+Its raw sole parent is the exact accepted base.
+The complete range comparison reports an equal patch.
+The source changes no DNS preflight code.
+The strategy catalog, configuration, natural and composite keys, documents, imports, and batch semantics remain unchanged.
+No dependency, detector, baseline, exclusion, or suppression changes.
+
+### Current offline and guide proof
+
+The repeated offline command passes 445 tests with zero failures, errors, or skips.
+Its 71 feature tests repeat failure, retry, concurrency, scope separation, native SDK responses, and record preservation.
+The remaining 374 tests cover the adjacent writer, router, schema, retention, and SQLite paths.
+The combined statement and branch coverage is 96.48 percent.
+All seven new or changed methods have zero missing statements and zero missing branches.
+The existing SQLite tests again report three unclosed-connection warnings.
+
+```bash
+rtk proxy .venv/bin/python -m pytest tests/unit/arango_indexes tests/contract/test_arango_declared_indexes.py tests/unit/test_arango_writer.py tests/unit/test_router.py tests/unit/db tests/unit/refactors/test_sqlite_database_writer.py -q --tb=short --cov=src.db.arango_writer --cov=src.db.database_schema_utils --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/refresh-index-coverage.json --cov-fail-under=90
+rtk proxy .venv/bin/python -m pytest tests/guardrails/test_wave1_safe_input_paths.py tests/guardrails/local_test_quality_loop/test_guidance.py -q --no-cov --tb=short
+rtk proxy .venv/bin/python -m pytest tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides::test_required_local_procedures -q -s --no-cov --tb=short
+```
+
+The input and guidance suite passes 452 tests with zero failures, errors, or skips.
+The direct current-guide test also passes.
+It reports six attempted inputs, six completed reads, six validations, three guide reads, and three guide checks.
+It measures two explicit paths, two automatic paths, and four effective paths.
+These measurements describe actual current inputs, not historical counts.
+
+### Current owned integration proof
+
+The original Podman capability remains available.
+The repeated integration uses the unchanged session-only compose overlay and the original issue-specific profile.
+The service starts alone with `--no-deps`.
+Its container, volume, network, and project use `misthelper-tmp-issue3309-indexes-5a6310ca`.
+The only published address is `127.0.0.1:9650`.
+The actual server reports ArangoDB `3.12.4-3`, and the current Python SDK is `8.3.5`.
+
+```bash
+rtk proxy env MISTHELPER_ISSUE3309_ARANGO_URL=http://127.0.0.1:9650 .venv/bin/python -m pytest tests/integration/test_arango_declared_indexes_live.py -q -s --no-cov --tb=short
+```
+
+Both current live tests pass with zero failures, errors, or skips.
+The real writer stores 1,001 prepared documents before index creation and 1,001 after index creation.
+The complete document comparison remains equal, excluding only server `_id` and `_rev`.
+The collection contains six total indexes, including exactly five declared non-unique persistent indexes.
+The normal optimizer changes from zero index nodes to one index node on `status`.
+The query returns exactly `["action-0"]`.
+The equal `status` request retains its identifier and returns `isNewlyCreated=False`.
+The replacement test retains one document and updates its status.
+
+The two fixtures remove two owned databases.
+The store contains only `_system` before resource cleanup.
+The session removes one exact owned container, one exact owned volume, and one exact owned network.
+Each exact-name cleanup scan returns zero resources.
+No production store, container, port, service, network, or volume is accessed.
+
+### Current configured gates
+
+The earlier command table defines the unchanged configured scopes.
+The repeated measurements are:
+
+| Gate | Current result |
+| - | - |
+| Full-root Ruff | Passed with zero findings |
+| Full-root Black | Passed across 2,044 files |
+| Exact CI mypy scope | Passed across 667 source files |
+| Syntax | Passed for the entrypoint and all nine feature Python files |
+| Bandit and separator guard | Passed across 790 files with zero findings and zero read errors |
+| Pylint | Passed with a score of 9.83 |
+| Configured Radon and complexity guard | Passed every block at the maximum of 10 |
+| Configured Vulture | Passed with zero findings at confidence 70 |
+| Configured pydocstyle | Passed |
+| Configured Interrogate | Passed with 99.6 percent coverage |
+| Citation references | Passed 251 citations with zero unresolved references |
+| Diagram references | Passed 153 references across 15 diagrams |
+| Feature Markdown links | Passed 11 files with zero broken links |
+
+Both unchanged test-quality commands pass:
+
+```bash
+rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --log-level WARNING
+rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from f48f653ae6145b0ea3aa82a76ffa4c6cf86897c0 --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt --log-level WARNING
+```
+
+The full command checks 1,021 files, analyzes 973 modules, and compares 725 existing findings.
+It reports zero new findings, zero parse errors, and 48 declared skips.
+The committed command analyzes all five feature test modules with zero findings and zero parse errors.
+That scope includes the native SDK contract module and the live integration module.
+Its two skip records describe omitted full-suite roots, not an excluded native module or skipped test.
+
+The normal runtime audit again aborts during temporary macOS interpreter setup.
+It performs no audit and receives no passing status.
+The approved complete hashed resolution and strict audit both succeed:
+
+```bash
+rtk proxy env UV_NATIVE_TLS=1 UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv pip compile requirements.txt --python .venv/bin/python --generate-hashes --output-file /Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/refresh-runtime-audit-requirements.txt --quiet
+rtk proxy .venv/bin/pip-audit -r /Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/refresh-runtime-audit-requirements.txt --no-deps --disable-pip --strict --format json --output /Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/refresh-pip-audit-runtime.json
+```
+
+The current resolution contains 105 exact pins and 2,177 SHA-256 hashes.
+The strict audit checks 105 packages, skips zero packages, and reports zero known vulnerabilities.
+The Git-only development tools remain outside this runtime audit.
+The manifests and configured policies remain unchanged.
+
+The configured STE heuristics pass all twenty feature files with scores from 92 through 98.
+The report retains `dictionary_unavailable`, `scope=partial`, and `unintended_skip=false`.
+No licensed dictionary coverage is claimed.
+
+### Local-only delivery state
+
+The local evidence update changes only this validation record and the existing feature task record.
+The corrected twenty-file boundary remains unchanged.
+The production patch remains equivalent to the preserved source.
+Publication still requires the actual accepted predecessor after #3311 and a separate full-SHA publication grant.
+No push, pull request, Actions run, merge, dispatch, production write, DNS migration, or next-owner release occurs.
