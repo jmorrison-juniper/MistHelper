@@ -819,11 +819,7 @@ def _build_version_option_row(
     model = str(device.get("model", "")).strip()
     device_type = str(device.get("type", "")).strip().lower()
     versions = sorted(
-        {
-            _normalized_version(version)
-            for version in by_model.get(model, ())
-            if _normalized_version(version)
-        },
+        {_normalized_version(version) for version in by_model.get(model, ()) if _normalized_version(version)},
         key=_numeric_version_key,
         reverse=True,
     )
