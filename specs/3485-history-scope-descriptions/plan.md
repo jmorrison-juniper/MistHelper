@@ -72,6 +72,10 @@ Pre-existing directory debt remains separate.
 The browser journey uses the native owner fixture without importing another conftest module.
 Its correctness does not depend on screenshots, traces, or video.
 The shared strict package guard still controls required browser collection.
+The organization audit can be empty or contain the existing native take and release.
+The owned validator accepts only those exact states and rejects seven invalid variants.
+The decision proof uses a private copy of actual rendered elements.
+It changes no server record, global fixture, or owner input.
 
 ## Project Structure
 

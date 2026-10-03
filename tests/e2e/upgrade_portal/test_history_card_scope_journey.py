@@ -105,6 +105,142 @@ class HistoryEvidence:
         NAME = "E2E Stored Poll Site"
         CAPTURE_ID = "e2e-capture-stored-poll-0001"
 
+    class AuditTrail:
+        """Describe the exact native take and release of the selected organization."""
+
+        ORG_ID = "11111111-1111-1111-1111-111111111111"
+        ROWS = [
+            ["34983498-3498-3498-3498-349834983498", "release", "ef9f811c166805f7", ""],
+            ["34983498-3498-3498-3498-349834983498", "take", "ef9f811c166805f7", ""],
+        ]
+        ROW_IDS = ["history-audit-row-1", "history-audit-row-2"]
+        EMPTY_TEXT = "This page shows no site lock action for the selected organization."
+
+    @staticmethod
+    def organization_audit(page: Page) -> str:
+        """Require the exact empty state or the two known native scoped events."""
+        logger.info("Verify the selected organization audit state")
+        scope = page.locator("[data-run-bulk-controls]").get_attribute("data-organization-id")
+        assert scope == HistoryEvidence.AuditTrail.ORG_ID
+        table = page.get_by_test_id("history-audit-table")
+        rows = table.locator('[data-testid^="history-audit-row-"]')
+        actual = [
+            [" ".join(text.split()) for text in row.locator(":scope > td").all_text_contents()] for row in rows.all()
+        ]
+        empty = page.get_by_test_id("history-audit-empty")
+        assert "e2e.operator@example.invalid" not in table.inner_html()
+        if not actual:
+            sync_api.expect(empty).to_have_text(HistoryEvidence.AuditTrail.EMPTY_TEXT)
+            sync_api.expect(table.locator("tbody tr")).to_have_count(1)
+            logger.debug("Verified the organization audit empty state with zero rows")
+            return "empty"
+        sync_api.expect(empty).to_have_count(0)
+        assert actual == HistoryEvidence.AuditTrail.ROWS
+        assert [row.get_attribute("data-testid") for row in rows.all()] == HistoryEvidence.AuditTrail.ROW_IDS
+        logger.debug("Verified the organization audit populated state with two scoped rows")
+        return "populated"
+
+    class AuditProof:
+        """Check both exact decisions on a private copy of the real rendered audit elements."""
+
+        DISPLAY_SCRIPT = """
+        (table, values) => {
+          document.querySelector('[data-run-bulk-controls]').dataset.organizationId = values.org;
+          const body = table.querySelector('tbody');
+          body.replaceChildren();
+          if (values.rows.length === 0) {
+            const row = body.insertRow();
+            const cell = row.insertCell();
+            cell.colSpan = 5;
+            cell.dataset.testid = 'history-audit-empty';
+            cell.textContent = values.empty;
+            return;
+          }
+          values.rows.forEach((cells, index) => {
+            const row = body.insertRow();
+            row.dataset.testid = `history-audit-row-${index + 1}`;
+            const moment = document.createElement('th');
+            moment.scope = 'row';
+            moment.textContent = '2026-09-03 10:00 UTC';
+            row.append(moment);
+            cells.forEach(value => { row.insertCell().textContent = value; });
+          });
+        }
+        """
+
+        MUTATION_SCRIPT = """
+        values => {
+          const rows = document.querySelectorAll('[data-testid^="history-audit-row-"]');
+          if (values.kind === 'extra') {
+            const extra = rows[0].cloneNode(true);
+            extra.dataset.testid = 'history-audit-row-3';
+            rows[0].parentElement.append(extra);
+          } else if (values.kind === 'missing') {
+            rows[0].remove();
+          } else if (values.kind === 'organization') {
+            document.querySelector('[data-run-bulk-controls]').dataset.organizationId = values.value;
+          } else {
+            const columns = {site: 0, action: 1, digest: 2, previous: 3};
+            const column = columns[values.kind];
+            if (column === undefined) { throw new Error('Unknown audit proof mutation.'); }
+            rows[0].querySelectorAll(':scope > td')[column].textContent = values.value;
+          }
+        }
+        """
+
+        @classmethod
+        def verify(cls, page: Page) -> dict[str, object]:
+            """Prove two accepted states and seven rejected variants without changing server data."""
+            logger.info("Check both organization audit branches and invalid variants")
+            fragment = "".join(
+                page.locator(selector).evaluate("node => node.outerHTML")
+                for selector in ("[data-run-bulk-controls]", '[data-testid="history-audit-table"]')
+            )
+            proof = page.context.new_page()
+            try:
+                proof.set_content(fragment)
+                states = []
+                for state in ("empty", "populated"):
+                    cls.display(proof, state)
+                    states.append(HistoryEvidence.organization_audit(proof))
+                rejected = cls.rejections(proof)
+                logger.debug("Checked %s audit branches and %s invalid variants", len(states), rejected)
+                return {"states": states, "rejected": rejected}
+            finally:
+                proof.close()
+
+        @classmethod
+        def display(cls, page: Page, state: str) -> None:
+            """Change only the private proof document and keep its real caption."""
+            rows = [] if state == "empty" else HistoryEvidence.AuditTrail.ROWS
+            page.get_by_test_id("history-audit-table").evaluate(
+                cls.DISPLAY_SCRIPT,
+                {
+                    "rows": rows,
+                    "org": HistoryEvidence.AuditTrail.ORG_ID,
+                    "empty": HistoryEvidence.AuditTrail.EMPTY_TEXT,
+                },
+            )
+
+        @classmethod
+        def rejections(cls, page: Page) -> int:
+            """Reject extra or missing events and each incorrect scoped event field."""
+            variants = (
+                ("extra", ""),
+                ("missing", ""),
+                ("organization", "foreign-organization"),
+                ("site", "foreign-site"),
+                ("action", "takeover"),
+                ("digest", "0000000000000000"),
+                ("previous", "unexpected-previous-holder"),
+            )
+            for kind, value in variants:
+                cls.display(page, "populated")
+                page.evaluate(cls.MUTATION_SCRIPT, {"kind": kind, "value": value})
+                with pytest.raises(AssertionError):
+                    HistoryEvidence.organization_audit(page)
+            return len(variants)
+
     @staticmethod
     def single_site_runs(page: Page) -> None:
         """Require the same eight run identifiers, not only eight arbitrary rows."""
@@ -160,9 +296,8 @@ class TestHistoryCardScopeJourney:
             "org-run-e2e-reconcile-0001",
             "org-run-e2e-retry-0001",
         ]
-        sync_api.expect(page.get_by_test_id("history-audit-empty")).to_have_text(
-            "This page shows no site lock action for the selected organization."
-        )
+        HistoryEvidence.organization_audit(page)
+        assert HistoryEvidence.AuditProof.verify(page) == {"states": ["empty", "populated"], "rejected": 7}
 
     def test_unnamed_empty_site_ignores_a_query_display_name(self, page: Page, e2e_test_run_id: str) -> None:
         """An unmatched site names the selected-site scope rather than a caller-supplied name."""

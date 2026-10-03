@@ -50,3 +50,10 @@ The parent grants sole delivery on `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`.
 The native browser fixture passes the required journey with trace, screenshot, and video options off.
 Strict full collection preserves all 600 accepted CI cases and adds the three required history cases.
 The current import and owner guard checks pass 37 cases, including their negative decisions.
+
+The first complete CI execution exposed an owned test assumption, not a production description failure.
+The preserved `2005` head fails only the populated-organization audit expectation.
+The correction retains all audit assertions and permits only exact empty or known native event states.
+Both decisions run explicitly, and seven invalid event variants fail.
+Complete local execution passes 551 cases with 52 exact baseline skips and no failure.
+All 603 case identifiers remain unchanged.

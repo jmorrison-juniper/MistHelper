@@ -96,7 +96,7 @@ This limitation does not reduce the complete runtime graph audit.
 AST comparisons confirm that 66 other route and reader bodies remain unchanged.
 Only the history page context wiring changes.
 The complete existing scope class remains unchanged.
-All 35 new test methods obey the 25-line and five-parameter limits.
+All 39 new test methods obey the 25-line and five-parameter limits.
 The symbol comparison reports no lost module-level name.
 It reports the genuine `HistoryCardDescription` and `HistoryCardScope` additions.
 The new module also imports `annotations` and `dataclass`.
@@ -127,3 +127,39 @@ Run the changed-scope command on clean committed content against the intended cu
 Its current local equivalent uses the granted immutable SHA and both configured full-gate paths.
 Use the default command, without scope controls, for the complete suite.
 No guide, baseline, exclusion, dictionary, or dependency change is necessary.
+
+## Complete CI ordering proof
+
+The first published head is `2005e25c79a9acda8b4cb468bee78434f7d5857b`.
+Its full CI run completes 550 passing cases, 52 existing skips, and one owned failure.
+The unchanged local reproduction has the same result across all 603 cases.
+The failure is not a runner timeout.
+Earlier audit-isolation cases correctly add two selected-organization audit records.
+The populated organization case incorrectly required an empty audit table.
+
+The correction changes only the owned browser test and these evidence records.
+It keeps exact capture, run, and operation identifiers and all scope notes and accessible captions.
+The audit validator reads real cells and the actual selected organization binding.
+It requires the exact empty statement or exactly the native release and take rows.
+Those rows name site `34983498-3498-3498-3498-349834983498`, digest `ef9f811c166805f7`, and no previous holder.
+No extra or foreign row is accepted.
+
+The existing organization case explicitly exercises both decisions on a private copy of real rendered elements.
+Seven controlled variants must fail.
+They cover extra rows, missing rows, wrong organization, wrong site, wrong action, wrong digest, and unexpected previous-holder data.
+The proof closes its own additional page.
+It resets no global history and changes no owner input, backend, fixture, source, or timeout.
+
+The corrected history selection passes all 35 cases without a skip.
+The complete corrected CI scope passes 551 cases with 52 existing skips and no failure or error.
+All 603 case identifiers match the failed run.
+All 52 skipped identifiers match the exact approved-main run `37076793737`.
+The comparison retains spaces inside parameter identifiers.
+No required new case skips.
+
+The real native history-only run proves the empty organization audit state.
+The real complete run proves the populated state with both exact native records.
+Both runs retain strict guards and trace, screenshot, and video options off.
+The repeated 970 focused cases and 37 guard cases pass.
+The new production model still covers all 33 statements and both branches.
+All production, harness, policy, dependency, baseline, and exclusion bytes remain unchanged from the first published head.

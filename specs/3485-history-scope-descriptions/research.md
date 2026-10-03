@@ -49,6 +49,24 @@ The browser fixture supplies a named site with no run or operation and a populat
 **Alternatives considered**: Replacing complete readers would weaken the organization evidence.
 Changing the shared browser fixture would conflict with another reserved repair.
 
+## Shared audit history
+
+**Decision**: Retain exact empty assertions and validate the two known native organization audit events.
+
+**Rationale**: The full CI scope runs the existing audit-isolation journey before the owned organization history case.
+That journey records a take and release for site `34983498-3498-3498-3498-349834983498`.
+The selected organization therefore has two valid audit rows.
+The history-only selection has no preceding audit journey and correctly shows the empty statement.
+
+The owned case reads actual rendered cells, row identifiers, and the selected organization binding.
+It also tests both decisions on a private copy of those real rendered elements.
+Seven controlled variants reject extra or missing rows and incorrect organization, site, action, digest, or previous-holder data.
+No server record, owner input, global fixture, source reader, or timeout changes.
+
+**Alternatives considered**: Removing audit assertions would lose the empty contract.
+Accepting arbitrary rows would weaken scope and privacy evidence.
+Resetting shared history would change the behavior of the original 600 cases.
+
 ## Local capability limits
 
 The Bash SpecKit plan script is absent.
