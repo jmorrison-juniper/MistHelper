@@ -93,3 +93,32 @@ Wait for the parent grant before a push or pull request.
 After the grant, rebase onto that exact `main` revision and repeat the local gates.
 Use the full pull request template and the protected exact-head squash merge.
 Run the relevant local tests against the actual merged `main` SHA in this isolated worktree.
+
+## Local Refresh on 2026-10-03
+
+The [local-only grant](https://github.com/jmorrison-juniper/MistHelper/issues/3313#issuecomment-5967867728) limits this phase to local refresh.
+Preserve the original range ending at `0970aad563681ca601ec49837f9ba123d8ba1038`.
+Use the accepted predecessor `18127a874259732e9e6770de027e9485388b7592`.
+Set `rebase.updateRefs=false` for the bounded migration.
+Do not restore shared history or move a peer reference.
+
+The migration has no conflict.
+Every original reserved-path byte remains equal before the evidence refresh.
+The fresh configuration and SSH export probes pass without a fixture correction.
+Keep the existing synthetic discovery and backend boundaries.
+Do not add another bypass or modify production database code.
+
+Run the current DNS, constructor, index, natural-key, writer, output, and refusal tests.
+Run the native guide and analyzer behavior suite.
+Run the required six-input preflight before each quality analyzer command.
+Compare every field of all complete findings against the preserved report.
+Do not modify the baseline, detector, exclusion, or threshold.
+
+Prepare the current 23-item pull request template as a session artifact only.
+Record exact commands, current results, and missing capabilities.
+Preserve historical red evidence separately from current green evidence.
+Commit the evidence locally and verify the exact source, tree, lineage, and twelve-path boundary.
+Then pause for the coordinator.
+
+The earlier protected delivery plan remains conditional.
+This local-only grant authorizes none of its remote steps.

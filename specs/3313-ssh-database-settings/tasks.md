@@ -30,3 +30,18 @@
 - [ ] T013 Rebase, repeat local gates, push once, and use the complete pull request template.
 - [ ] T014 Verify every required check, the protected exact-head merge, and the actual merged `main` SHA.
 - [ ] T015 Run the exact-main local tests and report their results.
+
+These remote steps remain held.
+The 2026-10-03 grant authorizes local refresh only, not protected publication.
+
+## Local Refresh Only
+
+- [x] R001 Read and verify the complete 4,049-byte grant and accepted predecessor.
+- [x] R002 Preserve the original two commits, historical analysis, and original quality evidence separately.
+- [x] R003 Migrate only this branch with `rebase.updateRefs=false` and no conflict.
+- [x] R004 Verify the original writer and fixture bytes and confirm that no coupled correction is necessary.
+- [x] R005 Run the current writer, authenticated SSH, DNS, constructor, index, natural-key, output, and refusal tests.
+- [x] R006 Run current compile, lint, format, exact CI types, required input preflight, and native quality behavior.
+- [x] R007 Preserve every field of all 725 existing findings without a baseline or policy change.
+- [x] R008 Refresh the local evidence and current offline 23-item template with exact results and honest limits.
+- [x] R009 Commit locally, verify the source, tree, lineage, and twelve-path boundary, then report and pause.
