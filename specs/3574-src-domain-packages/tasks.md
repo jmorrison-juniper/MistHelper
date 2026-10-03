@@ -32,7 +32,7 @@
 - [ ] T016 Run `symbol-diff` for every moved Python module.
 - [x] T017 Run the focused test groups.
 - [ ] T018 Run both required `pytest-chunks` sweep commands.
-- [x] T019 Run SpecKit analysis and repair each finding.
+- [ ] T019 Run SpecKit analysis and repair each finding.
 
 ## Phase 6: Delivery
 
