@@ -130,7 +130,13 @@ def test_phase_services_install_without_legacy_mistapi(monkeypatch) -> None:
     wiring._install_settle_gate_service(application)
     wiring._install_comparison_service(application)
 
-    assert application.config["CAPTURE_SERVICE"] is not None
-    assert application.config["UPGRADE_SERVICE"] is not None
-    assert application.config["SETTLE_GATE_SERVICE"] is not None
-    assert application.config["COMPARISON_SERVICE"] is not None
+    assert {
+        "CAPTURE_SERVICE",
+        "UPGRADE_SERVICE",
+        "SETTLE_GATE_SERVICE",
+        "COMPARISON_SERVICE",
+    }.issubset(application.config)
+    loaded[wiring.CAPTURE_SERVICE_MODULE].CaptureService.assert_called_once()
+    loaded[wiring.UPGRADE_SERVICE_MODULE].UpgradeService.assert_called_once()
+    loaded[wiring.SETTLE_GATE_SERVICE_MODULE].SettleGateService.assert_called_once()
+    loaded[wiring.COMPARISON_SERVICE_MODULE].ComparisonService.assert_called_once()
