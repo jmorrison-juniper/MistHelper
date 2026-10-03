@@ -118,6 +118,7 @@ class TestPersist:
         OrgCradlepointConnectionExporter._persist([], "OrgCradlepointConnection_x.csv")
 
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert not mist_helper.DataExporter.write_with_format_selection.called  # Empty rows must not trigger a write.
 
 
 class TestStatusMenu:
@@ -133,6 +134,15 @@ class TestStatusMenu:
             OrgCradlepointConnectionExporter.status()
 
         mist_helper.DataExporter.write_with_format_selection.assert_called_once()
+        assert (
+            len(mist_helper.DataExporter.write_with_format_selection.call_args.args[0]) == 1
+        )  # The valid response must produce one row.
+        assert (
+            mist_helper.DataExporter.write_with_format_selection.call_args.args[0][0]["org_id"] == ORG_ID
+        )  # The row must identify its organization.
+        assert (
+            mist_helper.DataExporter.write_with_format_selection.call_args.args[0][0]["last_status"] == "active"
+        )  # The row must retain the returned status.
 
     def test_http_200_configuration_error_is_exported(self, mist_helper: MagicMock) -> None:
         """A valid HTTP 200 status can report its own Cradlepoint configuration error."""
@@ -156,6 +166,7 @@ class TestStatusMenu:
             OrgCradlepointConnectionExporter.status()
 
         call.assert_not_called()
+        assert call.call_count == 0  # An empty organization must stop before the API call.
 
     def test_an_empty_body_writes_nothing(self, mist_helper: MagicMock) -> None:
         """A body that is not a dict is legitimate, so nothing is written."""
@@ -167,6 +178,7 @@ class TestStatusMenu:
             OrgCradlepointConnectionExporter.status()
 
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert not mist_helper.DataExporter.write_with_format_selection.called  # Missing data must not trigger a write.
 
     def test_an_sdk_error_never_escapes(self, mist_helper: MagicMock) -> None:
         """A network failure must return to the menu, not end the session."""
@@ -178,6 +190,7 @@ class TestStatusMenu:
             OrgCradlepointConnectionExporter.status()
 
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert not mist_helper.DataExporter.write_with_format_selection.called  # Failed requests must not write.
 
     @pytest.mark.parametrize("status_code", [403, 503])
     def test_http_refusal_response_is_rejected_before_export(
