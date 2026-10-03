@@ -1019,7 +1019,7 @@ flowchart LR
 
 ## Menu 236
 
-- Title: Run any site-scoped Mist count endpoint (33 operations)
+- Title: Run any site-scoped Mist count endpoint (32 operations)
 - Handler: `CountExporter.site_counts`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 33
@@ -1316,7 +1316,7 @@ flowchart LR
 
 ## Menu 260
 
-- Title: Run any org-scoped Mist get or list endpoint (55 operations)
+- Title: Run any org-scoped Mist get or list endpoint (56 operations)
 - Handler: `SimpleEndpointExporter.org_endpoints`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 55
@@ -1400,7 +1400,7 @@ flowchart LR
 
 ## Menu 261
 
-- Title: Run any site-scoped simple Mist read endpoint (58 operations)
+- Title: Run any site-scoped simple Mist read endpoint (57 operations)
 - Handler: `SimpleEndpointExporter.site_endpoints`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 57
