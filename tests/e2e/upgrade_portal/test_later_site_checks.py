@@ -390,8 +390,11 @@ class TestSingleSiteLaterChecks:
         sync_api.expect(start).to_have_text(label)  # The label returns to its first text.
         state = page.locator('[data-capture-field="state"]').first.inner_text()  # The state after the refusal.
         logger.info("The capture state after the refusal reads %s", state)  # Evidence for the visual review.
+        assert state == "pending"  # A refused start leaves no capture in progress.
+        assert page.locator('[data-capture-field="message"]').first.inner_text() == ""  # No capture was queued.
         in_view = page.get_by_test_id("capture-error").evaluate(IN_VIEW_SCRIPT)  # Where the operator looks.
         logger.info("The capture refusal is in the visible part of the page: %s", in_view)  # Evidence.
+        assert in_view  # The refusal must be visible without a manual scroll.
         assert JourneyEvidence.screenshot(page, "single-site-capture-refused.png").exists()  # The refusal.
         assert JourneyEvidence.screenshot(page, "single-site-capture-refused-visible.png", False).exists()
         JourneyEvidence.lose_page(page, False)  # The cloud answers both pages again.
@@ -480,6 +483,7 @@ class TestMultiSiteLaterChecks:
         sync_api.expect(page.get_by_test_id("org-upgrade-precheck-missing")).to_be_enabled()  # A second try.
         state = page.get_by_test_id(f"org-upgrade-precheck-state-{WEST_ID}").inner_text()  # After the refusal.
         logger.info("The pre-check state of West after the refusal reads %s", state)  # Evidence for the review.
+        assert state == "missing"  # A refused start leaves no capture for the site.
         in_view = page.get_by_test_id("org-upgrade-precheck-error").evaluate(IN_VIEW_SCRIPT)  # Where it shows.
         logger.info("The pre-check refusal is in the visible part of the page: %s", in_view)  # Evidence.
         assert JourneyEvidence.screenshot(page, "multi-site-precheck-refused.png").exists()  # The refusal.
