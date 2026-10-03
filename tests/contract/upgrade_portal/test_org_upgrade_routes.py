@@ -886,6 +886,27 @@ def test_reference_site_entries_use_root_totals() -> None:
     assert summary["site_upgrades"][0]["id"] == SITE_UPGRADE_ID
 
 
+def test_rejected_child_targets_count_as_failed_devices() -> None:
+    """A rejected child counts every target as failed when Mist created no job."""
+    summary = org_upgrade.aggregate_summary(
+        {
+            "operation_id": UPGRADE_ID,
+            "state": "failed",
+            "children": [
+                {
+                    "child_id": "rejected-gateway",
+                    "status": "rejected",
+                    "target_ids": ["gateway-1"],
+                    "targets": [{"mac": "gateway-1"}],
+                    "status_data": {},
+                }
+            ],
+        }
+    )
+    assert summary["failed_count"] == 1
+    assert summary["children"][0]["failed"] == 1
+
+
 def test_status_page_and_api_preserve_site_progress(
     org_upgrade_client: FlaskClient,
     org_service: OrgUpgradeServiceStandIn,

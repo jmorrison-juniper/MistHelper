@@ -200,6 +200,16 @@ def test_the_radio_controls_reach_the_confirm_page(page: Any) -> None:
     assert save_screenshot(page, "radio-confirm.png").exists()  # The summary before the typed word.
 
 
+def test_big_bang_hides_and_disables_the_failure_percentage(page: Any) -> None:
+    """Big bang hides the failure percentage and prevents the browser from submitting it."""
+    open_org_options(page)  # Open the multi-site form.
+    page.get_by_test_id("org-strategy-big_bang").check()  # Choose the strategy that ignores the field.
+    field = page.get_by_test_id("org-upgrade-max-failure-percentage-field")  # Locate the unused field directly.
+    assert field.is_hidden()  # Confirm Big bang hides the unused field.
+    failures = page.get_by_test_id("org-upgrade-max-failures")  # Locate the disabled input directly.
+    assert failures.is_disabled()  # Confirm the browser cannot submit the unused value.
+
+
 def test_each_advanced_control_follows_the_device_types(page: Any) -> None:
     """Each advanced control shows only for a device type that reads it."""
     open_org_options(page)  # Open the multi-site form with every device type checked.

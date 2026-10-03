@@ -62,6 +62,15 @@ def panel_lists(page: Any) -> dict[str, tuple[list[str], list[str], list[str]]]:
     return lists  # The caller compares every list at one time.
 
 
+def expect_rejected_gateway_count(page: Any) -> None:
+    """Assert that the aggregate and child rows count the rejected gateway."""
+    failed = page.locator('[data-org-upgrade-field="failed_count"]')  # Read the aggregate failed count.
+    sync_api.expect(failed).to_have_text("1")  # Count the gateway that the cloud rejected before job creation.
+    table = page.get_by_test_id("org-upgrade-site-progress")  # Read the child rows that explain the aggregate.
+    gateway = table.locator("tbody tr").filter(has_text="The cloud answered status 400.")  # Find the refused row.
+    sync_api.expect(gateway.locator("td").nth(4)).to_have_text("1")  # Keep the child failed count consistent.
+
+
 class TestMultiSiteCancelOutcomes:
     """Cancel a running multi-site operation, and read the three lists of each child job."""
 
@@ -76,6 +85,7 @@ class TestMultiSiteCancelOutcomes:
         sync_api.expect(page.get_by_test_id("org-upgrade-cancel")).to_be_enabled()
         page.get_by_test_id("org-upgrade-cancel").click()
         sync_api.expect(page.get_by_test_id("org-cancel-outcome")).to_be_visible()  # The redirect shows the panel.
+        expect_rejected_gateway_count(page)  # The rejected child must not produce a failed count of zero.
         assert panel_lists(page) == EXPECTED_LISTS  # Each device sits in one list.
         gateway_note = page.get_by_test_id(f"org-cancel-outcome-note-{CHILD_IDS['gateway']}")
         sync_api.expect(gateway_note).to_have_text(NEVER_STARTED)  # The refused child job has no cloud job.
@@ -88,6 +98,7 @@ class TestMultiSiteCancelOutcomes:
         page.screenshot(path=str(tmp_path / "cancel-after.png"), full_page=True)
         page.reload(wait_until="domcontentloaded")
         sync_api.expect(page.get_by_test_id("org-cancel-outcome")).to_be_visible()
+        expect_rejected_gateway_count(page)  # The stored record must preserve the corrected counts.
         assert panel_lists(page) == EXPECTED_LISTS  # The stored record keeps the same lists.
         sync_api.expect(page.get_by_test_id(f"org-upgrade-retry-held-device-{SECOND_AP_MAC}")).to_be_visible()
         page.screenshot(path=str(tmp_path / "cancel-reload.png"), full_page=True)
