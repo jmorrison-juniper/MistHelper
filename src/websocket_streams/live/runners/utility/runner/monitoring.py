@@ -124,35 +124,36 @@ class UtilityStreamMonitor:
 class UtilityFinisher:
     """Map utility results to stable session outcomes."""
 
+    @dataclass(frozen=True, slots=True)
+    class Outcome:
+        """Hold the terminal decision before cleanup starts."""
+
+        state: SessionState
+        reason: str
+
     context: RunContext
 
-    def finish(self, started: float, completed: float) -> None:
-        """Finish after normal monitoring ends."""
+    def decide(self, started: float, completed: float) -> UtilityFinisher.Outcome:
+        """Freeze the normal decision at the original completion point."""
         if self.context.state.stopping.is_set():
-            self.stopped()
-            return
+            return self.Outcome(SessionState.STOPPED, "The operator stopped the session.")
         if self.context.state.output_count == 0:
             reason = (
                 "The device sent no output before the time limit. "
                 "Check that the device is connected, then try again."
             )
-            self.context.sink.finish(SessionState.TIMED_OUT, reason)
-            return
-        self.context.sink.finish(SessionState.FINISHED, self._reason(started, completed))
+            return self.Outcome(SessionState.TIMED_OUT, reason)
+        return self.Outcome(SessionState.FINISHED, self._reason(started, completed))
 
-    def stopped(self) -> None:
-        """Finish after an operator stop."""
-        logger.emit(logging.INFO, "utility_runner_stopped")
-        self.context.sink.finish(SessionState.STOPPED, "The operator stopped the session.")
-
-    def failure(self, reason: str) -> None:
-        """Finish with one safe failure reason."""
-        logger.emit(logging.WARNING, "utility_runner_failed", {"status": "failed", "detail": reason})
-        self.context.sink.finish(SessionState.FAILED, reason)
-
-    def error(self, error: Exception) -> None:
-        """Map one run exception to a safe final state."""
-        UtilityErrorFinisher(self.context, self).finish(error)
+    def finish(self, outcome: UtilityFinisher.Outcome) -> None:
+        """Publish one immutable decision after cleanup resolves."""
+        logger.emit(logging.INFO, "utility_terminal_publish", {"status": outcome.state.value, "count": 1})
+        if outcome.state == SessionState.STOPPED:
+            logger.emit(logging.INFO, "utility_runner_stopped")
+        elif outcome.state == SessionState.FAILED:
+            logger.emit(logging.WARNING, "utility_runner_failed", {"status": "failed", "detail": outcome.reason})
+        self.context.sink.finish(outcome.state, outcome.reason)
+        logger.emit(logging.DEBUG, "utility_terminal_published", {"status": outcome.state.value, "count": 1})
 
     def _reason(self, started: float, completed: float) -> str:
         """Return the normal completion reason."""
@@ -170,19 +171,16 @@ class UtilityErrorFinisher:
     """Map one utility exception to a safe session outcome."""
 
     context: RunContext
-    finisher: UtilityFinisher
 
-    def finish(self, error: Exception) -> None:
-        """Finish one expected or unexpected error."""
+    def decide(self, error: Exception) -> UtilityFinisher.Outcome:
+        """Freeze one expected or unexpected error before cleanup."""
         if self.context.state.stopping.is_set():
-            self.finisher.stopped()
-            return
+            return UtilityFinisher.Outcome(SessionState.STOPPED, "The operator stopped the session.")
         reason = self._reason(error)
         if reason is not None:
-            self.finisher.failure(reason)
-            return
+            return UtilityFinisher.Outcome(SessionState.FAILED, reason)
         logger.emit(logging.ERROR, "utility_runner_crash", {"detail": type(error).__name__, "status": "failed"})
-        self.context.sink.finish(SessionState.FAILED, "The utility failed. Read the portal log for the cause.")
+        return UtilityFinisher.Outcome(SessionState.FAILED, "The utility failed. Read the portal log for the cause.")
 
     @staticmethod
     def _reason(error: Exception) -> str | None:

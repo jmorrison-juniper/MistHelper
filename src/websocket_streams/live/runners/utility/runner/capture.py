@@ -73,9 +73,10 @@ class CaptureStopper:
 class CaptureCleanup:
     """Choose capture cleanup from one completed run."""
 
-    def __init__(self, context: RunContext) -> None:
+    def __init__(self, context: RunContext, stopped: bool) -> None:
         """Store the run context."""
         self._context = context
+        self._stopped = stopped
 
     def stop_if_needed(self) -> None:
         """Stop a matching capture after an operator stop."""
@@ -96,7 +97,7 @@ class CaptureCleanup:
     def _target(self) -> tuple[str, str] | None:
         """Return the stopped capture scope and identifier."""
         trigger = self._context.state.trigger
-        if not self._context.state.stopping.is_set() or trigger is None:
+        if not self._stopped or trigger is None:
             return None
         capture_id = (self._context.state.answer or {}).get("id") if trigger.listen.channel != "cmd" else None
         if not isinstance(capture_id, str):

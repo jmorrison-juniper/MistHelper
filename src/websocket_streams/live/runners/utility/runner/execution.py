@@ -13,11 +13,13 @@ from src.websocket_streams.intake.fields.error import StreamRequestError
 from src.websocket_streams.live.runners.utility.filters.message_filter import UtilityMessageFilter
 from src.websocket_streams.live.runners.utility.runner.capture import CaptureCleanup
 from src.websocket_streams.live.runners.utility.runner.monitoring import (
+    UtilityErrorFinisher,
     UtilityFinisher,
     UtilityOutput,
     UtilityStreamMonitor,
 )
 from src.websocket_streams.live.runners.utility.triggers.models import UtilityRequest
+from src.websocket_streams.live.sessions.record.state import SessionState
 from src.websocket_streams.live.transport.runtime.logging.structured_logger import (
     StructuredTransportLogger,
 )
@@ -125,20 +127,22 @@ class UtilityExecution:
 
     def run(self) -> None:
         """Execute the complete utility lifecycle."""
-        started = completed = time.monotonic()
-        run_error: Exception | None = None
+        started = time.monotonic()
         try:
             completed = self._execute(started)
+            outcome = self._finisher.decide(started, completed)
         except Exception as error:
-            run_error = error
-        finally:
-            cleanup_failed = self._close()
+            outcome = UtilityErrorFinisher(self._context).decide(error)
+        except BaseException:
+            self._close(self._context.state.stopping.is_set())
+            raise
+        # Keep cleanup and notification on one decision. A late stop cannot change its state.
+        cleanup_failed = self._close(outcome.state == SessionState.STOPPED)
         if cleanup_failed:
-            self._finisher.failure("The utility cleanup failed. Read the portal log for the cause.")
-        elif run_error is not None:
-            self._finisher.error(run_error)
-        else:
-            self._finisher.finish(started, completed)
+            outcome = UtilityFinisher.Outcome(
+                SessionState.FAILED, "The utility cleanup failed. Read the portal log for the cause."
+            )
+        self._finisher.finish(outcome)
 
     def _execute(self, started: float) -> float:
         """Start and monitor one utility without terminal notification."""
@@ -146,12 +150,12 @@ class UtilityExecution:
         self._monitor.read(client, trigger.listen.timing, filterer, started)
         return time.monotonic()
 
-    def _close(self) -> bool:
+    def _close(self, stopped: bool) -> bool:
         """Attempt both cleanup actions before the terminal notification."""
         with self._context.state.lock:
             client = self._context.state.client
             self._context.state.client = None
-        actions = [CaptureCleanup(self._context).stop_if_needed]
+        actions = [CaptureCleanup(self._context, stopped).stop_if_needed]
         if client is not None:
             actions.insert(0, client.close)
         failed = False

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import threading
 from collections.abc import Callable
 from dataclasses import replace
@@ -37,19 +39,50 @@ class ControlledApi(FakeApiSession):
     class CloseControl:
         """Close the real transport before a controlled delay or failure."""
 
-        def __init__(self, *, fail: bool = False) -> None:
+        class CleanupHandler(logging.Handler):
+            """Hold the actual logging boundary after capture cleanup returns."""
+
+            def __init__(self, control: ControlledApi.CloseControl) -> None:
+                super().__init__()
+                self.control = control
+
+            def emit(self, record: logging.LogRecord) -> None:
+                event = json.loads(record.getMessage())
+                if self.control.boundary == "capture_noop" and (
+                    event.get("event") == "utility_cleanup_done" and event.get("action") == "stop_if_needed"
+                ):
+                    self.control.entered.set()
+                    if not self.control.proceed.wait(3.0):
+                        raise TimeoutError("The test did not release the cleanup boundary.")
+
+        def __init__(self, boundary: str = "stream_close", *, fail: bool = False) -> None:
             self.original = StreamClient.close
             self.fail = fail
-            self.entered, self.release = threading.Event(), threading.Event()
+            self.boundary = boundary
+            self.entered, self.proceed = threading.Event(), threading.Event()
+
+        def __enter__(self) -> ControlledApi.CloseControl:
+            self.target = logging.getLogger("src.websocket_streams.live.runners.utility.runner.execution")
+            self.previous = self.target.level
+            self.handler = self.CleanupHandler(self)
+            self.target.setLevel(logging.DEBUG)
+            self.target.addHandler(self.handler)
+            return self
+
+        def __exit__(self, kind: object, error: object, trace: object) -> None:
+            self.target.removeHandler(self.handler)
+            self.target.setLevel(self.previous)
+            self.handler.close()
 
         def callback(self) -> Callable[[StreamClient], None]:
             def controlled_close(client: StreamClient) -> None:
                 self.original(client)
-                self.entered.set()
                 if self.fail:
                     raise RuntimeError("The controlled client close failed.")
-                if not self.release.wait(3.0):
-                    raise TimeoutError("The test did not release stream close.")
+                if self.boundary == "stream_close":
+                    self.entered.set()
+                    if not self.proceed.wait(3.0):
+                        raise TimeoutError("The test did not release stream close.")
 
             return controlled_close
 
@@ -173,18 +206,19 @@ class TestCompletionOrdering:
         ("stop", "expected"),
         [
             (False, (SessionState.FINISHED, "The utility finished.")),
-            (True, (SessionState.STOPPED, "The operator stopped the session.")),
+            (True, (SessionState.FINISHED, "The utility finished.")),
         ],
     )
+    @pytest.mark.parametrize("boundary", ["stream_close", "capture_noop"])
     def test_close_barrier_delays_terminal_and_preserves_normal_reason(
         self,
         monkeypatch: pytest.MonkeyPatch,
         stop: bool,
         expected: tuple[SessionState, str],
+        boundary: str,
     ) -> None:
-        control = ControlledApi.CloseControl()
-        monkeypatch.setattr(StreamClient, "close", control.callback())
-        with CaptureScenario() as scenario:
+        with ControlledApi.CloseControl(boundary) as control, CaptureScenario() as scenario:
+            monkeypatch.setattr(StreamClient, "close", control.callback())
             scenario.context = replace(scenario.context, triggers=_fast_table())
             scenario.api.output_device = scenario.device
             try:
@@ -193,11 +227,11 @@ class TestCompletionOrdering:
                 assert scenario.sink.finished == []
                 if stop:
                     scenario.state.stopping.set()
-                control.release.set()
+                control.proceed.set()
                 assert scenario.finish() == expected
-                assert scenario.api.delete_entered.is_set() is stop
+                assert [call.method for call in scenario.api.calls] == ["POST"]
             finally:
-                control.release.set()
+                control.proceed.set()
 
     @pytest.mark.parametrize("stop", [False, True])
     def test_runtime_failure_retains_existing_stop_mapping(self, stop: bool) -> None:
@@ -431,8 +465,23 @@ class TestCaptureIdentityAndStatus:
             api.add_override("?limit=1", data=data)
             assert CaptureStopper(api).stop_site(SITE_ID, "cap-owned") is False
             assert [call.method for call in api.calls] == ["GET"]
+
         api.calls.clear()
         api.overrides.clear()
         api.add_override("?limit=1", data="")
         assert CaptureStopper(api).stop_site(SITE_ID, "cap-owned") is False
         assert [call.method for call in api.calls] == ["GET"]
+
+    @pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(2)])
+    def test_process_interruption_closes_transport_without_terminal_fallback(self, error: BaseException) -> None:
+        with CaptureScenario() as scenario:
+
+            def interrupt_trigger(uri: str, body: object | None) -> None:
+                raise error
+
+            scenario.api.before_post_return = interrupt_trigger
+            with pytest.raises(type(error)):
+                UtilityExecution(scenario.context).run()
+            assert scenario.context.state.client is None
+            assert scenario.sink.finished == []
+            assert [call.method for call in scenario.api.calls] == ["POST"]
