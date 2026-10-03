@@ -53,6 +53,8 @@ RESPONSE_HEADERS = {
     "Cache-Control": "no-store",  # A shared workstation must not keep a page with site data.
 }
 FAVICON_ROUTE = "/favicon.ico"  # This public asset carries no site data.
+STATIC_ASSET_PREFIX = "/static/"  # Static assets carry no site data and can use validators safely.
+STATIC_CACHE_CONTROL = "public, no-cache, must-revalidate"  # Revalidate assets so unchanged files return 304.
 CACHE_CONTROL_HEADER = "Cache-Control"  # This header needs a favicon exception.
 
 FORWARDED_HEADER = "X-Forwarded-For"  # `ProxyFix` reads this header. No code here parses it by hand.
@@ -145,6 +147,9 @@ class PortalSecurity:
                     logger.debug("Kept the favicon cache header")  # Confirm the narrow favicon exception.
                     continue  # Do not replace the asset cache header with the page cache header.
                 response.headers[name] = value  # A later value replaces an earlier one.
+            if request.path.startswith(STATIC_ASSET_PREFIX):  # Static files can be stored and revalidated safely.
+                response.headers[CACHE_CONTROL_HEADER] = STATIC_CACHE_CONTROL  # Keep unchanged assets at 304.
+                logger.debug("Applied revalidation caching to static asset %s", request.path)  # Record the asset path.
             return response  # Flask sends the response the hook returns.
 
     def _register_allow_list(self, app: Flask, networks: tuple[Network, ...]) -> None:
