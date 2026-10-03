@@ -326,23 +326,23 @@ class OrgOptionRefusal:
 
     @staticmethod
     def whole_number(text: str, field: str) -> int:
-        """Read one whole number, or refuse it with the multi-site label.
+        """Read an ASCII percentage, or refuse it with the multi-site control label."""
+        from ...api.numeric_input import AsciiWholeNumberReader
 
-        Args:
-            text: The text of one number that the operator typed.
-            field: The field that holds the number.
-
-        Returns:
-            The number.
-
-        Raises:
-            BadOptionError: If the text holds no whole number.
-        """
-        try:  # The parser text repeats the typed value, so it never reaches the page.
-            return int(text)  # Convert the text for the shared mapper, which applies the range rules.
-        except ValueError as error:  # A word, a decimal point, or an empty entry holds no whole number.
-            logger.warning("The organization upgrade refused the field %s, which holds no whole number", field)
-            raise BadOptionError(field, labels=ORG_OPTION_HELP) from error
+        logger.info("Check the organization percentage control %s.", field)
+        word = text.strip()
+        if len(word) > len(str(100)) or not word.isascii() or not word.isdecimal():
+            logger.warning("Organization numeric control checked=1 field=%s reason=invalid_token.", field)
+            raise BadOptionError(field, labels=ORG_OPTION_HELP)
+        try:
+            number = AsciiWholeNumberReader(100, field).read(word)
+        except ValueError:
+            logger.warning("Organization numeric control checked=1 field=%s reason=conversion_refused.", field)
+            raise BadOptionError(field, labels=ORG_OPTION_HELP) from None
+        if number is None:
+            raise BadOptionError(field, labels=ORG_OPTION_HELP)
+        logger.debug("Organization numeric control checked=1 field=%s reason=accepted.", field)
+        return number
 
 
 def upgrade_service() -> Any:

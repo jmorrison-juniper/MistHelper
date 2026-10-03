@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -51,6 +52,7 @@ from src.firmware.upgrade_service import (
     classify_gateway,
     list_available_versions,
 )
+from src.upgrade_portal.api.numeric_input import AsciiWholeNumberReader
 from src.upgrade_portal.capture.devices import (
     HTTP_STATUS_NONE,
     REASON_READ_FAILED,
@@ -218,6 +220,22 @@ OPTION_HELP: Mapping[str, tuple[str, str]] = {
     ),
     "max_failure_percentage": (
         "Failures allowed across the whole run",
+        "Write a percentage from 0 to 100.",
+    ),
+    "p2p_cluster_size": (
+        "Access points of one download group",
+        "Write a whole number from 0 to 1000.",
+    ),
+    "p2p_parallelism": (
+        "Download groups that run together",
+        "Write a whole number from 0 to 1000.",
+    ),
+    "rrm_first_batch_percentage": (
+        "Access points of the first radio batch, as a percentage",
+        "Write a percentage from 0 to 100.",
+    ),
+    "rrm_max_batch_percentage": (
+        "Largest radio batch after the first, as a percentage",
         "Write a percentage from 0 to 100.",
     ),
     "channel": (
@@ -972,6 +990,33 @@ def _flat_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     return merged
 
 
+class OptionNumberReader:
+    """Validate control tokens before conversion without inventing cloud bounds."""
+
+    @staticmethod
+    def read(word: str, field: str, highest: int | None = None) -> int:
+        """Read ASCII digits and preserve the range of an unbounded stored value."""
+        logger.info("Check the numeric control %s.", field)
+        limit = len(str(highest)) if highest is not None else OptionNumberReader.representation_limit()
+        if (limit and len(word) > limit) or not word.isascii() or not word.isdecimal():
+            logger.warning("Numeric control checked=1 field=%s reason=invalid_token.", field)
+            raise BadOptionError(field)
+        try:
+            accepted = int(word) if highest is None else AsciiWholeNumberReader(highest, field).read(word)
+        except ValueError:
+            logger.warning("Numeric control checked=1 field=%s reason=conversion_refused.", field)
+            raise BadOptionError(field) from None
+        if accepted is None:
+            raise BadOptionError(field)
+        logger.debug("Numeric control checked=1 field=%s reason=accepted.", field)
+        return accepted
+
+    @staticmethod
+    def representation_limit() -> int:
+        """Use the active Python conversion policy for values with no field ceiling."""
+        return sys.get_int_max_str_digits()
+
+
 def _read_whole_number(payload: Mapping[str, Any], field: str, highest: int) -> int | None:
     """Read one optional whole number, or refuse a value outside its range.
 
@@ -995,13 +1040,9 @@ def _read_whole_number(payload: Mapping[str, Any], field: str, highest: int) -> 
     if value is None or not str(value).strip():
         return None
     word = str(value).strip()
-    if isinstance(value, bool) or not word.isdigit():  # A sign, a decimal point, and a word all fail here.
+    if isinstance(value, bool):
         raise BadOptionError(field)
-    number = int(word)
-    if number > highest:
-        logger.warning("Upgrade portal refused the field %s above its limit", field)
-        raise BadOptionError(field)
-    return number
+    return OptionNumberReader.read(word, field, highest)
 
 
 def _number_entries(value: Any) -> list[str]:
@@ -1049,9 +1090,8 @@ def _read_number_list(payload: Mapping[str, Any], field: str) -> tuple[int, ...]
     if not entries or len(entries) > _PHASE_COUNT_HIGHEST:
         logger.warning("Upgrade portal refused the list field %s for its length", field)
         raise BadOptionError(field)
-    if not all(word.isdigit() for word in entries):  # A sign and a decimal point both fail here.
-        raise BadOptionError(field)
-    return tuple(int(word) for word in entries)
+    highest = _PERCENTAGE_HIGHEST if field == "canary_phases" else None
+    return tuple(OptionNumberReader.read(word, field, highest) for word in entries)
 
 
 def _read_word_choice(payload: Mapping[str, Any], field: str, choices: Sequence[str]) -> str | None:
@@ -1255,12 +1295,8 @@ def parse_duration_seconds(text: str, field: str) -> int:
         logger.warning("Upgrade portal refused the field %s because the unit is not one of s, m, h, or d", field)
         raise BadOptionError(field)
     number = word[:-1]
-    if not number.isdigit():  # ``isdigit`` refuses a sign, a space, and a decimal point.
-        raise BadOptionError(field)
-    seconds = int(number) * DURATION_UNIT_SECONDS[unit]
-    if seconds > START_TIME_HORIZON_SECONDS:
-        logger.warning("Upgrade portal refused the field %s because the span exceeds the site lock window", field)
-        raise BadOptionError(field)
+    highest = START_TIME_HORIZON_SECONDS // DURATION_UNIT_SECONDS[unit]
+    seconds = OptionNumberReader.read(number, field, highest) * DURATION_UNIT_SECONDS[unit]
     return seconds
 
 
@@ -1283,12 +1319,7 @@ def _read_stored_duration(stored: Any, field: str) -> int:
         BadOptionError: If the value is not a whole count inside the window.
     """
     word = str(stored).strip()
-    if not word.isdigit():
-        raise BadOptionError(field)
-    seconds = int(word)
-    if seconds > START_TIME_HORIZON_SECONDS:
-        raise BadOptionError(field)
-    return seconds
+    return OptionNumberReader.read(word, field, START_TIME_HORIZON_SECONDS)
 
 
 def _read_written_schedule(value: Any, field: str, now: Callable[[], int] | None) -> tuple[int | None, int | None]:
@@ -1308,11 +1339,13 @@ def _read_written_schedule(value: Any, field: str, now: Callable[[], int] | None
     word = str(value).strip()
     if isinstance(value, bool):
         raise BadOptionError(field)
-    if word.isdigit() and len(word) >= EPOCH_DIGIT_COUNT:
+    if word.isdecimal() and len(word) >= EPOCH_DIGIT_COUNT:
         # A run saved before issue #2187 holds a moment here. The window guard
         # still applies, because a stale moment writes firmware at once.
-        moment = int(word)
-        return None, moment if now is None else _guard_start_time(moment, now(), field)
+        clock = now() if now is not None else None
+        highest = clock + START_TIME_HORIZON_SECONDS if clock is not None else None
+        moment = OptionNumberReader.read(word, field, highest)
+        return None, moment if clock is None else _guard_start_time(moment, clock, field)
     seconds = parse_duration_seconds(word, field)
     # A duration needs a clock whatever the caller passed. See issue #2196 and
     # the note in `_read_schedule` above.
