@@ -11,14 +11,15 @@ import pytest  # The tests verify request errors and time bounds.
 
 import websocket  # Tests build the same handshake exceptions as websocket-client.
 from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Tests build utility definitions.
-from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked start requests.
-from src.websocket_streams.live.runners.utility.runner import UtilityRunner  # The stream runner under test.
-from src.websocket_streams.live.runners.utility.triggers import (
+from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked start requests.
+from src.websocket_streams.live.runners.utility.runner.execution import UtilityStreamOpener  # Subscribe seam.
+from src.websocket_streams.live.runners.utility.runner.utility_runner import UtilityRunner  # Utility runner class.
+from src.websocket_streams.live.runners.utility.triggers.models import (
     UtilityRequest,
     UtilityTiming,
-    UtilityTriggerTable,
-)  # Tests shorten timing without changing trigger data.
-from src.websocket_streams.live.sessions.record import SessionState  # Sink assertions use final states.
+)  # Immutable trigger records.
+from src.websocket_streams.live.runners.utility.triggers.table import UtilityTriggerTable  # Trigger table class.
+from src.websocket_streams.live.sessions.record.state import SessionState  # Sink assertions use final states.
 from src.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
@@ -129,23 +130,6 @@ class ShortTriggerTable(UtilityTriggerTable):
         return replace(trigger, listen=listen)  # Return an immutable trigger copy.
 
 
-class StopAfterOpenUtilityRunner(UtilityRunner):
-    """A utility runner that stops after subscribe but before the REST trigger."""
-
-    def _open_stream(self, trigger: UtilityRequest) -> StreamClient:
-        """Open the stream, then request a stop.
-
-        Args:
-            trigger: The utility trigger request.
-
-        Returns:
-            The open stream client.
-        """
-        client = super()._open_stream(trigger)  # Run the real subscribe-before-trigger path.
-        self.stop()  # Simulate the operator pressing Stop while the page shows connecting.
-        return client  # The base _run method decides whether it sends the trigger.
-
-
 def test_trigger_posts_only_after_channel_subscribed() -> None:
     """Send the trigger only after the stream subscription succeeds."""
     with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
@@ -238,7 +222,7 @@ def test_stop_closes_stream_within_three_seconds() -> None:
     assert elapsed < 3.0  # The close path must not block the operator.
 
 
-def test_stop_after_subscribe_prevents_utility_trigger() -> None:
+def test_stop_after_subscribe_prevents_utility_trigger(monkeypatch: pytest.MonkeyPatch) -> None:
     """Do not send the REST trigger when stop arrives after subscribe."""
     with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
         device = StreamDevice()  # Build one fake stream device.
@@ -252,7 +236,15 @@ def test_stop_after_subscribe_prevents_utility_trigger() -> None:
         )  # Point transport to the fake stream.
         endpoint = MistStreamEndpoint(api, profile)  # Use the same API session for auth and REST.
         sink = FakeSink()  # Record the final state.
-        runner = StopAfterOpenUtilityRunner(api, endpoint, _request("ex.retrieveArpTable"), sink, _slow_table())  # Run.
+        runner = UtilityRunner(api, endpoint, _request("ex.retrieveArpTable"), sink, _slow_table())  # Build runner.
+        original_open = UtilityStreamOpener._client  # Keep the real subscribe implementation.
+
+        def stop_after_open(opener: UtilityStreamOpener, trigger: UtilityRequest) -> StreamClient:
+            client = original_open(opener, trigger)  # Subscribe before the stop request.
+            runner.stop()  # Model Stop while the page still shows connecting.
+            return client  # Let the execution guard prevent the trigger.
+
+        monkeypatch.setattr(UtilityStreamOpener, "_client", stop_after_open)  # Install the stop seam.
         runner.start()  # Start the background utility.
         state, reason = sink.wait_finished()  # Wait for stop handling.
     assert state == SessionState.STOPPED  # Stop wins before the trigger.

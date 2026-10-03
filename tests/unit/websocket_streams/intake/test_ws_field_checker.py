@@ -3,7 +3,8 @@
 import pytest  # Pytest checks refusal paths.
 
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec  # Import field records.
-from src.websocket_streams.intake.fields import FieldValueChecker, StreamRequestError  # Import the checker under test.
+from src.websocket_streams.intake.fields.checker import FieldValueChecker  # Import the checker under test.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Import the refusal contract.
 
 
 def test_field_checker_converts_valid_values() -> None:

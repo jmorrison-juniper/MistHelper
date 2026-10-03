@@ -1,33 +1,185 @@
-"""Open one Mist stream WebSocket connection.
-
-Why:
-    Issue #3671 needs subscription-before-trigger behavior. This client opens
-    the stream, waits for each channel, and then yields data events.
-"""
+"""Open one Mist stream WebSocket connection."""
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import json  # Subscribe requests use JSON text frames.
-import logging  # The client logs safe connection state.
-import threading  # Close can come from another thread.
+import logging  # Structured records use repository logging handlers.
+import threading  # Close can occur from another thread.
 import time  # The default clock is monotonic.
-from collections.abc import Callable, Sequence  # Constructor types stay explicit.
+from collections.abc import Callable, Sequence  # Collaborator contracts stay explicit.
 from typing import Any  # websocket-client is not fully typed.
 
-import websocket  # The feature uses websocket-client per the contract.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint  # Endpoint builds safe connection values.
-from src.websocket_streams.live.transport.frames import (  # Share frame parsing across stream clients.
-    ConnectionClosed,
-    FrameDecoder,
-    FrameReader,
-    SubscribeError,
-)
+import websocket  # The transport uses websocket-client.
+from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint  # Endpoint owns auth and TLS values.
+from src.websocket_streams.live.transport.runtime.frame_decoder import FrameDecoder, SubscribeError  # Decode events.
+from src.websocket_streams.live.transport.runtime.logging.structured_logger import (
+    StructuredTransportLogger,
+)  # T072 provides the safe JSON logging boundary.
+from src.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed  # Share close details.
+from src.websocket_streams.live.transport.runtime.reader.frame_reader import FrameReader  # Share keepalive reads.
+from src.websocket_streams.live.transport.runtime.reader.socket_runtime import SocketRuntime  # Own socket closure.
 
-logger = logging.getLogger(__name__)  # Keep stream client logs under this module.
+
+class StreamConnection:
+    """Own one stream socket and its shared frame reader."""
+
+    _socket: Any | None  # The socket exists only after open.
+    _reader: FrameReader | None  # The reader follows the socket lifetime.
+
+    def __init__(
+        self,
+        endpoint: MistStreamEndpoint,
+        factory: Callable[..., Any],
+        clock: Callable[[], float],
+        closed: threading.Event,
+    ) -> None:
+        """Store the connection dependencies."""
+        self._endpoint, self._factory = endpoint, factory  # Store connection settings and the socket factory.
+        self._clock, self._closed = clock, closed  # Store timing and close coordination.
+        self._lock = threading.Lock()  # Protect the socket and reader references.
+        self._socket, self._reader = None, None  # Create empty connection references.
+        self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
+
+    def open(self) -> Any:
+        """Open and publish one websocket-client socket."""
+        socket = self._create()  # Build the socket with authentication, TLS, and host proxy settings.
+        with self._lock:  # Publish both connection objects together.
+            self._socket = socket  # Close can now reach the live socket.
+            self._reader = FrameReader(socket, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds)
+        if self._closed.is_set():  # A close can occur while the factory blocks.
+            SocketRuntime(socket).close()  # Release the socket before any subscription leaves.
+            raise ConnectionClosed(code=None, dropped=False)  # Report a local stop.
+        self._log.emit(logging.DEBUG, "stream_open_ready", {"status": "open"})  # Log safe readiness.
+        return socket  # The subscription collaborator needs the open socket.
+
+    def _create(self) -> Any:
+        """Create one configured websocket-client socket."""
+        timeout = self._endpoint.profile.subscribe_timeout_seconds  # Bound TCP and TLS setup.
+        self._log.emit(logging.INFO, "stream_open_start", {"timeout_seconds": timeout})  # Log safe timing.
+        socket = self._factory(
+            self._endpoint.stream_url(),
+            header=self._endpoint.headers(),
+            cookie=self._endpoint.cookie(),
+            sslopt=self._endpoint.sslopt(),
+            enable_multithread=True,
+            timeout=timeout,
+        )  # Leave proxy selection to websocket-client and the host environment.
+        socket.settimeout(timeout)  # Keep write operations bounded after the handshake.
+        return socket  # Open publishes the socket only after the factory returns.
+
+    def receive(self, timeout: float) -> str | bytes | None:
+        """Return one decoded frame payload or no payload."""
+        reader = self._reader  # Copy the reader without extending the lock scope.
+        if reader is None:  # Close removes the reader before it closes the socket.
+            raise ConnectionClosed(dropped=False)  # Report a clean local stop.
+        frame = reader.read(timeout)  # The shared reader handles ping, pong, and close frames.
+        if frame is None:  # A timeout or control frame has no application payload.
+            return None  # The caller can continue its bounded wait.
+        return (
+            frame.payload.decode("utf-8", errors="replace")
+            if frame.opcode == websocket.ABNF.OPCODE_TEXT
+            else frame.payload
+        )  # Decode text events and preserve binary event bytes.
+
+    def close(self) -> None:
+        """Close the stream socket from any thread."""
+        self._log.emit(logging.INFO, "stream_close_start", {"action": "close"})  # Log before changing state.
+        self._closed.set()  # Wake all bounded read loops.
+        with self._lock:  # Detach both connection objects together.
+            socket = self._socket  # Copy the socket for closure outside the lock.
+            self._socket = None  # Future operations cannot use the old socket.
+            self._reader = None  # Future reads report a local close.
+        if socket is not None:  # Closing before open remains harmless.
+            SocketRuntime(socket).close()  # Abort, close, and shutdown the socket.
+        self._log.emit(logging.DEBUG, "stream_close_ready", {"status": "closed"})  # Log safe completion.
+
+
+class SubscriptionCoordinator:
+    """Send channel requests and confirm each subscription."""
+
+    def __init__(self, channels: Sequence[str], clock: Callable[[], float], timeout: float) -> None:
+        """Store immutable subscription settings."""
+        self._channels = tuple(channels)  # One connection uses one stable channel set.
+        self._clock = clock  # Tests can control subscription deadlines.
+        self._timeout = timeout  # The endpoint bounds the complete subscribe phase.
+        self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
+
+    def subscribe(self, socket: Any, connection: StreamConnection, closed: threading.Event) -> None:
+        """Send and confirm every configured channel."""
+        pending = self._start(socket)  # Send each request and return the pending channel set.
+        deadline = self._clock() + self._timeout  # Bound the full confirmation phase.
+        read_slice = max(0.01, min(0.1, self._timeout / 2))  # Keep close and keepalive checks frequent.
+        while pending and not closed.is_set():  # A local close interrupts the wait.
+            if self._clock() >= deadline:  # Missing confirmation fails the open.
+                raise SubscribeError(sorted(pending)[0], "timeout")  # Preserve the existing error contract.
+            payload = connection.receive(read_slice)  # Read one bounded subscription frame.
+            if payload is not None:  # Control frames and timeouts have no subscription event.
+                self._record(FrameDecoder.event(payload), pending)  # Update or fail the pending set.
+        self._finish(pending)  # Report a local close or successful completion.
+
+    def _record(self, event: dict[str, object], pending: set[str]) -> None:
+        """Apply one subscription event to the pending set."""
+        channel = event.get("channel")  # Subscription answers identify one channel.
+        if not isinstance(channel, str):  # Early data and malformed events do not confirm a channel.
+            return  # Continue waiting for the required confirmations.
+        if event.get("event") == "channel_subscribed":  # The cloud accepted this channel.
+            pending.discard(channel)  # Unknown channels do not affect required channels.
+        elif event.get("event") == "subscribe_failed":  # The cloud refused this channel.
+            detail = event.get("detail")  # Preserve the existing refusal detail.
+            raise SubscribeError(channel, str(detail or "subscribe_failed"))  # Report the same contract error.
+
+    def _start(self, socket: Any) -> set[str]:
+        """Send each channel request and return the pending set."""
+        pending = set(self._channels)  # Each channel needs one confirmation.
+        self._log.emit(logging.INFO, "stream_subscribe_start", {"count": len(pending)})  # Log only the count.
+        for channel in self._channels:  # Mist accepts one request for each channel.
+            socket.send(json.dumps({"subscribe": channel}))  # Do not log the channel path.
+        return pending  # The subscribe loop removes confirmed channels.
+
+    def _finish(self, pending: set[str]) -> None:
+        """Validate the completed subscription phase."""
+        if pending:  # Only a local close can leave pending channels here.
+            raise ConnectionClosed(code=None, dropped=False)  # Do not report false success.
+        self._log.emit(logging.DEBUG, "stream_subscribe_ready", {"count": len(self._channels)})  # Log the count.
+
+
+class StreamEventReader:
+    """Read decoded data events from one stream connection."""
+
+    def __init__(
+        self,
+        connection: StreamConnection,
+        closed: threading.Event,
+        clock: Callable[[], float],
+        interval: float,
+    ) -> None:
+        """Store the read-loop collaborators."""
+        self._connection, self._closed = connection, closed  # Store frame and close collaborators.
+        self._clock, self._interval = clock, interval  # Store timing values.
+
+    def next_event(self, timeout: float) -> dict[str, object] | None:
+        """Return the next data event within the requested wait."""
+        deadline = self._clock() + timeout  # Bound the complete application wait.
+        while not self._closed.is_set():  # A local close ends the loop.
+            wait_left = deadline - self._clock()  # Recompute after every frame.
+            if wait_left <= 0:  # The requested interval expired.
+                return None  # A quiet stream remains valid.
+            event = self._read(wait_left)  # Read and decode one application event.
+            if event is None:  # A timeout or control frame is not an application event.
+                continue  # Continue until data or the outer deadline.
+            if event.get("event") == "data":  # Callers consume data events only.
+                return event  # Preserve channel and data fields.
+        raise ConnectionClosed(dropped=False)  # A local close is not a network drop.
+
+    def _read(self, wait_left: float) -> dict[str, object] | None:
+        """Read and decode one stream event."""
+        read_slice = max(0.01, min(0.1, self._interval / 2))  # Keep keepalive checks frequent.
+        payload = self._connection.receive(min(wait_left, read_slice))  # Read one bounded frame.
+        return None if payload is None else FrameDecoder.event(payload)  # Decode only application payloads.
 
 
 class StreamClient:
-    """Read data events from one Mist stream connection."""
+    """Coordinate one Mist stream connection and its collaborators."""
 
     def __init__(
         self,
@@ -36,186 +188,39 @@ class StreamClient:
         factory: Callable[..., Any] = websocket.create_connection,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        """Build the stream client.
-
-        Args:
-            endpoint: The connection parameter source.
-            channels: Channel paths to subscribe to.
-            factory: The websocket factory, or a fake in tests.
-            clock: The monotonic clock.
-        """
-        self._endpoint = endpoint  # The endpoint owns auth and TLS settings.
-        self._channels = tuple(channels)  # The subscription set must not change during a connection.
-        self._factory = factory  # Tests inject a controlled socket factory.
-        self._clock = clock  # Tests can use a fake clock.
-        self._socket: Any | None = None  # The socket exists after open.
-        self._reader: FrameReader | None = None  # The frame reader exists after open.
-        self._closed = threading.Event()  # close() wakes read loops quickly.
-        self._lock = threading.Lock()  # Protect the socket reference and close state.
+        """Build the stream collaborators."""
+        self._closed = threading.Event()  # One event coordinates the complete client.
+        self._connection = StreamConnection(endpoint, factory, clock, self._closed)  # Own socket state.
+        self._subscriptions = SubscriptionCoordinator(
+            channels, clock, endpoint.profile.subscribe_timeout_seconds
+        )  # Own subscription protocol state.
+        self._events = StreamEventReader(
+            self._connection, self._closed, clock, endpoint.profile.read_timeout_seconds
+        )  # Own event wait behavior.
+        self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
 
     def open(self) -> None:
-        """Open the WebSocket connection and subscribe to every channel.
-
-        Raises:
-            SubscribeError: A channel refuses or fails to answer in time.
-        """
-        url = self._endpoint.stream_url()  # The endpoint builds the safe address.
-        host = self._endpoint.host_label(url)  # Logs can hold only the host.
-        logger.info("Opening Mist stream WebSocket to host %s", host)  # Log before the network connection.
-        socket = self._factory(
-            url,
-            header=self._endpoint.headers(),
-            cookie=self._endpoint.cookie(),
-            sslopt=self._endpoint.sslopt(),
-            enable_multithread=True,
-            timeout=self._endpoint.profile.subscribe_timeout_seconds,  # Bound a stalled TCP or TLS handshake.
-        )  # Open with thread-safe websocket-client mode.
-        socket.settimeout(self._endpoint.profile.subscribe_timeout_seconds)  # Keep writes from using read timeouts.
-        with self._lock:  # Publish the socket under the lock.
-            self._socket = socket  # close() can now close the socket.
-            self._reader = FrameReader(
-                socket, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds
-            )  # Shared reader handles control frames.
-        if self._closed.is_set():  # A stop can arrive while the factory connects.
-            FrameReader.close_socket(socket)  # Do not leave a stopped connection subscribed.
-            raise ConnectionClosed(code=None, dropped=False)  # The caller maps this to stopped.
-        logger.debug("Opened Mist stream WebSocket to host %s", host)  # Do not log path or headers.
-        self._subscribe_all(socket)  # Wait for every channel before returning.
+        """Open the socket and confirm every channel subscription."""
+        socket = self._connection.open()  # Publish the live socket before subscription.
+        self._subscriptions.subscribe(socket, self._connection, self._closed)  # Confirm every required channel.
 
     def next_event(self, timeout: float) -> dict[str, object] | None:
-        """Return the next data event.
-
-        Args:
-            timeout: Maximum wait in seconds for a data event.
-
-        Returns:
-            A decoded data event, or None after the requested wait.
-
-        Raises:
-            ConnectionClosed: The connection ended or became silent.
-        """
-        deadline = self._clock() + timeout  # The caller controls the outer wait.
-        while not self._closed.is_set():  # Local close ends the read loop quickly.
-            wait_left = deadline - self._clock()  # Recompute so fake clocks work.
-            if wait_left <= 0:  # The caller asked for a bounded wait.
-                return None  # No data arrived in that interval.
-            frame = self._recv_once(min(wait_left, self._read_slice()))  # Keep keepalive checks frequent.
-            if frame is None:  # A socket timeout is not a closed connection.
-                continue  # Keep waiting until the caller timeout expires.
-            event = FrameDecoder.event(frame)  # Decode with SDK-compatible rules.
-            if event.get("event") == "data":  # Runners need data events only here.
-                return event  # The full event includes channel and data.
-        raise ConnectionClosed(dropped=False)  # A local close is not a network drop.
+        """Return the next data event within the requested wait."""
+        return self._events.next_event(timeout)  # The reader owns frame filtering and timeout behavior.
 
     def run(self, on_event: Callable[[dict[str, object]], None]) -> None:
-        """Call a callback for each data event until the connection ends.
-
-        Args:
-            on_event: Callback that receives each data event.
-
-        Raises:
-            ConnectionClosed: The connection dropped.
-        """
-        logger.info("Running Mist stream read loop for %s channel(s)", len(self._channels))  # Log before the loop.
-        while not self._closed.is_set():  # The local close path returns cleanly.
-            try:  # Keep local close separate from a dropped connection.
-                event = self.next_event(
-                    self._endpoint.profile.read_timeout_seconds
-                )  # Keepalive uses the profile timeout.
+        """Deliver data events until close or a dropped connection."""
+        self._log.emit(logging.INFO, "stream_run_start", {"action": "read_loop"})  # Log the safe action.
+        while not self._closed.is_set():  # A local close ends the callback loop.
+            try:  # Distinguish a local close from a dropped connection.
+                event = self._events.next_event(0.1)  # Keep stop checks frequent.
             except ConnectionClosed as error:
-                if error.dropped:  # Network drops must surface to the caller.
-                    raise  # The runner decides how to reconnect or fail.
+                if error.dropped:  # The caller must decide whether to reconnect.
+                    raise  # Preserve dropped connection behavior.
                 return  # A local close is a normal stop.
-            if event is not None:  # Timeouts are allowed while a stream stays quiet.
-                on_event(event)  # Deliver only decoded data events.
-        logger.debug("Stopped Mist stream read loop after local close")  # Local close is a normal end.
+            if event is not None:  # Quiet intervals need no callback.
+                on_event(event)  # Deliver the complete decoded data event.
 
     def close(self) -> None:
-        """Close the WebSocket from any thread."""
-        logger.info("Closing Mist stream WebSocket")  # Log before changing state.
-        self._closed.set()  # Reader loops see the local close within one socket timeout.
-        with self._lock:  # Copy the socket while protected.
-            socket = self._socket  # The socket can be None before open.
-            self._socket = None  # Future sends cannot use a closing socket.
-            self._reader = None  # Future reads cannot use the old socket.
-        if socket is not None:  # close() before open is harmless.
-            FrameReader.close_socket(socket)  # Abort, close, and shutdown to release CLOSE_WAIT sockets.
-        logger.debug("Closed Mist stream WebSocket")  # Log after the close request.
-
-    def _subscribe_all(self, socket: Any) -> None:
-        """Send and confirm each subscription.
-
-        Args:
-            socket: The open websocket.
-
-        Raises:
-            SubscribeError: A subscription fails or times out.
-        """
-        pending = set(self._channels)  # Each channel must receive its own confirmation.
-        logger.info("Subscribing to %s Mist stream channel(s)", len(pending))  # Log only a count.
-        for channel in self._channels:  # Mist accepts one subscribe frame per channel.
-            payload = json.dumps({"subscribe": channel})  # The stream contract defines this shape.
-            socket.send(payload)  # Do not log the channel path.
-        deadline = self._clock() + self._endpoint.profile.subscribe_timeout_seconds  # Bound the subscribe phase.
-        while pending and not self._closed.is_set():  # Stop if close() interrupts open.
-            if self._clock() >= deadline:  # Missing answers fail the open.
-                raise SubscribeError(sorted(pending)[0], "timeout")  # Report one missing channel.
-            frame = self._recv_once(self._read_slice())  # The application wait stays short for close().
-            if frame is None:  # No subscription answer arrived yet.
-                continue  # Keep waiting until the deadline.
-            event = FrameDecoder.event(frame)  # Subscription answers are JSON events.
-            self._record_subscription(event, pending)  # Remove confirmed channels or raise.
-        if pending and self._closed.is_set():  # A local close interrupted the subscribe wait.
-            raise ConnectionClosed(code=None, dropped=False)  # Do not report a false subscription success.
-        logger.debug("Subscribed to %s Mist stream channel(s)", len(self._channels))  # Log only a count.
-
-    def _record_subscription(self, event: dict[str, object], pending: set[str]) -> None:
-        """Process one subscription event.
-
-        Args:
-            event: The decoded stream event.
-            pending: The channels that still need confirmation.
-
-        Raises:
-            SubscribeError: The cloud refused a channel.
-        """
-        channel = event.get("channel")  # Subscription events name the channel.
-        if not isinstance(channel, str):  # Non-subscription events can arrive early.
-            return  # The runner filters data after open.
-        if event.get("event") == "channel_subscribed":  # A channel is ready.
-            pending.discard(channel)  # Unknown channels do not affect required channels.
-            return  # The subscribe wait can continue.
-        if event.get("event") == "subscribe_failed":  # Mist refused this channel.
-            detail = event.get("detail")  # Mist can send a refusal detail.
-            raise SubscribeError(channel, str(detail or "subscribe_failed"))  # Report the safe detail.
-
-    def _recv_once(self, timeout: float) -> str | bytes | None:
-        """Receive one frame with a short timeout.
-
-        Args:
-            timeout: The socket timeout for this attempt.
-
-        Returns:
-            The frame payload, or None on a timeout.
-
-        Raises:
-            ConnectionClosed: The socket ended.
-        """
-        reader = self._reader  # Copy the current frame reader.
-        if reader is None:  # A local close removed the reader.
-            raise ConnectionClosed(dropped=False)  # The caller should end cleanly.
-        frame = reader.read(timeout)  # The shared reader handles keepalive and close codes.
-        if frame is None:  # Control frames and timeouts are not stream data.
-            return None  # The caller keeps waiting.
-        if frame.opcode == websocket.ABNF.OPCODE_TEXT:  # Stream text events are JSON text.
-            return frame.payload.decode("utf-8", errors="replace")  # Decode text frames for FrameDecoder.
-        return frame.payload  # Binary frames go through FrameDecoder with NUL removal.
-
-    def _read_slice(self) -> float:
-        """Return one bounded socket wait slice.
-
-        Returns:
-            A short wait that lets keepalive fire before two intervals pass.
-        """
-        interval = self._endpoint.profile.read_timeout_seconds  # The profile controls keepalive timing.
-        return max(0.01, min(0.1, interval / 2))  # Keep a lower bound so sockets do not spin.
+        """Close the stream connection from any thread."""
+        self._connection.close()  # The connection owns socket detachment and shutdown.

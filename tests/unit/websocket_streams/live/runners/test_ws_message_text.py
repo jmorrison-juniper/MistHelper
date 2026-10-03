@@ -7,11 +7,9 @@ import logging  # The filter test builds a log record.
 
 import pytest  # The malformed JSON test checks the decoder refusal.
 
-from src.websocket_streams.live.runners.text import (
-    MessageShaper,
-    PacketSummary,
-    ShellAddressFilter,
-)  # The tests cover text helpers.
+from src.websocket_streams.live.runners.text.messages import MessageShaper  # Test channel message shaping.
+from src.websocket_streams.live.runners.text.packets import PacketSummary  # Test packet summary shaping.
+from src.websocket_streams.live.runners.text.redaction import ShellAddressFilter  # Test address redaction.
 
 
 class TestMessageText:

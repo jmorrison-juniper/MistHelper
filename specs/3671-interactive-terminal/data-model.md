@@ -27,6 +27,7 @@ The session states do not change. A terminal session moves through these states.
 connecting --(socket open)--> live --(first output)--> live and input_ready
 live --(operator stop or reaper)--> stopping --> stopped
 live and input_ready --(device sends a close frame, for example after exit)--> finished
+live and input_ready --(local input or resize write fails)--> failed
 live --(a screen command reaches its time limit)--> finished
 live and input_ready --(connection lost with no close frame)--> failed
 live without output --(far side ends the connection)--> failed
@@ -39,9 +40,12 @@ ends. Each terminal session uses this order of rules.
 1. If the operator or the reaper closed the connection, the state is `stopped`.
 2. If the device sent no output before the far side ended the connection, the state is
    `failed`. The reason is `NO_ANSWER_REASON` (issue #3710, FR-019).
-3. If the device sent output and then a close frame, the state is `finished`. The reason is
+3. If a local input or resize write closes the connection after output, the state is
+   `failed`. The reason is `WRITE_FAILED_REASON`:
+   `The terminal could not send data to the device.` (issue #3741).
+4. If the device sent output and then a close frame, the state is `finished`. The reason is
    `CLOSED_REASON`.
-4. If the connection ended with no close frame, the state is `failed`. The reason is
+5. If the connection ended with no close frame, the state is `failed`. The reason is
    `DROPPED_REASON`.
 
 A screen command checks one rule before these rules. If its time limit closed the
@@ -119,6 +123,11 @@ Rules:
 - At the first output, the queue sends the pending text in order. Then it sends each new
   request at once.
 - A session that is not live gets `not_open` (409).
+- If a local input write fails, the request gets `not_open` (409). The reader then ends the
+  session as `failed` with `WRITE_FAILED_REASON`.
+- If a live resize write fails, the request gets `not_open` (409). The reader then ends the
+  session as `failed` with `WRITE_FAILED_REASON`. A resize before the socket opens stays
+  deferred and does not fail the session.
 
 ## UtilityRequest
 

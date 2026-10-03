@@ -9,12 +9,14 @@ Why:
 from __future__ import annotations  # Keep annotations lazy for Flask imports.
 
 from collections.abc import Iterator  # Type the fake download stream.
+from types import SimpleNamespace  # Group fake leaf services.
 from typing import Any  # Type Flask test client answers.
 
 import pytest  # Use fixtures for the portal app lifetime.
 
-from src.websocket_streams.live.sessions.buffer import MessagePage, StreamMessage  # The fake read returns records.
-from src.websocket_streams.web.services import WebSocketsServices  # Inject the fake WebSocket service.
+from src.websocket_streams.live.sessions.buffer.message import StreamMessage
+from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
+from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Inject the fake service bundle.
 from web_portal.app import WebPortalApp  # Build the real portal app as the browser tests do.
 from web_portal.menu_registry import build_static_menu_actions  # Supply normal menu actions.
 
@@ -54,6 +56,21 @@ class SecretGuardTerminal:
 class SecretGuardServices:
     """Fake service with safe responses for all WebSocket routes."""
 
+    def __init__(self) -> None:
+        """Group the fake leaf services."""
+        lifecycle = SimpleNamespace(
+            start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
+        )  # Group session lifecycle behavior.
+        self.sessions = SimpleNamespace(
+            lifecycle=lifecycle, messages=SimpleNamespace(read=self.read_messages)
+        )  # Group lifecycle and message behavior.
+        self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group catalog behavior.
+        self.artifacts = SimpleNamespace(
+            delete=self.delete_session, download=self.download_session
+        )  # Group artifact behavior.
+        self.terminal = SecretGuardTerminal()  # Expose direct terminal behavior.
+        self.pickers = SimpleNamespace(site=self, related=self)  # Group picker behavior.
+
     def catalog_payload(self) -> dict[str, object]:
         """Return a safe catalog payload."""
         return {
@@ -83,10 +100,6 @@ class SecretGuardServices:
         payload = self._session(session_id)  # Start with a safe session.
         payload["state"] = "stopped"  # Mark stopped.
         return payload  # Safe payload.
-
-    def terminal(self) -> SecretGuardTerminal:
-        """Return the safe fake terminal gateway."""
-        return SecretGuardTerminal()  # The terminal routes call this fake.
 
     def delete_session(self, _session_id: str) -> dict[str, object]:
         """Return a safe delete answer."""
@@ -149,7 +162,7 @@ def portal_client() -> Iterator[Any]:
     app.config["TESTING"] = True  # Surface route errors to the test.
     app.config["WTF_CSRF_ENABLED"] = False  # This test reads payload content, not the CSRF guard.
     app.config["APISESSION"] = {"token": API_TOKEN}  # Store a token-shaped value that must not leak.
-    app.config[WebSocketsServices.CONFIG_KEY] = SecretGuardServices()  # Inject safe route behavior.
+    app.config[WebSocketServiceRegistry.CONFIG_KEY] = SecretGuardServices()  # Inject safe route behavior.
     try:  # Ensure shutdown runs even when an assertion fails.
         yield app.test_client()  # Give tests an in-process client.
     finally:

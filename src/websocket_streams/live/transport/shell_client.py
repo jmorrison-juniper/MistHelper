@@ -1,31 +1,183 @@
-"""Open one Mist shell or screen WebSocket connection.
-
-Why:
-    Issue #3671 needs a terminal-grade bidirectional client. This class sends
-    input and resize frames while a reader thread receives output without
-    the Mist channel marker byte.
-"""
+"""Open one Mist shell or screen WebSocket connection."""
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import json  # Resize frames use JSON text.
-import logging  # The client logs safe connection state.
-import threading  # Send and read can run on different threads.
+import logging  # Structured records use repository logging handlers.
+import threading  # Send and read can occur on different threads.
 import time  # The default clock is monotonic.
-from collections.abc import Callable  # Constructor types stay explicit.
+from collections.abc import Callable  # Collaborator contracts stay explicit.
 from typing import Any  # websocket-client is not fully typed.
 
-import websocket  # The feature uses websocket-client per the contract.
-from src.websocket_streams.intake.fields import StreamRequestError  # Not-open sends use the HTTP contract.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, ShellAddressPolicy  # Connection helpers.
-from src.websocket_streams.live.transport.frames import ConnectionClosed, FrameReader  # Shared frame reading.
+import websocket  # The transport uses websocket-client.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Closed writes use the HTTP contract.
+from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, ShellAddressPolicy  # Connection rules.
+from src.websocket_streams.live.transport.runtime.logging.structured_logger import (
+    StructuredTransportLogger,
+)  # T072 provides the safe JSON logging boundary.
+from src.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed  # Share close details.
+from src.websocket_streams.live.transport.runtime.reader.frame_reader import FrameReader  # Share keepalive reads.
+from src.websocket_streams.live.transport.runtime.reader.socket_runtime import SocketRuntime  # Own socket closure.
 from websocket import ABNF  # Binary fallback uses the websocket-client opcode.
 
-logger = logging.getLogger(__name__)  # Keep shell client logs under this module.
+
+class ShellConnection:
+    """Own one shell socket and its shared frame reader."""
+
+    _socket: Any | None  # The socket exists only after open.
+    _reader: FrameReader | None  # The reader follows the socket lifetime.
+
+    def __init__(
+        self,
+        endpoint: MistStreamEndpoint,
+        policy: ShellAddressPolicy,
+        factory: Callable[..., Any],
+        clock: Callable[[], float],
+    ) -> None:
+        """Store the connection dependencies."""
+        self._endpoint, self._policy = endpoint, policy  # Store connection settings and address policy.
+        self._factory, self._clock = factory, clock  # Store the socket factory and clock.
+        self._closed, self._lock = threading.Event(), threading.Lock()  # Coordinate close and state access.
+        self._socket, self._reader = None, None  # Create empty connection references.
+        self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
+
+    def open(self, url: str) -> None:
+        """Validate, open, and publish one shell socket."""
+        socket = self._create(url)  # Validate the address and build the configured socket.
+        with self._lock:  # Publish both connection objects together.
+            self._socket = socket  # Writers can now use the connection.
+            self._closed.clear()  # A new open starts with a live read state.
+            self._reader = FrameReader(socket, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds)
+        self._log.emit(logging.DEBUG, "shell_open_ready", {"status": "open"})  # Log safe readiness.
+
+    def _create(self, url: str) -> Any:
+        """Create one validated websocket-client socket."""
+        safe_url, timeout = (
+            self._policy.check(url),
+            self._endpoint.profile.subscribe_timeout_seconds,
+        )  # Validate the address and read the connect timeout.
+        self._log.emit(logging.INFO, "shell_open_start", {"timeout_seconds": timeout})  # Log safe timing.
+        socket = self._factory(
+            safe_url,
+            header=self._endpoint.headers(),
+            cookie=self._endpoint.cookie(),
+            sslopt=self._endpoint.sslopt(),
+            enable_multithread=True,
+            skip_utf8_validation=True,
+            timeout=timeout,
+        )  # Leave proxy selection to websocket-client and the host environment.
+        socket.settimeout(timeout)  # Keep later writes bounded.
+        return socket  # Open publishes the socket and reader together.
+
+    def close(self) -> None:
+        """Close the shell socket from any thread."""
+        self._log.emit(logging.INFO, "shell_close_start", {"action": "close"})  # Log before changing state.
+        self._closed.set()  # Wake all bounded read loops.
+        with self._lock:  # Detach both connection objects together.
+            socket = self._socket  # Copy the socket for closure outside the lock.
+            self._socket = None  # Future writes report not_open.
+            self._reader = None  # Future reads report a local close.
+        if socket is not None:  # Closing before open remains harmless.
+            SocketRuntime(socket).close()  # Abort, close, and shutdown the socket.
+        self._log.emit(logging.DEBUG, "shell_close_ready", {"status": "closed"})  # Log safe completion.
+
+    def resource(self, kind: str) -> Any:
+        """Return the active socket or reader for one collaborator."""
+        resource = self._socket if kind == "socket" else self._reader  # Select the requested live resource.
+        if resource is None or self._closed.is_set():  # Closed operations must fail before network access.
+            if kind == "socket":  # Writes use the stable HTTP request error.
+                raise StreamRequestError("not_open", "The shell connection is not open.")  # Preserve the contract.
+            raise ConnectionClosed(dropped=False)  # Reads report a clean local close.
+        return resource  # The caller owns the short operation scope.
 
 
-class ShellClient:
-    """Read and write one shell or screen WebSocket without the Mist channel marker."""
+class ShellFrameReader:
+    """Read shell output and remove only the Mist channel marker."""
+
+    def __init__(self, connection: ShellConnection, clock: Callable[[], float], interval: float) -> None:
+        """Store the read dependencies."""
+        self._connection = connection  # One collaborator owns the frame reader lifetime.
+        self._clock = clock  # Tests can control outer read deadlines.
+        self._interval = interval  # The profile controls keepalive timing.
+
+    def read(self, timeout: float | None = None) -> bytes | None:
+        """Return one output frame or no data after a quiet interval."""
+        deadline = None if timeout is None else self._clock() + timeout  # None requests one quiet interval.
+        while True:  # The connection reader reports local or remote closure.
+            wait = self._slice() if deadline is None else min(self._slice(), max(0.0, deadline - self._clock()))
+            if deadline is not None and wait <= 0:  # The requested wait expired.
+                return None  # A quiet shell remains valid.
+            payload = self._receive(wait)  # Read one application frame.
+            if payload is not None:  # A data frame arrived.
+                return self._strip(payload)  # Remove exactly one Mist marker byte.
+            if deadline is None:  # The caller requested one quiet interval.
+                return None  # Preserve the existing quiet result.
+
+    def _receive(self, timeout: float) -> bytes | None:
+        """Return one frame payload or no payload."""
+        frame = self._connection.resource("reader").read(timeout)  # Shared logic handles keepalive and close frames.
+        return None if frame is None else frame.payload  # Shell output stays as bytes.
+
+    def _slice(self) -> float:
+        """Return one short receive interval."""
+        return max(0.01, min(0.1, self._interval / 2))  # Prevent busy loops and delayed keepalive checks.
+
+    def _strip(self, frame: bytes) -> bytes:
+        """Remove one leading Mist channel marker byte."""
+        return frame[1:] if frame.startswith(b"\x00") else frame  # Keep all remaining output bytes unchanged.
+
+
+class ShellFrameWriter:
+    """Serialize terminal input and resize frames on one socket."""
+
+    def __init__(self, connection: ShellConnection, send_lock: threading.Lock) -> None:
+        """Store the write dependencies."""
+        self._connection = connection  # The connection validates the open socket.
+        self._send_lock = send_lock  # One lock preserves input and resize order.
+        self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
+
+    def send(self, text: str) -> None:
+        """Send terminal input as one binary frame."""
+        payload = b"\x00" + text.encode("utf-8")  # Mist input requires one leading channel marker.
+        self._log.emit(logging.DEBUG, "shell_input_start", {"byte_count": len(payload)})  # Log only byte count.
+        self._write(payload, binary=True)  # Preserve the exact UTF-8 bytes on the wire.
+        self._log.emit(logging.DEBUG, "shell_input_ready", {"byte_count": len(payload)})  # Log only byte count.
+
+    def resize(self, cols: int, rows: int) -> None:
+        """Send the terminal size as one text frame."""
+        message = json.dumps({"resize": {"width": cols, "height": rows}})  # Preserve the protocol shape.
+        self._log.emit(logging.DEBUG, "shell_resize_start", {"count": 2})  # Do not log unbounded dimensions.
+        self._write(message, binary=False)  # Keep resize order with input writes.
+        self._log.emit(logging.DEBUG, "shell_resize_ready", {"status": "sent"})  # Log safe completion.
+
+    def _write(self, payload: str | bytes, binary: bool) -> None:
+        """Write one frame and close the connection on failure."""
+        try:  # A broken link must close the terminal session.
+            with self._send_lock:  # Preserve input and resize frame order.
+                socket = self._connection.resource("socket")  # Refuse writes after close.
+                if binary and hasattr(socket, "send_binary"):  # Real sockets expose a binary helper.
+                    socket.send_binary(payload)  # Send the binary input frame.
+                elif binary:  # Fakes and older clients use the opcode form.
+                    socket.send(payload, opcode=ABNF.OPCODE_BINARY)  # Preserve the binary opcode.
+                else:  # Resize uses a text frame.
+                    socket.send(payload)  # Send the JSON resize message.
+        except (websocket.WebSocketException, OSError) as error:
+            self._connection.close()  # Stop the reader after a failed write.
+            raise StreamRequestError("not_open", "The shell connection is not open.") from error  # Stable refusal.
+
+
+class ShellLifecycle:
+    """Provide the shared close operation for shell clients."""
+
+    _connection: ShellConnection  # Subclasses create the connection collaborator.
+
+    def close(self) -> None:
+        """Close the shell connection from any thread."""
+        self._connection.close()  # The connection owns socket detachment and shutdown.
+
+
+class ShellClient(ShellLifecycle):
+    """Coordinate one Mist shell connection and its collaborators."""
 
     def __init__(
         self,
@@ -34,209 +186,26 @@ class ShellClient:
         factory: Callable[..., Any] = websocket.create_connection,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        """Build the shell client.
-
-        Args:
-            endpoint: The connection parameter source.
-            policy: The address policy.
-            factory: The websocket factory, or a fake in tests.
-            clock: The monotonic clock.
-        """
-        self._endpoint = endpoint  # The endpoint owns auth and TLS settings.
-        self._policy = policy  # The policy prevents credential leaks.
-        self._factory = factory  # Tests inject a controlled socket factory.
-        self._clock = clock  # Tests can use a fake clock.
-        self._socket: Any | None = None  # The socket exists after open.
-        self._reader: FrameReader | None = None  # The frame reader exists after open.
-        self._closed = threading.Event()  # close() wakes read loops quickly.
-        self._lock = threading.Lock()  # Protect the socket reference.
-        self._send_lock = threading.Lock()  # Preserve input and resize frame order.
+        """Build the shell collaborators."""
+        self._connection = ShellConnection(endpoint, policy, factory, clock)  # Own socket and reader state.
+        self._reader = ShellFrameReader(
+            self._connection, clock, endpoint.profile.read_timeout_seconds
+        )  # Own bounded output reads.
+        self._writer = ShellFrameWriter(self._connection, threading.Lock())  # Own ordered input and resize writes.
 
     def open(self, url: str, cols: int, rows: int) -> None:
-        """Open the shell WebSocket and send the initial size.
-
-        Args:
-            url: The shell address from the Mist REST trigger.
-            cols: Initial terminal columns.
-            rows: Initial terminal rows.
-        """
-        safe_url = self._policy.check(url)  # Refuse an unsafe URL before credentials are built.
-        host = self._endpoint.host_label(safe_url)  # Logs can hold only the host.
-        logger.info("Opening Mist shell WebSocket to host %s", host)  # Log before the network connection.
-        socket = self._factory(
-            safe_url,
-            header=self._endpoint.headers(),
-            cookie=self._endpoint.cookie(),
-            sslopt=self._endpoint.sslopt(),
-            enable_multithread=True,
-            skip_utf8_validation=True,
-            timeout=self._endpoint.profile.subscribe_timeout_seconds,  # Bound a stalled TCP or TLS handshake.
-        )  # Open with thread-safe websocket-client mode.
-        socket.settimeout(self._endpoint.profile.subscribe_timeout_seconds)  # Keep writes from using read timeouts.
-        with self._lock:  # Publish the socket under the lock.
-            self._socket = socket  # send(), resize(), and close() can now use it.
-            self._reader = FrameReader(
-                socket, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds
-            )  # Shared reader handles control frames.
-            self._closed.clear()  # A new connection starts open.
-        logger.debug("Opened Mist shell WebSocket to host %s", host)  # Do not log path or headers.
-        self.resize(cols, rows)  # Send the terminal size immediately after open.
+        """Open the shell connection and send its initial size."""
+        self._connection.open(url)  # Validate and publish the socket first.
+        self._writer.resize(cols, rows)  # Send the initial dimensions immediately.
 
     def read(self, timeout: float | None = None) -> bytes | None:
-        """Read one shell output frame.
-
-        Args:
-            timeout: Maximum wait in seconds, or None for one quiet interval.
-
-        Returns:
-            Output bytes with one leading Mist channel NUL removed, or None after a quiet interval.
-
-        Raises:
-            ConnectionClosed: The connection ended.
-        """
-        deadline = None if timeout is None else self._clock() + timeout  # None means one socket quiet interval.
-        while not self._closed.is_set():  # Local close ends the read loop quickly.
-            wait = (
-                self._read_slice() if deadline is None else min(self._read_slice(), max(0.0, deadline - self._clock()))
-            )  # Keep every receive shorter than the keepalive interval.
-            if deadline is not None and wait <= 0:  # The requested wait expired.
-                return None  # A quiet interval is not an error.
-            frame = self._recv_once(wait)  # Receive with a short timeout.
-            if frame is None:  # The socket timed out or returned a control frame.
-                if deadline is None:  # The caller asked for one quiet interval.
-                    return None  # Match the contract quiet result.
-                continue  # The bounded wait can continue.
-            return self._strip_channel_marker(frame)  # Remove only the Mist channel marker byte.
-        raise ConnectionClosed(dropped=False)  # A local close is a clean end.
+        """Return one shell output frame or no data."""
+        return self._reader.read(timeout)  # The reader owns keepalive and marker behavior.
 
     def send(self, text: str) -> None:
-        """Send terminal input as a binary frame.
-
-        Args:
-            text: The terminal input text.
-
-        Raises:
-            StreamRequestError: The socket is not open.
-        """
-        payload = b"\x00" + text.encode("utf-8")  # Mist shell input requires a leading NUL byte.
-        logger.debug("Sending %s Mist shell input bytes", len(payload))  # Debug level: paste sends many chunks.
-        with self._send_lock:  # Preserve input order across web threads.
-            socket = self._open_socket()  # Refuse sends after close.
-            self._write_binary(socket, payload)  # Send one binary frame or close on write failure.
-        logger.debug("Sent %s Mist shell input bytes", len(payload))  # Log only the byte count.
+        """Send terminal input as one binary frame."""
+        self._writer.send(text)  # The writer owns ordering and failure closure.
 
     def resize(self, cols: int, rows: int) -> None:
-        """Send the terminal size.
-
-        Args:
-            cols: Terminal columns.
-            rows: Terminal rows.
-
-        Raises:
-            StreamRequestError: The socket is not open.
-        """
-        message = json.dumps({"resize": {"width": cols, "height": rows}})  # The shell protocol defines this shape.
-        logger.debug("Sending Mist shell resize to %s columns and %s rows", cols, rows)  # Debug level: drags are busy.
-        with self._send_lock:  # Keep resize order consistent with input frames.
-            socket = self._open_socket()  # Refuse resize after close.
-            self._write_text(socket, message)  # Send one text frame or close on write failure.
-        logger.debug("Sent Mist shell resize to %s columns and %s rows", cols, rows)  # Log after send.
-
-    def close(self) -> None:
-        """Close the shell WebSocket from any thread."""
-        logger.info("Closing Mist shell WebSocket")  # Log before changing state.
-        self._closed.set()  # Reader loops see the local close within one socket timeout.
-        with self._lock:  # Copy the socket while protected.
-            socket = self._socket  # The socket can be None before open.
-            self._socket = None  # Future sends fail as not open.
-            self._reader = None  # Future reads cannot use the old socket.
-        if socket is not None:  # close() before open is harmless.
-            FrameReader.close_socket(socket)  # Abort, close, and shutdown to release CLOSE_WAIT sockets.
-        logger.debug("Closed Mist shell WebSocket")  # Log after the close request.
-
-    def _open_socket(self) -> Any:
-        """Return the open socket.
-
-        Returns:
-            The current websocket object.
-
-        Raises:
-            StreamRequestError: The socket is not open.
-        """
-        socket = self._socket  # Copy the socket reference.
-        if socket is None or self._closed.is_set():  # Sends after close must fail.
-            raise StreamRequestError("not_open", "The shell connection is not open.")  # Contract refusal.
-        return socket  # The caller can send while holding its own send lock.
-
-    def _recv_once(self, timeout: float) -> bytes | None:
-        """Receive one frame with a short timeout.
-
-        Args:
-            timeout: The socket timeout for this attempt.
-
-        Returns:
-            The frame payload, or None on a timeout or control frame.
-
-        Raises:
-            ConnectionClosed: The socket ended.
-        """
-        reader = self._reader  # Copy the current frame reader.
-        if reader is None:  # A local close removed the reader.
-            raise ConnectionClosed(dropped=False)  # The caller should end cleanly.
-        frame = reader.read(timeout)  # The shared reader handles keepalive and close codes.
-        return None if frame is None else frame.payload  # The caller removes any Mist channel marker.
-
-    def _read_slice(self) -> float:
-        """Return one bounded socket wait slice.
-
-        Returns:
-            A short wait that lets keepalive fire before two intervals pass.
-        """
-        interval = self._endpoint.profile.read_timeout_seconds  # The profile controls keepalive timing.
-        return max(0.01, min(0.1, interval / 2))  # Keep a lower bound so sockets do not spin.
-
-    def _strip_channel_marker(self, frame: bytes) -> bytes:
-        """Remove one leading Mist channel marker byte from output.
-
-        Args:
-            frame: One shell or screen output frame.
-
-        Returns:
-            The frame after one leading NUL byte is removed, or the original frame.
-        """
-        return frame[1:] if frame.startswith(b"\x00") else frame  # Remove exactly one leading channel marker.
-
-    def _write_text(self, socket: Any, message: str) -> None:
-        """Send one text frame.
-
-        Args:
-            socket: The open websocket object.
-            message: The text frame payload.
-
-        Raises:
-            StreamRequestError: The write failed.
-        """
-        try:  # A slow or broken link must close the terminal session.
-            socket.send(message)  # Resize is a text frame.
-        except (websocket.WebSocketException, OSError) as exc:
-            self.close()  # Close the reader after a failed write.
-            raise StreamRequestError("not_open", "The shell connection is not open.") from exc  # Contract refusal.
-
-    def _write_binary(self, socket: Any, payload: bytes) -> None:
-        """Send one binary frame.
-
-        Args:
-            socket: The open websocket object.
-            payload: The binary payload.
-
-        Raises:
-            StreamRequestError: The write failed.
-        """
-        try:  # A failed paste write must close the terminal session.
-            if hasattr(socket, "send_binary"):  # websocket-client exposes this helper on real sockets.
-                socket.send_binary(payload)  # Use the helper when present.
-            else:
-                socket.send(payload, opcode=ABNF.OPCODE_BINARY)  # Fakes or older clients can use the opcode form.
-        except (websocket.WebSocketException, OSError) as exc:
-            self.close()  # Close the reader after a failed write.
-            raise StreamRequestError("not_open", "The shell connection is not open.") from exc  # Contract refusal.
+        """Send the current terminal dimensions."""
+        self._writer.resize(cols, rows)  # The writer preserves ordering with input.

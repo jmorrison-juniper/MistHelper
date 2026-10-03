@@ -16,24 +16,21 @@ from src.websocket_streams.catalog.model import (
     Safety,
     UtilityDefinition,
 )  # Tests build local definitions.
-from src.websocket_streams.intake.fields import StreamRequestError  # The manager raises these errors.
-from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # Factory tests assert runner classes.
-from src.websocket_streams.live.runners.shell import ShellRunner  # Factory tests assert runner classes.
-from src.websocket_streams.live.runners.text import ShellAddressFilter  # The filter test counts redaction filters.
-from src.websocket_streams.live.runners.utility.runner import UtilityRunner  # Factory tests assert runner classes.
-from src.websocket_streams.live.runners.utility.screen import ScreenRunner  # Factory tests assert runner classes.
-from src.websocket_streams.live.sessions.manager import (
-    RunnerFactory,
-    StreamSessionManager,
-)  # The tests cover the manager.
-from src.websocket_streams.live.sessions.record import SessionState  # Tests finish sessions directly.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # The manager raises these errors.
+from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked requests by hand.
+from src.websocket_streams.live.runners.channel.runner import (
+    ChannelStreamRunner,
+)  # Factory tests assert runner classes.
+from src.websocket_streams.live.runners.shell.runners import ScreenRunner, ShellRunner  # Factory runner classes.
+from src.websocket_streams.live.runners.text.redaction import ShellAddressFilter  # Count redaction filters.
+from src.websocket_streams.live.runners.utility.runner.utility_runner import UtilityRunner  # Utility runner class.
+from src.websocket_streams.live.sessions.manager.factory import RunnerFactory  # Test concrete runner selection.
+from src.websocket_streams.live.sessions.manager.lifecycle import StreamSessionManager  # Test manager behavior.
+from src.websocket_streams.live.sessions.record.state import SessionState  # Tests finish sessions directly.
 from src.websocket_streams.live.sessions.settings import StreamSettings  # The manager needs limits.
 from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests assert the shell queue type.
-from src.websocket_streams.live.terminal.state import (
-    TerminalSize,
-    TerminalState,
-)  # Tests assert terminal values.
+from src.websocket_streams.live.terminal.state.size import TerminalSize  # Tests assert terminal size values.
+from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Tests assert state values.
 from src.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     TransportProfile,
@@ -211,8 +208,9 @@ class TestStreamSessionManager:
         assert (first, second, third) == (True, True, False)  # Only input before readiness is queued.
         assert factory.runners[0].inputs == ["show ", "version\r", "exit\r"]  # The runner receives exact order.
         assert "ex.shell" in caplog.text  # The audit line names the key.
-        assert "device-a" in caplog.text  # The audit line names the device.
-        assert "site-a" in caplog.text  # The audit line names the site.
+        assert '"status":"shell"' in caplog.text  # The structured audit names the bounded safety state.
+        assert "device-a" not in caplog.text  # The safe field boundary removes device identifiers.
+        assert "site-a" not in caplog.text  # The safe field boundary removes site identifiers.
         assert "show " not in caplog.text  # The audit line never logs shell text.
 
     def test_session_returns_handle_and_unknown_session_raises(self) -> None:

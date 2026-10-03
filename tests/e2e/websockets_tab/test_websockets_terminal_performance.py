@@ -56,8 +56,7 @@ def test_sc001_echo_time_for_200_keys(page: Any, terminal_harness: TerminalPorta
     print(f"SC-001 echo median_ms={median_ms:.2f} p95_ms={p95_ms:.2f}")  # Report measurement.
     path = terminal_harness.screenshot(page, "perf-sc001-echo.png")  # Save evidence.
     assert path.exists() is True  # The screenshot must exist.
-    assert median_ms < 50.0  # SC-001 allows 50 ms, and one scheduler pause does not move the median.
-    assert p95_ms < 500.0  # The browser E2E run allows Windows scheduler jitter but still bounds latency.
+    assert p95_ms < 50.0  # SC-001 requires 95 percent of the measured keys to stay below 50 ms.
 
 
 def test_sc007_one_mb_output(page: Any, terminal_harness: TerminalPortalHarness) -> None:

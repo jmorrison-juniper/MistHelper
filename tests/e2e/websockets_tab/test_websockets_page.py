@@ -21,7 +21,8 @@ from typing import Any  # Type Playwright objects without importing private type
 
 import pytest  # Use fixtures and Playwright integration.
 
-from src.websocket_streams.live.sessions.buffer import MessagePage, StreamMessage  # The fake keeps real records.
+from src.websocket_streams.live.sessions.buffer.message import StreamMessage
+from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake keeps real records.
 
 logger = logging.getLogger(__name__)  # Keep this test module visible in logs.
 
@@ -67,6 +68,18 @@ class FakeWebSocketServices:
         self._next_id = 1  # Deterministic identifiers make tests easy to read.
         self.shell_inputs: list[dict[str, object]] = []  # Record shell input forms.
         self.terminal_data: dict[str, bytes] = {}  # Store fake terminal byte history by session.
+        lifecycle = SimpleNamespace(
+            start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
+        )  # Group fake session lifecycle behavior.
+        self.sessions = SimpleNamespace(
+            lifecycle=lifecycle, messages=SimpleNamespace(read=self.read_messages)
+        )  # Group fake session behavior.
+        self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group fake catalog behavior.
+        self.artifacts = SimpleNamespace(
+            delete=self.delete_session, download=self.download_session
+        )  # Group fake artifact behavior.
+        self.terminal = self  # Expose direct fake terminal behavior.
+        self.pickers = SimpleNamespace(site=self, related=self)  # Group fake picker behavior.
 
     def reset(self) -> None:
         """Clear sessions before one browser story."""
@@ -94,7 +107,7 @@ class FakeWebSocketServices:
         with self._lock:  # Session limit and identifier allocation must be atomic.
             live = [session.title for session in self._sessions.values() if session.live]  # Current live titles.
             if len(live) >= 2:  # The fake limit is two sessions.
-                from src.websocket_streams.intake.fields import StreamRequestError  # Import only on refusal.
+                from src.websocket_streams.intake.fields.error import StreamRequestError  # Import only on refusal.
 
                 raise StreamRequestError(
                     "limit_reached", "The live session limit is reached.", {"live": live}
@@ -396,7 +409,7 @@ def websocket_portal(fake_services: FakeWebSocketServices) -> Iterator[str]:
     import mistapi  # Patch the site picker SDK seam.
     from werkzeug.serving import make_server  # Start an in-process server.
 
-    from src.websocket_streams.web.services import WebSocketsServices  # Inject the fake services.
+    from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Inject the fake services.
     from web_portal.app import WebPortalApp  # Build the same app as the portal.
     from web_portal.menu_registry import build_static_menu_actions  # Supply normal menu actions.
 
@@ -409,7 +422,7 @@ def websocket_portal(fake_services: FakeWebSocketServices) -> Iterator[str]:
         patcher.setattr(mistapi.api.v1.orgs.sites, "listOrgSites", list_sites)  # Patch site picker.
         app = WebPortalApp.create_app(SimpleNamespace(), build_static_menu_actions(), ORG_ID)  # Build app.
         app.config["TESTING"] = True  # Raise route errors during the test.
-        app.config[WebSocketsServices.CONFIG_KEY] = fake_services  # Inject the fake service.
+        app.config[WebSocketServiceRegistry.CONFIG_KEY] = fake_services  # Inject the fake service.
         server = make_server("127.0.0.1", free_port(), app, threaded=True)  # Bind a free port.
         thread = threading.Thread(target=server.serve_forever, daemon=True)  # Serve beside Playwright.
         logger.info("Starting the WebSocket portal on port %d", server.server_port)  # Log server start.

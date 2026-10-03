@@ -12,7 +12,7 @@ from enum import Enum  # The annotation tests need a small enum.
 
 from src.websocket_streams.catalog.model import FieldKind, Safety  # Field kinds and safety classes.
 from src.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # The class under test.
-from src.websocket_streams.catalog.utilities import UtilityCatalog  # The catalog reads the SDK signatures.
+from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Read installed SDK signatures.
 from src.websocket_streams.catalog.utility_text import UtilityText  # The class under test.
 
 

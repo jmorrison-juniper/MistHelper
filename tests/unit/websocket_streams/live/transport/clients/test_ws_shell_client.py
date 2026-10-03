@@ -2,6 +2,8 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # Logging tests parse structured transport records.
+import logging  # Logging tests capture debug records.
 import threading  # Send from another thread is part of the contract.
 from collections.abc import Callable  # The client helper accepts fake factories.
 
@@ -9,13 +11,15 @@ import pytest  # Tests assert expected transport errors.
 from websocket._url import get_proxy_info  # FR-005: the pinned library reads the proxy of the host.
 
 import websocket  # Socket fakes raise websocket-client write errors.
-from src.websocket_streams.intake.fields import StreamRequestError  # Sends use the request error contract.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Sends use the request error contract.
 from src.websocket_streams.live.transport.endpoint import (  # Build client endpoints.
     MistStreamEndpoint,
     ShellAddressPolicy,
     TransportProfile,
 )
-from src.websocket_streams.live.transport.frames import ConnectionClosed  # Read errors use this structured close.
+from src.websocket_streams.live.transport.runtime.reader.contracts import (
+    ConnectionClosed,
+)  # Read errors use this structured close.
 from src.websocket_streams.live.transport.shell_client import ShellClient  # Test the shell transport client.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
@@ -426,3 +430,24 @@ class TestShellClient:
         endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Build endpoint with fake auth.
         policy = ShellAddressPolicy(endpoint.cloud_host, allow_loopback=allow_loopback)  # Build address policy.
         return ShellClient(endpoint, policy, factory=factory or websocket.create_connection)  # Return the client.
+
+
+class TestShellStructuredLogging:
+    """Verify shell records use the T072 safe JSON boundary."""
+
+    def test_shell_records_are_json_and_exclude_input(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Emit structured records without shell addresses or terminal input."""
+        caplog.set_level(logging.DEBUG, logger="src.websocket_streams.live.transport.shell_client")  # Capture events.
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = ShellDevice()  # Build a normal shell device.
+            cloud.register("/shell/private-token", device)  # Use a path that must not enter logs.
+            client = TestShellClient()._client(cloud)  # Build the client with focused test collaborators.
+            client.open(f"{cloud.base_ws_url}/shell/private-token", 80, 24)  # Emit open and resize records.
+            client.send("terminal-secret-text\r")  # Emit an input record with only a byte count.
+            client.close()  # Emit close records.
+        records = [json.loads(record.message) for record in caplog.records]  # Parse every captured record.
+        serialized = json.dumps(records)  # Build one text value for secret checks.
+        assert records  # The shell client must use the structured logger.
+        assert all("event" in record for record in records)  # Every record has the required event field.
+        assert "private-token" not in serialized  # The shell path must not cross the log boundary.
+        assert "terminal-secret-text" not in serialized  # Terminal input must not cross the log boundary.

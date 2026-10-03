@@ -13,9 +13,10 @@ from src.websocket_streams.catalog.model import (
     FieldKind,
     FieldSpec,
 )  # Tests build local definitions.
-from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # The tests cover the channel runner.
-from src.websocket_streams.live.sessions.record import SessionState  # Fake sinks record final state.
+from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked requests by hand.
+from src.websocket_streams.live.runners.channel import runner as channel_runner_module  # Patch health timing.
+from src.websocket_streams.live.runners.channel.runner import ChannelStreamRunner  # Test channel behavior.
+from src.websocket_streams.live.sessions.record.state import SessionState  # Fake sinks record final state.
 from src.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
@@ -141,11 +142,13 @@ class StopAfterOpenClient:
     def __init__(self, _endpoint: object, channels: tuple[str, ...]) -> None:
         """Record the channel set."""
         self.channels = channels  # The runner should pass all channel paths.
+        self.open_called = False  # Tests verify whether a stop prevented the network action.
         self.run_called = False  # A stop after open must prevent run().
         StopAfterOpenClient.instances.append(self)  # Keep the instance for assertions.
 
     def open(self) -> None:
         """Request stop as soon as open returns."""
+        self.open_called = True  # Record the network action before the injected stop.
         if StopAfterOpenClient.stop_event is None:  # The test must inject the stop event.
             raise AssertionError("The stop event was not configured.")  # Fail with a clear reason.
         StopAfterOpenClient.stop_event.set()  # Simulate Stop during the post-open gap.
@@ -278,7 +281,7 @@ class TestChannelStreamRunner:
             sink = FakeSink()  # Record runner callbacks.
             endpoint = self._endpoint(cloud, reconnect_delays=(0.01, 0.01))  # Use a two-retry budget.
             runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
-            monkeypatch.setattr(ChannelStreamRunner, "_HEALTHY_OPERATION_SECONDS", 0.02)  # Bound this test.
+            monkeypatch.setattr(channel_runner_module, "HEALTHY_OPERATION_SECONDS", 0.02)  # Bound this test.
             try:  # Stop the runner after repeated healthy recovery.
                 runner.start()  # Start the daemon reader thread.
                 for live_count in range(1, 5):  # Exceed one retry budget with healthy connections.
@@ -367,15 +370,42 @@ class TestChannelStreamRunner:
             assert time.monotonic() - start < 0.5  # Stop woke the wait promptly.
             assert finished == [(SessionState.STOPPED, "The operator stopped the session.")]  # Stop state.
 
+    def test_stop_before_client_preparation_does_not_open(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Do not open a new client after an operator stop."""
+        sink = FakeSink()  # Record runner callbacks.
+        endpoint = self._endpoint_for_url("ws://127.0.0.1:1/api-ws/v1/stream")  # The fake ignores the URL.
+        runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+        entered = threading.Event()  # Signal the gap before client preparation.
+        resume = threading.Event()  # Hold the worker until stop returns.
+        prepare = runner._attempt._prepare_client  # Preserve the real preparation behavior.
+
+        def paused_prepare() -> object:
+            """Pause before the runner publishes a new client."""
+            entered.set()  # Tell the test that the worker reached the race window.
+            resume.wait(1.0)  # Wait for the operator stop with a test bound.
+            return prepare()  # Continue through the real client preparation.
+
+        StopAfterOpenClient.instances = []  # Clear prior fake-client instances.
+        StopAfterOpenClient.stop_event = runner._state.runtime.stop  # Inject the runner stop event.
+        monkeypatch.setattr(runner._attempt, "_prepare_client", paused_prepare)  # Pause the reported race window.
+        monkeypatch.setattr(channel_runner_module, "StreamClient", StopAfterOpenClient)  # Track open calls.
+        runner.start()  # Start the daemon reader thread.
+        assert entered.wait(1.0) is True  # Confirm that the worker reached the controlled window.
+        runner.stop()  # Stop before the worker prepares its client.
+        resume.set()  # Let the worker continue after stop returns.
+        finished = sink.wait_for_finished(1, 1.0)  # Wait for the stopped outcome.
+        assert finished == [(SessionState.STOPPED, "The operator stopped the session.")]  # Stop state.
+        assert StopAfterOpenClient.instances[0].open_called is False  # No connection started after stop.
+
     def test_stop_after_open_does_not_mark_live_or_run_reader(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Stop after open before the runner marks the session live."""
         sink = FakeSink()  # Record runner callbacks.
         endpoint = self._endpoint_for_url("ws://127.0.0.1:1/api-ws/v1/stream")  # The fake ignores the URL.
         runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
         StopAfterOpenClient.instances = []  # Clear prior fake-client instances.
-        StopAfterOpenClient.stop_event = runner._state.stop  # Inject the runner stop event for the fake client.
+        StopAfterOpenClient.stop_event = runner._state.runtime.stop  # Inject the runner stop event for the fake client.
         monkeypatch.setattr(
-            "src.websocket_streams.live.runners.channel.StreamClient", StopAfterOpenClient
+            "src.websocket_streams.live.runners.channel.runner.StreamClient", StopAfterOpenClient
         )  # Replace only this test's stream client.
         runner.start()  # Start the daemon reader thread.
         finished = sink.wait_for_finished(1, 1.0)  # Wait for stopped state.

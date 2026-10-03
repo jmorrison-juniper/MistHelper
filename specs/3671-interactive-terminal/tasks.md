@@ -435,13 +435,16 @@ Compare the messages, the states, and the end reasons.
   (delivered: `documentation/operator-guide.md`, `documentation/wiki/Web-Portal.md`)
 - [X] T053 [P] Add the release note `changelog.d/issue-3671-interactive-terminal.md`.
   (delivered: `changelog.d/issue-3671-interactive-terminal.md`)
-- [x] T054 Run the quality gates per `quickstart.md`. Also run mypy with `MYPY_PATHS`,
-  Bandit, Vulture, pydocstyle, and the complexity gate. Fix each finding. Record the
-  results in `research.md` section R14. The pull request body copies the same results.
+- [x] T054 Run the feature gates per `quickstart.md`. Also run mypy with `MYPY_PATHS`,
+  Bandit, Vulture, pydocstyle, interrogate, Radon, and Pylint. Record the results in
+  `research.md` section R14. The feature gates pass. The separate local test-quality scope
+  test has 48 failures and 34 passes on this branch and clean `main`. Issue #3742 tracks
+  that baseline defect.
   (delivered: `specs/3671-interactive-terminal/research.md`, section R14)
-- [x] T055 Run the live checks per `quickstart.md` section 5. Record the shell host, the
-  NUL prefix result, and the longest pause of Show ARP and Show Route. If a pause is longer
-  than 5 seconds, change the quiet time in the trigger table.
+- [x] T055 Run the read-only live checks per `quickstart.md` section 5. Record the shell
+  host, the NUL prefix result, and the longest pause of Show ARP and Show Route. If a pause
+  is longer than 5 seconds, change the quiet time in the trigger table. The separate
+  owner-approved port-bounce journey is not T055 evidence.
   (delivered: `specs/3671-interactive-terminal/research.md`, section R13)
 - [ ] T056 Run speckit-analyze. Fix each CRITICAL finding and each HIGH finding, then run
   the analysis again.
@@ -455,6 +458,16 @@ Compare the messages, the states, and the end reasons.
   `tests/e2e/websockets_tab/test_websockets_terminal.py` and the route scan in
   `tests/unit/websocket_streams/web/test_ws_secret_guard.py`.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`, `tests/unit/websocket_streams/web/test_ws_secret_guard.py`)
+- [x] T070 Fix issue #3740. Consume the retry budget after immediate post-subscription
+  drops. Reset it only after one event or 5 stable seconds. Prove exhaustion and reset
+  behavior with channel runner unit tests.
+  (delivered: `src/websocket_streams/live/runners/channel.py`,
+  `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`)
+- [x] T071 Fix issue #3741. Report failed local input and live resize writes as failed
+  sessions with `WRITE_FAILED_REASON`. Return the transport refusal to the HTTP route.
+  Preserve deferred resize before the connection opens and explicit operator-stop behavior.
+  (delivered: `src/websocket_streams/live/runners/shell.py`,
+  `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`)
 
 ### Delivery pipeline (constitution Principle IV)
 
@@ -601,3 +614,222 @@ Lead:      T004, T005, T023, T027, and T028
 - Each executable line gets an inline comment. Each action logs before and after.
 - No log holds a token, a cookie, an address path, a key, pasted text, or output.
 - Commit after each lane merges into the feature branch.
+
+## Phase 10: Convergence
+
+- [X] T072 [P] CRITICAL: Replace
+  `src/websocket_streams/live/transport/frames.py` with the package
+  `src/websocket_streams/live/transport/runtime/`, and keep its `__init__.py`
+  docstring-only.
+  Put frame reading, frame decoding, and shared structured logging in separate leaf modules.
+  The logger MUST write each record as ASCII JSON, permit only bounded safe fields, and
+  redact secrets at the boundary. Replace
+  `tests/unit/websocket_streams/live/transport/test_ws_frames.py` with focused tests under
+  `tests/unit/websocket_streams/live/transport/runtime/`. The tests MUST parse each record,
+  check field bounds, and test redaction for tokens, cookies, shell paths, keys, pasted
+  text, and terminal output. Preserve the frame and keepalive behavior that Constitution
+  I, V, and VII, FR-009, and SC-006 require (contradicts).
+
+- [X] T073 CRITICAL: After T072, decompose every noncompliant class and function in
+  `src/websocket_streams/live/transport/endpoint.py`,
+  `src/websocket_streams/live/transport/stream_client.py`, and
+  `src/websocket_streams/live/transport/shell_client.py`. Use named collaborator classes,
+  not wrappers, and keep each hierarchy within the five-item limits. Use the shared
+  structured logger from T072, and update the endpoint and client tests under
+  `tests/unit/websocket_streams/live/transport/`. Preserve authentication, TLS, proxy,
+  keepalive, reconnect, close, input, and resize. Constitution I, II, V, and VII and
+  FR-001 through FR-009 require this behavior (contradicts).
+
+- [X] T074 [P] CRITICAL: After T072, decompose every noncompliant class and function in
+  `src/websocket_streams/live/terminal/byte_history.py`,
+  `src/websocket_streams/live/terminal/input_queue.py`, and
+  `src/websocket_streams/live/terminal/gateway.py`. Use named collaborator classes, not
+  wrappers, and keep `src/websocket_streams/live/terminal/state.py` compliant. Use the
+  shared structured logger from T072, and update the matching tests under
+  `tests/unit/websocket_streams/live/terminal/`. Preserve history, queue order, rate, read,
+  input, and resize. Constitution I, II, V, and VII, FR-011 through FR-019, and FR-046
+  require this behavior (contradicts).
+
+- [X] T075 [P] CRITICAL: After T072, replace each noncompliant utility module with a
+  compliant package at `src/websocket_streams/live/runners/utility/filters/`,
+  `src/websocket_streams/live/runners/utility/runner/`, and
+  `src/websocket_streams/live/runners/utility/triggers/`. Keep each `__init__.py`
+  docstring-only, and move behavior into named leaf classes. Do not add a wrapper or a
+  compatibility export. Use the shared structured logger from T072, and update imports
+  and tests under `tests/unit/websocket_streams/live/runners/utility/` and
+  `tests/contract/websocket_streams/`. Preserve trigger parity, early output, capture,
+  filtering, time limits, and stop. Constitution I, II, V, and VII and FR-002 through
+  FR-004 require this behavior (contradicts).
+
+- [X] T076 [P] CRITICAL: After T072, replace
+  `src/websocket_streams/live/runners/shell.py` with the compliant package
+  `src/websocket_streams/live/runners/shell/`, and keep its `__init__.py` docstring-only.
+  Split terminal opening, reading, outcomes, input, and screen behavior into named classes.
+  Do not add wrappers or compatibility exports. Use the shared structured logger from T072,
+  and update imports and
+  `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`. Preserve the behavior
+  for shell safety, first output, deferred input, resize, close, time limits, and failed
+  writes. Constitution I, II, V, and VII and US1 require this behavior (contradicts).
+
+- [X] T077 [P] CRITICAL: Replace
+  `src/websocket_streams/web/static/websockets_terminal.js` with compliant leaf modules
+  under `src/websocket_streams/web/static/terminal/`. Group controller, input, clipboard,
+  menu, paste, and preference behavior into nested folders with five entries or fewer.
+  Keep each class at five methods or fewer. Remove the pass-through wrapper, and load each
+  leaf script in dependency order from
+  `src/websocket_streams/web/templates/websockets_page.html`. Update
+  `src/websocket_streams/web/static/websockets.js` and the tests under
+  `tests/e2e/websockets_tab/`. Preserve every journey for the terminal and clipboard as
+  required by Constitution I and II, US1, and US2 (contradicts).
+
+- [X] T078 After T073 through T077, add the structural contract test
+  `tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py`.
+  Check every feature source path named in `plan.md`. Fail when a hierarchy has over five
+  child items, parameters, blocks, operations, or methods, or when a function exceeds 25
+  lines. Print the count of checked modules, classes, and functions. Prove failure against
+  one bounded bad fixture. Then run the test against the implementation that Constitution
+  I and II require (missing).
+
+- [X] T079 [P] CRITICAL: Extend
+  `tests/contract/websocket_streams/test_ws_sdk_contract.py` with a deterministic contract
+  test for the mistapi `WebSocketWrapper.start_with_trigger` path. Emit command output
+  while the REST trigger runs. Prove that no subscribed SDK consumer receives that output
+  because the SDK opens the WebSocket after the trigger. Also prove that the owned
+  subscribe-first path retains the same output. Use no network and state the checked
+  event count. This proof qualifies the bounded exception for an owned WebSocket under
+  the Technology Constraints, FR-001 through FR-003, and US3/AC1 (missing).
+
+- [ ] T080 CRITICAL: After all source tasks, reword every feature commit subject to
+  `version YY.MM.DD.HH.MM - description` with its UTC time. Preserve each commit content.
+  Verify every subject in the feature range and fail if one subject does not match.
+  Record the checked commit count in `specs/3671-interactive-terminal/research.md` per
+  Constitution IV (contradicts).
+
+- [X] T081 After T072 through T079, correct
+  `specs/3671-interactive-terminal/plan.md` and
+  `specs/3671-interactive-terminal/tasks.md`. Mark the observability gate PASS only after
+  the JSON parsing, ASCII, field-bound, and redaction tests pass. Mark the WebSocket gate
+  PASS only after T079 passes. Replace the standard-logging decision with the shared
+  structured-logging decision, and add exact test names and result counts to the evidence.
+  Keep T056 open until T083 passes. This proves compliance with Principle V, the exception
+  for an owned WebSocket, and the Constitution Check in the plan (partial).
+  (delivered: `specs/3671-interactive-terminal/plan.md` and
+  `specs/3671-interactive-terminal/tasks.md`. Evidence: the T081 evidence table below.)
+
+- [ ] T082 After T072 through T081, run every command in
+  `specs/3671-interactive-terminal/quickstart.md`. Run the repository syntax, Ruff, Black,
+  mypy, Bandit, Vulture, pydocstyle, interrogate, Radon, Pylint, unit, contract, guardrail,
+  integration, and browser gates. Run the focused structural, logging, secret-redaction,
+  and SDK-exception tests separately. Record each exact command, result, count, and
+  measurement in `specs/3671-interactive-terminal/research.md` per T054 and Constitution
+  IV (missing).
+
+- [ ] T083 After T082, run `speckit.analyze` against the final specification, plan, and
+  tasks. Fix every CRITICAL and HIGH finding. Fix each lower finding that concerns the
+  feature scope. Run the analysis again until no actionable finding remains. Record the
+  summary from each analysis in `specs/3671-interactive-terminal/research.md`. Then add
+  the final evidence to T056 and the Constitution Check in the plan (partial).
+
+- [ ] T084 After T083, rerun every gate from T082 against the final analyzed tree. If a
+  gate fails, fix the cause and rerun the complete affected gate set. Record the final
+  commands, results, counts, and measurements in
+  `specs/3671-interactive-terminal/research.md` per Constitution IV, T054, and T056
+  (missing).
+
+## Phase 11: Convergence Correction
+
+- [X] T085 [P] CRITICAL: After T072, replace
+  `src/websocket_streams/catalog/registry.py` and
+  `src/websocket_streams/catalog/utilities.py` with compliant packages. Keep each
+  `__init__.py` docstring-only, and move behavior into named leaf classes without wrappers.
+  Use the shared structured logger from T072. Update imports and tests under
+  `tests/unit/websocket_streams/catalog/`. Preserve catalog discovery, lock flags, fields,
+  safety classes, and page payloads as required by Constitution I, II, V, and VII
+  (contradicts).
+
+- [X] T086 [P] CRITICAL: After T072, replace
+  `src/websocket_streams/intake/fields.py`,
+  `src/websocket_streams/intake/identifiers.py`,
+  `src/websocket_streams/intake/pickers.py`, and
+  `src/websocket_streams/intake/start_request.py` with compliant packages. Keep each
+  `__init__.py` docstring-only, and move behavior into named leaf classes without wrappers.
+  Use the shared structured logger from T072. Update imports and tests under
+  `tests/unit/websocket_streams/intake/`. Preserve validation, identifiers, picker caches,
+  locks, targets, parameters, and request errors as required by Constitution I, II, V, and
+  VII (contradicts).
+
+- [X] T087 [P] CRITICAL: After T073, replace
+  `src/websocket_streams/live/runners/channel.py` and
+  `src/websocket_streams/live/runners/text.py` with compliant packages. Keep each
+  `__init__.py` docstring-only, and move behavior into named leaf classes without wrappers.
+  Use the shared structured logger from T072. Update imports and tests under
+  `tests/unit/websocket_streams/live/runners/`. Preserve retry budgets, healthy resets,
+  event routing, message shaping, packet summaries, and address redaction. Constitution I,
+  II, V, and VII, FR-007, FR-009, and T070 require this behavior (contradicts).
+
+- [X] T088 CRITICAL: After T074 through T076 and T085 through T087, replace
+  `src/websocket_streams/live/sessions/buffer.py`,
+  `src/websocket_streams/live/sessions/manager.py`, and
+  `src/websocket_streams/live/sessions/record.py` with compliant packages. Keep each
+  `__init__.py` docstring-only. Move behavior into named leaf classes without wrappers.
+  Use the shared structured logger from T072. Update imports and tests under
+  `tests/unit/websocket_streams/live/sessions/`. Preserve buffer limits, session states,
+  runner creation, terminal binding, cleanup, payloads, and failure behavior. Constitution
+  I, II, V, and VII and FR-013 through FR-019 require this behavior (contradicts).
+
+- [X] T089 [P] CRITICAL: After T074, replace
+  `src/websocket_streams/live/terminal/state.py` with the compliant package
+  `src/websocket_streams/live/terminal/state/`. Keep its `__init__.py` docstring-only.
+  Split size, status, state, and chunk payload behavior into named leaf classes without
+  wrappers. Use the shared structured logger from T072. Update imports and tests under
+  `tests/unit/websocket_streams/live/terminal/`. Preserve terminal state, size, close, and
+  payload behavior as required by Constitution I, II, V, and VII and FR-012 through FR-019
+  (contradicts).
+
+- [X] T090 CRITICAL: After T085 through T089, replace
+  `src/websocket_streams/web/blueprint.py` and
+  `src/websocket_streams/web/services.py` with compliant packages. Keep each `__init__.py`
+  docstring-only, and move route, request, service, and picker behavior into named leaf
+  classes without wrappers. Use the shared structured logger from T072. Update all imports,
+  route tests, service tests, and browser journeys under `tests/unit/websocket_streams/web/`
+  and `tests/e2e/websockets_tab/`. Preserve routes, CSRF checks, errors, limits, downloads,
+  pickers, and terminal service behavior. Constitution I, II, V, and VII and FR-046 through
+  FR-048 require this behavior (contradicts).
+
+- [X] T091 After T078 and T085 through T090, extend
+  `tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py`.
+  Include all 25 Python modules from the final analysis and each replacement leaf module.
+  Prove that every original path is compliant or became a compliant package. Check the 28
+  reported classes and the 19 reported functions. Print the counts of checked paths,
+  modules, classes, and functions. Rerun the bounded failure proof and the compliant-tree
+  proof per Constitution I and II (partial).
+
+### T081 evidence for completed convergence tasks
+
+All commands used `.venv\Scripts\python.exe`. Each command ran in the issue #3671
+worktree on 2026-10-02.
+
+| Task | Exact tests and command | Count and result |
+| - | - | - |
+| T072 | `test_records_are_ascii_json_with_only_bounded_safe_fields`, `test_sensitive_fields_are_redacted_at_boundary`, and `test_safe_text_values_redact_embedded_secrets`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_frame_decoder.py tests\unit\websocket_streams\live\transport\runtime\test_frame_reader.py tests\unit\websocket_streams\live\transport\runtime\test_structured_logging.py -q`. | PASS. 30 passed. The focused logging file contributes 15 passed tests. |
+| T073 | `test_endpoint_records_are_json_and_exclude_secrets`, `test_stream_records_are_json_and_exclude_channel_paths`, and `test_shell_records_are_json_and_exclude_input`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\test_ws_endpoint.py tests\unit\websocket_streams\live\transport\clients -q`. | PASS. 62 passed. |
+| T074 | `test_trim_reports_gap_and_keeps_newest_bytes`, `test_queued_send_then_release_preserves_order`, `test_input_size_and_rate_limits_preserve_contract_codes`, and `test_payload_logs_only_bounded_metadata`. Command: `python -m pytest tests\unit\websocket_streams\live\terminal -q`. | PASS. 25 passed. |
+| T075 | `test_trigger_posts_only_after_channel_subscribed`, `test_early_command_output_before_post_return_is_kept`, `test_show_command_runs_one_hundred_times_with_full_output`, and `test_utility_trigger_table_matches_sdk_requests`. Command: `python -m pytest tests\unit\websocket_streams\live\runners\utility tests\contract\websocket_streams\test_ws_utility_trigger_parity.py -q`. | PASS. 42 passed. |
+| T076 | `test_shell_first_output_marks_live_and_releases_queued_input`, `test_shell_logs_do_not_hold_address_input_or_output`, and `test_shell_history_preserves_raw_control_and_split_utf8_bytes`. Command: `python -m pytest tests\unit\websocket_streams\live\runners\test_ws_shell_runner.py -q`. | PASS. 18 passed. |
+| T077 | `test_j2_typed_text`, `test_j13_paste_keys`, `test_j19_split_screen_updates`, `test_j22_log_safety`, and `test_review_fr048_page_gets_no_shell_address`. Command: `python -m pytest tests\e2e\websockets_tab -q`. | PASS. 57 passed. |
+| T078 | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The red fixture failed at 6 module children. |
+| T079 | `TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention`. Command: `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py::TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention -q`. | PASS. 1 passed. The SDK path retained 0-of-1 events. The owned path retained 1-of-1 events. |
+| T085 | `test_stream_catalog_payload_hides_paths_and_marks_locks`, `test_stream_catalog_logs_bounded_json_without_catalog_keys`, and `test_utility_catalog_counts_match_contract`. Command: `python -m pytest tests\unit\websocket_streams\catalog -q`. | PASS. 18 passed. |
+| T086 | `test_identifier_logs_use_bounded_json_without_identifier_text`, `test_start_request_locks_shell_and_checks_confirmation`, and `test_picker_failure_returns_reason`. Command: `python -m pytest tests\unit\websocket_streams\intake -q`. | PASS. 32 passed. |
+| T087 | `test_post_subscription_flapping_consumes_retry_budget`, `test_stable_quiet_connections_receive_fresh_retry_budgets`, and `test_shell_address_filter_redacts_wss_address`. Command: `python -m pytest tests\unit\websocket_streams\live\runners\test_ws_channel_runner.py tests\unit\websocket_streams\live\runners\test_ws_message_text.py -q`. | PASS. 24 passed. |
+| T088 | `test_shell_audit_and_terminal_input_queue`, `test_terminal_payload_and_bytes`, and `test_runner_factory_builds_each_runner_kind`. Command: `python -m pytest tests\unit\websocket_streams\live\sessions -q`. | PASS. 46 passed. |
+| T089 | `test_size_and_close_logs_are_bounded_json`, `test_payload_matches_contract_fields`, and `test_payload_logs_only_bounded_metadata`. Command: `python -m pytest tests\unit\websocket_streams\live\terminal\test_ws_terminal_state.py -q`. | PASS. 6 passed. |
+| T090 | `test_post_without_the_form_token_is_refused`, `test_websocket_routes_do_not_leak_secrets`, `test_ready_terminal_gateway_reaches_the_manager`, and the 57 browser journeys. Commands: `python -m pytest tests\unit\websocket_streams\web -q` and `python -m pytest tests\e2e\websockets_tab -q`. | PASS. 49 unit tests and 57 browser tests passed. |
+| T091 | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The guard checked 27 mappings, 25 analyzed paths, 145 modules, 204 classes, and 618 functions. |
+
+- [ ] T092 After T085 through T091, repeat T080 through T084 in order. Reword commits only
+  after all correction commits exist. Update the plan and task evidence after T091 passes.
+  Then run all gates, run the final analysis, fix its findings, and run all affected gates
+  again. Do not treat the earlier T082 through T084 results as final evidence. Record the
+  final task-audit and STE results in `specs/3671-interactive-terminal/research.md` per
+  Constitution IV, T054, and T056 (partial).

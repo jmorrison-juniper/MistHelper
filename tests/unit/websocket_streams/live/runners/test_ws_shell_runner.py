@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # Structured shell records must parse as bounded JSON objects.
 import logging  # caplog checks that logs contain no terminal secrets.
 import threading  # Raw-output tests delay close until after the client starts reading.
 import time  # Tests use bounded waits for the reader thread.
@@ -10,19 +11,24 @@ import pytest  # The tests use fixtures and exception assertions.
 
 import websocket  # Failure tests build the same exception type as websocket-client.
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec, Safety, UtilityDefinition  # Build requests.
-from src.websocket_streams.intake.fields import StreamRequestError  # Write-failure tests check route errors.
-from src.websocket_streams.intake.start_request import StartRequest  # Runner input is already checked.
-from src.websocket_streams.live.runners.shell import ShellRunner  # The device shell runner under test.
-from src.websocket_streams.live.sessions.buffer import MessageBuffer  # A session needs a small event buffer.
-from src.websocket_streams.live.sessions.record import SessionState, StreamSession  # The runner writes here.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Write-failure tests check route errors.
+from src.websocket_streams.intake.start_request.models import StartRequest  # Runner input is already checked.
+from src.websocket_streams.live.runners.shell.runners import ShellRunner  # The device shell runner under test.
+from src.websocket_streams.live.sessions.buffer.message_buffer import (
+    MessageBuffer,
+)  # A session needs a small event buffer.
+from src.websocket_streams.live.sessions.record.session import StreamSession
+from src.websocket_streams.live.sessions.record.state import SessionResources, SessionState  # The runner writes here.
 from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Terminal output is byte history.
 from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Shell input queues until output.
-from src.websocket_streams.live.terminal.state import TerminalState  # The terminal stores size and history.
+from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Store size and history.
 from src.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
     TransportProfile,
 )  # Test endpoint.
+from src.websocket_streams.live.transport.runtime.logging.bounds import MAX_EVENT_LENGTH, MAX_FIELD_LENGTH
+from src.websocket_streams.live.transport.runtime.logging.fields import SAFE_FIELDS  # The logger allows these fields.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
 )  # Offline SDK-shaped session.
@@ -67,13 +73,9 @@ def _terminal() -> TerminalState:
 
 def _session(terminal: TerminalState | None = None) -> StreamSession:
     """Return one shell stream session."""
-    return StreamSession(
-        "shell-test",
-        _request(),
-        MessageBuffer(20, 99999),
-        time.monotonic,
-        terminal if terminal is not None else _terminal(),
-    )  # Return a real session sink, as the manager would.
+    selected = terminal if terminal is not None else _terminal()  # Use the supplied terminal or a writable default.
+    resources = SessionResources(MessageBuffer(20, 99999), time.monotonic, selected)  # Group session resources.
+    return StreamSession("shell-test", _request(), resources)  # Return a real session sink, as the manager would.
 
 
 def _endpoint(api: FakeApiSession, subscribe_timeout_seconds: float = 10.0) -> MistStreamEndpoint:
@@ -299,10 +301,10 @@ def test_shell_failed_input_write_reports_failed_local_close(monkeypatch: pytest
 
         def fail_send(_text: str) -> None:
             """Close the client and report the simulated failed transport write."""
-            runner._client.close()  # Match ShellClient behavior after a transport write failure.
+            runner._opening.client.close()  # Match ShellClient behavior after a transport write failure.
             raise StreamRequestError("not_open", "The shell connection is not open.")  # Return the route error.
 
-        monkeypatch.setattr(runner._client, "send", fail_send)  # Replace only the next input transport write.
+        monkeypatch.setattr(runner._opening.client, "send", fail_send)  # Replace only the next input transport write.
         with pytest.raises(StreamRequestError):  # The input request must still receive its transport error.
             runner.send_input("show version\r")  # Simulate a write that closes the local client.
         _wait_for_state(session, {SessionState.FAILED})  # The reader must map the local close to failed.
@@ -322,10 +324,10 @@ def test_shell_live_resize_write_failure_propagates(monkeypatch: pytest.MonkeyPa
 
         def fail_resize(_cols: int, _rows: int) -> None:
             """Close the client and report the simulated failed transport write."""
-            runner._client.close()  # Match ShellClient behavior after a transport write failure.
+            runner._opening.client.close()  # Match ShellClient behavior after a transport write failure.
             raise StreamRequestError("not_open", "The shell connection is not open.")  # Return the route error.
 
-        monkeypatch.setattr(runner._client, "resize", fail_resize)  # Fail the next live resize transport write.
+        monkeypatch.setattr(runner._opening.client, "resize", fail_resize)  # Fail the next live resize transport write.
         with pytest.raises(StreamRequestError):  # The route must not convert this failure into HTTP 202.
             runner.resize(100, 30)  # Send a resize after the connection is live.
         _wait_for_state(session, {SessionState.FAILED})  # The reader must also record the failed connection.
@@ -380,7 +382,8 @@ def test_shell_unexpected_sink_exception_fails_plainly() -> None:
     with FakeMistCloud() as cloud:  # The fake cloud sends one output frame.
         cloud.register("/shell/default", ShellDevice())  # Shell output triggers add_bytes.
         api = FakeApiSession(cloud)  # REST returns the shell URL.
-        session = RaisingSession("boom", _request(), MessageBuffer(20, 99999), time.monotonic, _terminal())  # Sink.
+        resources = SessionResources(MessageBuffer(20, 99999), time.monotonic, _terminal())  # Group sink resources.
+        session = RaisingSession("boom", _request(), resources)  # Build the failing sink.
         runner = _runner(api, session)  # Bind input to the raising sink.
         runner.start()  # Start the shell.
         _wait_for_state(session, {SessionState.FAILED})  # The runner catches the exception.
@@ -407,6 +410,14 @@ def test_shell_logs_do_not_hold_address_input_or_output(caplog: pytest.LogCaptur
     assert "/shell/default" not in caplog.text  # Logs must not hold the URL path.
     assert "SECRET-TYPED" not in caplog.text  # Logs must not hold typed text.
     assert "SECRET-OUTPUT" not in caplog.text  # Logs must not hold output text.
+    records = [record for record in caplog.records if ".runners.shell." in record.name]  # Select package records.
+    payloads = [json.loads(record.message) for record in records]  # Require valid JSON for each package record.
+    assert payloads  # The shell package must emit structured action evidence.
+    assert all(set(payload) <= {"event", "redacted", *SAFE_FIELDS} for payload in payloads)  # Allow safe fields only.
+    assert all(len(str(payload["event"])) <= MAX_EVENT_LENGTH for payload in payloads)  # Bound event names.
+    assert all(
+        len(value) <= MAX_FIELD_LENGTH for payload in payloads for value in payload.values() if isinstance(value, str)
+    )  # Bound every safe string field.
 
 
 def test_shell_history_preserves_raw_control_and_split_utf8_bytes() -> None:
@@ -437,7 +448,8 @@ def test_shell_close_without_output_fails_with_the_silent_device_reason(caplog: 
     assert session.reason == ShellRunner.NO_ANSWER_REASON  # The page tells the operator to wait one minute.
     assert session.input_ready is False  # No output means that the input never opened.
     assert _history(session) == b""  # The device sent no byte.
-    assert "output seen False" in caplog.text  # The portal log shows the silent close.
+    assert '"event":"terminal_connection_closed"' in caplog.text  # The structured log records the close.
+    assert '"status":"silent"' in caplog.text  # The structured log records that no output arrived.
 
 
 class SilentDropDevice:

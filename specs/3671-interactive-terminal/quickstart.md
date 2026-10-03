@@ -58,7 +58,23 @@ Caution: the shell runs each command on the live device. Use read-only commands 
 8. Record the shell host name only. Do not record the address path.
 9. Remove the test container, its volume, and its network.
 
-## 6. Run the quality gates
+## 6. Run the owner-approved destructive journey
+
+Warning: This journey can interrupt device traffic. Do not include it in the read-only T055
+evidence. Run it only after the device owner approves the exact port.
+
+1. Select one port that the owner approved.
+2. Confirm through the Mist API that the port exists and has `up` set to false.
+3. Run `show interfaces terse <port> | no-more`.
+4. Continue only if the command reports that the port is administratively up and its link
+   is down.
+5. Confirm that the page shows the destructive-action warning.
+6. Type the exact device name in the confirmation field.
+7. Start the port bounce.
+8. Repeat the API check and the read-only interface command after the attempt.
+9. Record the before and after states separately from the T055 results.
+
+## 7. Run the quality gates
 
 ```powershell
 python -m ruff check src/websocket_streams tests

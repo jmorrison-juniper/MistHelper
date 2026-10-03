@@ -360,6 +360,8 @@ the screen text.
   version 0.64 shows them.
 - The lab switch "Morrison-Switch" and the lab gateway "SRX-1500" are available for the
   live checks. The live checks use read-only commands only.
+- An owner-approved destructive port-bounce journey can provide separate safety evidence.
+  It is not part of the read-only live-check scope.
 - Each browser tab that shows a session can type into that session.
 - The current session limits stay: five sessions, two minutes of idle time, and a 30-minute
   life. The existing settings can change these limits.

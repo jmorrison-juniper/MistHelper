@@ -97,6 +97,10 @@ Answer 202:
 Refusals: `bad_request`, `not_found`, `not_terminal`, `read_only`, `not_open`,
 `input_full`, `too_large`, and `rate_limited`.
 
+If the local device write fails, the route returns `not_open` (409). The reader then ends
+the session as `failed`. The terminal read route reports
+`The terminal could not send data to the device.` as `WRITE_FAILED_REASON` (issue #3741).
+
 ## POST /api/websockets/sessions/{session_id}/resize
 
 Send the terminal size to a shell session.
@@ -123,6 +127,11 @@ Answer 202:
 
 Refusals: `bad_request`, `not_found`, `not_terminal`, `read_only`, `not_open`, and
 `rate_limited`.
+
+If a live resize write fails, the route returns `not_open` (409), not 202. The reader then
+ends the session as `failed`. The terminal read route reports
+`The terminal could not send data to the device.` as `WRITE_FAILED_REASON` (issue #3741).
+A resize before the shell socket opens stays deferred and does not use this failure path.
 
 ## Removed body shape
 

@@ -12,7 +12,7 @@ from typing import Any  # Type fake SDK arguments without importing SDK types.
 
 import mistapi  # Patch the installed SDK seams that the picker calls.
 
-from src.websocket_streams.intake.pickers import StreamPickerService  # The class under test.
+from src.websocket_streams.intake.pickers.service import StreamPickerService  # The class under test.
 
 SITE_ID = "11111111-2222-3333-4444-555555555555"  # One stable site identifier.
 MAP_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"  # One stable map identifier.

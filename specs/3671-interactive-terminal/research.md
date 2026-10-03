@@ -194,6 +194,9 @@ different Mist domain, the rule gets that domain with the evidence in the pull r
   After 2 silent intervals, the client closes the connection as dead.
 - A channel stream connects again up to 3 times, after 1, 2, and 4 seconds. After the third
   failure, the session fails with a reason.
+- A drop after subscription consumes the current retry budget. A successful subscription
+  alone does not reset the count. One data event or 5 stable subscribed seconds resets the
+  count (issue #3740).
 - A channel stream does not connect again after an HTTP 4xx refusal of the WebSocket
   handshake, because a retry cannot heal it. The session fails at once with the refusal
   reason. HTTP 408 and HTTP 429 are the exceptions, because a wait can heal them. They use
@@ -223,7 +226,7 @@ plain text with no control codes.
 **Reason**: The buffer holds the screen text after the control codes ran. The server
 history holds raw bytes with control codes.
 
-## R13. Live check results (task T055)
+## R13. Read-only live check results (task T055)
 
 The live checks ran on 2026-10-01 against the lab organization. They used Morrison-Switch
 and SRX-1500, read-only commands, a host portal, and the test container
@@ -248,18 +251,17 @@ and SRX-1500, read-only commands, a host portal, and the test container
 ### Real-gear stages
 
 The staged runs used the Morrison House site on 2026-10-02. The commands were
-read-only, except for the guarded port bounce in stage 3.
+read-only. The owner-approved port bounce is separate evidence below.
 
 | Stage | Scope | Result |
 | - | - | - |
 | 1 | Page, channels, utilities, packet capture, and session limit | The run finished in about 30 minutes. The SRX utilities finished. The access point utilities finished. The wired capture showed 119 packet rows. |
 | 1b | Session limit, MXedge channels, and a late session | Five sessions ran. The sixth request got HTTP 429. The deprecated MXedge channels failed. The stats variants worked. Issue #3737 tracks their removal. |
 | 2 | Shell, resize, pager, copy, paste, settings, end rules, early input, and screens | The run exited with code 0. The first prompt took 2.09 seconds. Thirty echo samples gave a 163.2 ms median and a 181.4 ms 95th percentile. Top and Monitor Traffic filled an 80 by 40 screen. |
-| 3 | Port bounce, disconnected switch, and concurrent load | The page found the guarded port and showed the destructive-action warning. The port sent no output and timed out after 91.115 seconds. The disconnected switch shell got HTTP 400. Its ARP utility timed out after 90.9 seconds. Three concurrent shells stayed responsive and stopped cleanly. |
+| 3 | Disconnected switch and concurrent load | The disconnected switch shell got HTTP 400. Its ARP utility timed out after 90.9 seconds. Three concurrent shells stayed responsive and stopped cleanly. |
 
-Stage 3 preserved the port state. `ge-0/0/3` was administratively up and
-operationally down before and after the attempt. The page sent 13 input requests.
-The browser reported no console errors and no HTTP errors.
+The page sent 13 input requests during the read-only shell checks. The browser reported no
+console errors and no HTTP errors.
 
 The load step opened three shells. Five page loads took 0.130 to 0.240 seconds.
 The five catalog requests took 10.1 to 30.0 ms. All three shells ended in the
@@ -285,6 +287,23 @@ Stage 1 recorded 13 site-list connection resets after about 90 idle seconds.
 The reset arrived about 80 ms after the request. A retry 25 seconds later worked.
 The update on issue #3732 records this evidence.
 
+### Owner-approved destructive port-bounce journey
+
+This journey was not part of the read-only T055 scope. The owner approved one guarded
+attempt on `ge-0/0/3` of SRX-1500.
+
+The operator completed these safety checks before the start request.
+
+1. The Mist API reported that the port existed and had `up` set to false.
+2. The read-only command `show interfaces terse ge-0/0/3 | no-more` reported
+   `ge-0/0/3 up down`.
+3. The page showed `Warning: This utility changes the device state and can interrupt traffic.`
+4. The operator explicitly confirmed the action by typing `SRX-1500`.
+
+The request sent no output and reached its 91.115-second time limit. The API still reported
+`up` as false after the attempt. The read-only command still reported `ge-0/0/3 up down`.
+Thus, the port was administratively up and operationally down before and after the attempt.
+
 ### Browser measurements against the fake device (task T050)
 
 The measurements ran on 2026-10-02 on the Windows workstation. They used headless Chromium,
@@ -293,7 +312,7 @@ round trip to the Mist cloud, so it does not measure the portal part.
 
 | Criterion | Target | Result |
 | - | - | - |
-| SC-001 echo | The portal adds less than 50 ms for 95 percent of keys | Each run sends 200 keys. The first run gave a median of 15.3 ms and a 95th percentile of 28.9 ms. A later run gave 31.9 ms and 48.2 ms. A run while a lint job used the full processor gave 34.0 ms and 58.0 ms. The test fails when the median is 50 ms or more. It also fails when the 95th percentile is 500 ms or more, because a Windows test run can pause for a long time. |
+| SC-001 echo | The portal adds less than 50 ms for 95 percent of keys | Each run sends 200 keys. The first run gave a median of 15.3 ms and a 95th percentile of 28.9 ms. A later run gave 31.9 ms and 48.2 ms. A run while a lint job used the full processor gave 34.0 ms and 58.0 ms. The median stays in the report as diagnostic evidence. The test enforces the criterion directly and fails when the 95th percentile is 50 ms or more. |
 | SC-007 output | 1 MiB shows in less than 3 seconds | 0.29 to 0.33 seconds in 2 runs. The test waits until the counter shows 1,048,640 bytes and the prompt shows after the output. |
 | SC-005 load | Another page answers in less than 1 second while 5 shells send output | 0.24 to 0.34 seconds in 3 runs. The test fails at 1 second or more. |
 | Paste split | A 256 KiB paste splits in less than 50 ms | 0.50 ms for 64 parts of 4,096 characters |
@@ -311,8 +330,14 @@ The final focused validation gave these results.
 | Black | Passed. |
 | Node syntax check | Passed. |
 | mypy | Passed on 530 files. |
+| Bandit | Passed with exit code 0. |
+| Radon | Passed. All functions stayed within the complexity threshold. |
+| Vulture | Passed with exit code 0. |
+| pydocstyle | Passed with exit code 0. |
+| interrogate | Passed at 99.6 percent, above the 90 percent minimum. |
+| Pylint | Passed the 9.5 minimum with a score of 9.83. |
 
-The combined guardrail run did not pass. It reported 2,598 passed, 48 failed,
-and 3 skipped. The failures came from a missing test-quality baseline,
-path-trace mismatches, and `agents.md` input validation. This result is separate
-from the focused validation above.
+The feature tests and the code-quality gates above pass. The separate local test-quality
+scope test reports 48 failures and 34 passes. The same failures reproduce on clean `main`
+at commit `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`. Issue #3742 tracks the
+baseline defect. The #3671 feature does not cause those failures.

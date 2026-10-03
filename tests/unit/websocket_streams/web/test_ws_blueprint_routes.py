@@ -11,15 +11,17 @@ from __future__ import annotations  # Keep annotations lazy for Flask imports.
 
 from collections.abc import Iterator  # Type the fake download stream.
 from pathlib import Path  # Build the app template path.
+from types import SimpleNamespace  # Group fake leaf services without a compatibility facade.
 from typing import Any  # Type fake request bodies without concrete service classes.
 
 import pytest  # Use pytest fixtures for the route app.
 from flask import Flask  # Build a small app around the blueprint.
 
-from src.websocket_streams.intake.fields import StreamRequestError  # Raise contract errors from the fake.
-from src.websocket_streams.live.sessions.buffer import MessagePage, StreamMessage  # The fake read returns records.
-from src.websocket_streams.web.blueprint import websockets_bp  # The blueprint under test.
-from src.websocket_streams.web.services import WebSocketsServices  # The config key for dependency injection.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Raise contract errors from the fake.
+from src.websocket_streams.live.sessions.buffer.message import StreamMessage
+from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
+from src.websocket_streams.web.blueprint.registry import WebSocketBlueprint  # Build the blueprint under test.
+from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Inject the fake service bundle.
 from web_portal.services.config import SecurityMiddleware  # The portal installs the form token check with this class.
 
 ROOT = Path(__file__).resolve().parents[4]  # Repository root for template lookup.
@@ -78,10 +80,18 @@ class FakeWebSocketServices:
         """Start with no recorded actions."""
         self.deleted: list[str] = []  # Record deleted sessions for assertions.
         self.gateway = FakeTerminalGateway()  # The terminal routes use this fake gateway.
-
-    def terminal(self) -> FakeTerminalGateway:
-        """Return the fake terminal gateway."""
-        return self.gateway  # The routes call read, send, and resize on it.
+        lifecycle = SimpleNamespace(
+            start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
+        )  # Group session lifecycle behavior.
+        self.sessions = SimpleNamespace(
+            lifecycle=lifecycle, messages=SimpleNamespace(read=self.read_messages)
+        )  # Group lifecycle and message behavior.
+        self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group catalog behavior.
+        self.artifacts = SimpleNamespace(
+            delete=self.delete_session, download=self.download_session
+        )  # Group artifact behavior.
+        self.terminal = self.gateway  # Expose direct terminal behavior.
+        self.pickers = SimpleNamespace(site=self, related=self)  # Group picker behavior.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return a small catalog answer."""
@@ -191,14 +201,14 @@ class RouteTestApp:
             "accent_color": "#c000ff",
             "logo_url": "",
         }  # Base.
-        flask_app.config[WebSocketsServices.CONFIG_KEY] = FakeWebSocketServices()  # Inject the fake service.
+        flask_app.config[WebSocketServiceRegistry.CONFIG_KEY] = FakeWebSocketServices()  # Inject the fake bundle.
         if form_token_check:  # The token test needs the same check that the portal installs.
             flask_app.config["WTF_CSRF_ENABLED"] = True  # Turn on the form token check.
             SecurityMiddleware()._configure_csrf(flask_app)  # Install the portal handler that answers JSON.
         else:  # The other tests send no form token.
             flask_app.jinja_env.globals["csrf_token"] = lambda: "test-csrf"  # Let the base template render.
         RouteTestApp._add_base_links(flask_app)  # The base template links to these endpoints.
-        flask_app.register_blueprint(websockets_bp)  # Register the routes under test.
+        flask_app.register_blueprint(WebSocketBlueprint.create())  # Register the routes under test.
         return flask_app  # Give the test client a complete app.
 
     @staticmethod
@@ -229,7 +239,7 @@ def client(app: Flask) -> Any:
 @pytest.fixture
 def gateway(app: Flask) -> FakeTerminalGateway:
     """Return the fake terminal gateway of the app."""
-    return app.config[WebSocketsServices.CONFIG_KEY].gateway  # The terminal routes call this fake.
+    return app.config[WebSocketServiceRegistry.CONFIG_KEY].gateway  # The terminal routes call this fake.
 
 
 def test_page_and_catalog_routes_answer(client: Any) -> None:
@@ -427,7 +437,7 @@ class TestTerminalFormToken:
             TERMINAL_PATH.format(session_id="shell1", route=route),
             json=body,
         )
-        fake_gateway = token_app.config[WebSocketsServices.CONFIG_KEY].gateway  # The fake behind the routes.
+        fake_gateway = token_app.config[WebSocketServiceRegistry.CONFIG_KEY].gateway  # The fake behind the routes.
         assert answer.status_code == 400  # The portal keeps the status of the token library.
         assert answer.get_json()["code"] == "csrf_expired"  # The page can tell the operator to reload.
         assert (fake_gateway.sends, fake_gateway.sizes) == ([], [])  # No text and no size reached the gateway.

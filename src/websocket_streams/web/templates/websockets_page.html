@@ -149,6 +149,21 @@
 {% block extra_scripts %}
 <script src="{{ url_for('websockets.static', filename='vendor/xterm/xterm.min.js') }}"></script>
 <script src="{{ url_for('websockets.static', filename='vendor/xterm/addon-fit.min.js') }}"></script>
-<script src="{{ url_for('websockets.static', filename='websockets_terminal.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/bootstrap.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/preference/store.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/chunks.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/display.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/clipboard/clipboard.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/clipboard/history.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/queue.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/paste/delivery.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/paste/dialog.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/paste/flow.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/keys.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/menu/menu.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/preference/controls.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/transport.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/reader.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/controller.js') }}"></script>
 <script src="{{ url_for('websockets.static', filename='websockets.js') }}"></script>
 {% endblock %}

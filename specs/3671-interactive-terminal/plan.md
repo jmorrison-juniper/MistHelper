@@ -40,6 +40,8 @@ data to a disk.
 **Testing**:
 
 - pytest unit tests and contract tests.
+- A required contract test that proves the matching mistapi WebSocket path
+  cannot preserve the first output or split terminal control sequence.
 - A fake Mist cloud server that uses the Python standard library only. It speaks RFC 6455.
 - Playwright browser journeys with screenshots under `test-artifacts/websockets-terminal/`.
 - Live checks on the lab switch and the lab gateway with read-only commands.
@@ -76,20 +78,33 @@ session. 256 KiB for each paste. 16 KiB for each input request.
 | II. Class-Based Architecture | PASS | Each feature lives in a named class. The plan adds no wrapper function and no legacy shim. The old line input route goes away. |
 | III. Safety-First | PASS | The shell lock and the typed device name stay. The client refuses a shell address without TLS or outside the cloud domain. Each input route checks the session, the size, and the rate. |
 | IV. Full Deployment Pipeline | PASS | Every quality gate runs. The pull request adds a release note fragment. Tasks T057 to T061 hold the 12 pipeline steps, which include the container update after the merge. Each branch commit uses the step 4 subject `version YY.MM.DD.HH.MM - description`, with the time in UTC. The pull request title uses Conventional Commits, because the title guard reads the title. Issue #3720 records the conflict with the repository practice. |
-| V. Observability | PARTIAL | Each connection logs the host, the state, and the byte counts. A test scans the logs for secrets and keys. The new modules use standard logging with fixed templates and `%s` arguments, as the rest of the package does. Issue #3721 decides the structlog move for the package. |
+| V. Observability | PASS | The feature uses one shared structured logger. Each record is ASCII JSON. The logger permits bounded safe fields and redacts secrets at the boundary. `test_records_are_ascii_json_with_only_bounded_safe_fields`, `test_sensitive_fields_are_redacted_at_boundary`, and `test_safe_text_values_redact_embedded_secrets` pass. The focused logging file reports 15 passed tests. |
 | VI. Inline Comments | PASS | Each executable line gets an inline comment. |
 | VII. Action Logging | PASS | Each action logs before and after. Logs for keys and output hold byte counts only. |
-| Technology: mistapi sole interface | EXCEPTION | REST requests use mistapi. The WebSocket transport is own code, because the SDK WebSocket paths lose output (#3659 and #3660). The client reads 4 private session attributes, and a contract test pins them. Issue #3718 holds the amendment decision and the return path to the SDK. |
+| Technology: mistapi REST and owned WebSocket transport | PASS | REST requests use mistapi. `test_trigger_order_controls_early_command_event_retention` executes the SDK `WebSocketWrapper.start_with_trigger` path and the owned `UtilityExecution.run` path. The same early event has 0-of-1 SDK retention and 1-of-1 owned retention. The focused contract command reports 1 passed test. |
 | Security: Fix Over Suppress | PASS | The plan adds no suppression comment. |
 | SpecKit Escalation | PASS | This feature uses the full SpecKit flow. |
 
-Re-check after the Phase 1 design: PASS. The data model and the contracts keep each rule.
+Re-check after the Phase 1 design: PASS for observability and the owned WebSocket
+exception. The data model and transport contracts keep the authentication,
+endpoint, safety, and redaction rules.
 
-Re-check after the SpecKit analysis on 2026-10-02: the five-item findings are fixed. The mistapi
-exception and the logging style are recorded above, and each one has an issue.
+Re-check for T081 on 2026-10-02: PASS for the T072 through T079 and T085 through
+T091 evidence. T082 through T084 remain open. T056 remains open until the final
+gates and the final SpecKit analysis pass.
 
 The merge does not wait for issues #3718 and #3721. The owner gave a standing instruction to
 merge the work that is ready. The final report names both issues for an owner decision.
+
+## T081 Convergence Evidence
+
+All commands used the worktree interpreter at `.venv\Scripts\python.exe`.
+
+| Gate | Exact test and command | Result |
+| - | - | - |
+| Structured logging | `test_records_are_ascii_json_with_only_bounded_safe_fields`, `test_sensitive_fields_are_redacted_at_boundary`, and `test_safe_text_values_redact_embedded_secrets`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_structured_logging.py -q`. | PASS. 15 passed. The records parse as JSON, stay ASCII, use bounded safe fields, and redact tokens, cookies, shell paths, keys, pasted text, and terminal output. |
+| Owned WebSocket exception | `TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention`. Command: `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py::TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention -q`. | PASS. 1 passed. The SDK trigger-first path retains 0-of-1 events. The owned subscribe-first path retains 1-of-1 events. |
+| Structural guard | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The guard checked 27 mappings, 25 analyzed paths, 145 modules, 204 classes, and 618 functions. The red fixture failed at 6 module children. The unreadable-input fixture also failed. |
 
 ## Project Structure
 
@@ -117,40 +132,38 @@ src/websocket_streams/live/
 |-- __init__.py
 |-- runners/
 |   |-- __init__.py
-|   |-- channel.py          (changed: uses the own stream client)
-|   |-- shell.py            (changed: uses the own shell client and the terminal history)
-|   |-- text.py             (changed: removes the shell text cleaner)
-|   `-- utility/            (new package, replaces utility.py)
-|       |-- __init__.py
-|       |-- runner.py       (UtilityRunner and CaptureStopper)
-|       |-- triggers.py     (UtilityTriggerTable and UtilityRequest)
-|       |-- filters.py      (UtilityMessageFilter)
-|       `-- screen.py       (ScreenRunner for Top and Monitor Traffic)
+|   |-- channel/            (retry, routing, and runner leaf modules)
+|   |-- shell/              (lifecycle, modes, and runner leaf modules)
+|   |-- text/               (message, packet, and redaction leaf modules)
+|   `-- utility/
+|       |-- filters/        (early buffer and message filter)
+|       |-- runner/         (capture, execution, monitoring, and runner)
+|       `-- triggers/       (models and trigger table)
 |-- sessions/
 |   |-- __init__.py
-|   |-- buffer.py
-|   |-- manager.py          (changed: builds terminal sessions, drops line input)
-|   |-- record.py           (changed: holds the terminal state)
+|   |-- buffer/             (encoding, message, page, and buffer leaf modules)
+|   |-- manager/            (contracts, factory, lifecycle, and operations)
+|   |-- record/             (lifecycle, output, session, and state)
 |   `-- settings.py         (changed: reads the terminal history size)
 |-- terminal/               (new package)
 |   |-- __init__.py
 |   |-- byte_history.py     (ByteHistory)
 |   |-- input_queue.py      (TerminalInput)
-|   |-- state.py            (TerminalState and TerminalChunk)
+|   |-- state/              (size, state, and chunk payload leaf modules)
 |   `-- gateway.py          (TerminalGateway)
 `-- transport/              (new package)
     |-- __init__.py
     |-- endpoint.py         (MistStreamEndpoint, ShellAddressPolicy, and ConnectFailure)
-    |-- frames.py           (FrameReader and FrameDecoder)
+    |-- runtime/            (frame decoder, reader, and structured logging)
     |-- stream_client.py    (StreamClient)
     `-- shell_client.py     (ShellClient)
 
 src/websocket_streams/web/
-|-- blueprint.py            (changed: adds the terminal, input, and resize routes)
-|-- services.py             (changed: calls the terminal gateway)
+|-- blueprint/              (route and response leaf modules)
+|-- services/               (assembly, operations, picker, and registry leaf modules)
 |-- static/
 |   |-- websockets.js       (changed: hands shell and screen sessions to the terminal)
-|   |-- websockets_terminal.js   (new: TerminalController and its helper classes)
+|   |-- terminal/           (controller, input, clipboard, menu, paste, and preferences)
 |   |-- websockets.css      (changed: terminal panel styles)
 |   `-- vendor/xterm/       (new: xterm.min.js, addon-fit.min.js, xterm.css, LICENSE, README.md)
 `-- templates/
@@ -158,15 +171,15 @@ src/websocket_streams/web/
 
 tests/
 |-- unit/websocket_streams/live/
-|   |-- transport/              (new)
-|   |   |-- test_ws_endpoint.py and test_ws_frames.py
-|   |   |-- clients/            (new: the stream client and shell client tests)
-|   |   `-- fake_mist_cloud/    (new: server.py, devices.py, api.py)
+|   |-- transport/
+|   |   |-- runtime/            (frame, logging, and structural tests)
+|   |   |-- clients/            (stream client and shell client tests)
+|   |   `-- fake_mist_cloud/    (server.py, devices.py, and api.py)
 |   |-- terminal/               (new)
-|   `-- runners/utility/        (new, replaces test_ws_utility_runner.py)
+|   `-- runners/utility/        (utility and screen runner tests)
 |-- contract/websocket_streams/
 |   |-- test_ws_utility_trigger_parity.py   (new)
-|   `-- test_ws_sdk_contract.py             (changed: pins the private session attributes)
+|   `-- test_ws_sdk_contract.py             (SDK insufficiency and private field contracts)
 `-- e2e/websockets_tab/                     (new package)
     |-- __init__.py
     |-- terminal_support.py                 (new: the fake portal harness and the helpers)
@@ -175,11 +188,10 @@ tests/
     `-- test_websockets_terminal_performance.py   (new: SC-001, SC-005, and SC-007)
 ```
 
-**Structure Decision**: The new code stays inside `src/websocket_streams/live/`. The top
-package already holds 5 entries, so the plan adds no top-level folder. The `live/` folder
-grows from 3 to 5 entries. The `runners/` folder keeps 5 entries, because the utility runner
-becomes a package. The manager loses the line input code, and the terminal gateway takes the
-terminal routes.
+**Structure Decision**: The new code stays inside `src/websocket_streams/`. The final
+convergence replaces each noncompliant module with a package of named leaf classes. Each
+replacement `__init__.py` contains a docstring only. The structural guard checks the 25
+analyzed Python paths, one support mapping, and one JavaScript mapping.
 
 The tests follow the same rule. The fake Mist cloud stays next to the transport tests that
 use it. The browser tests of the tab go into the new package `tests/e2e/websockets_tab/`.
@@ -202,6 +214,6 @@ branch rebased onto that commit.
 | Item | Reason | Simpler option that the plan does not use |
 | - | - | - |
 | An own WebSocket client instead of the SDK WebSocket paths | The SDK paths lose the first output and split control sequences (#3659 and #3660). | Keep the SDK paths. The operator then sees missing or broken output. Issue #3718 records the exception. |
-| Standard logging in the new modules | The rest of `src/websocket_streams/` uses standard logging. One style in one package keeps the logs easy to read. | Move only the new modules to structlog. The package then mixes two log styles. Issue #3721 decides the move for the whole package. |
+| Shared structured logging in the feature modules | Constitution V requires machine-parseable logs. One shared boundary emits ASCII JSON, permits bounded safe fields, and redacts secrets before a handler receives them. | Use separate text templates in each module. That option does not enforce one JSON shape, field bounds, or boundary redaction. |
 | One release note fragment in `changelog.d/`, which grows from 69 to 70 entries | The release note rule requires one fragment for each change. | Edit `CHANGELOG.md` on the branch. The rule forbids that edit, because each parallel branch then conflicts on the same lines. Issue #3720 asks for a constitution rule for process folders. |
 | One feature folder in `specs/`, which grows from 761 to 762 entries | The SpecKit flow keeps one folder for each feature. | Keep the design in the issue only. The escalation rule requires the SpecKit flow for a change of this size. Issue #3720 covers this folder too. |

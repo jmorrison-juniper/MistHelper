@@ -8,8 +8,8 @@ from collections.abc import Callable  # Type SDK class constructors.
 from mistapi.websockets import location, orgs, sites  # Import SDK channel modules.
 
 from src.websocket_streams.catalog.channels import ChannelCatalog  # Import channel catalog.
-from src.websocket_streams.live.runners import channel as channel_module  # Inspect the owned channel runner.
-from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # Pin the constructor interface.
+from src.websocket_streams.live.runners.channel import runner as channel_module  # Inspect the owned channel runner.
+from src.websocket_streams.live.runners.channel.runner import ChannelStreamRunner  # Pin the constructor interface.
 
 ORG_ID = "11111111-1111-4111-8111-111111111111"  # Use one valid organization identifier.
 SITE_ID = "22222222-2222-4222-8222-222222222222"  # Use one valid site identifier.

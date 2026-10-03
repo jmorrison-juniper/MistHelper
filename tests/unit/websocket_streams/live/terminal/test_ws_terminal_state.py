@@ -1,17 +1,19 @@
-"""Tests for terminal state and chunk payloads."""
+"""Tests for terminal state leaf classes and chunk payloads."""
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # Structured state records must parse as JSON objects.
+import logging  # caplog captures structured state records.
+
 import pytest  # The tests assert contract refusals.
 
-from src.websocket_streams.intake.fields import StreamRequestError  # Tests verify exact refusal codes.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify exact refusal codes.
 from src.websocket_streams.live.terminal.byte_history import ByteHistory, HistoryRead  # Tests build read values.
 from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests build writable terminal state.
-from src.websocket_streams.live.terminal.state import (
-    TerminalChunk,
-    TerminalState,
-    TerminalStatus,
-)  # The tests cover these classes.
+from src.websocket_streams.live.terminal.state.chunk_payload import TerminalChunk  # Tests build read payloads.
+from src.websocket_streams.live.terminal.state.status import TerminalStatus  # Tests build status values.
+from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Tests build shared state.
+from src.websocket_streams.live.transport.runtime.logging.bounds import MAX_FIELD_LENGTH  # Tests check bounds.
 
 
 class TestTerminalState:
@@ -51,6 +53,20 @@ class TestTerminalState:
         assert closed_read.closed is True  # Close marks the history as closed.
         assert error.value.code == "not_open"  # The contract code is exact.
 
+    def test_size_and_close_logs_are_bounded_json(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Write bounded JSON records without terminal content."""
+        state = TerminalState(ByteHistory(), TerminalInput(), 10.0, "2026-10-01T09:30:00Z")  # Build state.
+        with caplog.at_level(logging.DEBUG):  # Capture each structured state record.
+            state.set_size(120, 40)  # Write the size action records.
+            state.close()  # Write the close action records.
+        records = [json.loads(record.message) for record in caplog.records]  # Parse each JSON record.
+        state_records = [record for record in records if record["event"].startswith("terminal_state_")]  # Select close.
+        size_records = [record for record in records if record["event"].startswith("terminal_size_")]  # Select size.
+        assert len(state_records) == 2  # Close writes one start and one complete record.
+        assert len(size_records) == 2  # Resize writes one start and one complete record.
+        assert all(len(str(value)) <= MAX_FIELD_LENGTH for record in records for value in record.values())  # Bound.
+        assert all("2026-10-01" not in record.message for record in caplog.records)  # Exclude expiry text.
+
 
 class TestTerminalChunk:
     """Verify terminal read payload shape."""
@@ -74,3 +90,18 @@ class TestTerminalChunk:
             "expires_at": "2026-10-01T09:30:00Z",
         }  # Contract answer shape.
         assert payload == expected  # The payload matches the HTTP contract.
+
+    def test_payload_logs_only_bounded_metadata(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Exclude terminal bytes, reason text, and expiry text from payload logs."""
+        read = HistoryRead(b"secret terminal output", 0, 22, 0, False)  # Build sensitive terminal output.
+        status = TerminalStatus("live", "private reason", True)  # Build status with private reason text.
+        terminal = TerminalState(ByteHistory(), TerminalInput(), 10.0, "private expiry")  # Build terminal state.
+        with caplog.at_level(logging.DEBUG):  # Capture both payload action records.
+            TerminalChunk(read, status, terminal).payload()  # Build the contract payload.
+        records = [json.loads(record.message) for record in caplog.records]  # Parse each structured record.
+        payload_records = [record for record in records if record["event"].startswith("terminal_chunk_")]  # Select.
+        assert len(payload_records) == 2  # Payload creation writes start and complete records.
+        assert all(record["byte_count"] == 22 for record in payload_records)  # Report only the byte count.
+        assert all(record["status"] == "live" for record in payload_records)  # Report bounded public state.
+        assert all("secret terminal output" not in record.message for record in caplog.records)  # Exclude output.
+        assert all("private" not in record.message for record in caplog.records)  # Exclude reason and expiry.

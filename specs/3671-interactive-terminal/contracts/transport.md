@@ -95,6 +95,9 @@ than one site or device, so the client takes a list of channel paths.
 | `close()` | Close the socket from any thread. `run` then returns. |
 
 A channel stream runner calls `open` and `run` again after a break, up to 3 times.
+An immediate drop after subscription consumes the current retry budget. The runner resets
+that budget only after it receives one data event or stays subscribed for 5 stable seconds
+(issue #3740).
 
 ## ShellClient
 
@@ -110,6 +113,9 @@ One connection to a shell address or a screen command address.
 
 `send` and `resize` can run on a web thread while `read` runs on the reader thread. The
 client opens the socket with `enable_multithread=True`.
+If either local write fails, the client closes the socket and raises `not_open`. The
+terminal runner then records `WRITE_FAILED_REASON` instead of an operator stop (issue
+#3741).
 
 ## Log rule
 

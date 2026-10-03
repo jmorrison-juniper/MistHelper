@@ -2,6 +2,8 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # Logging tests parse structured transport records.
+import logging  # Logging tests capture debug records.
 import threading  # Thread tests verify close from another thread.
 import time  # Tests measure bounded close behavior.
 from collections.abc import Callable  # The recorder helper returns a callback.
@@ -10,7 +12,8 @@ import pytest  # Tests assert expected transport errors.
 
 import websocket  # Socket fakes raise websocket-client timeout errors.
 from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Need endpoints.
-from src.websocket_streams.live.transport.frames import ConnectionClosed, SubscribeError  # Test structured errors.
+from src.websocket_streams.live.transport.runtime.frame_decoder import SubscribeError  # Test subscription errors.
+from src.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed  # Test close errors.
 from src.websocket_streams.live.transport.stream_client import StreamClient  # Test the stream transport client.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
@@ -285,8 +288,13 @@ class TestStreamClient:
     def test_stop_during_connect_raises_local_close_and_sends_no_subscribe(self) -> None:
         """Stop during connect before any subscribe frame can leave."""
         factory = BlockingFactory()  # Build a factory that lets the test stop during connect.
-        client = self._client_for_url("ws://127.0.0.1:1/api-ws/v1/stream", ["/one"], subscribe_timeout=0.7)  # Client.
-        client._factory = factory  # Inject the factory because the helper builds the default client.
+        profile = TransportProfile(
+            stream_url="ws://127.0.0.1:1/api-ws/v1/stream",
+            allow_loopback=True,
+            subscribe_timeout_seconds=0.7,
+        )  # Configure the exact blocked connection case.
+        endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Build the endpoint with bounded timing.
+        client = StreamClient(endpoint, ["/one"], factory=factory)  # Inject the factory through the public API.
         errors: list[ConnectionClosed] = []  # The opener records the local close.
         thread = threading.Thread(target=self._open_until_close, args=(client, errors), daemon=True)  # Opener.
         thread.start()  # Start the slow connect.
@@ -303,8 +311,16 @@ class TestStreamClient:
     def test_stop_during_subscribe_wait_raises_local_close(self) -> None:
         """Stop during subscribe wait instead of reporting a false subscribe success."""
         socket = SilentSubscribeSocket()  # Build a socket that never sends channel_subscribed.
-        client = self._client_for_url("ws://127.0.0.1:1/api-ws/v1/stream", ["/one"])  # Build the client.
-        client._factory = lambda *_args, **_kwargs: socket  # Return the silent socket from open().
+        profile = TransportProfile(
+            stream_url="ws://127.0.0.1:1/api-ws/v1/stream",
+            allow_loopback=True,
+        )  # Configure the silent subscription case.
+        endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Build the endpoint with default timing.
+
+        def factory(*_args: object, **_kwargs: object) -> SilentSubscribeSocket:
+            return socket  # Return the silent socket from the public factory seam.
+
+        client = StreamClient(endpoint, ["/one"], factory=factory)  # Inject the factory during construction.
         errors: list[ConnectionClosed] = []  # The opener records the local close.
         thread = threading.Thread(target=self._open_until_close, args=(client, errors), daemon=True)  # Opener.
         thread.start()  # Start the subscribe wait.
@@ -366,3 +382,23 @@ class TestStreamClient:
             delivered.set()  # Wake the test after the callback runs.
 
         return record  # StreamClient.run calls this callback.
+
+
+class TestStreamStructuredLogging:
+    """Verify stream records use the T072 safe JSON boundary."""
+
+    def test_stream_records_are_json_and_exclude_channel_paths(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Emit structured records without subscription channel values."""
+        caplog.set_level(logging.DEBUG, logger="src.websocket_streams.live.transport.stream_client")  # Capture events.
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a normal stream device.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            profile = TransportProfile(stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream", allow_loopback=True)
+            endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Build a loopback endpoint.
+            client = StreamClient(endpoint, ["/private/channel"])  # Use a path that must not enter logs.
+            client.open()  # Emit open and subscription records.
+            client.close()  # Emit close records.
+        records = [json.loads(record.message) for record in caplog.records]  # Parse every captured record.
+        assert records  # The stream client must use the structured logger.
+        assert all("event" in record for record in records)  # Every record has the required event field.
+        assert "/private/channel" not in json.dumps(records)  # Channel paths must not cross the log boundary.

@@ -2,12 +2,14 @@
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import json  # Logging tests parse each structured transport record.
+import logging  # Logging tests capture debug records.
 import ssl  # TLS option tests compare ssl constants.
 
 import pytest  # The policy tests assert refusal errors.
 
 import websocket  # ConnectFailure tests use real websocket-client exceptions.
-from src.websocket_streams.intake.fields import StreamRequestError  # Policy refusals use this contract error.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Policy refusals use this contract error.
 from src.websocket_streams.live.transport.endpoint import (  # Build endpoint policies for these tests.
     ConnectFailure,
     MistStreamEndpoint,
@@ -212,3 +214,24 @@ class TestConnectFailure:
                 )  # The reason is safe.
             finally:
                 client.close()  # Ensure the client releases any socket state.
+
+
+class TestEndpointStructuredLogging:
+    """Verify endpoint records use the T072 safe JSON boundary."""
+
+    def test_endpoint_records_are_json_and_exclude_secrets(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Emit bounded records without token, cookie, or certificate values."""
+        caplog.set_level(logging.DEBUG, logger="src.websocket_streams.live.transport.endpoint")  # Capture all events.
+        session = FakeApiSession()  # Build a session with sensitive connection values.
+        session._apitoken = ["token-secret-value"]  # Add a token that must not enter logs.
+        session._session.cookies.set("session", "cookie-secret-value")  # Add a cookie that must not enter logs.
+        session._session.cert = ("certificate-secret.pem", "key-secret.pem")  # Add sensitive file paths.
+        endpoint = MistStreamEndpoint(session)  # Emit endpoint construction records.
+        endpoint.headers()  # Emit authentication records.
+        endpoint.cookie()  # Emit cookie records.
+        endpoint.sslopt()  # Emit TLS records.
+        records = [json.loads(record.message) for record in caplog.records]  # Parse every captured record.
+        serialized = json.dumps(records)  # Build one text value for secret checks.
+        assert records  # The endpoint must use the structured logger.
+        assert all("event" in record for record in records)  # Every record has the required event field.
+        assert "secret" not in serialized  # No sensitive connection value can cross the log boundary.

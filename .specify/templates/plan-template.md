@@ -42,6 +42,18 @@
 
 [Gates determined based on constitution file]
 
+For a feature that uses Juniper Mist Cloud:
+
+- Confirm that every REST request uses a working mistapi method.
+- If the feature proposes an owned WebSocket transport, name the matching
+  mistapi WebSocket path and the contract that it cannot meet.
+- Name the contract tests that prove the SDK path is broken, incomplete, or
+  cannot preserve required output.
+- Confirm that the owned transport preserves SDK authentication and endpoint
+  contracts.
+- Confirm tests cover output, failure handling, safety, and secret redaction.
+- Treat a missing proof or contract test as a failed gate.
+
 ## Project Structure
 
 ### Documentation (this feature)

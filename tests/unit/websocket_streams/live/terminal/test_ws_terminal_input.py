@@ -4,7 +4,7 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import pytest  # The tests assert contract refusals.
 
-from src.websocket_streams.intake.fields import StreamRequestError  # Tests verify exact refusal codes.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify exact refusal codes.
 from src.websocket_streams.live.terminal.input_queue import TerminalInput  # The tests cover this class.
 
 
@@ -66,11 +66,11 @@ class TestTerminalInput:
         clock = FakeClock()  # Use deterministic time.
         terminal_input = TerminalInput(clock)  # Build an input queue with a fake clock.
         for _index in range(60):  # Send exactly the allowed count.
-            terminal_input.check_rate()  # Count one accepted request.
+            terminal_input.rate.check()  # Count one accepted request.
         with pytest.raises(StreamRequestError) as error:  # Capture the rate-limit refusal.
-            terminal_input.check_rate()  # The next request exceeds the cap.
+            terminal_input.rate.check()  # The next request exceeds the cap.
         clock.value = 1.0  # Move the clock outside the one-second window.
-        terminal_input.check_rate()  # A new window accepts another request.
+        terminal_input.rate.check()  # A new window accepts another request.
         assert error.value.code == "rate_limited"  # The contract code is exact.
 
     def test_submit_without_sender_raises_not_open_after_release(self) -> None:

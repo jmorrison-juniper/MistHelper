@@ -10,14 +10,17 @@ import pytest  # Parametrized failure-path tests need pytest.
 
 import websocket  # Failure tests build the same exception type as websocket-client.
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec, Safety, UtilityDefinition  # Build requests.
-from src.websocket_streams.intake.start_request import StartRequest  # Runners accept checked requests.
-from src.websocket_streams.live.runners.utility.screen import ScreenRunner  # The screen runner under test.
-from src.websocket_streams.live.runners.utility.triggers import UtilityTriggerTable  # Tests shorten the time limit.
-from src.websocket_streams.live.sessions.buffer import MessageBuffer  # A stream session needs an event buffer.
-from src.websocket_streams.live.sessions.record import SessionState, StreamSession  # The runner writes here.
+from src.websocket_streams.intake.start_request.models import StartRequest  # Runners accept checked requests.
+from src.websocket_streams.live.runners.shell.runners import ScreenRunner  # The screen runner under test.
+from src.websocket_streams.live.runners.utility.triggers.table import UtilityTriggerTable  # Trigger table.
+from src.websocket_streams.live.sessions.buffer.message_buffer import (
+    MessageBuffer,
+)  # A stream session needs an event buffer.
+from src.websocket_streams.live.sessions.record.session import StreamSession
+from src.websocket_streams.live.sessions.record.state import SessionResources, SessionState  # The runner writes here.
 from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Screen output is raw byte history.
 from src.websocket_streams.live.terminal.gateway import TerminalRunner  # Writable terminal runners satisfy this.
-from src.websocket_streams.live.terminal.state import TerminalState  # Screen terminal state is read-only.
+from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Build read-only screen state.
 from src.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
@@ -71,13 +74,8 @@ def _terminal() -> TerminalState:
 
 def _session(request: StartRequest) -> StreamSession:
     """Return one screen stream session."""
-    return StreamSession(
-        "screen-test",
-        request,
-        MessageBuffer(20, 99999),
-        time.monotonic,
-        _terminal(),
-    )  # Use a real session sink.
+    resources = SessionResources(MessageBuffer(20, 99999), time.monotonic, _terminal())  # Group session resources.
+    return StreamSession("screen-test", request, resources)  # Use a real session sink.
 
 
 def _endpoint(api: FakeApiSession, subscribe_timeout_seconds: float = 10.0) -> MistStreamEndpoint:
@@ -161,7 +159,10 @@ class RecordingScreenDevice:
 class OneSecondTriggerTable(UtilityTriggerTable):
     """A trigger table with a one-second total limit."""
 
-    _DEFAULT_TOTAL_SECONDS = 1.0  # Keep the time-limit test under 20 seconds.
+    def __init__(self) -> None:
+        """Build definitions with a one-second total limit."""
+        super().__init__()  # Build the production trigger collaborators.
+        self._definitions.DEFAULT_TOTAL_SECONDS = 1.0  # Keep the time-limit test under 20 seconds.
 
 
 def test_screen_top_and_monitor_triggers_send_expected_requests() -> None:

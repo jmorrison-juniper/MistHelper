@@ -5,10 +5,10 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 import pytest  # The tests check contract refusals.
 
 from src.websocket_streams.catalog.model import Safety  # Tests filter shell catalog entries.
-from src.websocket_streams.catalog.utilities import UtilityCatalog  # Tests build real utility definitions.
-from src.websocket_streams.intake.fields import StreamRequestError  # Unknown keys raise this error.
-from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked start requests.
-from src.websocket_streams.live.runners.utility.triggers import UtilityTriggerTable  # The table under test.
+from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Build real definitions.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Unknown keys raise this error.
+from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked start requests.
+from src.websocket_streams.live.runners.utility.triggers.table import UtilityTriggerTable  # The table under test.
 
 
 class TestUtilityTriggerTable:

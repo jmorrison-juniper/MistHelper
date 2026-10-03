@@ -16,9 +16,14 @@ from typing import Any  # Playwright objects are duck typed in these helpers.
 
 import pytest  # Skip journeys until lead-owned code is present.
 
-from src.websocket_streams.intake.start_request import DeviceFacts  # Fake picker returns real device facts.
+from src.websocket_streams.intake.start_request.models import DeviceFacts  # Fake picker returns real device facts.
 from src.websocket_streams.live.sessions.settings import StreamSettings  # Tests enable shell starts.
-from src.websocket_streams.web.services import WebSocketsServiceParts, WebSocketsServices  # Install real services.
+from src.websocket_streams.web.services.assembly.bundle import WebSocketServiceBundle  # Type real route services.
+from src.websocket_streams.web.services.assembly.collaborators import (
+    WebSocketCollaborators,
+)  # Supply fake-cloud collaborators.
+from src.websocket_streams.web.services.assembly.factory import WebSocketServiceFactory  # Build real leaf services.
+from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Install the service bundle.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession  # Fake Mist REST seam.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
     MonitorFramingScreenDevice,
@@ -232,16 +237,17 @@ class TerminalPortalHarness:
             raise RuntimeError("The fake API session is not ready.")  # Fail with a clear harness error.
         app = WebPortalApp.create_app(self.api, build_static_menu_actions(), ORG_ID)  # Build app.
         app.config["TESTING"] = True  # Raise route errors during tests.
-        app.config[WebSocketsServices.CONFIG_KEY] = self._services(app)  # Install real services with fake parts.
+        app.config[WebSocketServiceRegistry.CONFIG_KEY] = self._services(app)  # Install real services.
         return app  # Return configured app.
 
-    def _services(self, _app: Any) -> WebSocketsServices:
+    def _services(self, _app: Any) -> WebSocketServiceBundle:
         """Build real WebSocket services with fake app dependencies."""
         from src.websocket_streams.catalog.channels import ChannelCatalog  # Real channel catalog.
-        from src.websocket_streams.catalog.registry import StreamCatalog  # Real catalog registry.
-        from src.websocket_streams.catalog.utilities import UtilityCatalog  # Real utility catalog.
-        from src.websocket_streams.intake.start_request import StartRequestChecker  # Real start checker.
-        from src.websocket_streams.live.sessions.manager import RunnerFactory, StreamSessionManager  # Real manager.
+        from src.websocket_streams.catalog.registry.stream_catalog import StreamCatalog  # Real registry leaf class.
+        from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Real utility leaf class.
+        from src.websocket_streams.intake.start_request.checker import StartRequestChecker  # Real start checker.
+        from src.websocket_streams.live.sessions.manager.factory import RunnerFactory  # Real runner factory.
+        from src.websocket_streams.live.sessions.manager.lifecycle import StreamSessionManager  # Real manager.
         from src.websocket_streams.live.transport.endpoint import TransportProfile  # Loopback profile.
 
         picker = FakePickerService()  # Use deterministic site and device rows.
@@ -259,8 +265,8 @@ class TerminalPortalHarness:
         if self.api is None:  # start() builds the fake API before services.
             raise RuntimeError("The fake API session is not ready.")  # Fail with a clear harness error.
         manager = StreamSessionManager(settings, RunnerFactory(self.api, profile))  # Real manager and runners.
-        parts = WebSocketsServiceParts(catalog, checker, picker, manager, settings, None)  # Ready service parts.
-        return WebSocketsServices(parts)  # Routes call the real service facade.
+        collaborators = WebSocketCollaborators(catalog, checker, picker, manager, settings)  # Ready collaborators.
+        return WebSocketServiceFactory.from_collaborators(collaborators)  # Build the real leaf services.
 
     def _server_for(self, app: Any) -> Any:
         """Return a Werkzeug server on a free port."""

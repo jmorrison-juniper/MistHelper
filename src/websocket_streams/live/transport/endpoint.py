@@ -1,306 +1,179 @@
-"""Build safe Mist WebSocket connection parameters.
-
-Why:
-    Issue #3671 replaces private Mist SDK WebSocket code. These classes keep
-    authentication details on the server and validate shell addresses before a
-    connection can send credentials.
-"""
+"""Build safe Mist WebSocket connection parameters."""
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
-import logging  # The transport logs safe connection metadata only.
+import logging  # Structured records use repository logging handlers.
 import ssl  # TLS settings mirror the Mist SDK behavior.
-from dataclasses import dataclass  # TransportProfile is immutable configuration.
-from http.cookiejar import Cookie  # Cookie iteration uses the standard cookie type.
-from urllib.parse import urlparse  # URL parsing avoids unsafe string checks.
+from dataclasses import dataclass  # The transport profile is immutable.
+from urllib.parse import urlparse  # URL parsing prevents unsafe string checks.
 
-import websocket  # ConnectFailure reads the websocket-client open errors.
-from src.websocket_streams.intake.fields import StreamRequestError  # Address refusals use the HTTP contract.
-
-logger = logging.getLogger(__name__)  # Keep transport logs under this module.
+import websocket  # Connection failures use websocket-client error types.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Policy refusals use the HTTP contract.
+from src.websocket_streams.live.transport.runtime.logging.structured_logger import (
+    StructuredTransportLogger,
+)  # T072 provides the safe JSON logging boundary.
 
 
 @dataclass(frozen=True, slots=True)
 class TransportProfile:
-    """Configuration for one live WebSocket connection.
-
-    Args:
-        stream_url: A test stream address, or None to build the Mist address.
-        allow_loopback: Allow loopback shell URLs for offline tests.
-        read_timeout_seconds: Quiet time before a ping.
-        subscribe_timeout_seconds: Wait for each channel subscription answer.
-        reconnect_delays: Retry waits for channel stream callers.
-    """
+    """Hold immutable settings for one live WebSocket connection."""
 
     stream_url: str | None = None  # Tests can replace the Mist cloud address.
-    allow_loopback: bool = False  # Fake cloud tests use ws://127.0.0.1 only.
-    read_timeout_seconds: float = 20.0  # The client pings after one quiet interval.
-    subscribe_timeout_seconds: float = 10.0  # Mist should answer each subscribe quickly.
-    reconnect_delays: tuple[float, ...] = (1.0, 2.0, 4.0)  # Runners use the documented retry waits.
+    allow_loopback: bool = False  # Fake cloud tests can use loopback WebSockets.
+    read_timeout_seconds: float = 20.0  # The reader pings after one quiet interval.
+    subscribe_timeout_seconds: float = 10.0  # The cloud must answer each subscription.
+    reconnect_delays: tuple[float, ...] = (1.0, 2.0, 4.0)  # Callers use bounded retry delays.
 
 
-class MistStreamEndpoint:
-    """Read WebSocket connection values from a Mist API session."""
+class SessionConnectionValues:
+    """Read authentication and TLS values from one Mist API session."""
+
+    def __init__(self, apisession: object) -> None:
+        """Store the session and its normalized cloud host."""
+        raw_host = getattr(apisession, "_cloud_uri", "")  # Read the SDK-compatible cloud value.
+        parsed = urlparse(raw_host if "://" in raw_host else f"https://{raw_host}")  # Accept host-only values.
+        self._apisession, self._cloud_host = apisession, parsed.hostname or raw_host  # Store session and host.
+        self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
+
+    def headers(self) -> list[str]:
+        """Return the active token header when token sign-in is configured."""
+        self._log.emit(logging.INFO, "transport_auth_build", {"action": "token_headers"})  # Log the safe action.
+        tokens, index = (
+            getattr(self._apisession, "_apitoken", []),
+            getattr(self._apisession, "_apitoken_index", -1),
+        )  # Read token state together.
+        headers = (
+            [f"Authorization: Token {tokens[index]}"]
+            if tokens and isinstance(index, int) and 0 <= index < len(tokens)
+            else []
+        )  # Validate the index before building the header.
+        self._log.emit(logging.DEBUG, "transport_auth_ready", {"count": len(headers)})  # Log only the count.
+        return headers  # Cookie sign-in uses an empty header list.
+
+    def cookie(self) -> str | None:
+        """Return safe cookie pairs for password sign-in."""
+        self._log.emit(logging.INFO, "transport_cookie_build", {"action": "cookie_header"})  # Log the safe action.
+        cookies = getattr(getattr(self._apisession, "_session", None), "cookies", None)  # Read the cookie jar.
+        pairs = [
+            f"{cookie.name}={cookie.value or ''}"
+            for cookie in cookies or []
+            if not any(char in cookie.name or char in (cookie.value or "") for char in "\r\n")
+        ]  # Preserve order while excluding header-control characters.
+        self._log.emit(logging.DEBUG, "transport_cookie_ready", {"count": len(pairs)})  # Log only the count.
+        return "; ".join(pairs) or None  # An empty jar must not create a header.
+
+    def sslopt(self) -> dict[str, object]:
+        """Return websocket-client TLS options from the requests session."""
+        self._log.emit(logging.INFO, "transport_tls_build", {"action": "tls_options"})  # Log the safe action.
+        verify, cert = (
+            getattr(getattr(self._apisession, "_session", None), "verify", True),
+            getattr(getattr(self._apisession, "_session", None), "cert", None),
+        )  # Read both requests-compatible TLS values.
+        options = self._tls_options(verify, cert)  # Build the complete websocket-client mapping.
+        self._log.emit(logging.DEBUG, "transport_tls_ready", {"count": len(options)})  # Log only the count.
+        return options  # The clients pass this mapping without changes.
+
+    def _tls_options(self, verify: object, cert: object) -> dict[str, object]:
+        """Build the TLS mapping from requests-compatible values."""
+        options: dict[str, object] = {}  # Start with secure websocket-client defaults.
+        if verify is False:  # Match an explicit SDK verification disablement.
+            options.update({"cert_reqs": ssl.CERT_NONE, "check_hostname": False})  # Disable both checks.
+        elif isinstance(verify, str):  # A string names the CA bundle.
+            options["ca_certs"] = verify  # Use the websocket-client option name.
+        if isinstance(cert, str):  # A string names one certificate file.
+            options["certfile"] = cert  # Pass the client certificate.
+        elif isinstance(cert, tuple) and cert:  # A tuple can include a private key.
+            options.update({"certfile": cert[0], **({"keyfile": cert[1]} if len(cert) > 1 else {})})  # Add files.
+        return options  # Return the complete TLS mapping.
+
+
+class MistStreamEndpoint(SessionConnectionValues):
+    """Provide safe connection values for one Mist cloud endpoint."""
 
     def __init__(self, apisession: object, profile: TransportProfile | None = None) -> None:
-        """Build the endpoint.
-
-        Args:
-            apisession: The Mist API session with the SDK private attributes.
-            profile: Optional transport configuration.
-        """
-        logger.info("Building Mist WebSocket endpoint")  # Log before reading session state.
-        self._apisession = apisession  # The endpoint reads private SDK-compatible attributes.
-        self._profile = profile or TransportProfile()  # Defaults match the transport contract.
-        self._cloud_host = self._read_cloud_host()  # Store the host for repeated safe use.
-        logger.debug("Built Mist WebSocket endpoint for host %s", self._cloud_host)  # Log only the host.
+        """Build the endpoint from one SDK-compatible API session."""
+        super().__init__(apisession)  # Read authentication and cloud values once.
+        self._profile = profile or TransportProfile()  # Use the documented defaults when no profile exists.
+        self._log.emit(logging.DEBUG, "transport_endpoint_ready", {"action": "endpoint"})  # Report safe readiness.
 
     @property
     def profile(self) -> TransportProfile:
-        """Return the transport profile.
-
-        Returns:
-            The immutable transport profile.
-        """
-        return self._profile  # Callers need the timeout and retry values.
+        """Return the immutable transport profile."""
+        return self._profile  # Clients need timeout and reconnect values.
 
     @property
     def cloud_host(self) -> str:
-        """Return the Mist API host.
-
-        Returns:
-            The host name, such as ``api.mist.com``.
-        """
-        return self._cloud_host  # Shell policy needs the same host.
+        """Return the normalized Mist API host."""
+        return self._cloud_host  # Address policy uses the same cloud boundary.
 
     def stream_url(self) -> str:
-        """Return the Mist stream address.
-
-        Returns:
-            The configured test address or the derived Mist stream address.
-        """
-        if self._profile.stream_url is not None:  # Tests inject a loopback stream address.
-            return self._profile.stream_url  # The test address must stay byte-for-byte.
-        websocket_host = self._cloud_host.replace("api.", "api-ws.", 1)  # Match the Mist SDK address rule.
-        return f"wss://{websocket_host}/api-ws/v1/stream"  # The stream path is fixed by the Mist API.
-
-    def headers(self) -> list[str]:
-        """Return the authorization headers for token sign-in.
-
-        Returns:
-            A websocket-client header list.
-        """
-        logger.info("Building Mist WebSocket token headers for host %s", self._cloud_host)  # Log before auth setup.
-        tokens = getattr(self._apisession, "_apitoken", [])  # The SDK stores API tokens on this private field.
-        index = getattr(self._apisession, "_apitoken_index", -1)  # The SDK stores the active token index here.
-        if tokens and isinstance(index, int) and 0 <= index < len(tokens):  # Token sign-in takes precedence.
-            logger.debug("Built one Mist WebSocket token header for host %s", self._cloud_host)  # Do not log token.
-            return [f"Authorization: Token {tokens[index]}"]  # websocket-client expects header strings.
-        logger.debug(
-            "Built zero Mist WebSocket token headers for host %s", self._cloud_host
-        )  # Cookie sign-in uses none.
-        return []  # Password sign-in uses cookies.
-
-    def cookie(self) -> str | None:
-        """Return the safe cookie header text for password sign-in.
-
-        Returns:
-            The cookie header text, or None when no safe cookie exists.
-        """
-        logger.info("Building Mist WebSocket cookies for host %s", self._cloud_host)  # Log before cookie processing.
-        session = getattr(self._apisession, "_session", None)  # The SDK stores the requests session here.
-        cookies = getattr(session, "cookies", None)  # Requests keeps cookies on this jar.
-        safe = [self._cookie_pair(cookie) for cookie in cookies or []]  # Skip cookies that could inject headers.
-        joined = "; ".join(pair for pair in safe if pair is not None)  # websocket-client wants one cookie string.
-        logger.debug(  # Count safe cookies without exposing cookie names or values.
-            "Built %s safe Mist WebSocket cookies for host %s", len([p for p in safe if p]), self._cloud_host
-        )
-        return joined or None  # An empty string should not become a header.
-
-    def sslopt(self) -> dict[str, object]:
-        """Return websocket-client TLS options.
-
-        Returns:
-            TLS options derived from the requests session.
-        """
-        logger.info("Building Mist WebSocket TLS options for host %s", self._cloud_host)  # Log before TLS setup.
-        ssl_options: dict[str, object] = {}  # websocket-client accepts this option dictionary.
-        session = getattr(self._apisession, "_session", None)  # The requests session holds verify and cert.
-        verify = getattr(session, "verify", True)  # Requests defaults to certificate validation.
-        cert = getattr(session, "cert", None)  # Requests allows a client certificate value.
-        if verify is False:  # The SDK disables certificate checks for this explicit setting.
-            ssl_options["cert_reqs"] = ssl.CERT_NONE  # websocket-client uses ssl constants.
-            ssl_options["check_hostname"] = False  # Hostname checks must match the disabled validation.
-        elif isinstance(verify, str):  # A path names a CA bundle.
-            ssl_options["ca_certs"] = verify  # websocket-client uses ca_certs for the same path.
-        self._add_cert_options(ssl_options, cert)  # Client certificate handling matches the SDK.
-        logger.debug(  # Count TLS options without logging certificate paths twice.
-            "Built %s Mist WebSocket TLS options for host %s", len(ssl_options), self._cloud_host
-        )
-        return ssl_options  # Callers pass this directly to websocket-client.
+        """Return the configured or derived stream address."""
+        if self._profile.stream_url is not None:  # Offline tests provide an exact loopback address.
+            return self._profile.stream_url  # Keep the supplied address byte-for-byte.
+        websocket_host = self._cloud_host.replace("api.", "api-ws.", 1)  # Apply the Mist SDK host rule.
+        return f"wss://{websocket_host}/api-ws/v1/stream"  # Use the fixed Mist stream path.
 
     def host_label(self, url: str) -> str:
-        """Return only the host label of a URL.
-
-        Args:
-            url: A WebSocket URL.
-
-        Returns:
-            The URL host, or an empty string when parsing fails.
-        """
-        parsed = urlparse(url)  # Parsing keeps path and query out of logs.
-        return parsed.hostname or ""  # Logs can hold only this label.
-
-    def _read_cloud_host(self) -> str:
-        """Read the API cloud host from the SDK-compatible session.
-
-        Returns:
-            The normalized host text.
-        """
-        raw_host = getattr(self._apisession, "_cloud_uri", "")  # The Mist SDK private field holds the cloud host.
-        parsed = urlparse(raw_host if "://" in raw_host else f"https://{raw_host}")  # Accept host-only test values.
-        return parsed.hostname or raw_host  # Fallback keeps tests explicit.
-
-    def _cookie_pair(self, cookie: Cookie) -> str | None:
-        """Return one safe cookie pair.
-
-        Args:
-            cookie: One cookie from the requests cookie jar.
-
-        Returns:
-            The ``name=value`` text, or None when the cookie is unsafe.
-        """
-        value = cookie.value or ""  # Empty cookie values are allowed by the SDK behavior.
-        if "\r" in cookie.name or "\n" in cookie.name or "\r" in value or "\n" in value:  # CRLF can inject headers.
-            logger.warning("Skipping unsafe Mist WebSocket cookie for host %s", self._cloud_host)  # Do not log cookie.
-            return None  # Unsafe cookies must not leave the process.
-        return f"{cookie.name}={value}"  # websocket-client joins cookie pairs with semicolons.
-
-    def _add_cert_options(self, ssl_options: dict[str, object], cert: object) -> None:
-        """Add client certificate options.
-
-        Args:
-            ssl_options: The option dictionary to update.
-            cert: The requests session certificate value.
-        """
-        if isinstance(cert, str):  # A single path holds the certificate file.
-            ssl_options["certfile"] = cert  # websocket-client uses certfile for this case.
-        elif isinstance(cert, tuple) and cert:  # A tuple can hold certificate and key paths.
-            ssl_options["certfile"] = cert[0]  # The first item is the certificate.
-            if len(cert) > 1:  # The second item is optional.
-                ssl_options["keyfile"] = cert[1]  # websocket-client uses keyfile for the private key.
+        """Return only the host part of a WebSocket address."""
+        return urlparse(url).hostname or ""  # Exclude the path, query, and credentials.
 
 
 class ShellAddressPolicy:
-    """Validate shell and screen WebSocket addresses before credentials are sent."""
+    """Validate shell and screen addresses before credentials leave the server."""
 
     def __init__(self, cloud_host: str, allow_loopback: bool = False) -> None:
-        """Build the shell address policy.
-
-        Args:
-            cloud_host: The Mist API cloud host.
-            allow_loopback: True when offline tests can use loopback WebSocket URLs.
-        """
-        logger.info("Building shell address policy for host %s", cloud_host)  # Log before deriving the domain.
-        self._cloud_host = cloud_host.lower().strip(".")  # Domain comparison is case-insensitive.
-        self._allow_loopback = allow_loopback  # Tests need loopback without TLS.
-        self._domain = ".".join(self._cloud_host.split(".")[-2:])  # The contract defines the base domain this way.
-        logger.debug("Built shell address policy for domain %s", self._domain)  # The domain is safe to log.
+        """Build the policy for one Mist cloud domain."""
+        self._allow_loopback = allow_loopback  # Offline tests explicitly permit loopback.
+        normalized = cloud_host.lower().strip(".")  # Domain checks are case-insensitive.
+        self._domain = ".".join(normalized.split(".")[-2:])  # The contract uses the base cloud domain.
+        self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
 
     def check(self, url: str) -> str:
-        """Return a safe shell address.
+        """Return the address when it meets the transport policy."""
+        self._log.emit(logging.INFO, "shell_address_check", {"action": "validate"})  # Do not log the address.
+        parsed = urlparse(url)  # Parse the address before any credentials are built.
+        if self._is_allowed(parsed.scheme, parsed.hostname or "", parsed.port):  # Apply loopback or TLS policy.
+            self._log.emit(logging.DEBUG, "shell_address_allowed", {"status": "allowed"})  # Log safe status.
+            return url  # Keep the accepted address unchanged.
+        self._log.emit(logging.WARNING, "shell_address_refused", {"status": "outside_domain"})  # Log safe reason.
+        raise StreamRequestError("bad_request", "The shell address is outside the Mist cloud domain.")  # Refuse it.
 
-        Args:
-            url: The address returned by the Mist REST trigger.
-
-        Returns:
-            The same URL when it is allowed.
-
-        Raises:
-            StreamRequestError: The address is outside the allowed policy.
-        """
-        logger.info("Checking shell WebSocket address")  # Do not log the URL path.
-        parsed = urlparse(url)  # Use structured URL checks.
-        host = (parsed.hostname or "").lower().strip(".")  # Normalize host for comparison.
-        if self._is_allowed_loopback(parsed.scheme, host, parsed.port):  # Tests can use a local fake cloud.
-            logger.debug("Accepted loopback shell WebSocket host %s", host)  # The host is safe to log.
-            return url  # The fake cloud URL is allowed only by explicit profile.
-        if parsed.scheme == "wss" and self._is_mist_domain(host):  # Production addresses must use TLS in the domain.
-            logger.debug("Accepted Mist shell WebSocket host %s", host)  # Do not log path or query.
-            return url  # The URL passed the policy.
-        logger.warning("Refused shell WebSocket host %s", host)  # The host is safe to log.
-        raise StreamRequestError("bad_request", "The shell address is outside the Mist cloud domain.")  # Refuse safely.
-
-    def _is_allowed_loopback(self, scheme: str, host: str, port: int | None) -> bool:
-        """Return whether a loopback URL is allowed.
-
-        Args:
-            scheme: The parsed URL scheme.
-            host: The parsed and normalized host.
-            port: The parsed port.
-
-        Returns:
-            True when the URL is an allowed loopback URL.
-        """
-        return self._allow_loopback and scheme == "ws" and host == "127.0.0.1" and port is not None  # Tests only.
-
-    def _is_mist_domain(self, host: str) -> bool:
-        """Return whether a host belongs to the Mist domain.
-
-        Args:
-            host: The parsed and normalized host.
-
-        Returns:
-            True when the host is the base domain or a subdomain.
-        """
-        return host == self._domain or host.endswith(f".{self._domain}")  # The leading dot blocks look-alike domains.
+    def _is_allowed(self, scheme: str, host: str, port: int | None) -> bool:
+        """Return whether the normalized address meets either policy."""
+        normalized = host.lower().strip(".")  # Domain checks are case-insensitive.
+        loopback = self._allow_loopback and scheme == "ws" and normalized == "127.0.0.1" and port is not None
+        mist = scheme == "wss" and (normalized == self._domain or normalized.endswith(f".{self._domain}"))
+        return loopback or mist  # Permit explicit tests or secure Mist cloud hosts.
 
 
 class ConnectFailure:
-    """Turn a WebSocket open error into a plain reason for the operator.
+    """Map WebSocket open failures to safe operator reasons."""
 
-    Why:
-        A failed open used to show "Read the portal log for the cause", or a raw
-        operating system message. The operator needs to know if the Mist cloud
-        refused the connection, did not answer, or could not be reached.
-    """
-
-    REFUSED_TEXT = "The Mist cloud refused the WebSocket connection with HTTP status {status}."  # Handshake refusal.
-    TIMEOUT_TEXT = "The Mist cloud did not answer the WebSocket connection in time."  # Connect or handshake timeout.
-    TLS_TEXT = "The TLS check of the Mist cloud connection failed."  # Certificate or TLS handshake failure.
+    REFUSED_TEXT = "The Mist cloud refused the WebSocket connection with HTTP status {status}."  # HTTP refusal.
+    TIMEOUT_TEXT = "The Mist cloud did not answer the WebSocket connection in time."  # Handshake timeout.
+    TLS_TEXT = "The TLS check of the Mist cloud connection failed."  # TLS validation failure.
     ADDRESS_TEXT = "The portal could not find the address of the Mist cloud."  # Name lookup failure.
-    NETWORK_TEXT = "The portal could not connect to the Mist cloud."  # Refused, reset, or lost TCP connection.
+    NETWORK_TEXT = "The portal could not connect to the Mist cloud."  # TCP or proxy failure.
 
     @classmethod
     def reason(cls, error: BaseException) -> str | None:
-        """Return the plain reason for one open error.
-
-        Args:
-            error: The exception from the WebSocket open.
-
-        Returns:
-            The plain reason, or None when the error is not a connection failure.
-        """
-        if isinstance(error, websocket.WebSocketBadStatusException):  # The cloud answered with an HTTP error.
-            return cls.REFUSED_TEXT.format(status=error.status_code)  # The status helps the operator and support.
-        for error_types, text in cls._rules():  # The first matching rule wins, so the order matters.
-            if isinstance(error, error_types):  # This rule names the error family.
-                return text  # Return the plain reason for this family.
-        return None  # Other errors are program errors, so the caller keeps its own handling.
+        """Return the safe reason for one recognized connection failure."""
+        if isinstance(error, websocket.WebSocketBadStatusException):  # The cloud returned an HTTP status.
+            return cls.REFUSED_TEXT.format(status=error.status_code)  # Keep only the numeric status.
+        for error_types, text in cls._rules():  # Match specific families before broad operating system errors.
+            if isinstance(error, error_types):  # Use the first matching family.
+                return text  # Return the stable operator message.
+        return None  # Program errors keep their original handling.
 
     @classmethod
     def _rules(cls) -> tuple[tuple[tuple[type[BaseException], ...], str], ...]:
-        """Return the error families in match order.
-
-        Returns:
-            Pairs of error types and plain reasons. A timeout and a TLS error are also an OSError, so they come first.
-        """
+        """Return connection failure families in match order."""
         return (
-            ((TimeoutError, websocket.WebSocketTimeoutException), cls.TIMEOUT_TEXT),  # Connect or handshake wait.
-            ((ssl.SSLError,), cls.TLS_TEXT),  # Certificate and TLS handshake errors.
-            ((websocket.WebSocketAddressException,), cls.ADDRESS_TEXT),  # The name lookup failed.
+            ((TimeoutError, websocket.WebSocketTimeoutException), cls.TIMEOUT_TEXT),  # Timeouts precede OSError.
+            ((ssl.SSLError,), cls.TLS_TEXT),  # TLS errors can also inherit from OSError.
+            ((websocket.WebSocketAddressException,), cls.ADDRESS_TEXT),  # Name lookup failures are distinct.
             (
                 (OSError, websocket.WebSocketProxyException, websocket.WebSocketConnectionClosedException),
                 cls.NETWORK_TEXT,
-            ),  # ConnectionError and other socket errors.
+            ),  # Remaining connection failures share one safe reason.
         )
