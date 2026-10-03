@@ -64,6 +64,7 @@ class SessionSink(Protocol):
     """The methods that runners call on a session."""
 
     terminal: TerminalState | None  # Shell and screen runners read the stored terminal size at open.
+    state: SessionState  # Runners distinguish pre-open requests from live transport failures.
 
     def mark_live(self, note: str = "") -> None:
         """Mark the session as live.
