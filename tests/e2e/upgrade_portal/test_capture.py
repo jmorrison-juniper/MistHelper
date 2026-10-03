@@ -50,6 +50,14 @@ sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright pac
 # then reaches the skip and never an import error.
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError  # noqa: E402  # WHY: The skip runs first.
 
+from tests.e2e.upgrade_portal.test_upgrade import (  # noqa: E402  # WHY: The selector helper stays behind the skip.
+    OFFERED_VERSION_INDEX,  # The prompt occupies the index before offered versions.
+    TARGET_ROW_PREFIX,  # Each target row records the device type it represents.
+    TYPE_VERSION_SELECT_IDS,  # These are the three current type controls.
+    _chose_one_version_for_every_device,  # Use the tested type selector.
+    _is_options_save,  # This helper recognizes the real options-save response.
+)
+
 # `contracts/http-api.md` fixes this path for the site picker.
 SITE_PAGE_PATH = "/select/site"
 SITE_ROW_PREFIX = "site-row-"
@@ -88,6 +96,7 @@ CAPTURE_START_UPGRADE_ERROR_ID = "capture-start-upgrade-error"
 # two identifiers, so the walk below opens the same pages an operator opens.
 SITE_OPEN_PREFIX = "site-open-"
 SITE_CAPTURE_LINK_ID = "site-capture-link"
+NAV_SITES_ID = "nav-sites"  # The shared header returns the operator to the site list.
 
 # Issue #2259: the walk must hold the site before it writes to it. FR-072 gives
 # one site to one operator. One press takes a free site, and a site that any
@@ -106,10 +115,10 @@ CSRF_META_ID = "csrf-meta"  # `layout.html` publishes the token under this ident
 
 # The options page and the confirm page of the run the upgrade button creates.
 # `contracts/http-api.md` section 5 fixes both page paths and the create path.
-VERSION_SELECT_ALL_ID = "upgrade-version-select-all"
 OPTIONS_SAVE_ID = "upgrade-options-save-button"
 CONFIRM_LINK_ID = "upgrade-confirm-link"
 CONFIRM_INPUT_ID = "upgrade-confirm-input"
+UPGRADE_SITE_ID_ID = "upgrade-site-id"  # The run page identifies the site that owns this run.
 OPTIONS_PAGE_SUFFIX = "/options"  # The run page that picks a version for each device.
 CONFIRM_PAGE_SUFFIX = "/confirm"  # The run page that reads the typed word.
 
@@ -586,6 +595,108 @@ def _run_id_from_url(url: str) -> str:
     return tail.split("/", 1)[0]  # The key ends at the next path separator.
 
 
+class CaptureClickJourney:
+    """Guard the real options page before the capture walk saves its plan."""
+
+    def __init__(self, page: Any, ledger: RunLedger) -> None:
+        """Bind the guard to the walk page and its own-run ledger."""
+        self.page = page  # Keep every browser action on the operator's real page.
+        self.ledger = ledger  # Let teardown end only the run this walk created.
+
+    def require_created_run(self, status: int) -> None:
+        """Fail with a precise reason when the create endpoint refuses a new run."""
+        logger.info("Check the run-create status %s", status)  # Record the response before classifying it.
+        if status == LOCKED_STATUS:  # A fresh fixture site must not hold another live run.
+            logger.error("The run create answered 409 because a live run holds the site.")  # Name the fixture fault.
+            raise AssertionError("The run create answered 409 because a live run holds the site.")  # Fail this journey.
+        if status == UNREACHABLE_STATUS:  # The local fixture requires its lock store.
+            logger.error("The run create answered 503 because the local site-lock store is unavailable.")  # Name it.
+            raise AssertionError(
+                "The run create answered 503 because the local site-lock store is unavailable."
+            )  # Fail.
+        logger.debug("The run-create status is not a 409 or 503 refusal")  # Other statuses reach the contract check.
+
+    def prepare_options(self) -> str:
+        """Read the created run and select a version for every present device type."""
+        logger.info("Wait for the options page of the created run")  # Record the next browser step.
+        self.page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)  # Keep the original bound.
+        logger.debug("The browser reached the options page")  # Confirm that the real route rendered.
+        logger.info("Read the run key from the options page address")  # Record the address read.
+        run_id = _run_id_from_url(self.page.url)  # Read the key from the page that the click opened.
+        logger.debug("Read the run key from the options page")  # Do not expose the key in logs.
+        logger.info("Record the created run for teardown")  # Record before any plan action.
+        self.ledger.record(run_id)  # Teardown cancels this run before it releases the site.
+        logger.debug("Recorded one run in the walk ledger")  # Confirm test-owned cleanup state.
+        self._require_type_versions()  # A missing family or version is a portal or fixture failure.
+        return run_id  # The caller continues the click journey with this run.
+
+    def return_to_owned_capture(self, site_id: str) -> None:
+        """Click back to this run's capture page so fixture teardown can release its site."""
+        logger.info("Check that the confirmed run belongs to the capture site")  # Bind cleanup to the owned site.
+        run_site_id = self.page.get_by_test_id(UPGRADE_SITE_ID_ID).inner_text().strip()  # Read the confirmed site.
+        logger.info("Open the site list to return to the run's capture page")  # Use the existing site navigation.
+        with self.page.expect_response(
+            lambda answer: answer.request.is_navigation_request()
+        ):  # Track the real site-list navigation.
+            self.page.get_by_test_id(NAV_SITES_ID).click()  # Click the shared header link.
+        self.page.wait_for_url(f"**{SITE_PAGE_PATH}", timeout=START_TIMEOUT_MS)  # Wait for the real site list.
+        with self.page.expect_response(
+            lambda answer: answer.request.is_navigation_request()
+        ):  # Track the inventory navigation.
+            self.page.get_by_test_id(f"{SITE_OPEN_PREFIX}{site_id}").click()  # Open the row for the run's site.
+        with self.page.expect_response(
+            lambda answer: answer.request.is_navigation_request()
+        ):  # Track the capture-page navigation.
+            self.page.get_by_test_id(SITE_CAPTURE_LINK_ID).click()  # Open the capture page for the run's site.
+        capture_url = urlsplit(self.page.url)  # Read the page that the navigation clicks opened.
+        assert capture_url.path == "/captures/new"  # Require the site page that draws the release control.
+        assert parse_qs(capture_url.query).get("site_id", [""])[0] == site_id  # Keep cleanup on the run site.
+        release = self.page.get_by_test_id(LOCK_RELEASE_BUTTON_ID)  # Select the release control for this site.
+        sync_api.expect(release).to_be_visible(timeout=START_TIMEOUT_MS)  # Prove the control is drawn for this holder.
+        assert release.get_attribute("data-site-id") == site_id  # Bind the visible control to the owned site.
+        assert (
+            run_site_id == site_id
+        ), f"The run site {run_site_id!r} is not the capture site."  # Reject a different site after safe navigation.
+        logger.debug("The run's capture page exposes its owned site release control")  # Confirm teardown's page.
+
+    def _require_type_versions(self) -> None:
+        """Require one row and one offered version for each type control."""
+        logger.info("Check every current type control before selecting versions")  # Record the complete check.
+        for test_id in TYPE_VERSION_SELECT_IDS:  # Check every device type, even if another type has versions.
+            self._require_type_options(test_id)  # Check the matching device rows and offered versions.
+        logger.info("Select offered versions through the existing browser helper")  # Record before selection.
+        _chose_one_version_for_every_device(self.page)  # Reuse the proven real-control interaction.
+        logger.debug("The existing selection helper finished on all required controls")  # Confirm selection completed.
+        for test_id in TYPE_VERSION_SELECT_IDS:  # Verify the helper changed each required family control.
+            logger.info("Verify the selected value of %s", test_id)  # Record before reading the control.
+            value = self.page.get_by_test_id(test_id).input_value()  # Read the value that the form will submit.
+            logger.debug("The selected value is present for %s: %s", test_id, bool(value))  # Report no version value.
+            if not value:  # An empty value would produce no planned device of this type.
+                raise AssertionError(f"{test_id} kept an empty version after selection.")  # Fail before the save.
+
+    def _require_type_options(self, test_id: str) -> None:
+        """Require a matching row and an offered version for each type control."""
+        device_type = test_id.rsplit("-", 1)[1]  # The suffix names this device type.
+        row_selector = f'[data-testid^="{TARGET_ROW_PREFIX}"][data-device-type="{device_type}"]'  # Match this family.
+        logger.info("Count target rows for device type %s", device_type)  # Record before reading the table.
+        row_count = self.page.locator(row_selector).count()  # Require a device that can use this type control.
+        logger.debug("Found %s target row(s) for device type %s", row_count, device_type)  # Report the measured count.
+        if row_count < 1:  # A control without a matching device cannot prove a plan.
+            raise AssertionError(f"{test_id} has no target row for device type {device_type}.")  # Fail before save.
+        logger.info("Read the option count for %s", test_id)  # Record before checking the actual select.
+        control = self.page.get_by_test_id(test_id)  # Select the shipped control by its contract identifier.
+        control_count = control.count()  # A missing or repeated control violates the page contract.
+        logger.debug("Found %s control(s) for %s", control_count, test_id)  # Report the measured count.
+        if control_count != 1:  # Require one control for each present device type.
+            raise AssertionError(f"The options page rendered {control_count} controls for {test_id}.")  # Fail.
+        option_count = control.locator("option").count()  # Count the prompt and the offered firmware versions.
+        logger.debug("Found %s option(s) for %s", option_count, test_id)  # Report the measured count.
+        if option_count <= OFFERED_VERSION_INDEX:  # The prompt is not a version that can form a plan.
+            raise AssertionError(  # Stop before the options save.
+                f"{test_id} offers no version for {row_count} {device_type} device(s)."  # Name the empty family.
+            )
+
+
 def _walk_to_capture_view(page: Any) -> None:
     """Open the capture view by clicking from the site list.
 
@@ -820,36 +931,52 @@ class TestUpgradeJourney:
             run_ledger: The ledger that the teardown of `walking_page` reads.
         """
         _walk_to_capture_view(walking_page)  # Site list, to inventory, to capture view, by clicks alone.
+        capture_site_id = parse_qs(urlsplit(walking_page.url).query).get("site_id", [""])[0]  # Retain this site's key.
+        assert (
+            capture_site_id != ""
+        ), "The capture page has no site identifier to bind the run to."  # Require ownership.
         _start_and_reveal_upgrade(walking_page)  # Start the capture and wait for the upgrade button.
 
         with walking_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as run_event:
             walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The button posts the run create.
         status = run_event.value.status  # The status reads without a body, so it survives the navigation.
-        if status in (LOCKED_STATUS, UNREACHABLE_STATUS):  # A live run or a dead lock store stops a fresh run.
-            pytest.skip(f"The run create answered {status}, so no fresh run key exists to walk.")
-        assert status == CREATED_STATUS, f"The run create answered {status}. The contract fixes 201."
+        journey = CaptureClickJourney(walking_page, run_ledger)  # Guard the options stage with this run's ledger.
+        journey.require_created_run(status)  # A refusal is a fixture or portal fault, not an environment skip.
+        assert status == CREATED_STATUS, f"The run create answered {status}. The contract fixes 201."  # Require 201.
+        run_id = journey.prepare_options()  # Check all three type controls before saving a plan.
+        logger.info("Save the selected versions through the options page")  # Record before the user-facing action.
+        with walking_page.expect_response(_is_options_save, timeout=START_TIMEOUT_MS) as save_event:  # Record save.
+            walking_page.get_by_test_id(OPTIONS_SAVE_ID).click()  # The operator saves the selected type versions.
+        save_status = save_event.value.status  # Read the status of the one plan-saving route.
+        logger.debug("The options-save route answered %s", save_status)  # Record the measured response status.
+        assert save_status == OK_STATUS, f"Options save answered {save_status}. Expected 200."  # Require status 200.
 
-        walking_page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
-        run_id = _run_id_from_url(walking_page.url)  # The options URL holds the run key that the walk follows.
-        run_ledger.record(run_id)  # Issue #3511: the teardown ends this run, so the site stays free.
-        picker = walking_page.get_by_test_id(VERSION_SELECT_ALL_ID)  # The bulk control fills every device version.
-        if picker.locator("option").count() <= 1:  # Only the empty prompt exists, so no version can plan a device.
-            pytest.skip("The options page offered no version, so the save would keep an empty plan.")
-        picker.select_option(index=1)  # The first real version, because index 0 is the empty prompt.
-        walking_page.get_by_test_id(OPTIONS_SAVE_ID).click()  # The save writes the plan and opens the confirm page.
+        logger.info("Wait for the saved run's confirmation page")  # Record the next page transition.
+        walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)  # Keep the bound.
+        sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(
+            timeout=START_TIMEOUT_MS
+        )  # Require the real confirmation control.
+        logger.debug("The saved run's confirmation page is visible")  # Confirm the first confirmation view.
 
-        walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
-        sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
-
-        walking_page.get_by_role("link", name="History", exact=True).click()
-        walking_page.wait_for_url(f"**{HISTORY_PAGE_PATH}", timeout=START_TIMEOUT_MS)
-        walking_page.get_by_role("link", name=run_id, exact=True).click()
-        walking_page.wait_for_url(f"**/runs/{run_id}", timeout=START_TIMEOUT_MS)
-        confirm_link = walking_page.get_by_test_id(CONFIRM_LINK_ID)
-        sync_api.expect(confirm_link).to_be_visible(timeout=START_TIMEOUT_MS)
-        confirm_link.click()
-        walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
-        sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
+        logger.info("Open History from the confirmed run")  # Preserve the operator's existing navigation path.
+        walking_page.get_by_role("link", name="History", exact=True).click()  # Open History with the visible link.
+        walking_page.wait_for_url(f"**{HISTORY_PAGE_PATH}", timeout=START_TIMEOUT_MS)  # Wait for the History route.
+        logger.debug("The History page is visible")  # Confirm the first navigation completed.
+        logger.info("Open the run that this journey created")  # Select only the test-owned run.
+        walking_page.get_by_role("link", name=run_id, exact=True).click()  # Open its real History link.
+        walking_page.wait_for_url(f"**/runs/{run_id}", timeout=START_TIMEOUT_MS)  # Wait for the owned run page.
+        confirm_link = walking_page.get_by_test_id(CONFIRM_LINK_ID)  # Select the run's existing confirm link.
+        sync_api.expect(confirm_link).to_be_visible(timeout=START_TIMEOUT_MS)  # Require the real link.
+        logger.info("Open the confirmation page from the owned run")  # Preserve the existing click step.
+        confirm_link.click()  # Open the confirm page with the visible control.
+        walking_page.wait_for_url(
+            f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS
+        )  # Wait for the confirmation route.
+        sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(
+            timeout=START_TIMEOUT_MS
+        )  # Require the real confirmation control.
+        logger.debug("The run returned to its confirmation page")  # Confirm the full original click path.
+        journey.return_to_owned_capture(capture_site_id)  # Give fixture teardown the real page for its site release.
 
     def test_a_refused_second_start_shows_a_link_to_the_open_run(
         self, walking_page: Any, run_ledger: RunLedger
