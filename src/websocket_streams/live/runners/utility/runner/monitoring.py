@@ -48,7 +48,7 @@ class UtilityOutput:
         definition = self._definition()
         self.mark_live()
         if definition.output == "packets":
-            packet = self._packet(payload)
+            packet = payload["pcap_dict"] if isinstance(payload, Mapping) and "pcap_dict" in payload else payload
             summary = PacketSummary.summarize(packet)
             self.context.sink.add_message("packet", packet, summary=summary)
             return
@@ -82,13 +82,6 @@ class UtilityOutput:
         if not isinstance(definition, UtilityDefinition):
             raise StreamRequestError("bad_request", "The utility definition is not valid.")
         return definition
-
-    @staticmethod
-    def _packet(payload: object) -> object:
-        """Return packet content from a capture payload."""
-        if isinstance(payload, Mapping) and "pcap_dict" in payload:
-            return payload["pcap_dict"]
-        return payload
 
 
 @dataclass(slots=True)
