@@ -32,6 +32,7 @@ from src.firmware.org_upgrade_body import (  # Issue #3383: the count limit and 
     PEER_SIZE_FIELDS,
     RADIO_BATCH_FIELDS,
 )
+from src.firmware.running_version import RunningFirmwareVersionResolver
 from src.firmware.upgrade_service import (
     MESH_UPGRADE_CHOICES,
     NODE_ORDER_CHOICES,
@@ -779,6 +780,7 @@ def build_version_options(
     devices: Sequence[Mapping[str, Any]],
     by_model: Mapping[str, tuple[str, ...]],
     type_selections: Mapping[str, Mapping[str, Any]] | None = None,
+    running_by_key: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Build one version choice row for each device.
 
@@ -792,11 +794,13 @@ def build_version_options(
         devices: The inventory rows.
         by_model: The version list of each model.
         type_selections: The selected default for each device type.
+        running_by_key: The running versions indexed by device identifier.
 
     Returns:
         One row for each device, in the order that the inventory returned.
     """
     selections = type_selections or {}
+    version_resolver = RunningFirmwareVersionResolver(object()) if running_by_key is not None else None
     rows: list[dict[str, Any]] = []
     for device in devices:
         model = str(device.get("model", "")).strip()
@@ -813,7 +817,18 @@ def build_version_options(
             _configured_override(device_type, os.environ),
         )
         version_target = selected if selected in versions else safe_target
-        version_before = str(device.get("version", "")).strip()
+        version_reading = None
+        if version_resolver is not None:
+            version_reading = version_resolver.read(dict(device), dict(running_by_key or {}))
+        version_before = (
+            version_reading.value if version_reading is not None else str(device.get("version", "")).strip()
+        )
+        type_supported = device_type in SUPPORTED_DEVICE_TYPES
+        skip_reason = (
+            ""
+            if type_supported
+            else f"The portal skips {device_type or 'unknown'} devices because this type is not supported."
+        )
         rows.append(
             {
                 "mac": normalize_device_mac(device.get("mac")),
@@ -825,11 +840,18 @@ def build_version_options(
                 "safe_target": safe_target,
                 "target_source": target_source,
                 "firmware_mismatch": bool(version_before) and bool(safe_target) and version_before != safe_target,
+                "version_is_running": version_reading.is_running if version_reading is not None else False,
+                "version_note": (
+                    ""
+                    if version_reading is None or version_reading.is_running
+                    else "The running version is not available."
+                ),
                 "versions": versions,
                 # Issue #2211: the cloud may name a type that the portal does not
                 # model. The row states it, so the table can tell the operator why
                 # that device carries no target.
-                "type_supported": device_type in SUPPORTED_DEVICE_TYPES,
+                "type_supported": type_supported,
+                "skip_reason": skip_reason,
                 # Issue #2157 shows the router controls only when the selection
                 # holds a router. The page cannot read the model rules, so the
                 # row carries the family that `classify_gateway` decided.
@@ -1913,9 +1935,22 @@ def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any
     if inventory.is_short:  # Issue #3424: the rows of the first page look like a complete table.
         codes = PartialInventoryError.reason_codes(reasons)  # FR-012: the codes hold no device address.
         logger.warning("Upgrade portal read a short device list of site %s for the options page: %s", site_id, codes)
+    if callable(getattr(session, "mist_get", None)):
+        try:
+            running_by_key = RunningFirmwareVersionResolver(session).fetch_site_running_versions(
+                site_id
+            )  # Running state.
+        except (AssertionError, AttributeError) as error:
+            logger.warning("Upgrade portal could not read running versions for site %s: %s", site_id, error)
+            running_by_key = {}
+    else:
+        logger.warning("Upgrade portal cannot read running versions for site %s from this session", site_id)
+        running_by_key = {}
     by_model = read_model_versions(session, site_id, inventory.records, org_id)  # The versions of each model.
     type_selections = TypedVersionSelector().select(inventory.records, by_model)  # The safe target of each type.
-    rows = build_version_options(inventory.records, by_model, type_selections)  # One row for each device.
+    rows = build_version_options(  # One row for each device.
+        inventory.records, by_model, type_selections, running_by_key
+    )
     logger.info("Upgrade portal offers %s device(s) on the options page of site %s", len(rows), site_id)  # After.
     return {
         "targets": rows,  # One row for each device that the read found.
