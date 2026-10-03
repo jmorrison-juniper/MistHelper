@@ -753,16 +753,38 @@
         var output = byId('wsOutput');  // The message view.
         var follow = output.scrollHeight - output.scrollTop - output.clientHeight < 40;  // True when the operator did not scroll up.
         var filter = (byId('wsMessageFilter').value || '').toLowerCase();  // Match without case.
-        var messages = state.messages.filter(function(message) { return messageText(message).toLowerCase().indexOf(filter) >= 0; });  // Matches.
+        var view = state.selectedSession ? state.selectedSession.output : 'lines';  // The server names the view type.
         clearNode(output);  // Remove the old rows.
-        drawMessages(output, messages);  // Draw the rows in the view of this output type.
+        if (view === 'lines') renderLines(output, state.messages, filter);  // Join command chunks before the view or filter reads them.
+        else drawMessages(output, matchingMessages(state.messages, filter), view);  // Keep record boundaries for JSON and packets.
         if (follow) output.scrollTop = output.scrollHeight;  // Keep the newest row in view.
     }
 
-    function drawMessages(output, messages) {
-        var view = state.selectedSession ? state.selectedSession.output : 'lines';  // The server names the view type.
+    function matchingMessages(messages, filter) {
+        return messages.filter(function(message) { return messageText(message).toLowerCase().indexOf(filter) >= 0; });  // Match complete records.
+    }
+
+    function drawMessages(output, messages, view) {
         if (view === 'packets') renderPackets(output, messages);  // Show one row for each packet.
         else renderRows(output, messages);  // Show one row for each message.
+    }
+
+    function renderLines(output, messages, filter) {
+        var row = make('div', 'ws-message-row');  // One command output block keeps cloud chunks invisible.
+        var text = filterLineText(joinLineText(messages), filter);  // Filter complete command lines after joining chunks.
+        row.appendChild(make('pre', 'mb-0', text));  // Preserve the command line and word boundaries.
+        output.appendChild(row);  // Add the single command output block.
+    }
+
+    function joinLineText(messages) {
+        return messages.map(messageText).join('');  // Mist chunks can split a line or a word, so add no separator.
+    }
+
+    function filterLineText(text, filter) {
+        if (!filter) return text;  // An empty filter must preserve every original character.
+        return text.split(/\r\n|\r|\n/).filter(function(line) {
+            return line.toLowerCase().indexOf(filter) >= 0;  // Keep each complete line that contains the filter.
+        }).join('\n');  // Show only the matching command lines.
     }
 
     function renderRows(output, messages) {
@@ -869,6 +891,11 @@
         if (isTerminalSession(session)) return;  // The terminal read loop observes the final state.
         if (!state.pollTimer) startPollTimer();  // Read the last messages until the runner closes.
     }
+
+    window.MistWebSocketOutput = Object.freeze({
+        filterLineText: filterLineText,  // Let the unit test execute the production line filter.
+        joinLineText: joinLineText  // Let the unit test execute the production chunk join.
+    });  // Publish the pure output operations without exposing page state.
 
     document.addEventListener('DOMContentLoaded', init);  // Start after the page markup exists.
 })();
