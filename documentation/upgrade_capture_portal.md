@@ -117,7 +117,7 @@ offers the browser token mode.
 | --- | --- | --- |
 | `CAPTURE_PORT` | `8056` | The listen port. Text that is not a number falls back to 8056. |
 | `CAPTURE_HOST` | loopback, or every address in a container | The listen address of the launcher. |
-| `CAPTURE_SECRET_KEY` | none | The key that signs the session cookie. |
+| `CAPTURE_SECRET_KEY` | required in containers | The stable key that signs the session cookie. |
 | `CAPTURE_POLL_SECONDS` | `30` | The wait between two browser status calls. The range is 5 to 3600. |
 | `CAPTURE_THEMES` | `magenta,default` | The stylesheet names that the portal offers. The first name is the default. |
 | `CAPTURE_ALLOWED_IPS` | none | A comma list of networks that may reach the portal. |
@@ -139,6 +139,15 @@ offers the browser token mode.
 The two store defaults are container service names. No desktop host uses the
 name `misthelper-arangodb` or the name `misthelper-redis`. If you start the portal on a
 desktop, set `ARANGO_HOST` and `REDIS_HOST` to your own addresses.
+
+Generate `CAPTURE_SECRET_KEY` before you start a container deployment:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Set the generated value in `.env`. Compose and the Quadlet unit pass the value
+to the portal. A container with no value refuses to start.
 
 On a desktop, the launcher binds loopback only. The portal then accepts a
 connection from that desktop alone. In a container, the launcher binds every

@@ -105,6 +105,8 @@ services:
       - WEB_PORT=8055
       # Upgrade capture portal port (must match exposed port)
       - CAPTURE_PORT=8056
+      # Require a stable session key so restarts preserve operator sessions.
+      - CAPTURE_SECRET_KEY=${CAPTURE_SECRET_KEY:?CAPTURE_SECRET_KEY must be set}
       # Metrics gateway HTTP port
       - METRICS_PORT=8057
       # Bind the metrics gateway to the container interface for port publishing
