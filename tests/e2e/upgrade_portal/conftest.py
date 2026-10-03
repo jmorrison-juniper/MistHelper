@@ -101,6 +101,7 @@ from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the see
     OrgControlSeeds,
 )
 from tests.e2e.upgrade_portal.org_ended_seeds import OrgEndedSeeds  # Issue #3367: a child job that ended first.
+from tests.e2e.upgrade_portal.screenshot import install_screenshot_retry  # Retry the known Chromium screenshot flake.
 from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site whose read stops early.
     SHORT_SITE_BROWSER_ID,
     SHORT_SITE_DEVICE_COUNT,
@@ -2663,7 +2664,7 @@ def page(context: Any, capture_portal_server: str) -> Iterator[Any]:
     """
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     context.add_cookies(portal_session_cookies())  # Both cookies, against the portal address.
-    opened = context.new_page()  # The page then carries the session on its first request.
+    opened = install_screenshot_retry(context.new_page())  # Route every full-page evidence call through one retry.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
@@ -2695,7 +2696,7 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
     del capture_portal_server  # Requested for its start-up work alone.
     context = browser.new_context(base_url=BASE_URL)  # A separate cookie jar, so a separate lock identity.
     context.add_cookies(second_operator_cookies())  # The second pair, which the server also registered.
-    opened = context.new_page()
+    opened = install_screenshot_retry(context.new_page())
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
@@ -2756,7 +2757,7 @@ def firmware_operator_page(
     """
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     context.add_cookies(firmware_operator_cookies())  # Both cookies, against the portal address.
-    opened = context.new_page()  # The page then carries the session on its first request.
+    opened = install_screenshot_retry(context.new_page())  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
@@ -2784,7 +2785,7 @@ def controls_operator_page(context: Any, capture_portal_server: str) -> Iterator
     """
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     context.add_cookies(controls_operator_cookies())  # Both cookies, against the portal address.
-    opened = context.new_page()  # The page then carries the session on its first request.
+    opened = install_screenshot_retry(context.new_page())  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
@@ -2810,7 +2811,7 @@ def empty_site_operator_page(context: Any, capture_portal_server: str) -> Iterat
     """
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     context.add_cookies(operator_session_cookies(EMPTY_SITE_EMAIL, EMPTY_SITE_BROWSER_ID))  # The separate pair.
-    opened = context.new_page()  # The page then carries the session on its first request.
+    opened = install_screenshot_retry(context.new_page())  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
@@ -2836,7 +2837,7 @@ def short_read_operator_page(context: Any, capture_portal_server: str) -> Iterat
     """
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     context.add_cookies(operator_session_cookies(SHORT_SITE_EMAIL, SHORT_SITE_BROWSER_ID))  # The separate pair.
-    opened = context.new_page()  # The page then carries the session on its first request.
+    opened = install_screenshot_retry(context.new_page())  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
@@ -2864,7 +2865,7 @@ def lost_page_operator_page(context: Any, capture_portal_server: str) -> Iterato
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     cookies = operator_session_cookies(LOST_PAGE_EMAIL, LOST_PAGE_BROWSER_ID, LOST_PAGE_ORG_ID)  # A separate pair.
     context.add_cookies(cookies)  # The session selects the lost-page organization.
-    opened = context.new_page()  # The page then carries the session on its first request.
+    opened = install_screenshot_retry(context.new_page())  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
@@ -2893,7 +2894,7 @@ def later_check_operator_page(context: Any, capture_portal_server: str) -> Itera
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     cookies = operator_session_cookies(LATER_CHECK_EMAIL, LATER_CHECK_BROWSER_ID, LATER_CHECK_ORG_ID)  # A new pair.
     context.add_cookies(cookies)  # The session selects the later-check organization.
-    opened = context.new_page()  # The page then carries the session on its first request.
+    opened = install_screenshot_retry(context.new_page())  # The page then carries the session on its first request.
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
@@ -2919,7 +2920,7 @@ def signed_out_page(browser: Any, capture_portal_server: str) -> Iterator[Any]:
     """
     del capture_portal_server  # Requested for its start-up work alone.
     context = browser.new_context(base_url=BASE_URL)  # A clean cookie jar starts the real sign-in journey.
-    opened = context.new_page()  # The page carries no session cookie on its first request.
+    opened = install_screenshot_retry(context.new_page())  # The page carries no session cookie on its first request.
     yield opened  # The caller drives the complete sign-in path through the browser.
     opened.close()  # A page left open would hold a browser target for the whole run.
     context.close()  # The context holds a profile directory until it closes.
