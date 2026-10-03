@@ -699,11 +699,12 @@ Lead:      T004, T005, T023, T027, and T028
   event count. This proof qualifies the bounded exception for an owned WebSocket under
   the Technology Constraints, FR-001 through FR-003, and US3/AC1 (missing).
 
-- [ ] T080 CRITICAL: After all source tasks, reword every feature commit subject to
+- [X] T080 CRITICAL: After all source tasks, reword every feature commit subject to
   `version YY.MM.DD.HH.MM - description` with its UTC time. Preserve each commit content.
   Verify every subject in the feature range and fail if one subject does not match.
   Record the checked commit count in `specs/3671-interactive-terminal/research.md` per
-  Constitution IV (contradicts).
+  Constitution IV. The history check found 23 valid subjects and 23 required trailers.
+  A tree comparison against the pre-rewrite backup found no content difference. (delivered)
 
 - [X] T081 After T072 through T079, correct
   `specs/3671-interactive-terminal/plan.md` and

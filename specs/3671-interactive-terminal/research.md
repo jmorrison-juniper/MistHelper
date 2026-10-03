@@ -341,3 +341,10 @@ The feature tests and the code-quality gates above pass. The separate local test
 scope test reports 48 failures and 34 passes. The same failures reproduce on clean `main`
 at commit `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`. Issue #3742 tracks the
 baseline defect. The #3671 feature does not cause those failures.
+
+## R15. Commit history verification
+
+The T080 history rewrite checked 23 feature commits. All 23 subjects matched
+`version YY.MM.DD.HH.MM - description`. All 23 commits included the required Copilot
+co-author trailer. The author dates remained in chronological order. A tree comparison
+between the final rewritten commit and the pre-rewrite backup found no content difference.
