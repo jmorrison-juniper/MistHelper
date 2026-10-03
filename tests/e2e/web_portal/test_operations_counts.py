@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
-OPERATIONS_SCRIPT = Path(__file__).parents[2] / "web_portal" / "static" / "js" / "operations.js"
+OPERATIONS_SCRIPT = Path(__file__).parents[3] / "web_portal" / "static" / "js" / "operations.js"
 
 
 @pytest.fixture

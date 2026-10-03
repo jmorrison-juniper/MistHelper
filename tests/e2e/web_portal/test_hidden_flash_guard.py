@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)  # Module-level logger for action logging.
 
 
 # Path to the portal stylesheet relative to the repository root.
-_CSS_PATH = pathlib.Path(__file__).parent.parent.parent / "web_portal" / "static" / "css" / "portal.css"
+_CSS_PATH = pathlib.Path(__file__).parents[3] / "web_portal" / "static" / "css" / "portal.css"
 
 # Regex that matches the required hidden-attribute guard.
 # The rule must use !important to beat any author display declaration.
