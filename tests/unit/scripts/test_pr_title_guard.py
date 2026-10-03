@@ -282,6 +282,14 @@ class TestTitleOutput:
 class TestEventInput:
     """Distinguish unavailable input from an available invalid title."""
 
+    @staticmethod
+    def expected_path_category(kind: str, category: str, platform: str) -> str:
+        """Select native open errors for the two reported path shapes."""
+        # Windows open reports EACCES for a directory and ENOENT for a file used as a parent.
+        if platform == "win32":
+            return {"directory": "PermissionError", "not_a_directory": "FileNotFoundError"}.get(kind, category)
+        return category
+
     @pytest.fixture(params=OUTPUTS["failure_inputs"])
     def failure_input(
         self, request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -306,7 +314,7 @@ class TestEventInput:
             monkeypatch.delenv("GITHUB_EVENT_PATH")
         else:
             monkeypatch.setenv("GITHUB_EVENT_PATH", paths[kind])
-        return problem, category
+        return problem, self.expected_path_category(kind, category, sys.platform)
 
     @staticmethod
     def assert_input_failure(
@@ -375,6 +383,54 @@ class TestEventInput:
         captured = capsys.readouterr()
         self.assert_input_failure(result, captured.out, caplog.records, ("file", "PermissionError"))
         assert "frame-\u4fee\n::error::.py" in json.loads(caplog.records[-1].getMessage().split(" frames=", 1)[1])
+        assert "event-secret" not in captured.err
+
+    @pytest.mark.parametrize(
+        ("kind", "category", "platform", "expected"),
+        [
+            ("directory", "IsADirectoryError", "darwin", "IsADirectoryError"),
+            ("directory", "IsADirectoryError", "linux", "IsADirectoryError"),
+            ("directory", "IsADirectoryError", "win32", "PermissionError"),
+            ("not_a_directory", "NotADirectoryError", "darwin", "NotADirectoryError"),
+            ("not_a_directory", "NotADirectoryError", "linux", "NotADirectoryError"),
+            ("not_a_directory", "NotADirectoryError", "win32", "FileNotFoundError"),
+            ("missing", "FileNotFoundError", "win32", "FileNotFoundError"),
+            ("too_long", "OSError", "win32", "OSError"),
+            ("file", "UnicodeDecodeError", "win32", "UnicodeDecodeError"),
+            ("absent", "TypeError", "win32", "TypeError"),
+        ],
+    )
+    def test_native_path_expectations(self, kind: str, category: str, platform: str, expected: str) -> None:
+        """Check each platform."""
+        assert self.expected_path_category(kind, category, platform) == expected
+
+    @pytest.mark.parametrize(
+        ("platform", "case"),
+        [
+            ("linux", ("directory", "IsADirectoryError", IsADirectoryError)),
+            ("win32", ("directory", "IsADirectoryError", PermissionError)),
+            ("linux", ("not_a_directory", "NotADirectoryError", NotADirectoryError)),
+            ("win32", ("not_a_directory", "NotADirectoryError", FileNotFoundError)),
+        ],
+    )
+    def test_controlled_path_refusals(
+        self,
+        platform: str,
+        case: tuple[str, str, type[OSError]],
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Prove each selected error still fails with zero checked titles."""
+        kind, category, error_type = case
+        caplog.set_level(logging.DEBUG)
+        with patch.dict(os.environ, {"GITHUB_EVENT_PATH": "event-secret.json"}):
+            with patch.object(Path, "open", autospec=True, side_effect=error_type("event-secret")) as reader:
+                result = PullRequestTitleGuard().main()
+                reader.assert_called_once_with(Path("event-secret.json"), encoding="utf-8")
+        captured = capsys.readouterr()
+        expected = self.expected_path_category(kind, category, platform)
+        self.assert_input_failure(result, captured.out, caplog.records, ("file", expected))
+        assert caplog.records[-1].levelname == "ERROR"
         assert "event-secret" not in captured.err
 
 
