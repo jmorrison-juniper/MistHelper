@@ -942,7 +942,7 @@ class SiteList:
         that lost a page, and the site list answer names both flags.
 
     Attributes:
-        rows: One row for each site, in cloud order.
+        rows: One row for each site, sorted by site name.
         sites_complete: True when the site read is whole.
         counts_complete: True when the device count read is whole.
         counts_observed: True when the device count read answered at least one
@@ -1062,7 +1062,10 @@ def build_site_rows(org_id: str) -> SiteList:
     sites = as_records(site_answer)  # The site records, whatever shape the reader answered.
     counts = build_count_index(as_records(count_answer))  # The device count of each site.
     locks = read_site_locks(org_id, [str(site.get("id", "")) for site in sites])  # An absent entry reads unknown.
-    rows = [build_site_row(site, counts, locks) for site in sites]  # One row for each site, in cloud order.
+    rows = sorted(
+        (build_site_row(site, counts, locks) for site in sites),
+        key=lambda row: (str(row["name"]).casefold(), str(row["site_id"]).casefold()),
+    )  # Stable name order makes a large picker predictable. Issue #3216.
     counts_seen = bool(counts)  # True when the statistics read gave at least one device count. Issue #3840.
     built = SiteList(
         rows,

@@ -323,8 +323,9 @@ def _skip_without_comparison(page: Any) -> None:
     """
     if page.get_by_test_id(STATISTICS_ID).count() > 0:  # The comparison rendered, so the journey went through.
         return
-    notice = page.get_by_test_id(FLASH_ID)
-    reason = (notice.inner_text() or "").strip() if notice.count() > 0 else "The portal named no reason."
+    notice = page.get_by_test_id(FLASH_ID)  # Two regions carry this identifier (#3216).
+    spoken = [text.strip() for text in notice.all_inner_texts() if text.strip()]  # This reader is not strict.
+    reason = spoken[0] if spoken else "The portal named no reason."
     pytest.skip(f"The portal showed the picker again rather than a comparison. Reason: {reason}")
 
 
