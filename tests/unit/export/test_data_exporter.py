@@ -476,7 +476,8 @@ class TestWriteSqliteFormat:
 class TestWriteToCsv:
     def test_empty_data_short_circuits(self):
         with patch.object(DataExporter, "_resolve_csv_path") as resolver:
-            DataExporter.write_to_csv([], "target.csv")
+            result = DataExporter.write_to_csv([], "target.csv")
+        assert result is None
         resolver.assert_not_called()
 
     def test_full_flow_writes(self, monkeypatch):
@@ -551,7 +552,8 @@ class TestWriteCsvOpenAndEmit:
 class TestWriteCsvWithExceptionHandling:
     def test_success_passes_through(self):
         with patch.object(DataExporter, "_write_csv_open_and_emit") as inner:
-            DataExporter._write_csv_with_exception_handling("p", [{"a": 1}], ["a"])
+            result = DataExporter._write_csv_with_exception_handling("p", [{"a": 1}], ["a"])
+        assert result is None
         inner.assert_called_once()
 
     def test_permission_error_reraises(self, caplog):
