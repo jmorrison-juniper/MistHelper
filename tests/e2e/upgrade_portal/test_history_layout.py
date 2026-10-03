@@ -111,7 +111,8 @@ def _capture_row(capture_id: str) -> dict[str, Any]:
         "capture_id": capture_id,
         "started_at": _MOMENT,
         "role": "pre",
-        "capture_status": "verified",
+        "capture_status": "complete",  # The content status that the shipped store writes for a whole capture.
+        "state": "verified",  # The lifecycle state that the shipped store writes after the read-back.
         "actor_email": "operator@example.com",
         "stored_size_bytes": 1_234_567,
     }
