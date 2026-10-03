@@ -70,7 +70,7 @@ Common use cases:
 
 - [GET_sites_site_id_iotendpoints_count.md](GET_sites_site_id_iotendpoints_count.md) -- countSiteIotEndpoints uses `GET /api/v1/sites/{site_id}/iotendpoints/count`.
 - [GET_sites_site_id_iotendpoints_search.md](GET_sites_site_id_iotendpoints_search.md) -- searchSiteIotEndpoints uses `GET /api/v1/sites/{site_id}/iotendpoints/search`.
-- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
+- [GET_orgs_org_id_insights_fingerprints_count.md](../orgs/GET_orgs_org_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/orgs/{org_id}/insights/fingerprints/count`.
 
 ## MistHelper Notes
 

@@ -6,14 +6,12 @@ import logging  # WHY: trace API calls and response sizes.
 from typing import Any, Protocol, cast  # WHY: type the SDK session seam and response status checks.
 
 import mistapi  # WHY: use the installed SDK paging helper for count responses.
-from mistapi.api.v1.sites import insights  # WHY: keep the documented site path as a 404 fallback.
 
 from src.reports.client_fingerprint_census.model import RawFingerprintCount
 
 logger = logging.getLogger(__name__)  # WHY: name this client in the shared log stream.
 
 _HTTP_OK = 200  # WHY: old response doubles without a status keep the legacy success behavior.
-_HTTP_NOT_FOUND = 404  # WHY: the live cloud can reject the documented site path with this status.
 _HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the census payload is not trustworthy.
 _PAGE_LIMIT = "100"  # WHY: raw session queries accept strings and match the previous SDK request size.
 
@@ -42,11 +40,6 @@ class ClientFingerprintCensusClient:
             site_id,
         )
         response = self._count_org_path(site_id, distinct)  # WHY: live cloud serves the report at org scope.
-        if self._response_status_code(response) == _HTTP_NOT_FOUND:  # WHY: keep the documented path as fallback.
-            logger.warning(  # WHY: explain why the client tries the documented fallback path.
-                "Org client fingerprint census path returned HTTP 404. Trying the site path."
-            )
-            response = self._count_site_path(site_id, distinct)  # WHY: OpenAPI still documents this path.
         logger.debug(  # WHY: result summary without logging the response payload.
             "Client fingerprint census count call returned response=%s", type(response).__name__
         )
@@ -65,18 +58,6 @@ class ClientFingerprintCensusClient:
         response = self._mist_session.mist_get(path, query=query)  # WHY: SDK lacks this generated function.
         logger.debug("Org path returned HTTP status=%d", self._response_status_code(response))  # WHY: summary.
         return response  # WHY: caller handles pagination and fallback.
-
-    def _count_site_path(self, site_id: str, distinct: str) -> object:
-        """Call the documented site-scoped fingerprint count path."""
-        logger.info("Reading client fingerprint census through the site path")  # WHY: action log before API call.
-        response = insights.countSiteClientFingerprints(  # WHY: SDK alias matches the site-scoped OpenAPI path.
-            self._mist_session,
-            site_id,
-            distinct=distinct,
-            limit=100,
-        )
-        logger.debug("Site path returned HTTP status=%d", self._response_status_code(response))  # WHY: summary.
-        return response  # WHY: caller handles pagination and error checks.
 
     @staticmethod
     def _response_status_code(response: Any) -> int:

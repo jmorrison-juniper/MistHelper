@@ -107,7 +107,7 @@ Common use cases:
 
 - [DELETE_sites_site_id_auto_map_assignment.md](DELETE_sites_site_id_auto_map_assignment.md) -- cancelSiteAutoMapAssignment uses `DELETE /api/v1/sites/{site_id}/auto_map_assignment`.
 - [POST_sites_site_id_auto_map_assignment.md](POST_sites_site_id_auto_map_assignment.md) -- startSiteAutoMapAssignment uses `POST /api/v1/sites/{site_id}/auto_map_assignment`.
-- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
+- [GET_orgs_org_id_insights_fingerprints_count.md](../orgs/GET_orgs_org_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/orgs/{org_id}/insights/fingerprints/count`.
 
 ## MistHelper Notes
 
