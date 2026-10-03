@@ -363,10 +363,7 @@ def _build_registry() -> dict:
         "244",  # SiteSearchExporter.service_path_events
         "257",  # SiteSearchExporter.nac_clients
         "258",  # SiteOtherDeviceEventsExporter.other_device_events
-        # These rows reach a site prompt first and a plain input() call after
-        # it. The sweep proved that a plain call survives a closed stream by
-        # taking its default, so the site control alone unblocks the run.
-        "63",  # SiteDeviceExporter.device_virtual_chassis
+        # These rows use the site answer before optional prompts.
         "64",  # SiteClientExporter.wifi_clients
         "67",  # SiteConfigExporter.maps
         "82",  # SiteExportUtils.switches_metrics
@@ -380,6 +377,13 @@ def _build_registry() -> dict:
             "category": "interactive",
             "parameters": [_site_param()],
         }
+
+    switch_parameter = _device_param("switch")
+    switch_parameter["label"] = "Switch"
+    registry["63"] = {
+        "category": "interactive",
+        "parameters": [_site_param(), switch_parameter],
+    }  # The actual VC handler requires the site answer before the switch answer.
 
     # Each row below reaches a site prompt and then one or more identifier
     # prompts that reject an empty answer. A site control alone let the run
@@ -922,13 +926,14 @@ class OperationExecutor:
             op_category = reg_entry["category"] if reg_entry else "non_interactive"
             if category not in categories:
                 categories[category] = []
-            categories[category].append(
-                {
-                    "menu_number": key,
-                    "description": desc,
-                    "category": op_category,
-                }
-            )
+            row = {
+                "menu_number": key,
+                "description": desc,
+                "category": op_category,
+            }
+            if category == "Work In Progress":
+                row["work_in_progress"] = True  # Guidance follows the displayed category, not run permission.
+            categories[category].append(row)
         for operations in categories.values():
             # Sort by the numeric value, not the text. Text order puts "10"
             # before "9", and the page showed an operator a shuffled list.

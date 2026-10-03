@@ -13,7 +13,24 @@ var selectedCategory = null;
 var currentRunId = null;
 var currentSSE = null;
 var currentParameters = [];
+var parameterDataReady = false;
 var baseParameters = [];  // Keep the server-sent controls so dynamic controls can be rebuilt after a choice changes.
+
+class OperationSelectionRequest {
+    constructor(control, siteSelect) {
+        this.control = control;
+        this.siteSelect = siteSelect;
+        this.siteId = siteSelect ? getSelectedDataAttr(siteSelect, 'siteId') : '';
+        this.generation = String(Number(control.dataset.requestGeneration || 0) + 1);
+        control.dataset.requestGeneration = this.generation;
+    }
+
+    isCurrent() {
+        return document.getElementById(this.control.id) === this.control
+            && this.control.dataset.requestGeneration === this.generation
+            && (!this.siteSelect || getSelectedDataAttr(this.siteSelect, 'siteId') === this.siteId);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -108,6 +125,7 @@ function buildOperationItem(op) {
     var html = '<li class="list-group-item list-group-item-action op-item" ';
     html += 'data-menu="' + op.menu_number + '" ';
     html += 'data-category="' + (op.category || 'non_interactive') + '" ';
+    html += 'data-work-in-progress="' + (op.work_in_progress === true) + '" ';
     html += 'onclick="selectOperation(' + op.menu_number + ', this)">';
     html += '<strong class="me-2">' + op.menu_number + '</strong> ';
     html += escapeHtml(op.description) + badge;
@@ -137,7 +155,7 @@ function selectOperation(menuNumber, element) {
     resetParameterPanels();
     clearExecutionPanel();  // Clear the prior run without revealing an empty panel for the new selection.
     loadParameters(menuNumber);
-    document.getElementById('runBtn').disabled = false;
+    document.getElementById('runBtn').disabled = true;
     revealPanelOnStackedLayout();  // A stacked layout hides the panel below the list.
 }
 
@@ -198,6 +216,7 @@ function showSelectedPanel(menuNumber, element) {
     document.getElementById('selectedOpDesc').textContent = element
         ? element.textContent.trim().replace(/interactive|SSH only/g, '').trim()
         : '';
+    setElementVisible('wipCaution', !!element && element.getAttribute('data-work-in-progress') === 'true');
 }
 
 function resetParameterPanels() {
@@ -206,6 +225,7 @@ function resetParameterPanels() {
     setElementVisible('parameterError', false);
     document.getElementById('parameterFields').innerHTML = '';
     currentParameters = [];
+    parameterDataReady = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +236,8 @@ function loadParameters(menuNumber) {
     var formDiv = document.getElementById('parameterForm');
     var fieldsDiv = document.getElementById('parameterFields');
     var loadingDiv = document.getElementById('parameterLoading');
+    parameterDataReady = false;
+    document.getElementById('runBtn').disabled = true;
 
     fieldsDiv.innerHTML = '';
     setElementVisible(loadingDiv, true);
@@ -224,10 +246,12 @@ function loadParameters(menuNumber) {
     fetch('/api/operations/parameters/' + menuNumber)
         .then(readJsonAnswer)
         .then(function(data) {
+            if (String(menuNumber) !== selectedMenuNumber) return;
             setElementVisible(loadingDiv, false);
             handleParameterResponse(data, formDiv, fieldsDiv);
         })
         .catch(function(err) {
+            if (String(menuNumber) !== selectedMenuNumber) return;
             setElementVisible(loadingDiv, false);
             showParameterError('Failed to load parameters: ' + err.message);
         });
@@ -235,6 +259,15 @@ function loadParameters(menuNumber) {
 
 function handleParameterResponse(data, formDiv, fieldsDiv) {
     var runBtn = document.getElementById('runBtn');
+
+    if (data.error) {
+        parameterDataReady = false;
+        baseParameters = [];
+        currentParameters = [];
+        runBtn.disabled = true;
+        showParameterError(data.error);
+        return;
+    }
 
     if (data.category === 'cli_only') {
         baseParameters = [];  // Clear stale dynamic controls when the selected row cannot run in the browser.
@@ -247,6 +280,7 @@ function handleParameterResponse(data, formDiv, fieldsDiv) {
     }
 
     setElementVisible(runBtn, true);
+    parameterDataReady = true;
     if (data.parameters && data.parameters.length > 0) {
         baseParameters = data.parameters.slice();  // Keep a clean copy before a dynamic endpoint choice adds controls.
         currentParameters = data.parameters.slice();  // Start validation with the controls the server returned.
@@ -257,6 +291,7 @@ function handleParameterResponse(data, formDiv, fieldsDiv) {
         baseParameters = [];  // Clear stale controls from the previously selected operation.
         currentParameters = [];  // A row without controls should not validate stale dynamic fields.
         setElementVisible(formDiv, false);
+        validateForm();
     }
 }
 
@@ -306,6 +341,7 @@ function buildParameterGroup(param) {
 function buildParameterLabel(param) {
     var label = document.createElement('label');
     label.className = 'form-label';
+    label.htmlFor = 'param-' + param.name;
     label.textContent = param.label || param.name;
     if (param.required) {
         label.innerHTML += ' <span class="text-danger">*</span>';
@@ -358,9 +394,11 @@ function showSelectError(selectElement, message) {
 }
 
 function fetchSites(selectElement) {
+    var request = new OperationSelectionRequest(selectElement);
     fetch('/api/operations/sites')
         .then(readJsonAnswer)
         .then(function(data) {
+            if (!request.isCurrent()) return;
             if (data.error) {
                 showSelectError(selectElement, 'Cannot load the sites. ' + data.error);
                 return;
@@ -368,6 +406,7 @@ function fetchSites(selectElement) {
             populateSiteOptions(selectElement, data.sites || [], data.reason);
         })
         .catch(function(err) {
+            if (!request.isCurrent()) return;
             showSelectError(selectElement, 'Cannot load the sites. ' + err.message);
         });
 }
@@ -410,6 +449,7 @@ function createDeviceDropdown(param) {
 }
 
 function fetchDevices(siteSelect, deviceSelect) {
+    var request = new OperationSelectionRequest(deviceSelect, siteSelect);
     var siteId = getSelectedDataAttr(siteSelect, 'siteId');
     if (!siteId) {
         deviceSelect.innerHTML = '<option value="">-- Select site first --</option>';
@@ -425,6 +465,7 @@ function fetchDevices(siteSelect, deviceSelect) {
     fetch(url)
         .then(readJsonAnswer)
         .then(function(data) {
+            if (!request.isCurrent()) return;  // An older site or request must not replace the current target.
             if (data.error) {
                 showSelectError(deviceSelect, 'Cannot load the devices. ' + data.error);
                 return;
@@ -432,6 +473,7 @@ function fetchDevices(siteSelect, deviceSelect) {
             populateDeviceOptions(deviceSelect, data.devices || [], data.reason);
         })
         .catch(function(err) {
+            if (!request.isCurrent()) return;
             showSelectError(deviceSelect, 'Cannot load the devices. ' + err.message);
         });
 }
@@ -631,6 +673,7 @@ function buildSelect(param) {
     select.className = 'form-select form-select-sm';
     select.name = param.name;
     select.id = 'param-' + param.name;
+    select.setAttribute('data-testid', 'param-' + param.name);
     if (param.required) select.required = true;
     return select;
 }
@@ -655,6 +698,7 @@ function updateDependentField(param, parentValue) {
     var group = document.getElementById('param-group-' + param.name);
     var control = document.getElementById('param-' + param.name);
     if (!group || !control) return;
+    control.value = '';
 
     if (!parentValue) {
         group.style.display = 'none';
@@ -675,7 +719,7 @@ function updateDependentField(param, parentValue) {
 // ---------------------------------------------------------------------------
 
 function validateForm() {
-    var valid = true;
+    var valid = parameterDataReady;
     var runBtn = document.getElementById('runBtn');
 
     currentParameters.forEach(function(param) {
@@ -691,7 +735,8 @@ function validateForm() {
 
 function isFieldInvalid(param) {
     var control = document.getElementById('param-' + param.name);
-    if (!control || !param.required) return false;
+    if (!param.required) return false;
+    if (!control) return true;
 
     var group = document.getElementById('param-group-' + param.name);
     if (group && group.style.display === 'none') return false;
@@ -712,6 +757,7 @@ function isFieldInvalid(param) {
 function runSelectedOperation() {
     if (selectedMenuNumber === null) return;
     if (selectedCategory === 'cli_only') return;
+    if (!parameterDataReady) return;
     if (currentParameters.length > 0 && !validateForm()) return;
 
     var inputAnswers = collectInputAnswers();

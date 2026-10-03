@@ -1,0 +1,23 @@
+{
+  "feature": "3158-wip-target-controls",
+  "feature_directory": "specs/3158-wip-target-controls",
+  "issue": 3158,
+  "branch": "jmorrison-juniper-wip-target-controls",
+  "currentStep": "implement",
+  "status": "locally-verified",
+  "completedSteps": ["specify", "plan", "tasks", "implement"],
+  "workflow": "feature-only-file-equivalent",
+  "hookResult": {
+    "powershell": "unavailable: pwsh executable not found",
+    "rawBranchHook": "refused: the app owns branch creation and switching",
+    "sharedState": "unchanged",
+    "companionHooks": "not executed",
+    "optionalCommitHooks": "not executed"
+  },
+  "publication": {
+    "position": 46,
+    "afterIssue": 3375,
+    "allowed": false,
+    "requiredGrant": "explicit parent full verified-main SHA"
+  }
+}
