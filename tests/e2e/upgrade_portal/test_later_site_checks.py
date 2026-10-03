@@ -391,10 +391,10 @@ class TestSingleSiteLaterChecks:
         state = page.locator('[data-capture-field="state"]').first.inner_text()  # The state after the refusal.
         logger.info("The capture state after the refusal reads %s", state)  # Evidence for the visual review.
         assert state == "pending"  # A refused start leaves no capture in progress.
-        assert page.locator('[data-capture-field="message"]').first.inner_text() == "" == ""  # No capture was queued.
+        assert page.locator('[data-capture-field="message"]').first.inner_text() == ""  # No capture was queued.
         in_view = page.get_by_test_id("capture-error").evaluate(IN_VIEW_SCRIPT)  # Where the operator looks.
         logger.info("The capture refusal is in the visible part of the page: %s", in_view)  # Evidence.
-        assert in_view  # The refusal must be visible without a manual scroll.
+        assert in_view is True  # The refusal must be visible without a manual scroll.
         assert JourneyEvidence.screenshot(page, "single-site-capture-refused.png").exists()  # The refusal.
         assert JourneyEvidence.screenshot(page, "single-site-capture-refused-visible.png", False).exists()
         JourneyEvidence.lose_page(page, False)  # The cloud answers both pages again.
