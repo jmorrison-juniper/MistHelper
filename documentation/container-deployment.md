@@ -340,6 +340,13 @@ host needs it.
 A message that reads `PermissionError: [Errno 13] Permission denied:
 '/app/data/script.log'` means the folder refused the write.
 
+### Concurrent application logging
+
+MistHelper processes share `data/script.log` and its `data/script.log.lock` file.
+The custom rotating handler locks the file before each write and rollover.
+The handler reopens the active file after another process rotates it.
+Keep both files on the same mount. The lock must use the same filesystem as the log.
+
 ## Corporate proxy and TLS certificates
 
 The container image verifies every TLS certificate. It never disables the check.
