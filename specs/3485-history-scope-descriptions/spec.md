@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Ready for planning
+**Status**: Verified for publication
 
 **Input**: Repair [issue #3485](https://github.com/jmorrison-juniper/MistHelper/issues/3485).
 The history of one site must not describe the records of the whole organization.

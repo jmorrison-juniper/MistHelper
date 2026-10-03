@@ -20,7 +20,8 @@ rtk proxy .venv/bin/python -m pytest -q \
 Run the real browser journey.
 
 ```bash
-rtk proxy .venv/bin/python -m pytest -q --browser chromium \
+rtk proxy env UPGRADE_PORTAL_E2E_STRICT=1 .venv/bin/python -m pytest -q --browser chromium \
+  --tracing off --screenshot off --video off \
   tests/e2e/upgrade_portal/test_history_card_scope_journey.py
 ```
 
@@ -48,24 +49,29 @@ Do not replace its dictionary or change its configuration.
 
 Commit only the reserved files.
 Report the commit SHA and local evidence to the parent.
-Do not push or create a pull request before the explicit publication grant.
+Use only the parent's explicit granted base before publication.
+The current grant names `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`.
+Do not publish if live main changes without a new grant.
 
 ## Recorded local results
 
-The original rendered route failed all 27 cases across the nine descriptions.
+The exact granted-base archive fails all 27 original cases across the nine rendered descriptions.
 The repaired focused matrix passed 970 cases with no failures or skips.
 The Chromium history matrix passed 35 cases with no failures or skips.
-All 33 statements of the new view model have coverage.
+All 33 statements and both branches of the new view model have coverage.
 Both added executable lines of the history context wiring have coverage.
 The complete `review.py` coverage is 96.25 percent.
 The complete audit reader coverage is 100 percent.
-Combined coverage is 96.86 percent.
+Combined statement coverage is 96.86 percent.
+Combined statement and branch coverage is 96.09 percent.
+The review reader covers 89 of 100 branches.
+The audit reader covers all 24 branches.
 
 The full Ruff gate passed.
-The full Black gate checked 2,004 Python files.
-The exact CI mypy scope checked 664 files.
-Full Bandit checked 787 files and 214,004 lines with no findings or scan errors.
-The unchanged test-quality ratchet checked 995 files and found no new finding.
+The full Black gate checks 2,034 Python files.
+The exact CI mypy scope checks 666 files.
+Full Bandit checks 789 files and 215,196 lines with no findings or scan errors.
+The unchanged default test-quality ratchet checks 1,014 files and finds no new finding.
 All three new test modules have no finding.
 The link check scanned nine Markdown files and found no broken local link.
 The configured STE heuristics passed for 14 files.
@@ -90,7 +96,7 @@ This limitation does not reduce the complete runtime graph audit.
 AST comparisons confirm that 66 other route and reader bodies remain unchanged.
 Only the history page context wiring changes.
 The complete existing scope class remains unchanged.
-All 36 new test methods obey the 25-line and five-parameter limits.
+All 35 new test methods obey the 25-line and five-parameter limits.
 The symbol comparison reports no lost module-level name.
 It reports the genuine `HistoryCardDescription` and `HistoryCardScope` additions.
 The new module also imports `annotations` and `dataclass`.
@@ -100,5 +106,24 @@ The comparator API checks the new file after Git confirms its absence from that 
 Its verdict is 1 for the intentional additions, not an unchanged-name result.
 
 The parent authorized a dedicated semantic module to resolve structural finding C1.
-The repeated checks above apply to that completed extraction.
-No push or pull request occurred.
+The repeated checks above apply to the exact granted-base branch.
+Strict collection measures all 603 CI browser cases with zero import skips.
+It preserves all 600 accepted cases and adds only the three required history cases.
+The 37 current strict-package, owner-header, and process-owner checks pass.
+
+The native browser receipt measures three required cases, one real fixture identity, and one owned server.
+It confirms the actual `magenta` and `default` theme choices.
+Trace, screenshot, and video options remain off for the required journey.
+The owned journey adds no direct conftest import or unconditional screenshot write.
+The existing shared journeys still save their documented manual screenshots.
+Those screenshots do not determine the required journey's correctness.
+
+The receipt confirms that the server process stopped, its port closed, and its owner record was removed.
+The checkout audit trail remains empty.
+The live-run guard reports no leaked run.
+
+Run the six-input and three-guide preflight before both test-quality commands.
+Run the changed-scope command on clean committed content against the intended current base.
+Its current local equivalent uses the granted immutable SHA and both configured full-gate paths.
+Use the default command, without scope controls, for the complete suite.
+No guide, baseline, exclusion, dictionary, or dependency change is necessary.

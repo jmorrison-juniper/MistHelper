@@ -46,4 +46,7 @@ The complete existing scope class matches the base.
 The other 66 top-level route and reader bodies match the base.
 Only the history page context wiring changes.
 All 10 requirements and five outcomes have verified implementation and test evidence.
-No publication grant is recorded.
+The parent grants sole delivery on `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`.
+The native browser fixture passes the required journey with trace, screenshot, and video options off.
+Strict full collection preserves all 600 accepted CI cases and adds the three required history cases.
+The current import and owner guard checks pass 37 cases, including their negative decisions.

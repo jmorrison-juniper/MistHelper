@@ -58,14 +58,20 @@ The new properties perform pure text formatting and read no additional source.
 Names stay outside logs.
 Jinja's existing escaping remains enabled.
 
-The parent explicitly withholds publication.
-Complete local implementation, checks, and the commit before requesting a publication grant.
+The parent initially withheld publication.
+The parent now grants sole position-22 delivery on `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`.
+The original local commit remains under `preservation/issue3485-local-b2108a50`.
+The complete warmup history remains under `preservation/issue3485-refresh66`.
+Require the exact granted base and clean committed content before publication.
 Do not start a container, cloud action, or production deployment.
 
 **Post-design check**: The bounded extraction resolves finding C1 without increasing existing scope members.
 Only the history page context wiring changes.
 Every other route body and reader remains unchanged.
 Pre-existing directory debt remains separate.
+The browser journey uses the native owner fixture without importing another conftest module.
+Its correctness does not depend on screenshots, traces, or video.
+The shared strict package guard still controls required browser collection.
 
 ## Project Structure
 

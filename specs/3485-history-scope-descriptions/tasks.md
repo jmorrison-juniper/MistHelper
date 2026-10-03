@@ -64,9 +64,11 @@ Verify all notes, captions, and empty statements.
 - [x] T018 Repeat the full affected matrix and all configured gates after extraction. (delivered: specs/3485-history-scope-descriptions/quickstart.md)
 - [x] T019 Resolve C1 through the bounded extraction and verify requirement coverage. (delivered: specs/3485-history-scope-descriptions/checklists/requirements.md)
 - [x] T020 Record exact post-extraction local results and remaining publication limits. (delivered: specs/3485-history-scope-descriptions/.spec-context.json)
+- [x] T021 Refresh the native-owner journey and verify the complete current-base collection, negative guards, and local checks. (delivered: tests/e2e/upgrade_portal/test_history_card_scope_journey.py)
 
-Publication and exact merged-main verification require a later parent grant.
-They are not authorized local tasks.
+The parent grants sole publication and delivery on `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`.
+The session task records track protected publication and exact merged-main verification separately.
+Do not infer a different base from a later observed revision.
 
 ## Dependencies & Execution Order
 
@@ -78,6 +80,7 @@ T008 requires T007 and precedes every post-extraction verification.
 T010 through T016 require the implemented descriptions.
 T018 requires all dedicated tests and the release note.
 T019 and T020 require the local results.
+T021 requires the explicit refresh grant and repeats all affected checks after the rebase.
 
 ## Parallel Opportunities
 
