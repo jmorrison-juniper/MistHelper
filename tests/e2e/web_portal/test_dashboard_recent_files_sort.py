@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
-PORTAL_SCRIPT = Path(__file__).parents[2] / "web_portal" / "static" / "js" / "portal.js"
+PORTAL_SCRIPT = Path(__file__).parents[3] / "web_portal" / "static" / "js" / "portal.js"
 
 
 def _dashboard_html(client, data_dir: Path) -> str:
