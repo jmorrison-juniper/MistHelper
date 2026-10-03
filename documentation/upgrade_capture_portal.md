@@ -750,6 +750,10 @@ records the defect that this rule repairs.
 The access point job obeys the same rule for its sites. If the job completed at
 one site and stopped at another site, the access point job reads `cancelled`.
 
+An uncertain child job blocks a retry. The check can prove success only. If the
+check cannot prove success, inspect the Mist dashboard before another upgrade.
+This rule prevents a second live job from writing firmware to the same device.
+
 ## Reconcile a stale run
 
 Open a stale run to find the reconciliation control. The control appears only

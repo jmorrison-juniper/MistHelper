@@ -2234,6 +2234,12 @@ def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
         _array_count(targets.get("upgraded")),  # The devices that the cloud lists as upgraded.
         _array_count(targets.get("failed")),  # The devices that the cloud lists as failed.
     )
+    status = str(child.get("status") or "").strip().lower()  # A rejected child has no cloud target lists.
+    if status in {"rejected", "not_submitted"}:  # The portal submitted no device of this child job.
+        logger.debug(
+            "Child job %s rejected %s target(s)", child.get("child_id", ""), counts[0]
+        )  # Log the failure count.
+        return counts[0], 0, counts[0]  # Every target failed before a cloud job could start.
     if OrgChildDevices.is_proven(child):  # The check proved each device of this child job.
         upgraded, failed = OrgChildDevices(child).proven_counts(counts[0])  # The rule of the device table.
         child_id = child.get("child_id", "")  # Name the child job in the log line.
