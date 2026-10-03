@@ -55,9 +55,10 @@ class TestWebhookExport:
 
     def test_selection_lists_webhooks_and_uses_safe_input(self, mist_helper: MagicMock) -> None:
         """List organization webhooks before prompting."""
+        page = MagicMock(status_code=200, data=_WEBHOOKS, next=None)
+        page.raw_data = '[{"id":"wh-1","name":"Alarms"},{"id":"wh-2","name":"Audits"}]'
         with (
-            patch(f"{_MODULE}.mistapi.get_all", return_value=_WEBHOOKS),
-            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=object()) as list_call,
+            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=page) as list_call,
             patch(f"{_MODULE}.InputUtils.safe_input", return_value="1"),
         ):
             result = OrgWebhookDeliveriesExporter._select_webhook_id("org-1")
@@ -77,12 +78,11 @@ class TestWebhookExport:
     def test_deliveries_calls_search_once_and_persists_rows(self, mist_helper: MagicMock) -> None:
         """Run the organization delivery search for the selected webhook."""
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: provide the required scope.
+        page = MagicMock(status_code=200, data=[{"id": "delivery-1"}], raw_data='[{"id":"delivery-1"}]', next=None)
+        search_call = MagicMock(return_value=page)
         with (
             patch.object(OrgWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-1", "Alarms")),
-            patch(
-                f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries", return_value=object()
-            ) as search_call,
-            patch(f"{_MODULE}.mistapi.get_all", return_value=[{"id": "delivery-1"}]),
+            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries", search_call),
             patch.object(OrgWebhookDeliveriesExporter, "_persist") as persist_call,
         ):
             OrgWebhookDeliveriesExporter.deliveries()

@@ -3,10 +3,12 @@
 from __future__ import annotations  # WHY: support the project Python type syntax.
 
 import logging  # WHY: record each export action for operator diagnosis.
+import re  # Recognize only a safe HTTP status in an existing SDK exception contract.
 from typing import Any  # WHY: Mist API rows are JSON-shaped dictionaries.
 
 import mistapi  # WHY: call the installed Mist SDK endpoint.
 
+from src.api.response_integrity import ResponseIntegrityChecker  # Detect the SDK's retained malformed-body signal.
 from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
@@ -18,8 +20,105 @@ logger = logging.getLogger(__name__)  # Use a module logger for non-exception ex
 _OPERATION = "searchOrgWebhooksDeliveries"  # WHY: select the configured storage-key strategy.
 
 
+class OrgWebhookResponseRefusal(ValueError):
+    """Carry a safe validation reason without an I/O operation."""
+
+
 class OrgWebhookDeliveriesExporter:
     """Export webhook deliveries for one organization webhook."""
+
+    class ResponsePages:
+        """Validate each native response before accepting the complete collection."""
+
+        @classmethod
+        def read(cls, response: object, resource: tuple[str, str, str]) -> list[dict[str, Any]] | None:
+            """Return accepted rows, or report a refusal before any persistence."""
+            logger.info("Reading webhook response pages for resource=%s", resource[0])
+            rows: list[dict[str, Any]] = []
+            visited: set[str] = set()
+            page, checked = 1, 0
+            while True:
+                status: object = None
+                try:
+                    checked += 1  # Count a response decision, including a failed status or body.
+                    status = getattr(response, "status_code", None)
+                    cls._status(status)
+                    rows.extend(cls._rows(response))
+                    next_link = cls._next_link(response, visited)
+                    logger.debug("Checked webhook response page=%s checked_pages=%s rows=%s", page, checked, len(rows))
+                    if not next_link:
+                        return rows
+                    page, status = page + 1, None
+                    logger.info("Reading next webhook response page=%s", page)
+                    response = mistapi.get_next(mist_session=SourceDependencyResolver.apisession, response=response)
+                except Exception as exception:  # Keep unreadable properties and SDK pagination errors inside the menu.
+                    cls.report_refusal(exception, resource, (page, checked, status))
+                    return None
+
+        @staticmethod
+        def _status(status: object) -> int:
+            """Require a reliable successful HTTP status before reading the body."""
+            if not isinstance(status, int) or isinstance(status, bool) or not 100 <= status < 600:
+                raise OrgWebhookResponseRefusal("The HTTP status is unavailable or invalid.")
+            if not 200 <= status < 300:
+                raise OrgWebhookResponseRefusal(f"HTTP {status} did not confirm a successful response.")
+            return status
+
+        @staticmethod
+        def _rows(response: object) -> list[dict[str, Any]]:
+            """Accept only readable native list or results pages with object records."""
+            body = getattr(response, "raw_data", None)
+            if not isinstance(body, str) or not body.strip() or ResponseIntegrityChecker.body_failed_to_parse(response):
+                raise OrgWebhookResponseRefusal("The response body is empty or unavailable, or did not parse as JSON.")
+            payload = getattr(response, "data", None)
+            if isinstance(payload, dict) and payload.get("error"):
+                raise OrgWebhookResponseRefusal("The response body reports an API error.")
+            payload = payload.get("results") if isinstance(payload, dict) else payload
+            if not isinstance(payload, list):
+                raise OrgWebhookResponseRefusal("The response body does not contain a record array.")
+            rows: list[dict[str, Any]] = []
+            for row in payload:
+                if not isinstance(row, dict):
+                    raise OrgWebhookResponseRefusal("The response body contains a non-object record.")
+                rows.append(row)
+            return rows
+
+        @staticmethod
+        def _next_link(response: object, visited: set[str]) -> str | None:
+            """Reject malformed or repeated SDK links without changing a valid link."""
+            next_link = getattr(response, "next", None)
+            if next_link is not None and not isinstance(next_link, str):
+                raise OrgWebhookResponseRefusal("The next-page link is invalid.")
+            if next_link:
+                if next_link in visited:
+                    raise OrgWebhookResponseRefusal("The next-page link repeats an accepted request.")
+                visited.add(next_link)
+            return next_link
+
+        @staticmethod
+        def report_refusal(
+            exception: Exception, resource: tuple[str, str, str], counts: tuple[int, int, object]
+        ) -> None:
+            """Report measured refusal context without raw bodies or private exception text."""
+            reason = str(exception) if isinstance(exception, OrgWebhookResponseRefusal) else type(exception).__name__
+            if type(exception) is RuntimeError and len(exception.args) == 1:
+                message = exception.args[0]
+                if isinstance(message, str) and re.fullmatch(r"HTTP [45][0-9]{2}", message):
+                    reason = message  # Preserve the existing explicit HTTP exception contract without arbitrary text.
+            context = [value if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value) else "unavailable" for value in resource]
+            status = counts[2]
+            if not isinstance(status, int) or isinstance(status, bool) or not 100 <= status < 600:
+                status = "unavailable"
+            logger.error(
+                "Error fetching organization webhook deliveries: refused resource=%s org_id=%s webhook_id=%s "
+                "page=%s checked_pages=%s HTTP %s reason=%s",
+                *context,
+                counts[0],
+                counts[1],
+                status,
+                reason,
+                exc_info=(OrgWebhookResponseRefusal, OrgWebhookResponseRefusal(reason), exception.__traceback__),
+            )
 
     @staticmethod
     def _resolve_webhook_choice(raw: str, webhooks: list[dict[str, Any]]) -> tuple[str, str] | None:
@@ -40,9 +139,16 @@ class OrgWebhookDeliveriesExporter:
     def _select_webhook_id(org_id: str) -> tuple[str, str] | None:
         """List organization webhooks and prompt for one selection."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
+        resource = ("listOrgWebhooks", org_id, "selection")
         logger.info("Listing organization webhooks for org_id=%s", org_id)  # Log before the SDK call.
-        response = mistapi.api.v1.orgs.webhooks.listOrgWebhooks(mh.apisession, org_id)  # Fetch choices.
-        webhooks = mistapi.get_all(response=response, mist_session=mh.apisession)  # Read all webhook pages.
+        try:
+            response = mistapi.api.v1.orgs.webhooks.listOrgWebhooks(mh.apisession, org_id)
+            webhooks = OrgWebhookDeliveriesExporter.ResponsePages.read(response, resource)
+        except Exception as exception:
+            OrgWebhookDeliveriesExporter.ResponsePages.report_refusal(exception, resource, (1, 0, None))
+            return None
+        if webhooks is None:
+            return None
         logger.debug("Received %d organization webhooks", len(webhooks))  # Log the choice count.
         if not webhooks:  # Stop when the organization has no configured webhooks.
             logger.info("! No webhooks configured for this organization")  # Give the operator a clear result.
@@ -87,15 +193,16 @@ class OrgWebhookDeliveriesExporter:
             return
         webhook_id, webhook_name = webhook_choice  # Unpack the selected webhook.
         try:
-            logger.info(
-                "Calling %s for org_id=%s webhook_id=%s", _OPERATION, org_id, webhook_id
-            )  # Log before API call.
+            logger.info("Calling %s for org_id=%s webhook_id=%s", _OPERATION, org_id, webhook_id)
             response = mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries(
                 mh.apisession, org_id, webhook_id
             )  # Fetch deliveries.
-            rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all results.
+            rawdata = OrgWebhookDeliveriesExporter.ResponsePages.read(response, (_OPERATION, org_id, webhook_id))
+            if rawdata is None:
+                return
             logger.debug("%s returned %d rows", _OPERATION, len(rawdata))  # Log the response count.
             OrgWebhookDeliveriesExporter._persist(rawdata, webhook_name)  # Write the normalized result.
         except Exception as exception:  # Keep SDK failures inside the menu loop.
-            logging.error("Error fetching organization webhook deliveries: %s", exception)  # Record failure context.
-            logging.info("! Error fetching organization webhook delivery data: %s", exception)  # Tell the operator.
+            OrgWebhookDeliveriesExporter.ResponsePages.report_refusal(
+                exception, (_OPERATION, org_id, webhook_id), (1, 0, None)
+            )
