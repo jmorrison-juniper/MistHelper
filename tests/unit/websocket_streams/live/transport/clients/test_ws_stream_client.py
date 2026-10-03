@@ -398,7 +398,9 @@ class TestStreamStructuredLogging:
             client = StreamClient(endpoint, ["/private/channel"])  # Use a path that must not enter logs.
             client.open()  # Emit open and subscription records.
             client.close()  # Emit close records.
-        records = [json.loads(record.message) for record in caplog.records]  # Parse every captured record.
+        records = [  # Parse only records from this client and exclude concurrent logger output.
+            json.loads(record.message) for record in caplog.records if record.name.endswith("stream_client")
+        ]
         assert len(records) == 6  # The stream client must emit the complete open, subscribe, and close sequence.
         assert all("event" in record for record in records)  # Every record has the required event field.
         assert "/private/channel" not in json.dumps(records)  # Channel paths must not cross the log boundary.

@@ -988,9 +988,16 @@ def test_review_21_session_list_shows_terminal_without_errors(
     page.evaluate("window.scrollTo(0, 0)")  # Put the session list in view, as an operator does to choose a session.
     page.locator(f'[data-session-id="{shell_id}"]').click()  # Show shell A from the session list.
     page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # xterm draws shell A in view.
-    in_view = page.get_by_test_id("ws-terminal-screen").evaluate(
+    page.wait_for_function(  # Wait until the animated session switch moves the terminal into view.
+        """() => { // Poll the real browser layout until the terminal enters the viewport.
+            const element = document.querySelector('[data-testid="ws-terminal-screen"]'); // Find the terminal host.
+            return element && element.getBoundingClientRect().top < window.innerHeight; // Require a visible top edge.
+        }""",
+        timeout=READY_TIMEOUT_MS,
+    )
+    in_view = page.get_by_test_id("ws-terminal-screen").evaluate(  # Measure the final viewport position.
         "(element) => { const box = element.getBoundingClientRect(); return box.top < window.innerHeight; }"
-    )  # The terminal top must be inside the browser window.
+    )
     _shot(page, harness, "review-21-list-click-shows-terminal.png")  # Save evidence.
     assert in_view is True  # The page moved the view to the terminal output.
     assert errors == []  # The page and xterm logged no error.

@@ -445,7 +445,9 @@ class TestShellStructuredLogging:
             client.open(f"{cloud.base_ws_url}/shell/private-token", 80, 24)  # Emit open and resize records.
             client.send("terminal-secret-text\r")  # Emit an input record with only a byte count.
             client.close()  # Emit close records.
-        records = [json.loads(record.message) for record in caplog.records]  # Parse every captured record.
+        records = [  # Parse only records from this client and exclude concurrent logger output.
+            json.loads(record.message) for record in caplog.records if record.name.endswith("shell_client")
+        ]
         serialized = json.dumps(records)  # Build one text value for secret checks.
         assert len(records) == 8  # The shell client must emit the complete open, write, and close sequence.
         assert all("event" in record for record in records)  # Every record has the required event field.
