@@ -25,7 +25,7 @@
             var element = this.controller.elements.expiry; // Read the expiry element once.
             if (!value) { element.classList.add('d-none'); return; } // Hide stale expiry text.
             var remaining = Date.parse(value) - Date.now(); // Measure time until backend expiry.
-            element.textContent = remaining <= 120000 && remaining > 0 ? 'This terminal expires at ' + value + '.' : ''; // Warn only during the final two minutes.
+            element.textContent = remaining < 120000 && remaining > 0 ? 'This terminal expires at ' + value + '.' : ''; // Warn only after the final two-minute boundary.
             element.classList.toggle('d-none', !element.textContent); // Hide empty warning text.
         }
     }
@@ -97,11 +97,15 @@
             this.readOnly = session.read_only === true || session.output === 'screen'; // Detect fixed read-only screen output.
             this.lastState = session.state || ''; this.nextPosition = 0; this.openedAt = Date.now(); this.readFailures = 0; // Reset output state.
             this.panel.show(true); // Show clean terminal controls.
-            this.runtime.create(); this.runtime.wire(); // Create and connect xterm.
-            if (!this.readOnly) { this.resize.fit(true); this.resize.start(); } // Fit and observe shell sessions.
+            var generation = this.readGeneration; // Bind the deferred mount to this selection.
+            window.requestAnimationFrame(function() { // Let the disposed xterm release its shared host first.
+                if (generation !== this.readGeneration || this.stopped) return; // Skip a session that changed first.
+                this.runtime.create(); this.runtime.wire(); // Create and connect xterm after host cleanup.
+                if (!this.readOnly) { this.resize.fit(true); this.resize.start(); } // Fit and observe shell sessions.
+                this.reader.start(); // Start terminal output reads after xterm mounts.
+                this.focusTerminal(); // Move keyboard focus to xterm.
+            }.bind(this)); // Keep the controller in the frame callback.
             if (session.state === 'connecting') this.onState({ notice: terminal.constants.waitingNotice }); // Explain the initial device wait.
-            this.reader.start(); // Start terminal output reads.
-            this.focusTerminal(); // Move keyboard focus to xterm.
         }
 
         close() { // Close the active terminal and all pending work.

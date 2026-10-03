@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-29
 
-**Status**: Implemented
+**Status**: Implementation complete, validation pending
 
 **Input**: User description: "Use our own code for the Mist live connections instead of the
 Mist software kit. Give the WebSockets tab a terminal that works like SecureCRT. The terminal
@@ -20,11 +20,11 @@ This feature closes issue #3671. It also closes issue #3659 (broken screen outpu
 The WebSockets tab (issue #3551) uses the Mist software kit for each live connection. Two
 defects in that kit affect operators.
 
-1. Issue #3660: the kit sends the device command first and opens the output channel second.
-   A fast device can answer before the channel opens. The operator then sees no output, or
-   only part of the output.
-2. Issue #3659: the kit reads each screen update alone. If one control sequence arrives in
-   two parts, the screen shows stray characters.
+1. Issue #3660: `mistapi.device_utils.__tools.__ws_wrapper.WebSocketWrapper.start_with_trigger`
+   sends the device command first and opens the output channel second. A fast device can
+   answer before the channel opens. The operator then sees no output, or only partial output.
+2. Issue #3659: the same SDK WebSocket wrapper reads each screen update alone. If one control
+   sequence arrives in two parts, the screen shows stray characters.
 
 The shell view is a line box today. The operator cannot use the arrow keys, Tab completion,
 full-screen programs, or the clipboard in a normal way.
@@ -52,7 +52,7 @@ and that the terminal shows the device output correctly.
    **Then** the device receives each character in order, and the terminal shows the output.
 3. **Given** an open shell, **When** the operator presses a special key, **Then** the
    device receives the standard terminal code for that key. The special keys are the arrow
-   keys, Tab, Backspace, Delete, Home, End, Page Up, Page Down, Esc, and the function keys.
+   keys, Tab, Backspace, Delete, Home, End, Page Up, Page Down, Esc, and F1 through F12.
 4. **Given** an open shell with no text selected, **When** the operator presses Ctrl+C,
    **Then** the device receives the interrupt character.
 5. **Given** an open shell, **When** the operator changes the window size, **Then** the
@@ -237,9 +237,13 @@ the screen text.
 - **FR-005**: The connection code MUST support each Mist cloud region, token sign-in, and
   password sign-in. It MUST use the TLS settings of the API session and the proxy settings
   of the host.
-- **FR-006**: The connection code MUST send a keepalive signal on each long connection.
+- **FR-006**: Each channel, utility, shell, and screen connection MUST send a ping after
+  20 seconds without a received frame. It MUST close after 40 seconds without a received
+  frame. A check can differ from either boundary by one 100-millisecond socket-read slice.
 - **FR-007**: The portal MUST connect a dropped channel stream again up to 3 times. After
-  the third failure, the session MUST fail with a reason.
+  the third failure, the session MUST fail with a reason. If reconnect output remains in
+  the message buffer, the page MUST continue without a gap warning. If the buffer dropped
+  reconnect output, the page MUST show a gap warning.
 - **FR-008**: The portal MUST refuse a shell address that does not use TLS. It MUST also
   refuse a shell address outside the Mist cloud domain of the API session.
 - **FR-009**: Logs MUST NOT hold API tokens, cookies, the path of a shell address,
@@ -255,7 +259,8 @@ the screen text.
   Delete, Home, End, Page Up, and Page Down.
 - **FR-012**: The shell terminal MUST send its size when the session starts and each time
   the panel size changes. The column count MUST be 20 to 500. The row count MUST be 5 to
-  200. A screen command view does not send a size (see FR-035).
+  200. A screen command MUST send 80 columns and 40 rows once when it starts. It MUST
+  ignore later panel-size changes (see FR-035).
 - **FR-013**: The portal MUST keep up to 4,096 characters that the operator types before
   the first output. It MUST send them in order when the first output arrives.
 - **FR-014**: The terminal MUST keep at least 5,000 lines of history.
@@ -268,9 +273,12 @@ the screen text.
 - **FR-018**: When the operator returns to a session in the session list, the terminal
   MUST show the history that the portal holds for that session.
 - **FR-019**: If a shell sends no output for 20 seconds after it opens, the terminal MUST
-  show a notice. If the cloud then closes the shell before any output, the session MUST end
-  as failed with a reason. If the device closes the shell after some output, the session
-  MUST end as finished.
+  show a notice. The shell MUST continue until the cloud closes it. If the cloud closes the
+  shell before output, the session MUST fail with a reason. If the device closes after
+  output, the session MUST finish. For a utility command, the fixed server first-output
+  limit MUST be 30 seconds. Its supported range MUST be exactly 30 seconds, with no
+  environment override. The source MUST be
+  `UtilityTriggerDefinitions.FIRST_OUTPUT_SECONDS`.
 
 **Copy and paste**
 
@@ -282,9 +290,9 @@ the screen text.
   Ctrl+C with a selection MUST NOT send the interrupt character.
 - **FR-023**: These actions MUST paste: Ctrl+V, Ctrl+Shift+V, Shift+Insert, Cmd+V on
   macOS, the menu Paste, and the Paste button.
-- **FR-024**: The portal MUST change each line end in pasted text to a carriage return. If
-  the device turned on bracketed paste mode, the portal MUST put the text between the
-  bracketed paste markers.
+- **FR-024**: The browser page MUST change each line end in pasted text to a carriage
+  return. If xterm.js detects bracketed paste mode, the page MUST put the text between the
+  bracketed paste markers. The server MUST preserve the resulting UTF-8 bytes.
 - **FR-025**: Before it sends pasted text with more than one line, the page MUST show a
   confirmation. The confirmation MUST show the line count and the first five lines. The
   operator MUST be able to turn the confirmation off. The browser MUST keep the setting.
@@ -297,12 +305,15 @@ the screen text.
   screen reader MUST announce the notice.
 - **FR-030**: A right-click in the terminal MUST open a menu with Copy, Paste, Select all,
   and Clear. Clear MUST remove the local history only.
+- **FR-031**: The terminal font MUST start at 14 pixels. The A- and A+ controls MUST use
+  one-pixel steps from 10 through 28 pixels. The browser MUST keep the value in
+  `misthelper.wsTerminal.prefs` and restore it after a reload.
 
 **Screen commands**
 
 - **FR-035**: Top and Monitor Traffic MUST show in a read-only terminal view. The view MUST
-  use a fixed size of 80 columns and 40 rows, because the device draws the screen for that
-  size. The view MUST interpret control sequences that arrive in more than one part.
+  send a fixed size of 80 columns and 40 rows when it starts. It MUST ignore later panel
+  changes. The view MUST interpret control sequences that arrive in more than one part.
 
 **History file**
 
@@ -313,9 +324,10 @@ the screen text.
 
 - **FR-045**: The shell MUST stay locked until the portal setting turns it on. Each shell
   session MUST need the typed device name. These rules exist today, and they MUST stay.
-- **FR-046**: Each request that sends keys, pasted text, or a size MUST carry the form
-  token of the page. The portal MUST limit the size of each request and the rate of
-  requests for each session.
+- **FR-046**: Each input or resize request MUST carry the form token. An input request
+  MUST hold at most 16 KiB of UTF-8 text. Input before first output MUST hold at most 4,096
+  characters. A resize MUST use 20 through 500 columns and 5 through 200 rows. Input and
+  resize MUST share a limit of 60 requests in each monotonic one-second window per session.
 - **FR-047**: The shell view MUST show the warning that each command runs on the live
   device.
 - **FR-048**: The page MUST NOT receive the shell address or any sign-in secret.
@@ -345,14 +357,17 @@ the screen text.
   answers at once.
 - **SC-004**: The browser test suite passes each copy action, each paste action, and each
   key in this specification.
-- **SC-005**: With five shell sessions that send output at the same time, other portal
-  pages still answer within 1 second.
+- **SC-005**: Start one 1 MiB output burst in each of five shell sessions. Hold all five
+  bursts open across the measurement. Each stream MUST send bytes during each measured
+  load and MUST complete exactly 1 MiB. Alternate five visible loads of `/websockets` with
+  five visible loads of `/operations`. The nearest-rank p95 selects rank 10 from the 10
+  complete loads and MUST be less than 1 second. The test permits no failed load.
 - **SC-006**: A scan of the logs from the test suite finds no token, cookie, shell address
   path, keystroke, pasted text, or terminal output.
-- **SC-007**: The terminal shows 1 MB of device output within 3 seconds on the local test
+- **SC-007**: The terminal shows 1 MiB of device output within 3 seconds on the local test
   path.
-- **SC-008**: The screen commands show no stray characters in 100 of 100 test runs with
-  split control sequences.
+- **SC-008**: The screen commands show no stray characters across 100 consecutive updates
+  with split control sequences in one session.
 
 ## Assumptions
 
@@ -367,4 +382,5 @@ the screen text.
   life. The existing settings can change these limits.
 - Out of scope: a direct SSH connection to a device, file transfer, split panes, and a
   history file on the portal disk.
-- The terminal runs in current versions of Chrome, Edge, and Firefox.
+- The terminal supports Chrome 120 or newer and Edge 120 or newer. The automated browser
+  gate uses the current Playwright Chromium release. Firefox support is outside this feature.

@@ -203,8 +203,8 @@ def test_screen_history_preserves_split_control_bytes_and_read_only_state() -> N
     assert isinstance(runner, TerminalRunner) is False  # A screen runner is not a writable terminal runner.
 
 
-def test_screen_resize_sends_json_frame() -> None:
-    """Resize sends the terminal size JSON frame."""
+def test_screen_resize_keeps_fixed_device_size() -> None:
+    """Ignore panel resize requests after the fixed device size frame."""
     with FakeMistCloud() as cloud:  # Start a fake screen server.
         device = RecordingScreenDevice(close=False)  # Keep the screen open.
         cloud.register("/screen/default", device)  # Route the screen URL.
@@ -213,12 +213,11 @@ def test_screen_resize_sends_json_frame() -> None:
         runner = _runner(api, session)  # Build the runner.
         runner.start()  # Start the screen command.
         _wait_for_state(session, {SessionState.LIVE})  # Wait until connected.
-        runner.resize(120, 35)  # Send a live resize.
-        frames = device.wait_for_resize(2, 5.0)  # Initial size and live resize must arrive.
+        runner.resize(120, 35)  # Attempt to replace the fixed screen size.
+        frames = device.wait_for_resize(2, 0.2)  # Detect an incorrect second size frame.
         runner.stop()  # Stop the open screen.
         _wait_for_state(session, {SessionState.STOPPED})  # Wait for clean shutdown.
-    assert frames[0] == {"resize": {"width": 80, "height": 40}}  # Open sends fixed screen size first.
-    assert frames[1] == {"resize": {"width": 120, "height": 35}}  # Resize sends JSON dimensions.
+    assert frames == [{"resize": {"width": 80, "height": 40}}]  # Only the required initial size reached the device.
 
 
 def test_screen_open_sends_fixed_80_by_40_resize_to_device() -> None:

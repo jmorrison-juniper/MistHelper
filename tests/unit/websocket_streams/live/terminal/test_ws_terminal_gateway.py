@@ -3,30 +3,59 @@
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import time  # Wait-cap tests use short bounded waits.
+from collections.abc import Callable  # Fake runners can forward bytes to the transport.
 from concurrent.futures import ThreadPoolExecutor  # Long-poll tests use worker threads.
 from types import SimpleNamespace  # Test sessions need small mutable records.
 from unittest.mock import Mock  # Test sessions expose one observed method.
 
 import pytest  # The tests assert contract refusals.
 
+import websocket  # The production shell client uses the installed WebSocket transport.
 from src.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify refusal codes.
 from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Tests build terminal state.
 from src.websocket_streams.live.terminal.gateway import TerminalGateway  # Tests cover this class.
 from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests build writable state.
 from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Tests build terminal state.
+from src.websocket_streams.live.transport.endpoint import (  # Tests build a safe loopback endpoint.
+    MistStreamEndpoint,
+    ShellAddressPolicy,
+    TransportProfile,
+)
+from src.websocket_streams.live.transport.shell_client import (
+    ShellClient,
+)  # Send paste bytes through production transport.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession  # Supply endpoint auth.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
+    ShellDevice,
+)  # Receive exact paste bytes.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeConnection,
+    FakeMistCloud,
+)  # Host the fake shell.
+
+
+class PasteSinkShellDevice(ShellDevice):
+    """Receive exact paste bytes without command-response backpressure."""
+
+    def _process_input(self, connection: FakeConnection, data: bytes) -> None:
+        """Keep received bytes without interpreting pasted lines as commands."""
+        del connection, data  # The inherited receive path already stored the exact bytes.
 
 
 class FakeRunner:
     """Record exact terminal input and size order."""
 
-    def __init__(self) -> None:
-        """Build an empty runner recorder."""
+    def __init__(self, sender: Callable[[str], None] | None = None) -> None:
+        """Build an empty runner recorder with an optional transport sender."""
         self.sent: list[str] = []  # Keep exact input order.
         self.sizes: list[tuple[int, int]] = []  # Keep accepted size order.
+        self.sender = sender  # Forward accepted input when a transport test supplies a sender.
 
     def send_input(self, text: str) -> None:
-        """Record exact input text."""
-        self.sent.append(text)  # Tests compare exact device input.
+        """Record exact input text and optionally send it to the fake device."""
+        self.sent.append(text)  # Tests compare exact gateway input.
+        if self.sender is not None:  # Device-bound tests supply the production client sender.
+            self.sender(text)  # Send accepted bytes through ShellClient.
 
     def resize(self, cols: int, rows: int) -> None:
         """Record one terminal size."""
@@ -48,12 +77,15 @@ class FakeLookup:
         return session  # Return the known test session.
 
 
-def _gateway(clock: list[float] | None = None) -> tuple[TerminalGateway, SimpleNamespace, FakeRunner]:
+def _gateway(
+    clock: list[float] | None = None,
+    sender: Callable[[str], None] | None = None,
+) -> tuple[TerminalGateway, SimpleNamespace, FakeRunner]:
     """Build one live writable terminal gateway."""
     values = clock if clock is not None else [0.0]  # Use caller time or a new clock.
     terminal_input = TerminalInput(lambda: values[0])  # Build deterministic rate state.
     terminal = TerminalState(ByteHistory(), terminal_input, 1800.0, "2026-10-01T09:30:00Z")  # Build state.
-    runner = FakeRunner()  # Record exact input and resize calls.
+    runner = FakeRunner(sender)  # Record actions and optionally forward input.
     terminal_input.bind(runner.send_input)  # Bind the runner sender.
     session = SimpleNamespace(
         terminal=terminal,
@@ -152,6 +184,55 @@ class TestTerminalGatewayWrite:
         assert accepted == {"accepted": 16 * 1024, "queued": False}  # Keep the size contract.
         assert runner.sent[0] == exact  # Preserve the exact Unicode text.
         assert (large.value.code, rate.value.code) == ("too_large", "rate_limited")  # Keep codes.
+
+    def test_input_and_resize_share_monotonic_rate_window(self) -> None:
+        """Share one safe rate window across both write routes."""
+        clock = [10.0]  # Keep both routes in one deterministic monotonic second.
+        gateway, session, runner = _gateway(clock)  # Build one session-scoped request window.
+        session.terminal.input.release()  # Send accepted input directly to the fake runner.
+        for _index in range(59):  # Use requests one through 59 with input writes.
+            gateway.send("abc123", "x")  # Count one input request in the shared window.
+        accepted = gateway.resize("abc123", 80, 24)  # Accept resize request 60.
+        with pytest.raises(StreamRequestError) as rate:  # Capture mixed-route request 61.
+            gateway.send("abc123", "x")  # Refuse input after the accepted resize.
+        clock[0] = 9.0  # Simulate a clock rollback without expiring safe history.
+        with pytest.raises(StreamRequestError) as rollback:  # Capture the rollback request.
+            gateway.resize("abc123", 81, 25)  # Refuse request 61 after the rollback.
+        assert accepted == {"cols": 80, "rows": 24}  # Keep the accepted resize response.
+        assert runner.sizes == [(80, 24)]  # Send only the accepted resize to the device.
+        assert (rate.value.code, rollback.value.code) == ("rate_limited", "rate_limited")  # Keep codes.
+
+    def test_two_thousand_line_paste_reaches_device_one_hundred_times(self) -> None:
+        """Preserve a 2,000-line paste through the gateway and ShellClient in 100 runs."""
+        paste = "".join(f"show line {index}\r" for index in range(2000))  # Build the ordered paste.
+        parts = [paste[index : index + 4096] for index in range(0, len(paste), 4096)]  # Match browser chunks.
+        expected = paste.encode("utf-8")  # Compare exact device bytes for each complete run.
+        with FakeMistCloud() as cloud:  # Host every complete production connection.
+            for run_number in range(100):  # Prove every required complete run independently.
+                path = f"/shell/paste-{run_number}"  # Give each fake device one isolated route.
+                device = PasteSinkShellDevice()  # Receive this run at the simulated device boundary.
+                cloud.register(path, device)  # Route this production client to its fake device.
+                client = self._shell_client(cloud)  # Build this run's production shell transport.
+                try:  # Always close this production connection after its flow.
+                    client.open(f"{cloud.base_ws_url}{path}", 80, 24)  # Open this device session.
+                    gateway, session, _runner = _gateway(sender=client.send)  # Connect the gateway to ShellClient.
+                    session.terminal.input.release()  # Release browser-sized parts to the transport.
+                    for part in parts:  # Deliver every paste part through the production gateway.
+                        gateway.send("abc123", part)  # Preserve browser order through both boundaries.
+                    received = device.wait_for_input(len(expected), 5.0)  # Await this run's device bytes.
+                    assert received == expected  # Require complete ordered bytes at the device boundary.
+                finally:
+                    client.close()  # Stop this socket before the next complete run.
+
+    @staticmethod
+    def _shell_client(cloud: FakeMistCloud) -> ShellClient:
+        """Build a production shell client for the safe loopback cloud."""
+        profile = TransportProfile(
+            stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream", allow_loopback=True
+        )  # Allow test loopback.
+        endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Supply fake authentication fields.
+        policy = ShellAddressPolicy(endpoint.cloud_host, allow_loopback=True)  # Restrict the client to this host.
+        return ShellClient(endpoint, policy, factory=websocket.create_connection)  # Use production socket creation.
 
     def test_resize_accepts_edges_and_refuses_bad_sizes(self) -> None:
         """Accept valid edges and refuse invalid dimensions."""

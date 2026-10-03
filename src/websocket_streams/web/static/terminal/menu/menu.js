@@ -38,7 +38,7 @@
             if (name === 'copy') this.controller.clipboard.copySelection(); // Copy selected terminal text.
             if (name === 'paste' && !this.controller.inputBlocked()) { this.controller.pasteFlow.pasteFromClipboard(); return; } // Keep paste dialog focus when manual input opens.
             if (name === 'select') this.controller.term.selectAll(); // Select the complete xterm buffer.
-            if (name === 'clear') this.controller.term.clear(); // Clear local xterm history.
+            if (name === 'clear') { this.controller.term.clear(); this.controller.term.write('\x1b[2J\x1b[H'); } // Clear local history and visible rows.
             this.controller.focusTerminal(); // Return focus after the menu action.
         }
     }

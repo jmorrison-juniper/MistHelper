@@ -45,8 +45,18 @@ SPECIAL_KEY_BYTES = (  # xterm.js sends these bytes in normal cursor mode, and t
     ("PageUp", b"\x1b[5~"),
     ("PageDown", b"\x1b[6~"),
     ("Escape", b"\x1b"),
-    ("F1", b"\x1bOP"),
-    ("F5", b"\x1b[15~"),  # F5 to F12 use the tilde form, not the SS3 form of F1 to F4.
+    ("F1", b"\x1bOP"),  # F1 uses the SS3 terminal sequence.
+    ("F2", b"\x1bOQ"),  # F2 uses the SS3 terminal sequence.
+    ("F3", b"\x1bOR"),  # F3 uses the SS3 terminal sequence.
+    ("F4", b"\x1bOS"),  # F4 uses the SS3 terminal sequence.
+    ("F5", b"\x1b[15~"),  # F5 starts the CSI tilde sequence range.
+    ("F6", b"\x1b[17~"),  # F6 keeps the xterm CSI code.
+    ("F7", b"\x1b[18~"),  # F7 keeps the xterm CSI code.
+    ("F8", b"\x1b[19~"),  # F8 keeps the xterm CSI code.
+    ("F9", b"\x1b[20~"),  # F9 keeps the xterm CSI code.
+    ("F10", b"\x1b[21~"),  # F10 keeps the xterm CSI code.
+    ("F11", b"\x1b[23~"),  # F11 keeps the xterm CSI code.
+    ("F12", b"\x1b[24~"),  # F12 ends the required function-key range.
 )
 RATE_LIMITED_BODY = '{"error":"rate limited","code":"rate_limited"}'  # The terminal HTTP rate limit answer.
 WAITING_NOTICE = "The portal waits for the first output from the device."  # The header notice before the first output.
@@ -68,6 +78,21 @@ def _open_shell(page: Any, harness: TerminalPortalHarness) -> None:
     """Open one terminal shell on the fake switch."""
     harness.open_page(page)  # Load the WebSockets page.
     harness.start_shell(page)  # Start a shell terminal session.
+    warning = page.get_by_test_id("ws-terminal-warning").inner_text(timeout=READY_TIMEOUT_MS)  # Read before input.
+    assert warning == "Warning: Each command runs on the live device."  # Require the live-device warning first.
+
+
+def _open_additional_page(page: Any, harness: TerminalPortalHarness) -> None:
+    """Open a second page without waiting for its continuous session read to stop."""
+    page.goto(
+        f"{harness.base_url}/websockets", wait_until="domcontentloaded", timeout=READY_TIMEOUT_MS
+    )  # Load the page shell.
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"], origin=harness.base_url
+    )  # Permit clipboard journeys.
+    page.get_by_test_id("ws-catalog-entry-ex.createShellSession").wait_for(  # Wait for catalog readiness.
+        state="visible", timeout=READY_TIMEOUT_MS
+    )
 
 
 def _start_top(page: Any) -> None:
@@ -286,6 +311,34 @@ def test_j12_ctrl_c_with_selection(page: Any, terminal_harness: TerminalPortalHa
     assert terminal_harness.shell.received_input == before  # No interrupt reached the device.
 
 
+def test_review_context_menu_copy_paste_select_and_clear(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """FR-029 and FR-030: each menu action reports and preserves server history."""
+    _open_shell(page, terminal_harness)  # Start a terminal with visible text.
+    session_id = _active_session_id(page)  # Build the server-history route for this session.
+    history_url = f"{terminal_harness.base_url}/api/websockets/sessions/{session_id}/terminal?after=0"  # Read history.
+    history_before = page.request.get(history_url).json()["data"]  # Keep the server bytes before local Clear.
+    page.get_by_test_id("ws-terminal-screen").click(button="right")  # Open the context menu.
+    page.get_by_test_id("ws-terminal-menu-select-all").click()  # Select all visible terminal text.
+    page.get_by_test_id("ws-terminal-screen").click(button="right")  # Open the menu with the selection active.
+    page.get_by_test_id("ws-terminal-menu-copy").click()  # Copy through the explicit menu action.
+    copied = page.evaluate("navigator.clipboard.readText()")  # Read the exact browser clipboard result.
+    toast = page.get_by_test_id("ws-terminal-toast")  # Read the polite screen-reader notice.
+    toast.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Wait for the asynchronous clipboard action.
+    assert toast.inner_text() == f"Copied {len(copied)} characters."  # Report the exact copied count.
+    assert toast.get_attribute("aria-live") == "polite"  # Let a screen reader announce the result.
+    page.get_by_test_id("ws-terminal-screen").click(button="right")  # Open the menu for local Clear.
+    page.get_by_test_id("ws-terminal-menu-clear").click()  # Clear only the browser terminal buffer.
+    page.wait_for_function(
+        "() => document.querySelector('[data-testid=ws-terminal-screen]').innerText.trim() === ''"
+    )  # Wait for the local erase sequence.
+    assert _screen_text(page).strip() == ""  # The local terminal no longer shows its old history.
+    assert page.request.get(history_url).json()["data"] == history_before  # Clear did not change server history.
+    page.get_by_test_id("ws-terminal-screen").click(button="right")  # Open the menu for Paste.
+    page.get_by_test_id("ws-terminal-menu-paste").click()  # Paste the copied multi-line terminal text.
+    page.get_by_test_id("ws-terminal-paste-dialog").wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Confirm.
+    page.get_by_test_id("ws-terminal-paste-cancel").click()  # Keep the menu proof read-only at the device.
+
+
 def test_j13_paste_keys(page: Any, terminal_harness: TerminalPortalHarness) -> None:
     """J13: paste keys send exact text bytes."""
     _open_shell(page, terminal_harness)  # Start the terminal.
@@ -295,6 +348,19 @@ def test_j13_paste_keys(page: Any, terminal_harness: TerminalPortalHarness) -> N
     received = terminal_harness.shell.wait_for_input(len("paste-one"), 2.0)  # Wait for device bytes.
     _shot(page, terminal_harness, "j13-paste-keys.png")  # Save evidence.
     assert b"paste-one" in received  # The exact bytes reached the fake device.
+
+
+def test_j13_utf8_paste_preserves_exact_device_bytes(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """J13: preserve UTF-8 text, line ends, and bracketed paste markers."""
+    _open_shell(page, terminal_harness)  # Use the shell that enables bracketed paste mode.
+    text = "caf\u00e9 \u2603\n\u7b2c\u4e8c\u884c"  # Include two-byte and three-byte UTF-8 characters.
+    content = "caf\u00e9 \u2603\r\u7b2c\u4e8c\u884c".encode("utf-8")  # Define normalized UTF-8 content.
+    expected = b"\x1b[200~" + content + b"\x1b[201~"  # Define the exact bracketed-paste device bytes.
+    _dispatch_terminal_paste(page, text)  # Send a browser paste event through the page flow.
+    page.get_by_test_id("ws-terminal-paste-send").click()  # Confirm the multi-line paste.
+    received = terminal_harness.shell.wait_for_input(len(expected), 2.0)  # Wait for all bytes.
+    _shot(page, terminal_harness, "j13-utf8-paste.png")  # Save visible UTF-8 evidence.
+    assert received == expected  # No marker, character, or line-ending byte can change.
 
 
 def test_j14_paste_confirmation_cancel_and_send(page: Any, paste_echo_terminal_harness: TerminalPortalHarness) -> None:
@@ -355,12 +421,26 @@ def test_j18_kept_settings(page: Any, terminal_harness: TerminalPortalHarness) -
     """J18: terminal settings persist across page reload."""
     _open_shell(page, terminal_harness)  # Start the terminal.
     _open_settings(page)  # Reveal the settings controls.
-    page.get_by_test_id("ws-terminal-copy-on-select").uncheck()  # Change setting.
+    page.get_by_test_id("ws-terminal-copy-on-select").uncheck()  # Change the selection setting.
+    for _index in range(10):  # Cross the lower boundary from the 14-pixel default.
+        page.get_by_test_id("ws-terminal-font-down").click()  # The control must stop at 10 pixels.
+    lower = page.evaluate("JSON.parse(localStorage.getItem('misthelper.wsTerminal.prefs')).fontSize")  # Read minimum.
+    for _index in range(30):  # Cross the upper boundary from the 10-pixel minimum.
+        page.get_by_test_id("ws-terminal-font-up").click()  # The control must stop at 28 pixels.
+    upper = page.evaluate("JSON.parse(localStorage.getItem('misthelper.wsTerminal.prefs')).fontSize")  # Read maximum.
+    for _index in range(12):  # Select 16 pixels for the reload check.
+        page.get_by_test_id("ws-terminal-font-down").click()  # Use the same one-pixel production control.
+    saved_before = page.evaluate("JSON.parse(localStorage.getItem('misthelper.wsTerminal.prefs'))")  # Read storage.
     page.reload(wait_until="domcontentloaded", timeout=READY_TIMEOUT_MS)  # Reload without waiting on long reads.
     terminal_harness.start_shell(page)  # Start another shell.
-    checked = page.get_by_test_id("ws-terminal-copy-on-select").is_checked()  # Read stored setting.
+    checked = page.get_by_test_id("ws-terminal-copy-on-select").is_checked()  # Read the restored checkbox.
+    saved_after = page.evaluate(
+        "JSON.parse(localStorage.getItem('misthelper.wsTerminal.prefs'))"
+    )  # Read restored storage.
     _shot(page, terminal_harness, "j18-kept-settings.png")  # Save evidence.
-    assert checked is False  # Setting persisted in localStorage.
+    assert checked is False  # The selection setting persisted in localStorage.
+    assert (lower, upper) == (10, 28)  # The controls enforce both inclusive font limits.
+    assert saved_before["fontSize"] == saved_after["fontSize"] == 16  # The font size persisted across reload.
 
 
 def test_j19_split_screen_updates(page: Any, terminal_harness: TerminalPortalHarness) -> None:
@@ -482,6 +562,37 @@ def test_review_fr048_page_gets_no_shell_address(page: Any, terminal_harness: Te
     assert shell_path not in text  # The shell address path never arrives.
     assert terminal_harness.cloud.base_ws_url not in text  # The cloud WebSocket host never arrives.
     assert "fake-token" not in text  # The API token never arrives.
+
+
+def test_terminal_expiry_notice_crosses_two_minute_boundary(
+    page: Any, pushable_terminal_harness: TerminalPortalHarness
+) -> None:
+    """FR-017: the expiry notice starts after the final two-minute boundary."""
+    harness = pushable_terminal_harness  # Use late device output to complete each controlled read.
+    page.add_init_script(
+        "window.__realNow = Date.now.bind(Date); window.__testNow = null; "
+        "Date.now = () => window.__testNow === null ? window.__realNow() : window.__testNow;"
+    )  # Control only the page clock.
+    _open_shell(page, harness)  # Start one shell with the real backend expiry value.
+    session_id = _active_session_id(page)  # Read the active terminal identity.
+    payload = page.evaluate(
+        "async ([id]) => (await fetch('/api/websockets/sessions/' + id + '/terminal?after=0&wait=0')).json()",
+        [session_id],
+    )  # Read expiry metadata.
+    expires_at = str(payload["expires_at"])  # Keep the exact backend expiry text.
+    expiry_ms = page.evaluate("value => Date.parse(value)", expires_at)  # Convert through the browser parser.
+    page.evaluate("value => { window.__testNow = value; }", expiry_ms - 120_000)  # Stop at the exact boundary.
+    harness.shell.push_output(b"boundary-before\r\n")  # Complete the current read at the boundary.
+    page.get_by_text("boundary-before").wait_for(timeout=READY_TIMEOUT_MS)  # Wait for the metadata update.
+    assert page.get_by_test_id("ws-terminal-expiry").is_hidden()  # Do not warn at exactly two minutes.
+    page.evaluate(
+        "value => { window.__testNow = value; }", expiry_ms - 119_999
+    )  # Cross one millisecond into the warning range.
+    harness.shell.push_output(b"boundary-after\r\n")  # Complete the next read after the boundary.
+    page.get_by_text("boundary-after").wait_for(timeout=READY_TIMEOUT_MS)  # Wait for the second metadata update.
+    page.get_by_test_id("ws-terminal-expiry").get_by_text(f"This terminal expires at {expires_at}.").wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # Require the notice after the boundary.
 
 
 def test_review_fr014_history_keeps_five_thousand_lines(
@@ -718,6 +829,44 @@ def test_review_14_hidden_paste_input_hides_label(page: Any, terminal_harness: T
     assert input_hidden is True  # The confirmation dialog hides the manual input box.
 
 
+def test_review_two_pages_type_into_one_shell(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """Edge case: two browser pages can control one shared shell in order."""
+    _open_shell(page, terminal_harness)  # Start one server-side shell from the first page.
+    session_id = _active_session_id(page)  # Keep the shared session identifier.
+    second = page.context.new_page()  # Open another page in the same authenticated browser context.
+    try:  # Always close the extra page after the shared-session proof.
+        _open_additional_page(second, terminal_harness)  # Load the portal while its shared terminal read stays active.
+        second.locator(f'[data-session-id="{session_id}"]').click()  # Select the existing shared shell.
+        second.get_by_test_id("ws-terminal-screen").wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Attach.
+        before = terminal_harness.shell.received_input  # Keep the device input before both pages type.
+        page.get_by_test_id("ws-terminal-screen").click()  # Focus the first terminal.
+        page.keyboard.type("A")  # Send one byte from the first page.
+        second.get_by_test_id("ws-terminal-screen").click()  # Focus the second terminal.
+        second.keyboard.type("B")  # Send the next byte from the second page.
+        received = terminal_harness.shell.wait_for_input(len(before) + 2, 2.0)  # Wait for both page writes.
+        _shot(second, terminal_harness, "review-two-pages-one-shell.png")  # Save shared-shell evidence.
+        assert received.endswith(b"AB")  # The device received both page writes in request order.
+    finally:  # Clean up even when one browser assertion fails.
+        second.close()  # Page closure stops reads and lets the idle reaper own later cleanup.
+
+
+def test_page_close_leaves_shared_shell_for_idle_cleanup(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """FR-015: page closure leaves a live shell for the bounded idle reaper."""
+    first = page.context.new_page()  # Keep the fixture page available for the final API check.
+    second = page.context.new_page()  # Open the second operator view in the same context.
+    _open_shell(first, terminal_harness)  # Start one shared server-side shell.
+    session_id = _active_session_id(first)  # Keep the server identity after both views close.
+    _open_additional_page(second, terminal_harness)  # Attach while the first page keeps a live read.
+    second.locator(f'[data-session-id="{session_id}"]').click()  # Select the shared shell.
+    second.get_by_test_id("ws-terminal-screen").wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Attach.
+    first.close()  # End reads from the first page without an operator Stop request.
+    second.close()  # End reads from the second page without an operator Stop request.
+    answer = page.context.request.get(f"{terminal_harness.base_url}/api/websockets/sessions")  # Read server state.
+    sessions = answer.json()["sessions"]  # Read the bounded session records.
+    selected = next(item for item in sessions if item["session_id"] == session_id)  # Find the shared shell.
+    assert selected["state"] in {"connecting", "live"}  # Leave cleanup to the idle reaper, not page closure.
+
+
 def test_review_17_session_switch_drops_stale_read(page: Any, pushable_terminal_harness: TerminalPortalHarness) -> None:
     """Review 17: a late read answer of the old session never reaches the shown session."""
     harness = pushable_terminal_harness  # Use a short name for the harness.
@@ -776,8 +925,13 @@ def test_review_18_session_switch_drops_pending_paste(page: Any, terminal_harnes
     first_id = _active_session_id(page)  # Remember shell A.
     terminal_harness.start_shell(page)  # Start shell B, which the page then shows.
     second_id = _wait_new_active_session(page, first_id)  # Shell B is now the shown session.
-    page.locator(f'[data-session-id="{first_id}"]').click()  # Show shell A again.
+    with page.expect_response(
+        lambda response: f"/{first_id}/terminal" in response.url and "after=0" in response.url
+    ) as replay:  # Wait for shell A to return its stored history.
+        page.locator(f'[data-session-id="{first_id}"]').click()  # Show shell A again.
+    assert replay.value.json()["data"]  # The terminal route must return shell A bytes.
     page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # Shell A replays its banner.
+    _shot(page, terminal_harness, "review-18-switch-back-shell-a.png")  # Save the visible replay before the paste.
     _dispatch_terminal_paste(page, "show version\nshow chassis hardware")  # Two lines open the confirmation.
     dialog = page.get_by_test_id("ws-terminal-paste-dialog")  # The paste confirmation dialog.
     dialog.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # The paste waits for the operator.
@@ -852,7 +1006,11 @@ def test_review_3710_silent_device_shows_notice_and_failed_reason(
     )  # Shorten the read wait and the notice wait.
     _open_shell(page, harness)  # Start a shell on the silent device.
     page.locator("#wsSessionReason", has_text=WAITING_NOTICE).wait_for(timeout=READY_TIMEOUT_MS)  # First notice.
-    page.locator("#wsSessionReason", has_text=SILENT_NOTICE).wait_for(timeout=READY_TIMEOUT_MS)  # Silent notice.
+    page.wait_for_timeout(1500)  # Stay before the controlled two-second notice boundary.
+    assert page.locator("#wsSessionReason").inner_text() == WAITING_NOTICE  # Do not show the notice too early.
+    page.locator("#wsSessionReason", has_text=SILENT_NOTICE).wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # Show it after two seconds.
     page.locator("#wsSessionState", has_text="State: Live").wait_for(timeout=READY_TIMEOUT_MS)  # The socket is open.
     _shot(page, harness, "review-3710-silent-device-notice.png")  # Save evidence of the notice.
     harness.shell.close_shell()  # The Mist cloud closes the silent terminal with an empty close frame.

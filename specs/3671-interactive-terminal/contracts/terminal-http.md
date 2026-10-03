@@ -95,7 +95,8 @@ Answer 202:
 `queued` is true when the text waits for the first output.
 
 Refusals: `bad_request`, `not_found`, `not_terminal`, `read_only`, `not_open`,
-`input_full`, `too_large`, and `rate_limited`.
+`input_full`, `too_large`, and `rate_limited`. Input and resize share one session-scoped
+monotonic request window. Request 61 in one second returns `rate_limited`.
 
 If the local device write fails, the route returns `not_open` (409). The reader then ends
 the session as `failed`. The terminal read route reports
@@ -126,7 +127,8 @@ Answer 202:
 ```
 
 Refusals: `bad_request`, `not_found`, `not_terminal`, `read_only`, `not_open`, and
-`rate_limited`.
+`rate_limited`. This route uses the same session-scoped monotonic request window as the
+input route.
 
 If a live resize write fails, the route returns `not_open` (409), not 202. The reader then
 ends the session as `failed`. The terminal read route reports

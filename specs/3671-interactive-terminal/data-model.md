@@ -111,12 +111,13 @@ The terminal read route returns one `TerminalChunk`.
 | `pending` | list of text | The text that arrived before the first output |
 | `pending_chars` | integer | 4,096 at most |
 | `ready` | boolean | True after the first output |
-| `times` | queue of floats | The request times of the newest second |
+| `rate` | `RequestRateLimiter` | One session-scoped monotonic window for input and resize |
 
 Rules:
 
 - One request holds 16 KiB of UTF-8 text at most. A larger request gets `too_large` (413).
-- One session accepts 60 requests each second. More requests get `rate_limited` (429).
+- Input and resize share one session-scoped limit of 60 requests in each monotonic second.
+- Request 61 gets `rate_limited` (429), including after the clock moves backward.
 - Before the first output, the text goes into `pending`. If `pending` then holds more than
   4,096 characters, the request gets `input_full` (409), and the text does not go into
   `pending`.

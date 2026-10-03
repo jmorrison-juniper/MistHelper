@@ -1,27 +1,24 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.5.0 -> 1.6.0
-  Modified principles: None
+  Version change: 1.6.0 -> 1.7.0
+  Modified principles:
+    - I. Five-Item Rule (Structural Discipline): clarified the exception for
+      required unique process records in established process folders. Each
+      change may add only its own record and must track existing folder debt.
   Modified constraints:
-    - mistapi: kept mistapi as the sole interface for Mist Cloud REST APIs.
-      Added a narrow owned WebSocket transport exception when the matching
-      SDK WebSocket path is broken, incomplete, or cannot preserve required
-      output. Added contract, authentication, endpoint, safety, and
-      secret-redaction gates for that exception.
+    - Data Directory: permitted generated test evidence in the established,
+      git-ignored test-artifacts/ folder. Product outputs remain under data/.
   Added sections: None.
   Removed sections: None.
   Governance updated: None.
   Templates requiring updates:
     - .specify/templates/plan-template.md: updated.
-    - .specify/templates/spec-template.md: updated.
-    - .specify/templates/tasks-template.md: updated.
+    - .specify/templates/spec-template.md: no update required.
+    - .specify/templates/tasks-template.md: no update required.
     - .specify/templates/commands/*.md: no command files present.
-  Related files updated simultaneously:
-    - specs/3671-interactive-terminal/plan.md.
-  Follow-up actions:
-    - Add a contract test that proves the matching mistapi WebSocket path
-      cannot preserve the required output before the feature plan gate passes.
+  Related files updated simultaneously: None.
+  Follow-up actions: None.
 -->
 
 <!-- Global coding standards (5-Item Rule, class-based architecture,
@@ -43,6 +40,13 @@ Every new hierarchy level MUST contain no more than five children.
 Existing tracked violations are grandfathered technical debt. A feature MUST
 NOT add a direct child to a noncompliant parent. New feature code MUST enter a
 compliant nested package.
+
+Required unique process records MAY be direct children of an established
+process folder, such as `specs/` or `changelog.d/`, when the repository
+workflow requires direct children. Each change MUST add only its own unique
+record. The plan MUST record the existing folder debt and MUST track a
+separate incremental remediation action. This exception does not permit other
+new direct children in a noncompliant parent.
 
 A change MAY edit an existing child when the edit is narrow and necessary.
 The change MUST NOT increase the number of children at that hierarchy level.
@@ -297,9 +301,10 @@ The following technology choices are binding for all MistHelper code:
   artificial IDs). Primary key strategy MUST be defined in
   `ENDPOINT_PRIMARY_KEY_STRATEGIES` before implementing any new
   operation.
-- **Data Directory**: All outputs MUST go to the `data/` directory,
-  enforced at runtime. SSH logs go to `data/per-host-logs/`.
-  Database file is `data/mist_data.db`.
+- **Data Directory**: All product outputs MUST go to the `data/` directory,
+  enforced at runtime. Generated test evidence MAY go to the established,
+  git-ignored `test-artifacts/` folder. SSH logs go to
+  `data/per-host-logs/`. Database file is `data/mist_data.db`.
 - **Container Security**: The container runs as the non-root user
   `misthelper` with UID 1000. The mounted `data/` directory MUST accept a
   write from that identifier. On Linux, use
@@ -528,4 +533,4 @@ patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.6.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-02
+**Version**: 1.7.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-03

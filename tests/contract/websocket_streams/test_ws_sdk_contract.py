@@ -245,6 +245,17 @@ class TestWebSocketTriggerOrderingContract:
         harness.state.subscribers.clear()  # Reset the offline server before the owned path.
         _OwnedOrderingHarness(harness).run()  # Execute the actual UtilityRunner._run method.
 
+    def test_split_screen_sequence_requires_owned_byte_retention(self) -> None:
+        """Prove that the SDK screen model loses a split control sequence."""
+        wrapper = WebSocketWrapper(APISession(), UtilResponse())  # Use the real SDK screen extraction path.
+        parts = ("\x1b[2Jbase", "\x1b[", "2Jnext")  # Split one clear sequence across SDK updates.
+        sdk_output = [wrapper._extract_raw({"raw": part}) for part in parts]  # Feed the real SDK model in order.
+        owned_output = "".join(parts).encode()  # Model the exact bytes retained by the owned transport.
+        assert (sdk_output[-1], owned_output.endswith(b"\x1b[2Jnext")) == (
+            "base2Jnext",
+            True,
+        ), "checked 1 split sequence; only the owned path retained it"  # Prove SDK damage and owned retention.
+
     def test_file_obeys_structural_rules(self) -> None:
         """Keep this contract file within the five-item structural limits."""
         harness = _StructuralRuleHarness(Path(__file__))  # Measure the committed test file.

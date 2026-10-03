@@ -595,6 +595,7 @@
         state.selectedSession = session;  // The message panel shows this session.
         state.nextAfter = 0;  // Read the buffer from the oldest kept message.
         state.messages = [];  // Remove the messages of the last session.
+        show(byId('wsMessageGap'), false);  // Remove a gap notice that belongs to the last session.
         localStorage.setItem(SESSION_KEY, session.session_id);  // Show this session again after a reload.
         markSelectedSession(session.session_id);  // Show the selection in the list.
         show(byId('wsMessagePanel'), true);  // Show the message panel.
@@ -734,6 +735,7 @@
         var fresh = payload.messages || [];  // The messages after the newest kept number.
         state.selectedSession = payload.session || session;  // The server sends the newest counters.
         state.nextAfter = payload.next_after || state.nextAfter;  // Continue after the newest message.
+        show(byId('wsMessageGap'), payload.gap === true);  // Warn when reconnect output exceeded the bounded buffer.
         updateSessionHeader(state.selectedSession);  // Title, state, and counters.
         updateSessionItem(state.selectedSession);  // Keep the list equal to the panel.
         if (fresh.length) appendMessages(fresh);  // Draw again only when something is new.

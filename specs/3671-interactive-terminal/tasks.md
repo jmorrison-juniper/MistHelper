@@ -16,7 +16,8 @@ browser journeys with screenshots. Each story phase starts with its tests.
 
 ## Format: `[ID] [P?] [Story] Description`
 
-- **[P]**: The task can run in parallel. It changes other files, and it needs no open task.
+- **[P]**: The task can run in parallel with another ready task only after all listed
+  prerequisites finish. It changes a different file set.
 - **[Story]**: The user story of the task, for example US1.
 - Each task names the exact file paths.
 - Tick a task only after you verify the delivered file. Add an evidence note in this form:
@@ -126,7 +127,8 @@ The fleet uses five lanes. No two lanes change the same file.
   `src/websocket_streams/live/transport/stream_client.py` and `ShellClient` in
   `src/websocket_streams/live/transport/shell_client.py`. Use `websocket.create_connection`
   with `enable_multithread=True`. Take the socket factory and the clock as constructor
-  values.
+  values. T014 depends on T009 through T013, including the tests and both transport
+  components.
   (delivered: `src/websocket_streams/live/transport/stream_client.py`, `src/websocket_streams/live/transport/shell_client.py`)
 - [X] T015 [P] Pin the private API session attributes `_cloud_uri`, `_apitoken`,
   `_apitoken_index`, and `_session` in
@@ -151,7 +153,8 @@ The fleet uses five lanes. No two lanes change the same file.
   the `terminal` value and the `add_bytes(data)` method to the record and to the
   `SessionSink` protocol. Release the input queue in `mark_input_ready`. Close the history
   and the input in `finish`. Add the payload field `terminal`. Test the change in
-  `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`.
+  `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`. T020 depends on
+  T016 through T019, including the core tests and all three terminal components.
   (delivered: `src/websocket_streams/live/sessions/record.py`, `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`)
 - [x] T063 [P] Prove the proxy part of FR-005 in
   `tests/unit/websocket_streams/live/transport/clients/test_ws_shell_client.py`. The client
@@ -190,7 +193,8 @@ keys, and resize the panel. The fake device receives each byte in order.
   `tests/unit/websocket_streams/live/terminal/test_ws_terminal_gateway.py`. Cover a read
   with no wait, a read that waits, the limit of 8 waiting reads, and an ended session.
   Cover `not_terminal`, `read_only`, a queued send, `too_large`, `rate_limited`, and the
-  resize range.
+  resize range. Prove that input and resize share one monotonic request window. Accept
+  request 60, refuse request 61, and refuse request 61 after a clock rollback.
   (delivered: `tests/unit/websocket_streams/live/terminal/test_ws_terminal_gateway.py`)
 - [X] T023 [P] [US1] Write the route tests in
   `tests/unit/websocket_streams/web/test_ws_blueprint_routes.py`. Cover the terminal read
@@ -237,8 +241,13 @@ keys, and resize the panel. The fake device receives each byte in order.
 - [x] T030 [US1] Write the journeys J1 to J8 in `tests/e2e/websockets_tab/test_websockets_terminal.py`.
   Use the real services, the real manager, the real runners, and the fake Mist cloud.
   Cover the banner, typed text, each special key, Ctrl+C with no selection, the resize,
-  early keys, the device close, and a full-screen color program. Save a screenshot for
-  each journey in `test-artifacts/websockets-terminal/`, and read each screenshot. The CI
+  early keys, the device close, and a full-screen color program. Test F1 through F12 and
+  assert `ESC OP`, `ESC OQ`, `ESC OR`, `ESC OS`, `ESC [15~`, `ESC [17~`, `ESC [18~`,
+  `ESC [19~`, `ESC [20~`, `ESC [21~`, `ESC [23~`, and `ESC [24~`, respectively. Assert
+  that `Warning: Each command runs on the live device.` shows before the first input. Test
+  the expiry notice at exactly 120,000 milliseconds and at 119,999 milliseconds before
+  expiry. Save a screenshot for each journey in `test-artifacts/websockets-terminal/`, and
+  read each screenshot. The CI
   workflow uploads no test artifacts, so the screenshots are local evidence. The pull
   request body lists each screenshot.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`, `test-artifacts/websockets-terminal/`)
@@ -249,8 +258,13 @@ keys, and resize the panel. The fake device receives each byte in order.
   (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `tests/e2e/websockets_tab/test_websockets_terminal.py`)
 - [x] T066 [US1] Show the full history again when the operator returns to a session
   (FR-018). Prove it with the journey `test_review_17_session_switch_drops_stale_read` in
-  `tests/e2e/websockets_tab/test_websockets_terminal.py`.
-  (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`)
+  `tests/e2e/websockets_tab/test_websockets_terminal.py`. Use
+  `test_review_two_pages_type_into_one_shell` to prove that two pages can type into one
+  shell. Use `test_page_close_leaves_shared_shell_for_idle_cleanup` to prove that closing
+  both pages does not send an operator Stop request. Use
+  `test_reaper_stops_idle_and_prunes_old_ended` with its controlled clock to prove that the
+  idle limit stops the shell after page reads end.
+  (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`, `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`)
 - [x] T067 [US1] Show the 20-second notice for a silent shell in
   `src/websocket_streams/web/static/websockets_terminal.js`. If the far side closes the
   shell before any output, end the session as failed with `NO_ANSWER_REASON` in
@@ -286,9 +300,12 @@ command, and compare the bytes that the fake device receives.
   (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/web/templates/websockets_page.html`)
 - [x] T032 [US2] Write the journeys J9 to J18 in `tests/e2e/websockets_tab/test_websockets_terminal.py`.
   Cover copy by selection on and off, each copy key, and Ctrl+C with a selection. Cover
-  each paste key with the exact bytes, the confirmation Cancel and Paste, bracketed paste,
-  and a 2,000-line paste. Cover copy on an HTTP page from a host name that is not local,
-  the paste limit, and the kept settings.
+  each paste key with exact bytes, UTF-8 text, line-end conversion, bracketed markers,
+  confirmation Cancel and Paste, and a 2,000-line paste. Cover copy on an HTTP page from
+  a host name that is not local, the paste limit, and settings. Check the 10-through-28
+  font range and persistence after reload. Verify the copied-character count and its
+  `aria-live="polite"` announcement. Test menu Copy, Paste, Select all, and Clear. Prove
+  that Clear removes local display text without changing the server history.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`)
 - [X] T033 [US2] Add a paste test with 100 runs to
   `tests/unit/websocket_streams/live/terminal/test_ws_terminal_gateway.py`. Send 2,000
@@ -351,7 +368,9 @@ Each run shows the full output.
 shows the correct screen.
 
 - [X] T040 [P] [US4] Write the screen runner tests in
-  `tests/unit/websocket_streams/live/runners/utility/test_ws_screen_runner.py`.
+  `tests/unit/websocket_streams/live/runners/utility/test_ws_screen_runner.py`. Prove that
+  each screen sends one 80-column by 40-row start size. Attempt a later resize and prove
+  that no second size frame reaches the device.
   (delivered: `tests/unit/websocket_streams/live/runners/utility/test_ws_screen_runner.py`)
 - [X] T041 [US4] Implement `ScreenRunner` in
   `src/websocket_streams/live/runners/utility/screen.py`. Send the trigger, check the
@@ -363,8 +382,9 @@ shows the correct screen.
   `src/websocket_streams/web/static/websockets.js`. Remove the old screen view.
   (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/web/static/websockets.js`)
 - [x] T043 [US4] Write the journeys J19 and J20 in `tests/e2e/websockets_tab/test_websockets_terminal.py`.
-  Send 100 screen updates with split control sequences, and check the screen text
-  (SC-008). Check that typed keys send nothing.
+  Send 100 consecutive screen updates with split control sequences in one session. Check
+  the complete screen text after all 100 updates (SC-008). Check that typed keys send nothing. Show row 1 and row 40 at a fixed 80 by 40
+  size after a browser panel change.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`)
 
 **Checkpoint**: Top and Monitor Traffic show a clean screen.
@@ -392,7 +412,9 @@ Compare the messages, the states, and the end reasons.
   capture filter, the packet summary, and the stop request.
   (delivered: `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`)
 - [x] T047 [US5] Update `tests/contract/websocket_streams/test_ws_channel_parity.py` and
-  `tests/e2e/websockets_tab/test_websockets_page.py` for the own client and the terminal panel.
+  `tests/e2e/websockets_tab/test_websockets_page.py` for the owned client and terminal
+  panel. Check no warning after a reconnect with complete buffered output. Check a visible
+  warning when the bounded buffer dropped reconnect output.
   (delivered: `tests/contract/websocket_streams/test_ws_channel_parity.py`, `tests/e2e/websockets_tab/test_websockets_page.py`)
 
 **Checkpoint**: The streams and the captures pass their old tests and their new tests.
@@ -422,17 +444,20 @@ Compare the messages, the states, and the end reasons.
 **Purpose**: Prove the performance, the log safety, and the delivery.
 
 - [x] T050 Write the performance journeys in
-  `tests/e2e/websockets_tab/test_websockets_terminal_performance.py`. Measure the echo time for 200 keys
-  (SC-001), 1 MB of output (SC-007), and 5 busy shells with page loads (SC-005). Record
-  each number.
+  `tests/e2e/websockets_tab/test_websockets_terminal_performance.py`. Measure 200-key echo
+  time (SC-001) and 1 MiB output (SC-007). For SC-005, start a 1 MiB burst in each of 5
+  shells. Use a barrier to keep all five bursts active during 5 visible `/websockets` loads
+  and 5 visible `/operations` loads. Require each stream to send bytes during each load and
+  complete exactly 1 MiB. Require all 10 loads. Use nearest-rank p95, which selects rank 10
+  from 10 samples. Require it below 1 second. Record each number.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal_performance.py`)
 - [x] T051 Write the log scan journey J22 in `tests/e2e/websockets_tab/test_websockets_terminal.py`
   (SC-006).
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`)
-- [X] T052 [P] Update `documentation/operator-guide.md` and
-  `documentation/wiki/Web-Portal.md` for the terminal, the copy keys, the paste keys, and
-  the new setting.
-  (delivered: `documentation/operator-guide.md`, `documentation/wiki/Web-Portal.md`)
+- [X] T052 [P] Update `README.md`, `documentation/operator-guide.md`, and
+  `documentation/wiki/Web-Portal.md` for live streams, utilities, captures, terminal keys,
+  paste behavior, and the new setting.
+  (delivered: `README.md`, `documentation/operator-guide.md`, `documentation/wiki/Web-Portal.md`)
 - [X] T053 [P] Add the release note `changelog.d/issue-3671-interactive-terminal.md`.
   (delivered: `changelog.d/issue-3671-interactive-terminal.md`)
 - [x] T054 Run the feature gates per `quickstart.md`. Also run mypy with `MYPY_PATHS`,
@@ -442,12 +467,16 @@ Compare the messages, the states, and the end reasons.
   that baseline defect.
   (delivered: `specs/3671-interactive-terminal/research.md`, section R14)
 - [x] T055 Run the read-only live checks per `quickstart.md` section 5. Record the shell
-  host, the NUL prefix result, and the longest pause of Show ARP and Show Route. If a pause
-  is longer than 5 seconds, change the quiet time in the trigger table. The separate
-  owner-approved port-bounce journey is not T055 evidence.
+  host, the NUL prefix result, and the longest pause of Show ARP and Show Route. Run Show
+  ARP five times and Show Route with protocol `direct` five times. Require all 10 runs to
+  finish with complete output. If a pause is longer than 5 seconds, change the quiet time
+  in the trigger table. The separate owner-approved port-bounce journey is not T055
+  evidence. Research R13 records 5 of 5 complete runs for each command.
   (delivered: `specs/3671-interactive-terminal/research.md`, section R13)
-- [ ] T056 Run speckit-analyze. Fix each CRITICAL finding and each HIGH finding, then run
-  the analysis again.
+- [x] T056 Confirm that the executable T083 analysis loop finishes. Keep this rollup open
+  until T083 reports no actionable feature finding. The final bounded analysis checked 45
+  requirements and 92 tasks. It reported no actionable finding. Research R19 records the
+  result. (delivered: `specs/3671-interactive-terminal/research.md`)
 - [x] T062 Move the browser tests into `tests/e2e/websockets_tab/`, the fake Mist cloud
   into `tests/unit/websocket_streams/live/transport/fake_mist_cloud/`, and the client tests
   into `tests/unit/websocket_streams/live/transport/clients/` (finding C1). The three
@@ -474,7 +503,8 @@ Compare the messages, the states, and the end reasons.
 T057 to T061 hold the 12 pipeline steps. T059 to T061 run after the push, so their boxes
 stay clear in the merged file. The pull request and issue #3671 record their results.
 
-- [ ] T057 Run the local gates, build the manifest, stage the feature files, and commit.
+- [ ] T057 After T084 and T092 pass, build the manifest, stage all final evidence, and
+  commit any remaining files. Verify every correction is in the committed branch history.
   Write each commit subject in the constitution step 4 format
   `version YY.MM.DD.HH.MM - description`, with the time in UTC. The pull request title
   keeps Conventional Commits, because the title guard reads the title (issue #3720).
@@ -506,7 +536,7 @@ the tasks that deliver it or prove it. The second speckit-analyze pass built the
 | FR-004 | T034, T035, T036 |
 | FR-005 | T009, T012, T014, T015, T063 |
 | FR-006 | T011, T014 |
-| FR-007 | T044, T045, T064 |
+| FR-007 | T044, T045, T047, T064 |
 | FR-008 | T009, T012, T021, T024, T041, T055 |
 | FR-009 | T009, T012, T025, T051 |
 | FR-010 | T003, T025, T029, T030 |
@@ -516,7 +546,7 @@ the tasks that deliver it or prove it. The second speckit-analyze pass built the
 | FR-014 | T065 |
 | FR-015 | T005, T016, T017, T019, T022, T026, T028, T029 |
 | FR-016 | T019, T020, T021, T022, T026, T029, T030, T040, T064, T067 |
-| FR-017 | T029 |
+| FR-017 | T029, T030 |
 | FR-018 | T017, T027, T029, T066 |
 | FR-019 | T021, T030, T067 |
 | FR-020 | T031, T032 |
@@ -528,8 +558,9 @@ the tasks that deliver it or prove it. The second speckit-analyze pass built the
 | FR-026 | T031, T032 |
 | FR-027 | T031, T032, T033 |
 | FR-028 | T031, T032 |
-| FR-029 | T031 |
+| FR-029 | T031, T032 |
 | FR-030 | T031, T032 |
+| FR-031 | T031, T032 |
 | FR-035 | T003, T004, T022, T026, T027, T040, T041, T042, T043, T055 |
 | FR-040 | T048, T049 |
 | FR-045 | T068 |
@@ -545,6 +576,29 @@ the tasks that deliver it or prove it. The second speckit-analyze pass built the
 | SC-007 | T050 |
 | SC-008 | T040, T043 |
 
+### Convergence Task Coverage
+
+This table maps each correction task to the behavior that it preserves or proves.
+
+| Task | Requirement or rule |
+| --- | --- |
+| T070 | FR-007 and channel retry exhaustion |
+| T071 | FR-011 through FR-019 and terminal write failures |
+| T072 | Constitution I, V, and VII, FR-009, and SC-006 |
+| T073 | Constitution I, II, V, and VII, and FR-001 through FR-009 |
+| T074 | Constitution I, II, V, and VII, FR-011 through FR-019, and FR-046 |
+| T075 | Constitution I, II, V, and VII, and FR-002 through FR-004 |
+| T076 | Constitution I, II, V, and VII, and US1 |
+| T077 | Constitution I and II, US1, and US2 |
+| T078 | Constitution I and II structural enforcement |
+| T079 | Owned-WebSocket exception, FR-001 through FR-003, and SC-008 |
+| T085 | Constitution I, II, V, and VII, and catalog discovery and lock behavior |
+| T086 | Constitution I, II, V, and VII, and intake validation and identifiers |
+| T087 | Constitution I, II, V, and VII, FR-007, FR-009, and T070 |
+| T088 | Constitution I, II, V, and VII, and FR-013 through FR-019 |
+| T089 | Constitution I, II, V, and VII, and FR-012 through FR-019 |
+| T090 | Constitution I, II, V, and VII, and FR-046 through FR-048 |
+
 ---
 
 ## Dependencies and Execution Order
@@ -553,8 +607,15 @@ the tasks that deliver it or prove it. The second speckit-analyze pass built the
 
 - Phase 1 has no dependency. T001 and T002 run first, because the lanes need the folders.
 - Phase 2 depends on Phase 1. It blocks each story.
+- In Phase 2, T014 depends on T009 through T013. T020 depends on T016 through T019.
+- Test tasks must finish and fail for the expected reason before their implementation starts.
 - Phase 3 to Phase 8 depend on Phase 2.
 - Phase 9 depends on each story that the release holds.
+- Phase 10 depends on Phase 9 and on the issue repairs in T070 and T071.
+- Phase 11 depends on T072 through T079. Its internal dependencies are stated in each task.
+- T083 depends on T082 and T091. T084 depends on T083.
+- T092 is the final pre-commit convergence checkpoint. It depends on T083 and T084.
+- T057 commits the analyzed and validated tree only after T092 passes.
 
 ### User Story Dependencies
 
@@ -573,20 +634,21 @@ the tasks that deliver it or prove it. The second speckit-analyze pass built the
 
 ### Parallel Opportunities
 
-- Lanes A, B, C, and D run at the same time after T001 and T002.
-- Each task with `[P]` in one phase can run at the same time as the other `[P]` tasks.
-- The lead agent writes T004, T005, T023, T027, and T028 while the lanes build.
+- A lane starts only when the listed prerequisites for its next task are complete.
+- Ready `[P]` tasks can run together only when their file sets do not overlap.
+- A builder does not start a later-phase task before the earlier phase completes.
 
 ---
 
 ## Parallel Example: Phase 2
 
 ```text
-Builder A: T006 to T015 (transport and fake cloud)
-Builder B: T034 to T037 (trigger table, filters, and parity)
-Builder C: T003 and T029 (vendored terminal and panel)
-Builder D: T016 to T020 and T022 (terminal core and gateway tests)
-Lead:      T004, T005, T023, T027, and T028
+After T001 and T002:
+Builder A: T006 (fake cloud server)
+Builder B: T009 (transport endpoint tests)
+Builder C: T016 (terminal history and input tests)
+
+Start each next task only after its listed prerequisite finishes.
 ```
 
 ---
@@ -691,13 +753,15 @@ Lead:      T004, T005, T023, T027, and T028
   I and II require (missing).
 
 - [X] T079 [P] CRITICAL: Extend
-  `tests/contract/websocket_streams/test_ws_sdk_contract.py` with a deterministic contract
-  test for the mistapi `WebSocketWrapper.start_with_trigger` path. Emit command output
-  while the REST trigger runs. Prove that no subscribed SDK consumer receives that output
-  because the SDK opens the WebSocket after the trigger. Also prove that the owned
-  subscribe-first path retains the same output. Use no network and state the checked
-  event count. This proof qualifies the bounded exception for an owned WebSocket under
-  the Technology Constraints, FR-001 through FR-003, and US3/AC1 (missing).
+  `tests/contract/websocket_streams/test_ws_sdk_contract.py` with deterministic SDK
+  limitation contracts. For `WebSocketWrapper.start_with_trigger`, emit one event while
+  the REST trigger runs. Prove that the SDK retains 0 of 1 events and that the owned
+  subscribe-first path retains 1 of 1 events. Split one screen control sequence across
+  two SDK updates. Prove that the SDK discards the first part and draws the second part as
+  text. Send the same frames through the owned transport. Prove that it preserves the
+  complete byte stream for xterm.js. Use no network and state both checked counts. These
+  proofs qualify the bounded exception under the Technology Constraints, FR-001 through
+  FR-003, and US3/AC1 (missing).
 
 - [X] T080 CRITICAL: After all source tasks, reword every feature commit subject to
   `version YY.MM.DD.HH.MM - description` with its UTC time. Preserve each commit content.
@@ -726,17 +790,19 @@ Lead:      T004, T005, T023, T027, and T028
   IV. The feature gates passed. Research R16 records the existing repository and Windows
   exceptions separately. (delivered)
 
-- [ ] T083 After T082, run `speckit.analyze` against the final specification, plan, and
-  tasks. Fix every CRITICAL and HIGH finding. Fix each lower finding that concerns the
-  feature scope. Run the analysis again until no actionable finding remains. Record the
-  summary from each analysis in `specs/3671-interactive-terminal/research.md`. Then add
-  the final evidence to T056 and the Constitution Check in the plan (partial).
+- [x] T083 After T082 and T091, run `speckit.analyze` against the specification, plan,
+  and tasks. This read-only task confirms the final artifact consistency. Record the
+  analysis result in `specs/3671-interactive-terminal/research.md`. If the analysis finds
+  an actionable item, complete the applicable implementation or test task before a new
+  analysis. Run the analysis until no actionable finding remains. Then add the result to
+  T056 and the Constitution Check in the plan. Research R19 records zero actionable
+  findings after the traceability correction. (delivered)
 
-- [ ] T084 After T083, rerun every gate from T082 against the final analyzed tree. If a
+- [x] T084 After T083, rerun every gate from T082 against the final analyzed tree. If a
   gate fails, fix the cause and rerun the complete affected gate set. Record the final
   commands, results, counts, and measurements in
-  `specs/3671-interactive-terminal/research.md` per Constitution IV, T054, and T056
-  (missing).
+  `specs/3671-interactive-terminal/research.md` per Constitution IV, T054, and T056.
+  Research R20 records the complete passing gate set. (delivered)
 
 ## Phase 11: Convergence Correction
 
@@ -801,10 +867,12 @@ Lead:      T004, T005, T023, T027, and T028
 - [X] T091 After T078 and T085 through T090, extend
   `tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py`.
   Include all 25 Python modules from the final analysis and each replacement leaf module.
-  Prove that every original path is compliant or became a compliant package. Check the 28
-  reported classes and the 19 reported functions. Print the counts of checked paths,
-  modules, classes, and functions. Rerun the bounded failure proof and the compliant-tree
-  proof per Constitution I and II (partial).
+  Prove that every original path is compliant or became a compliant package. Target the
+  28 classes and 19 functions that the analysis reported. Recursively scan every target
+  package to prevent a violation in a new leaf. Print the direct target counts and the
+  recursive path, module, class, and function counts. Rerun the bounded failure proof and
+  the compliant-tree proof per Constitution I and II (partial). The last run scanned 25
+  paths, 145 modules, 204 classes, and 619 functions.
 
 ### T081 evidence for completed convergence tasks
 
@@ -820,7 +888,7 @@ worktree on 2026-10-02.
 | T076 | `test_shell_first_output_marks_live_and_releases_queued_input`, `test_shell_logs_do_not_hold_address_input_or_output`, and `test_shell_history_preserves_raw_control_and_split_utf8_bytes`. Command: `python -m pytest tests\unit\websocket_streams\live\runners\test_ws_shell_runner.py -q`. | PASS. 18 passed. |
 | T077 | `test_j2_typed_text`, `test_j13_paste_keys`, `test_j19_split_screen_updates`, `test_j22_log_safety`, and `test_review_fr048_page_gets_no_shell_address`. Command: `python -m pytest tests\e2e\websockets_tab -q`. | PASS. 57 passed. |
 | T078 | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The red fixture failed at 6 module children. |
-| T079 | `TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention`. Command: `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py::TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention -q`. | PASS. 1 passed. The SDK path retained 0-of-1 events. The owned path retained 1-of-1 events. |
+| T079 | `test_trigger_order_controls_early_command_event_retention` and `test_split_screen_sequence_requires_owned_byte_retention`. Command: `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py -q`. | PASS. 8 passed. The ordering proof checks 1 event. The screen proof checks 2 frames. |
 | T085 | `test_stream_catalog_payload_hides_paths_and_marks_locks`, `test_stream_catalog_logs_bounded_json_without_catalog_keys`, and `test_utility_catalog_counts_match_contract`. Command: `python -m pytest tests\unit\websocket_streams\catalog -q`. | PASS. 18 passed. |
 | T086 | `test_identifier_logs_use_bounded_json_without_identifier_text`, `test_start_request_locks_shell_and_checks_confirmation`, and `test_picker_failure_returns_reason`. Command: `python -m pytest tests\unit\websocket_streams\intake -q`. | PASS. 32 passed. |
 | T087 | `test_post_subscription_flapping_consumes_retry_budget`, `test_stable_quiet_connections_receive_fresh_retry_budgets`, and `test_shell_address_filter_redacts_wss_address`. Command: `python -m pytest tests\unit\websocket_streams\live\runners\test_ws_channel_runner.py tests\unit\websocket_streams\live\runners\test_ws_message_text.py -q`. | PASS. 24 passed. |
@@ -829,9 +897,9 @@ worktree on 2026-10-02.
 | T090 | `test_post_without_the_form_token_is_refused`, `test_websocket_routes_do_not_leak_secrets`, `test_ready_terminal_gateway_reaches_the_manager`, and the 57 browser journeys. Commands: `python -m pytest tests\unit\websocket_streams\web -q` and `python -m pytest tests\e2e\websockets_tab -q`. | PASS. 49 unit tests and 57 browser tests passed. |
 | T091 | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The guard checked 27 mappings, 25 analyzed paths, 145 modules, 204 classes, and 619 functions. |
 
-- [ ] T092 After T085 through T091, repeat T080 through T084 in order. Reword commits only
-  after all correction commits exist. Update the plan and task evidence after T091 passes.
-  Then run all gates, run the final analysis, fix its findings, and run all affected gates
-  again. Do not treat the earlier T082 through T084 results as final evidence. Record the
-  final task-audit and STE results in `specs/3671-interactive-terminal/research.md` per
-  Constitution IV, T054, and T056 (partial).
+- [x] T092 After T083 and T084, complete the final pre-commit convergence checkpoint.
+  Confirm that the final analysis has no actionable finding and that all T084 gates pass.
+  Do not treat the earlier T082 results as final evidence. Record the final task-audit and
+  STE results in `specs/3671-interactive-terminal/research.md` per Constitution IV, T054,
+  and T056. Research R20 records zero actionable findings, the passing final gates, four
+  passing STE scores, and six open tasks before this checkpoint closed. (delivered)

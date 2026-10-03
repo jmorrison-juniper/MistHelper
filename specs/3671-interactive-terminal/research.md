@@ -314,8 +314,25 @@ round trip to the Mist cloud, so it does not measure the portal part.
 | - | - | - |
 | SC-001 echo | The portal adds less than 50 ms for 95 percent of keys | Each run sends 200 keys. The first run gave a median of 15.3 ms and a 95th percentile of 28.9 ms. A later run gave 31.9 ms and 48.2 ms. A run while a lint job used the full processor gave 34.0 ms and 58.0 ms. The median stays in the report as diagnostic evidence. The test enforces the criterion directly and fails when the 95th percentile is 50 ms or more. |
 | SC-007 output | 1 MiB shows in less than 3 seconds | 0.29 to 0.33 seconds in 2 runs. The test waits until the counter shows 1,048,640 bytes and the prompt shows after the output. |
-| SC-005 load | Another page answers in less than 1 second while 5 shells send output | 0.24 to 0.34 seconds in 3 runs. The test fails at 1 second or more. |
+| SC-005 load | Another page answers in less than 1 second while 5 shells send output | 0.24 to 0.34 seconds in 4 runs. The final nearest-rank p95 was 0.33 seconds. Each of five streams sent a positive byte count during each of ten measured loads. Each stream completed exactly 1 MiB. |
 | Paste split | A 256 KiB paste splits in less than 50 ms | 0.50 ms for 64 parts of 4,096 characters |
+
+### Device-bound paste evidence (SC-002)
+
+Command: `python -m pytest tests\unit\websocket_streams\live\terminal\test_ws_terminal_gateway.py -q`.
+Result: PASS. All 11 tests passed in 4.67 seconds. The SC-002 test completed 100 independent
+2,000-line paste runs through `TerminalGateway`, production `ShellClient`, and a fake shell
+device. The fake device received the complete ordered byte stream in all 100 runs.
+
+### Final performance and visual evidence
+
+Command: `python -m pytest tests\e2e\websockets_tab\test_websockets_terminal_performance.py -k sc005 -q -s`.
+Result: PASS. The nearest-rank p95 was 0.33 seconds across ten complete visible loads.
+Each of five open streams sent bytes during each measured load. Each stream then completed
+exactly 1 MiB. The `perf-sc005-busy-shells.png` screenshot shows a complete and readable
+Operations page after the tenth load. The `perf-sc007-one-mib.png` screenshot shows a readable
+terminal, the 1,048,640-byte counter, the final prompt, the action buttons, and the size footer.
+No text overlaps, broken font, or disconnected table content appears in either screenshot.
 
 ## R14. Current validation results
 
@@ -374,7 +391,7 @@ method docstrings.
 | Structural proof | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s` | PASS. 3 tests passed. The guard checked 27 mappings, 25 paths, 145 modules, 204 classes, and 619 functions. |
 | Structured logging | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_structured_logging.py -q` | PASS. 15 tests passed. |
 | Secret redaction | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_sensitive_redaction.py -q` | PASS. 1 test passed. |
-| SDK exception | `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py -q` | PASS. 7 tests passed. |
+| SDK exception | `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py -q` | PASS. 8 tests passed. The SDK kept 0 of 1 early events. The owned transport kept 1 of 1. The owned transport preserved 2 split frames. |
 | JavaScript syntax | `node --check` for each file under `src\websocket_streams\web\static\terminal` | PASS. Node checked 16 modules. |
 
 The final browser performance results passed all four limits. The echo test measured a
@@ -397,3 +414,105 @@ The complete repository commands identified exceptions outside the feature scope
 
 These exceptions do not change the feature result. T083 performs the final SpecKit
 analysis before the complete T084 validation pass.
+
+## R17. First T083 analysis and repairs
+
+The first final analysis reported 3 critical findings, 5 high findings, and 9 medium
+findings. The analysis made no file change. This repair pass addressed each feature
+finding before the second analysis.
+
+| Finding group | Repair |
+| - | - |
+| Deployment gate | Principle IV now stays PENDING until T057 through T061 finish. |
+| SDK exception proof | T079 and the plan now require early-event and split-screen proofs. |
+| Structural debt | Complexity Tracking now lists all 25 original Python violations. |
+| Dependencies | The graph now includes Phases 10 and 11, T083, T084, T092, and T057. |
+| Convergence coverage | A table maps T070, T071, T072 through T079, and T085 through T090. |
+| Function keys | The specification and T030 now define F1 through F12 and their byte sequences. |
+| Fixed screens | FR-012, FR-035, T040, and T043 now require one fixed 80-by-40 device size. |
+| Live command evidence | T055 now requires five complete Show ARP and five complete Show Route runs. |
+| Live warning | `_open_shell` verifies the exact warning before terminal input. |
+| Expiry boundary | A browser journey checks exactly 120,000 and 119,999 milliseconds before expiry. |
+| Clipboard access | T032 now requires the copied count, polite announcement, and four menu actions. |
+| Shared sessions | Browser journeys cover two-page input and page-close behavior. The controlled manager test covers idle cleanup. |
+| Browser support | The specification and plan now require Chrome 120 or newer and Edge 120 or newer. |
+| Keepalive timing | FR-006 now defines a 20-second ping and a 40-second close boundary. |
+| Analysis ownership | T056 is the rollup, T083 is the analysis loop, and T092 is the final checkpoint. |
+| Structural counts | T091 distinguishes 28 direct classes and 19 direct functions from recursive scan counts. |
+
+The second analysis must confirm that no actionable feature finding remains. T083 stays
+open until that result exists.
+
+## R18. Correct T083 analysis and second repair pass
+
+The next analysis was limited to `specs/3671-interactive-terminal/`. It reported 5 critical,
+6 high, 4 medium, and 1 low actionable findings. The earlier analysis of
+`specs/3671-websocket-terminal-foundation/` was not evidence for this feature.
+
+| Finding group | Repair |
+| - | - |
+| Process folders and screenshots | Constitution 1.7.0 defines unique process records and generated evidence exceptions. The plan records both checks. Issue #3750 will restructure the existing process-folder debt. |
+| User documentation | T052 now includes the WebSocket capability description in `README.md`. |
+| Exact SDK path and proof | The specification and plan name `WebSocketWrapper.start_with_trigger`. The plan records 1 event, 2 frames, and 8 passing contract tests. |
+| Paste ownership and UTF-8 | FR-024 assigns conversion and framing to the page. A browser journey checks exact UTF-8 device bytes. |
+| Process ownership | The plan requires one Gunicorn worker. A container contract pins `--workers 1`. |
+| Request limits | FR-046 defines the 16 KiB input cap, 4,096-character early queue, resize ranges, and shared 60-request window. A deterministic test accepts mixed-route request 60 and refuses request 61 before and after a clock rollback. |
+| Performance details | SC-005 defines two routes, ten visible loads, five 1 MiB bursts, p95, threshold, and zero failures. |
+| First-output limit | FR-019 and the plan apply the fixed 30-second value to utility commands. A shell waits until the cloud closes it. |
+| Commit order | T092 freezes the validated tree. T057 then commits it and verifies the history. |
+| Reconnect visibility | A browser journey checks the hidden no-gap state and visible buffer-gap warning. |
+| Font behavior | FR-031 defines 14 pixels by default, the 10-through-28 range, one-pixel steps, and browser persistence. |
+| Task semantics | The task format and Phase 2 example require completed prerequisites before parallel work. |
+
+A final analysis must confirm that no actionable feature finding remains. T083 remains open
+until that analysis passes.
+
+## R19. Final T083 analysis
+
+The final bounded analysis checked 45 requirements and 92 tasks. It found one medium
+ownership issue in the traceability table. Four requirements mapped delivery to the
+read-only analysis task. The correction mapped each requirement to its implementation or
+test task. It also made T083 explicitly read-only.
+
+The confirmation analysis found no actionable item. It reported 100 percent requirement
+coverage, no ambiguity, no coverage gap, no constitution conflict, and no unmapped work.
+Principle IV remains pending only because T057 through T061 own delivery and deployment.
+
+## R20. Final T084 and T092 gate evidence
+
+The final gates ran on 2026-10-03. The Python and browser suites ran sequentially, because
+they share local CPU, sockets, and browser resources. A simultaneous diagnostic run caused
+one timing failure in each suite. Both tests passed alone before the sequential gate run.
+
+| Gate | Exact command | Result |
+| - | - | - |
+| Compile | `python -m compileall -q MistHelper.py src tests` | PASS. The command reported no error. |
+| Ruff | `python -m ruff check .` | PASS. |
+| Black | `python -m black --check .` | PASS. Black checked 2,174 files. |
+| mypy | `python -m mypy src MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | PASS. mypy checked 782 files. |
+| Bandit | `python -m bandit -r src -c pyproject.toml` | PASS. Bandit checked 195,355 lines and reported zero findings. |
+| Vulture | `python -m vulture src MistHelper.py wsgi.py web_portal --min-confidence 70` | PASS. Vulture reported zero findings. |
+| pydocstyle | `python -m pydocstyle src` | PASS. |
+| Interrogate | `python -m interrogate src --fail-under 90` | PASS. Coverage was 99.7 percent. |
+| Complexity | `radon cc src MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j \| complexity-gate --max 10` | PASS. All functions stayed at complexity 10 or less. |
+| Pylint | `$env:PYTHONUTF8='1'; python -m pylint src --fail-under=9.5` | PASS. The score was 9.83 out of 10. |
+| WebSocket Python | `python -m pytest tests/unit/websocket_streams tests/contract/websocket_streams -q` | PASS. 363 tests passed in 33.15 seconds. |
+| Browser | `python -m pytest tests/e2e/websockets_tab -q` | PASS. 63 tests passed in 225.08 seconds. |
+| Structural proof | `python -m pytest tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py -q -s` | PASS. 3 tests checked 27 mappings, 25 paths, 145 modules, 204 classes, and 622 functions. |
+| Log and secret safety | `python -m pytest tests/unit/websocket_streams/live/transport/runtime/test_structured_logging.py tests/unit/websocket_streams/web/test_ws_secret_guard.py -q` | PASS. 16 tests passed. |
+| SDK exception | `python -m pytest tests/contract/websocket_streams/test_ws_sdk_contract.py -q` | PASS. 8 tests passed. |
+| One-worker deployment | `python -m pytest tests/contract/container/test_gunicorn_control_sockets.py::TestGunicornStartupControls::test_web_portal_uses_one_worker_for_process_local_terminal_state -q` | PASS. 1 test passed. Three other tests need Unix sockets and remain tracked by #3370. |
+| JavaScript syntax | `node --check` for each JavaScript file under the terminal folder | PASS. Node checked 16 modules. |
+| STE | `ste-linter --config .ste-linter.toml --min-score 80 specs/3671-interactive-terminal/spec.md specs/3671-interactive-terminal/plan.md specs/3671-interactive-terminal/tasks.md specs/3671-interactive-terminal/research.md --quiet` | PASS. The final four scores were 96, 96, 96, and 97. |
+
+The final performance evidence remained inside the passing browser suite. SC-005 measured a
+0.33-second nearest-rank p95 while all five streams sent bytes during every load. Each
+stream completed exactly 1 MiB. SC-007 displayed 1 MiB in approximately 0.30 seconds.
+
+The first final task audit found nine open tasks. They were T056 through T061, T083, T084,
+and T092. The analysis and gate evidence completed T056, T083, and T084. The next audit
+found six open tasks. They were T057 through T061 and T092. This result confirms that only
+the current checkpoint and the five delivery tasks remained open. T092 completes the
+checkpoint. T057 through T061 correctly remain open for commit, pull request, merge, image
+verification, and local deployment. The final audit after T092 found only these five
+planned delivery tasks.

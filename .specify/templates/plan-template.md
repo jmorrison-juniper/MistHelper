@@ -42,6 +42,16 @@
 
 [Gates determined based on constitution file]
 
+For repository structure and generated files:
+
+- If repository workflow requires a direct child in an established process
+  folder, confirm that the change adds only its own unique record.
+- Record existing process-folder debt and a separate incremental remediation
+  action.
+- Confirm that product outputs remain under `data/`.
+- Generated test evidence MAY use the established, git-ignored
+  `test-artifacts/` folder.
+
 For a feature that uses Juniper Mist Cloud:
 
 - Confirm that every REST request uses a working mistapi method.

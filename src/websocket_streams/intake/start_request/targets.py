@@ -40,12 +40,22 @@ class TargetValidator:
     ) -> tuple[str, ...]:
         """Return checked values for one target field."""
         values = raw if isinstance(raw, list) else [raw]  # Normalize one value to a list.
+        limit = self._target_limit(spec, definition)  # Read the route-specific target limit.
+        if raw is None or not values or len(values) > limit:  # Enforce required and repeatable counts.
+            raise StreamRequestError("bad_request", "The target count is not valid.", {"field": spec.name})
+        return self._checked_values(spec, values)  # Return unique UUID text for path construction.
+
+    @staticmethod
+    def _target_limit(spec: FieldSpec, definition: ChannelDefinition | UtilityDefinition) -> int:
+        """Return the permitted target count for one field."""
         repeatable = (
             isinstance(definition, ChannelDefinition) and definition.repeatable == spec.name
         )  # Read limit mode.
-        limit = 10 if repeatable else 1  # Repeatable channel targets allow ten values.
-        if raw is None or not values or len(values) > limit:  # Enforce required and repeatable counts.
-            raise StreamRequestError("bad_request", "The target count is not valid.", {"field": spec.name})
+        return 10 if repeatable else 1  # Repeatable channel targets allow ten values.
+
+    @staticmethod
+    def _checked_values(spec: FieldSpec, values: list[object]) -> tuple[str, ...]:
+        """Return unique UUID text for one target field."""
         checked = tuple(str(value) for value in values if IdentityIdentifierRules.is_uuid(value))  # Keep UUIDs only.
         if len(checked) != len(values) or len(set(checked)) != len(checked):  # Enforce shape and uniqueness.
             raise StreamRequestError("bad_request", "The target value is not valid.", {"field": spec.name})

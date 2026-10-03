@@ -105,3 +105,10 @@ class ScreenRunner(DeviceTerminalRunner):
             "The screen command started.", "The device ended the screen command.", behavior.trigger, behavior
         )  # Keep mode text and actions in one immutable contract.
         super().__init__(opening, sink, configuration)  # Build the shared terminal lifecycle.
+
+    def resize(self, cols: int, rows: int) -> None:
+        """Keep the fixed screen size after the initial device frame."""
+        logger.emit(
+            logging.INFO, "screen_resize_ignored", {"count": cols, "code": rows}
+        )  # Log the rejected panel size.
+        logger.emit(logging.DEBUG, "screen_resize_ignore_completed", {"status": "fixed"})  # Confirm fixed geometry.

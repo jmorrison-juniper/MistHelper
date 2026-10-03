@@ -68,6 +68,7 @@ class FakeWebSocketServices:
         self._next_id = 1  # Deterministic identifiers make tests easy to read.
         self.shell_inputs: list[dict[str, object]] = []  # Record shell input forms.
         self.terminal_data: dict[str, bytes] = {}  # Store fake terminal byte history by session.
+        self.message_gap = False  # Let a browser journey expose a reconnect buffer gap.
         lifecycle = SimpleNamespace(
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group fake session lifecycle behavior.
@@ -88,6 +89,7 @@ class FakeWebSocketServices:
             self._next_id = 1  # Reset identifiers.
             self.shell_inputs.clear()  # Remove prior shell input.
             self.terminal_data.clear()  # Remove prior terminal bytes.
+            self.message_gap = False  # Start each browser journey without lost buffered messages.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -133,7 +135,7 @@ class FakeWebSocketServices:
             messages = [message for message in session.messages if message.seq > after]  # New messages.
             next_after = messages[-1].seq if messages else after  # Highest returned sequence.
             payload = self._payload(session)  # Copy the session card state.
-        return MessagePage(payload, messages, next_after, 1, False)  # Read.
+        return MessagePage(payload, messages, next_after, 1, self.message_gap)  # Expose deterministic gap state.
 
     def stop_session(self, session_id: str) -> dict[str, object]:
         """Stop one fake session."""
@@ -476,6 +478,20 @@ def test_channel_stream_with_multi_site_selection(page: Any, websocket_portal: s
     page.get_by_test_id("ws-session-title").wait_for(timeout=READY_TIMEOUT_MS)  # Session card.
     page.locator('[data-testid="ws-output"]').get_by_text('"count"').nth(0).wait_for(timeout=READY_TIMEOUT_MS)  # JSON.
     shot = screenshot(page, "01-channel-stream.png")  # Keep evidence.
+    assert shot.exists()  # The screenshot was written.
+
+
+def test_channel_reconnect_gap_notice(page: Any, websocket_portal: str, fake_services: FakeWebSocketServices) -> None:
+    """Show no warning for a complete reconnect and a warning after a buffer gap."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    page.get_by_test_id("ws-catalog-entry-site.stats.devices").click()  # Choose the channel.
+    page.locator('[data-testid="ws-field-site_id"]').select_option(SITE_ID)  # Choose one site.
+    page.get_by_test_id("ws-start-button").click()  # Start the stream.
+    notice = page.get_by_test_id("ws-message-gap")  # Read the accessible reconnect warning.
+    notice.wait_for(state="hidden", timeout=READY_TIMEOUT_MS)  # A complete buffer has no gap warning.
+    fake_services.message_gap = True  # Simulate a reconnect after the message buffer dropped output.
+    notice.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # The next poll must report the gap.
+    shot = screenshot(page, "01b-channel-reconnect-gap.png")  # Keep readable warning evidence.
     assert shot.exists()  # The screenshot was written.
 
 
