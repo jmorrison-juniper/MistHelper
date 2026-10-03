@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import logging
 import math
@@ -12,9 +13,12 @@ from contextlib import closing, contextmanager
 from http.client import HTTPConnection
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
+from uuid import uuid4
 
-from flask import Flask, Response, jsonify, render_template, request
-from playwright.sync_api import ConsoleMessage, Page, expect
+from flask import Flask, Response, current_app, jsonify, render_template, request
+from playwright.sync_api import ConsoleMessage, Page, Route, expect
+from playwright.sync_api import Response as BrowserResponse
 from werkzeug.serving import make_server
 
 from web_portal.routes.data import data_bp
@@ -55,6 +59,13 @@ class WidePreviewFixture:
             writer.writerows(self.rows)
         logging.debug("Wrote %d columns and %d records.", len(self.columns), len(self.rows))
 
+    def export_page_bytes(self) -> bytes:
+        """Match the existing export format without changing the source file."""
+        content = io.StringIO(newline="")
+        writer = csv.writer(content, quoting=csv.QUOTE_ALL, lineterminator="\n")
+        writer.writerows([self.columns, *self.rows[:50]])
+        return content.getvalue()[:-1].encode("utf-8")
+
 
 class DataPreviewHarness:
     """Serve actual data routes, templates, and assets on an assigned loopback port."""
@@ -62,6 +73,7 @@ class DataPreviewHarness:
     def __init__(self, directory: Path) -> None:
         """Keep the harness separate from Mist sessions and database services."""
         root = Path(__file__).resolve().parents[2] / "web_portal"
+        self.policy = self.RequestPolicy(directory)
         self.fixture = WidePreviewFixture(directory)
         self.fixture.write()
         self.url = ""
@@ -73,10 +85,13 @@ class DataPreviewHarness:
                 title="Compact preview fixture", theme="dark", accent_color="#0077B6", logo_url="/static/favicon.svg"
             ),
         )
+        self.app.extensions["compact_preview_policy"] = self.policy
         self.configure()
 
     def configure(self) -> None:
         """Use the real data blueprint and only read-only auxiliary responses."""
+        self.app.before_request(self.policy.before_request)
+        self.app.after_request(self.policy.after_request)
         self.app.register_blueprint(data_bp)
         self.app.jinja_env.globals["csrf_token"] = lambda: "fixture-csrf"
         endpoints = {
@@ -108,12 +123,58 @@ class DataPreviewHarness:
             return jsonify(error="The fixture does not provide this route."), 404
         return jsonify(answers[resource])
 
+    class RequestPolicy:
+        """Refuse another root, missing ownership, or an execution request."""
+
+        def __init__(self, directory: Path) -> None:
+            """Bind one fake-only owner to an existing temporary directory."""
+            self.root = directory.resolve(strict=True)
+            repository = Path(__file__).resolve().parents[2]
+            if not self.root.is_dir() or self.root.is_relative_to(repository):
+                raise ValueError("The preview fixture requires a temporary directory outside the repository.")
+            self.headers = {
+                "X-MistHelper-Preview-Owner": uuid4().hex,
+                "X-MistHelper-Preview-Root": self.root.name,
+                "X-MistHelper-Preview-Columns": "43",
+                "X-MistHelper-Preview-Records": "112",
+            }
+            self.counts = dict(requests=0, refused=0, responses=0, real_mist=0, real_stores=0, real_operations=0)
+
+        @staticmethod
+        def permits(method: str, path: str) -> bool:
+            """Allow only the fixture pages, assets, and read-only data routes."""
+            pages = {"/", "/data", "/operations", "/maps", "/websockets"}
+            reads = {"/api/data/files", "/api/themes", "/api/operations/list", "/api/operations/active"}
+            return method in {"GET", "HEAD"} and (
+                path in pages or path in reads or path.startswith(("/static/", "/api/data/preview/"))
+            )
+
+        def before_request(self) -> tuple[Response, int] | None:
+            """Check ownership before any route can read a file or call a service."""
+            logging.info("Checking the fake preview request owner.")
+            self.counts["requests"] += 1
+            owned = all(request.headers.get(name) == value for name, value in self.headers.items())
+            root_matches = current_app.config.get("DATA_DIR") == str(self.root)
+            if not owned or not root_matches or not self.permits(request.method, request.path):
+                self.counts["refused"] += 1
+                logging.warning("Caution: the preview fixture refused a request before its route ran.")
+                return jsonify(error="The preview fixture ownership check refused this request."), 403
+            logging.debug("Checked 1 owned request with 43 columns and 112 fixture records.")
+            return None
+
+        def after_request(self, response: Response) -> Response:
+            """Identify every fixture response without a live account or store."""
+            response.headers.update(self.headers)
+            self.counts["responses"] += 1
+            return response
+
 
 class LoopbackPreviewServer:
     """Own one temporary server without changing production services."""
 
     def __init__(self, app: Flask) -> None:
         """Let the operating system assign the port without a separate probe."""
+        self.policy = app.extensions["compact_preview_policy"]
         self.server = make_server("127.0.0.1", 0, app, threaded=True)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.url = f"http://127.0.0.1:{self.server.server_port}"
@@ -132,10 +193,11 @@ class LoopbackPreviewServer:
     def check_ready(self) -> None:
         """Require a successful response from the actual data listing route."""
         with closing(HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)) as connection:
-            connection.request("GET", "/api/data/files")
+            connection.request("GET", "/api/data/files", headers=self.policy.headers)
             response = connection.getresponse()
             response.read()
-            if response.status != 200:
+            owned = all(response.getheader(name) == value for name, value in self.policy.headers.items())
+            if response.status != 200 or not owned:
                 raise RuntimeError(f"The preview server readiness request returned {response.status}.")
         logging.debug("The isolated preview server answered its readiness request.")
 
@@ -148,6 +210,7 @@ class LoopbackPreviewServer:
         if self.thread.is_alive():
             raise RuntimeError("The isolated preview server did not stop.")
         logging.debug("Stopped 1 isolated preview server.")
+        print(f"Preview request ownership counts: {self.policy.counts}. Owned servers remaining: 0.")
 
 
 class PreviewRowBudget:
@@ -183,12 +246,13 @@ class PreviewRowBudget:
     )
 
     @classmethod
-    def capture(cls, page: Page, destination: Path) -> dict[str, Any]:
-        """Save geometry and a screenshot before the budget can fail."""
+    def capture(cls, page: Page, destination: Path, screenshots: bool = False) -> dict[str, Any]:
+        """Measure geometry independently of the optional screenshot setting."""
         logging.info("Measuring every rendered preview row.")
         measured: dict[str, Any] = page.evaluate(cls.geometry_script)
         measured["viewport"] = page.viewport_size
-        page.screenshot(path=str(destination.with_suffix(".png")), full_page=False)
+        if screenshots:
+            page.screenshot(path=str(destination.with_suffix(".png")), full_page=False)
         destination.with_suffix(".json").write_text(json.dumps(measured, indent=2), encoding="utf-8")
         print(
             f"Checked {len(measured['heights'])} preview rows and {measured['columnCount']} columns. "
@@ -218,14 +282,38 @@ class PreviewRowBudget:
 class PreviewBrowser:
     """Record browser errors rather than hiding failures in an offline journey."""
 
-    def __init__(self, page: Page) -> None:
+    def __init__(self, page: Page, harness: DataPreviewHarness, screenshots: bool = False) -> None:
         """Collect console errors and JavaScript exceptions for each journey."""
         self.page = page
         self.console_errors: list[str] = []
         self.page_errors: list[str] = []
         self.expected_http_errors: tuple[int, ...] = ()
+        self.owner_errors: list[str] = []
+        self.response_count = 0
+        self.url = harness.url
+        self.owner_headers = harness.policy.headers
+        self.screenshots = screenshots
+        page.context.set_extra_http_headers(self.owner_headers)
+        page.context.route("**/*", self.check_route)
+        page.on("response", self.record_response)
         page.on("console", self.record_console)
         page.on("pageerror", lambda error: self.page_errors.append(str(error)))
+
+    def check_route(self, route: Route) -> None:
+        """Block a foreign origin or an execution route before network delivery."""
+        target = urlsplit(route.request.url)
+        owned = target.scheme == "http" and target.netloc == urlsplit(self.url).netloc
+        if not owned or not DataPreviewHarness.RequestPolicy.permits(route.request.method, target.path):
+            self.owner_errors.append("The browser requested a route outside the owned read-only fixture.")
+            route.abort("blockedbyclient")
+            return
+        route.continue_()
+
+    def record_response(self, response: BrowserResponse) -> None:
+        """Require all response ownership and fixture-shape headers to match."""
+        self.response_count += 1
+        if any(response.headers.get(name.lower()) != value for name, value in self.owner_headers.items()):
+            self.owner_errors.append("A browser response has missing or foreign fixture ownership headers.")
 
     def record_console(self, message: ConsoleMessage) -> None:
         """Keep every error for the final exact check."""
@@ -254,6 +342,8 @@ class PreviewBrowser:
     def verify(self) -> None:
         """Reject unexpected errors and count deliberate HTTP error cases."""
         logging.info("Checking browser errors for the preview journey.")
+        if self.owner_errors or self.response_count == 0:
+            raise AssertionError(f"Checked {self.response_count} responses. Ownership errors: {self.owner_errors!r}.")
         if self.page_errors:
             raise AssertionError(f"The browser reported JavaScript exceptions: {self.page_errors!r}.")
         if len(self.console_errors) != len(self.expected_http_errors):
@@ -263,3 +353,6 @@ class PreviewBrowser:
             if not message.startswith(expected):
                 raise AssertionError(f"The expected HTTP {status} error differs from {message!r}.")
         logging.debug("Checked %d expected HTTP errors and 0 JavaScript exceptions.", len(self.expected_http_errors))
+        print(
+            f"Checked {self.response_count} owned browser responses. Foreign requests and real execution callbacks: 0."
+        )

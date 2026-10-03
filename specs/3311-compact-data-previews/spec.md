@@ -82,7 +82,10 @@ Run the existing data browser and results table tests.
 - **FR-007**: Use the real modal template, renderer, and styles in browser tests.
 - **FR-008**: Keep test files under temporary directories and keep the server on loopback with an assigned port.
 - **FR-009**: Start no production service, database, container, Mist API call, or firmware operation.
-- **FR-010**: Save a screenshot for each measured width and retain browser traces on failure.
+- **FR-010**: Keep recording optional and disabled by default. Enable screenshots explicitly for each required width proof.
+- **FR-011**: Fail required browser cases when the timeout or Playwright capability is unavailable.
+- **FR-012**: Require exact ownership and fixture-shape headers on every fixture request and response.
+- **FR-013**: Refuse foreign origins, execution requests, and a changed data root before a route runs.
 
 ### Key Entities
 
@@ -100,6 +103,8 @@ Run the existing data browser and results table tests.
 - **SC-004**: Full values remain exact through pointer, keyboard, touch, and export.
 - **SC-005**: All four shipped themes and the existing results table retain their behavior.
 - **SC-006**: The required browser cases run without skips or unexpected console errors.
+- **SC-007**: The same browser decisions pass with screenshots, traces, and video disabled.
+- **SC-008**: The fixture reports zero real Mist calls, store calls, and execution callbacks.
 
 ## Assumptions
 
@@ -107,3 +112,12 @@ The supported browsers provide the native HTML dialog element.
 The full-value dialog stays inside the Bootstrap modal for focus control.
 The issue requires no backend change or new dependency.
 The parent must authorize remote publication with an exact verified main commit.
+
+## Local Refresh Boundary
+
+The parent authorized a local refresh on `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`.
+That authorization permits no push, pull request, workflow, merge, or delivery.
+The original commit remains at `preservation/3311-original-7619861`.
+The future publication grant must name the accepted commit after issue #3395.
+The refresh changes only owned test behavior and these feature documents.
+The product CSS and JavaScript retain their original repair bytes.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -17,6 +18,8 @@ from tests.support.data_preview_harness import (
     PreviewRowBudget,
 )
 
+pytest_plugins = [__name__]  # Register the already rewritten module before any required case can receive a skip.
+
 
 @pytest.fixture
 def compact_portal(tmp_path: Path) -> Iterator[DataPreviewHarness]:
@@ -28,9 +31,11 @@ def compact_portal(tmp_path: Path) -> Iterator[DataPreviewHarness]:
 
 
 @pytest.fixture
-def preview_browser(page: Page, compact_portal: DataPreviewHarness) -> Iterator[PreviewBrowser]:
+def preview_browser(
+    page: Page, compact_portal: DataPreviewHarness, pytestconfig: pytest.Config
+) -> Iterator[PreviewBrowser]:
     """Keep every console error visible to the test result."""
-    browser = PreviewBrowser(page)
+    browser = PreviewBrowser(page, compact_portal, screenshots=pytestconfig.getoption("screenshot") == "on")
     browser.open(compact_portal.url, compact_portal.fixture.filename)
     yield browser
     browser.verify()
@@ -64,7 +69,7 @@ class TestCompactPreviewRows:
             arg=theme,
         )
         expect(page.locator("#dataPreviewPageInfo")).to_have_text("Page 1 of 3 (112 rows)")
-        measured = PreviewRowBudget.capture(page, tmp_path / f"preview-{theme}-{width}")
+        measured = PreviewRowBudget.capture(page, tmp_path / f"preview-{theme}-{width}", preview_browser.screenshots)
         assert PreviewRowBudget.check(measured["heights"]) == 50
         assert PreviewRowBudget.check(measured["headerHeights"]) == 1
         assert measured["columnCount"] == 43
@@ -108,7 +113,9 @@ class TestCompactPreviewRows:
         preview_browser.expected_http_errors = (status,) if status >= 400 else ()
         page.route(
             "**/api/data/preview/OrgMarvisActions.csv?**",
-            lambda route: route.fulfill(status=status, body=body, content_type="application/json"),
+            lambda route: route.fulfill(
+                status=status, body=body, content_type="application/json", headers=preview_browser.owner_headers
+            ),
         )
         page.evaluate("() => DataPreviewModal.openPreview('OrgMarvisActions.csv')")
         expect(page.locator("#dataPreviewBody .text-danger")).to_have_text(message)
@@ -182,7 +189,7 @@ class TestFullPreviewCellValues:
     ) -> None:
         """Touch targets keep the same row budget and exact full text."""
         page = preview_browser.page
-        measured = PreviewRowBudget.capture(page, tmp_path / "preview-touch-1024")
+        measured = PreviewRowBudget.capture(page, tmp_path / "preview-touch-1024", preview_browser.screenshots)
         assert PreviewRowBudget.check(measured["heights"]) == 50
         button = page.locator("#modalPreviewTable tbody tr").first.locator("td").nth(1).get_by_role("button")
         bounds = button.bounding_box()
@@ -192,7 +199,8 @@ class TestFullPreviewCellValues:
         dialog = page.get_by_role("dialog", name="Full cell value", exact=True)
         expect(dialog).to_be_visible()
         assert dialog.locator("#dataPreviewCellText").text_content() == compact_portal.fixture.rows[0][1]
-        dialog.screenshot(path=str(tmp_path / "preview-touch-full-value.png"))
+        if preview_browser.screenshots:
+            dialog.screenshot(path=str(tmp_path / "preview-touch-full-value.png"))
         dialog.get_by_role("button", name="Close full value", exact=True).tap()
         expect(dialog).not_to_be_visible()
         expect(button).to_be_focused()
@@ -206,10 +214,11 @@ class TestFullPreviewCellValues:
             columns=[header, "empty", "zero", "false", "special"],
             rows=[[None, "", 0, False, special]],
             total_rows=1,
-            total_pages=1,
-            page=1,
         )
-        page.route("**/api/data/preview/Values.db/rows?**", lambda route: route.fulfill(json=answer))
+        page.route(
+            "**/api/data/preview/Values.db/rows?**",
+            lambda route: route.fulfill(json=answer, headers=preview_browser.owner_headers),
+        )
         page.evaluate("() => DataPreviewModal.openSqliteTable('Values.db', 'rows')")
         expect(page.locator("#modalPreviewTable tbody tr")).to_have_count(1)
         assert page.locator("#modalPreviewTable th").first.text_content() == header
@@ -299,6 +308,7 @@ class TestExistingPreviewControls:
             page.locator("#dataPreviewModal").get_by_role("button", name="Export CSV", exact=True).click()
         download = downloaded.value
         assert download.suggested_filename == "preview_export.csv"
+        assert download.path().read_bytes() == compact_portal.fixture.export_page_bytes()
         with download.path().open(encoding="utf-8", newline="") as handle:
             exported = list(csv.reader(handle))
         assert exported == [compact_portal.fixture.columns, *compact_portal.fixture.rows[:50]]
@@ -328,3 +338,17 @@ class TestExistingPreviewControls:
         page.locator("#resultsBody tr").first.click()
         expect(page.get_by_test_id("results-row-detail")).to_be_visible()
         assert page.get_by_test_id("results-row-detail").locator("dt").count() == 43
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Fail required preview cases when a test capability is unavailable."""
+    checked = sum(item.path.name == "test_data_preview_row_height.py" for item in items)
+    if checked == 0:
+        return
+    logging.info("Checking capabilities for %d required preview browser cases.", checked)
+    for plugin, package in (("timeout", "pytest-timeout"), ("playwright", "pytest-playwright")):
+        if not config.pluginmanager.hasplugin(plugin):
+            raise pytest.UsageError(
+                f"Checked {checked} required preview cases. {package} is missing. Required preview cases cannot skip."
+            )
+    logging.debug("Checked %d required preview cases. All test capabilities are available.", checked)
