@@ -128,7 +128,8 @@ def test_a_capture_that_fails_another_rule_is_not_adopted(change: dict[str, str]
 def test_a_partial_capture_with_verified_lifecycle_is_adopted() -> None:
     """Issue #3375: partial content remains reusable after the lifecycle verifies."""
     store = store_with(capture("cap-partial", capture_status="partial"))  # The content is incomplete.
-    assert store.newest_precheck(SITE_ID) == "cap-partial", "The stand-in rejected a lifecycle-verified partial capture."
+    adopted = store.newest_precheck(SITE_ID)  # Read the lifecycle-verified partial capture.
+    assert adopted == "cap-partial", "The stand-in rejected a lifecycle-verified partial capture."
 
 
 def test_the_store_order_decides_a_tie() -> None:
@@ -214,7 +215,7 @@ class TestPrecheckTierReader:
             (
                 capture("cap-other-site", tier=3, site_id=OTHER_SITE_ID),
                 capture("cap-post", tier=3, role="post"),
-                capture("cap-failed", tier=3, capture_status="failed"),
+                capture("cap-failed", tier=3, state="failed"),
                 capture("cap-owned", tier=3, run_id=OWNING_RUN),
             ),
         ],
