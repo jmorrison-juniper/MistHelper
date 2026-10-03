@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch  # WHY: isolate API and persistence b
 
 import pytest  # WHY: provide fixtures and parameterized response cases.
 
-from src.export.org_webhook_deliveries_exporter import OrgWebhookDeliveriesExporter
+from src.operations.exporting.export.org_webhook_deliveries_exporter import OrgWebhookDeliveriesExporter
 
-_MODULE = "src.export.org_webhook_deliveries_exporter"  # WHY: keep patch targets stable.
+_MODULE = "src.operations.exporting.export.org_webhook_deliveries_exporter"  # WHY: keep patch targets stable.
 
 
 @pytest.fixture
