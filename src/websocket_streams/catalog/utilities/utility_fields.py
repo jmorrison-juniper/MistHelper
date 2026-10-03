@@ -4,6 +4,7 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import inspect  # SDK signatures define the supported parameters.
 from collections.abc import Callable  # Type SDK utility callables.
+from dataclasses import replace  # Reuse the shared field record with one scoped hint.
 
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec  # Build immutable field records.
 from src.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # Read enum values from SDK annotations.
@@ -64,7 +65,7 @@ class UtilityFieldFactory:
             inspect.signature(function).parameters.values(),
         )  # Read annotations and parameters from the installed SDK.
         fields = [
-            self.parameter(name, parameter, hints.get(parameter.name))
+            self.parameter(family, name, parameter, hints.get(parameter.name))
             for parameter in parameters
             if parameter.name not in self._SKIP_PARAMS and parameter.name != "port"
         ]  # Convert each operator-controlled parameter.
@@ -74,15 +75,31 @@ class UtilityFieldFactory:
             fields.insert(0, self.named("interfaces", True, family))  # Add the derived interface list first.
         return tuple(fields)  # Preserve SDK order after derived fields.
 
-    def parameter(self, function_name: str, parameter: inspect.Parameter, annotation: object) -> FieldSpec:
+    def parameter(
+        self,
+        family: str,
+        function_name: str,
+        parameter: inspect.Parameter,
+        annotation: object,
+    ) -> FieldSpec:
         """Build one field from SDK parameter metadata."""
         required = parameter.default is inspect.Signature.empty  # Detect required SDK parameters.
         if function_name == "retrieveDhcpLeases" and parameter.name == "network":  # Preserve the contract override.
             required = True  # Require the network for lease retrieval.
         choices = SdkAnnotation.enum_choices(annotation)  # Read fixed values from the resolved enum.
-        return self.named(parameter.name, required, "", choices)  # Apply the central field contract.
+        field = self.named(parameter.name, required, "", choices)  # Apply the central field contract.
+        if family == "srx" and function_name == "retrieveRoutes" and parameter.name == "protocol":
+            return replace(field, hint=UtilityText.hint("protocol", "srx.retrieveRoutes"))
+        return field  # Preserve shared field behavior for every other parameter.
 
-    def named(self, name: str, required: bool, family: str, choices: tuple[str, ...] = ()) -> FieldSpec:
+    def named(
+        self,
+        name: str,
+        required: bool,
+        family: str,
+        choices: tuple[str, ...] = (),
+        utility_key: str = "",
+    ) -> FieldSpec:
         """Build one field from the central contract table."""
         if name not in self._SPECS:  # Refuse an SDK parameter outside the reviewed contract.
             raise RuntimeError(f"Unknown WebSocket utility parameter {name}")  # Stop startup with exact evidence.
