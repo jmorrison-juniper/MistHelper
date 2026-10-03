@@ -4528,6 +4528,10 @@
             window.sessionStorage.setItem(storageKey, JSON.stringify(selected));
         }
 
+        function countNoun(count, singular, plural) {
+            return count === 1 ? singular : plural;
+        }
+
         function replaceSelection(runIds) {
             var retained = new Set(runIds);
             checkboxes.forEach(function (field) { field.checked = retained.has(field.value); });
@@ -4566,9 +4570,15 @@
                     }
                 }).then(function (preview) {
                     replaceSelection(preview.run_ids || []);
-                    summary.textContent = preview.run_count + " run(s) across " + preview.site_count + " site(s).";
+                    summary.textContent = preview.run_count + " "
+                        + countNoun(preview.run_count, "run", "runs")
+                        + " across " + preview.site_count + " "
+                        + countNoun(preview.site_count, "site", "sites") + ".";
                     removed.textContent = preview.removed_run_ids.length
-                        ? preview.removed_run_ids.length + " selection(s) were removed because they are not visible in this scope."
+                        ? "The portal removed " + preview.removed_run_ids.length + " "
+                        + countNoun(preview.removed_run_ids.length, "selected run", "selected runs")
+                        + ", because this scope does not show "
+                        + countNoun(preview.removed_run_ids.length, "it", "them") + "."
                         : "Every selected run is visible in this scope.";
                     phrase.textContent = preview.confirmation;
                     previewAction = preview.action || "";

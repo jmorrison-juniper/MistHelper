@@ -405,18 +405,18 @@
 }
 
 .history-table.history-table-sites thead th:nth-child(1) {
-    width: 12%;
+    width: 8%;
 }
 
 /* A site name such as `E2E Stored Poll Site` fits this share at a window of
  * 1280 pixels. A longer name clips, and the title attribute holds the whole
  * name. */
 .history-table.history-table-sites thead th:nth-child(2) {
-    width: 13%;
+    width: 10%;
 }
 
 .history-table.history-table-sites thead th:nth-child(3) {
-    width: 14%;
+    width: 10%;
 }
 
 .history-table.history-table-sites thead th:nth-child(4) {
@@ -424,15 +424,15 @@
 }
 
 .history-table.history-table-sites thead th:nth-child(5) {
-    width: 9%;
+    width: 8%;
 }
 
 .history-table.history-table-sites thead th:nth-child(6) {
-    width: 7%;
+    width: 8%;
 }
 
 .history-table.history-table-sites thead th:nth-child(7) {
-    width: 12%;
+    width: 24%;
 }
 
 .history-table.history-table-sites thead th:nth-child(8) {
@@ -444,13 +444,15 @@
 }
 
 .history-table.history-table-sites thead th:nth-child(10) {
-    width: 10%;
+    width: 9%;
 }
 
 /* The row header of this table reads as a plain cell. `.portal-table` styles
  * the `td` element alone, so the browser default would center the identifier
  * and print it in bold beside seven left aligned cells. */
-.history-table tbody th {
+.history-table tbody th,
+.run-history-table tbody th,
+.history-operation-table tbody th {
     background-color: var(--portal-surface);
     border-bottom: 1px solid var(--portal-table-border);
     padding: 0.5rem 0.75rem;
@@ -467,6 +469,8 @@
  * up with the taller action cell. */
 .history-table td {
     vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* The identifier stays on one line and ends in an ellipsis. The `title`
@@ -495,6 +499,43 @@
     white-space: nowrap;
 }
 
+/* Issue #3495. The device type phrase must fit at common desktop widths. */
+.history-table:not(.history-table-sites) thead th:nth-child(6) {
+    width: 24%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(1) {
+    width: 17%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(2) {
+    width: 11%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(3) {
+    width: 6%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(4) {
+    width: 8%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(5) {
+    width: 7%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(7) {
+    width: 7%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(8) {
+    width: 10%;
+}
+
+.history-table:not(.history-table-sites) thead th:nth-child(9) {
+    width: 10%;
+}
+
 /* Issue #3486. A long site name stays on one line and ends in an ellipsis, so
  * the row keeps the height budget of issue #2106. The title attribute of the
  * cell holds the whole name. */
@@ -521,6 +562,15 @@
     padding-bottom: 0.375rem;
 }
 
+/* Issue #3491. The two history tables use the same row budget as Captures. */
+.run-history-table tbody th,
+.run-history-table tbody td,
+.history-operation-table tbody th,
+.history-operation-table tbody td {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+}
+
 /*
  * The shared button asks for 2.5rem of height. That height plus the cell
  * padding stands above 48 pixels, and one page of 25 rows then needs a long
@@ -535,7 +585,25 @@
 /* The run table keeps its age and stale text usable at 360, 768, and 1280
  * pixels. The shared scroll box supplies horizontal movement on narrow views. */
 .run-history-table {
+    table-layout: fixed;
     min-width: 62rem; /* Keep every run column readable instead of compressing controls. */
+}
+
+/* Issue #3491. Keep text whole, and clip only when the fixed table cannot show it. */
+.run-history-table td,
+.run-history-table th,
+.history-operation-table td,
+.history-operation-table th {
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: normal;
+}
+
+.history-operation-table {
+    table-layout: fixed;
+    min-width: 62rem;
 }
 
 .run-age-cell {
