@@ -1086,9 +1086,9 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         )  # WHY: load schema constants for direct assertions
 
         assert (
-            "searchSiteClientFingerprints" in COLLECTION_VERTEX_MAP
+            "searchOrgClientFingerprints" in COLLECTION_VERTEX_MAP
         )  # WHY: prove the fingerprint endpoint has a graph mapping
-        assert_vertex_config("searchSiteClientFingerprints", "fingerprints", "mac")  # WHY: vertex+key pair check
+        assert_vertex_config("searchOrgClientFingerprints", "fingerprints", "mac")  # WHY: vertex+key pair check
 
     def test_ui_settings_mapping_exists(self):  # WHY: pytest discovers this by name
         from src.foundation.persistence.db.arango_writer import (
@@ -1167,7 +1167,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
                 "listSiteApps": "applications",
                 "searchSiteCalls": "calls",
                 "searchSiteWanUsage": "wan_usage",
-                "searchSiteClientFingerprints": "fingerprints",
+                "searchOrgClientFingerprints": "fingerprints",
                 "listSiteUiSettings": "ui_settings",
                 "listSiteTroubleshootCalls": "troubleshoot_calls",
             }
@@ -1182,7 +1182,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         from src.foundation.persistence.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
         assert (
-            COLLECTION_VERTEX_MAP["searchSiteClientFingerprints"]["edges"] == []
+            COLLECTION_VERTEX_MAP["searchOrgClientFingerprints"]["edges"] == []
         )  # WHY: fingerprints are leaf vertices
 
     def test_ui_settings_no_edges(self):  # WHY: pytest discovers this by name

@@ -39,6 +39,12 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
 CANONICAL_ROOTS = {group.split("/")[0] for group in PACKAGE_GROUPS} | {
     Path(path).parts[0] for path in MODULE_PATHS.values()
 }  # Name every domain root that the move created, so a moved baseline maps to itself.
+INTENTIONAL_SYMBOL_REMOVALS: dict[str, set[str]] = {
+    # Issues #3334 and #3338 replace the invalid site fingerprint path with the
+    # organization path. The site fallback import and its status constant are
+    # removed on purpose, and the matching unit tests are removed in the same change.
+    "src/mist/intelligence/reports/client_fingerprint_census/client.py": {"_HTTP_NOT_FOUND", "insights"},
+}  # Record each reviewed module-level removal, so the guard reports only an unapproved loss.
 
 
 def ensure_origin_main() -> None:
@@ -154,7 +160,8 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
             new_symbols = module_symbols(
                 new_path.read_text(encoding="utf-8"), str(new_path)
             )  # Read the current module symbol set.
-            lost_symbols = sorted(old_symbols - new_symbols)  # Measure only removed module-level names.
+            allowed = INTENTIONAL_SYMBOL_REMOVALS.get(member.name, set())  # Read the reviewed removal list.
+            lost_symbols = sorted(old_symbols - new_symbols - allowed)  # Measure only an unapproved removal.
             if lost_symbols:  # Record each module that lost a name.
                 violations[member.name] = lost_symbols  # Keep exact names for repair evidence.
             checked_count += 1  # Record one complete module comparison.
@@ -234,3 +241,19 @@ def test_module_symbols_reports_a_removed_name() -> None:
     moved_symbols = module_symbols(moved_source, "moved.py")  # Read the reduced names.
     lost_symbols = base_symbols - moved_symbols  # Measure the loss that the guard must report.
     assert lost_symbols == {"helper"}, f"Checked {len(base_symbols)} base symbols. Lost {sorted(lost_symbols)}."
+
+
+def test_intentional_removals_waive_only_a_listed_name() -> None:
+    """Prove the waiver list hides a reviewed removal and keeps an unlisted removal visible."""
+    waived_module = "src/mist/intelligence/reports/client_fingerprint_census/client.py"
+    allowed = INTENTIONAL_SYMBOL_REMOVALS[waived_module]  # Read the reviewed removal set for that module.
+    old_symbols = allowed | {"unapproved"}  # Build a baseline that holds the waived names and one more name.
+    new_symbols: set[str] = set()  # Model a module that lost every baseline name.
+    lost_symbols = sorted(old_symbols - new_symbols - allowed)  # Apply the same subtraction as the guard.
+    assert lost_symbols == ["unapproved"], f"Checked {len(old_symbols)} base symbols. Lost {lost_symbols}."
+
+
+def test_intentional_removals_use_only_canonical_module_keys() -> None:
+    """Require every waiver key to name a canonical domain root under the source tree."""
+    bad_keys = [key for key in INTENTIONAL_SYMBOL_REMOVALS if Path(key).parts[1] not in CANONICAL_ROOTS]
+    assert not bad_keys, f"Checked {len(INTENTIONAL_SYMBOL_REMOVALS)} waiver keys. Bad keys: {bad_keys}."

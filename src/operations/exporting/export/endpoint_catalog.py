@@ -406,7 +406,7 @@ ENDPOINT_CATALOG: dict[str, EndpointInfo] = {
     "searchMspOrgGroup": EndpointInfo("Search MSP org group (needs type, search text)", INTERACTIVE_SAFE),
     "searchMspOrgs": EndpointInfo("Search MSP org", INTERACTIVE_SAFE),
     "searchOrgDeviceLastConfigs": EndpointInfo("Search org device last configs", INTERACTIVE_SAFE),
-    "searchSiteClientFingerprints": EndpointInfo("Search site client fingerprints", INTERACTIVE_SAFE),
+    "searchOrgClientFingerprints": EndpointInfo("Search org client fingerprints", INTERACTIVE_SAFE),
 }
 
 
