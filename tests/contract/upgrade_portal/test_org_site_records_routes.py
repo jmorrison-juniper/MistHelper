@@ -239,6 +239,25 @@ def test_an_empty_first_site_stops_the_save_the_same_way(site_app: SiteApp) -> N
     assert site_app.store.records == {}  # No plan exists, so no child job can start.
 
 
+def test_a_site_removed_before_save_returns_sites_required_without_a_plan(
+    site_app: SiteApp,
+    fake_mist_api: Any,
+) -> None:
+    """Issue #3441: a removed selected site cannot create an orphan aggregate plan."""
+    with signed_client(site_app, (site_app.first_site, SITE_TWO)) as client:  # Select two sites before one leaves.
+        fake_mist_api.payloads["listOrgSites"] = [  # The later ownership read no longer returns the second site.
+            row for row in fake_mist_api.payloads["listOrgSites"] if row["id"] != SITE_TWO
+        ]
+        answer = client.post(OPTIONS_API, json=CANARY_PLAN)  # Save after the selected site left the organization.
+        assert answer.status_code == 404  # The save uses the existing site selection refusal.
+        assert answer.get_json()["error"] == {  # The response names the missing site selection.
+            "code": org_upgrade.SITES_REQUIRED,  # The machine code stays stable for the site picker.
+            "message": org_upgrade.SITES_REQUIRED_MESSAGE,  # The operator receives the existing recovery text.
+        }
+        assert saved_options(client) is None  # The browser session keeps no saved plan.
+    assert site_app.store.records == {}  # The durable store receives no orphan plan.
+
+
 def test_a_failed_inventory_read_stops_the_save(site_app: SiteApp) -> None:
     """FR-002: a failed read of a site with devices must not drop those devices from the plan."""
     site_app.failed_reads.add(SITE_TWO)  # The page showed the devices, and the read at the save fails.
