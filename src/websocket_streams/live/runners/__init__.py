@@ -1,1 +1,1 @@
-"""The runners that drive the mistapi SDK for each kind of stream."""
+"""The runners that drive the own Mist WebSocket client for each kind of stream (issue #3671)."""

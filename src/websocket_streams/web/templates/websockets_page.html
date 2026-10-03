@@ -2,6 +2,7 @@
 {% block title %}WebSockets - {{ config.PORTAL.title }}{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('websockets.static', filename='vendor/xterm/xterm.css') }}">
 <link rel="stylesheet" href="{{ url_for('websockets.static', filename='websockets.css') }}">
 {% endblock %}
 
@@ -86,26 +87,86 @@
         </div>
         <div class="col-md-8 text-md-end text-muted small" id="wsCounters" data-testid="ws-counters"></div>
     </div>
+    <div class="small text-warning d-none mt-2" id="wsMessageGap" data-testid="ws-message-gap" role="status">
+        Some messages are not available. The connection continued after a gap.
+    </div>
     <div class="ws-output mt-3" id="wsOutput" data-testid="ws-output"></div>
-    <div class="ws-terminal-input d-none mt-3" id="wsTerminalInput" data-testid="ws-terminal-input">
-        <div class="alert alert-warning py-2" data-testid="ws-shell-warning">
-            Warning: A remote shell can change a device. Send only commands that you understand.
+    <div class="ws-terminal-panel d-none mt-3" id="wsTerminalPanel" data-testid="ws-terminal-panel">
+        <div class="alert alert-warning py-2 mb-2" id="wsTerminalWarning" data-testid="ws-terminal-warning"></div>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2" aria-label="Terminal toolbar">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="wsTerminalCopy" data-testid="ws-terminal-copy">Copy</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="wsTerminalPaste" data-testid="ws-terminal-paste">Paste</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="wsTerminalDownload" data-testid="ws-terminal-download">Download</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="wsTerminalFontUp" data-testid="ws-terminal-font-up" aria-label="Make terminal text larger">A+</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="wsTerminalFontDown" data-testid="ws-terminal-font-down" aria-label="Make terminal text smaller">A-</button>
+            <details class="ws-terminal-settings">
+                <summary class="btn btn-sm btn-outline-secondary" data-testid="ws-terminal-settings">Settings</summary>
+                <div class="ws-terminal-settings-menu p-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="wsTerminalCopyOnSelect" data-testid="ws-terminal-copy-on-select">
+                        <label class="form-check-label" for="wsTerminalCopyOnSelect">Copy on select</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="wsTerminalConfirmPaste" data-testid="ws-terminal-confirm-paste">
+                        <label class="form-check-label" for="wsTerminalConfirmPaste">Confirm multi-line paste</label>
+                    </div>
+                </div>
+            </details>
         </div>
-        <div class="input-group mb-2">
-            <input type="text" class="form-control" id="wsShellLine" data-testid="ws-shell-line" placeholder="Command line">
-            <button type="button" class="btn btn-outline-secondary" id="wsShellSend" data-testid="ws-shell-send">Send line</button>
+        <div class="ws-terminal-screen" id="wsTerminalScreen" data-testid="ws-terminal-screen"
+             aria-label="Device terminal" role="application" tabindex="0"></div>
+        <div class="small text-muted mt-2" id="wsTerminalStatus" data-testid="ws-terminal-status"></div>
+        <div class="small text-warning d-none" id="wsTerminalExpiry" data-testid="ws-terminal-expiry"></div>
+        <div class="small text-warning d-none" id="wsTerminalGap" data-testid="ws-terminal-gap"></div>
+        <progress class="ws-terminal-progress d-none mt-2" id="wsTerminalProgress" data-testid="ws-terminal-progress"
+                  max="1" value="0" aria-label="Paste progress"></progress>
+        <div class="ws-terminal-toast d-none mt-2" id="wsTerminalToast" data-testid="ws-terminal-toast"
+             aria-live="polite"></div>
+        <div class="ws-terminal-menu d-none" id="wsTerminalMenu" data-testid="ws-terminal-menu" role="menu">
+            <button type="button" class="dropdown-item" id="wsTerminalMenuCopy" data-testid="ws-terminal-menu-copy" role="menuitem">Copy</button>
+            <button type="button" class="dropdown-item" id="wsTerminalMenuPaste" data-testid="ws-terminal-menu-paste" role="menuitem">Paste</button>
+            <button type="button" class="dropdown-item" id="wsTerminalMenuSelectAll" data-testid="ws-terminal-menu-select-all" role="menuitem">Select all</button>
+            <button type="button" class="dropdown-item" id="wsTerminalMenuClear" data-testid="ws-terminal-menu-clear" role="menuitem">Clear</button>
         </div>
-        <div class="btn-group flex-wrap" role="group" aria-label="Shell keys" data-testid="ws-shell-keys">
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="interrupt" data-testid="ws-key-interrupt">Interrupt</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="tab" data-testid="ws-key-tab">Tab</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="space" data-testid="ws-key-space">Space</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="q" data-testid="ws-key-q">q</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-ws-key="enter" data-testid="ws-key-enter">Enter</button>
+        <div class="ws-terminal-paste-dialog d-none" id="wsTerminalPasteDialog" data-testid="ws-terminal-paste-dialog"
+             role="dialog" aria-modal="true" aria-labelledby="wsTerminalPasteTitle">
+            <div class="ws-terminal-dialog-card">
+                <h6 id="wsTerminalPasteTitle">Confirm paste</h6>
+                <p class="small mb-2" id="wsTerminalPasteLines" data-testid="ws-terminal-paste-lines"></p>
+                <pre class="ws-terminal-paste-preview" id="wsTerminalPastePreview" data-testid="ws-terminal-paste-preview"></pre>
+                <label class="form-label" id="wsTerminalPasteInputLabel" for="wsTerminalPasteInput">Paste text</label>
+                <textarea class="form-control d-none" id="wsTerminalPasteInput" data-testid="ws-terminal-paste-input"
+                          rows="6"></textarea>
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="wsTerminalPasteCancel"
+                            data-testid="ws-terminal-paste-cancel">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-accent" id="wsTerminalPasteSend"
+                            data-testid="ws-terminal-paste-send">Paste</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{{ url_for('websockets.static', filename='vendor/xterm/xterm.min.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='vendor/xterm/addon-fit.min.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/bootstrap.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/preference/store.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/chunks.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/display.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/clipboard/clipboard.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/clipboard/history.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/queue.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/paste/delivery.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/paste/dialog.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/paste/flow.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/input/keys.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/menu/menu.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/preference/controls.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/transport.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/reader.js') }}"></script>
+<script src="{{ url_for('websockets.static', filename='terminal/controller/controller.js') }}"></script>
 <script src="{{ url_for('websockets.static', filename='websockets.js') }}"></script>
 {% endblock %}

@@ -29,6 +29,12 @@ class TestGunicornStartupControls:
             "wsgi_capture:app": "/home/misthelper/.gunicorn/capture.ctl",
         }
 
+    def test_web_portal_uses_one_worker_for_process_local_terminal_state(self) -> None:
+        """Keep every WebSocket terminal session in the one owning portal process."""
+        command = GunicornStartup.read()["wsgi:app"]  # Read the deployed web portal command.
+        options = GunicornStartup.options(command)  # Parse the same options that the container uses.
+        assert options["--workers"] == "1"  # A second worker could not read process-local terminal state.
+
     @pytest.mark.parametrize(
         ("entrypoint", "expected"),
         [

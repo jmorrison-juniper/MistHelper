@@ -1,50 +1,31 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.4.0 -> 1.5.0
+  Version change: 1.6.0 -> 1.7.0
   Modified principles:
-    - I. Five-Item Rule: grandfathered existing hierarchy violations.
-      New feature code must use a compliant nested package. Surgical
-      edits may touch existing children without increasing child count.
-    - IV. Full Deployment Pipeline: replaced direct pushes to main with
-      the repository pull request and squash merge workflow.
+    - I. Five-Item Rule (Structural Discipline): clarified the exception for
+      required unique process records in established process folders. Each
+      change may add only its own record and must track existing folder debt.
   Modified constraints:
-    - Output Backends: kept DataExporter mandatory for API exports and
-      data collection. Declared operational stores may hold internal
-      transactional coordination records under strict safety rules.
-  Removed sections: N/A
-  Governance updated:
-    - Minor amendments can reconcile established repository practice
-      when they preserve safety and add no new structural debt.
-    - Compliance review must record existing debt and its separate
-      incremental remediation plan.
+    - Data Directory: permitted generated test evidence in the established,
+      git-ignored test-artifacts/ folder. Product outputs remain under data/.
+  Added sections: None.
+  Removed sections: None.
+  Governance updated: None.
   Templates requiring updates:
-    - .specify/templates/plan-template.md: no changes needed
-    - .specify/templates/spec-template.md: no changes needed
-    - .specify/templates/tasks-template.md: no changes needed
-    - .github/prompts/speckit.*.prompt.md: no changes needed
-  Related files updated simultaneously:
-    - .specify/feature.json
-    - specs/2447-stale-bulk-run-controls/.spec-context.json
-    - specs/2447-stale-bulk-run-controls/feature-files.txt
-    - specs/2447-stale-bulk-run-controls/spec.md
-    - specs/2447-stale-bulk-run-controls/plan.md
-    - specs/2447-stale-bulk-run-controls/tasks.md
-    - specs/2447-stale-bulk-run-controls/data-model.md
-    - specs/2447-stale-bulk-run-controls/research.md
-    - specs/2447-stale-bulk-run-controls/quickstart.md
-    - specs/2447-stale-bulk-run-controls/contracts/http-api.md
-    - specs/2447-stale-bulk-run-controls/contracts/reconciliation.md
-    - specs/2447-stale-bulk-run-controls/contracts/test-isolation.md
-    - specs/2447-stale-bulk-run-controls/contracts/ui.md
-    - specs/2447-stale-bulk-run-controls/checklists/requirements.md
-  Follow-up actions: None
+    - .specify/templates/plan-template.md: updated.
+    - .specify/templates/spec-template.md: no update required.
+    - .specify/templates/tasks-template.md: no update required.
+    - .specify/templates/commands/*.md: no command files present.
+  Related files updated simultaneously: None.
+  Follow-up actions: None.
 -->
 
 <!-- Global coding standards (5-Item Rule, class-based architecture,
      safety-first input, logging, quality gates) are defined in the
-     user-level VS Code instructions file:
-       %APPDATA%/Code/User/prompts/coding-standards.instructions.md
+     user-level VS Code instructions file.
+     The file is
+       `%APPDATA%/Code/User/prompts/coding-standards.instructions.md`.
      This constitution extends those global standards with
      MistHelper-specific principles and constraints. -->
 
@@ -59,6 +40,13 @@ Every new hierarchy level MUST contain no more than five children.
 Existing tracked violations are grandfathered technical debt. A feature MUST
 NOT add a direct child to a noncompliant parent. New feature code MUST enter a
 compliant nested package.
+
+Required unique process records MAY be direct children of an established
+process folder, such as `specs/` or `changelog.d/`, when the repository
+workflow requires direct children. Each change MUST add only its own unique
+record. The plan MUST record the existing folder debt and MUST track a
+separate incremental remediation action. This exception does not permit other
+new direct children in a noncompliant parent.
 
 A change MAY edit an existing child when the edit is narrow and necessary.
 The change MUST NOT increase the number of children at that hierarchy level.
@@ -273,8 +261,18 @@ The following technology choices are binding for all MistHelper code:
 
 - **Python**: 3.13 or newer. No code may target older Python versions.
 - **mistapi**: 0.59+ (Thomas Munzer's Mist API SDK). This is the sole
-  interface to the Juniper Mist Cloud API. Direct HTTP calls to Mist
-  endpoints are prohibited when a mistapi method exists.
+  interface for Juniper Mist Cloud REST APIs. Code MUST NOT send direct
+  HTTP requests to a Mist REST endpoint when a working mistapi method exists.
+- **Owned WebSocket Transport**: Code MAY own a Mist Cloud WebSocket transport.
+  This permission applies only when the matching mistapi WebSocket path is
+  broken, incomplete, or cannot preserve required output. The specification and plan
+  MUST name the SDK path and the failed contract. Contract tests MUST prove
+  that the SDK path is insufficient before implementation can pass review.
+  The owned transport MUST preserve the SDK authentication and endpoint
+  contracts. It MUST follow every safety rule and every secret-redaction rule
+  in this constitution. Its tests MUST verify authentication, endpoint,
+  output, failure, and redaction contracts. This exception does not permit
+  direct HTTP requests to Mist REST endpoints.
 - **Package Manager**: UV is preferred for speed; `requirements.txt`
   MUST be maintained for pip compatibility.
 - **Container Runtime**: Podman is the primary runtime. Docker is
@@ -283,8 +281,8 @@ The following technology choices are binding for all MistHelper code:
   session, or an end-to-end run MUST join the compose group. A bare
   `podman run` outside the group is prohibited. An ephemeral container
   MUST carry the issue number or the pull request number in its name
-  (`misthelper-tmp-<issue|pr><number>-<slug>`), MUST NOT publish a
-  production local port (read `compose.yml` for the current set), and
+  (`misthelper-tmp-<issue|pr><number>-<slug>`). It MUST NOT publish a
+  production local port. Read `compose.yml` for the current set. It
   MUST be removed when the test ends. See
   `documentation/container-deployment.md` § "Test and debug containers".
 - **File Paths**: MUST use `os.path.join()` or `pathlib.Path()`. Never
@@ -303,9 +301,10 @@ The following technology choices are binding for all MistHelper code:
   artificial IDs). Primary key strategy MUST be defined in
   `ENDPOINT_PRIMARY_KEY_STRATEGIES` before implementing any new
   operation.
-- **Data Directory**: All outputs MUST go to the `data/` directory,
-  enforced at runtime. SSH logs go to `data/per-host-logs/`.
-  Database file is `data/mist_data.db`.
+- **Data Directory**: All product outputs MUST go to the `data/` directory,
+  enforced at runtime. Generated test evidence MAY go to the established,
+  git-ignored `test-artifacts/` folder. SSH logs go to
+  `data/per-host-logs/`. Database file is `data/mist_data.db`.
 - **Container Security**: The container runs as the non-root user
   `misthelper` with UID 1000. The mounted `data/` directory MUST accept a
   write from that identifier. On Linux, use
@@ -353,13 +352,13 @@ Security tool findings (bandit, pip-audit, CodeQL) MUST be
 
 1. **Fix the root cause** -- Rewrite code to eliminate the vulnerability
    (e.g., validate table names against sqlite_master before use).
-2. **Refactor to avoid the pattern** -- Restructure so the flagged
-   pattern is not needed (e.g., move a secret default from a dict
-   to `os.environ.get()` directly).
-3. **`#nosec` only for verified false positives** -- When the tool
-   misidentifies safe code (e.g., a logging f-string flagged as SQL
-   injection, or an intentional `0.0.0.0` bind gated by
-   `is_running_in_container()`). The annotation MUST include a
+2. **Refactor to avoid the pattern.** Restructure the code so it does not
+   need the flagged pattern. For example, move a secret default out of a dict.
+   Use `os.environ.get()` to read it directly.
+3. **`#nosec` only for verified false positives** -- Use this option only
+   when the tool misidentifies safe code. Examples include a logging
+   f-string flagged as SQL injection and an intentional `0.0.0.0` bind
+   gated by `is_running_in_container()`. The annotation MUST include a
    justification comment.
 
 Never use `#nosec`, `# type: ignore`, `# noqa`, or similar
@@ -402,13 +401,13 @@ Not every task needs full ceremony. Use this decision tree:
 - Adding a test for well-understood behavior
 
 **Escalate to SpecKit** (spec required before coding):
-- Changes touching 3+ files or 2+ classes
-- New menu operations or API integrations
-- Architectural changes (new classes, module splits, data flow)
-- Bug fixes where root cause is unclear or spans multiple components
-- Any change to destructive operations (menu 90-100)
-- Performance or concurrency work
-- Database schema or primary key strategy changes
+- Changes touching 3+ files or 2+ classes.
+- New menu operations or API integrations.
+- Architectural changes (new classes, module splits, data flow).
+- Bug fixes where root cause is unclear or spans multiple components.
+- Any change to destructive operations (menu 90-100).
+- Performance or concurrency work.
+- Database schema or primary key strategy changes.
 
 **Rationale**: Underpowered models (GPT-5 Mini and similar) lose
 track of multi-step implementations without structured artifacts.
@@ -491,12 +490,12 @@ When multiple agents work on MistHelper simultaneously:
 ### PR Checklist Enforcement
 
 Every PR MUST include in its description:
-- `Closes #<issue-number>` (auto-closes the linked issue)
-- CI status confirmation (all quality gates green)
-- Files changed summary (to help detect overlap)
-- Local gate results
-- Deployment and rollback notes
-- `auto-merge` label added only after all checks pass
+- `Closes #<issue-number>` (auto-closes the linked issue).
+- CI status confirmation (all quality gates green).
+- Files changed summary (to help detect overlap).
+- Local gate results.
+- Deployment and rollback notes.
+- `auto-merge` label added only after all checks pass.
 
 ## Governance
 
@@ -534,4 +533,4 @@ patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.5.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-09-11
+**Version**: 1.7.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-03

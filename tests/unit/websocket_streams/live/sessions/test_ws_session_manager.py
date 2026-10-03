@@ -4,9 +4,11 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import json  # The read test decodes the joined JSON text.
 import logging  # caplog checks the audit line.
+import time  # Real runner failure tests use bounded waits.
 
 import pytest  # The tests check contract errors.
 
+import websocket  # Failure tests build the same exception type as websocket-client.
 from src.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
@@ -14,14 +16,32 @@ from src.websocket_streams.catalog.model import (
     Safety,
     UtilityDefinition,
 )  # Tests build local definitions.
-from src.websocket_streams.intake.fields import StreamRequestError  # The manager raises these errors.
-from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.sessions.manager import (
-    RunnerFactory,
-    StreamSessionManager,
-)  # The tests cover the manager.
-from src.websocket_streams.live.sessions.record import SessionState  # Tests finish sessions directly.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # The manager raises these errors.
+from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked requests by hand.
+from src.websocket_streams.live.runners.channel.runner import (
+    ChannelStreamRunner,
+)  # Factory tests assert runner classes.
+from src.websocket_streams.live.runners.shell.runners import ScreenRunner, ShellRunner  # Factory runner classes.
+from src.websocket_streams.live.runners.text.redaction import ShellAddressFilter  # Count redaction filters.
+from src.websocket_streams.live.runners.utility.runner.utility_runner import UtilityRunner  # Utility runner class.
+from src.websocket_streams.live.sessions.manager.factory import RunnerFactory  # Test concrete runner selection.
+from src.websocket_streams.live.sessions.manager.lifecycle import StreamSessionManager  # Test manager behavior.
+from src.websocket_streams.live.sessions.record.state import SessionState  # Tests finish sessions directly.
 from src.websocket_streams.live.sessions.settings import StreamSettings  # The manager needs limits.
+from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests assert the shell queue type.
+from src.websocket_streams.live.terminal.state.size import TerminalSize  # Tests assert terminal size values.
+from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Tests assert state values.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    TransportProfile,
+)  # Factory tests avoid real Mist sockets.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Factory tests need SDK-shaped session data.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeMistCloud,  # Real runner tests use a loopback cloud.
+    HandshakeFault,  # Fake cloud handshake failure control.
+)
 
 
 class FakeClock:
@@ -44,6 +64,7 @@ class FakeRunner:
         self.started = 0  # Count start calls.
         self.stopped = 0  # Count stop calls.
         self.inputs: list[str] = []  # Keep sent input text.
+        self.sizes: list[tuple[int, int]] = []  # TerminalRunner needs resize for runtime protocol checks.
 
     def start(self) -> None:
         """Record a start call."""
@@ -60,6 +81,15 @@ class FakeRunner:
             text: The checked shell input.
         """
         self.inputs.append(text)  # Tests verify shaped input text.
+
+    def resize(self, cols: int, rows: int) -> None:
+        """Record terminal size changes.
+
+        Args:
+            cols: The accepted terminal column count.
+            rows: The accepted terminal row count.
+        """
+        self.sizes.append((cols, rows))  # The protocol method lets manager bind shell input.
 
 
 class FakeFactory:
@@ -87,6 +117,8 @@ class FakeFactory:
 class FakeSink:
     """A fake sink for runner factory tests."""
 
+    terminal = None  # Factory tests build runners without a real terminal sink.
+
     def mark_live(self, note: str = "") -> None:
         """Ignore live transitions."""
         return None  # Factory tests do not start runners.
@@ -101,6 +133,14 @@ class FakeSink:
 
     def mark_input_ready(self) -> None:
         """Ignore shell readiness."""
+        return None  # Factory tests do not start runners.
+
+    def add_bytes(self, data: bytes) -> None:
+        """Ignore terminal output bytes.
+
+        Args:
+            data: Terminal output bytes from a runner.
+        """
         return None  # Factory tests do not start runners.
 
 
@@ -120,7 +160,7 @@ class TestStreamSessionManager:
         """Clamp read limits and report a gap."""
         manager, _factory, _clock = self._manager(max_sessions=1, buffer_messages=2)  # Keep only two messages.
         payload = manager.start(self._channel_request("first"))  # Start one session.
-        session = manager._get(str(payload["session_id"]))  # Read the session for direct sink calls.
+        session = manager.session(str(payload["session_id"]))  # Read the session for direct sink calls.
         session.mark_live()  # Allow messages.
         for index in range(3):  # Add three messages to force one drop.
             session.add_message("text", str(index))  # Store one message.
@@ -143,30 +183,99 @@ class TestStreamSessionManager:
         second = manager.stop(session_id)  # Repeat the stop.
         assert first["state"] == "stopping"  # A stop request moves to stopping.
         assert second["state"] == "stopping"  # A repeat stop returns the same state.
-        assert factory.runners[0].stopped == 1  # The runner receives one stop call.
-        manager._get(session_id).finish(SessionState.STOPPED, "done")  # End the session.
+        assert factory.runners[0].stopped == 2  # Each live Stop request wakes the runner.
+        manager.session(session_id).finish(SessionState.STOPPED, "done")  # End the session.
         filename, lines = manager.download(session_id)  # Build a download.
         assert filename.startswith("site.stats.devices-")  # The file name includes the key.
         assert list(lines) == []  # No messages were added.
         manager.delete(session_id)  # Ended sessions can be deleted.
 
-    def test_shell_input_rules_and_audit(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Validate shell input and audit a shell start."""
+    def test_shell_audit_and_terminal_input_queue(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Audit a shell start and bind queued terminal input to the runner."""
         caplog.set_level(logging.WARNING)  # Capture the audit warning.
         manager, factory, _clock = self._manager(max_sessions=1)  # Build one manager.
         payload = manager.start(self._shell_request())  # Start a shell session.
-        session = manager._get(str(payload["session_id"]))  # Read the session for direct state setup.
-        with pytest.raises(StreamRequestError):  # Input is closed before first output.
-            manager.send_input(session.session_id, "show version", None)  # Try early input.
+        session = manager.session(str(payload["session_id"]))  # Read the public session handle.
+        terminal = session.terminal  # Store terminal state for type narrowing.
+        assert isinstance(terminal, TerminalState)  # Shell sessions get a terminal state.
+        terminal_input = terminal.input  # Store the input queue for type narrowing.
+        assert isinstance(terminal_input, TerminalInput)  # Shell sessions get a writable input queue.
+        first = terminal_input.submit("show ")  # Queue early input before first output.
+        second = terminal_input.submit("version\r")  # Queue another part to verify order.
         session.mark_live()  # Mark the shell as live.
         session.mark_input_ready()  # Open input after first output.
-        manager.send_input(session.session_id, "show version", None)  # Send a command line.
-        manager.send_input(session.session_id, None, "interrupt")  # Send a special key.
-        assert factory.runners[0].inputs == ["show version\r", "\x03"]  # The manager shaped the inputs.
+        third = terminal_input.submit("exit\r")  # Later input sends at once.
+        assert (first, second, third) == (True, True, False)  # Only input before readiness is queued.
+        assert factory.runners[0].inputs == ["show ", "version\r", "exit\r"]  # The runner receives exact order.
         assert "ex.shell" in caplog.text  # The audit line names the key.
-        assert "device-a" in caplog.text  # The audit line names the device.
-        assert "site-a" in caplog.text  # The audit line names the site.
-        assert "show version" not in caplog.text  # The audit line never logs shell text.
+        assert '"status":"shell"' in caplog.text  # The structured audit names the bounded safety state.
+        assert "device-a" not in caplog.text  # The safe field boundary removes device identifiers.
+        assert "site-a" not in caplog.text  # The safe field boundary removes site identifiers.
+        assert "show " not in caplog.text  # The audit line never logs shell text.
+
+    def test_session_returns_handle_and_unknown_session_raises(self) -> None:
+        """Return known sessions through the public lookup."""
+        manager, _factory, _clock = self._manager(max_sessions=1)  # Build one manager.
+        payload = manager.start(self._channel_request("first"))  # Start one session.
+        session = manager.session(str(payload["session_id"]))  # Read the public session handle.
+        assert session.session_id == payload["session_id"]  # The lookup returns the same record.
+        with pytest.raises(StreamRequestError) as error:  # Unknown sessions use the contract error.
+            manager.session("missing")  # Look up an absent session.
+        assert error.value.code == "not_found"  # The route depends on this code.
+
+    def test_terminal_shape_and_expiry_for_each_session_kind(self) -> None:
+        """Build the expected terminal state for shell, screen, channel, and utility sessions."""
+        manager, _factory, clock = self._manager(max_sessions=4)  # Build one manager with room for four sessions.
+        shell = manager.session(str(manager.start(self._shell_request())["session_id"]))  # Start shell session.
+        screen = manager.session(str(manager.start(self._screen_request())["session_id"]))  # Start screen session.
+        channel = manager.session(str(manager.start(self._channel_request("channel"))["session_id"]))  # Channel.
+        utility = manager.session(str(manager.start(self._utility_request())["session_id"]))  # Start utility.
+        assert shell.terminal is not None and shell.terminal.read_only is False  # Shell accepts input.
+        assert shell.terminal.input.submit("show version\r") is True  # Shell input queues before first output.
+        assert screen.terminal is not None and screen.terminal.read_only is True  # Screen is read-only.
+        assert shell.terminal.size() == TerminalSize(80, 24)  # Shell keeps the normal terminal default size.
+        assert screen.terminal.size() == TerminalSize(80, 40)  # Screen uses the fixed Mist screen size.
+        assert channel.terminal is None  # Channel sessions use the message list.
+        assert utility.terminal is None  # Non-screen utility sessions use the message list.
+        assert shell.terminal.expires_mono == clock.value + 1800.0  # The monotonic expiry uses settings.
+        assert shell.terminal.expires_at.endswith("Z")  # The public expiry is UTC text.
+
+    @pytest.mark.parametrize(
+        ("fault", "error"),
+        [
+            (
+                HandshakeFault("refuse", status_code=403),
+                websocket.WebSocketBadStatusException("Handshake status 403", 403),
+            ),
+            (
+                HandshakeFault("refuse", status_code=503),
+                websocket.WebSocketBadStatusException("Handshake status 503", 503),
+            ),
+            (HandshakeFault("stall"), TimeoutError("The handshake stalled.")),
+            (HandshakeFault("reset"), ConnectionError("The peer reset the handshake.")),
+        ],
+    )
+    def test_real_factory_terminal_open_failures_update_session(
+        self,
+        fault: HandshakeFault,
+        error: BaseException,
+    ) -> None:
+        """Real shell open failures become failed sessions with plain reasons."""
+        expected = ConnectFailure.reason(error)  # Compute expected text through the production mapper.
+        assert isinstance(expected, str)  # Each table row must map to public operator text.
+        with FakeMistCloud() as cloud:  # The fake cloud drives the real WebSocket open path.
+            cloud.fail_handshake("/shell/fail", fault)  # Force this shell path to fail its handshake.
+            api = FakeApiSession(cloud)  # Build a fake Mist API session.
+            api.add_override("/shell", status_code=200, data={"url": f"{cloud.base_ws_url}/shell/fail"})  # Route.
+            manager = self._real_manager(api, cloud)  # Use the real RunnerFactory and manager path.
+            payload = manager.start(self._shell_request())  # Start returns before the runner fails.
+            session = self._wait_for_state(
+                manager, str(payload["session_id"]), {SessionState.FAILED}, timeout=5.0
+            )  # Wait for the mapped open failure.
+            requests = cloud.wait_for_requests(1, 5.0)  # Prove that the WebSocket path was attempted.
+        assert requests[0].path == "/shell/fail"  # The fake cloud recorded the failed open.
+        assert session.reason == expected  # The selected session receives the mapped reason.
+        assert "fake-token" not in session.reason  # The reason must not expose secrets.
 
     def test_reaper_stops_idle_and_prunes_old_ended(self) -> None:
         """Stop idle sessions, keep 5 ended sessions at most, and remove them after 10 minutes."""
@@ -176,13 +285,13 @@ class TestStreamSessionManager:
         payload = manager.start(self._channel_request("idle"))  # Start one session.
         clock.value = 31.0  # Move past the idle limit.
         manager.reap_once()  # Run one reaper pass.
-        assert manager._get(str(payload["session_id"])).state.value == "stopping"  # The idle session was stopped.
+        assert manager.session(str(payload["session_id"])).state.value == "stopping"  # The idle session stopped.
         clock.value = 47.0  # Move past the stuck stopping limit.
         manager.reap_once()  # Run another reaper pass.
-        assert manager._get(str(payload["session_id"])).state.value == "stopped"  # Stuck stopping became stopped.
+        assert manager.session(str(payload["session_id"])).state.value == "stopped"  # Stuck stopping became stopped.
         for index in range(6):  # Add six ended sessions to test retention.
             ended_payload = manager.start(self._channel_request(f"ended-{index}"))  # Start one extra session.
-            ended = manager._get(str(ended_payload["session_id"]))  # Read it for a direct finish.
+            ended = manager.session(str(ended_payload["session_id"]))  # Read it for a direct finish.
             ended.finish(SessionState.FINISHED, "done")  # Mark the session ended.
         manager.reap_once()  # Seven new ended sessions exist, so the count limit applies.
         assert len(manager.list_payload()["sessions"]) == 5  # The manager keeps five ended sessions at most.
@@ -199,41 +308,102 @@ class TestStreamSessionManager:
         for index in range(7):  # End seven sessions at different times.
             clock.value = 100.0 + index  # Each session ends one second after the previous session.
             payload = manager.start(self._channel_request(f"ended-{index}"))  # Start one session.
-            manager._get(str(payload["session_id"])).finish(SessionState.FINISHED, "done")  # End it at once.
+            manager.session(str(payload["session_id"])).finish(SessionState.FINISHED, "done")  # End it at once.
         clock.value = 200.0  # Start the live session last, so the list order is clear.
         live = manager.start(self._channel_request("live"))  # A live session never counts as ended.
         manager.reap_once()  # Apply the count limit.
         titles = [session["title"] for session in manager.list_payload()["sessions"]]  # Newest first.
         assert titles == ["live", "ended-6", "ended-5", "ended-4", "ended-3", "ended-2"]  # The two oldest left.
-        assert manager._get(str(live["session_id"])).live is True  # The live session stays live.
+        assert manager.session(str(live["session_id"])).live is True  # The live session stays live.
 
     def test_not_found_bad_input_stop_all_and_shutdown(self) -> None:
         """Cover manager error paths and shutdown behavior."""
         manager, _factory, _clock = self._manager(max_sessions=2)  # Build one manager.
         with pytest.raises(StreamRequestError):  # Unknown sessions raise not_found.
             manager.read("missing", 0, 1)  # Try to read an unknown session.
-        payload = manager.start(self._shell_request())  # Start one shell session.
-        session = manager._get(str(payload["session_id"]))  # Read the session for state setup.
-        session.mark_live()  # Make the shell live.
-        session.mark_input_ready()  # Open shell input.
-        with pytest.raises(StreamRequestError):  # Control characters are not allowed in lines.
-            manager.send_input(session.session_id, "bad\x01", None)  # Try a bad line.
-        with pytest.raises(StreamRequestError):  # Unknown keys are not allowed.
-            manager.send_input(session.session_id, None, "bad")  # Try a bad key.
+        manager.start(self._shell_request())  # Start one shell session.
         assert manager.live_count() == 1  # One live session is counted.
         assert manager.stop_all("stop all") == 1  # The live session receives one stop.
         manager.shutdown()  # Shutdown is safe after stop_all.
         manager.shutdown()  # A second shutdown does nothing.
 
     def test_runner_factory_builds_each_runner_kind(self) -> None:
-        """Build each concrete runner kind without starting the SDK."""
-        factory = RunnerFactory(object())  # Build a factory with a fake API session.
-        channel_runner = factory.build(self._channel_request("channel"), FakeSink())  # Build a channel runner.
-        utility_runner = factory.build(self._utility_request(), FakeSink())  # Build a utility runner.
-        shell_runner = factory.build(self._shell_request(), FakeSink())  # Build a shell runner.
-        assert channel_runner.__class__.__name__ == "ChannelStreamRunner"  # Channel requests use the channel runner.
-        assert utility_runner.__class__.__name__ == "UtilityRunner"  # Utility requests use the utility runner.
-        assert shell_runner.__class__.__name__ == "ShellRunner"  # Shell requests use the shell runner.
+        """Build each concrete runner kind and install shell filters once."""
+        factory = self._runner_factory_for_class_tests()  # Build a factory with a fake API session.
+        mist_logger = logging.getLogger("mistapi")  # The factory installs the redaction filter here.
+        original_filters = list(mist_logger.filters)  # Restore shared logger state after the test.
+        original_flag = RunnerFactory._filter_installed  # Restore class state after the test.
+        mist_logger.filters = [
+            item for item in mist_logger.filters if not isinstance(item, ShellAddressFilter)
+        ]  # Reset.
+        RunnerFactory._filter_installed = False  # Force the test to measure one installation.
+        try:  # Always restore logger state for later tests.
+            channel_runner = factory.build(self._channel_request("channel"), FakeSink())  # Build channel runner.
+            utility_runner = factory.build(self._utility_request(), FakeSink())  # Build command runner.
+            shell_runner = factory.build(self._shell_request(), FakeSink())  # Build shell runner.
+            screen_runner = factory.build(self._screen_request(), FakeSink())  # Build screen runner.
+            filters = [item for item in mist_logger.filters if isinstance(item, ShellAddressFilter)]  # Count filters.
+        finally:  # Put back the global logger state even when assertions fail.
+            mist_logger.filters = original_filters  # Restore the previous logger filter list.
+            RunnerFactory._filter_installed = original_flag  # Restore the previous class flag.
+        assert isinstance(channel_runner, ChannelStreamRunner)  # Channel requests use the channel runner.
+        assert isinstance(utility_runner, UtilityRunner)  # Line utilities use the utility runner.
+        assert isinstance(shell_runner, ShellRunner)  # Shell requests use the shell runner.
+        assert isinstance(screen_runner, ScreenRunner)  # Screen utilities use the screen runner.
+        assert len(filters) == 1  # Shell and screen share one redaction filter.
+
+    def _runner_factory_for_class_tests(self) -> RunnerFactory:
+        """Build a real runner factory for class-selection tests.
+
+        Returns:
+            A runner factory with loopback transport settings.
+        """
+        profile = TransportProfile(
+            stream_url="ws://127.0.0.1:1/api-ws/v1/stream", allow_loopback=True
+        )  # Avoid deriving a production address in the test.
+        return RunnerFactory(FakeApiSession(), profile)  # Return a factory with SDK-shaped attributes.
+
+    def _real_manager(self, api: FakeApiSession, cloud: FakeMistCloud) -> StreamSessionManager:
+        """Build a manager that uses the real runner factory.
+
+        Args:
+            api: The fake Mist API session.
+            cloud: The fake Mist cloud that owns loopback URLs.
+
+        Returns:
+            A session manager with short WebSocket waits.
+        """
+        profile = TransportProfile(
+            stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
+            allow_loopback=True,
+            read_timeout_seconds=0.05,
+            subscribe_timeout_seconds=0.2,
+            reconnect_delays=(),
+        )  # Keep all failure paths fast and loopback-only.
+        settings = StreamSettings(max_sessions=1)  # One session is enough for each failure case.
+        return StreamSessionManager(settings, RunnerFactory(api, profile), time.monotonic)  # Return manager.
+
+    def _wait_for_state(
+        self, manager: StreamSessionManager, session_id: str, states: set[SessionState], timeout: float = 2.0
+    ) -> object:
+        """Wait until one session reaches an expected state.
+
+        Args:
+            manager: The manager that owns the session.
+            session_id: The selected session identifier.
+            states: Acceptable final states.
+            timeout: Maximum wait seconds.
+
+        Returns:
+            The session after it reaches one expected state.
+        """
+        deadline = time.monotonic() + timeout  # Bound each async assertion.
+        while time.monotonic() < deadline:  # Poll for a short time.
+            session = manager.session(session_id)  # Read the current session state.
+            if session.state in states:  # The background runner reached the target state.
+                return session  # The caller can assert the reason.
+            time.sleep(0.01)  # Avoid a busy loop while the runner thread works.
+        return manager.session(session_id)  # Return the observed state for assertion failure context.
 
     def _manager(
         self, max_sessions: int, buffer_messages: int = 500, idle_seconds: int = 120
@@ -295,4 +465,18 @@ class TestStreamSessionManager:
         )  # Build a read utility.
         return StartRequest(
             "utility", definition, {"site_id": ("site-a",), "device_id": ("dev-a",)}, {}, "Ping"
+        )  # Return a checked request.
+
+    def _screen_request(self) -> StartRequest:
+        """Build a checked screen utility request.
+
+        Returns:
+            A screen start request.
+        """
+        target = FieldSpec("device_id", "Device", FieldKind.UUID, picker="devices")  # Build the device target field.
+        definition = UtilityDefinition(
+            "ex.topCommand", "ex", "topCommand", "Top", "Run top.", (), Safety.READ, "screen", (target,)
+        )  # Build a screen utility.
+        return StartRequest(
+            "utility", definition, {"site_id": ("site-a",), "device_id": ("dev-a",)}, {}, "Top"
         )  # Return a checked request.

@@ -59,3 +59,42 @@ class TestStreamSettings:
         assert settings.buffer_messages == 50  # The lower message limit is valid.
         assert settings.buffer_bytes == 64 * 1024 * 1024  # The upper byte limit is valid.
         assert settings.max_stream_seconds == 240 * 60  # The upper minute limit becomes seconds.
+
+
+class TestTerminalHistorySetting:
+    """Verify the terminal history size setting of issue #3671."""
+
+    def test_default_keeps_one_mebibyte(self) -> None:
+        """Keep 1,024 KiB of terminal output when the variable is absent."""
+        settings = StreamSettings.from_environment({})  # Build settings from an empty source.
+        assert settings.terminal_history_bytes == 1024 * 1024  # The default is 1 MiB.
+
+    @pytest.mark.parametrize(
+        ("raw", "expected_kib"),
+        [
+            ("256", 256),  # The lower edge is valid.
+            ("8192", 8192),  # The upper edge is valid.
+            (" 2048 ", 2048),  # Spaces around the number do not matter.
+        ],
+    )
+    def test_range_values_convert_to_bytes(self, raw: str, expected_kib: int) -> None:
+        """Convert each value inside the range from KiB to bytes."""
+        settings = StreamSettings.from_environment({"PORTAL_WS_TERMINAL_HISTORY_KB": raw})  # Set one value.
+        assert settings.terminal_history_bytes == expected_kib * 1024  # The KiB value becomes bytes.
+
+    @pytest.mark.parametrize("raw", ["255", "8193", "lots", "-1", "1e3"])
+    def test_bad_values_warn_and_use_the_default(self, raw: str, caplog: pytest.LogCaptureFixture) -> None:
+        """Use the default and name the variable for an out-of-range value or a non-number."""
+        caplog.set_level(logging.WARNING)  # Capture warnings from settings parsing.
+        settings = StreamSettings.from_environment({"PORTAL_WS_TERMINAL_HISTORY_KB": raw})  # Set one bad value.
+        assert settings.terminal_history_bytes == 1024 * 1024  # A bad value cannot change the limit.
+        assert "PORTAL_WS_TERMINAL_HISTORY_KB" in caplog.text  # The warning names the variable.
+
+    def test_public_limits_payload_does_not_change(self) -> None:
+        """Keep the history size out of the public catalog payload."""
+        settings = StreamSettings.from_environment({"PORTAL_WS_TERMINAL_HISTORY_KB": "4096"})  # Set a valid value.
+        assert settings.limits_payload() == {
+            "max_sessions": 5,
+            "idle_seconds": 120,
+            "capture_seconds": 60,
+        }  # The catalog route sends the same keys as before.

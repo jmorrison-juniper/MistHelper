@@ -1,61 +1,36 @@
-"""Tests for the WebSockets channel runner."""
+"""Tests for the issue #3671 WebSockets channel runner."""
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
-import pytest  # The tests check input refusal.
+import threading  # Fake sinks use a condition to wait for runner callbacks.
+import time  # Reconnect timing tests compare elapsed time.
 
+import pytest  # The post-open stop test patches the transport client.
+
+import websocket  # Tests build the same handshake exceptions as websocket-client.
 from src.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
     FieldSpec,
 )  # Tests build local definitions.
-from src.websocket_streams.intake.fields import StreamRequestError  # Input refusal uses this error.
-from src.websocket_streams.intake.start_request import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.runners.channel import ChannelStreamRunner  # The tests cover the channel runner.
-from src.websocket_streams.live.sessions.record import SessionState  # Fake sinks record final state.
-
-
-class FakeClient:
-    """A fake SDK WebSocket client."""
-
-    last: FakeClient | None = None  # Tests inspect the newest client.
-
-    def __init__(self, session: object, **kwargs: object) -> None:
-        """Build one fake client.
-
-        Args:
-            session: The fake API session.
-            kwargs: SDK constructor options.
-        """
-        self.kwargs = kwargs  # Tests assert the constructor settings.
-        self.callbacks: dict[str, object] = {}  # Store callbacks by name.
-        self.connected = False  # Record connect calls.
-        self.disconnected = False  # Record disconnect calls.
-        FakeClient.last = self  # Keep this instance for assertions.
-
-    def on_open(self, callback: object) -> None:
-        """Store the open callback."""
-        self.callbacks["open"] = callback  # The runner registers this callback.
-
-    def on_message(self, callback: object) -> None:
-        """Store the message callback."""
-        self.callbacks["message"] = callback  # The runner registers this callback.
-
-    def on_error(self, callback: object) -> None:
-        """Store the error callback."""
-        self.callbacks["error"] = callback  # The runner registers this callback.
-
-    def on_close(self, callback: object) -> None:
-        """Store the close callback."""
-        self.callbacks["close"] = callback  # The runner registers this callback.
-
-    def connect(self, run_in_background: bool) -> None:
-        """Record a connect call."""
-        self.connected = run_in_background  # The runner must request background mode.
-
-    def disconnect(self, wait: bool) -> None:
-        """Record a disconnect call."""
-        self.disconnected = not wait  # The runner must not wait in the web request.
+from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked requests by hand.
+from src.websocket_streams.live.runners.channel import runner as channel_runner_module  # Patch health timing.
+from src.websocket_streams.live.runners.channel.runner import ChannelStreamRunner  # Test channel behavior.
+from src.websocket_streams.live.sessions.record.state import SessionState  # Fake sinks record final state.
+from src.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+    MistStreamEndpoint,
+    TransportProfile,
+)  # Transport setup.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
+    FakeApiSession,
+)  # Fake endpoint authentication.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import StreamDevice  # Fake stream device.
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
+    FakeConnection,
+    FakeMistCloud,
+    HandshakeFault,
+)  # Loopback WebSocket server.
 
 
 class FakeSink:
@@ -66,67 +41,437 @@ class FakeSink:
         self.live_notes: list[str] = []  # Keep live notes.
         self.messages: list[tuple[str, object, str | None]] = []  # Keep added messages.
         self.finished: list[tuple[SessionState, str]] = []  # Keep final states.
+        self._condition = threading.Condition()  # Tests wait for callbacks with a bound.
 
     def mark_live(self, note: str = "") -> None:
         """Record a live transition."""
-        self.live_notes.append(note)  # Tests verify the callback.
+        with self._condition:  # Protect the callback records.
+            self.live_notes.append(note)  # Tests verify the callback.
+            self._condition.notify_all()  # Wake tests waiting for live state.
 
     def add_message(self, kind: str, content: object, *, source: str | None = None, summary: str | None = None) -> None:
         """Record one message."""
-        self.messages.append((kind, content, source))  # Tests verify shaped content.
+        _summary_length = len(summary or "")  # Read the optional summary without changing channel assertions.
+        with self._condition:  # Protect the callback records.
+            self.messages.append((kind, content, source))  # Tests verify shaped content and source.
+            self._condition.notify_all()  # Wake tests waiting for messages.
 
     def finish(self, state: SessionState, reason: str) -> None:
         """Record a final state."""
-        self.finished.append((state, reason))  # Tests verify end state mapping.
+        with self._condition:  # Protect the callback records.
+            self.finished.append((state, reason))  # Tests verify end state mapping.
+            self._condition.notify_all()  # Wake tests waiting for final state.
 
-    def mark_input_ready(self) -> None:
-        """Ignore shell input readiness."""
-        return None  # Channel streams never call this method.
+    def wait_for_live(self, count: int, timeout: float) -> list[str]:
+        """Wait for a live transition count."""
+        with self._condition:  # Wait on the callback condition.
+            self._condition.wait_for(lambda: len(self.live_notes) >= count, timeout=timeout)  # Bound the wait.
+            return list(self.live_notes)  # Return a snapshot for assertions.
+
+    def wait_for_messages(self, count: int, timeout: float) -> list[tuple[str, object, str | None]]:
+        """Wait for a message count."""
+        with self._condition:  # Wait on the callback condition.
+            self._condition.wait_for(lambda: len(self.messages) >= count, timeout=timeout)  # Bound the wait.
+            return list(self.messages)  # Return a snapshot for assertions.
+
+    def wait_for_finished(self, count: int, timeout: float) -> list[tuple[SessionState, str]]:
+        """Wait for a finish count."""
+        with self._condition:  # Wait on the callback condition.
+            self._condition.wait_for(lambda: len(self.finished) >= count, timeout=timeout)  # Bound the wait.
+            return list(self.finished)  # Return a snapshot for assertions.
+
+
+class DropDuringSubscribeDevice:
+    """A fake stream device that drops each connection during subscribe."""
+
+    def __init__(self) -> None:
+        """Build a drop counter."""
+        self.drop_count = 0  # Tests verify that every open attempt reached subscribe.
+        self._lock = threading.Lock()  # The fake server can call this handler from several threads.
+
+    def receive(self, connection: object, opcode: int, payload: bytes) -> None:
+        """Drop after the subscribe frame arrives.
+
+        Args:
+            connection: The fake WebSocket connection.
+            opcode: The frame opcode.
+            payload: The frame payload.
+        """
+        _payload_size = len(payload)  # Read the payload without logging channel content.
+        if opcode != 0x1:  # Subscribe frames use text frames.
+            return  # Ignore non-text frames.
+        with self._lock:  # Protect the drop count.
+            self.drop_count += 1  # Count the subscribe attempt before dropping.
+        connection.drop()  # Drop before any channel_subscribed answer.
+
+
+class DropAfterSubscribeDevice:
+    """A fake stream device that drops each connection after subscription."""
+
+    def __init__(self) -> None:
+        """Build a subscribed-drop counter."""
+        self.drop_count = 0  # Tests verify that every connection completed subscription.
+        self._lock = threading.Lock()  # The fake server can call this handler from several threads.
+
+    def receive(self, connection: FakeConnection, opcode: int, payload: bytes) -> None:
+        """Confirm a subscription, then drop the connection.
+
+        Args:
+            connection: The fake WebSocket connection.
+            opcode: The frame opcode.
+            payload: The frame payload.
+        """
+        _payload_size = len(payload)  # Read the payload without exposing the channel path.
+        if opcode != 0x1:  # Subscribe frames use text frames.
+            return  # Ignore non-text frames.
+        with self._lock:  # Protect the drop count.
+            self.drop_count += 1  # Count the completed subscribe request before the drop.
+        answer = '{"event":"channel_subscribed","channel":"/sites/site-a/stats/devices"}'  # Confirm subscribe.
+        connection.send_text(answer)  # Let the client complete open() before the endpoint drops.
+        drop_timer = threading.Timer(0.005, connection.drop)  # Drop before healthy operation can occur.
+        drop_timer.daemon = True  # Do not keep the test process alive for a delayed drop.
+        drop_timer.start()  # Run the drop after the subscribe answer reaches the client.
+
+
+class StopAfterOpenClient:
+    """A stream client fake that requests stop immediately after open."""
+
+    stop_event: threading.Event | None = None  # The test injects the runner stop event.
+    instances: list[StopAfterOpenClient] = []  # Tests read the fake client after the run.
+
+    def __init__(self, _endpoint: object, channels: tuple[str, ...]) -> None:
+        """Record the channel set."""
+        self.channels = channels  # The runner should pass all channel paths.
+        self.open_called = False  # Tests verify whether a stop prevented the network action.
+        self.run_called = False  # A stop after open must prevent run().
+        StopAfterOpenClient.instances.append(self)  # Keep the instance for assertions.
+
+    def open(self) -> None:
+        """Request stop as soon as open returns."""
+        self.open_called = True  # Record the network action before the injected stop.
+        if StopAfterOpenClient.stop_event is None:  # The test must inject the stop event.
+            raise AssertionError("The stop event was not configured.")  # Fail with a clear reason.
+        StopAfterOpenClient.stop_event.set()  # Simulate Stop during the post-open gap.
+
+    def run(self, _callback: object) -> None:
+        """Record an unexpected read-loop call."""
+        self.run_called = True  # The runner must not read after post-open stop.
+
+    def close(self) -> None:
+        """Accept close from the runner."""
+        return None  # The fake has no socket to close.
 
 
 class TestChannelStreamRunner:
     """Verify channel runner behavior."""
 
-    def setup_method(self) -> None:
-        """Forget the fake client of an earlier test."""
-        FakeClient.last = None  # Each test reads only the client that it built.
+    def test_source_map_and_message_shape_use_owned_stream_client(self) -> None:
+        """Map channel paths to the public source value."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a stream device.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a", "site-b")), sink)  # Runner.
+            try:  # Ensure the reader thread stops even if assertions fail.
+                runner.start()  # Start the daemon reader thread.
+                assert sink.wait_for_live(1, 1.0) == ["The WebSocket connection opened."]  # Subscription done.
+                device.publish("/sites/site-b/stats/devices", {"ok": True})  # Send one site-b event.
+                messages = sink.wait_for_messages(2, 1.0)  # Live note plus channel message.
+                assert messages[-1][0] == "json"  # Channel data stays JSON.
+                assert messages[-1][1] == {
+                    "event": "data",
+                    "channel": "/sites/site-b/stats/devices",
+                    "data": {"ok": True},
+                }  # Existing page shape stays stable.
+                assert messages[-1][2] == "site-b"  # Source map uses the repeatable value.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
 
-    def test_start_message_error_close_and_stop(self) -> None:
-        """Drive every SDK callback with a fake client."""
-        sink = FakeSink()  # Record runner output.
-        runner = ChannelStreamRunner(
-            object(), self._request(), sink, client_class=FakeClient
-        )  # Build a runner with a fake SDK.
-        runner.start()  # Start the fake client.
-        client = FakeClient.last  # Read the newest fake client.
-        assert client is not None and client.connected is True  # The runner built a client and connected it.
-        assert client.kwargs["auto_reconnect"] is True  # The runner enables reconnect.
-        assert client.kwargs["max_reconnect_attempts"] == 3  # The runner uses three attempts.
-        client.callbacks["open"]()  # Simulate an SDK open callback.
-        client.callbacks["message"](
-            {"channel": "/sites/site-a/stats/devices", "data": '{"ok": true}'}
-        )  # Simulate data.
-        assert sink.live_notes == ["The WebSocket connection opened."]  # The sink became live.
-        assert sink.messages[0][2] == "site-a"  # The runner mapped path to source.
-        client.callbacks["error"](RuntimeError("boom"))  # Simulate an SDK error.
-        assert sink.finished[-1][0] == SessionState.FAILED  # Errors fail the session.
-        runner.stop()  # Request a stop.
-        client.callbacks["close"](1000, "closed")  # Simulate the final close.
-        assert client.disconnected is True  # Stop did not wait for the SDK.
-        assert sink.finished[-1][0] == SessionState.STOPPED  # Stop maps close to stopped.
+    def test_reconnects_three_times_after_drops(self) -> None:
+        """Reconnect after drops using the profile delays."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a stream device.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            endpoint = self._endpoint(cloud, reconnect_delays=(0.05, 0.05, 0.05))  # Use short waits.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            start = time.monotonic()  # Measure that reconnect waits occurred.
+            try:  # Ensure retries stop before the fake cloud exits.
+                runner.start()  # Start the daemon reader thread.
+                cloud.wait_for_requests(1, 1.0)  # Wait for the initial connection.
+                device.drop()  # Drop the first connection.
+                cloud.wait_for_requests(2, 1.0)  # Wait for retry one.
+                device.drop()  # Drop retry one.
+                cloud.wait_for_requests(3, 1.0)  # Wait for retry two.
+                device.drop()  # Drop retry two.
+                requests = cloud.wait_for_requests(4, 1.0)  # Wait for retry three.
+                assert len(requests) == 4  # The runner made three new connections.
+                assert time.monotonic() - start >= 0.15  # The reconnect delays were used.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
 
-    def test_send_input_is_refused(self) -> None:
-        """Reject input for channel sessions."""
-        runner = ChannelStreamRunner(object(), self._request(), FakeSink(), client_class=FakeClient)  # Build a runner.
-        with pytest.raises(StreamRequestError):  # Channel runners are not shells.
-            runner.send_input("show version")  # Try shell input.
+    def test_failed_open_finishes_after_retry_budget(self) -> None:
+        """Fail after the third reconnect delay when subscribe never answers."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.register("/api-ws/v1/stream", object())  # This handler never confirms subscription.
+            sink = FakeSink()  # Record runner callbacks.
+            endpoint = self._endpoint(  # The same timeout bounds the handshake, so give a slow host room.
+                cloud, reconnect_delays=(0.01, 0.01, 0.01), subscribe_timeout=0.2
+            )  # Use short reconnect waits.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            try:  # Stop the runner after the retry-budget assertion.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the retry budget to end.
+                requests = cloud.wait_for_requests(4, 1.0)  # The fake cloud records just after its 101 answer.
+                assert len(requests) == 4  # Initial attempt plus three retries.
+                assert finished == [  # Keep the retry failure result stable.
+                    (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
+                ]
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
 
-    def _request(self) -> StartRequest:
-        """Build a repeatable channel request.
+    def test_drop_during_subscribe_consumes_retry_budget(self) -> None:
+        """Fail after retry attempts when every subscribe wait drops."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = DropDuringSubscribeDevice()  # Build a device that drops during subscribe.
+            assert callable(device.receive)  # The fake server calls this handler by reflection.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            delays = (0.01, 0.01)  # Keep the retry budget short.
+            endpoint = self._endpoint(cloud, reconnect_delays=delays, subscribe_timeout=0.2)  # Use short waits.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            try:  # Stop the runner after the drop-budget assertion.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the retry budget to end.
+                expected_attempts = len(delays) + 1  # The budget is initial attempt plus retries.
+                assert len(cloud.requests) == expected_attempts  # The runner did not retry forever.
+                assert device.drop_count == expected_attempts  # Each open attempt reached subscribe.
+                assert finished == [  # Keep the retry failure result stable.
+                    (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
+                ]
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
 
-        Returns:
-            A checked start request.
-        """
+    def test_post_subscription_flapping_consumes_retry_budget(self) -> None:
+        """Fail after five subscribed connections drop before healthy operation."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = DropAfterSubscribeDevice()  # Build a device that drops after each subscription.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            delays = (0.01, 0.01, 0.01, 0.01)  # Permit four retries and five total subscribed connections.
+            endpoint = self._endpoint(cloud, reconnect_delays=delays, subscribe_timeout=0.2)  # Use short waits.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            try:  # Stop the runner after the retry-budget assertion.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the final failed state.
+                expected_attempts = len(delays) + 1  # The initial connection and all retries must subscribe.
+                assert device.drop_count == expected_attempts  # At least five subscribed connections dropped.
+                assert len(sink.live_notes) == expected_attempts  # Every dropped connection reached live state.
+                assert finished == [  # The flapping endpoint must not open connections forever.
+                    (SessionState.FAILED, "The WebSocket connection failed after retry attempts.")
+                ]
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_stable_quiet_connections_receive_fresh_retry_budgets(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Recover repeatedly when each quiet connection operates long enough."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a quiet stream device.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            endpoint = self._endpoint(cloud, reconnect_delays=(0.01, 0.01))  # Use a two-retry budget.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            monkeypatch.setattr(channel_runner_module, "HEALTHY_OPERATION_SECONDS", 0.02)  # Bound this test.
+            try:  # Stop the runner after repeated healthy recovery.
+                runner.start()  # Start the daemon reader thread.
+                for live_count in range(1, 5):  # Exceed one retry budget with healthy connections.
+                    live_notes = sink.wait_for_live(live_count, 1.0)  # Wait for the current subscription.
+                    assert len(live_notes) == live_count  # Confirm that this connection reached live state.
+                    time.sleep(0.03)  # Let the quiet connection pass the health duration.
+                    device.drop()  # Drop the healthy connection to require another recovery.
+                recovered_notes = sink.wait_for_live(5, 1.0)  # Wait for recovery after the fourth healthy drop.
+                assert len(recovered_notes) == 5  # Healthy operation renewed the retry budget each time.
+                assert sink.finished == []  # The session remains active after genuine healthy recovery.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_http_4xx_handshake_refusal_fails_without_retry(self) -> None:
+        """Fail a 4xx handshake refusal without a retry."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault("refuse", status_code=403))  # 4xx refusal.
+            sink = FakeSink()  # Record runner callbacks.
+            runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a",)), sink)  # Build runner.
+            try:  # Stop the runner after the 4xx assertion.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the failure.
+                expected = ConnectFailure.REFUSED_TEXT.format(status=403)  # The reason must name the status.
+                assert finished == [(SessionState.FAILED, expected)]  # 4xx refusal fails at once.
+                assert len(cloud.requests) == 1  # A 4xx refusal must not retry.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    @pytest.mark.parametrize(
+        ("kind", "status_code", "error"),
+        (
+            ("refuse", 503, websocket.WebSocketBadStatusException("Handshake status 503", 503)),
+            ("refuse", 429, websocket.WebSocketBadStatusException("Handshake status 429", 429)),
+            ("stall", 0, TimeoutError("The handshake stalled.")),
+            ("reset", 0, ConnectionError("The peer reset the handshake.")),
+        ),
+    )
+    def test_open_failures_retry_budget_names_last_reason(
+        self, kind: str, status_code: int, error: BaseException
+    ) -> None:
+        """Fail after retry attempts and show the last open failure reason."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.fail_handshake("/api-ws/v1/stream", HandshakeFault(kind, status_code=status_code))  # Fault.
+            sink = FakeSink()  # Record runner callbacks.
+            delays = (0.01, 0.01)  # Keep the retry budget short.
+            endpoint = self._endpoint(cloud, reconnect_delays=delays, subscribe_timeout=0.1)  # Short timeout.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            try:  # Stop the runner after the retry-budget assertion.
+                expected = ConnectFailure.reason(error)  # Use the product mapper for the expected text.
+                if expected is None:  # Fail clearly if a row no longer maps to a safe reason.
+                    raise AssertionError("The representative open error did not map to a safe reason.")  # Fail fast.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the retry budget to end.
+                assert len(cloud.requests) == len(delays) + 1  # The retry budget was consumed once.
+                assert finished == [(SessionState.FAILED, expected)]  # The last open failure reason is visible.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_refused_channel_fails_without_path_in_reason(self) -> None:
+        """Fail at once when a channel subscription is refused."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a stream device.
+            device.refuse("/sites/site-a/stats/devices", "denied")  # Refuse the requested channel.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a",)), sink)  # Runner.
+            try:  # Stop the runner after the refusal assertion.
+                runner.start()  # Start the daemon reader thread.
+                finished = sink.wait_for_finished(1, 5.0)  # Wait for the subscription failure.
+                assert finished == [(SessionState.FAILED, "The stream subscription failed: denied.")]  # Safe reason.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_stop_during_reconnect_wait_stops_at_once(self) -> None:
+        """Wake a reconnect wait when the operator stops the runner."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            cloud.register("/api-ws/v1/stream", object())  # This handler never confirms subscription.
+            sink = FakeSink()  # Record runner callbacks.
+            endpoint = self._endpoint(cloud, reconnect_delays=(1.0,), subscribe_timeout=0.02)  # Long retry wait.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            runner.start()  # Start the daemon reader thread.
+            cloud.wait_for_requests(1, 1.0)  # Wait for the first failed attempt.
+            start = time.monotonic()  # Measure the stop latency.
+            runner.stop()  # Stop should wake the reconnect wait.
+            finished = sink.wait_for_finished(1, 1.0)  # Wait for stopped state.
+            assert time.monotonic() - start < 0.5  # Stop woke the wait promptly.
+            assert finished == [(SessionState.STOPPED, "The operator stopped the session.")]  # Stop state.
+
+    def test_stop_before_client_preparation_does_not_open(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Do not open a new client after an operator stop."""
+        sink = FakeSink()  # Record runner callbacks.
+        endpoint = self._endpoint_for_url("ws://127.0.0.1:1/api-ws/v1/stream")  # The fake ignores the URL.
+        runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+        entered = threading.Event()  # Signal the gap before client preparation.
+        resume = threading.Event()  # Hold the worker until stop returns.
+        prepare = runner._attempt._prepare_client  # Preserve the real preparation behavior.
+
+        def paused_prepare() -> object:
+            """Pause before the runner publishes a new client."""
+            entered.set()  # Tell the test that the worker reached the race window.
+            resume.wait(1.0)  # Wait for the operator stop with a test bound.
+            return prepare()  # Continue through the real client preparation.
+
+        StopAfterOpenClient.instances = []  # Clear prior fake-client instances.
+        StopAfterOpenClient.stop_event = runner._state.runtime.stop  # Inject the runner stop event.
+        monkeypatch.setattr(runner._attempt, "_prepare_client", paused_prepare)  # Pause the reported race window.
+        monkeypatch.setattr(channel_runner_module, "StreamClient", StopAfterOpenClient)  # Track open calls.
+        runner.start()  # Start the daemon reader thread.
+        assert entered.wait(1.0) is True  # Confirm that the worker reached the controlled window.
+        runner.stop()  # Stop before the worker prepares its client.
+        resume.set()  # Let the worker continue after stop returns.
+        finished = sink.wait_for_finished(1, 1.0)  # Wait for the stopped outcome.
+        assert finished == [(SessionState.STOPPED, "The operator stopped the session.")]  # Stop state.
+        assert StopAfterOpenClient.instances[0].open_called is False  # No connection started after stop.
+
+    def test_stop_after_open_does_not_mark_live_or_run_reader(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Stop after open before the runner marks the session live."""
+        sink = FakeSink()  # Record runner callbacks.
+        endpoint = self._endpoint_for_url("ws://127.0.0.1:1/api-ws/v1/stream")  # The fake ignores the URL.
+        runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+        StopAfterOpenClient.instances = []  # Clear prior fake-client instances.
+        StopAfterOpenClient.stop_event = runner._state.runtime.stop  # Inject the runner stop event for the fake client.
+        monkeypatch.setattr(
+            "src.websocket_streams.live.runners.channel.runner.StreamClient", StopAfterOpenClient
+        )  # Replace only this test's stream client.
+        runner.start()  # Start the daemon reader thread.
+        finished = sink.wait_for_finished(1, 1.0)  # Wait for stopped state.
+        assert finished == [(SessionState.STOPPED, "The operator stopped the session.")]  # Stop state.
+        assert sink.live_notes == []  # The page must not see a live connection after stop.
+        assert StopAfterOpenClient.instances[0].run_called is False  # No channel stream was left running.
+
+    def test_quiet_channel_stays_open_when_pongs_arrive(self) -> None:
+        """Keep a quiet channel alive when the fake cloud answers pings."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a stream device that stays quiet.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            endpoint = self._endpoint(cloud, read_timeout=0.05)  # Use a short keepalive interval.
+            runner = ChannelStreamRunner(endpoint, self._request(("site-a",)), sink)  # Build the runner.
+            try:  # Stop the quiet runner after the ping assertion.
+                runner.start()  # Start the daemon reader thread.
+                sink.wait_for_live(1, 1.0)  # Wait for subscription.
+                pings = cloud.wait_for_pings(3, 1.0)  # A healthy quiet channel should keep pinging.
+                assert len(pings) >= 3  # Pongs prevent a false drop.
+                assert len(sink.finished) == 0  # The session did not fail while pongs arrived.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def test_bad_json_and_empty_body_events_stay_visible(self) -> None:
+        """Keep malformed JSON and an empty body visible in channel messages."""
+        with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
+            device = StreamDevice()  # Build a stream device.
+            cloud.register("/api-ws/v1/stream", device)  # Route the stream path.
+            sink = FakeSink()  # Record runner callbacks.
+            runner = ChannelStreamRunner(self._endpoint(cloud), self._request(("site-a",)), sink)  # Build runner.
+            try:  # Ensure the reader thread stops after assertions.
+                runner.start()  # Start the daemon reader thread.
+                sink.wait_for_live(1, 1.0)  # Wait for subscription.
+                device.publish("/sites/site-a/stats/devices", "bad json")  # Publish malformed JSON text.
+                device.publish("/sites/site-a/stats/devices", data="")  # Publish an empty body.
+                messages = sink.wait_for_messages(2, 1.0)  # Wait for both channel messages.
+                assert messages[0][1]["data"] == "bad json"  # Malformed JSON stays as text.
+                assert messages[1][1]["data"] == ""  # The empty body stays empty.
+            finally:
+                runner.stop()  # Ensure the reader thread stops.
+
+    def _endpoint(
+        self,
+        cloud: FakeMistCloud,
+        reconnect_delays: tuple[float, ...] = (0.05, 0.05, 0.05),
+        read_timeout: float = 20.0,
+        subscribe_timeout: float = 1.0,
+    ) -> MistStreamEndpoint:
+        """Build a loopback stream endpoint."""
+        profile = TransportProfile(
+            stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
+            allow_loopback=True,
+            read_timeout_seconds=read_timeout,
+            subscribe_timeout_seconds=subscribe_timeout,
+            reconnect_delays=reconnect_delays,
+        )  # Configure short offline timeouts.
+        return MistStreamEndpoint(FakeApiSession(), profile)  # Return the endpoint under test.
+
+    def _endpoint_for_url(self, url: str) -> MistStreamEndpoint:
+        """Build an endpoint for a direct stream URL."""
+        profile = TransportProfile(stream_url=url, allow_loopback=True)  # Use a direct URL for a patched client.
+        return MistStreamEndpoint(FakeApiSession(), profile)  # Build endpoint with fake auth.
+
+    def _request(self, sites: tuple[str, ...]) -> StartRequest:
+        """Build a repeatable channel request."""
         site = FieldSpec("site_id", "Site", FieldKind.UUID, picker="sites")  # Build a site identifier.
         definition = ChannelDefinition(
             "site.stats.devices",
@@ -137,6 +482,4 @@ class TestChannelStreamRunner:
             (site,),
             "site_id",
         )  # Build a repeatable channel.
-        return StartRequest(
-            "channel", definition, {"site_id": ("site-a",)}, {}, "Device statistics - HQ"
-        )  # Return a checked request.
+        return StartRequest("channel", definition, {"site_id": sites}, {}, "Device statistics - HQ")  # Request.

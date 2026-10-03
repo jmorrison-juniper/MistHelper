@@ -3,7 +3,8 @@
 import pytest  # Pytest checks refusal paths.
 
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec  # Import field records.
-from src.websocket_streams.intake.fields import FieldValueChecker, StreamRequestError  # Import the checker under test.
+from src.websocket_streams.intake.fields.checker import FieldValueChecker  # Import the checker under test.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Import the refusal contract.
 
 
 def test_field_checker_converts_valid_values() -> None:
@@ -66,3 +67,26 @@ def test_field_checker_refuses_bad_list_item_and_choice() -> None:
         checker.check(
             FieldSpec("node", "Node", FieldKind.CHOICE, choices=("node0", "node1")), "node2"
         )  # Send an invalid choice.
+
+
+@pytest.mark.parametrize(
+    ("code", "status"),
+    [
+        ("not_terminal", 409),  # A session with no terminal refuses the terminal routes.
+        ("read_only", 409),  # A screen command takes no input.
+        ("input_full", 409),  # The queue before the first output is full.
+        ("too_large", 413),  # One input request holds too much text.
+        ("rate_limited", 429),  # The session received too many requests in one second.
+    ],
+)
+def test_terminal_refusal_codes_map_to_contract_status(code: str, status: int) -> None:
+    """Each terminal refusal code sends the HTTP status of the terminal contract (issue #3671)."""
+    refusal = StreamRequestError(code, "The terminal refused the request.")  # Build one terminal refusal.
+    assert refusal.status == status  # The blueprint sends the contract status.
+    assert refusal.to_payload()["code"] == code  # The page reads the same code from the JSON answer.
+
+
+def test_unknown_refusal_code_stays_a_bad_request() -> None:
+    """A code outside the table keeps the 400 status, so a new code cannot pass silently."""
+    refusal = StreamRequestError("no_such_code", "An unknown refusal.")  # Build a refusal with an unknown code.
+    assert refusal.status == 400  # The default status is a bad request.

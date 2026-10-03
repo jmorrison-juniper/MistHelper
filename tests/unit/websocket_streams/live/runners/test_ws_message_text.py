@@ -7,11 +7,9 @@ import logging  # The filter test builds a log record.
 
 import pytest  # The malformed JSON test checks the decoder refusal.
 
-from src.websocket_streams.live.runners.text import (
-    MessageShaper,
-    PacketSummary,
-    ShellAddressFilter,
-)  # The tests cover text helpers.
+from src.websocket_streams.live.runners.text.messages import MessageShaper  # Test channel message shaping.
+from src.websocket_streams.live.runners.text.packets import PacketSummary  # Test packet summary shaping.
+from src.websocket_streams.live.runners.text.redaction import ShellAddressFilter  # Test address redaction.
 
 
 class TestMessageText:
@@ -49,11 +47,14 @@ class TestMessageText:
         assert content["data"] == cut_json  # The shaper keeps the malformed text unchanged.
 
     def test_empty_body_stays_empty(self) -> None:
-        """Keep an empty channel body and an empty shell frame empty."""
-        kind, content, _source = MessageShaper().channel_message({"data": ""})  # Shape an event with an empty body.
+        """Keep an empty channel body empty."""
+        kind, content, _source = MessageShaper().channel_message(dict(data=""))  # Shape an empty body.
         assert kind == "json"  # Mappings still render as JSON.
         assert content["data"] == ""  # The empty body stays an empty string.
-        assert MessageShaper().clean_shell_text(b"") == ""  # An empty shell frame gives empty text.
+
+    def test_shaper_keeps_no_terminal_cleaner(self) -> None:
+        """Prove that the shaper no longer removes terminal control codes (issue #3671)."""
+        assert not hasattr(MessageShaper(), "clean_shell_text")  # xterm.js needs each raw control byte.
 
     def test_packet_summary_uses_dash_for_missing_fields(self) -> None:
         """Use dashes when packet fields are absent."""
@@ -61,11 +62,6 @@ class TestMessageText:
             {"src_ip": "1.1.1.1", "dst_ip": "2.2.2.2", "proto": "udp"}
         )  # Build one summary.
         assert summary == "- 1.1.1.1 -> 2.2.2.2 udp -"  # Missing time and length become dashes.
-
-    def test_shell_cleaning_removes_ansi(self) -> None:
-        """Remove ANSI escape sequences from shell output."""
-        clean = MessageShaper().clean_shell_text(b"\x1b[31mred\x1b[0m\x00")  # Clean one colored output string.
-        assert clean == "red"  # Only plain text remains.
 
     def test_shell_address_filter_redacts_wss_address(self) -> None:
         """Redact WebSocket addresses from log records."""

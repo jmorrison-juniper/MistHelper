@@ -28,6 +28,7 @@ class StreamSettings:
         buffer_messages: The maximum count of buffered messages per session.
         buffer_bytes: The maximum buffered bytes per session.
         max_stream_seconds: The maximum life of a live session.
+        terminal_history_bytes: The maximum terminal output bytes kept per terminal session.
     """
 
     changes_enabled: bool = False  # The default keeps state-changing utilities locked.
@@ -37,6 +38,7 @@ class StreamSettings:
     buffer_messages: int = 500  # The default bounds the message list size.
     buffer_bytes: int = 8 * 1024 * 1024  # The default bounds memory per session.
     max_stream_seconds: int = 1800  # The default bounds channel and shell life.
+    terminal_history_bytes: int = 1024 * 1024  # The default keeps 1 MiB of terminal output (issue #3671).
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str] | None = None) -> StreamSettings:
@@ -58,7 +60,8 @@ class StreamSettings:
             buffer_messages=cls._read_number(source, "PORTAL_WS_BUFFER_MESSAGES", 500, 50, 5000),
             buffer_bytes=cls._read_number(source, "PORTAL_WS_BUFFER_MB", 8, 1, 64) * 1024 * 1024,
             max_stream_seconds=cls._read_number(source, "PORTAL_WS_MAX_STREAM_MINUTES", 30, 1, 240) * 60,
-        )  # Convert megabytes and minutes to runtime units.
+            terminal_history_bytes=cls._read_number(source, "PORTAL_WS_TERMINAL_HISTORY_KB", 1024, 256, 8192) * 1024,
+        )  # Convert megabytes, minutes, and kibibytes to runtime units.
         logger.debug("Read WebSockets tab settings with max_sessions=%s", settings.max_sessions)  # Log safe data.
         return settings  # Return the immutable settings record.
 

@@ -13,9 +13,14 @@ from types import SimpleNamespace  # Return a checked request with a key attribu
 import pytest  # Assert contract errors from service calls.
 from flask import Flask  # Build small app instances for the service tests.
 
-from src.websocket_streams.intake.fields import StreamRequestError  # Not-ready errors use this type.
-from src.websocket_streams.live.sessions.buffer import MessagePage  # The fake manager returns a read answer.
-from src.websocket_streams.web.services import WebSocketsServiceParts, WebSocketsServices  # Classes under test.
+from src.websocket_streams.intake.fields.error import StreamRequestError  # Not-ready errors use this type.
+from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake manager returns a read answer.
+from src.websocket_streams.web.services.assembly.bundle import WebSocketServiceBundle  # Type the built service set.
+from src.websocket_streams.web.services.assembly.collaborators import (
+    WebSocketCollaborators,
+)  # Supply explicit test collaborators.
+from src.websocket_streams.web.services.assembly.factory import WebSocketServiceFactory  # Build test bundles.
+from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Store and stop app bundles.
 
 
 class FakeCatalog:
@@ -60,9 +65,9 @@ class FakeManager:
         """Return one stopped session."""
         return {"session_id": session_id, "state": "stopped"}  # Stop payload.
 
-    def send_input(self, session_id: str, line: str | None, key: str | None) -> None:
-        """Accept shell input without using it."""
-        assert session_id and (line is not None or key is not None)  # The service passed one input form.
+    def session(self, session_id: str) -> object:
+        """Refuse each session, because the fake holds no session."""
+        raise StreamRequestError("not_found", f"The session {session_id} was not found.")  # Contract error.
 
     def delete(self, session_id: str) -> None:
         """Accept a delete request."""
@@ -115,19 +120,19 @@ class FakePickers:
         return {"rows": [{"id": value, "label": "Row"}], "total_count": 1, "reason": None}  # Payload.
 
 
-def make_service(reason: str | None = None) -> tuple[WebSocketsServices, FakeManager]:
+def make_service(reason: str | None = None) -> tuple[WebSocketServiceBundle, FakeManager]:
     """Build a service with fake parts."""
     manager = FakeManager()  # The test reads this object after the action.
-    parts = WebSocketsServiceParts(
-        FakeCatalog(), FakeChecker(), FakePickers(), manager, FakeSettings(), reason
-    )  # Parts.
-    return WebSocketsServices(parts), manager  # Return both objects.
+    collaborators = WebSocketCollaborators(
+        FakeCatalog(), FakeChecker(), FakePickers(), manager, FakeSettings()
+    )  # Supply deterministic collaborators.
+    return WebSocketServiceFactory.from_collaborators(collaborators, reason), manager  # Return both objects.
 
 
 def test_catalog_payload_adds_ready_and_limits() -> None:
     """The service adds readiness and limits to the catalog payload."""
     service, _manager = make_service()  # Build a ready service.
-    payload = service.catalog_payload()  # Read the catalog payload.
+    payload = service.catalog.payload()  # Read the catalog payload.
     assert payload["ready"] is True  # Ready state is true.
     assert payload["limits"]["max_sessions"] == 2  # Limits came from settings.
     assert "path" not in str(payload)  # The payload does not expose a path field.
@@ -137,31 +142,49 @@ def test_not_ready_refuses_start_and_picker() -> None:
     """A not-ready service refuses starts and pickers."""
     service, _manager = make_service("The portal has no Mist session or organization.")  # Build not ready.
     with pytest.raises(StreamRequestError) as start_error:  # Start must fail.
-        service.start_session({"kind": "channel"})  # Attempt a start.
+        service.sessions.lifecycle.start({"kind": "channel"})  # Attempt a start.
     with pytest.raises(StreamRequestError) as picker_error:  # Picker must fail.
-        service.devices("site1")  # Attempt a picker read.
+        service.pickers.site.devices("site1")  # Attempt a picker read.
     assert start_error.value.code == "not_ready"  # Start refusal code.
     assert picker_error.value.code == "not_ready"  # Picker refusal code.
+
+
+def test_not_ready_refuses_the_terminal() -> None:
+    """A not-ready service refuses the terminal routes before the gateway runs."""
+    service, _manager = make_service("The portal has no Mist session or organization.")  # Build not ready.
+    with pytest.raises(StreamRequestError) as terminal_error:  # The terminal must fail.
+        service.terminal.read("missing", 0, 0.0)  # Attempt a terminal read.
+    assert terminal_error.value.code == "not_ready"  # The refusal uses the contract code.
+    assert terminal_error.value.status == 503  # The page shows the not-ready state.
+
+
+def test_ready_terminal_gateway_reaches_the_manager() -> None:
+    """The ready service gives one gateway, and the gateway finds sessions through the manager."""
+    service, _manager = make_service()  # Build a ready service.
+    terminal = service.terminal  # Read the terminal service.
+    with pytest.raises(StreamRequestError) as read_error:  # The fake manager holds no session.
+        terminal.read("missing", 0, 0.0)  # Read a session that does not exist.
+    assert service.terminal is terminal  # One terminal service owns the process gateway.
+    assert read_error.value.code == "not_found"  # The manager refusal reaches the route.
 
 
 def test_ready_service_delegates_to_manager_and_pickers() -> None:
     """A ready service delegates route work to the built parts."""
     service, manager = make_service()  # Build a ready service.
-    started = service.start_session({"kind": "channel"})  # Start a fake session.
-    listed = service.list_sessions()  # List sessions.
-    read = service.read_messages("abc123", 4, 10)  # Read messages.
-    stopped = service.stop_session("abc123")  # Stop session.
-    sent = service.send_input("abc123", {"key": "enter"})  # Send shell key.
-    deleted = service.delete_session("abc123")  # Delete session.
-    filename, lines = service.download_session("abc123")  # Download session.
-    picker = service.mxedges(None)  # Read a picker.
-    device_picker = service.devices("site1")  # Read devices through the picker service.
-    map_picker = service.maps("site1")  # Read maps through the picker service.
-    asset_picker = service.assets("site1")  # Read assets through the picker service.
-    client_picker = service.sdkclients("site1", "map1")  # Read SDK clients through the picker service.
+    started = service.sessions.lifecycle.start({"kind": "channel"})  # Start a fake session.
+    listed = service.sessions.lifecycle.list()  # List sessions.
+    read = service.sessions.messages.read("abc123", 4, 10)  # Read messages.
+    stopped = service.sessions.lifecycle.stop("abc123")  # Stop session.
+    deleted = service.artifacts.delete("abc123")  # Delete session.
+    filename, lines = service.artifacts.download("abc123")  # Download session.
+    picker = service.pickers.related.mxedges(None)  # Read a picker.
+    device_picker = service.pickers.site.devices("site1")  # Read devices through the picker service.
+    map_picker = service.pickers.site.maps("site1")  # Read maps through the picker service.
+    asset_picker = service.pickers.site.assets("site1")  # Read assets through the picker service.
+    client_picker = service.pickers.related.sdkclients("site1", "map1")  # Read SDK clients.
     assert manager.started is True and started["session_id"] == "abc123"  # Manager start ran.
     assert listed["sessions"] == [] and read.next_after == 4  # Manager reads ran.
-    assert stopped["state"] == "stopped" and sent == {"ok": True}  # Stop and input ran.
+    assert stopped["state"] == "stopped"  # Stop ran.
     assert deleted == {"ok": True} and filename == "download.jsonl"  # Delete and download ran.
     assert list(lines) == ['{"seq":1}\n'] and picker["rows"][0]["label"] == "Row"  # Streams and picker ran.
     assert device_picker["rows"][0]["label"] == "Row" and map_picker["rows"][0]["label"] == "Row"  # Picker rows.
@@ -172,8 +195,8 @@ def test_for_app_reuses_injected_service() -> None:
     """for_app returns the service that a test injects."""
     app = Flask(__name__)  # Build a small Flask app.
     service, _manager = make_service()  # Build an injected service.
-    app.config[WebSocketsServices.CONFIG_KEY] = service  # Inject the service.
-    assert WebSocketsServices.for_app(app) is service  # The service is reused.
+    app.config[WebSocketServiceRegistry.CONFIG_KEY] = service  # Inject the service.
+    assert WebSocketServiceRegistry.for_app(app) is service  # The service is reused.
 
 
 def test_for_app_builds_not_ready_service_without_credentials() -> None:
@@ -181,12 +204,12 @@ def test_for_app_builds_not_ready_service_without_credentials() -> None:
     app = Flask(__name__)  # Build a small Flask app.
     app.config["APISESSION"] = None  # Simulate a portal with no Mist session.
     app.config["ORG_ID"] = ""  # Simulate a portal with no organization.
-    service = WebSocketsServices.for_app(app)  # Build the app-scoped service.
-    catalog = service.catalog_payload()  # The catalog route can still answer.
-    listed = service.list_sessions()  # The session list can still answer.
+    service = WebSocketServiceRegistry.for_app(app)  # Build the app-scoped service.
+    catalog = service.catalog.payload()  # The catalog route can still answer.
+    listed = service.sessions.lifecycle.list()  # The session list can still answer.
     with pytest.raises(StreamRequestError) as error:  # A start must refuse when not ready.
-        service.start_session({"kind": "channel"})  # Attempt a start.
-    service.shutdown()  # Shutdown the empty manager safely.
+        service.sessions.lifecycle.start({"kind": "channel"})  # Attempt a start.
+    service.sessions.lifecycle.shutdown()  # Shutdown the empty manager safely.
     assert catalog["ready"] is False  # The payload reports not ready.
     assert listed["sessions"] == []  # The empty manager returns no sessions.
     assert error.value.code == "not_ready"  # The refusal uses the contract code.
@@ -194,9 +217,8 @@ def test_for_app_builds_not_ready_service_without_credentials() -> None:
 
 def test_fallback_not_ready_parts_have_limits() -> None:
     """Fallback parts provide limits when settings cannot import."""
-    parts = WebSocketsServices._not_ready_parts("The engine is loading.")  # Build fallback parts.
-    service = WebSocketsServices(parts)  # Build a service from fallback parts.
-    payload = service.catalog_payload()  # Read the safe catalog payload.
+    service = WebSocketServiceFactory.not_ready("The engine is loading.")  # Build fallback services.
+    payload = service.catalog.payload()  # Read the safe catalog payload.
     assert payload["limits"]["capture_seconds"] == 60  # Fallback settings keep capture seconds.
 
 
@@ -204,13 +226,13 @@ def test_stop_for_app_calls_shutdown() -> None:
     """stop_for_app shuts down an existing service."""
     app = Flask(__name__)  # Build a small Flask app.
     service, manager = make_service()  # Build an injected service.
-    app.config[WebSocketsServices.CONFIG_KEY] = service  # Inject the service.
-    WebSocketsServices.stop_for_app(app)  # Stop WebSocket services.
+    app.config[WebSocketServiceRegistry.CONFIG_KEY] = service  # Inject the service.
+    WebSocketServiceRegistry.stop_for_app(app)  # Stop WebSocket services.
     assert manager.shutdown_called is True  # Shutdown reached the manager.
 
 
 def test_stop_for_app_without_service_is_safe() -> None:
     """stop_for_app does nothing when the app has no service."""
     app = Flask(__name__)  # Build a small Flask app.
-    WebSocketsServices.stop_for_app(app)  # Stop without a configured service.
-    assert WebSocketsServices.CONFIG_KEY not in app.config  # No service was created.
+    WebSocketServiceRegistry.stop_for_app(app)  # Stop without a configured service.
+    assert WebSocketServiceRegistry.CONFIG_KEY not in app.config  # No service was created.

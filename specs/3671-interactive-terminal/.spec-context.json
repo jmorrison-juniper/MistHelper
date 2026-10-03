@@ -1,0 +1,37 @@
+{
+  "workflow": "speckit",
+  "specName": "Own Mist Live Connections and an Interactive Shell Terminal",
+  "branch": "feat/3671-interactive-terminal",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-10-01T07:20:00.000Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-10-01T09:21:48.000Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-10-01T10:03:14.000Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-10-02T09:55:51.000Z"
+    }
+  ]
+}

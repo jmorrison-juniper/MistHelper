@@ -69,23 +69,114 @@
     border-bottom: 0;
 }
 
-.ws-message-row pre,
-.ws-screen,
-.ws-terminal {
+.ws-message-row pre {
     color: var(--bs-body-color);
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-.ws-screen,
-.ws-terminal {
-    min-height: 18rem;
-    background: #050607;
-    color: #d7ffd7;
-    border-radius: 0.4rem;
-    padding: 0.75rem;
+.ws-terminal-panel {
+    position: relative;
 }
 
-.ws-terminal-input .btn-group {
-    gap: 0.25rem;
+.ws-terminal-screen {
+    min-height: 18rem;
+    height: 30rem;
+    background: #050607;
+    border-radius: 0.4rem;
+    overflow: hidden;
+}
+
+.ws-terminal-screen-fixed {
+    min-height: 44rem;
+    height: 44rem;
+    overflow: auto;
+}
+
+.ws-terminal-settings {
+    position: relative;
+}
+
+.ws-terminal-settings summary {
+    list-style: none;
+}
+
+.ws-terminal-settings summary::-webkit-details-marker {
+    display: none;
+}
+
+.ws-terminal-settings-menu {
+    position: absolute;
+    z-index: 20;
+    min-width: 14rem;
+    margin-top: 0.25rem;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.4rem;
+    box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 25%);
+}
+
+.ws-terminal-menu {
+    position: fixed;
+    z-index: 1100;
+    min-width: 9rem;
+    padding: 0.25rem 0;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.4rem;
+    box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 25%);
+}
+
+.ws-terminal-menu .disabled {
+    color: var(--bs-secondary-color);
+    pointer-events: none;
+}
+
+.ws-terminal-toast {
+    color: var(--bs-body-color);
+}
+
+.ws-terminal-progress {
+    width: 100%;
+}
+
+.ws-terminal-paste-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(0 0 0 / 55%);
+}
+
+.ws-terminal-dialog-card {
+    width: min(42rem, calc(100vw - 2rem));
+    padding: 1rem;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+}
+
+.ws-terminal-paste-preview {
+    max-height: 10rem;
+    overflow: auto;
+    padding: 0.5rem;
+    background: #050607;
+    color: #d7ffd7;
+    border-radius: 0.35rem;
+    white-space: pre-wrap;
+}
+
+.ws-terminal-clipboard-helper {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.xterm {
+    height: 100%;
+    padding: 0.75rem;
 }

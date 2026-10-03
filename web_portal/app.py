@@ -10,7 +10,6 @@ import logging
 import os
 from typing import Any
 
-
 from flask import Flask, Response, send_from_directory
 
 from web_portal.services.config import PortalConfigLoader, SecurityMiddleware, ThemeManager
@@ -180,18 +179,18 @@ class WebPortalApp:
     @staticmethod
     def _register_blueprints(app: Flask) -> None:
         """Register all route blueprints with the app."""
+        from src.websocket_streams.web.blueprint.registry import WebSocketBlueprint  # Build the WebSocket routes.
         from web_portal.routes.dashboard import dashboard_bp
         from web_portal.routes.data import data_bp
         from web_portal.routes.maps import maps_bp
         from web_portal.routes.operations import operations_bp
         from web_portal.routes.settings import settings_bp
-        from src.websocket_streams.web.blueprint import websockets_bp  # Register the WebSockets tab from gated source.
 
         app.register_blueprint(dashboard_bp)
         app.register_blueprint(data_bp)
         app.register_blueprint(operations_bp)
         app.register_blueprint(maps_bp)
-        app.register_blueprint(websockets_bp)  # Add the WebSockets page and its short API routes.
+        app.register_blueprint(WebSocketBlueprint.create())  # Add the WebSocket page and its short API routes.
         app.register_blueprint(settings_bp)
         WebPortalApp._register_webhook_blueprint(app)
 
@@ -298,8 +297,8 @@ class WebPortalApp:
     @staticmethod
     def _stop_websocket_sessions(app: Flask) -> None:
         """Stop the WebSocket session manager if the app built one."""
-        from src.websocket_streams.web.services import WebSocketsServices  # Import lazily to avoid a startup cycle.
+        from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Import the app registry.
 
         logger.info("Stopping WebSocket sessions for the web portal")  # Log before the WebSocket shutdown.
-        WebSocketsServices.stop_for_app(app)  # Stop each live WebSocket session and its reaper.
+        WebSocketServiceRegistry.stop_for_app(app)  # Stop each live WebSocket session and its reaper.
         logger.debug("WebSocket sessions stopped for the web portal")  # Confirm the WebSocket shutdown.

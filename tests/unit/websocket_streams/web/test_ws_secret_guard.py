@@ -3,17 +3,20 @@
 Why:
     Issue #3551 requires the browser answers to exclude the API token, raw
     Mist channel paths, and Mist WebSocket addresses.
+    Issue #3671 adds the terminal routes, so the guard reads them too.
 """
 
 from __future__ import annotations  # Keep annotations lazy for Flask imports.
 
 from collections.abc import Iterator  # Type the fake download stream.
+from types import SimpleNamespace  # Group fake leaf services.
 from typing import Any  # Type Flask test client answers.
 
 import pytest  # Use fixtures for the portal app lifetime.
 
-from src.websocket_streams.live.sessions.buffer import MessagePage, StreamMessage  # The fake read returns records.
-from src.websocket_streams.web.services import WebSocketsServices  # Inject the fake WebSocket service.
+from src.websocket_streams.live.sessions.buffer.message import StreamMessage
+from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
+from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Inject the fake service bundle.
 from web_portal.app import WebPortalApp  # Build the real portal app as the browser tests do.
 from web_portal.menu_registry import build_static_menu_actions  # Supply normal menu actions.
 
@@ -24,8 +27,49 @@ CHANNEL_PATH = f"/sites/{SITE_ID}/stats/devices"  # A raw channel path that must
 WS_ADDRESS = "wss://api-ws.mist.com/api-ws/session"  # A WebSocket address that must never appear.
 
 
+class SecretGuardTerminal:
+    """Fake terminal gateway with safe answers for the terminal routes."""
+
+    def read(self, _session_id: str, after: int, _wait_seconds: float) -> dict[str, object]:
+        """Return a safe terminal read answer."""
+        return {
+            "data": "b2s=",
+            "first": 0,
+            "next": after + 2,
+            "gap": 0,
+            "state": "live",
+            "reason": "",
+            "input_ready": True,
+            "read_only": False,
+            "expires_at": "2026-10-01T09:30:00Z",
+        }  # The two bytes "ok" and no address.
+
+    def send(self, _session_id: str, data: str) -> dict[str, object]:
+        """Return a safe input answer."""
+        return {"accepted": len(data.encode("utf-8")), "queued": False}  # No input text appears.
+
+    def resize(self, _session_id: str, cols: int, rows: int) -> dict[str, object]:
+        """Return a safe size answer."""
+        return {"cols": cols, "rows": rows}  # The size holds no secret.
+
+
 class SecretGuardServices:
     """Fake service with safe responses for all WebSocket routes."""
+
+    def __init__(self) -> None:
+        """Group the fake leaf services."""
+        lifecycle = SimpleNamespace(
+            start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
+        )  # Group session lifecycle behavior.
+        self.sessions = SimpleNamespace(
+            lifecycle=lifecycle, messages=SimpleNamespace(read=self.read_messages)
+        )  # Group lifecycle and message behavior.
+        self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group catalog behavior.
+        self.artifacts = SimpleNamespace(
+            delete=self.delete_session, download=self.download_session
+        )  # Group artifact behavior.
+        self.terminal = SecretGuardTerminal()  # Expose direct terminal behavior.
+        self.pickers = SimpleNamespace(site=self, related=self)  # Group picker behavior.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return a safe catalog payload."""
@@ -56,10 +100,6 @@ class SecretGuardServices:
         payload = self._session(session_id)  # Start with a safe session.
         payload["state"] = "stopped"  # Mark stopped.
         return payload  # Safe payload.
-
-    def send_input(self, _session_id: str, _body: object) -> dict[str, object]:
-        """Return a safe input answer."""
-        return {"ok": True}  # No input text appears.
 
     def delete_session(self, _session_id: str) -> dict[str, object]:
         """Return a safe delete answer."""
@@ -122,7 +162,7 @@ def portal_client() -> Iterator[Any]:
     app.config["TESTING"] = True  # Surface route errors to the test.
     app.config["WTF_CSRF_ENABLED"] = False  # This test reads payload content, not the CSRF guard.
     app.config["APISESSION"] = {"token": API_TOKEN}  # Store a token-shaped value that must not leak.
-    app.config[WebSocketsServices.CONFIG_KEY] = SecretGuardServices()  # Inject safe route behavior.
+    app.config[WebSocketServiceRegistry.CONFIG_KEY] = SecretGuardServices()  # Inject safe route behavior.
     try:  # Ensure shutdown runs even when an assertion fails.
         yield app.test_client()  # Give tests an in-process client.
     finally:
@@ -138,7 +178,9 @@ def test_websocket_routes_do_not_leak_secrets(portal_client: Any) -> None:
         portal_client.post("/api/websockets/sessions", json={"kind": "channel", "key": "site.stats.devices"}),
         portal_client.get("/api/websockets/sessions/abc123/messages?after=0"),
         portal_client.post("/api/websockets/sessions/abc123/stop"),
-        portal_client.post("/api/websockets/sessions/abc123/input", json={"line": "show version"}),
+        portal_client.post("/api/websockets/sessions/abc123/input", json={"data": "show version\r"}),
+        portal_client.get("/api/websockets/sessions/abc123/terminal?after=0"),
+        portal_client.post("/api/websockets/sessions/abc123/resize", json={"cols": 80, "rows": 24}),
         portal_client.delete("/api/websockets/sessions/abc123"),
         portal_client.get("/api/websockets/sessions/abc123/download"),
         portal_client.get(f"/api/websockets/sites/{SITE_ID}/devices"),

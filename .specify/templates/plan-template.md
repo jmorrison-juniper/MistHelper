@@ -42,6 +42,28 @@
 
 [Gates determined based on constitution file]
 
+For repository structure and generated files:
+
+- If repository workflow requires a direct child in an established process
+  folder, confirm that the change adds only its own unique record.
+- Record existing process-folder debt and a separate incremental remediation
+  action.
+- Confirm that product outputs remain under `data/`.
+- Generated test evidence MAY use the established, git-ignored
+  `test-artifacts/` folder.
+
+For a feature that uses Juniper Mist Cloud:
+
+- Confirm that every REST request uses a working mistapi method.
+- If the feature proposes an owned WebSocket transport, name the matching
+  mistapi WebSocket path and the contract that it cannot meet.
+- Name the contract tests that prove the SDK path is broken, incomplete, or
+  cannot preserve required output.
+- Confirm that the owned transport preserves SDK authentication and endpoint
+  contracts.
+- Confirm tests cover output, failure handling, safety, and secret redaction.
+- Treat a missing proof or contract test as a failed gate.
+
 ## Project Structure
 
 ### Documentation (this feature)

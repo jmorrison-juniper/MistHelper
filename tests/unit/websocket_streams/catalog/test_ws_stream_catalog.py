@@ -1,9 +1,14 @@
 """Tests for the joined WebSocket stream catalog."""
 
+import json  # Parse the shared structured logging records.
+import logging  # Capture the catalog logging levels.
+
+import pytest  # Type the log capture fixture.
+
 from src.websocket_streams.catalog.channels import ChannelCatalog  # Import channel catalog.
 from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Check the class of the shell entry.
-from src.websocket_streams.catalog.registry import StreamCatalog  # Import the registry under test.
-from src.websocket_streams.catalog.utilities import UtilityCatalog  # Import utility catalog.
+from src.websocket_streams.catalog.registry.stream_catalog import StreamCatalog  # Import the registry leaf class.
+from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Import the utility leaf class.
 
 
 def build_catalog(changes: bool = False, shell: bool = False) -> StreamCatalog:
@@ -45,3 +50,14 @@ def test_stream_catalog_lock_flag_respects_flags() -> None:
     assert (
         unlocked is not None and build_catalog(changes=True).lock_flag(unlocked) is None
     )  # The enabled flag gives no lock.
+
+
+def test_stream_catalog_logs_bounded_json_without_catalog_keys(caplog: pytest.LogCaptureFixture) -> None:
+    """The registry logs safe JSON without an operator-controlled key."""
+    caplog.set_level(logging.DEBUG)  # Capture both action and result records.
+    catalog = build_catalog()  # Build the real joined catalog.
+    catalog.find("utility", "operator-token-value")  # Supply a key that must not enter a log.
+    records = [json.loads(record.message) for record in caplog.records if record.message.startswith("{")]  # Parse JSON.
+    assert len(records) == 12  # The catalog build and lookup must emit the complete structured record sequence.
+    assert all("event" in record and len(record) <= 9 for record in records)  # Enforce bounded record fields.
+    assert "operator-token-value" not in caplog.text  # Keep the operator-controlled key outside logs.
