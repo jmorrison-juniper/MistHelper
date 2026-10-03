@@ -103,6 +103,7 @@ def test_bulk_preview_uses_singular_counts(page: Any) -> None:
     sync_api.expect(page.get_by_test_id("history-runs-preview-summary")).to_have_text(  # Issue #3472.
         "1 run across 1 site."
     )
+    assert page.get_by_test_id("history-runs-preview-summary").inner_text() == "1 run across 1 site."  # Prove the noun.
 
 
 def test_bulk_selection_survives_reload_but_requires_a_new_preview(page: Any) -> None:
