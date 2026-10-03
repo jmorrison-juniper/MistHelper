@@ -237,13 +237,53 @@ and SRX-1500, read-only commands, a host portal, and the test container
 | Show Route pause | With no protocol, SRX-1500 sends one table message, so the output has no pause. The table holds 0 rows, and the page shows "The device sent an empty table." A read-only probe on 2026-10-02 showed that the Mist cloud itself sends that empty table for an empty body, for Protocol `any`, and for VRF `default`. The request body equals the SDK body. Issue #3716 asks for a hint on the form. |
 | Show Route with a protocol | Protocol `direct` gave 5 of 5 full runs through the browser on 2026-10-02. Each run held 5,269 characters and 102 lines. With the digits masked, the 5 texts are equal, because only the route ages change. The cloud split the text into 39 to 65 messages, and each run took 7.8 to 9.1 seconds. |
 | Message rows | The page shows each cloud message as one row, and the cloud splits the text at random points. A word can start in one row and end in the next row. Issue #3723 records this defect, which also exists on `main`. |
-| Idle connection | After about 4 idle minutes, the first Mist API read of the host portal failed with a connection reset. The site list then showed the no-rows reason, and a new read worked. Issue #3732 records this defect. The branch does not change the site list route or the session setup. |
+| Idle connection | Stage 1 recorded 13 site-list resets after about 90 idle seconds. A retry 25 seconds later worked. Issue #3732 records this defect. The branch does not change the site list route or the session setup. |
 | Show ARP runs | SRX-1500 gave 5 of 5 finished runs through the browser on 2026-10-02. Each run took 8.8 to 10.5 seconds and held 34 to 50 messages. Each run held 68 entries and the device line "Total entries: 68". After the digits are masked, the first table text is equal in all 5 runs. About 1 second after the table, the device starts a refreshed copy. In one earlier run, the first entry of that copy arrived before the quiet time ended, so that run held 69 entry lines. |
 | Test device runs | ARP and Route each gave 100 of 100 full runs against a fake device that answers at once. The 100 ARP runs took 6.84 seconds, and the 100 Route runs took 6.64 seconds. |
 | Quiet time | No pause is longer than 5 seconds, so the trigger table keeps a quiet time of 5 seconds. |
 | Screen size | Top and Monitor Traffic open at 80 x 40 and fill all 40 rows. |
 | Silent shell | A quick fourth shell on the switch can stay silent. The page shows a notice after 20 seconds. The Mist cloud closes the terminal after about 90 seconds, and the page shows the no-answer reason (issue #3710). |
 | Echo time | The host portal measured a median of 212 ms and a 95th percentile of 239 ms. The test container measured a median of about 212 ms over 80 samples. One sample took 530 ms. |
+
+### Real-gear stages
+
+The staged runs used the Morrison House site on 2026-10-02. The commands were
+read-only, except for the guarded port bounce in stage 3.
+
+| Stage | Scope | Result |
+| - | - | - |
+| 1 | Page, channels, utilities, packet capture, and session limit | The run finished in about 30 minutes. The SRX utilities finished. The access point utilities finished. The wired capture showed 119 packet rows. |
+| 1b | Session limit, MXedge channels, and a late session | Five sessions ran. The sixth request got HTTP 429. The deprecated MXedge channels failed. The stats variants worked. Issue #3737 tracks their removal. |
+| 2 | Shell, resize, pager, copy, paste, settings, end rules, early input, and screens | The run exited with code 0. The first prompt took 2.09 seconds. Thirty echo samples gave a 163.2 ms median and a 181.4 ms 95th percentile. Top and Monitor Traffic filled an 80 by 40 screen. |
+| 3 | Port bounce, disconnected switch, and concurrent load | The page found the guarded port and showed the destructive-action warning. The port sent no output and timed out after 91.115 seconds. The disconnected switch shell got HTTP 400. Its ARP utility timed out after 90.9 seconds. Three concurrent shells stayed responsive and stopped cleanly. |
+
+Stage 3 preserved the port state. `ge-0/0/3` was administratively up and
+operationally down before and after the attempt. The page sent 13 input requests.
+The browser reported no console errors and no HTTP errors.
+
+The load step opened three shells. Five page loads took 0.130 to 0.240 seconds.
+The five catalog requests took 10.1 to 30.0 ms. All three shells ended in the
+`Stopped` state.
+
+### Real-gear route performance
+
+| Route or resource | Result |
+| - | - |
+| Session list | 3.7 to 4.7 ms median across the staged runs |
+| Message reads | 4.1 to 4.9 ms median |
+| Session creation | 10.5 to 17 ms median |
+| Catalog | 17 to 23 ms median in stages 1 and 2. Stage 3 measured 178.1 ms across two reads. |
+| Site devices | 47.5 to 115 ms median |
+| Sites | 114.5 to 185 ms median. Stage 1 reached 5.9 seconds during connection resets. |
+| Terminal input | 5.0 to 6.5 ms median |
+| Terminal resize | 5.9 to 7.5 ms median |
+| Terminal long poll | Up to 20 seconds by design |
+| Page catalog load | 0.130 to 0.960 seconds |
+| Probe process | The working set was 131.3 to 140 MB. The process used 51 to 53 threads. |
+
+Stage 1 recorded 13 site-list connection resets after about 90 idle seconds.
+The reset arrived about 80 ms after the request. A retry 25 seconds later worked.
+The update on issue #3732 records this evidence.
 
 ### Browser measurements against the fake device (task T050)
 
@@ -258,3 +298,21 @@ round trip to the Mist cloud, so it does not measure the portal part.
 | SC-005 load | Another page answers in less than 1 second while 5 shells send output | 0.24 to 0.34 seconds in 3 runs. The test fails at 1 second or more. |
 | Paste split | A 256 KiB paste splits in less than 50 ms | 0.50 ms for 64 parts of 4,096 characters |
 
+## R14. Current validation results
+
+The final focused validation gave these results.
+
+| Check | Result |
+| - | - |
+| Unit tests | 326 passed. |
+| Browser end-to-end tests | 57 passed. |
+| Contract tests | 1,679 passed and 1 skipped. |
+| Ruff | Passed. |
+| Black | Passed. |
+| Node syntax check | Passed. |
+| mypy | Passed on 530 files. |
+
+The combined guardrail run did not pass. It reported 2,598 passed, 48 failed,
+and 3 skipped. The failures came from a missing test-quality baseline,
+path-trace mismatches, and `agents.md` input validation. This result is separate
+from the focused validation above.
