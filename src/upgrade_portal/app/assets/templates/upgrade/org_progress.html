@@ -261,6 +261,9 @@
         <p class="portal-card-note">
           This check sends no firmware, stop, or cancel request to Mist. The portal changes a child job only with complete proof.
         </p>
+        <p class="portal-card-note" data-testid="org-upgrade-reconcile-retry-note">
+          {{ controls.reconcile.retry_note }}
+        </p>
         <ul data-testid="org-upgrade-reconcile-children">
           {% for child in controls.reconcile.children %}
             <li data-testid="org-upgrade-reconcile-child-{{ child.child_id }}">

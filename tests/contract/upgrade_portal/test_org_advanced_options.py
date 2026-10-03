@@ -424,6 +424,15 @@ def test_the_first_paint_hides_each_control_that_the_plan_does_not_read(harness:
     assert "disabled" in opening_tag(page, "org-upgrade-rrm-node-order")  # A hidden control posts no value.
 
 
+def test_the_big_bang_first_paint_hides_and_disables_failure_percentage(harness: AdvancedHarness) -> None:
+    """Big bang does not read the failure percentage, so the page sends no value."""
+    answer = save(harness, strategy="big_bang")  # Save the strategy that does not use a failure threshold.
+    assert answer.status_code == 200  # The plan is valid without a failure percentage.
+    page = harness.client.get(OPTIONS_PAGE).get_data(as_text=True)  # Render the saved strategy.
+    assert is_hidden(page, "org-upgrade-max-failure-percentage-field")  # The unused field stays hidden.
+    assert "disabled" in opening_tag(page, "org-upgrade-max-failures")  # The hidden field cannot post a value.
+
+
 def test_back_shows_each_saved_canary_and_peer_value(harness: AdvancedHarness) -> None:
     """The page shows each saved canary and peer value after Back."""
     assert save(harness, **PEER_CHOICES).status_code == 200  # Save a plan with each value.
