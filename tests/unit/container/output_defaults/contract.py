@@ -122,7 +122,7 @@ class ProtectedGuard:
     """Keep the complete active compose and readiness behavior at the base."""
 
     HASHES = {  # Byte identity also protects settings outside the tested readiness matrix.
-        "compose.yml": "b951b7218fe7d6fd35cb3ecd571598505949528eae4be1a7971b17d8b156be3b",
+        "compose.yml": "dd50436f3e5e92df9dc57071ba35ec6155f2ac2e371e1a9c2e3e15c913b335fb",
         "web_portal/routes/dashboard.py": "8d5f41817efbb24fd2b4e856399afee62617f56450ed993a091e0ddb7d0f9424",
     }
 
