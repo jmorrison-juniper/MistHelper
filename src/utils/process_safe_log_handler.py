@@ -24,16 +24,15 @@ class ProcessSafeRotatingFileHandler(RotatingFileHandler):
 
     def _acquire_windows_mutex(self) -> Any:
         """Acquire a named mutex for Windows hosts."""
-        import ctypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        ctypes_module = __import__("ctypes")  # Load Windows APIs without platform-stub attribute errors.
+        kernel32 = ctypes_module.WinDLL("kernel32", use_last_error=True)  # Load the mutex API for coordination.
         handle = kernel32.CreateMutexW(None, False, self._windows_mutex_name)
         if not handle:
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise ctypes_module.WinError(ctypes_module.get_last_error())
         result = kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
         if result != 0:
             kernel32.CloseHandle(handle)
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise ctypes_module.WinError(ctypes_module.get_last_error())
         return kernel32, handle
 
     def _acquire_process_lock(self) -> Any:
@@ -42,9 +41,8 @@ class ProcessSafeRotatingFileHandler(RotatingFileHandler):
             return self._acquire_windows_mutex()
         lock_file = open(self._process_lock_path, "r+b")
         lock_file.seek(0)
-        import fcntl
-
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        fcntl_module = __import__("fcntl")  # Load the POSIX lock API without Windows stub errors.
+        fcntl_module.flock(lock_file.fileno(), fcntl_module.LOCK_EX)
         return lock_file
 
     def _release_process_lock(self, lock_file: Any) -> None:
@@ -54,9 +52,8 @@ class ProcessSafeRotatingFileHandler(RotatingFileHandler):
             kernel32.ReleaseMutex(handle)
             kernel32.CloseHandle(handle)
             return
-        import fcntl
-
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        fcntl_module = __import__("fcntl")  # Load the POSIX lock API without Windows stub errors.
+        fcntl_module.flock(lock_file.fileno(), fcntl_module.LOCK_UN)
         lock_file.close()
 
     def _reopen_if_rotated(self) -> None:
