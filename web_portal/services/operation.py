@@ -535,24 +535,22 @@ def _build_registry() -> dict:
         ],
     }
 
-    # Issue #3299: menu 270 asks up to six questions, and the controls below
+    # Issue #3299: menu 270 asks up to seven questions, and the controls below
     # follow that prompt order. Modes 1, 2, and 4 read the first three answers
     # only, and the input queue drops the rest when the run ends. Mode 3 reads
-    # all six. Issue #3342 adds mode 4, the report of the closed actions.
+    # all seven when a verified resolve has a joined alarm. Issue #3342 adds
+    # mode 4, the report of the closed actions. Issue #3357 adds the optional
+    # alarm acknowledge confirmation as the last control.
     # The subcategory values use the category/subcategory pair, because the
     # categories ap and gateway both hold the subcategory key non_compliant.
     from src.mist.intelligence.marvis.actions.model import (
-        CATEGORY_NAMES,
-    )  # Read the category names that the CLI table shows.
-    from src.mist.intelligence.marvis.actions.model import (
-        RESOLUTION_CODES,
-    )  # Read the four codes in the order of the Mist UI.
-    from src.mist.intelligence.marvis.actions.model import (
-        TOPIC_NAMES,
-    )  # Read the subcategory names that the CLI table shows.
+        CATEGORY_NAMES,  # Read the category names that the CLI table shows.
+        RESOLUTION_CODES,  # Read the four codes in the order of the Mist UI.
+        TOPIC_NAMES,  # Read the subcategory names that the CLI table shows.
+    )
 
     registry["270"] = {  # Menu 270 exports or resolves the Marvis Actions of one topic set.
-        "category": "interactive",  # The portal must render the six controls before Run.
+        "category": "interactive",  # The portal must render the seven controls before Run.
         "parameters": [
             _choice_param(  # Answer prompt 1, the mode.
                 "marvis_mode",  # Name the control for the mode prompt.
@@ -609,6 +607,14 @@ def _build_registry() -> dict:
                 placeholder=(  # State the typed answer, and state how a blank answer shows the count.
                     "Type RESOLVE and the count, for example RESOLVE 12. "  # The exact form that the check accepts.
                     "Leave it blank to see the count."  # A blank answer logs the preview and the count.
+                ),
+            ),
+            _text_param(  # Answer prompt 7, the optional alarm acknowledge guard. Only mode 3 can read it.
+                "marvis_alarm_ack_confirmation",  # Name the control for the second destructive confirmation.
+                "Alarm Acknowledge Confirmation (mode 3 only)",  # Tell the operator what this value controls.
+                placeholder=(  # State the exact answer and the safe blank default.
+                    "Type ACKNOWLEDGE and the alarm count, for example ACKNOWLEDGE 12. "
+                    "Leave it blank to skip the alarm acknowledge step."
                 ),
             ),
         ],

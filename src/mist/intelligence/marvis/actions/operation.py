@@ -12,16 +12,19 @@ Output:
     and write the same rows to the configured database backend. Mode 1 writes
     every action, mode 2 writes the open actions, and mode 4 writes the closed
     actions. Before the write, these modes search the Marvis alarms one time
-    and add the alarm of each action to its row (issue #3339). Mode 3 writes
-    ``OrgMarvisActionsResolveResults.csv``, with one row for each request, and
-    it searches no alarm. With ``--output-format sqlite``, each write goes to a
+    and add the alarm of each action to its row (issue #3339). Mode 3 also
+    searches the alarms of its selected actions. After it verifies each
+    resolve, it can acknowledge the joined alarms after a second typed guard.
+    It writes ``OrgMarvisActionsResolveResults.csv`` with one row for each
+    request. With ``--output-format sqlite``, each write goes to a
     SQLite table that has the file name without ``.csv``, and the run writes no
     CSV file.
 
 Safety:
     Mode 3 changes Mist records. It sends nothing until the operator types
     ``RESOLVE <count>``. It changes open actions only, one request at a time,
-    and it reads the list again to verify each change.
+    and it reads the list again to verify each change. The alarm acknowledge
+    step stays off until the operator types ``ACKNOWLEDGE <count>``.
 """
 
 from __future__ import annotations  # WHY: enable PEP 604 unions in the annotations of this module.
@@ -45,6 +48,12 @@ from src.foundation.runtime.config.source_dependency_resolver import (
 from src.foundation.support.utils.rate_limiting import (
     AdaptivePacer,
 )  # WHY: the quota-aware wait between two resolve requests.
+from src.mist.intelligence.marvis.actions.acknowledgement import (
+    ACK_OUTCOME_ACKNOWLEDGED,
+    ACK_OUTCOME_ERROR,
+    ACK_OUTCOME_NOT_SENT,
+    MarvisAlarmAcknowledger,
+)  # WHY: guard and batch the optional alarm acknowledge step.
 from src.mist.intelligence.marvis.actions.alarms import (
     MarvisAlarmJoin,
 )  # WHY: add the Marvis alarm of each action to its row.
@@ -117,6 +126,7 @@ class MarvisResolveResult:
     symptom_name: str  # WHY: the subcategory name.
     topic: str  # WHY: the pair key, such as switch/sw_offline.
     entity_names: str  # WHY: the names of the impacted devices.
+    alarm_id: str  # WHY: the joined Marvis alarm that the optional acknowledge step can change.
     previous_status: str  # WHY: the status before the run.
     resolution_code: str  # WHY: the code that the run sent.
     resolution_name: str  # WHY: the text of the code.
@@ -125,6 +135,9 @@ class MarvisResolveResult:
     http_status: int | None  # WHY: the HTTP status, or no value when no request went out.
     message: str  # WHY: the reason of the outcome.
     verified_status: str  # WHY: the status that the verify read shows.
+    alarm_ack_outcome: str  # WHY: acknowledged, error, not_sent, no_alarm, or empty before a verified resolve.
+    alarm_ack_http_status: int | None  # WHY: the acknowledge HTTP status, or no value when no request went out.
+    alarm_ack_message: str  # WHY: explain the acknowledge result for this alarm.
     resolve_time: int  # WHY: the epoch millisecond time of the run.
     resolve_time_iso: str  # WHY: the readable time of the run.
 
@@ -167,6 +180,9 @@ class MarvisResolveResult:
             http_status=None,  # WHY: the send step sets the status.
             message="",  # WHY: the send step and the verify step set the message.
             verified_status="",  # WHY: the verify step sets the status that Mist reports.
+            alarm_ack_outcome="",  # WHY: the optional acknowledge step sets the outcome after verification.
+            alarm_ack_http_status=None,  # WHY: no acknowledge request has gone out.
+            alarm_ack_message="",  # WHY: no acknowledge decision exists yet.
             resolve_time=request.resolve_time,  # WHY: the epoch time of the run.
             resolve_time_iso=MarvisFieldReader.iso(request.resolve_time),  # WHY: the readable time of the run.
         )
@@ -184,6 +200,7 @@ _RECORD_COPY_FIELDS = (  # WHY: the result columns that copy the action columns 
     "symptom_name",
     "topic",
     "entity_names",
+    "alarm_id",
 )
 
 
@@ -382,6 +399,7 @@ class MarvisResolveWorkflow:
         resolver = MarvisBulkResolver(self._loaded.client, request, self._pacer())  # WHY: one resolver per run.
         results = resolver.resolve(targets)  # WHY: send the requests.
         self._verify(resolver, results)  # WHY: confirm each accepted request.
+        self._acknowledge(request, results)  # WHY: offer the optional alarm step for verified resolves only.
         self._write_results(results)  # WHY: one row for each target, then the summary.
 
     @staticmethod
@@ -469,6 +487,29 @@ class MarvisResolveWorkflow:
         time.sleep(VERIFY_DELAY_SECONDS)  # WHY: give Mist time to store the changes.
         resolver.verify(results, self._loaded.client.list_actions())  # WHY: compare with the new statuses.
 
+    def _acknowledge(
+        self,
+        request: MarvisResolveRequest,
+        results: Sequence[MarvisResolveResult],
+    ) -> None:
+        """Offer to acknowledge only the alarms of actions verified as resolved."""
+        eligible = [  # WHY: a failed or unverified resolve must never change its alarm.
+            result for result in results if result.outcome == OUTCOME_RESOLVED and result.alarm_id
+        ]
+        for result in results:  # WHY: each verified resolve without an alarm gets an explicit audit value.
+            if result.outcome == OUTCOME_RESOLVED and not result.alarm_id:  # WHY: no alarm identifier can be sent.
+                result.alarm_ack_outcome = "no_alarm"  # WHY: distinguish no alarm from a skipped prompt.
+                result.alarm_ack_message = "No joined Marvis alarm exists for this resolved action."  # WHY: explain.
+        acknowledger = MarvisAlarmAcknowledger(self._loaded.client, request, self._pacer())  # WHY: one guarded step.
+        ack_results = acknowledger.acknowledge([result.alarm_id for result in eligible])  # WHY: explicit IDs only.
+        for result in eligible:  # WHY: copy the alarm answer into the action result row.
+            acknowledged = ack_results.get(result.alarm_id)  # WHY: one result per unique alarm identifier.
+            if acknowledged is None:  # WHY: no result means that no alarm identifier was passed.
+                continue  # WHY: keep the empty values for a programming-safe fallback.
+            result.alarm_ack_outcome = acknowledged.outcome  # WHY: state the alarm result.
+            result.alarm_ack_http_status = acknowledged.http_status  # WHY: keep the API status.
+            result.alarm_ack_message = acknowledged.message  # WHY: keep the API answer or guard reason.
+
     @staticmethod
     def _write_results(results: Sequence[MarvisResolveResult]) -> None:
         """Write the results file, then log the summary and the completion line."""
@@ -503,6 +544,7 @@ class MarvisResolveWorkflow:
         counts = Counter(result.outcome for result in results)  # WHY: one count for each outcome.
         summary = " ".join(f"{outcome}={counts[outcome]}" for outcome in OUTCOMES)  # WHY: one fixed order.
         logger.log(DISPLAY_LEVEL, "Marvis Actions resolve summary: %s", summary)  # WHY: the operator reads it here.
+        MarvisResolveWorkflow._log_acknowledge_summary(results, target)  # WHY: the optional write owns its lines.
         if counts[OUTCOME_ERROR]:  # WHY: a refused request is a failure of the run.
             logger.error(  # WHY: the handled failure that the web dashboard reports as failed.
                 "MistHelper could not resolve %d of %d Marvis Actions. Read %s for the HTTP status of each one.",
@@ -518,6 +560,32 @@ class MarvisResolveWorkflow:
         if counts[OUTCOME_NOT_SENT]:  # WHY: the stop signal ended the run early.
             logger.warning(  # WHY: the operator must run the menu again for the rest.
                 "The stop signal ended the run. %d actions stay open.", counts[OUTCOME_NOT_SENT]
+            )
+
+    @staticmethod
+    def _log_acknowledge_summary(results: Sequence[MarvisResolveResult], target: str) -> None:
+        """Log the counts of the optional alarm acknowledge step, and each refusal.
+
+        Why:
+            Issue #3357. The acknowledge step is optional, so its counts stay
+            out of the resolve summary. The separate reader also keeps each
+            function below the complexity limit of the repository.
+
+        Args:
+            results: One result for each action that the run touched.
+            target: The file or the SQLite table that holds the results.
+        """
+        ack_counts = Counter(result.alarm_ack_outcome for result in results if result.alarm_ack_outcome)  # WHY: audit.
+        if not ack_counts:  # WHY: no resolved row carried an acknowledge decision.
+            return  # WHY: a run with no acknowledge decision prints no acknowledge line.
+        ordered = (ACK_OUTCOME_ACKNOWLEDGED, ACK_OUTCOME_ERROR, ACK_OUTCOME_NOT_SENT, "no_alarm")  # WHY: stable.
+        ack_summary = " ".join(f"{outcome}={ack_counts[outcome]}" for outcome in ordered)  # WHY: fixed order.
+        logger.log(DISPLAY_LEVEL, "Marvis alarm acknowledge summary: %s", ack_summary)  # WHY: operator output.
+        if ack_counts[ACK_OUTCOME_ERROR]:  # WHY: an acknowledge refusal is a failure of the optional write.
+            logger.error(  # WHY: the portal must not report success after Mist refused an acknowledge batch.
+                "MistHelper could not acknowledge %d Marvis alarms. Read %s for each HTTP status.",
+                ack_counts[ACK_OUTCOME_ERROR],
+                target,
             )
 
 
@@ -548,7 +616,8 @@ class MarvisActionsOperation:
         if not selected:  # WHY: the reason is already in the log.
             return  # WHY: nothing to export or resolve.
         if mode == MODE_RESOLVE:  # WHY: mode 3 changes Mist records.
-            MarvisResolveWorkflow(loaded).resolve_open_actions(selected)  # WHY: preview, confirm, resolve, and verify.
+            selected, _ = MarvisAlarmJoin(loaded.client).apply(selected, loaded.documents)  # WHY: join explicit alarms.
+            MarvisResolveWorkflow(loaded).resolve_open_actions(selected)  # WHY: resolve, verify, and offer acknowledge.
             return  # WHY: mode 3 writes the results file only.
         cls._export(loaded, selected)  # WHY: modes 1, 2, and 4 write the report.
 

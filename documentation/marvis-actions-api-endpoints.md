@@ -306,10 +306,10 @@ empty, and the log states the HTTP status.
 
 `GET /api/v1/orgs/{org_id}/alarms/search`
 
-Modes 1, 2, and 4 send this search one time for each export. The search occurs
-after the filter prompts and before the write. Mode 3 does not send it. The
-OpenAPI document of Mist describes this endpoint, and MistHelper calls it through
-the SDK. Issue #3339 added this step.
+Modes 1, 2, and 4 send this search one time for each export. Mode 3 sends it
+after the filter prompts and before the resolve preview. The OpenAPI document
+of Mist describes this endpoint, and MistHelper calls it through the SDK.
+Issue #3339 added the export join. Issue #3357 added the mode 3 join.
 
 Mist keeps a Marvis alarm for many Marvis Actions. The alarm holds its own status,
 its resolved time, and its acknowledge values. MistHelper copies eight alarm
@@ -470,10 +470,10 @@ alarms joined an action, and the second count line showed 0.
 
 ### The limits of an acknowledge step
 
-Menu 270 reads the acknowledge values of each alarm, but it does not acknowledge
-an alarm. Issue #3357 tracks that change as phase 2 of issue #3339. A person must
-review that change before it merges. Read these limits before you plan an
-acknowledge script.
+Mode 3 can acknowledge the joined alarms of actions that its verify read reports
+as closed. The step is off by default. It needs the exact text
+`ACKNOWLEDGE <count>`, where the count is the number of eligible alarms. A
+person must review this change before it merges.
 
 - An acknowledge changes Mist data for every engineer who reads the alarm.
 
@@ -491,6 +491,16 @@ acknowledge script.
 - The bundled API document limits one `ack` batch or one `unack` batch to 1,000
   alarm IDs. The text of the `ack_all` operation and the `unack_all` operation
   states the limit. The schema of the body states no limit.
+
+- MistHelper calls `orgs.alarms.ackOrgMultipleAlarms`. It sends explicit alarm
+  IDs in batches of 1,000 or fewer.
+
+- MistHelper never calls `ackOrgAllAlarms` or `unackOrgAllAlarms`.
+
+- The note holds the Marvis resolve code and the operator comment.
+
+- `OrgMarvisActionsResolveResults.csv` records `alarm_id`,
+  `alarm_ack_outcome`, `alarm_ack_http_status`, and `alarm_ack_message`.
 
 Warning: do not send `ack_all` from a script, because it will acknowledge every
 alarm of the organization. No request can restore the acknowledge state that each
@@ -635,7 +645,7 @@ this report. The research did not test a token with a lower role.
 | Mode | Requests for one run |
 | - | - |
 | 1, 2, or 4 | One list read for each 1,000 rows, one schema read, one site read for each 1,000 sites, and one alarm search for each 1,000 Marvis alarms. |
-| 3 | The list read, the schema read, and the site read of mode 1, one PUT for each action, and one more list read for each 1,000 rows. Mode 3 sends no alarm search. |
+| 3 | The list read, the schema read, and the site read of mode 1, one alarm search for each 1,000 Marvis alarms, one PUT for each action, one more list read for each 1,000 rows, and zero or more explicit alarm acknowledge batches of 1,000 IDs or fewer. |
 
 All users of MistHelper share one Mist token. Mist allows about 5,000 requests each
 hour for one token. The setting `MARVIS_RESOLVE_MAX_ACTIONS` in `.env` limits one

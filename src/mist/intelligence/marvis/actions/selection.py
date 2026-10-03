@@ -9,8 +9,8 @@ Why:
 
 Prompt contract:
     The prompts run in this order: mode, category, subcategory, resolution
-    code, comment, and confirmation. The web dashboard sends its answers in the
-    same order. No prompt text holds a word that makes the unattended
+    code, comment, resolve confirmation, and alarm acknowledge confirmation.
+    The web dashboard sends its answers in the same order. No prompt text holds a word that makes the unattended
     ``--testinteractive`` pass answer "0", so that pass takes the defaults and
     runs a read-only export.
 """
@@ -417,7 +417,7 @@ class MarvisResolveRequest:
 
 
 class MarvisResolvePrompts:
-    """Ask the resolution code, the comment, and the typed confirmation.
+    """Ask the resolution code, the comment, and the two typed confirmations.
 
     Why:
         A bulk resolve changes many Mist records. Each answer is checked
@@ -526,6 +526,41 @@ class MarvisResolvePrompts:
             True when the answer matches after the spaces are collapsed. Case matters.
         """
         return " ".join(answer.split()) == f"RESOLVE {count}"  # WHY: extra spaces are harmless, a wrong count is not.
+
+    @staticmethod
+    def ask_acknowledge_confirmation(count: int) -> bool:
+        """Ask the typed confirmation for the optional alarm acknowledge step.
+
+        Args:
+            count: The number of explicit alarms that the run can acknowledge.
+
+        Returns:
+            True only when the answer is ``ACKNOWLEDGE <count>``.
+        """
+        expected = f"ACKNOWLEDGE {count}"  # WHY: the count proves that the operator read the second preview.
+        logger.warning(  # WHY: state the shared-state consequence before the prompt.
+            "Warning: an acknowledge can hide an active fault from the unacknowledged alarm view. "
+            "This step changes %d Marvis alarms for every administrator of the organization.",
+            count,
+        )
+        answer = InputUtils.safe_input(  # WHY: the EOF-safe prompt returns an empty string on a closed stream.
+            f"Type {expected} to acknowledge these {count} Marvis alarms, or press Enter to skip: ",
+            default_value="",  # WHY: the optional destructive step is off by default.
+            context="marvis_actions.alarm_acknowledge_confirmation",  # WHY: name the prompt in the input log.
+        )
+        if not answer.strip():  # WHY: a blank answer intentionally skips the optional step.
+            logger.log(DISPLAY_LEVEL, "The Marvis alarm acknowledge step was skipped. No alarm was acknowledged.")
+            return False  # WHY: never send the request without the exact typed confirmation.
+        if " ".join(answer.split()) != expected:  # WHY: a wrong count or text cannot confirm the change.
+            logger.error(  # WHY: the portal reports the refusal as a handled failure.
+                "MistHelper could not confirm the Marvis alarm acknowledge step. "
+                "The answer '%s' does not match '%s'. No alarm was acknowledged.",
+                answer.strip()[:ANSWER_ECHO_LIMIT],
+                expected,
+            )
+            return False  # WHY: never send the request without the exact typed confirmation.
+        logger.info("The alarm acknowledge confirmation matches %s", expected)  # WHY: record the guard result.
+        return True  # WHY: the caller can acknowledge only the counted alarm identifiers.
 
     @staticmethod
     def comment_accepted(code: ResolutionCode, comment: str) -> bool:

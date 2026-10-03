@@ -188,6 +188,28 @@ class MarvisActionsClient:
             return status, ""  # WHY: no error text on success.
         return status, self._error_text(status, response.data)  # WHY: keep the reason for the results file.
 
+    def acknowledge_marvis_alarms(self, alarm_ids: list[str], note: str) -> tuple[int | None, str]:
+        """Acknowledge one explicit list of organization alarms.
+
+        Args:
+            alarm_ids: The alarm identifiers. The caller limits the list to 1,000.
+            note: The resolve reason code and the operator comment.
+
+        Returns:
+            The HTTP status and an empty string on success, or the HTTP status and the error text.
+        """
+        logger.info("Acknowledging %d Marvis alarms for org %s", len(alarm_ids), self._org_id)  # WHY: action log.
+        response = mistapi.api.v1.orgs.alarms.ackOrgMultipleAlarms(  # WHY: acknowledge only the listed alarms.
+            self._apisession,
+            self._org_id,
+            body={"alarm_ids": alarm_ids, "note": note},  # WHY: never use the unfiltered ack_all endpoint.
+        )
+        status = response.status_code  # WHY: mistapi returns API refusals as HTTP statuses.
+        logger.debug("The Marvis alarm acknowledge request returned HTTP %s", status)  # WHY: result summary.
+        if isinstance(status, int) and 200 <= status < 300:  # WHY: every 2xx status means that Mist accepted it.
+            return status, ""  # WHY: no error text on success.
+        return status, self._error_text(status, response.data)  # WHY: keep the reason for the results file.
+
     def _read_page(self, page: int) -> Any:
         """Read one page of the Marvis Actions list and return the mistapi response."""
         query = {  # WHY: the same query values that the Mist UI sends.

@@ -355,7 +355,7 @@ pie showData
 | [267](Menu-API-Endpoints-Interactive-Safe#menu-267) | Run any MSP detail endpoint with identifier prompts (10 operations) | `interactive_safe` | 11 |
 | [268](Menu-API-Endpoints-Interactive-Safe#menu-268) | Run any remaining endpoint with identifier prompts (6 operations) | `interactive_safe` | 7 |
 | [269](Menu-API-Endpoints-Safe#menu-269) | Scan the organization for rogue DHCP servers on switches (30 days) | `safe` | 6 |
-| [270](Menu-API-Endpoints-Interactive-Safe#menu-270) | Export or resolve Marvis Actions by category and subcategory | `interactive_safe` | 3 |
+| [270](Menu-API-Endpoints-Interactive-Safe#menu-270) | Export or resolve Marvis Actions by category and subcategory | `interactive_safe` | 4 |
 | [271](Menu-API-Endpoints-Safe#menu-271) | Export the subscription and contract expiry report | `safe` | 3 |
 | [272](Menu-API-Endpoints-Safe#menu-272) | Export the certificate expiry report | `safe` | 6 |
 | [273](Menu-API-Endpoints-Safe#menu-273) | Admin and API Token Hygiene Report | `safe` | 3 |

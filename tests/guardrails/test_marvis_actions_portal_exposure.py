@@ -13,6 +13,10 @@ Why:
     sends nothing until the operator types ``RESOLVE <count>``. The decision
     and its rejected alternative are in ``specs/3299-marvis-actions-bulk-resolve``.
 
+    Issue #3357 adds the seventh control, the optional alarm acknowledge
+    confirmation. The run sends no acknowledge request until the operator
+    confirms that control, so the added control keeps the safe category.
+
 These tests prove both directions.
 
 1. The gate admits menu 270, and the page lists it in a named category.
@@ -31,13 +35,14 @@ from src.foundation.support.utils.operation_registry import OperationRegistry
 from web_portal.services.operation import CATEGORY_RANGES, PARAMETER_REGISTRY, OperationExecutor
 
 MARVIS_MENU = "270"  # The menu number this feature added.
-CONTROL_NAMES = (  # The six controls, in the order of the six prompts.
+CONTROL_NAMES = (  # The seven controls, in the order of the seven prompts.
     "marvis_mode",
     "marvis_category",
     "marvis_subcategory",
     "marvis_resolution_code",
     "marvis_comment",
     "marvis_confirmation",
+    "marvis_alarm_ack_confirmation",
 )
 
 
