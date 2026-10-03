@@ -27,9 +27,11 @@ class CaptureStopper:
         """Stop a matching site capture."""
         logger.emit(logging.INFO, "site_capture_stop_check")
         response = self._apisession.mist_get(f"/api/v1/sites/{site_id}/pcaps?limit=1")
+        self._require_success(response, "lookup")
         if not self._has_capture(response, capture_id):
             return False
-        self._apisession.mist_delete(f"/api/v1/sites/{site_id}/pcaps")
+        response = self._apisession.mist_delete(f"/api/v1/sites/{site_id}/pcaps")
+        self._require_success(response, "stop")
         logger.emit(logging.DEBUG, "site_capture_stopped", {"status": "stopped"})
         return True
 
@@ -37,11 +39,23 @@ class CaptureStopper:
         """Stop a matching organization capture."""
         logger.emit(logging.INFO, "org_capture_stop_check")
         response = self._apisession.mist_get(f"/api/v1/orgs/{org_id}/pcaps?limit=1")
+        self._require_success(response, "lookup")
         if not self._has_capture(response, capture_id):
             return False
-        self._apisession.mist_delete(f"/api/v1/orgs/{org_id}/pcaps")
+        response = self._apisession.mist_delete(f"/api/v1/orgs/{org_id}/pcaps")
+        self._require_success(response, "stop")
         logger.emit(logging.DEBUG, "org_capture_stopped", {"status": "stopped"})
         return True
+
+    @staticmethod
+    def _require_success(response: object, action: str) -> None:
+        """Reject failed or unavailable HTTP status before reporting cleanup."""
+        logger.emit(logging.INFO, "capture_response_check", {"action": action, "count": 1})
+        status = getattr(response, "status_code", None)
+        if not isinstance(status, int) or isinstance(status, bool) or status != 200:
+            logger.emit(logging.ERROR, "capture_response_failed", {"action": action, "count": 1, "status": "failed"})
+            raise RuntimeError(f"The capture {action} failed. The API did not confirm status 200.")
+        logger.emit(logging.DEBUG, "capture_response_checked", {"action": action, "count": 1, "status": 200})
 
     @staticmethod
     def _has_capture(response: object, capture_id: str) -> bool:

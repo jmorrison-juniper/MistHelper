@@ -126,7 +126,7 @@ class UtilityFinisher:
 
     context: RunContext
 
-    def finish(self, started: float) -> None:
+    def finish(self, started: float, completed: float) -> None:
         """Finish after normal monitoring ends."""
         if self.context.state.stopping.is_set():
             self.stopped()
@@ -138,7 +138,7 @@ class UtilityFinisher:
             )
             self.context.sink.finish(SessionState.TIMED_OUT, reason)
             return
-        self.context.sink.finish(SessionState.FINISHED, self._reason(started))
+        self.context.sink.finish(SessionState.FINISHED, self._reason(started, completed))
 
     def stopped(self) -> None:
         """Finish after an operator stop."""
@@ -154,13 +154,13 @@ class UtilityFinisher:
         """Map one run exception to a safe final state."""
         UtilityErrorFinisher(self.context, self).finish(error)
 
-    def _reason(self, started: float) -> str:
+    def _reason(self, started: float, completed: float) -> str:
         """Return the normal completion reason."""
         trigger = self.context.state.trigger
         if trigger is None:
             return "The utility finished."
         total = trigger.listen.timing.total_seconds
-        if time.monotonic() - started >= total:
+        if completed - started >= total:
             return f"The utility reached its time limit of {total:g} seconds."
         return "The utility finished."
 

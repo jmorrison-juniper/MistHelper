@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+import traceback
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -124,24 +125,51 @@ class UtilityExecution:
 
     def run(self) -> None:
         """Execute the complete utility lifecycle."""
+        started = completed = time.monotonic()
+        run_error: Exception | None = None
         try:
-            self._execute(time.monotonic())
+            completed = self._execute(started)
         except Exception as error:
-            self._finisher.error(error)
+            run_error = error
         finally:
-            self._close()
+            cleanup_failed = self._close()
+        if cleanup_failed:
+            self._finisher.failure("The utility cleanup failed. Read the portal log for the cause.")
+        elif run_error is not None:
+            self._finisher.error(run_error)
+        else:
+            self._finisher.finish(started, completed)
 
-    def _execute(self, started: float) -> None:
-        """Start, monitor, and finish one utility."""
+    def _execute(self, started: float) -> float:
+        """Start and monitor one utility without terminal notification."""
         client, trigger, filterer = self._starter.start()
         self._monitor.read(client, trigger.listen.timing, filterer, started)
-        self._finisher.finish(started)
+        return time.monotonic()
 
-    def _close(self) -> None:
-        """Close the stream and stop a matching capture when required."""
+    def _close(self) -> bool:
+        """Attempt both cleanup actions before the terminal notification."""
         with self._context.state.lock:
             client = self._context.state.client
             self._context.state.client = None
+        actions = [CaptureCleanup(self._context).stop_if_needed]
         if client is not None:
-            client.close()
-        CaptureCleanup(self._context).stop_if_needed()
+            actions.insert(0, client.close)
+        failed = False
+        for action in actions:
+            logger.emit(logging.INFO, "utility_cleanup_start", {"action": action.__name__})
+            try:
+                action()
+                logger.emit(logging.DEBUG, "utility_cleanup_done", {"action": action.__name__})
+            except Exception as error:
+                failed = True
+                self._cleanup_error(error)
+        return failed
+
+    @staticmethod
+    def _cleanup_error(error: Exception) -> None:
+        """Log traceback locations without remote exception content."""
+        logger.emit(logging.ERROR, "utility_cleanup_failed", {"detail": type(error).__name__, "status": "failed"})
+        for frame in traceback.extract_tb(error.__traceback__):
+            logger.emit(
+                logging.ERROR, "utility_cleanup_trace", {"detail": f"{frame.filename}:{frame.lineno}:{frame.name}"}
+            )
