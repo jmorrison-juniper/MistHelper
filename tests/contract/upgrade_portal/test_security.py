@@ -510,7 +510,8 @@ def test_the_static_route_revalidates_an_unchanged_asset(probe_client: FlaskClie
     first = probe_client.get(STATIC_ASSET_PATH)
     etag = first.headers.get("ETag")
     assert first.status_code == 200
-    assert etag
+    if etag is None:
+        pytest.fail("Static assets must expose an ETag for conditional requests.")
     second = probe_client.get(STATIC_ASSET_PATH, headers={"If-None-Match": etag})
     assert second.status_code == 304
     assert second.get_data() == b""
