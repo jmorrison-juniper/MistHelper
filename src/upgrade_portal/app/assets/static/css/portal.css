@@ -501,7 +501,7 @@
 
 /* Issue #3495. The device type phrase must fit at common desktop widths. */
 .history-table:not(.history-table-sites) thead th:nth-child(6) {
-    width: 24%;
+    width: 26%;
 }
 
 .history-table:not(.history-table-sites) thead th:nth-child(1) {
@@ -529,11 +529,11 @@
 }
 
 .history-table:not(.history-table-sites) thead th:nth-child(8) {
-    width: 10%;
+    width: 9%;
 }
 
 .history-table:not(.history-table-sites) thead th:nth-child(9) {
-    width: 10%;
+    width: 9%;
 }
 
 /* Issue #3486. A long site name stays on one line and ends in an ellipsis, so
