@@ -10,6 +10,7 @@ import pytest  # The tests use fixtures and exception assertions.
 
 import websocket  # Failure tests build the same exception type as websocket-client.
 from src.websocket_streams.catalog.model import FieldKind, FieldSpec, Safety, UtilityDefinition  # Build requests.
+from src.websocket_streams.intake.fields import StreamRequestError  # Write-failure tests check route errors.
 from src.websocket_streams.intake.start_request import StartRequest  # Runner input is already checked.
 from src.websocket_streams.live.runners.shell import ShellRunner  # The device shell runner under test.
 from src.websocket_streams.live.sessions.buffer import MessageBuffer  # A session needs a small event buffer.
@@ -103,6 +104,16 @@ def _wait_for_state(session: StreamSession, states: set[SessionState], timeout: 
             return  # The assertion can continue.
         time.sleep(0.01)  # Keep waits short without a busy loop.
     assert session.state in states  # Report the observed state on timeout.
+
+
+def _wait_for_input_ready(session: StreamSession, timeout: float = 2.0) -> None:
+    """Wait until the shell receives its first output."""
+    deadline = time.monotonic() + timeout  # Bound the first-output wait.
+    while time.monotonic() < deadline:  # Poll the input state for a short time.
+        if session.input_ready:  # The first output released the input queue.
+            return  # The write-failure test can continue.
+        time.sleep(0.01)  # Keep waits short without a busy loop.
+    assert session.input_ready  # Report the observed state on timeout.
 
 
 def _history(session: StreamSession) -> bytes:
@@ -273,6 +284,52 @@ def test_shell_first_output_marks_live_and_releases_queued_input() -> None:
     assert received == b"show version\r"  # The device saw the exact queued order.
     assert device.received_frames[:2] == [b"\x00show ", b"\x00version\r"]  # Each input kept the NUL prefix.
     assert session.buffer.snapshot()[0].content_json == '"The shell opened."'  # The page sees the open event.
+
+
+def test_shell_failed_input_write_reports_failed_local_close(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3741: a failed input write must not report an operator stop."""
+    with FakeMistCloud() as cloud:  # Start a fake shell server for the reader thread.
+        cloud.register("/shell/default", ShellDevice())  # Route the default shell address.
+        api = FakeApiSession(cloud)  # Return the fake shell address from the REST trigger.
+        session = _session()  # Build a real session sink.
+        runner = _runner(api, session)  # Bind input before the shell starts.
+        runner.start()  # Open the shell and start the reader thread.
+        _wait_for_state(session, {SessionState.LIVE})  # Wait until input can use a live connection.
+        _wait_for_input_ready(session)  # Ensure the failure follows device output.
+
+        def fail_send(_text: str) -> None:
+            """Close the client and report the simulated failed transport write."""
+            runner._client.close()  # Match ShellClient behavior after a transport write failure.
+            raise StreamRequestError("not_open", "The shell connection is not open.")  # Return the route error.
+
+        monkeypatch.setattr(runner._client, "send", fail_send)  # Replace only the next input transport write.
+        with pytest.raises(StreamRequestError):  # The input request must still receive its transport error.
+            runner.send_input("show version\r")  # Simulate a write that closes the local client.
+        _wait_for_state(session, {SessionState.FAILED})  # The reader must map the local close to failed.
+    assert session.reason == ShellRunner.WRITE_FAILED_REASON  # The page must explain the failed device send.
+
+
+def test_shell_live_resize_write_failure_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3741: a live resize write failure must reach the HTTP route."""
+    with FakeMistCloud() as cloud:  # Start a fake shell server for a live connection.
+        cloud.register("/shell/default", ShellDevice())  # Route the default shell address.
+        api = FakeApiSession(cloud)  # Return the fake shell address from the REST trigger.
+        session = _session()  # Build a real session sink.
+        runner = _runner(api, session)  # Bind the runner to the session.
+        runner.start()  # Open the shell before the resize request.
+        _wait_for_state(session, {SessionState.LIVE})  # Distinguish a live write from a pre-open resize.
+        _wait_for_input_ready(session)  # Ensure the close maps to a write failure reason.
+
+        def fail_resize(_cols: int, _rows: int) -> None:
+            """Close the client and report the simulated failed transport write."""
+            runner._client.close()  # Match ShellClient behavior after a transport write failure.
+            raise StreamRequestError("not_open", "The shell connection is not open.")  # Return the route error.
+
+        monkeypatch.setattr(runner._client, "resize", fail_resize)  # Fail the next live resize transport write.
+        with pytest.raises(StreamRequestError):  # The route must not convert this failure into HTTP 202.
+            runner.resize(100, 30)  # Send a resize after the connection is live.
+        _wait_for_state(session, {SessionState.FAILED})  # The reader must also record the failed connection.
+    assert session.reason == ShellRunner.WRITE_FAILED_REASON  # The session must name the failed device send.
 
 
 def test_shell_close_drop_stop_and_stop_during_trigger() -> None:

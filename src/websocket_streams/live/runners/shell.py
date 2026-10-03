@@ -43,6 +43,7 @@ class DeviceTerminalRunner:
         "The device sent no output before the Mist cloud closed the terminal. Start a new session after one minute."
     )
     STOPPED_REASON = "The operator stopped the session."  # The record keeps a more exact stop reason.
+    WRITE_FAILED_REASON = "The terminal could not send data to the device."  # A local write failure is not a stop.
 
     def __init__(
         self,
@@ -97,8 +98,11 @@ class DeviceTerminalRunner:
         try:  # Send the resize only when a socket is ready.
             self._client.resize(cols, rows)  # The device redraws for the new size.
         except StreamRequestError:
-            logger.debug("Kept the terminal size until the connection opens")  # The open sends the stored size.
-            return  # The stored size is not lost.
+            if self._sink.state == SessionState.CONNECTING:  # A pre-open resize stays in the terminal state.
+                logger.debug("Kept the terminal size until the connection opens")  # The open sends the stored size.
+                return  # The stored size is not lost.
+            logger.warning("The terminal resize write failed for key %s", self._request.key)  # Record the live failure.
+            raise  # Let the HTTP route report the transport failure.
         logger.debug("Sent the terminal size for key %s", self._request.key)  # Log after the send.
 
     def _run(self) -> None:
@@ -227,10 +231,12 @@ class DeviceTerminalRunner:
         Returns:
             The final state and the plain reason.
         """
-        if self._stopping.is_set() or not closed.dropped:  # The operator or the reaper closed the terminal.
+        if self._stopping.is_set():  # Only an operator or reaper stop can produce the stopped state.
             return SessionState.STOPPED, self.STOPPED_REASON  # The record keeps the exact stop reason.
         if not self._output_seen:  # A remote end before output means the device accepted but did not answer.
             return SessionState.FAILED, self.NO_ANSWER_REASON  # Issue #3710: the device was silent.
+        if not closed.dropped:  # A non-operator local close follows a failed input or resize write.
+            return SessionState.FAILED, self.WRITE_FAILED_REASON  # Tell the operator that the send failed.
         if closed.code is not None:  # The device sent a close frame, for example after exit.
             return SessionState.FINISHED, self.CLOSED_REASON  # A normal end of the terminal.
         return SessionState.FAILED, self.DROPPED_REASON  # The network lost the connection.
