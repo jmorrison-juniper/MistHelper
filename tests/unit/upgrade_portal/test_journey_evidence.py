@@ -41,6 +41,22 @@ def test_screenshot_reraises_an_unrelated_playwright_failure(tmp_path: Path) -> 
     assert page.screenshot.call_count == 1
 
 
+def test_screenshot_reraises_the_second_known_protocol_failure(tmp_path: Path) -> None:
+    """A persistent known Chromium failure receives exactly one retry."""
+    page = Mock()  # Model a Playwright page without starting a browser.
+    error = module.PlaywrightError("Protocol error (Page.captureScreenshot): Unable to capture screenshot")
+    page.screenshot.side_effect = error  # Make both permitted capture attempts fail with the known error.
+
+    with pytest.raises(module.PlaywrightError, match="Unable to capture screenshot"):  # Preserve the browser error.
+        module.capture_full_page_screenshot(  # Exercise the shared retry boundary directly.
+            page.screenshot,
+            path=str(tmp_path / "journey.png"),
+            full_page=True,
+        )
+
+    assert page.screenshot.call_count == 2  # Prove the helper makes the first attempt and one retry only.
+
+
 def test_page_wrapper_retries_direct_full_page_screenshots(tmp_path: Path) -> None:
     """Direct page screenshots receive the same narrow retry."""
     page = Mock()
