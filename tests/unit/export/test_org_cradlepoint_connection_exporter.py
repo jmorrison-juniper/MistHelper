@@ -22,7 +22,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-from mistapi.__api_response import APIResponse
 
 from src.export.org_cradlepoint_connection_exporter import OrgCradlepointConnectionExporter
 from src.export.org_cradlepoint_connection_exporter import (
@@ -48,8 +47,10 @@ def mist_helper(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     return stub
 
 
-def sdk_response(status_code: int, payload: dict[str, str]) -> APIResponse:
+def sdk_response(status_code: int, payload: dict[str, str]) -> object:
     """Build a real SDK response so HTTP refusal handling matches production."""
+    from mistapi.__api_response import APIResponse  # Keep this lazy so analysis includes the full test module.
+
     response = requests.Response()
     response.status_code = status_code
     response.url = STATUS_URL
