@@ -721,10 +721,21 @@ def guarded_call(section: str, work: Callable[[], Any]) -> tuple[Any, list[dict[
         read returns None and one reason.
     """
     try:
-        return work(), []
+        value = work()
+        return value, _partial_reasons_of(value)
     except Exception as error:  # A failed section must never abort the whole capture
         logger.warning("Upgrade portal could not read the section %s: %s", section, type(error).__name__)
-        return None, [partial_reason(section, REASON_READ_FAILED, http_status_of(error))]
+        reason = str(getattr(error, "partial_reason", REASON_READ_FAILED))
+        return None, [partial_reason(section, reason, http_status_of(error))]
+
+
+def _partial_reasons_of(value: Any) -> list[dict[str, Any]]:
+    """Collect partial reasons attached to a read result."""
+    reasons = [dict(reason) for reason in getattr(value, "partial_reasons", ())]
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            reasons.extend(_partial_reasons_of(item))
+    return reasons
 
 
 def report_section(name: str) -> str:

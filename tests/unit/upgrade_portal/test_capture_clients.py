@@ -14,12 +14,15 @@ Why:
 
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.upgrade_portal.capture import clients
+from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 # WHY: A site key in the shape of the data model, so a reader sees a realistic
 # identifier rather than a bare word.
@@ -124,6 +127,20 @@ GUEST_ROW: dict[str, Any] = {
 # WHY: The statistics endpoint is a point-in-time list and takes no duration.
 # The three search endpoints aggregate a window and take the short duration.
 SEARCH_WINDOW: dict[str, Any] = {"duration": clients.SEARCH_DURATION}
+CLIENT_FIRST_URL = f"https://api.mist.com/api/v1/sites/{SITE_ID}/stats/clients?limit=1"
+CLIENT_NEXT_LINK = f"/api/v1/sites/{SITE_ID}/stats/clients?limit=1&page=2"
+CLIENT_SECOND_URL = f"https://api.mist.com{CLIENT_NEXT_LINK}"
+CLIENT_PAGE_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"}
+CLIENT_SECOND_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "2"}
+CLIENT_FIRST_ROW = {"mac": BOTH_MAC, **STATS_BASE}
+CLIENT_SECOND_ROW = {"mac": STATS_ONLY_MAC, **STATS_BASE}
+
+
+def _json_body(value: Any) -> bytes:
+    """Return one test payload as UTF-8 JSON bytes."""
+    return json.dumps(value).encode("utf-8")
+
+
 FETCH_CASES = [
     ("wired_client_api", "searchSiteWiredClients", clients.fetch_wired_rows, SEARCH_WINDOW),
     ("stats_api", "listSiteWirelessClientsStats", clients.fetch_wireless_stats_rows, {}),
@@ -238,6 +255,28 @@ def _joined(stats_rows: list[dict[str, Any]], search_rows: list[dict[str, Any]])
         The joined records, in address order.
     """
     return clients.read_wireless_clients(_session(), SITE_ID, _row_source(stats_rows), _row_source(search_rows))
+
+
+def test_wireless_statistics_read_follows_a_real_sdk_next_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The wireless statistics read keeps rows from every SDK page."""
+    first = build_sdk_answer(200, _json_body([CLIENT_FIRST_ROW]), CLIENT_PAGE_HEADERS, CLIENT_FIRST_URL)
+    second = build_sdk_answer(200, _json_body([CLIENT_SECOND_ROW]), CLIENT_SECOND_HEADERS, CLIENT_SECOND_URL)
+    session = PagedSession([second])
+    monkeypatch.setattr(clients.stats_api, "listSiteWirelessClientsStats", lambda *args, **kwargs: first)
+    rows = clients.fetch_wireless_stats_rows(session, SITE_ID)
+    assert rows == [CLIENT_FIRST_ROW, CLIENT_SECOND_ROW]
+    assert session.links == [CLIENT_NEXT_LINK]
+
+
+def test_wireless_statistics_read_reports_a_refused_later_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused later client page keeps page one and reports its status."""
+    first = build_sdk_answer(200, _json_body([CLIENT_FIRST_ROW]), CLIENT_PAGE_HEADERS, CLIENT_FIRST_URL)
+    lost = build_sdk_answer(502, b"<html>bad gateway</html>", HTML_TYPE, CLIENT_SECOND_URL)
+    session = PagedSession([lost])
+    monkeypatch.setattr(clients.stats_api, "listSiteWirelessClientsStats", lambda *args, **kwargs: first)
+    rows = clients.fetch_wireless_stats_rows(session, SITE_ID)
+    assert rows == [CLIENT_FIRST_ROW]
+    assert rows.partial_reasons == [{"reason": "page_count_mismatch", "http_status": 502}]
 
 
 def _signal_of(record: clients.ClientRecord) -> clients.WirelessSignal:
@@ -566,8 +605,9 @@ def test_each_fetch_reads_its_own_endpoint_and_keeps_the_mappings(
         extra: The keyword arguments beside the session, site, and page size.
     """
     session = _session()
-    with patch.object(clients, attribute) as api, patch.object(clients, "mistapi") as sdk:
-        sdk.get_all.return_value = [WIRED_ROW, "not a mapping"]
+    response = SimpleNamespace(data=[WIRED_ROW, "not a mapping"], status_code=200, next=None)
+    with patch.object(clients, attribute) as api:
+        getattr(api, call_name).return_value = response
         rows = fetch(session, SITE_ID)
     getattr(api, call_name).assert_called_once_with(session, SITE_ID, limit=clients.page_limit(), **extra)
     assert rows == [WIRED_ROW]

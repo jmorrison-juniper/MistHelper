@@ -14,6 +14,7 @@ Why:
 
 from __future__ import annotations
 
+import json
 import logging
 from types import SimpleNamespace
 from typing import Any
@@ -22,6 +23,7 @@ import mistapi
 import pytest
 
 from src.upgrade_portal.upgrade import gate
+from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches
 #      a real organization, a real site, or a real device.
@@ -44,6 +46,10 @@ UPTIME_AFTER_FAST_REBOOT = 45
 PAGE_LIMIT = 200
 HTTP_OK = 200
 START_TIME = 1000.0
+GATE_FIRST_URL = f"https://api.mist.com/api/v1/orgs/{ORG_ID}/devices/stats?limit=1"
+GATE_SECOND_LINK = f"/api/v1/orgs/{ORG_ID}/devices/stats?limit=1&page=2"
+GATE_SECOND_URL = f"https://api.mist.com{GATE_SECOND_LINK}"
+GATE_PAGE_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"}
 
 
 class FakeClock:
@@ -524,6 +530,19 @@ def test_a_short_poll_becomes_a_partial_reason(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: [{"mac": SWITCH_MAC}])
     result = gate.read_fleet_statistics(SimpleNamespace(), ORG_ID, page_limit=PAGE_LIMIT)
     assert result.partial_reasons[0]["reason"] == "page_count_mismatch"
+
+
+def test_a_refused_fleet_page_keeps_page_one_and_reports_page_two(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused later fleet page marks the gate round partial."""
+    first = build_sdk_answer(HTTP_OK, json.dumps([{"mac": SWITCH_MAC}]).encode(), GATE_PAGE_HEADERS, GATE_FIRST_URL)
+    lost = build_sdk_answer(502, b"<html>bad gateway</html>", HTML_TYPE, GATE_SECOND_URL)
+    session = PagedSession([lost])
+    monkeypatch.setattr(mistapi.api.v1.orgs.stats, "listOrgDevicesStats", lambda *a, **k: first)
+    result = gate.read_fleet_statistics(session, ORG_ID, page_limit=PAGE_LIMIT)
+    assert set(result.readings) == {SWITCH_MAC}
+    assert result.partial_reasons == [
+        {"section": gate.SECTION_GATE_STATISTICS, "reason": "page_count_mismatch", "http_status": 502}
+    ]
 
 
 def test_an_unknown_answer_shape_becomes_a_partial_reason(monkeypatch: pytest.MonkeyPatch) -> None:

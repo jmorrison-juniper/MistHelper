@@ -91,10 +91,15 @@ HTTP_BAD_GATEWAY = 502
 STATS_FIRST_URL = f"https://api.mist.com/api/v1/sites/{SITE_ID}/stats/devices?type=all&limit=1"
 STATS_SECOND_LINK = f"/api/v1/sites/{SITE_ID}/stats/devices?type=all&limit=1&page=2"
 STATS_SECOND_URL = f"https://api.mist.com{STATS_SECOND_LINK}"
+INVENTORY_FIRST_URL = f"https://api.mist.com/api/v1/orgs/{ORG_ID}/inventory?site_id={SITE_ID}&limit=1"
+INVENTORY_SECOND_LINK = f"/api/v1/orgs/{ORG_ID}/inventory?site_id={SITE_ID}&limit=1&page=2"
+INVENTORY_SECOND_URL = f"https://api.mist.com{INVENTORY_SECOND_LINK}"
 SEARCH_FIRST_URL = f"https://api.mist.com/api/v1/orgs/{ORG_ID}/devices/search?limit=1"
 SEARCH_NEXT_LINK = f"/api/v1/orgs/{ORG_ID}/devices/search?limit=1&page=2"
 PAGE_ONE_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"}
 PAGE_TWO_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "2"}
+INVENTORY_PAGE_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"}
+INVENTORY_SECOND_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "2"}
 FIRST_PAGE_ROW = {"mac": MASTER_MAC, "type": "switch"}
 SECOND_PAGE_ROW = {"mac": STANDALONE_MAC, "type": "ap"}
 GATEWAY_FAULT_BODY = b"<html><body>502 Bad Gateway</body></html>"
@@ -388,6 +393,25 @@ class TestReadInventory:
         result = devices.read_inventory(fake_mist_session, ORG_ID, SITE_ID, page_limit=PAGE_LIMIT)
         assert result.section == devices.SECTION_INVENTORY
         assert (result.records, result.partial_reasons) == (chassis_inventory, [])
+
+    def test_a_refused_inventory_page_keeps_page_one_and_reports_page_two(
+        self, cloud: SimpleNamespace, fake_mist_session: SimpleNamespace
+    ) -> None:
+        """A refused later inventory page marks the capture partial."""
+        first = build_sdk_answer(
+            HTTP_OK,
+            _json_body([FIRST_PAGE_ROW]),
+            INVENTORY_PAGE_HEADERS,
+            INVENTORY_FIRST_URL,
+        )
+        lost = build_sdk_answer(HTTP_BAD_GATEWAY, GATEWAY_FAULT_BODY, HTML_TYPE, INVENTORY_SECOND_URL)
+        cloud.inventory.return_value = first
+        session = PagedSession([lost])
+        result = devices.read_inventory(session, ORG_ID, SITE_ID, page_limit=PAGE_LIMIT)
+        assert result.records == [FIRST_PAGE_ROW]
+        assert result.partial_reasons == [
+            {"section": devices.SECTION_INVENTORY, "reason": devices.REASON_SHORT_READ, "http_status": HTTP_BAD_GATEWAY}
+        ]
 
     def test_a_failed_inventory_read_reports_a_reason_and_no_record(
         self, cloud: SimpleNamespace, fake_mist_session: SimpleNamespace
