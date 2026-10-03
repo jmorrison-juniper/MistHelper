@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
-import time
 from logging.handlers import RotatingFileHandler
 from typing import Any
 
@@ -16,40 +16,47 @@ class ProcessSafeRotatingFileHandler(RotatingFileHandler):
         """Create a delayed rotating handler with a shared lock file."""
         super().__init__(filename, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8", delay=True)
         self._process_lock_path = f"{self.baseFilename}.lock"
+        digest = hashlib.sha256(self.baseFilename.encode("utf-8")).hexdigest()
+        self._windows_mutex_name = f"Local\\MistHelperLog-{digest}"
         with open(self._process_lock_path, "ab") as lock_file:
             if lock_file.tell() == 0:
                 lock_file.write(b"\0")
 
+    def _acquire_windows_mutex(self) -> Any:
+        """Acquire a named mutex for Windows hosts."""
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.CreateMutexW(None, False, self._windows_mutex_name)
+        if not handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        result = kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
+        if result != 0:
+            kernel32.CloseHandle(handle)
+            raise ctypes.WinError(ctypes.get_last_error())
+        return kernel32, handle
+
     def _acquire_process_lock(self) -> Any:
         """Acquire the shared lock file before one write or rollover."""
-        lock_file = open(self._process_lock_path, "a+b")
-        lock_file.seek(0)
         if os.name == "nt":
-            import msvcrt
+            return self._acquire_windows_mutex()
+        lock_file = open(self._process_lock_path, "r+b")
+        lock_file.seek(0)
+        import fcntl
 
-            while True:
-                try:
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
-                    break
-                except OSError:
-                    time.sleep(0.01)
-        else:
-            import fcntl
-
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         return lock_file
 
     def _release_process_lock(self, lock_file: Any) -> None:
         """Release the shared lock file after one write or rollover."""
         if os.name == "nt":
-            import msvcrt
+            kernel32, handle = lock_file
+            kernel32.ReleaseMutex(handle)
+            kernel32.CloseHandle(handle)
+            return
+        import fcntl
 
-            lock_file.seek(0)
-            msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
         lock_file.close()
 
     def _reopen_if_rotated(self) -> None:
@@ -69,6 +76,13 @@ class ProcessSafeRotatingFileHandler(RotatingFileHandler):
         self.stream.close()
         self.stream = self._open()
 
+    def _close_windows_stream(self) -> None:
+        """Close the Windows stream so another process can rename the active file."""
+        if os.name == "nt" and self.stream is not None:
+            self.stream.flush()
+            self.stream.close()
+            self.stream = None
+
     def emit(self, record: logging.LogRecord) -> None:
         """Serialize one complete record and any required rollover."""
         lock_file = self._acquire_process_lock()
@@ -76,4 +90,5 @@ class ProcessSafeRotatingFileHandler(RotatingFileHandler):
             self._reopen_if_rotated()
             super().emit(record)
         finally:
+            self._close_windows_stream()
             self._release_process_lock(lock_file)

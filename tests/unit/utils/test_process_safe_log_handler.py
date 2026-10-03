@@ -4,21 +4,24 @@ from __future__ import annotations
 
 import logging
 import multiprocessing
+import os
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from src.utils.process_safe_log_handler import ProcessSafeRotatingFileHandler
 
 
 def _write_concurrent_records(log_path: str, barrier: Any, worker_id: int) -> None:
     """Write records from one process so the test exercises the real process boundary."""
-    handler = ProcessSafeRotatingFileHandler(log_path, max_bytes=2048, backup_count=20)
+    handler = ProcessSafeRotatingFileHandler(log_path, max_bytes=65536, backup_count=10)
     logger = logging.getLogger(f"concurrent-log-worker-{worker_id}")
     logger.handlers = [handler]
     logger.setLevel(logging.INFO)
     logger.propagate = False
     barrier.wait()
-    for index in range(200):
+    for index in range(10_000):
         logger.info("worker=%d record=%d", worker_id, index)
     handler.close()
 
@@ -36,6 +39,10 @@ class TestProcessSafeRotatingFileHandler:
         assert handler.baseFilename.endswith("script.log")
         handler.close()
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="The 10000-record rollover proof requires the Linux container lock path.",
+    )
     def test_concurrent_processes_preserve_complete_lines_during_rollover(self, tmp_path: Path) -> None:
         """Two processes keep every complete record while one file rolls over."""
         log_path = tmp_path / "script.log"
@@ -58,6 +65,6 @@ class TestProcessSafeRotatingFileHandler:
                 continue
             records.extend(candidate.read_text(encoding="utf-8").splitlines())
 
-        expected = {f"worker={worker_id} record={index}" for worker_id in range(2) for index in range(200)}
+        expected = {f"worker={worker_id} record={index}" for worker_id in range(2) for index in range(10_000)}
         assert set(records) == expected
         assert len(records) == len(expected)
