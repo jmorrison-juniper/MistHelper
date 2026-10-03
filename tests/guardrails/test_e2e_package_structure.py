@@ -8,11 +8,7 @@ EXPECTED_PACKAGES = {"upgrade_portal", "web_portal", "websockets_tab"}
 
 def test_e2e_root_contains_only_coherent_packages() -> None:
     """Keep E2E tests below the five-item directory limit."""
-    entries = {
-        entry.name
-        for entry in E2E_ROOT.iterdir()
-        if entry.name != "__pycache__"
-    }
+    entries = {entry.name for entry in E2E_ROOT.iterdir() if entry.name != "__pycache__"}
     assert entries == {"__init__.py", "conftest.py", *EXPECTED_PACKAGES}
     assert len(entries) <= 5
 
