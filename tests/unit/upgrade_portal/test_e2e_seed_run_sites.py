@@ -36,6 +36,7 @@ from typing import Any  # The records hold JSON values of mixed types.
 import pytest  # The fixtures and the parameters of the decision tests.
 
 from src.upgrade_portal.app.routes.upgrade import run_is_live  # The shipped rule of the site scan.
+from tests.e2e.upgrade_portal.retry_run_seeds import FAILED_RUN_ID, RETRY_SITE_ID, STOPPED_RUN_ID  # Issue #3292.
 
 logger = logging.getLogger(__name__)  # Keep the records of this module under one name.
 
@@ -190,6 +191,14 @@ class TestTheSeedRunSites:
             f"The guard read {count} seed run(s), and {len(found)} live run(s) hold a site of the picker: "
             f"{'; '.join(found)}. Each create call on that site answers 409 and names the seed run."
         )
+
+    def test_retry_seed_runs_use_their_local_site(self, seed_write: SeedWrite) -> None:
+        """The retry seed runs MUST use one site that is not the shared first site."""
+        logger.info("Check the site of each retry seed run")  # Log the plan.
+        records = {str(record["run_id"]): record for record in seed_write.records}  # Index the saved records.
+        retry_records = [records[FAILED_RUN_ID], records[STOPPED_RUN_ID]]  # The two retry records under test.
+        assert {str(record["site_id"]) for record in retry_records} == {RETRY_SITE_ID}  # One local site.
+        assert RETRY_SITE_ID not in seed_write.listed  # The site does not enter another browser journey.
 
 
 class TestTheScanDecision:

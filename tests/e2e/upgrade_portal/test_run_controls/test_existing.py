@@ -50,6 +50,7 @@ from collections.abc import Iterator  # The fixture `portal_page` yields, so its
 from typing import Any
 
 import pytest
+from tests.e2e.upgrade_portal.retry_run_seeds import RETRY_SITE_ID  # Issue #3292: the retry site is isolated.
 
 from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3497: the teardown.
 
@@ -201,11 +202,12 @@ def _free_the_site(page: Any, ledger: RunLedger) -> None:
         ledger: The ledger of the runs that the test built.
     """
     logger.info("Free the stand-in site after one test of the run controls")  # Log before the teardown.
-    site_id = _first_site_id(page)  # The picker page also publishes a fresh token.
     release = SiteRelease(page.request, _csrf_token(page))  # The same session holds the lock record.
     ended = release.end_runs(ledger.runs)  # A live run would hold the site for the next test.
-    release.free_site(site_id)  # A held lock would resume in the next module.
-    logger.debug("The teardown ended %s run(s) and freed the site", ended)  # Log after the teardown.
+    site_ids = ledger.sites or (_first_site_id(page),)  # A no-run test still frees the shared site.
+    for site_id in site_ids:  # Each local setup may use a different site.
+        release.free_site(site_id)  # A held lock would resume in the next module.
+    logger.debug("The teardown ended %s run(s) and freed %s site(s)", ended, len(site_ids))  # Log after teardown.
 
 
 def _first_site_id(page: Any) -> str:
@@ -267,7 +269,7 @@ def _named_live_run(answer: Any, path: str) -> str:
     return named
 
 
-def _create_run(page: Any, ledger: RunLedger) -> str:
+def _create_run(page: Any, ledger: RunLedger, site_id: str | None = None) -> str:
     """Create one upgrade run for the first site and return its key.
 
     Args:
@@ -282,7 +284,9 @@ def _create_run(page: Any, ledger: RunLedger) -> str:
             401 or 404. All three name a fault of the portal that this run
             started, so none of them may report a skip.
     """
-    site_id = _first_site_id(page)  # The first site row of the stand-in cloud.
+    listed_site_id = _first_site_id(page)  # Load the signed-in page and its CSRF token before any request.
+    site_id = site_id or listed_site_id  # Use a local site when the test owns one.
+    ledger.record_site(site_id)  # Teardown must free the site even when the run is final.
     path = RUNS_API_TEMPLATE.format(site_id=site_id)  # The create route of that site.
     headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # Each write needs both.
     logger.info("Create one run for the first site")  # Log before the create call.
@@ -304,7 +308,7 @@ def _create_run(page: Any, ledger: RunLedger) -> str:
     return run_id  # The caller opens the page of this run.
 
 
-def _take_site_lock_without_a_live_run(page: Any, ledger: RunLedger) -> None:
+def _take_site_lock_without_a_live_run(page: Any, ledger: RunLedger, site_id: str | None = None) -> None:
     """Take the site lock, then end the temporary run that acquired it.
 
     Args:
@@ -314,7 +318,8 @@ def _take_site_lock_without_a_live_run(page: Any, ledger: RunLedger) -> None:
     Raises:
         AssertionError: If the cancel or the take answers any status but 200.
     """
-    run_id = _create_run(page, ledger)  # The create call takes the site lock for this browser.
+    site_id = site_id or _first_site_id(page)  # Use the retry site when the fixture owns one.
+    run_id = _create_run(page, ledger, site_id)  # The create call takes the site lock for this browser.
     path = f"/api/runs/{run_id}/cancel"  # The cancel route of the temporary run.
     headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # Each write needs both.
     logger.info("Cancel the temporary run that took the site lock")  # Log before the cancel.
@@ -322,7 +327,6 @@ def _take_site_lock_without_a_live_run(page: Any, ledger: RunLedger) -> None:
     logger.debug("The cancel of the temporary run answered %s", answer.status)  # Log after the cancel.
     if answer.status != OK_STATUS:  # A live temporary run would block the retry.
         raise AssertionError(f"{path} answered {answer.status}, so the temporary lock run stayed live.")
-    site_id = _first_site_id(page)  # The picker page also publishes a fresh token.
     lock_path = f"/api/sites/{site_id}/lock"  # The lock route of the same site.
     headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # The token of the new page.
     logger.info("Take the site lock again with the word continue")  # Log before the take.
@@ -452,7 +456,7 @@ def fixture_failed_run_page(portal_page: Any, run_ledger: RunLedger) -> Any:
     Returns:
         The Playwright page object, on the run page of the failed run.
     """
-    _take_site_lock_without_a_live_run(portal_page, run_ledger)  # Keep the lock without blocking the retry.
+    _take_site_lock_without_a_live_run(portal_page, run_ledger, RETRY_SITE_ID)  # Keep the retry site lock locally.
     for _ in range(SEED_TRIES):  # The seed runs on its own thread, so it may land a moment after the bind.
         opened = _open_seeded_run_page(portal_page, FAILED_RUN_ID)  # False while the seed is not written.
         if opened and portal_page.get_by_test_id(RETRY_REGION_ID).count() >= 1:  # The seeded run is readable now.
@@ -589,7 +593,7 @@ class TestTheRetryControl:
 
     def test_a_stopped_run_offers_a_fresh_run_capture(self, portal_page: Any, run_ledger: RunLedger) -> None:
         """A stopped attempt can restart without rebuilding the plan by hand."""
-        _take_site_lock_without_a_live_run(portal_page, run_ledger)  # Keep the lock without a conflicting run.
+        _take_site_lock_without_a_live_run(portal_page, run_ledger, RETRY_SITE_ID)  # Keep the retry site lock locally.
         for _ in range(SEED_TRIES):  # The seed runs on its own thread, so it may land a moment after the bind.
             opened = _open_seeded_run_page(portal_page, STOPPED_RUN_ID)  # False while the seed is not written.
             button = portal_page.get_by_test_id(RETRY_BUTTON_ID)  # The retry control of the stopped run.
