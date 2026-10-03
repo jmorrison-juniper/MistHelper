@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -51,6 +52,7 @@ from src.firmware.upgrade_service import (
     classify_gateway,
     list_available_versions,
 )
+from src.upgrade_portal.api.numeric_input import AsciiWholeNumberReader
 from src.upgrade_portal.capture.devices import (
     HTTP_STATUS_NONE,
     REASON_READ_FAILED,
@@ -995,13 +997,35 @@ def _read_whole_number(payload: Mapping[str, Any], field: str, highest: int) -> 
     if value is None or not str(value).strip():
         return None
     word = str(value).strip()
-    if isinstance(value, bool) or not word.isdigit():  # A sign, a decimal point, and a word all fail here.
+    if isinstance(value, bool):  # Booleans must not become numeric option values.
         raise BadOptionError(field)
-    number = int(word)
+    number = _read_bounded_ascii_integer(word, field, highest)  # Apply the shared finite-field numeric boundary.
     if number > highest:
         logger.warning("Upgrade portal refused the field %s above its limit", field)
         raise BadOptionError(field)
     return number
+
+
+def _read_unbounded_ascii_integer(word: str, field: str) -> int:
+    """Convert an unbounded ASCII digit string within Python's active limit."""
+    if not word.isascii() or not word.isdecimal():  # Superscript and non-ASCII digits are not API integers.
+        raise BadOptionError(field)
+    limit = sys.get_int_max_str_digits()  # Read the active interpreter limit for unbounded business values.
+    if limit > 0 and len(word) > limit:  # Refuse oversized text before Python conversion can leak its policy error.
+        logger.warning("Upgrade portal refused the field %s because its digit string is too long", field)
+        raise BadOptionError(field)
+    try:
+        return int(word)
+    except ValueError as error:
+        raise BadOptionError(field) from error
+
+
+def _read_bounded_ascii_integer(word: str, field: str, maximum: int) -> int:
+    """Read one finite option through the shared numeric boundary."""
+    value = AsciiWholeNumberReader(maximum, field).read(word)  # Apply the shared lexical and representation checks.
+    if value is None:  # The shared reader reports malformed or oversized text without its raw value.
+        raise BadOptionError(field)
+    return value
 
 
 def _number_entries(value: Any) -> list[str]:
@@ -1023,7 +1047,11 @@ def _number_entries(value: Any) -> list[str]:
     return [str(one).strip() for one in sequence if str(one).strip()]
 
 
-def _read_number_list(payload: Mapping[str, Any], field: str) -> tuple[int, ...] | None:
+def _read_number_list(
+    payload: Mapping[str, Any],
+    field: str,
+    highest: int | None = None,
+) -> tuple[int, ...] | None:
     """Read one optional list of whole numbers from a text field or a real list.
 
     Why:
@@ -1049,9 +1077,9 @@ def _read_number_list(payload: Mapping[str, Any], field: str) -> tuple[int, ...]
     if not entries or len(entries) > _PHASE_COUNT_HIGHEST:
         logger.warning("Upgrade portal refused the list field %s for its length", field)
         raise BadOptionError(field)
-    if not all(word.isdigit() for word in entries):  # A sign and a decimal point both fail here.
-        raise BadOptionError(field)
-    return tuple(int(word) for word in entries)
+    if highest is None:  # Failure counts retain their existing unbounded business semantics.
+        return tuple(_read_unbounded_ascii_integer(word, field) for word in entries)
+    return tuple(_read_bounded_ascii_integer(word, field, highest) for word in entries)
 
 
 def _read_word_choice(payload: Mapping[str, Any], field: str, choices: Sequence[str]) -> str | None:
@@ -1143,7 +1171,7 @@ def _read_canary(payload: Mapping[str, Any]) -> CanaryOptions:
         BadOptionError: If a phase list, a failure list, or the percentage holds
             a value that no rule maps.
     """
-    phases = _read_number_list(payload, "canary_phases")
+    phases = _read_number_list(payload, "canary_phases", highest=_PERCENTAGE_HIGHEST)
     _check_phase_order(phases)  # A list that does not rise to 100 never reaches the cloud (issue #3223).
     failures = _read_number_list(payload, "max_failures")
     if failures is not None and len(failures) != len(phases or ()):
@@ -1255,9 +1283,9 @@ def parse_duration_seconds(text: str, field: str) -> int:
         logger.warning("Upgrade portal refused the field %s because the unit is not one of s, m, h, or d", field)
         raise BadOptionError(field)
     number = word[:-1]
-    if not number.isdigit():  # ``isdigit`` refuses a sign, a space, and a decimal point.
-        raise BadOptionError(field)
-    seconds = int(number) * DURATION_UNIT_SECONDS[unit]
+    maximum = START_TIME_HORIZON_SECONDS // DURATION_UNIT_SECONDS[unit]  # Derive the raw limit from the schedule bound.
+    parsed = _read_bounded_ascii_integer(number, field, maximum)  # Apply the finite duration boundary.
+    seconds = parsed * DURATION_UNIT_SECONDS[unit]
     if seconds > START_TIME_HORIZON_SECONDS:
         logger.warning("Upgrade portal refused the field %s because the span exceeds the site lock window", field)
         raise BadOptionError(field)
@@ -1283,9 +1311,11 @@ def _read_stored_duration(stored: Any, field: str) -> int:
         BadOptionError: If the value is not a whole count inside the window.
     """
     word = str(stored).strip()
-    if not word.isdigit():
-        raise BadOptionError(field)
-    seconds = int(word)
+    seconds = _read_bounded_ascii_integer(  # Apply the stored duration boundary.
+        word,
+        field,
+        START_TIME_HORIZON_SECONDS,
+    )
     if seconds > START_TIME_HORIZON_SECONDS:
         raise BadOptionError(field)
     return seconds
@@ -1308,11 +1338,16 @@ def _read_written_schedule(value: Any, field: str, now: Callable[[], int] | None
     word = str(value).strip()
     if isinstance(value, bool):
         raise BadOptionError(field)
-    if word.isdigit() and len(word) >= EPOCH_DIGIT_COUNT:
+    if word.isascii() and word.isdecimal() and len(word) >= EPOCH_DIGIT_COUNT:
         # A run saved before issue #2187 holds a moment here. The window guard
         # still applies, because a stale moment writes firmware at once.
-        moment = int(word)
-        return None, moment if now is None else _guard_start_time(moment, now(), field)
+        current = now() if now is not None else None  # Read the clock once for one stable schedule decision.
+        if current is None:  # Stored epoch replay has no clock-based business maximum.
+            moment = _read_unbounded_ascii_integer(word, field)  # Apply only Python's active representation limit.
+        else:
+            maximum = current + START_TIME_HORIZON_SECONDS  # Derive the existing schedule-window maximum.
+            moment = _read_bounded_ascii_integer(word, field, maximum)  # Apply the finite epoch boundary.
+        return None, moment if current is None else _guard_start_time(moment, current, field)
     seconds = parse_duration_seconds(word, field)
     # A duration needs a clock whatever the caller passed. See issue #2196 and
     # the note in `_read_schedule` above.
