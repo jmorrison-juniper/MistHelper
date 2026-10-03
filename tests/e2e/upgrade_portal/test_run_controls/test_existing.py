@@ -51,7 +51,6 @@ from typing import Any
 
 import pytest
 from tests.e2e.upgrade_portal.retry_run_seeds import RETRY_SITE_ID  # Issue #3292: the retry site is isolated.
-
 from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3497: the teardown.
 
 # The Playwright package must exist before this module defines a browser test.
