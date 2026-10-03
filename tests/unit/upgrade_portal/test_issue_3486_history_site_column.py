@@ -49,7 +49,7 @@ _EVERY_SITE_HEADERS = [  # FR-001: the Site column follows the Capture column.
     "Action",
 ]
 _ONE_SITE_HEADERS = [header for header in _EVERY_SITE_HEADERS if header != "Site"]  # The nine columns of today.
-_SITE_WIDTHS = (12, 13, 14, 7, 9, 7, 12, 7, 9, 10)  # research.md R4: the ten shares of the wider table.
+_SITE_WIDTHS = (8, 10, 10, 7, 8, 8, 24, 7, 9, 9)  # Issues #3491 and #3495: the ten readable shares.
 
 
 @dataclass(frozen=True, slots=True)

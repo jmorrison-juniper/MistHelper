@@ -285,3 +285,44 @@ def test_the_history_of_one_site_shows_no_site_column(page: Any) -> None:
     sync_api.expect(page.locator('[data-testid^="history-site-"]')).to_have_count(0)  # No row holds a site cell.
     sync_api.expect(page.get_by_test_id(f"history-row-{STORED_POLL_CAPTURE_ID}")).to_be_visible()  # The one row.
     logger.debug("The history of one site shows no Site column")  # Log after the compare.
+
+
+@pytest.mark.parametrize("width", WINDOW_WIDTHS)
+def test_the_history_site_text_does_not_break_inside_words(page: Any, width: int) -> None:
+    """The Runs and Multi-site upgrades tables keep long text on one line."""
+    open_history(page, EVERY_SITE_PATH, width)  # Open the widest history scope at this window width.
+    run_table = page.get_by_test_id("history-run-table")  # The single-site run table.
+    sync_api.expect(run_table).to_be_visible()  # The table must be present before style reads.
+    run_style = (
+        run_table.locator("tbody tr")
+        .first.locator("td")
+        .first.evaluate(  # Read the Site cell style.
+            "(cell) => ({whiteSpace: getComputedStyle(cell).whiteSpace, "
+            "wordBreak: getComputedStyle(cell).wordBreak, "
+            "textOverflow: getComputedStyle(cell).textOverflow})"
+        )
+    )
+    assert run_style == {
+        "whiteSpace": "nowrap",
+        "wordBreak": "normal",
+        "textOverflow": "ellipsis",
+    }, f"Run Site style is {run_style}"
+    run_box = run_table.locator("tbody tr").first.bounding_box()  # Measure one painted run row.
+    assert run_box is not None and run_box["height"] <= ROW_HEIGHT_CEILING, f"Run row is too tall: {run_box}"
+
+    operation_table = page.get_by_test_id("history-operation-table")  # The multi-site upgrade table.
+    if operation_table.count():  # The organization fixture can omit this section when no organization is selected.
+        operation_style = (
+            operation_table.locator("tbody tr")
+            .first.locator("td")
+            .first.evaluate(  # Read one cell.
+                "(cell) => ({whiteSpace: getComputedStyle(cell).whiteSpace, "
+                "wordBreak: getComputedStyle(cell).wordBreak, "
+                "textOverflow: getComputedStyle(cell).textOverflow})"
+            )
+        )
+        assert operation_style == {
+            "whiteSpace": "nowrap",
+            "wordBreak": "normal",
+            "textOverflow": "ellipsis",
+        }, f"Operation style is {operation_style}"
