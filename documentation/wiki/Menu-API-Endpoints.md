@@ -321,7 +321,7 @@ pie showData
 | [233](Menu-API-Endpoints-Safe#menu-233) | Search WAN client events for the organization (searchOrgWanClientEvents) | `safe` | 1 |
 | [234](Menu-API-Endpoints-Safe#menu-234) | Search system events for the organization (searchOrgSystemEvents) | `safe` | 1 |
 | [235](Menu-API-Endpoints-Interactive-Safe#menu-235) | Run any org-scoped Mist count endpoint (35 operations) | `interactive_safe` | 35 |
-| [236](Menu-API-Endpoints-Interactive-Safe#menu-236) | Run any site-scoped Mist count endpoint (33 operations) | `interactive_safe` | 34 |
+| [236](Menu-API-Endpoints-Interactive-Safe#menu-236) | Run any site-scoped Mist count endpoint (33 operations) | `interactive_safe` | 33 |
 | [237](Menu-API-Endpoints-Interactive-Safe#menu-237) | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` | 3 |
 | [238](Menu-API-Endpoints-Interactive-Safe#menu-238) | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | `interactive_safe` | 1 |
 | [239](Menu-API-Endpoints-Destructive#menu-239) | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | `destructive` | 19 |
@@ -346,7 +346,7 @@ pie showData
 | [258](Menu-API-Endpoints-Interactive-Safe#menu-258) | Search other-device events for a selected site (searchSiteOtherDeviceEvents) | `interactive_safe` | 2 |
 | [259](Menu-API-Endpoints-Interactive-Safe#menu-259) | Run any no-identifier Mist get or list endpoint (29 operations) | `interactive_safe` | 29 |
 | [260](Menu-API-Endpoints-Interactive-Safe#menu-260) | Run any org-scoped Mist get or list endpoint (55 operations) | `interactive_safe` | 55 |
-| [261](Menu-API-Endpoints-Interactive-Safe#menu-261) | Run any site-scoped simple Mist read endpoint (58 operations) | `interactive_safe` | 58 |
+| [261](Menu-API-Endpoints-Interactive-Safe#menu-261) | Run any site-scoped simple Mist read endpoint (58 operations) | `interactive_safe` | 57 |
 | [262](Menu-API-Endpoints-Interactive-Safe#menu-262) | Run any MSP-scoped Mist get or list endpoint (10 operations) | `interactive_safe` | 10 |
 | [263](Menu-API-Endpoints-Interactive-Safe#menu-263) | Run any site SLE endpoint with scope prompts (15 operations) | `interactive_safe` | 16 |
 | [264](Menu-API-Endpoints-Interactive-Safe#menu-264) | Run any site map endpoint with map prompts (7 operations) | `interactive_safe` | 8 |
@@ -374,7 +374,7 @@ pie showData
 | [286](Menu-API-Endpoints-Destructive#menu-286) | DESTRUCTIVE: Client CoA, reauthentication, and disconnect (Requires typing the target to confirm, supports --dry-run) | `destructive` | 5 |
 | [287](Menu-API-Endpoints-Destructive#menu-287) | DESTRUCTIVE: Replace a Mist inventory device for RMA (Requires typing 'REPLACE' to confirm, supports --dry-run) | `destructive` | 3 |
 | [288](Menu-API-Endpoints-Interactive-Safe#menu-288) | Show the SSR registration commands | `interactive_safe` | 0 |
-| [289](Menu-API-Endpoints-Interactive-Safe#menu-289) | Export the client fingerprint census for a site | `interactive_safe` | 3 |
+| [289](Menu-API-Endpoints-Interactive-Safe#menu-289) | Export the client fingerprint census for a site | `interactive_safe` | 2 |
 | [290](Menu-API-Endpoints-Interactive#menu-290) | Run spectrum analysis and RF diagnostic recording | `interactive` | 4 |
 | [291](Menu-API-Endpoints-Destructive#menu-291) | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run) | `destructive` | 2 |
 | [292](Menu-API-Endpoints-Destructive#menu-292) | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run) | `destructive` | 10 |

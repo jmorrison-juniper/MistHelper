@@ -21,7 +21,6 @@ flowchart LR
     root --> f_sites_stats["sites/stats<br/>27 menu options"]
     root --> f_sites_devices["sites/devices<br/>14 menu options"]
     root --> f_sites_sites["sites/sites<br/>7 menu options"]
-    root --> f_sites_insights["sites/insights<br/>6 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>5 menu options"]
     root --> f_sites_clients["sites/clients<br/>5 menu options"]
     root --> f_sites_mxedges["sites/mxedges<br/>5 menu options"]
@@ -29,6 +28,7 @@ flowchart LR
     root --> f_const_device_models["const/device_models<br/>4 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>4 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>4 menu options"]
+    root --> f_sites_guests["sites/guests<br/>4 menu options"]
     root --> more["173 more families"]
 ```
 
@@ -1022,7 +1022,7 @@ flowchart LR
 - Title: Run any site-scoped Mist count endpoint (33 operations)
 - Handler: `CountExporter.site_counts`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 34
+- Endpoints: 33
 
 ```mermaid
 flowchart LR
@@ -1038,9 +1038,9 @@ flowchart LR
     c1 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/last_config/count"]
     c1 --> e9["GET<br/>/api/v1/sites<br/>/{site_id}/events<br/>/system/count"]
     c1 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/guests<br/>/count"]
-    c1 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/fingerprints/count"]
-    c1 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/iotendpoints/count"]
-    menu --> more["22 more endpoints in<br/>the table"]
+    c1 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/iotendpoints/count"]
+    c1 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/marvis_configs<br/>/count"]
+    menu --> more["21 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1056,7 +1056,6 @@ flowchart LR
 | GET | `/api/v1/sites/{site_id}/devices/last_config/count` | [`sites.devices.countSiteDeviceLastConfig`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/count-site-device-last-config) | [`_SITE_OPS`](../../src/export/count_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/events/system/count` | [`sites.events.countSiteSystemEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/events/count-site-system-events) | [`_SITE_OPS`](../../src/export/count_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/guests/count` | [`sites.guests.countSiteGuestAuthorizations`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/guests/count-site-guest-authorizations) | [`_SITE_OPS`](../../src/export/count_exporter.py) | Name |
-| GET | `/api/v1/sites/{site_id}/insights/fingerprints/count` | [`sites.insights.countSiteClientFingerprints`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/nac-fingerprints/count-site-client-fingerprints) | [`_SITE_OPS`](../../src/export/count_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/iotendpoints/count` | [`sites.iotendpoints.countSiteIotEndpoints`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/iot-endpoints/count-site-iot-endpoints) | [`_SITE_OPS`](../../src/export/count_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/marvis_configs/count` | [`sites.marvis_configs.countSiteMarvisConfigActions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/marvis-configs/count-site-marvis-config-actions) | [`_SITE_OPS`](../../src/export/count_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/mxedges/events/count` | [`sites.mxedges.countSiteMxEdgeEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/mxedges/count-site-mx-edge-events) | [`_SITE_OPS`](../../src/export/count_exporter.py) | Name |
@@ -1404,7 +1403,7 @@ flowchart LR
 - Title: Run any site-scoped simple Mist read endpoint (58 operations)
 - Handler: `SimpleEndpointExporter.site_endpoints`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 58
+- Endpoints: 57
 
 ```mermaid
 flowchart LR
@@ -1422,7 +1421,7 @@ flowchart LR
     c1 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/versions"]
     c1 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/events<br/>/fast_roam"]
     c1 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}<br/>/evpn_topologies"]
-    menu --> more["46 more endpoints in<br/>the table"]
+    menu --> more["45 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1443,7 +1442,6 @@ flowchart LR
 | GET | `/api/v1/sites/{site_id}/guests` | [`sites.guests.listSiteAllGuestAuthorizations`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/guests/list-site-all-guest-authorizations) | [`_SITE_OPS`](../../src/export/simple_endpoint_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/guests/derived` | [`sites.guests.listSiteAllGuestAuthorizationsDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/guests/list-site-all-guest-authorizations-derived) | [`_SITE_OPS`](../../src/export/simple_endpoint_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/idpprofiles/derived` | [`sites.idpprofiles.listSiteIdpProfilesDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/idp-profiles/list-site-idp-profiles-derived) | [`_SITE_OPS`](../../src/export/simple_endpoint_exporter.py) | Name |
-| GET | `/api/v1/sites/{site_id}/insights/fingerprints/search` | [`sites.insights.searchSiteClientFingerprints`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/nac-fingerprints/search-site-client-fingerprints) | [`_SITE_OPS`](../../src/export/simple_endpoint_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/licenses/usages` | [`sites.licenses.getSiteLicenseUsage`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/licenses/get-site-license-usage) | [`_SITE_OPS`](../../src/export/simple_endpoint_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/location/coverage` | [`sites.location.getSiteBeamCoverageOverview`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/location/get-site-beam-coverage-overview) | [`_SITE_OPS`](../../src/export/simple_endpoint_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/location/ml/current` | [`sites.location.getSiteMachineLearningCurrentStat`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/location/get-site-machine-learning-current-stat) | [`_SITE_OPS`](../../src/export/simple_endpoint_exporter.py) | Name |
@@ -1860,20 +1858,9 @@ The map finds no Mist API request for this menu option.
 - Title: Export the client fingerprint census for a site
 - Handler: `ClientFingerprintCensus.run`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
-- Endpoints: 3
-
-```mermaid
-flowchart LR
-    menu["Menu 289: Export the<br/>client fingerprint<br/>census..."]
-    menu --> c1["ClientFingerprint<br/>CensusClient"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{_org_id}/insights<br/>/fingerprints/count"]
-    c1 --> e2["GET<br/>/api/v1/sites<br/>/{site_id}/insights<br/>/fingerprints/count"]
-    menu --> c2["APICoreFetchUtils"]
-    c2 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-```
+- Endpoints: 2
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{_org_id}/insights/fingerprints/count` | None (raw request) | [`ClientFingerprintCensusClient._count_org_path`](../../src/reports/client_fingerprint_census/client.py) | Path |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/insights/fingerprints/count` | [`sites.insights.countSiteClientFingerprints`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/nac-fingerprints/count-site-client-fingerprints) | [`ClientFingerprintCensusClient._count_site_path`](../../src/reports/client_fingerprint_census/client.py) | Call |

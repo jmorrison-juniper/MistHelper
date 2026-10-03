@@ -1506,13 +1506,6 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Mist site count distribution (countSiteCalls)",
     },
-    "countSiteClientFingerprints": {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
-        "indexes": ["site_id", "org_id"],
-        "unique_constraints": [],
-        "description": "Mist site count distribution (countSiteClientFingerprints)",
-    },
     "countSiteDeviceConfigHistory": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
@@ -2310,12 +2303,12 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site WAN link usage",
     },
-    "searchSiteClientFingerprints": {
+    "searchOrgClientFingerprints": {
         "type": "composite_pk",
         "primary_key": ["mac", "timestamp"],
         "indexes": ["site_id", "os_type", "mfg", "family"],
         "unique_constraints": [],
-        "description": "Site client NAC fingerprints",
+        "description": "Organization client NAC fingerprints",
     },
     "listSiteUiSettings": {
         "type": "natural_pk",
