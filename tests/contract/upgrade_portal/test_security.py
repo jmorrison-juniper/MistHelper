@@ -127,6 +127,7 @@ PROBE_GUARDED_PATH = "/_probe/guarded"  # WHY: Carries the real require_session 
 PROBE_ABSENT_PATH = "/_probe/absent"  # WHY: Matches no route, so the portal answers 404.
 PROBE_PEER_PATH = "/_probe/peer"  # WHY: Reports the address and the scheme that the portal read.
 STATIC_ASSET_PATH = "/static/css/portal.css"  # WHY: A real file that Flask serves from the static route.
+STATIC_CACHE_CONTROL = "public, no-cache, must-revalidate"  # WHY: Static files revalidate through their ETag.
 
 PROBE_BODY_MARKER = "probe-route-body-ran"  # WHY: Proof that the route body ran.
 PROBE_CALL_LOG_KEY = "PROBE_CALL_LOG"  # WHY: The application config carries the call log to a test.
@@ -388,13 +389,13 @@ def test_every_response_carries_every_security_header(
     header: str,
     value: str,
 ) -> None:
-    """Every response carries the full header set with the exact contract value.
+    """Every response carries the full header set with its safe contract value.
 
     Why:
         A header that appears on a page and disappears on an error page gives
         false comfort. The success page, the 404 page, the token refusal, the
         session refusal, and a static file all pass through the same hook, so
-        all five must carry the same headers.
+        all five must carry the same headers, except static assets use revalidation.
 
     Args:
         probe_client: The test client.
@@ -404,7 +405,8 @@ def test_every_response_carries_every_security_header(
     """
     response = fetch_probe_response(probe_client, kind)
     assert response.status_code == EXPECTED_STATUS[kind]
-    assert response.headers.get(header) == value
+    expected = STATIC_CACHE_CONTROL if kind == "static_file" and header == "Cache-Control" else value
+    assert response.headers.get(header) == expected
 
 
 def test_content_security_policy_matches_the_contract_exactly(probe_client: FlaskClient) -> None:
@@ -494,8 +496,24 @@ def test_the_static_route_carries_the_full_header_set(probe_client: FlaskClient)
     assert response.status_code == 200
     headers = dict(response.headers)
     # WHY: The failure then names every wrong header at once, with its value.
-    wrong = {name: headers.get(name) for name, value in EXPECTED_HEADERS.items() if headers.get(name) != value}
+    wrong = {
+        name: headers.get(name)
+        for name, value in EXPECTED_HEADERS.items()
+        if name != "Cache-Control" and headers.get(name) != value
+    }
     assert wrong == {}
+    assert headers["Cache-Control"] == STATIC_CACHE_CONTROL
+
+
+def test_the_static_route_revalidates_an_unchanged_asset(probe_client: FlaskClient) -> None:
+    """An unchanged static asset answers 304 when the browser sends its ETag."""
+    first = probe_client.get(STATIC_ASSET_PATH)
+    etag = first.headers.get("ETag")
+    assert first.status_code == 200
+    assert etag
+    second = probe_client.get(STATIC_ASSET_PATH, headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.get_data() == b""
 
 
 # ---------------------------------------------------------------------------
