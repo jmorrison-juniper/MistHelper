@@ -89,9 +89,10 @@ Re-check after the Phase 1 design: PASS for observability and the owned WebSocke
 exception. The data model and transport contracts keep the authentication,
 endpoint, safety, and redaction rules.
 
-Re-check for T081 on 2026-10-02: PASS for the T072 through T079 and T085 through
-T091 evidence. T082 through T084 remain open. T056 remains open until the final
-gates and the final SpecKit analysis pass.
+Re-check for T082 on 2026-10-03: PASS for the feature gate set and all focused
+constitutional proofs. The full repository commands also identified the existing or
+platform-specific exceptions recorded in research R16. T083 and T084 remain open. T056
+remains open until the final gates and the final SpecKit analysis pass.
 
 The merge does not wait for issues #3718 and #3721. The owner gave a standing instruction to
 merge the work that is ready. The final report names both issues for an owner decision.
@@ -104,7 +105,7 @@ All commands used the worktree interpreter at `.venv\Scripts\python.exe`.
 | - | - | - |
 | Structured logging | `test_records_are_ascii_json_with_only_bounded_safe_fields`, `test_sensitive_fields_are_redacted_at_boundary`, and `test_safe_text_values_redact_embedded_secrets`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_structured_logging.py -q`. | PASS. 15 passed. The records parse as JSON, stay ASCII, use bounded safe fields, and redact tokens, cookies, shell paths, keys, pasted text, and terminal output. |
 | Owned WebSocket exception | `TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention`. Command: `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py::TestWebSocketTriggerOrderingContract::test_trigger_order_controls_early_command_event_retention -q`. | PASS. 1 passed. The SDK trigger-first path retains 0-of-1 events. The owned subscribe-first path retains 1-of-1 events. |
-| Structural guard | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The guard checked 27 mappings, 25 analyzed paths, 145 modules, 204 classes, and 618 functions. The red fixture failed at 6 module children. The unreadable-input fixture also failed. |
+| Structural guard | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The guard checked 27 mappings, 25 analyzed paths, 145 modules, 204 classes, and 619 functions. The red fixture failed at 6 module children. The unreadable-input fixture also failed. |
 
 ## Project Structure
 

@@ -80,5 +80,5 @@ evidence. Run it only after the device owner approves the exact port.
 python -m ruff check src/websocket_streams tests
 python -m black --check src/websocket_streams tests
 python -m mypy src/websocket_streams --config-file pyproject.toml
-python scripts\run_local_test_shard.py unit --chunk-timeout 900 --test-timeout 120
+pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\unit --split tests\unit\upgrade_portal
 ```

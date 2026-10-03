@@ -26,11 +26,17 @@ logger = StructuredTransportLogger(logging.getLogger(__name__))
 class ApiSessionProtocol(Protocol):
     """Define the REST methods that utility requests use."""
 
-    def mist_post(self, uri: str, body: object | None = None) -> object: ...
+    def mist_post(self, uri: str, body: object | None = None) -> object:
+        """Send one Mist POST request."""
+        ...  # Protocol implementations provide the REST operation.
 
-    def mist_get(self, uri: str) -> object: ...
+    def mist_get(self, uri: str) -> object:
+        """Send one Mist GET request."""
+        ...  # Protocol implementations provide the REST operation.
 
-    def mist_delete(self, uri: str) -> object: ...
+    def mist_delete(self, uri: str) -> object:
+        """Send one Mist DELETE request."""
+        ...  # Protocol implementations provide the REST operation.
 
 
 @dataclass(slots=True)

@@ -717,13 +717,14 @@ Lead:      T004, T005, T023, T027, and T028
   (delivered: `specs/3671-interactive-terminal/plan.md` and
   `specs/3671-interactive-terminal/tasks.md`. Evidence: the T081 evidence table below.)
 
-- [ ] T082 After T072 through T081, run every command in
+- [X] T082 After T072 through T081, run every command in
   `specs/3671-interactive-terminal/quickstart.md`. Run the repository syntax, Ruff, Black,
   mypy, Bandit, Vulture, pydocstyle, interrogate, Radon, Pylint, unit, contract, guardrail,
   integration, and browser gates. Run the focused structural, logging, secret-redaction,
   and SDK-exception tests separately. Record each exact command, result, count, and
   measurement in `specs/3671-interactive-terminal/research.md` per T054 and Constitution
-  IV (missing).
+  IV. The feature gates passed. Research R16 records the existing repository and Windows
+  exceptions separately. (delivered)
 
 - [ ] T083 After T082, run `speckit.analyze` against the final specification, plan, and
   tasks. Fix every CRITICAL and HIGH finding. Fix each lower finding that concerns the
@@ -826,7 +827,7 @@ worktree on 2026-10-02.
 | T088 | `test_shell_audit_and_terminal_input_queue`, `test_terminal_payload_and_bytes`, and `test_runner_factory_builds_each_runner_kind`. Command: `python -m pytest tests\unit\websocket_streams\live\sessions -q`. | PASS. 46 passed. |
 | T089 | `test_size_and_close_logs_are_bounded_json`, `test_payload_matches_contract_fields`, and `test_payload_logs_only_bounded_metadata`. Command: `python -m pytest tests\unit\websocket_streams\live\terminal\test_ws_terminal_state.py -q`. | PASS. 6 passed. |
 | T090 | `test_post_without_the_form_token_is_refused`, `test_websocket_routes_do_not_leak_secrets`, `test_ready_terminal_gateway_reaches_the_manager`, and the 57 browser journeys. Commands: `python -m pytest tests\unit\websocket_streams\web -q` and `python -m pytest tests\e2e\websockets_tab -q`. | PASS. 49 unit tests and 57 browser tests passed. |
-| T091 | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The guard checked 27 mappings, 25 analyzed paths, 145 modules, 204 classes, and 618 functions. |
+| T091 | `test_bounded_bad_fixture_fails`, `test_unreadable_input_fails`, and `test_current_feature_obeys_structural_limits`. Command: `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s`. | PASS. 3 passed. The guard checked 27 mappings, 25 analyzed paths, 145 modules, 204 classes, and 619 functions. |
 
 - [ ] T092 After T085 through T091, repeat T080 through T084 in order. Reword commits only
   after all correction commits exist. Update the plan and task evidence after T091 passes.

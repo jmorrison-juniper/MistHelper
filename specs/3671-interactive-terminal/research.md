@@ -348,3 +348,52 @@ The T080 history rewrite checked 23 feature commits. All 23 subjects matched
 `version YY.MM.DD.HH.MM - description`. All 23 commits included the required Copilot
 co-author trailer. The author dates remained in chronological order. A tree comparison
 between the final rewritten commit and the pre-rewrite backup found no content difference.
+
+## R16. T082 complete gate evidence
+
+All commands used `.venv\Scripts\python.exe` in the issue #3671 worktree on
+2026-10-03. The static feature gates passed after two local corrections. Bandit required
+an explicit runtime check instead of an `assert`. Pydocstyle required three protocol
+method docstrings.
+
+| Gate | Exact command | Result |
+| - | - | - |
+| Compile | `python -m compileall -q MistHelper.py src tests` | PASS. The command reported no error. |
+| Ruff | `python -m ruff check .` | PASS. |
+| Black | `python -m black --check .` | PASS. Black checked 2,174 files. |
+| mypy | `python -m mypy src MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | PASS. mypy checked 782 files. |
+| Bandit | `python -m bandit -r src -c pyproject.toml` | PASS. Bandit reported zero findings. |
+| Vulture | `python -m vulture src --min-confidence 70` | PASS. Vulture reported zero findings. |
+| pydocstyle | `python -m pydocstyle src` | PASS. |
+| Interrogate | `python -m interrogate src --fail-under 90` | PASS. Coverage was 99.6 percent. |
+| Radon | `python -m radon cc src -s -n C` | PASS. Radon reported no block above the limit. |
+| Pylint | `$env:PYTHONUTF8='1'; python -m pylint src --fail-under=9.5` | PASS. The repository score was 9.83 out of 10. The feature package scored 9.80 in a separate run. |
+| WebSocket unit and contract | `python -m pytest tests\unit\websocket_streams tests\contract\websocket_streams -q` | PASS. 360 tests passed. |
+| Browser | `python -m pytest tests\e2e\websockets_tab -q` | PASS. 57 tests passed. |
+| Channel stop race | `python -m pytest tests\unit\websocket_streams\live\runners\test_ws_channel_runner.py -q` | PASS. 17 tests passed. |
+| Structural proof | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_ws_feature_structure.py -q -s` | PASS. 3 tests passed. The guard checked 27 mappings, 25 paths, 145 modules, 204 classes, and 619 functions. |
+| Structured logging | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_structured_logging.py -q` | PASS. 15 tests passed. |
+| Secret redaction | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_sensitive_redaction.py -q` | PASS. 1 test passed. |
+| SDK exception | `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py -q` | PASS. 7 tests passed. |
+| JavaScript syntax | `node --check` for each file under `src\websocket_streams\web\static\terminal` | PASS. Node checked 16 modules. |
+
+The final browser performance results passed all four limits. The echo test measured a
+26.53 ms median and a 37.15 ms 95th percentile. The page rendered 1 MiB in 0.39 seconds.
+Another page loaded in 0.29 seconds while five shells produced output. A 256 KiB paste
+split into 64 parts in 0.60 ms.
+
+The screenshot review covered the catalog, warnings, terminal, paste dialog, screen
+utility, and large-output views. The 55 current screenshots showed clear fonts, aligned
+tables, and continuous terminal text. The browser reported no console or HTTP errors.
+
+The complete repository commands identified exceptions outside the feature scope.
+
+| Repository or platform exception | Result and tracking |
+| - | - |
+| Unit shard | `pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\unit --split tests\unit\upgrade_portal` reached the 900-second chunk limit. The earlier measured unit shard took 1,179.3 seconds. |
+| Title guard on Windows | `python -m pytest tests\unit\scripts\test_pr_title_guard.py -q` gave 732 passes and 2 failures. Windows returned `PermissionError` and `FileNotFoundError` instead of the expected POSIX classes. Issue #3749 tracks the defect. |
+| Contract, guardrail, and integration shard | The command reached the 900-second chunk limit. It also reproduced the clean-main test-quality failures in #3742. |
+| Control-socket tests | Three tests require `socket.AF_UNIX`, which Windows does not provide. The existing #3370 work tracks this platform gap. |
+
+These exceptions do not change the feature result. T083 performs the final SpecKit
+analysis before the complete T084 validation pass.

@@ -62,7 +62,8 @@ class SessionPayloadSupport(SessionAttributes):
         """Store exact terminal bytes and update public counters."""
         now = self._clock()  # Use one time for rate changes.
         terminal = self.terminal  # Read the optional terminal state once.
-        assert terminal is not None  # The output caller rejects message-list sessions.
+        if terminal is None:  # Reject an invalid direct call instead of relying on an assertion.
+            raise RuntimeError("Terminal state is required for byte output.")  # Preserve data instead of losing it.
         terminal.history.append(data)  # Preserve exact output bytes in terminal history.
         self._rate_times.append(now)  # Count this output chunk in the rate window.
         self._trim_rate(now)  # Keep only recent rate samples.
