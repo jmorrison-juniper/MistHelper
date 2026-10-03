@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)  # A module logger keeps the record source 
 
 pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
-ROOT = Path(__file__).parents[2]  # Anchor asset paths at the repository root.
+ROOT = Path(__file__).parents[3]  # Anchor asset paths at the repository root.
 SCRIPT_DIR = ROOT / "web_portal" / "static" / "js"  # Reuse the production browser scripts.
 OPERATIONS_SCRIPT = SCRIPT_DIR / "operations.js"  # Load the Operations controller.
 DATA_PREVIEW_SCRIPT = SCRIPT_DIR / "data_preview.js"  # Load the preview modal controller.

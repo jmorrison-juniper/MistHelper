@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from tests.e2e.test_map_title_contrast import MapTitleContrast
+from tests.e2e.web_portal.test_map_title_contrast import MapTitleContrast
 from tests.unit.web_portal.test_map_viewer_xss import _extract_function, _read_template
 
 logger = logging.getLogger(__name__)
