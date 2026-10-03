@@ -19,8 +19,6 @@ from dataclasses import asdict, dataclass, field  # Hold one step and one browse
 from pathlib import Path  # Build Windows-compatible artifact paths.
 from typing import Any  # The Playwright objects carry no stub types in this project.
 
-from tests.e2e.upgrade_portal.screenshot import capture_full_page_screenshot  # Share the browser retry boundary.
-
 logger = logging.getLogger(__name__)  # Keep the journey records under this module name.
 
 # WHY: The repository root is four levels above this file. The artifacts stay
@@ -111,8 +109,7 @@ class JourneyRecorder:
         seconds = round(time.perf_counter() - started, 3)  # Keep millisecond precision.
         number = len(self.steps) + 1  # Count the steps from one.
         path = self.folder / f"{number:02d}-{SAFE_NAME.sub('-', name.lower()).strip('-')}.png"  # The screenshot file.
-        capture_full_page_screenshot(  # Capture the full page, so no section hides below the fold.
-            self.page.screenshot,
+        self.page.screenshot(  # Use the fixture retry boundary once for full-page evidence.
             path=str(path),
             full_page=True,
         )
