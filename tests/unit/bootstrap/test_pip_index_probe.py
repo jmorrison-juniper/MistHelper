@@ -363,14 +363,18 @@ class TestInstallEnvironment:
                 "scenario",
                 (([], False, False), ([], True, False), (["--recreate"], True, True), (["--recreate"], False, True)),
             )
+            @pytest.mark.parametrize("platform", ("win32", "linux", "darwin"))
             def test_environment_options(
                 self,
                 offline: TestInstallEnvironment.TestUvBootstrap.TestIndexes.OfflineRun,
                 scenario: tuple[list[str], bool, bool],
+                monkeypatch: pytest.MonkeyPatch,
+                platform: str,
             ) -> None:
                 """Existing reuse and --recreate keep pip availability and the same virtual environment target."""
                 logging.info("Checking environment creation options.")  # Trace before local creation substitutes.
                 arguments, existing, recreate = scenario  # Specify command-line and existing-environment decisions.
+                monkeypatch.setattr(bootstrap_worktree.sys, "platform", platform)  # Exercise each supported platform.
                 if existing:  # Create only a harmless dummy interpreter under the temporary worktree.
                     offline.setup.prepare_files(interpreter=offline.bootstrapper.interpreter)  # Install no Python.
                 options = bootstrap_worktree.build_parser().parse_args(arguments)  # Exercise the unchanged parser.
@@ -382,7 +386,12 @@ class TestInstallEnvironment:
                 if existing and not recreate:  # Reuse must not instantiate another environment builder.
                     assert offline.setup.builder.call_args is None  # Prove no redundant creation.
                 else:  # Both new and recreated environments retain the existing pip seed policy.
-                    assert offline.setup.builder.call_args.kwargs == {"with_pip": True, "upgrade_deps": False}  # Seed.
+                    expected_builder = {  # Keep copied Windows interpreters and linked POSIX interpreters explicit.
+                        "with_pip": True,
+                        "upgrade_deps": False,
+                        "symlinks": platform != "win32",
+                    }
+                    assert offline.setup.builder.call_args.kwargs == expected_builder  # Prove platform-safe creation.
                     assert offline.setup.builder.created_directory == offline.bootstrapper.venv_dir  # Same target.
 
         class TestIndexes:  # Keep source-policy cases and their local recorder under a compliant parent.

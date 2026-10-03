@@ -322,7 +322,10 @@ class WorktreeBootstrapper:
             LOGGER.info("The environment exists at %s", self.venv_dir)
             return  # Keep the existing environment, because a second creation adds no value.
         LOGGER.info("Creating the virtual environment at %s", self.venv_dir)
-        venv.EnvBuilder(with_pip=True, upgrade_deps=False).create(self.venv_dir)  # Build the environment with pip.
+        use_symlinks = sys.platform != "win32"  # Keep POSIX loader metadata intact while preserving Windows copies.
+        venv.EnvBuilder(with_pip=True, upgrade_deps=False, symlinks=use_symlinks).create(
+            self.venv_dir
+        )  # Build the environment with pip and a portable interpreter path.
         LOGGER.debug("Created the virtual environment")
 
     def install_requirements(self) -> list[str]:  # Keep installer selection local to this invocation.
