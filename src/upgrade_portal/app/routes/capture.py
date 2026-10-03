@@ -41,6 +41,7 @@ from typing import Any  # A capture document and an injected seam are both free-
 
 from flask import Blueprint, Response, current_app, g, has_app_context, jsonify, request  # The framework.
 
+from ...api.numeric_input import AsciiWholeNumberReader
 from ...capture import export as capture_export  # The download writer. It reaches no cloud, so a plain import is safe.
 from ...capture import tables as capture_tables  # The page row builders. The same rule holds for this module.
 from ...runtime import identity, lock  # The real session guard and the real lock rules. No copy of them lives here.
@@ -571,24 +572,23 @@ def request_body() -> dict[str, Any]:
 
 
 def tier_number(value: Any) -> int | None:
-    """Read one tier field as a whole number.
+    """Read a JSON integer or bounded ASCII tier text.
 
-    Why:
-        A JSON body carries the tier as a number and a plain form post carries
-        the same field as text. A true reads as the whole number 1 in Python, so
-        a boolean must never pass as a tier.
-
-    Args:
-        value: The raw field value.
-
-    Returns:
-        The whole number, or None when the value is not one.
+    Booleans remain invalid because Python treats them as integers.
+    Form text permits neither a sign nor surrounding whitespace.
+    The caller retains the explicit refusal for an unsupported tier.
     """
+    logger.info("capture: read the numeric field %s", TIER_FIELD)
     if isinstance(value, bool):  # A true would otherwise read as the tier 1.
+        logger.warning("capture: checked=1 field=%s reason=boolean", TIER_FIELD)
         return None  # No boolean names a tier.
-    if isinstance(value, str) and value.isdigit():  # The plain form path.
-        return int(value)  # A form field arrives as text only.
-    return value if isinstance(value, int) else None  # Text and every other shape read as no tier.
+    if isinstance(value, str):
+        return AsciiWholeNumberReader(max(KNOWN_TIERS), TIER_FIELD).read(value)
+    if isinstance(value, int):
+        logger.debug("capture: checked=1 field=%s reason=integer", TIER_FIELD)
+        return value
+    logger.warning("capture: checked=1 field=%s reason=wrong_type", TIER_FIELD)
+    return None
 
 
 def read_tier(body: dict[str, Any]) -> int | None:

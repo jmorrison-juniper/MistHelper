@@ -39,6 +39,7 @@ from __future__ import annotations  # Postponed annotations keep every hint a pl
 
 import inspect  # Reads whether the device reader names a session parameter.
 import logging  # The portal logs with the standard library only.
+import sys
 from collections.abc import Callable, Mapping  # Types each injected seam and the address index.
 from dataclasses import dataclass  # Builds the frozen view model of the organization picker.
 from importlib import import_module  # Imports a later module late, never at load.
@@ -49,6 +50,7 @@ from urllib.parse import quote, urlencode  # Escapes values inside links and pag
 from flask import Blueprint, Response, current_app, flash, jsonify, render_template, request, session  # The framework.
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
 
+from ...api.numeric_input import AsciiWholeNumberReader
 from ...capture.devices import (  # Issue #3438: the page walk and the page guard of issue #3424.
     HTTP_STATUS_NONE,
     DeviceRead,
@@ -1646,24 +1648,18 @@ def filter_org_rows(rows: list[dict[str, str]], needle: str) -> list[dict[str, s
 
 
 def read_whole_number(field: str, fallback: int) -> int:
-    """Read one whole number out of the query string of the current request.
+    """Read a nonnegative query number, or keep the caller's fallback.
 
-    Why:
-        A paging link is a path, so an operator may edit it by hand. A value
-        that is not a number, or a value below zero, must read as the fallback.
-        The fallback keeps the slice from showing a page from the wrong end.
-
-    Args:
-        field: The query argument to read.
-        fallback: The value to return when the argument is absent or damaged.
-
-    Returns:
-        The value, which is never below zero.
+    One plus sign and surrounding whitespace remain valid.
+    The sequence index bound rejects numbers that cannot name a usable row.
+    A damaged link still opens the first page.
     """
-    raw = request.args.get(field, "").strip()  # An absent argument reads as an empty string.
-    if not raw.lstrip("+").isdigit():  # A sign, a fraction, or a word is not a row count.
-        return fallback  # The damaged link falls back, and the page still renders.
-    return int(raw)  # The text holds digits alone, so the value is not below zero.
+    logger.info("select: read the query field %s", field)
+    raw = request.args.get(field, "").strip().removeprefix("+")
+    value = AsciiWholeNumberReader(sys.maxsize, field).read(raw)
+    result = fallback if value is None else value
+    logger.debug("select: checked=1 field=%s fallback=%s", field, value is None)
+    return result
 
 
 def org_page_url(offset: int, needle: str) -> str:
