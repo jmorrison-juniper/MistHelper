@@ -46,9 +46,19 @@
 - [x] T017 Update the database guide and release note. (delivered: `documentation/diagrams/core/database-strategy.md`, `changelog.d/issue-3309-declared-arango-indexes.md`)
 - [x] T018 Record the local quality and writing results. (delivered: `specs/3309-declared-arango-indexes/design/validation.md`)
 - [x] T019 Analyze requirement coverage. (delivered: `specs/3309-declared-arango-indexes/design/validation.md`)
-- [ ] T020 Commit the verified exact file set locally and report the clean revision. The coordinator receives the receipt after verification.
+- [x] T020 Commit the verified exact file set locally and report the clean revision. (delivered: `specs/3309-declared-arango-indexes/design/validation.md`, preserved source `7da4424c8ad36941937d6462ac766cfbe730b9ad`)
 - [ ] T021 Await the coordinator's verified-main grant before remote work. This task remains blocked until that explicit grant.
 - [ ] T022 After the grant, rebase, repeat local evidence, complete the protected exact-head merge, and test the exact actual main revision.
+
+## Local refresh
+
+The local-only grant permits the accepted base `f48f653ae6145b0ea3aa82a76ffa4c6cf86897c0`.
+The original source remains under `preservation/3309-local-refresh-20261002-source`.
+The exact one-commit rebase completes without shared-history restoration.
+The equivalent rebased repair is `bbbaf6ec5b13fcc02f29b032ef621928dee15a12`.
+Current offline, input, guide, live database, coverage, and configured gate evidence is in the validation record.
+T021 and T022 remain blocked.
+The local-only grant does not permit publication or release of the next owner.
 
 ## Dependencies & Execution Order
 
