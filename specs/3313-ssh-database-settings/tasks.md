@@ -45,3 +45,18 @@ The 2026-10-03 grant authorizes local refresh only, not protected publication.
 - [x] R007 Preserve every field of all 725 existing findings without a baseline or policy change.
 - [x] R008 Refresh the local evidence and current offline 23-item template with exact results and honest limits.
 - [x] R009 Commit locally, verify the source, tree, lineage, and twelve-path boundary, then report and pause.
+
+## Second Local Refresh Only
+
+- [x] R010 Verify all five public comments, the claim, current labels, zero open pull requests, and the accepted terminal predecessor.
+- [x] R011 Preserve the accepted whole three-commit range, all 42 artifact hashes, and the original history before migration.
+- [x] R012 Migrate only this branch with `rebase.updateRefs=false` and prove that all three patches remain equal.
+- [x] R013 Run 91 owned, 951 related, and 530 native causal cases without a fixture or assertion change.
+- [x] R014 Run current compile, full lint, full format, exact CI types, guidance, coverage, and unchanged security gates.
+- [x] R015 Preserve all fields of 725 findings, current settings, all 48 exclusions, and the committed comparison.
+- [x] R016 Record audit, platform, dictionary, full-suite, and normal-hook limits in the current offline 23-item template.
+- [x] R017 Commit the local evidence and seal the clean head, tree, lineage, eight original blobs, twelve paths, and nineteen protected blobs.
+- [x] R018 Report the persistent handoff and freeze without publication or a later-position release.
+
+Shared fixture and assertion repairs retain their separate owners.
+Stop an unexpected failure before a repeat or an ungranted edit.

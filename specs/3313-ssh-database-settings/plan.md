@@ -122,3 +122,33 @@ Then pause for the coordinator.
 
 The earlier protected delivery plan remains conditional.
 This local-only grant authorizes none of its remote steps.
+
+## Second Local Refresh on the Terminal Predecessor
+
+The coordinator directs only local refresh on `fa71c32dcc25ddb95ca1c73146e072e24b4286b1`.
+The complete accepted tree is `4ab7c58cc6decdfd511f7aeb011341f0931aff25`.
+Preserve the complete previously accepted three-commit range and all 42 artifact hashes before migration.
+Keep the original two-commit range intact.
+
+The bounded own-branch rebase uses `rebase.updateRefs=false`.
+It has no conflict and preserves all three patches.
+All eight original non-specification blobs and nineteen current protected blobs remain equal.
+No peer reference, shared history, or separately owned fixture changes.
+
+The fresh owned scope contains the same 91 unique cases.
+The related scope contains the same 951 unique cases.
+Both ordered memberships match the accepted evidence.
+The related scope retains one existing registry skip only.
+The native guide and analyzer causal scope contains 530 passing cases.
+
+The current full analyzer discovers 1,048 files and analyzes 1,000 modules.
+Every field of all 725 findings matches both original and accepted reports.
+The configuration and all 48 exclusion records remain equal.
+The selected committed comparison is separate from the full scan.
+Its omitted-root and stale-baseline records are not pytest skips.
+
+Refresh only the four owned specification records and an offline template artifact.
+Use ordinary local Git commit behavior with no hook skip override.
+Keep the expected native audit abort and all capability limits explicit.
+Seal the exact final head, tree, lineage, protected bytes, template, and local evidence.
+Then freeze for the coordinator without any remote action.

@@ -109,7 +109,7 @@ Each scenario has a local test plan.
 No unresolved scope decision remains.
 The app owns the branch, so this workflow uses feature-only files instead of the legacy branch and shared-state hooks.
 
-## Local Refresh Authorization
+## First Local Refresh Authorization
 
 The [local-only grant](https://github.com/jmorrison-juniper/MistHelper/issues/3313#issuecomment-5967867728) authorizes the original twelve paths only.
 The accepted predecessor is `18127a874259732e9e6770de027e9485388b7592`.
@@ -122,3 +122,21 @@ The current DNS resolver, cache, constructor refusals, indexes, natural keys, an
 
 This grant authorizes no push, pull request, Actions request, merge, branch deletion, or production action.
 The coordinator must make a separate protected publication decision.
+
+## Second Local Refresh Authorization
+
+The coordinator directs a second local refresh on the accepted terminal predecessor.
+The exact predecessor is `fa71c32dcc25ddb95ca1c73146e072e24b4286b1`.
+Its whole tree is `4ab7c58cc6decdfd511f7aeb011341f0931aff25`.
+Its sole parent is `608b543882932e1370f6fadcc2da7c8bc54f9164`.
+The [terminal acceptance](https://github.com/jmorrison-juniper/MistHelper/pull/3763#issuecomment-5970762082) is evidence of that predecessor, not publication authority.
+
+The accepted three-commit range ending at `2f96e3f50439cb780654adc804e1e06fbad07d8f` remains in a separate verified bundle and three patches.
+All 42 accepted evidence artifacts retain their exact hashes.
+The original `0970aad563681ca601ec49837f9ba123d8ba1038` range remains preserved separately.
+
+The migration uses only the same twelve paths.
+The production writer and all five Python test files retain their original bytes.
+No coupled fixture correction is necessary.
+Shared fixture and assertion repairs remain with their separate owners.
+No publication, workflow request, merge, branch deletion, runtime restart, deployment, or later-position release is authorized.

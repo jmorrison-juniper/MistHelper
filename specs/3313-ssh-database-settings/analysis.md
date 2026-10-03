@@ -6,11 +6,178 @@
 
 **Original base**: `ff3cc1bea8ab58026210a968ff1465f61c9fec78`
 
-**Current accepted predecessor**: `18127a874259732e9e6770de027e9485388b7592`
+**Current accepted predecessor**: `fa71c32dcc25ddb95ca1c73146e072e24b4286b1`
 
-**Accepted tree**: `203ead4ef7c0a9e51f53b459193c6b410c811732`
+**Accepted tree**: `4ab7c58cc6decdfd511f7aeb011341f0931aff25`
 
-## Local Refresh on 2026-10-03
+## Second Local Refresh on the Terminal Predecessor
+
+The coordinator's local-only direction names the accepted terminal predecessor and the same twelve authorized paths.
+The exact [terminal acceptance](https://github.com/jmorrison-juniper/MistHelper/pull/3763#issuecomment-5970762082) has 1,829 UTF-8 bytes.
+Its body SHA256 is `46093431034b02323a6c12cfa2f6788aa4967ab335cf037cb1812af17e9abe5c`.
+The accepted predecessor has sole parent `608b543882932e1370f6fadcc2da7c8bc54f9164`.
+The acceptance comment alone grants no authority.
+The coordinator separately directs this local-only refresh.
+
+All five current public issue comments retain the original reservation and first grant.
+The authenticated account, assignment, and labels remain `jmorrison-juniper`.
+There are zero open pull requests.
+No conflicting reserved-path edit appears in the accepted predecessor.
+
+### Preservation and Migration
+
+The complete previously accepted range ends at `2f96e3f50439cb780654adc804e1e06fbad07d8f`.
+Its complete tree is `80ac4e22a61bfbe914fad11f583686a1bcd1c989`.
+The owner verifies all 42 accepted artifacts against their original byte counts and SHA256 hashes.
+An independent archive retains those artifacts and their original manifest.
+Its SHA256 is `ec0287423557e33cfbf215c6bcb5b287926671f7dd2be95d42b99639799f82a0`.
+
+The local tag is `preservation/issue3313-accepted-2f96e3f5`.
+The verified bundle retains the whole accepted three-commit range.
+Its only prerequisite is the explicit accepted base `18127a874259732e9e6770de027e9485388b7592`.
+All three accepted patches remain separate.
+The original two-commit bundle, original tag, historical red proof, and every accepted artifact remain unchanged.
+
+The bounded rebase uses `rebase.updateRefs=false`.
+It touches only this app-managed branch and has no conflict.
+It creates migrated preparation head `9a4f3059e61f70b7d2316899021c935e8ae3aed8`.
+The three migrated patches equal the accepted patches through `git range-diff`.
+Every original reserved-path byte remains equal before the specification evidence refresh.
+No fetch, shared-history restoration, or peer-reference movement occurs.
+The existing local `origin/main` already equals the exact granted predecessor.
+
+The actual writer, fixture boundaries, SSH guide, and release fragment need no correction.
+All eight original non-specification blobs remain equal to the original `0970aad5` source.
+All nineteen protected source and policy blobs match the current granted predecessor.
+Every other tracked path stays unchanged.
+No database, DNS, cache, index, key, policy, output default, credential-warning behavior, or session-file algorithm changes.
+The separate shared-fixture and assertion owners retain their work.
+
+### Current Measurements
+
+| Scope | Result |
+| - | - |
+| Owned writer and session contracts | 91 unique cases pass, with no failure, error, skip, or warning. |
+| Current related database and output contracts | 950 passes and one existing registry skip over 951 unique cases. |
+| Native guide and analyzer causal contracts | 530 passes, with no failure, error, skip, or warning. |
+| Exporter affected coverage | 81 cases pass. Combined statement and branch coverage is `95.44235924932975` percent. |
+| Bash syntax and Python compile | Passed for the writer, entrypoint, and all five owned Python files. |
+| Full Ruff and Black | Passed. Black leaves 2,204 files unchanged. |
+| Exact current CI type scope | Passed for 785 source files. |
+| Direct fixture types | Passed for three modules without a new suppression. |
+| Full configured Bandit | 908 files, zero findings, and zero read errors. |
+| Configured source and fixture complexity | Passed at the unchanged maximum of 10. |
+| Configured dead-code and docstring gates | Passed at the existing thresholds. |
+| Native required guidance | Six required inputs and three active guide procedures pass. |
+| Full native analyzer | 1,048 files discovered and 1,000 modules analyzed. |
+| Complete current finding preservation | All fields of all 725 objects match both preserved reports. |
+| Analyzer configuration and exclusions | Current settings and all 48 exclusion records remain equal. |
+| Clean migrated committed comparison | Three selected test files, zero findings, and zero parse errors. |
+
+The ordered 91-member and 951-member XML lists match their accepted original lists.
+Every member is unique.
+The related skip reason remains `The registry holds no option of the class unregistered.`
+This skip does not remove an owned acceptance case.
+The current related receipt uses the already accepted `junit_family=legacy` local output format.
+No source setting or assertion changes.
+
+The SSH case authenticates the loopback connection and verifies the generated host key.
+The fresh shell reads the actual writer-generated file.
+The actual configuration, exporter, and router run with only the original bounded synthetic discovery and backend fixtures.
+The owned fake backend stores two natural-key records.
+The actual exporter log confirms `Polyglot write: backend=arangodb, written=2, failed=0`.
+This is not a deployed OpenSSH session or a live database write.
+No production port, store, Mist operation, runtime restart, container, or deployment occurs.
+
+The protected-file and original-blob receipts record exact Git blob identities.
+The final local head, tree, sole-parent lineage, template identity, and new artifact seal belong to the persistent handoff.
+The final local commit updates only the four owned specification files.
+Normal Git hooks remain in effect with no skip override or bypass flag.
+
+### Exact Current Commands
+
+The current owned and related commands pass:
+
+```bash
+.venv/bin/python -m pytest tests/unit/container/session_database \
+  tests/unit/container/test_write_session_env_script.py --tb=short -q -rs
+
+.venv/bin/python -B -m pytest -p no:cacheprovider \
+  tests/unit/container tests/unit/db_discovery \
+  tests/unit/test_standalone.py tests/unit/test_arango_writer.py \
+  tests/unit/test_redis_writer.py tests/unit/test_redis_json_writer.py \
+  tests/unit/test_router.py tests/unit/db/test_database_schema_utils.py \
+  tests/unit/arango_indexes tests/contract/test_arango_declared_indexes.py \
+  tests/unit/export/test_data_exporter.py \
+  tests/guardrails/test_portal_operation_coverage.py \
+  tests/guardrails/test_operation_registry_menu_coverage.py \
+  tests/unit/web_portal/test_output_scan_runtime_files.py \
+  --tb=short -q -rs -o junit_family=legacy
+```
+
+The current native causal and coverage commands pass:
+
+```bash
+.venv/bin/python -B -m pytest -p no:cacheprovider \
+  tests/guardrails/local_test_quality_loop \
+  tests/tools/test_quality_analyzer --tb=short -q -rs
+
+.venv/bin/python -B -m pytest -p no:cacheprovider \
+  tests/unit/export/test_data_exporter.py --cov=src.export.data_exporter \
+  --cov-branch --cov-report=term-missing --cov-fail-under=80 --tb=short -q
+```
+
+The required six-input preflight precedes each current analyzer command.
+The native full command has no narrowed roots.
+The committed comparison uses both explicit full-scope triggers:
+
+```bash
+.venv/bin/python -B -m pytest -p no:cacheprovider -s -q \
+  tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+
+.venv/bin/test-quality-analyzer --gate \
+  --config .github/test-quality-config.toml \
+  --baseline .github/test-quality-baseline.json
+
+.venv/bin/test-quality-analyzer --gate \
+  --config .github/test-quality-config.toml \
+  --baseline .github/test-quality-baseline.json \
+  --changed-from origin/main \
+  --full-gate-path .github/workflows/ci.yml \
+  --full-gate-path requirements-dev.txt
+```
+
+All 725 complete finding objects retain their original locations and fields.
+Their canonical SHA256 remains `28379074d9df1e096918d53fd9033c800ae52d1b016debfa4454d4fa2fa970d8`.
+The full scan has zero stale baseline entries and zero parse errors.
+The scoped comparison's omitted-root and stale entries are separate from pytest skips.
+No baseline, detector, normalization, policy, exclusion, suppression, or threshold changes.
+
+### Current Audit and Limits
+
+The expected normal audit again aborts in temporary `ensurepip` with `SIGABRT` before a vulnerability verdict.
+It is not a successful normal audit.
+The separate complete UV resolution retains all runtime versions and hashes.
+The strict native audit uses `--no-deps --disable-pip --require-hashes --strict`.
+It measures all 105 applicable macOS ARM64 packages with zero missing packages and zero known vulnerabilities.
+
+The unchanged runtime manifest SHA256 remains `848301049195163bb029b66e486efdea9ec2da71126a1c64219978613dee8d72`.
+Git-only development source and other platforms remain outside this current audit.
+The licensed STE dictionary, spaCy, PowerShell, and VS Code browser tools remain unavailable.
+Configured supported-file writing checks retain partial dictionary coverage.
+No older Linux result becomes current platform evidence.
+No complete-repository test, complete-repository coverage, browser, deployed SSH, or live database result is claimed.
+
+Affected exporter coverage includes 282 of 291 statements and 74 of 82 branches.
+It exceeds the unchanged 80-percent floor.
+The current native preflight properties measure approximately 1.004 through 1.012 seconds, including scheduling overhead.
+The cached partial-backend refusal measures `0.0002751660067588091` seconds.
+These results do not establish complete driver, router, or production Windows deadlines.
+
+The second local refresh authorizes no push, pull request, workflow request, merge, branch deletion, production action, or position-28 release.
+The owner freezes the final clean source for the coordinator's separate decision.
+
+## First Local Refresh on 2026-10-03
 
 The complete [local-only grant](https://github.com/jmorrison-juniper/MistHelper/issues/3313#issuecomment-5967867728) contains 4,049 UTF-8 bytes.
 Its SHA256 is `011df67cd673c9c9cc1654c8222ded45fb2dca68bed258fa6e1e7a8b3658601f`.
