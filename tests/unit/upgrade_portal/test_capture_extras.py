@@ -19,6 +19,7 @@ Why:
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from types import SimpleNamespace
@@ -27,6 +28,7 @@ from typing import Any
 import pytest
 
 from src.upgrade_portal.capture import extras
+from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 _SCOPE = extras.SiteScope("org-0001", "site-0001")  # WHY: One scope serves every test in this module.
 _FAULT_MESSAGE = "The page walk failed."  # WHY: No log record may repeat this, so one test asserts its absence.
@@ -62,6 +64,12 @@ _ROWS: dict[str, list[dict[str, Any]]] = {
     extras.SECTION_BGP_PEERS: [_BGP_ROW],
     extras.SECTION_ALARMS: [_ALARM_ROW],
 }
+
+_PORT_FIRST_URL = "https://api.mist.com/api/v1/sites/site-0001/stats/ports?limit=1"
+_PORT_NEXT_LINK = "/api/v1/sites/site-0001/stats/ports?limit=1&page=2"
+_PORT_SECOND_URL = f"https://api.mist.com{_PORT_NEXT_LINK}"
+_PORT_PAGE_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"}
+_PORT_SECOND_HEADERS = {**JSON_TYPE, "X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "2"}
 
 
 class _FakeCall:
@@ -409,9 +417,11 @@ def test_the_page_walk_keeps_the_first_page_when_the_walk_returns_nothing(
         would vanish and nobody would know. The floor writes a warning that
         names the site, because a short section with no warning reads as whole.
     """
-    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=lambda response, mist_session: []))
+    first = SimpleNamespace(status_code=200, data={"results": [_PORT_ROW]}, next="/next")
+    lost = SimpleNamespace(status_code=200, data={"error": "no results"}, next=None)
+    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_next=lambda mist_session, response: lost))
     with caplog.at_level(logging.WARNING, logger=extras.logger.name):
-        walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
+        walked = extras._paged(object(), first, _SCOPE)
     assert walked.data == [_PORT_ROW]
     assert walked.status_code == 200
     assert [record for record in caplog.records if record.levelno == logging.WARNING]
@@ -420,10 +430,48 @@ def test_the_page_walk_keeps_the_first_page_when_the_walk_returns_nothing(
 
 def test_the_page_walk_keeps_every_row_of_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
     """The page walk replaces the first page when it returns more rows."""
-    pages = [_PORT_ROW, dict(_PORT_ROW, port_id="ge-0/0/2")]
-    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=lambda response, mist_session: pages))
-    walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
-    assert walked.data == pages
+    first = SimpleNamespace(status_code=200, data={"results": [_PORT_ROW]}, next="/next")
+    second = SimpleNamespace(status_code=200, data={"results": [dict(_PORT_ROW, port_id="ge-0/0/2")]}, next=None)
+    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_next=lambda mist_session, response: second))
+    walked = extras._paged(object(), first, _SCOPE)
+    assert walked.data == [_PORT_ROW, dict(_PORT_ROW, port_id="ge-0/0/2")]
+
+
+def test_the_page_walk_follows_real_sdk_next_links(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The extra read keeps rows from every real SDK page."""
+    first = build_sdk_answer(200, json.dumps({"results": [_PORT_ROW]}).encode(), _PORT_PAGE_HEADERS, _PORT_FIRST_URL)
+    second = build_sdk_answer(
+        200,
+        json.dumps({"results": [dict(_PORT_ROW, port_id="ge-0/0/2")]}).encode(),
+        _PORT_SECOND_HEADERS,
+        _PORT_SECOND_URL,
+    )
+    session = PagedSession([second])
+    monkeypatch.setattr(
+        extras.mistapi.api.v1.sites.stats,
+        "searchSiteSwOrGwPorts",
+        lambda *args, **kwargs: first,
+    )
+    section = extras._read_section(extras.SOURCE_PORTS, session, _SCOPE, extras._fetch_ports)
+    assert section.reason == extras.REASON_READ
+    assert [row["port_id"] for row in section.records] == ["ge-0/0/1", "ge-0/0/2"]
+    assert session.links == [_PORT_NEXT_LINK]
+
+
+def test_the_page_walk_reports_a_refused_real_sdk_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused extra page keeps page one and reports the later status."""
+    first = build_sdk_answer(200, json.dumps({"results": [_PORT_ROW]}).encode(), _PORT_PAGE_HEADERS, _PORT_FIRST_URL)
+    lost = build_sdk_answer(502, b"<html>bad gateway</html>", HTML_TYPE, _PORT_SECOND_URL)
+    session = PagedSession([lost])
+    monkeypatch.setattr(
+        extras.mistapi.api.v1.sites.stats,
+        "searchSiteSwOrGwPorts",
+        lambda *args, **kwargs: first,
+    )
+    section = extras._read_section(extras.SOURCE_PORTS, session, _SCOPE, extras._fetch_ports)
+    assert section.reason == "page_count_mismatch"
+    assert section.http_status == 502
+    assert [row["port_id"] for row in section.records] == ["ge-0/0/1"]
 
 
 def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(
@@ -437,7 +485,7 @@ def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(
         a credential, so no log record may repeat one.
     """
 
-    def _raise(response: Any, mist_session: Any) -> list[dict[str, Any]]:
+    def _raise(mist_session: Any, response: Any) -> list[dict[str, Any]]:
         """Fail the page walk.
 
         Args:
@@ -452,9 +500,13 @@ def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(
         """
         raise RuntimeError(_FAULT_MESSAGE)
 
-    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=_raise))
+    monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_next=_raise))
     with caplog.at_level(logging.WARNING, logger=extras.logger.name):
-        walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
+        walked = extras._paged(
+            object(),
+            SimpleNamespace(status_code=200, data={"results": [_PORT_ROW]}, next="/next"),
+            _SCOPE,
+        )
     assert walked.data == [_PORT_ROW]
     assert "RuntimeError" in caplog.text
     assert _FAULT_MESSAGE not in caplog.text
