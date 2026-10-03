@@ -47,7 +47,7 @@
 - [x] T018 Record the local quality and writing results. (delivered: `specs/3309-declared-arango-indexes/design/validation.md`)
 - [x] T019 Analyze requirement coverage. (delivered: `specs/3309-declared-arango-indexes/design/validation.md`)
 - [x] T020 Commit the verified exact file set locally and report the clean revision. (delivered: `specs/3309-declared-arango-indexes/design/validation.md`, preserved source `7da4424c8ad36941937d6462ac766cfbe730b9ad`)
-- [ ] T021 Await the coordinator's verified-main grant before remote work. This task remains blocked until that explicit grant.
+- [x] T021 Obtain the coordinator's verified-main grant before remote work. (delivered: [sole grant](https://github.com/jmorrison-juniper/MistHelper/issues/3309#issuecomment-5965481973), approved predecessor `10fbd06110101e7f75705dbd585796dfeff8a3ab`)
 - [ ] T022 After the grant, rebase, repeat local evidence, complete the protected exact-head merge, and test the exact actual main revision.
 
 ## Local refresh
@@ -57,8 +57,18 @@ The original source remains under `preservation/3309-local-refresh-20261002-sour
 The exact one-commit rebase completes without shared-history restoration.
 The equivalent rebased repair is `bbbaf6ec5b13fcc02f29b032ef621928dee15a12`.
 Current offline, input, guide, live database, coverage, and configured gate evidence is in the validation record.
-T021 and T022 remain blocked.
+T021 and T022 remained blocked at that local-only stage.
 The local-only grant does not permit publication or release of the next owner.
+
+## Protected publication
+
+The sole publication grant permits position 25 on predecessor `10fbd06110101e7f75705dbd585796dfeff8a3ab`.
+The complete saved two-commit range is preserved and rebased without conflict.
+The production and test patches remain equivalent.
+Current database, native SDK, retry, concurrency, preservation, guide, gate, and isolated integration proofs pass again.
+The native module also passes a forced analyzer scope.
+T022 remains incomplete until the protected merge and exact actual-main receipt exist.
+Only the coordinator can accept the receipt and release the next owner.
 
 ## Dependencies & Execution Order
 

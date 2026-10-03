@@ -1,7 +1,8 @@
 # Validation Record: Declared ArangoDB indexes
 
-The sections before the local refresh record contain the historical measurements from 2026-10-01.
-The local refresh record contains the repeated measurements on the accepted base.
+The initial sections contain the historical measurements from 2026-10-01.
+The local refresh record contains the repeated measurements on the earlier accepted base.
+The publication record contains the repeated measurements on the approved predecessor.
 
 ## Initial evidence
 
@@ -340,3 +341,118 @@ The corrected twenty-file boundary remains unchanged.
 The production patch remains equivalent to the preserved source.
 Publication still requires the actual accepted predecessor after #3311 and a separate full-SHA publication grant.
 No push, pull request, Actions run, merge, dispatch, production write, DNS migration, or next-owner release occurs.
+
+## Publication proof on 2026-10-03 UTC
+
+The [sole publication grant](https://github.com/jmorrison-juniper/MistHelper/issues/3309#issuecomment-5965481973) authorizes position 25.
+The only approved predecessor is `10fbd06110101e7f75705dbd585796dfeff8a3ab`.
+The coordinator accepted issue #3311 through pull request #3746.
+The current main read matches that complete predecessor and its sole parent, `f48f653ae6145b0ea3aa82a76ffa4c6cf86897c0`.
+Its tree is `883fb049a45a7843f2bd572a496ef6fbd31a01a4`.
+No open pull request overlaps a reserved path.
+
+### Complete saved range
+
+The session preserves `1c69ee953252aa6e88cf21af4ebdd88a73504532` under `preservation/3309-publication-20261003-refresh`.
+It preserves `bbbaf6ec5b13fcc02f29b032ef621928dee15a12` under `preservation/3309-publication-20261003-repair`.
+The original `7da4424c8ad36941937d6462ac766cfbe730b9ad` remains under its existing preservation tag.
+The raw parent chain proves exactly two saved commits above the earlier accepted base.
+All required source, parent, and target objects are available.
+
+The bounded rebase completes without conflict:
+
+```bash
+rtk proxy git -c rebase.updateRefs=false -c rebase.autoStash=false rebase --no-fork-point --no-autosquash --no-autostash --onto 10fbd06110101e7f75705dbd585796dfeff8a3ab f48f653ae6145b0ea3aa82a76ffa4c6cf86897c0
+```
+
+The rebased repair is `da82f742862edb245e6e8109733f7fe56a9955a6`.
+The preserved evidence commit becomes `f9dfff11e88837e76083fc5b74d226071ab93902`.
+The raw chain ends at the exact approved predecessor.
+The complete range comparison reports both patches equal.
+The twenty-path boundary remains identical to the saved source.
+The rebase changes no other owner ref and restores no shared history.
+
+### Repeated current measurements
+
+The offline command recorded above passes all 445 tests again.
+The input and guidance command passes all 452 tests again.
+Both results have zero failures, errors, and skips.
+All seven changed methods retain 100 percent statement and branch coverage.
+The two changed database modules retain 96.48 percent combined coverage.
+The three pre-existing SQLite connection warnings remain explicit.
+
+The direct current-guide preflight reads and validates all six required inputs.
+It reads and checks all three active guides.
+It measures two explicit paths, two automatic paths, and four effective paths.
+The preflight completes before the analyzer commands.
+
+The original owned integration capability remains available.
+Both real ArangoDB tests pass again with zero failures, errors, and skips.
+The repeated proof preserves 1,001 complete prepared documents.
+It measures five declared non-unique persistent indexes and six total indexes.
+The optimizer changes from zero index nodes to one index node on `status`.
+The query returns exactly `["action-0"]`.
+The equal-index request retains its identifier and reports `isNewlyCreated=False`.
+
+The original issue-specific compose service starts alone with `--no-deps`.
+It uses the unchanged session-only overlay and exact owned resource names.
+It publishes only `127.0.0.1:9650`.
+The fixtures remove two test databases.
+The store contains only `_system` before resource cleanup.
+The session removes the exact one container, one volume, and one network.
+All three exact-name scans return zero resources.
+The run accesses no production resource.
+
+### Repeated current gates
+
+| Gate | Publication-base result |
+| - | - |
+| Full-root Ruff | Passed with zero findings |
+| Full-root Black | Passed across 2,047 files |
+| Exact CI mypy scope | Passed across 667 source files |
+| Syntax | Passed for the entrypoint and all nine feature Python files |
+| Bandit and separator guard | Passed across 790 files with zero findings and read errors |
+| Pylint | Passed with a score of 9.83 |
+| Configured complexity, dead-code, and docstring gates | Passed with complexity at most 10 and docstring coverage 99.6 percent |
+| Feature links | Passed all 11 Markdown files with zero broken links |
+| Citations and diagrams | Passed 251 citations and 153 references across 15 diagrams |
+| CodeQL verdict register | Matched all 88 dismissed alerts without a register change |
+
+The complete configured test-quality gate checks 1,023 files and analyzes 975 modules.
+It compares 725 existing findings and reports zero new findings and zero parse errors.
+The committed scope analyzes all five real feature test modules with zero findings and zero parse errors.
+Both the native SDK contract and live integration module participate.
+
+The forced native command also passes:
+
+```bash
+rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --roots tests/contract/test_arango_declared_indexes.py --include-mist-api --log-level WARNING
+```
+
+That command analyzes exactly one native SDK module and reports zero findings and parse errors.
+Its two skipped discovery roots omit the full-suite roots from this explicit scope.
+They do not exclude the native module.
+No analyzer rule, baseline, pin, suppression, or exclusion changes.
+
+The normal macOS runtime audit again aborts before scanning.
+The approved complete hashed alternative succeeds with 105 exact pins and 2,177 SHA-256 hashes.
+The strict audit checks all 105 packages, skips none, and reports zero known vulnerabilities.
+The Git-only development tools remain outside this runtime audit.
+
+The configured writing heuristics pass all twenty files with scores from 92 through 98.
+The applicable writing-guide test also passes.
+The licensed dictionary remains unavailable, and the report states partial coverage without an unintended skip.
+
+### Protected publication boundary
+
+The source retains the semantic manager in `database_schema_utils.py` and the unique integration basename.
+The DNS, key, preparation, and batching methods remain unchanged against the approved predecessor.
+The catalog, documents, configuration, dependencies, and policies remain unchanged.
+
+Publication requires one push and one full current-template pull request.
+The ordinary protected squash must match the complete checked head and the approved predecessor.
+Every fresh applicable job and all fifteen strict contexts must pass first.
+The independent CodeQL status must originate from app 57789.
+The exact actual-main proof and automatic outcomes remain mandatory after the merge.
+The coordinator alone can accept that receipt and release the next owner.
+This grant permits no DNS migration, production write, restart, or deployment.
