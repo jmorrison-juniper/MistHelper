@@ -195,8 +195,8 @@ class FakeMistCloud:
         try:  # Drop incomplete or closed connections without failing the test.
             path, headers = self._handshake(client)  # Complete the WebSocket opening handshake.
             connection = self._new_connection(client, path, headers)  # Record the accepted connection.
-            handler = self._routes.get(path)  # Route the request path to a device.
-            if hasattr(handler, "on_connect"):  # Devices can send a banner immediately.
+            handler = self._routes.get(path)  # Route the request path to a device. A missing route gives None.
+            if handler is not None and hasattr(handler, "on_connect"):  # Only a registered device can send a banner.
                 handler.on_connect(connection)  # Notify the handler after the handshake.
             self._read_loop(client, connection, handler)  # Process frames until the connection ends.
         except OSError:
