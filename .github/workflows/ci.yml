@@ -420,8 +420,8 @@ jobs:
         # misthelper-devtools. The two samples keep product source in the scan.
         run: >-
           bandit-exclude-check
-          --include-sample ./src/utils/zen_city_metadata.py
-          --include-sample '.\src\utils\zen_city_metadata.py'
+          --include-sample ./src/foundation/support/utils/zen_city_metadata.py
+          --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
         # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)

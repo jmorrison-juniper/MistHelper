@@ -5,9 +5,9 @@ Scope: T055/T056/T057/T058/T058A/T058B/T061/T062/T063
 
 ## Code Extraction and Delegation
 
-- Extracted `GatewayExportUtils` from `MistHelper.py` into `src/gateway/gateway_export_utils.py`.
-- Extracted gateway stats branch into `src/gateway/gateway_stats_exporter.py`.
-- Extracted gateway override analyzer branch into `src/gateway/gateway_override_analyzer.py`.
+- Extracted `GatewayExportUtils` from `MistHelper.py` into `src/mist/resources/gateway/gateway_export_utils.py`.
+- Extracted gateway stats branch into `src/mist/resources/gateway/gateway_stats_exporter.py`.
+- Extracted gateway override analyzer branch into `src/mist/resources/gateway/gateway_override_analyzer.py`.
 - Reduced `MistHelper.py` gateway export/stats ownership to orchestration and delegation wrappers for menu operations `31-36`, `99`, and `163` pathways.
 - Added unit tests:
   - `tests/unit/gateway/test_gateway_export_utils.py`
@@ -38,7 +38,7 @@ Scope: T055/T056/T057/T058/T058A/T058B/T061/T062/T063
 ## Constitution Compliance (T058A)
 
 - `MistHelper.py` retains orchestration/delegation for relevant gateway menu entrypoints.
-- Gateway implementation ownership moved into `src/gateway/*` extracted modules.
+- Gateway implementation ownership moved into `src/mist/resources/gateway/*` extracted modules.
 - Scope guard respected: no `GlobalImportManager` changes.
 - Phase-scope verification complete for changed gateway modules/wrappers and tests.
 

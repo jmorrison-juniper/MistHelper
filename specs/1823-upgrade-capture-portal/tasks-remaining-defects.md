@@ -79,7 +79,7 @@ adds no shared module and no new subpackage, so this phase is small.
 **⚠️ CRITICAL**: US1 (Phase 3) is the data-graph foundation. Phase B depends on it.
 The whole comparison trusts a clean graph. So US1 lands before US2.
 
-- [X] T003 Verify the empty-run edge guards in `src/upgrade_portal/capture/store.py`.
+- [X] T003 Verify the empty-run edge guards in `src/interfaces/portals/upgrade_portal/capture/store.py`.
   Read `build_edge` (~line 1351), `write_edge` (~line 1458), and
   `_link_capture_to_run` (~line 1516). Confirm each one already skips an empty
   `run_id`. US1 relies on these guards, so no edge forms for a standalone capture.
@@ -117,24 +117,24 @@ renders the correct plan.
 ### Implementation for User Story 1
 
 - [X] T006 [US1] Add a standalone key builder in
-  `src/upgrade_portal/capture/assembly.py`. The builder reads a fresh `uuid4` hex
+  `src/interfaces/portals/upgrade_portal/capture/assembly.py`. The builder reads a fresh `uuid4` hex
   nonce, not a run, and returns `cap-{hex}-01`. Keep `capture_key` for the run path
   (D1).
-- [X] T007 [US1] In `src/upgrade_portal/app/routes/capture.py::build_job`
+- [X] T007 [US1] In `src/interfaces/portals/upgrade_portal/app/routes/capture.py::build_job`
   (~line 606, invented value at ~line 618): when the body names no run, set
   `run_id=""` and build the key from the standalone builder of T006. Do not invent
   a run identifier (D1, FR-096).
-- [X] T008 [US1] In `src/upgrade_portal/capture/collector.py::capture_identity`
+- [X] T008 [US1] In `src/interfaces/portals/upgrade_portal/capture/collector.py::capture_identity`
   (~line 949): accept a job that names no run and carries a prebuilt standalone
   key. Build the document from that key instead of raising `MISSING_RUN_MESSAGE`
   for an empty run (D1).
 - [X] T009 [P] [US1] Add `repair_dangling_edges` to
-  `src/upgrade_portal/capture/store.py`. Scan the `capture_for_run` edges. Read the
+  `src/interfaces/portals/upgrade_portal/capture/store.py`. Scan the `capture_for_run` edges. Read the
   run document that each edge names in `_from` before any removal. Remove only an
   edge whose run document does not exist. Log each removed edge with its key and
   the missing run key. Leave every capture document (D2, FR-097, FR-098, Risk 2).
 - [X] T010 [US1] Call `repair_dangling_edges` once from the ensure path in
-  `src/upgrade_portal/capture/store.py`, near `_ensure_collection` (~line 577), so
+  `src/interfaces/portals/upgrade_portal/capture/store.py`, near `_ensure_collection` (~line 577), so
   it runs once for each worker at start and stays idempotent (D2). Depends on T009.
 
 ### Contract and data-model updates for User Story 1
@@ -152,9 +152,9 @@ renders the correct plan.
 ### Checkpoint for User Story 1
 
 - [X] T013 [US1] Run the US1 gate. Confirm T004 and T005 now pass. Run `ruff`,
-  `black --check`, and `mypy` strict on `src/upgrade_portal/capture/assembly.py`,
-  `src/upgrade_portal/capture/collector.py`, `src/upgrade_portal/capture/store.py`,
-  and `src/upgrade_portal/app/routes/capture.py`. Confirm zero dangling edges after
+  `black --check`, and `mypy` strict on `src/interfaces/portals/upgrade_portal/capture/assembly.py`,
+  `src/interfaces/portals/upgrade_portal/capture/collector.py`, `src/interfaces/portals/upgrade_portal/capture/store.py`,
+  and `src/interfaces/portals/upgrade_portal/app/routes/capture.py`. Confirm zero dangling edges after
   20 run-less captures (SC-017). US1 is now independently testable.
 
 ---
@@ -185,17 +185,17 @@ page with no typed address.
 ### Implementation for User Story 2
 
 - [X] T016 [US2] Add `latest_standalone_precheck(site_id)` to
-  `src/upgrade_portal/capture/store.py`. Filter role `pre`, an empty `run_id`, and
+  `src/interfaces/portals/upgrade_portal/capture/store.py`. Filter role `pre`, an empty `run_id`, and
   a verified state. Read the newest by date (FR-103, Risk 3). Depends on Phase A.
-- [X] T017 [US2] In `src/upgrade_portal/app/routes/upgrade.py::create_run`
+- [X] T017 [US2] In `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py::create_run`
   (~line 766): adopt the newest verified standalone pre-check, write the `pre`
   edge, and set the run pre-check field. Keep the existing lock refusal and the
   live-run refusal in front of the adoption (Delta H3, FR-103, FR-104, FR-105).
 - [X] T018 [US2] Add the start-upgrade control and its error region to
-  `src/upgrade_portal/app/assets/templates/capture/capture.html`. Use the test
+  `src/interfaces/portals/upgrade_portal/app/assets/templates/capture/capture.html`. Use the test
   identifiers `capture-start-upgrade-button` and `capture-start-upgrade-error`
   (Delta U1, FR-101).
-- [X] T019 [US2] In `src/upgrade_portal/app/assets/static/js/portal.js`: post
+- [X] T019 [US2] In `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`: post
   `POST /api/sites/<site_id>/runs`, read the new run identifier, open the options
   page, and render a refusal that names the lock holder or the unfinished run
   (FR-102, FR-104, FR-105). Shared file: sequence before US3 and US6 edits.
@@ -215,8 +215,8 @@ page with no typed address.
   capture view, to the options page, to the confirm page, with no typed address
   (FR-106, SC-018).
 - [X] T022 [US2] Run the US2 gate. Confirm T014, T015, and T021 pass. Run `ruff`,
-  `black --check`, and `mypy` strict on `src/upgrade_portal/capture/store.py` and
-  `src/upgrade_portal/app/routes/upgrade.py`. Confirm the browser reaches the
+  `black --check`, and `mypy` strict on `src/interfaces/portals/upgrade_portal/capture/store.py` and
+  `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`. Confirm the browser reaches the
   confirm page with no typed address. US2 is now independently testable.
 
 **Checkpoint**: Phase A and Phase B are complete. The five Phase C stories can now
@@ -249,14 +249,14 @@ reload. Confirm the banner reports the operator as the holder.
 
 ### Implementation for User Story 3
 
-- [X] T025 [US3] In `src/upgrade_portal/runtime/lock.py`: ensure the stored run
+- [X] T025 [US3] In `src/interfaces/portals/upgrade_portal/runtime/lock.py`: ensure the stored run
   value is an empty string, never `str(None)` (`LockRecord.run_id` ~line 564,
   `LockRequest.run_id` ~line 727) (FR-112, Risk 4).
-- [X] T026 [US3] In `src/upgrade_portal/app/routes/capture.py`: thread the grant
+- [X] T026 [US3] In `src/interfaces/portals/upgrade_portal/app/routes/capture.py`: thread the grant
   from `capture_conflict` (~line 814) and `take_site_lock` (~line 761) through
   `launch_capture` into the 202 body. Send the grant on the success answer only
   (Delta H1, FR-109, Risk 5).
-- [X] T027 [US3] In `src/upgrade_portal/app/assets/static/js/portal.js`: on a
+- [X] T027 [US3] In `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`: on a
   capture-start success, read the grant and call the existing painters
   `paintLockHeld` (~line 1928) and `startLockBeat` (~line 2185). Add no new painter
   (FR-107, FR-108, FR-110). Shared file: this edit lands before the US6 edit.
@@ -268,8 +268,8 @@ reload. Confirm the banner reports the operator as the holder.
   answer carries the lock grant after a lock take). Update the source anchor
   comments in the same commit.
 - [X] T029 [US3] Run the US3 gate. Confirm T023 and T024 pass. Run `ruff`,
-  `black --check`, and `mypy` strict on `src/upgrade_portal/runtime/lock.py` and
-  `src/upgrade_portal/app/routes/capture.py`. Confirm the banner reports the true
+  `black --check`, and `mypy` strict on `src/interfaces/portals/upgrade_portal/runtime/lock.py` and
+  `src/interfaces/portals/upgrade_portal/app/routes/capture.py`. Confirm the banner reports the true
   holder with no reload (SC-019) and the lock survives one renewal period (SC-020).
 
 ---
@@ -298,12 +298,12 @@ true client count and the return rate reads correctly.
 
 ### Implementation for User Story 4
 
-- [X] T031 [US4] In `src/upgrade_portal/compare/clients.py`: add `proved_present`
+- [X] T031 [US4] In `src/interfaces/portals/upgrade_portal/compare/clients.py`: add `proved_present`
   to `ClientComparison` and add a section-size reader that takes the larger of the
   two client index sizes. Fill the field in `compare_clients` (~line 494) by
   summing the proved present count over the three skipped sections (wired,
   wireless, guest) (D3, FR-113, FR-114).
-- [X] T032 [US4] In `src/upgrade_portal/compare/statistics.py::count_clients`
+- [X] T032 [US4] In `src/interfaces/portals/upgrade_portal/compare/statistics.py::count_clients`
   (~line 338): add the proved present count to the present count. The return rate
   reads the corrected present count with no further change (D3, FR-115). Depends on
   T031.
@@ -311,8 +311,8 @@ true client count and the return rate reads correctly.
 ### Checkpoint for User Story 4
 
 - [X] T033 [US4] Run the US4 gate. Confirm T030 passes. Run `ruff`,
-  `black --check`, and `mypy` strict on `src/upgrade_portal/compare/clients.py` and
-  `src/upgrade_portal/compare/statistics.py`. Confirm the `to_dict` form still names
+  `black --check`, and `mypy` strict on `src/interfaces/portals/upgrade_portal/compare/clients.py` and
+  `src/interfaces/portals/upgrade_portal/compare/statistics.py`. Confirm the `to_dict` form still names
   only `client_deltas` and `skipped_sections`. Re-run the existing
   `tests/unit/upgrade_portal/test_compare_statistics.py` and
   `tests/unit/upgrade_portal/test_compare_skipped_counts.py` to confirm no
@@ -341,12 +341,12 @@ unreachable lock store.
 
 ### Implementation for User Story 5
 
-- [X] T035 [US5] In `src/upgrade_portal/app/routes/select.py`: add the
+- [X] T035 [US5] In `src/interfaces/portals/upgrade_portal/app/routes/select.py`: add the
   `site_unknown` state constant and return it from `lock_banner_context`
   (~line 1790) when the site identifier is empty. Keep `site_lock_state`
   (~line 614) `unknown` reserved for an unreachable store (D5, FR-118, FR-119).
 - [X] T036 [US5] Add one sentence for the `site_unknown` state to
-  `src/upgrade_portal/app/assets/templates/partials/lock_banner.html`. Do not
+  `src/interfaces/portals/upgrade_portal/app/assets/templates/partials/lock_banner.html`. Do not
   change the `held`, `free`, `locked`, or `unknown` wording (D5, FR-119).
 
 ### Contract update and checkpoint for User Story 5
@@ -356,7 +356,7 @@ unreachable lock store.
   fifth banner state `site_unknown`). Update the source anchor comments in the same
   commit.
 - [X] T038 [US5] Run the US5 gate. Confirm T034 passes. Run `ruff`,
-  `black --check`, and `mypy` strict on `src/upgrade_portal/app/routes/select.py`.
+  `black --check`, and `mypy` strict on `src/interfaces/portals/upgrade_portal/app/routes/select.py`.
   Confirm a page with a resolvable site reports a lock state that agrees with every
   other page in the session (FR-119).
 
@@ -388,7 +388,7 @@ version controls stay dropdowns. Confirm every default is unchanged.
 ### Implementation for User Story 6
 
 - [X] T040 [US6] Convert three controls to radio groups in
-  `src/upgrade_portal/app/assets/templates/upgrade/options.html`. Add
+  `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html`. Add
   `upgrade-strategy-group` with `upgrade-strategy-big-bang` and
   `upgrade-strategy-canary`; `upgrade-reboot-group` with `upgrade-reboot-yes` and
   `upgrade-reboot-no`; `upgrade-junos-file-action-group` with
@@ -396,13 +396,13 @@ version controls stay dropdowns. Confirm every default is unchanged.
   version dropdowns `upgrade-version-select-all` and `upgrade-version-select-<mac>`
   (D6, FR-122). Keep the defaults: strategy all-at-once, reboot yes, Junos file
   action no (FR-123).
-- [X] T041 [US6] In `src/upgrade_portal/app/assets/static/js/portal.js`: read the
+- [X] T041 [US6] In `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`: read the
   checked radio for each group. Replace the `UPGRADE_REBOOT_TESTID`,
   `UPGRADE_JUNOS_TESTID`, and `UPGRADE_STRATEGY_TESTID` constants (~lines 72-74)
   with the new group identifiers. Keep the saved body field names and defaults
   (D6, FR-124). Shared file: land this edit after the US3 edit T027.
 - [X] T042 [P] [US6] Style the radio groups in
-  `src/upgrade_portal/app/assets/static/css/portal.css`.
+  `src/interfaces/portals/upgrade_portal/app/assets/static/css/portal.css`.
 
 ### RISK task - retire every old identifier (US6)
 
@@ -453,7 +453,7 @@ row names the value before and the value after.
   single difference table (D7, FR-125, FR-126, FR-127). This task is the sole owner
   of parent `spec.md` edits, so US6 does not also edit `spec.md`.
 - [X] T048 [US7] Confirm no code change is needed. Read
-  `src/upgrade_portal/compare/render.py` and confirm it already builds one device
+  `src/interfaces/portals/upgrade_portal/compare/render.py` and confirm it already builds one device
   difference table and one client difference table (D7). Re-run
   `tests/unit/upgrade_portal/test_compare_render.py` to confirm the view is
   unchanged.
@@ -478,7 +478,7 @@ row names the value before and the value after.
   All must pass with no regression against the T001 baseline.
   - `python -m ruff check .`
   - `python -m black --check .`
-  - `python -m mypy src/upgrade_portal` (strict)
+  - `python -m mypy src/interfaces/portals/upgrade_portal` (strict)
   - `python -m pytest tests/unit/upgrade_portal tests/contract/upgrade_portal`
   - `python -m pytest tests/e2e/upgrade_portal`
   Confirm every new test passes, the 13842 unit tests and the 167 browser tests
@@ -509,12 +509,12 @@ row names the value before and the value after.
 
 ### Cross-story shared files (must serialize)
 
-- **`src/upgrade_portal/app/assets/static/js/portal.js`** is edited by US2 (T019),
+- **`src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`** is edited by US2 (T019),
   US3 (T027), and US6 (T041). Phase B lands first. Inside Phase C, land the US3
   edit (T027) before the US6 edit (T041).
-- **`src/upgrade_portal/app/routes/capture.py`** is edited by US1 (T007) and US3
+- **`src/interfaces/portals/upgrade_portal/app/routes/capture.py`** is edited by US1 (T007) and US3
   (T026). Phase A lands before Phase C, so the order is safe.
-- **`src/upgrade_portal/capture/store.py`** is edited by US1 (T009, T010) and US2
+- **`src/interfaces/portals/upgrade_portal/capture/store.py`** is edited by US1 (T009, T010) and US2
   (T016). Phase A lands before Phase B, so the order is safe.
 - **`specs/.../contracts/http-api.md`** is edited by US1 (T011), US2 (T020), and
   US3 (T028). Land each in phase order.

@@ -16,7 +16,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig, _response_status_code
+from src.operations.execution.firmware.firmware_manager import (
+    FirmwareManager,
+    FirmwareManagerConfig,
+    _response_status_code,
+)
 
 
 def _make_manager(**overrides: Any) -> FirmwareManager:
@@ -311,7 +315,7 @@ class TestExecuteStatusCheck:
     """
 
     def test_runs_checker_with_bound_session_and_restores(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import src.firmware.firmware_manager as fm_mod
+        import src.operations.execution.firmware.firmware_manager as fm_mod
 
         instance_session = object()
         mgr = _make_manager(apisession=instance_session)
@@ -343,7 +347,7 @@ class TestExecuteStatusCheck:
         assert fm_mod.apisession is sentinel_prev
 
     def test_restores_apisession_even_on_checker_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import src.firmware.firmware_manager as fm_mod
+        import src.operations.execution.firmware.firmware_manager as fm_mod
 
         mgr = _make_manager(apisession=object())
         # Reset the module global AFTER __init__ rebound it.
@@ -363,7 +367,7 @@ class TestExecuteStatusCheck:
         assert fm_mod.apisession is sentinel_prev
 
     def test_emits_audit_logs(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
-        import src.firmware.firmware_manager as fm_mod
+        import src.operations.execution.firmware.firmware_manager as fm_mod
 
         mgr = _make_manager()
 

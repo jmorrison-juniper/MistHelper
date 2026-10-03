@@ -198,10 +198,15 @@ class ExportIsolation:
 
     def runtime(self) -> None:
         """Replace context, resolver binding, telemetry, settings, and exporter caches."""
-        from src.config import runtime_settings  # Load settings after environment isolation.
-        from src.config.source_dependency_resolver import SourceDependencyResolver  # Restore the bound state.
-        from src.export.data_exporter import DataExporter  # Keep the real export implementation.
-        from src.refactors.main_entrypoint import AppContext, MainEntrypoint  # Create one independent state owner.
+        from src.foundation.runtime.config import runtime_settings  # Load settings after environment isolation.
+        from src.foundation.runtime.config.source_dependency_resolver import (
+            SourceDependencyResolver,
+        )  # Restore the bound state.
+        from src.foundation.support.refactors.main_entrypoint import (
+            AppContext,
+            MainEntrypoint,
+        )  # Create one independent state owner.
+        from src.operations.exporting.export.data_exporter import DataExporter  # Keep the real export implementation.
 
         logging.info("Bind isolated parser and export state")  # Mark the runtime state transfer.
         self.monkeypatch.setattr(MainEntrypoint, "context", AppContext())  # Never change a previous main context.
@@ -225,7 +230,7 @@ class ExportIsolation:
         """Keep attempts observable even when a caller catches their failure."""
         import requests  # Refuse Mist HTTP calls at their transport boundary.
 
-        from src.export import data_exporter  # Block the optional probe and router construction.
+        from src.operations.exporting.export import data_exporter  # Block the optional probe and router construction.
 
         logging.info("Install forbidden external-action guards")  # Mark the safety controls before execution.
         targets = [  # Keep actual local CSV and SQLite writers outside this list.
@@ -263,7 +268,7 @@ class ExportIsolation:
 
     def verify(self) -> None:
         """Require zero forbidden calls and zero optional router state."""
-        from src.export.data_exporter import DataExporter  # Read the actual shared cache owner.
+        from src.operations.exporting.export.data_exporter import DataExporter  # Read the actual shared cache owner.
 
         for guard in self.forbidden:  # Check every external boundary, including caught exceptions.
             guard.assert_not_called()  # Standalone local writes must reach no remote resource.
@@ -344,7 +349,9 @@ class TestFormatSelection:
         self, isolated: ExportIsolation, environment: str | None, flag: str | None
     ) -> None:
         """Environment values must not change the default or an explicit CLI choice."""
-        from src.export.data_exporter import DataExporter  # Use the actual public local-write entry point.
+        from src.operations.exporting.export.data_exporter import (
+            DataExporter,
+        )  # Use the actual public local-write entry point.
 
         logging.info("Set the output environment case %s", environment)  # Log only the non-secret format value.
         if environment is not None:  # The fixture already covers the truly unset case.

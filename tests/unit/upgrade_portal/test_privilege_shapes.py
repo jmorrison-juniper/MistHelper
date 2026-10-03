@@ -27,9 +27,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from src.upgrade_portal.app import wiring
-from src.upgrade_portal.app.routes import auth, select
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app import wiring
+from src.interfaces.portals.upgrade_portal.app.routes import auth, select
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 ORG_ID = "8a1ea872-241a-4c8e-a5ca-2d85674c7229"  # The shape of a real organization key.
 ORG_NAME = "Morrison House"  # The readable name that the picker must show.

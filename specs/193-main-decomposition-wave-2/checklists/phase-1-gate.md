@@ -5,8 +5,8 @@ Scope: T001/T002/T003/T004/T004A/T005/T006/T007/T008/T009
 
 ## Code Extraction and Delegation
 
-- Extracted `SiteAnalyticsConfigurator` to `src/analytics/site_analytics_configurator.py`.
-- Extracted `SiteInventoryHealthAnalyzer` to `src/analytics/site_inventory_health_analyzer.py`.
+- Extracted `SiteAnalyticsConfigurator` to `src/mist/intelligence/analytics/site_analytics_configurator.py`.
+- Extracted `SiteInventoryHealthAnalyzer` to `src/mist/intelligence/analytics/site_inventory_health_analyzer.py`.
 - Updated `MistHelper.py` menu actions for operations `169` and `7` to delegate to extracted modules via dependency containers.
 - Removed in-file class implementations from `MistHelper.py` and retained orchestration in menu wiring.
 

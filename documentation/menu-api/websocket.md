@@ -51,8 +51,8 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`_ws_cmd_deps`](../../MistHelper.py) | Reference |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_mac_table` | None (raw request) | [`MacTableCommand._post_show_mac_table`](../../src/websocket/commands.py) | Path |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`WebSocketManager._subscribe_command_channel`](../../src/websocket/manager.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_mac_table` | None (raw request) | [`MacTableCommand._post_show_mac_table`](../../src/mist/realtime/websocket/commands.py) | Path |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`WebSocketManager._subscribe_command_channel`](../../src/mist/realtime/websocket/manager.py) | Channel |
 
 ## Menu 103
 
@@ -73,9 +73,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](../../src/network/routing_utils.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](../../src/network/_routing_utils_payload.py) | Path |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](../../src/network/routing_utils.py) | Channel |
+| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](../../src/mist/networking/network/routing_utils.py) | Call |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](../../src/mist/networking/network/_routing_utils_payload.py) | Path |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](../../src/mist/networking/network/routing_utils.py) | Channel |
 
 ## Menu 104
 
@@ -96,9 +96,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](../../src/network/routing_utils.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](../../src/network/_routing_utils_payload.py) | Path |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](../../src/network/routing_utils.py) | Channel |
+| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](../../src/mist/networking/network/routing_utils.py) | Call |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](../../src/mist/networking/network/_routing_utils_payload.py) | Path |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](../../src/mist/networking/network/routing_utils.py) | Channel |
 
 ## Menu 105
 
@@ -119,9 +119,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](../../src/network/routing_utils.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_route` | [`sites.devices.showSiteSsrAndSrxRoutes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-routes) | [`_RoutingUtilsPayload._invoke_ssr_route_api`](../../src/network/_routing_utils_payload.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](../../src/network/routing_utils.py) | Channel |
+| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](../../src/mist/networking/network/routing_utils.py) | Call |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_route` | [`sites.devices.showSiteSsrAndSrxRoutes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-routes) | [`_RoutingUtilsPayload._invoke_ssr_route_api`](../../src/mist/networking/network/_routing_utils_payload.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](../../src/mist/networking/network/routing_utils.py) | Channel |
 
 ## Menu 106
 
@@ -143,9 +143,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_neighbors` | [`sites.devices.showSiteGatewayOspfNeighbors`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-neighbors) | [`_OSPF_NEIGHBORS_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_neighbors` | [`sites.devices.showSiteGatewayOspfNeighbors`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-neighbors) | [`_OSPF_NEIGHBORS_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 107
 
@@ -167,9 +167,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_interfaces` | [`sites.devices.showSiteGatewayOspfInterfaces`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-interfaces) | [`_OSPF_INTERFACES_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_interfaces` | [`sites.devices.showSiteGatewayOspfInterfaces`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-interfaces) | [`_OSPF_INTERFACES_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 108
 
@@ -191,9 +191,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_database` | [`sites.devices.showSiteGatewayOspfDatabase`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-database) | [`_OSPF_DATABASE_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_database` | [`sites.devices.showSiteGatewayOspfDatabase`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-database) | [`_OSPF_DATABASE_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 109
 
@@ -215,9 +215,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_summary` | [`sites.devices.showSiteGatewayOspfSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-summary) | [`_OSPF_SUMMARY_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_ospf_summary` | [`sites.devices.showSiteGatewayOspfSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-gateway-ospf-summary) | [`_OSPF_SUMMARY_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 110
 
@@ -239,9 +239,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_session` | [`sites.devices.showSiteSsrAndSrxSessions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-sessions) | [`_SESSION_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_session` | [`sites.devices.showSiteSsrAndSrxSessions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-sessions) | [`_SESSION_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 111
 
@@ -263,9 +263,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_service_path` | [`sites.devices.showSiteSsrServicePath`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-service-path) | [`_SERVICE_PATH_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_service_path` | [`sites.devices.showSiteSsrServicePath`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-service-path) | [`_SERVICE_PATH_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 112
 
@@ -287,9 +287,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_bgp_summary` | [`sites.devices.showSiteDeviceBgpSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-bgp-summary) | [`_BGP_SUMMARY_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_bgp_summary` | [`sites.devices.showSiteDeviceBgpSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-bgp-summary) | [`_BGP_SUMMARY_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 113
 
@@ -311,9 +311,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_arp` | [`sites.devices.showSiteDeviceArpTable`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/show-site-device-arp-table) | [`_ARP_TABLE_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_arp` | [`sites.devices.showSiteDeviceArpTable`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/show-site-device-arp-table) | [`_ARP_TABLE_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 114
 
@@ -336,10 +336,10 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`_UtilityCommandsSelection._fetch_device_config`](../../src/device/_utility_commands_selection.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_dhcp_leases` | [`sites.devices.showSiteDeviceDhcpLeases`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-dhcp-leases) | [`_DHCP_LEASES_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`_UtilityCommandsSelection._fetch_device_config`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_dhcp_leases` | [`sites.devices.showSiteDeviceDhcpLeases`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-dhcp-leases) | [`_DHCP_LEASES_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 115
 
@@ -361,9 +361,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_dot1x` | [`sites.devices.showSiteDeviceDot1xTable`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-dot1x-table) | [`_DOT1X_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_dot1x` | [`sites.devices.showSiteDeviceDot1xTable`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-dot1x-table) | [`_DOT1X_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 116
 
@@ -385,9 +385,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_evpn_database` | [`sites.devices.showSiteDeviceEvpnDatabase`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-evpn-database) | [`_EVPN_DATABASE_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_evpn_database` | [`sites.devices.showSiteDeviceEvpnDatabase`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/show-site-device-evpn-database) | [`_EVPN_DATABASE_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 117
 
@@ -409,9 +409,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/resolve_dns` | [`sites.devices.testSiteSsrDnsResolution`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/test-site-ssr-dns-resolution) | [`_DNS_RESOLUTION_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/resolve_dns` | [`sites.devices.testSiteSsrDnsResolution`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/test-site-ssr-dns-resolution) | [`_DNS_RESOLUTION_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 118
 
@@ -423,7 +423,7 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`_ws_cmd_deps`](../../MistHelper.py) | Reference |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`WebSocketManager._subscribe_command_channel`](../../src/websocket/manager.py) | Channel |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`WebSocketManager._subscribe_command_channel`](../../src/mist/realtime/websocket/manager.py) | Channel |
 
 ## Menu 119
 
@@ -435,7 +435,7 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`_ws_cmd_deps`](../../MistHelper.py) | Reference |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`WebSocketManager._subscribe_command_channel`](../../src/websocket/manager.py) | Channel |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`WebSocketManager._subscribe_command_channel`](../../src/mist/realtime/websocket/manager.py) | Channel |
 
 ## Menu 120
 
@@ -467,18 +467,18 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`APITenantFetchUtils._fetch_org_template_tenants`](../../src/api/tenant_fetch.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/networks` | [`orgs.networks.listOrgNetworks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/networks/list-org-networks) | [`APITenantFetchUtils.organization_tenants`](../../src/api/tenant_fetch.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/servicepolicies` | [`orgs.servicepolicies.listOrgServicePolicies`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/service-policies/list-org-service-policies) | [`APITenantFetchUtils._fetch_org_policy_tenants`](../../src/api/tenant_fetch.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/services` | [`orgs.services.listOrgServices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/list-org-services) | [`APIFetchUtils.organization_services`](../../src/api/api_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`ServicePingManager._lookup_device_info`](../../src/websocket/service_ping_manager.py) | Call |
-| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`ServicePingDiscoveryMixin._retrieve_device_config`](../../src/websocket/service_ping_discovery.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/service_ping` | [`sites.devices.servicePingFromSsr`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/service-ping-from-ssr) | [`ServicePingManager._execute_service_ping`](../../src/websocket/service_ping_manager.py) | Call |
-| GET | `/api/v1/sites/{site_id}/gatewaytemplates/derived` | [`sites.gatewaytemplates.listSiteGatewayTemplatesDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/gateway-templates/list-site-gateway-templates-derived) | [`APITenantFetchUtils._fetch_site_template_tenants`](../../src/api/tenant_fetch.py) | Call |
-| GET | `/api/v1/sites/{site_id}/networks/derived` | [`sites.networks.listSiteNetworksDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/networks/list-site-networks-derived) | [`APITenantFetchUtils.site_tenants`](../../src/api/tenant_fetch.py) | Call |
-| GET | `/api/v1/sites/{site_id}/servicepolicies/derived` | [`sites.servicepolicies.listSiteServicePoliciesDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/service-policies/list-site-service-policies-derived) | [`APITenantFetchUtils._fetch_site_policy_tenants`](../../src/api/tenant_fetch.py) | Call |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`ServicePingDiscoveryMixin._retrieve_device_stats`](../../src/websocket/service_ping_discovery.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`ServicePingManager._setup_websocket`](../../src/websocket/service_ping_manager.py) | Channel |
+| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`APITenantFetchUtils._fetch_org_template_tenants`](../../src/mist/access/api/tenant_fetch.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/networks` | [`orgs.networks.listOrgNetworks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/networks/list-org-networks) | [`APITenantFetchUtils.organization_tenants`](../../src/mist/access/api/tenant_fetch.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/servicepolicies` | [`orgs.servicepolicies.listOrgServicePolicies`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/service-policies/list-org-service-policies) | [`APITenantFetchUtils._fetch_org_policy_tenants`](../../src/mist/access/api/tenant_fetch.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/services` | [`orgs.services.listOrgServices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/list-org-services) | [`APIFetchUtils.organization_services`](../../src/mist/access/api/api_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`ServicePingManager._lookup_device_info`](../../src/mist/realtime/websocket/service_ping_manager.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`ServicePingDiscoveryMixin._retrieve_device_config`](../../src/mist/realtime/websocket/service_ping_discovery.py) | Call |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/service_ping` | [`sites.devices.servicePingFromSsr`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/service-ping-from-ssr) | [`ServicePingManager._execute_service_ping`](../../src/mist/realtime/websocket/service_ping_manager.py) | Call |
+| GET | `/api/v1/sites/{site_id}/gatewaytemplates/derived` | [`sites.gatewaytemplates.listSiteGatewayTemplatesDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/gateway-templates/list-site-gateway-templates-derived) | [`APITenantFetchUtils._fetch_site_template_tenants`](../../src/mist/access/api/tenant_fetch.py) | Call |
+| GET | `/api/v1/sites/{site_id}/networks/derived` | [`sites.networks.listSiteNetworksDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/networks/list-site-networks-derived) | [`APITenantFetchUtils.site_tenants`](../../src/mist/access/api/tenant_fetch.py) | Call |
+| GET | `/api/v1/sites/{site_id}/servicepolicies/derived` | [`sites.servicepolicies.listSiteServicePoliciesDerived`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/service-policies/list-site-service-policies-derived) | [`APITenantFetchUtils._fetch_site_policy_tenants`](../../src/mist/access/api/tenant_fetch.py) | Call |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`ServicePingDiscoveryMixin._retrieve_device_stats`](../../src/mist/realtime/websocket/service_ping_discovery.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`ServicePingManager._setup_websocket`](../../src/mist/realtime/websocket/service_ping_manager.py) | Channel |
 
 ## Menu 121
 
@@ -489,8 +489,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/arp` | None (raw request) | [`ARPCommandManager._trigger_command`](../../src/device/arp_command_manager.py) | Path |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`ARPCommandManager._build_ws_subscribe`](../../src/device/arp_command_manager.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/arp` | None (raw request) | [`ARPCommandManager._trigger_command`](../../src/mist/resources/device/arp_command_manager.py) | Path |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`ARPCommandManager._build_ws_subscribe`](../../src/mist/resources/device/arp_command_manager.py) | Channel |
 
 ## Menu 122
 
@@ -512,9 +512,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/cable_test` | [`sites.devices.cableTestFromSwitch`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/cable-test-from-switch) | [`_CABLE_TEST_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._fetch_stats_data`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/cable_test` | [`sites.devices.cableTestFromSwitch`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/lan/cable-test-from-switch) | [`_CABLE_TEST_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._fetch_stats_data`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |
 
 ## Menu 123
 
@@ -536,6 +536,6 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/traceroute` | [`sites.devices.tracerouteFromDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/traceroute-from-device) | [`_TRACEROUTE_SPEC`](../../src/device/_utility_commands_show.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/device/_utility_commands_selection.py) | Call |
-| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/device/_utility_commands_websocket.py) | Channel |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/traceroute` | [`sites.devices.tracerouteFromDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/common/traceroute-from-device) | [`_TRACEROUTE_SPEC`](../../src/mist/resources/device/_utility_commands_show.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_UtilityCommandsSelection._get_device_info`](../../src/mist/resources/device/_utility_commands_selection.py) | Call |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`_UtilityCommandsWebsocket._prepare_ws_channel`](../../src/mist/resources/device/_utility_commands_websocket.py) | Channel |

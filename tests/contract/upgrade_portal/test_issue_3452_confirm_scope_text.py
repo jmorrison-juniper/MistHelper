@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 from flask import Flask
 
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime import identity
 from tests.contract.upgrade_portal.test_issue_3447_selected_site_count import (
     install_seams,
     register_operator,

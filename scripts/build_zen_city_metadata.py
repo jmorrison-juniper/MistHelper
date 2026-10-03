@@ -6,8 +6,8 @@ Why:
     city. The command refuses to overwrite existing metadata, and it prints a
     difference summary, so an unknown city becomes visible at once.
 
-    Issue #3404 moved the attach logic into `src/utils/zen_city_metadata.py`.
-    `src/utils/zscaler_catalogue.py` reads that function at run time, so the
+    Issue #3404 moved the attach logic into `src/foundation/support/utils/zen_city_metadata.py`.
+    `src/foundation/support/utils/zscaler_catalogue.py` reads that function at run time, so the
     function is product code. This file keeps the maintenance command only.
 """
 
@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.utils.zen_city_metadata import attach_city_metadata  # The promoted library half.
+from src.foundation.support.utils.zen_city_metadata import attach_city_metadata  # The promoted library half.
 
 
 def main() -> None:

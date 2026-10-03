@@ -133,7 +133,7 @@ Legacy compatibility surface removed with compat_facades deprecation
 ```
 
 That guard reported green while `mistapi` 0.64.0 removed a module that
-`src/org_data_collector.py` imported.
+`src/operations/wan/org_data_collector.py` imported.
 
 ## Success Criteria *(mandatory)*
 

@@ -400,13 +400,13 @@ Comparison View (side-by-side, deltas, CSV export)
 ### 6.1 New Files & Directories
 
 ```
-src/upgrade_portal/
+src/interfaces/portals/upgrade_portal/
 ├── app.py                      # Gunicorn entry point (port 8056)
 ├── auth.py                     # Authentication layer
 ├── session_manager.py          # Session locking + timeout
 ├── routes.py                   # API endpoints
 ├── capture.py                  # CaptureService
-├── upgrade.py                  # UpgradeService (reuses existing src/firmware/)
+├── upgrade.py                  # UpgradeService (reuses existing src/operations/execution/firmware/)
 ├── settle_gate.py              # SettleGateService
 ├── comparison.py               # ComparisonService
 ├── storage.py                  # DatabaseRouter integration
@@ -435,7 +435,7 @@ specs/1823-capture-upgrade-portal/
 
 ### 6.2 Container Integration
 
-- Add `src/upgrade_portal/` to the `Containerfile` build
+- Add `src/interfaces/portals/upgrade_portal/` to the `Containerfile` build
 - Keep ArangoDB and Redis in the `misthelper` compose project
 - Export port 8056 in `docker-compose.yml` / `compose.yml`
 - Symlink data directory: `/app/data` (shared with main portal)
@@ -505,7 +505,7 @@ specs/1823-capture-upgrade-portal/
 ### Phase 2: Capture & Upgrade (Weeks 3-4)
 - [ ] Implement CaptureService (multi-threaded device fetch)
 - [ ] Implement pre-capture page (tables, CSV export)
-- [ ] Integrate UpgradeService (reuse src/firmware/)
+- [ ] Integrate UpgradeService (reuse src/operations/execution/firmware/)
 - [ ] Implement upgrade status page (real-time polling)
 - [ ] Unit + integration tests
 

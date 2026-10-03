@@ -3,7 +3,7 @@
 import pytest
 
 import MistHelper
-from src.utils.menu_entry import MenuEntry  # WHY: patched menu rows must match production rows.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: patched menu rows must match production rows.
 
 _HAS_MENU_WIRING = all(hasattr(MistHelper, attr_name) for attr_name in ("menu_actions", "LicenseExportUtils"))
 pytestmark = pytest.mark.skipif(

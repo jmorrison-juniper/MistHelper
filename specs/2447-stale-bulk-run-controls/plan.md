@@ -81,11 +81,11 @@ run records. It performs no automatic action cleanup.
 
 ### New API Package
 
-The `src/upgrade_portal/api` directory currently has fewer than five children.
+The `src/interfaces/portals/upgrade_portal/api` directory currently has fewer than five children.
 Add this compliant package:
 
 ```text
-src/upgrade_portal/api/run_controls/
+src/interfaces/portals/upgrade_portal/api/run_controls/
 ├── __init__.py
 ├── models.py
 ├── routes.py
@@ -109,11 +109,11 @@ five children.
 
 ### New Persistence Package
 
-The `src/upgrade_portal/persistence` directory currently has fewer than five
+The `src/interfaces/portals/upgrade_portal/persistence` directory currently has fewer than five
 children. Add this compliant package:
 
 ```text
-src/upgrade_portal/persistence/actions/
+src/interfaces/portals/upgrade_portal/persistence/actions/
 ├── __init__.py
 ├── models.py
 ├── replay.py

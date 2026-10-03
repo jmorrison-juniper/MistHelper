@@ -1,4 +1,4 @@
-"""Unit tests for ``src.ssh.cli_shell_manager.CLIShellManager``.
+"""Unit tests for ``src.operations.execution.ssh.cli_shell_manager.CLIShellManager``.
 
 Why: Un-omitting this WebSocket CLI shell manager from ``[tool.coverage.run].omit``
 requires 100% line + branch coverage across the 10 static methods, the
@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.ssh import cli_shell_manager as csm_module
-from src.ssh.cli_shell_manager import CLIShellManager
+from src.operations.execution.ssh import cli_shell_manager as csm_module
+from src.operations.execution.ssh.cli_shell_manager import CLIShellManager
 from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 
@@ -190,7 +190,7 @@ class TestCreateSession:
         fake_response = MagicMock()
         fake_response.data = {"url": "wss://shell/1"}
 
-        with patch("src.ssh.cli_shell_manager.mistapi") as m_mistapi:
+        with patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as m_mistapi:
             m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.return_value = fake_response
             result = CLIShellManager._create_session("s-1", "d-1")
 
@@ -201,7 +201,9 @@ class TestCreateSession:
 
     def test_signature_type_error_is_not_hidden(self, fake_mh):
         """A malformed SDK call must fail as a programming error."""
-        with patch("src.ssh.cli_shell_manager.mistapi") as m_mistapi:  # WHY: isolate the SDK boundary.
+        with patch(
+            "src.operations.execution.ssh.cli_shell_manager.mistapi"
+        ) as m_mistapi:  # WHY: isolate the SDK boundary.
             m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.side_effect = TypeError(  # WHY: mimic drift.
                 "missing required argument: body"
             )
@@ -210,7 +212,7 @@ class TestCreateSession:
 
     def test_returns_none_and_prints_on_exception(self, fake_mh, caplog):
         """A runtime failure is logged as WARNING and yields None."""
-        with patch("src.ssh.cli_shell_manager.mistapi") as m_mistapi:
+        with patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as m_mistapi:
             m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.side_effect = RuntimeError("boom")
             result = CLIShellManager._create_session("s-1", "d-1")
 
@@ -225,7 +227,7 @@ class TestShellResizeTerminal:
     def test_sends_resize_without_debug(self, caplog):
         """Sends a JSON resize control frame; no debug output when debug is off."""
         ws = MagicMock()
-        with patch("src.ssh.cli_shell_manager.shutil.get_terminal_size", return_value=(100, 30)):
+        with patch("src.operations.execution.ssh.cli_shell_manager.shutil.get_terminal_size", return_value=(100, 30)):
             CLIShellManager._shell_resize_terminal(ws, debug=False)
 
         ws.send.assert_called_once_with('{"resize": {"width": 100, "height": 30}}')
@@ -234,7 +236,7 @@ class TestShellResizeTerminal:
     def test_sends_resize_with_debug_trace(self, caplog):
         """Debug logs the exact resize payload before sending."""
         ws = MagicMock()
-        with patch("src.ssh.cli_shell_manager.shutil.get_terminal_size", return_value=(80, 24)):
+        with patch("src.operations.execution.ssh.cli_shell_manager.shutil.get_terminal_size", return_value=(80, 24)):
             CLIShellManager._shell_resize_terminal(ws, debug=True)
 
         ws.send.assert_called_once_with('{"resize": {"width": 80, "height": 24}}')
@@ -251,7 +253,7 @@ class TestShellRenderScreen:
         screen.dirty = {1, 0}
         screen.display = ["row-zero", "row-one", "row-two"]
 
-        with patch("src.ssh.cli_shell_manager.sys.stdout") as m_stdout:
+        with patch("src.operations.execution.ssh.cli_shell_manager.sys.stdout") as m_stdout:
             CLIShellManager._shell_render_screen(stream, screen, "chunk")
 
         stream.feed.assert_called_once_with("chunk")
@@ -273,7 +275,7 @@ class TestShellRenderScreen:
         screen.dirty = set()
         screen.display = []
 
-        with patch("src.ssh.cli_shell_manager.sys.stdout") as m_stdout:
+        with patch("src.operations.execution.ssh.cli_shell_manager.sys.stdout") as m_stdout:
             CLIShellManager._shell_render_screen(stream, screen, "")
 
         stream.feed.assert_called_once_with("")
@@ -440,7 +442,7 @@ class TestShellStartReceiver:
         stream = MagicMock()
         screen = MagicMock()
 
-        with patch("src.ssh.cli_shell_manager.threading.Thread") as m_thread:
+        with patch("src.operations.execution.ssh.cli_shell_manager.threading.Thread") as m_thread:
             m_instance = MagicMock()
             m_thread.return_value = m_instance
             CLIShellManager._shell_start_receiver(ws, stream, screen, debug=True)
@@ -457,7 +459,7 @@ class TestRunInteractive:
         monkeypatch.setattr(csm_module, "_has_pyte", False)
         monkeypatch.setattr(csm_module, "pyte", None)
 
-        with patch("src.ssh.cli_shell_manager.websocket") as m_ws:
+        with patch("src.operations.execution.ssh.cli_shell_manager.websocket") as m_ws:
             CLIShellManager._run_interactive("wss://x", debug=False)
 
         m_ws.create_connection.assert_not_called()
@@ -468,7 +470,7 @@ class TestRunInteractive:
         monkeypatch.setattr(csm_module, "_has_pyte", True)
         monkeypatch.setattr(csm_module, "pyte", None)
 
-        with patch("src.ssh.cli_shell_manager.websocket") as m_ws:
+        with patch("src.operations.execution.ssh.cli_shell_manager.websocket") as m_ws:
             CLIShellManager._run_interactive("wss://x", debug=False)
 
         m_ws.create_connection.assert_not_called()
@@ -484,8 +486,8 @@ class TestRunInteractive:
         m_ws_conn = MagicMock()
         m_sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
         with (
-            patch("src.ssh.cli_shell_manager.websocket") as m_ws_mod,
-            patch("src.ssh.cli_shell_manager.time.sleep", new=m_sleep),
+            patch("src.operations.execution.ssh.cli_shell_manager.websocket") as m_ws_mod,
+            patch("src.operations.execution.ssh.cli_shell_manager.time.sleep", new=m_sleep),
             patch.object(CLIShellManager, "_shell_resize_terminal") as m_resize,
             patch.object(CLIShellManager, "_shell_start_receiver") as m_start,
         ):
@@ -512,8 +514,8 @@ class TestRunInteractive:
         monkeypatch.setattr(csm_module, "pyte", fake_pyte)
 
         with (
-            patch("src.ssh.cli_shell_manager.websocket") as m_ws_mod,
-            patch("src.ssh.cli_shell_manager.time.sleep"),
+            patch("src.operations.execution.ssh.cli_shell_manager.websocket") as m_ws_mod,
+            patch("src.operations.execution.ssh.cli_shell_manager.time.sleep"),
             patch.object(CLIShellManager, "_shell_resize_terminal"),
             patch.object(CLIShellManager, "_shell_start_receiver"),
         ):

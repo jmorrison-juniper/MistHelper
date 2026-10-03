@@ -2,7 +2,7 @@
 
 Why:
     The harness must drive the shipped code and never a copy of it. The entry
-    point is ``RunDriver.start`` at ``src/upgrade_portal/upgrade/driver.py``. A
+    point is ``RunDriver.start`` at ``src/interfaces/portals/upgrade_portal/upgrade/driver.py``. A
     test that passed while the shipped settle gate never ran would prove
     nothing at all.
 
@@ -23,9 +23,9 @@ from typing import Any
 import mistapi
 import pytest
 
-from src.firmware import upgrade_service
-from src.upgrade_portal.runtime.runs import PHASE_ORDER, RunRecordBuilder, RunState
-from src.upgrade_portal.upgrade import driver, events, gate, options, phase_gate
+from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER, RunRecordBuilder, RunState
+from src.interfaces.portals.upgrade_portal.upgrade import driver, events, gate, options, phase_gate
+from src.operations.execution.firmware import upgrade_service
 from tests.support.rehearsal.clock import RehearsalClock
 from tests.support.rehearsal.cloud import StandInCloud
 from tests.support.rehearsal.errors import RehearsalNetworkError

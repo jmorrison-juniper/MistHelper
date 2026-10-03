@@ -1,4 +1,4 @@
-"""Unit tests for RateLimitingUtils in src/utils/rate_limiting.py."""
+"""Unit tests for RateLimitingUtils in src/foundation/support/utils/rate_limiting.py."""
 
 import json
 import logging
@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.utils.rate_limiting import PidInputs, RateLimitingUtils
+from src.foundation.support.utils.rate_limiting import PidInputs, RateLimitingUtils
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ class TestLoadPidTuningData:
 
     def test_returns_defaults_when_no_file(self):
         """Returns default dict when tuning file does not exist."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         original = rl.tuning_data_file
         rl.tuning_data_file = "nonexistent.json"
@@ -98,7 +98,7 @@ class TestLoadPidTuningData:
 
     def test_loads_from_file(self):
         """Loads tuning data from a valid JSON file."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         test_data = {"k_p": 0.2, "k_i": 0.001, "error": [1.0, 2.0], "integral": 0.5}
@@ -116,7 +116,7 @@ class TestLoadPidTuningData:
 
     def test_handles_corrupt_json(self):
         """Returns defaults on corrupt JSON."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         with open(filepath, "w", encoding="utf-8") as fh:
@@ -132,7 +132,7 @@ class TestLoadPidTuningData:
 
     def test_handles_empty_body_tuning_file(self):
         """An empty tuning file must return safe PID defaults."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")  # Use the product default file name.
         with open(filepath, "wb") as file_handle:  # Write bytes so the fixture matches an empty body.
@@ -148,7 +148,7 @@ class TestLoadPidTuningData:
 
     def test_handles_malformed_json_tuning_file(self):
         """A malformed tuning file must return safe PID defaults."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")  # Use the product default file name.
         with open(filepath, "w", encoding="utf-8") as file_handle:  # Write text to match persisted JSON.
@@ -164,7 +164,7 @@ class TestLoadPidTuningData:
 
     def test_cleans_error_values_on_load(self):
         """Error values with NaN/Inf are cleaned during load."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         test_data = {"k_p": 0.1, "k_i": 0.001, "error": [1.0, None, 3.0], "integral": 0.0}
@@ -188,7 +188,7 @@ class TestSavePidTuningData:
 
     def test_saves_and_reads_back(self):
         """Saved data can be read back as valid JSON."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         original = rl.tuning_data_file
@@ -452,7 +452,7 @@ class TestLogDelayLevel:
 
     def test_chooses_the_severity_that_matches_the_delay(self, caplog):
         """The severity ladder must match the backpressure the delay reports."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         ladder = [
             (rl._HIGH_DELAY + 1.0, "WARNING", "High delay"),  # Above the high mark the operator must see a warning.
@@ -535,7 +535,7 @@ class TestGetRateLimitedDelay:
 
     def test_returns_tuple(self, api_cache):
         """Returns a 2-tuple of (smoothed_delay, delay_in_seconds)."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         original = rl.tuning_data_file
@@ -559,7 +559,7 @@ class TestGetRateLimitedDelay:
 
     def test_writes_tuning_data(self, api_cache):
         """Tuning data file is created after a call."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         original = rl.tuning_data_file
@@ -572,7 +572,7 @@ class TestGetRateLimitedDelay:
 
     def test_writes_metrics_log(self, api_cache):
         """Delay metrics log file is created after a call."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         tuning_filepath = os.path.join("data", "tuning_data.json")
         original = rl.tuning_data_file
@@ -593,7 +593,7 @@ class TestEdgeCases:
 
     def test_load_missing_error_key(self):
         """Load handles data without error key."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         with open(filepath, "w", encoding="utf-8") as fh:
@@ -609,7 +609,7 @@ class TestEdgeCases:
 
     def test_load_error_not_list(self):
         """Load handles error key that is not a list."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
         with open(filepath, "w", encoding="utf-8") as fh:
@@ -625,7 +625,7 @@ class TestEdgeCases:
 
     def test_save_raises_on_bad_path(self):
         """Save raises when path is invalid."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         original = rl.tuning_data_file
         rl.tuning_data_file = os.path.join("nonexistent_dir_xyz", "bad.json")
@@ -637,7 +637,7 @@ class TestEdgeCases:
 
     def test_std_dev_without_numpy(self):
         """Standard deviation calculation works without numpy."""
-        import src.utils.rate_limiting as rl
+        import src.foundation.support.utils.rate_limiting as rl
 
         original = rl._has_numpy
         rl._has_numpy = False
@@ -658,7 +658,7 @@ class TestEdgeCases:
             "initialized": False,
         }
 
-        with patch("src.utils.rate_limiting.RateLimitingUtils._refresh_api_usage") as mock_refresh:
+        with patch("src.foundation.support.utils.rate_limiting.RateLimitingUtils._refresh_api_usage") as mock_refresh:
             mock_refresh.side_effect = lambda s, c, t: c.update(
                 {
                     "used": 500,
@@ -739,9 +739,11 @@ class TestCoverageGapTargets:
 
     def test_get_tuning_data_file_path_makedirs_fallback(self):  # Cover lines 27-28
         """_get_tuning_data_file_path falls back to cwd when makedirs raises."""
-        import src.utils.rate_limiting as rl  # Import module to access the module-level function
+        import src.foundation.support.utils.rate_limiting as rl  # Import module to access the module-level function
 
-        with patch("src.utils.rate_limiting.os.makedirs", side_effect=OSError("no permission")):  # makedirs raises
+        with patch(
+            "src.foundation.support.utils.rate_limiting.os.makedirs", side_effect=OSError("no permission")
+        ):  # makedirs raises
             result = rl._get_tuning_data_file_path()  # Call the module-level function directly
         assert result.endswith("tuning_data.json")  # Fallback path still ends with correct filename
         assert "data" not in result or not result.startswith(os.path.join(os.getcwd(), "data"))  # Not in data/ dir
@@ -808,7 +810,7 @@ class TestColdCacheStartsTheAdaptiveDelay:
     @staticmethod
     def _point_tuning_file(monkeypatch, tmp_path):
         """Send the tuning file to a temporary path, so no test writes the repository."""
-        import src.utils.rate_limiting as rl  # Import here to reach the module global.
+        import src.foundation.support.utils.rate_limiting as rl  # Import here to reach the module global.
 
         monkeypatch.setattr(rl, "tuning_data_file", str(tmp_path / "tuning_data.json"))  # Redirect the write.
 

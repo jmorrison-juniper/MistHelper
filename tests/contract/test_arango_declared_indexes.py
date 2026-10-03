@@ -12,11 +12,11 @@ from arango import ArangoClient
 from arango.request import Request
 from arango.response import Response
 
-from src.db import DatabaseConfig, WriteResult
-from src.db.arango_writer import ArangoDBWriter
-from src.db.redis_writer import RedisJSONWriter
-from src.db.router import DatabaseRouter
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.persistence.db import DatabaseConfig, WriteResult
+from src.foundation.persistence.db.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db.redis_writer import RedisJSONWriter
+from src.foundation.persistence.db.router import DatabaseRouter
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.integration.test_arango_declared_indexes_live import IsolatedArangoIndexTarget, IsolatedIndexQueryProof
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 

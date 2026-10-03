@@ -1,4 +1,4 @@
-"""Unit tests for src.device.arp_command_manager.ARPCommandManager.
+"""Unit tests for src.mist.resources.device.arp_command_manager.ARPCommandManager.
 
 Tranche 12 of initiative #878: un-omit `arp_command_manager.py` and drive it to
 100% line coverage.
@@ -22,12 +22,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.dataclasses.websocket_stream_target import WebSocketStreamTarget
-from src.device import arp_command_manager as arp_mod
-from src.device.arp_command_manager import ARPCommandManager
+from src.foundation.models.dataclasses.websocket_stream_target import WebSocketStreamTarget
+from src.mist.resources.device import arp_command_manager as arp_mod
+from src.mist.resources.device.arp_command_manager import ARPCommandManager
 
 # WHY: caplog must target the module logger so INFO/WARNING/ERROR records surface (issue #886).
-_LOGGER_NAME = "src.device.arp_command_manager"
+_LOGGER_NAME = "src.mist.resources.device.arp_command_manager"
 
 
 @pytest.fixture

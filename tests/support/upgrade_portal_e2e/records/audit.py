@@ -19,8 +19,12 @@ from typing import Any, ClassVar  # A trail row holds values of mixed types, and
 
 import pytest  # Issue #3498: the move uses the public patch object of pytest.
 
-from src.upgrade_portal.compare import lock_audit  # Issue #3508: the expiry rule of the audit log of the portal.
-from src.upgrade_portal.runtime import lock  # Issue #3498: the module that writes the site lock trail.
+from src.interfaces.portals.upgrade_portal.compare import (
+    lock_audit,
+)  # Issue #3508: the expiry rule of the audit log of the portal.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    lock,
+)  # Issue #3498: the module that writes the site lock trail.
 from tests.support.site_lock_trail import CheckoutTrailGuard  # Issue #3512: the root guard names the checkout trail.
 
 logger = logging.getLogger(__name__)  # Keep the trail records tied to this module.

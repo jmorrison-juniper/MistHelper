@@ -1,4 +1,4 @@
-"""Unit tests for src.refactors.marvis_data_utils.
+"""Unit tests for src.foundation.support.refactors.marvis_data_utils.
 
 Wave 13 P2 coverage lift — MarvisDataUtilsFactory.instance() is a
 lazy singleton that wires escape/flatten callables from MistHelper's
@@ -11,7 +11,7 @@ from __future__ import annotations  # WHY: enable PEP 604 unions on older type c
 import sys  # WHY: patch.dict(sys.modules) to inject a fake MistHelper module
 from unittest.mock import MagicMock, patch  # WHY: MagicMock stubs + patch for module swap
 
-import src.refactors.marvis_data_utils as marvis_module  # WHY: reset _instance between test cases
+import src.foundation.support.refactors.marvis_data_utils as marvis_module  # WHY: reset _instance between test cases
 
 
 def _install_fake_misthelper() -> MagicMock:
@@ -33,7 +33,7 @@ def test_instance_returns_wired_marvis_data_utils() -> None:
     _reset_singleton()  # WHY: start from a cold cache
     fake_mh = _install_fake_misthelper()
     with patch.dict(sys.modules, {"MistHelper": fake_mh}):
-        with patch("src.refactors.marvis_data_utils.MarvisDataUtils") as marvis_cls:
+        with patch("src.foundation.support.refactors.marvis_data_utils.MarvisDataUtils") as marvis_cls:
             marvis_cls.return_value = MagicMock(name="wired_marvis_instance")  # WHY: return distinctive instance
             result = marvis_module.MarvisDataUtilsFactory.instance()  # WHY: cold path builds the instance
     assert result is marvis_cls.return_value  # WHY: factory returns the constructed instance
@@ -48,7 +48,7 @@ def test_instance_returns_cached_singleton_on_second_call() -> None:
     _reset_singleton()  # WHY: start from a cold cache so first call builds fresh
     fake_mh = _install_fake_misthelper()
     with patch.dict(sys.modules, {"MistHelper": fake_mh}):
-        with patch("src.refactors.marvis_data_utils.MarvisDataUtils") as marvis_cls:
+        with patch("src.foundation.support.refactors.marvis_data_utils.MarvisDataUtils") as marvis_cls:
             first = marvis_module.MarvisDataUtilsFactory.instance()  # WHY: cold construction
             second = marvis_module.MarvisDataUtilsFactory.instance()  # WHY: warm cache-hit
     assert first is second  # WHY: singleton identity preserved

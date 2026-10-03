@@ -9,7 +9,7 @@
 
 ### Context
 
-The current signature at `src/firmware/org_ap_upgrader.py` line 41 is:
+The current signature at `src/operations/execution/firmware/org_ap_upgrader.py` line 41 is:
 
 ```python
 def __init__(  # pylint: disable=too-many-arguments
@@ -31,7 +31,7 @@ def __init__(  # pylint: disable=too-many-arguments
 
 Eleven parameters (2 required positional + 9 keyword-only) trigger the **STRUCT-PARAMS** high finding (threshold 5). The pre-existing `# pylint: disable=too-many-arguments` suppression violates spec FR-015 (zero suppressions) and must go.
 
-The four MistHelper.py callsites at lines 20247, 20269, 20289, and 20305 all construct the class via the lazy-import shim `from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl` and then invoke `_Impl(...)` with keyword arguments. Spec FR-018 and SC-007 forbid any diff to those lines: `git diff main..HEAD -- MistHelper.py` must show zero changes in the 20237-20314 range.
+The four MistHelper.py callsites at lines 20247, 20269, 20289, and 20305 all construct the class via the lazy-import shim `from src.operations.execution.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl` and then invoke `_Impl(...)` with keyword arguments. Spec FR-018 and SC-007 forbid any diff to those lines: `git diff main..HEAD -- MistHelper.py` must show zero changes in the 20237-20314 range.
 
 ### Options Considered
 
@@ -297,7 +297,7 @@ Target coverage: **>=80%** to clear the CONV-COMMENTS threshold with a small buf
 
 ### Rationale
 
-- Uniform `# WHY:` prefix is grep-friendly: `git grep -c "# WHY:" src/firmware/org_ap_upgrader.py` gives a fast coverage estimate before running the full analyzer.
+- Uniform `# WHY:` prefix is grep-friendly: `git grep -c "# WHY:" src/operations/execution/firmware/org_ap_upgrader.py` gives a fast coverage estimate before running the full analyzer.
 - Constitution VI is explicit that comments explain *why*, not *what*.
 - 80% target matches the analyzer's threshold; the actual pass typically ends up at 85-95%.
 
@@ -344,8 +344,8 @@ Spec FR-018 and SC-007 forbid any diff to MistHelper.py lines 20237-20314. The f
 
 | Line | Site | Contract |
 |------|------|----------|
-| 20237 | `class OrgLevelAPFirmwareUpgrader:` docstring `"""Thin wrapper that delegates to src.firmware.org_ap_upgrader."""` | No change. |
-| 20247 | `from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl` (inside `run` staticmethod) | No change. |
+| 20237 | `class OrgLevelAPFirmwareUpgrader:` docstring `"""Thin wrapper that delegates to src.operations.execution.firmware.org_ap_upgrader."""` | No change. |
+| 20247 | `from src.operations.execution.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl` (inside `run` staticmethod) | No change. |
 | 20252-20264 | `_Impl(org_id=..., apisession=..., dry_run=..., safe_input_fn=..., check_stop_fn=..., get_org_id_fn=..., fetch_sites_fn=..., write_results_fn=..., is_debug_fn=..., msp_privileges=..., selected_msp=...)` | No change — kwargs shape matches `OrgAPUpgraderConfig` field names exactly. |
 | 20269 | Same import inside `execute` method | No change. |
 | 20273-20283 | `_Impl(...)` with 9 kwargs (no `msp_privileges`, no `selected_msp`) | No change — the two omitted kwargs default to `None`, which `OrgAPUpgraderConfig.__post_init__` normalizes to `[]` / `None`. |

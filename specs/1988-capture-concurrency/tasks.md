@@ -22,10 +22,10 @@
 
 **Purpose**: Identify current portal concurrency and safety constraints before measurement.
 
-- [x] T006 Read `src\upgrade_portal\capture\collector.py` for two-wave capture reads. (delivered: plan.md)
-- [x] T007 Read `src\upgrade_portal\runtime\pools.py` for `CAPTURE_WORKER_TARGET`. (delivered: plan.md)
-- [x] T008 Read `src\upgrade_portal\upgrade\gate.py` and `phase_gate.py` for rate budget facts. (delivered: plan.md)
-- [x] T009 Read `src\upgrade_portal\compare\diff.py` for digest short circuit behavior. (delivered: plan.md)
+- [x] T006 Read `src\interfaces\portals\upgrade_portal\capture\collector.py` for two-wave capture reads. (delivered: plan.md)
+- [x] T007 Read `src\interfaces\portals\upgrade_portal\runtime\pools.py` for `CAPTURE_WORKER_TARGET`. (delivered: plan.md)
+- [x] T008 Read `src\interfaces\portals\upgrade_portal\upgrade\gate.py` and `phase_gate.py` for rate budget facts. (delivered: plan.md)
+- [x] T009 Read `src\interfaces\portals\upgrade_portal\compare\diff.py` for digest short circuit behavior. (delivered: plan.md)
 - [x] T010 Review pull request #2729 file overlap and avoid production portal changes. (delivered: plan.md)
 
 ---

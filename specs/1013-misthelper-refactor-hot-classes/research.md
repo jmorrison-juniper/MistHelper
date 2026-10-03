@@ -36,10 +36,10 @@ Any hit under `src/` marks the candidate a Cat A/C. Zero hits marks it Cat B. Di
 
 | Position | Class | MistHelper.py anchor | Existing canonical body | Facade shape |
 |---|---|---|---|---|
-| 1 | `GatewayTemplateConfigManager` | `MistHelper.py:15596` | `src/gateway/template_config.py:30` | 3 static delegation methods on the facade; all three are 1:1 present on the canonical class. |
-| 2 | `FirmwareManager` | `MistHelper.py:17376` | `src/firmware/firmware_manager.py:134` | Factory facade with 270 defs (delegation to canonical class methods); method inventory audited 1:1 against canonical body. |
-| 3 | `SiteConfigManager` | `MistHelper.py:16926` | `src/site/site_config_manager.py:54` | `_configure_module()` + 4 delegation methods; canonical class exports all 5 with matching signatures. |
-| 4 | `DeviceUtilityCommands` | `MistHelper.py:13527` | `src/device/utility_commands.py:82` | Facade orchestrator with 35 op-subclasses (Command pattern fan-out); canonical class holds all 35 op-classes as nested types or same-module peers. Method-parity audit is the largest of the four (see Decision 12). |
+| 1 | `GatewayTemplateConfigManager` | `MistHelper.py:15596` | `src/mist/resources/gateway/template_config.py:30` | 3 static delegation methods on the facade; all three are 1:1 present on the canonical class. |
+| 2 | `FirmwareManager` | `MistHelper.py:17376` | `src/operations/execution/firmware/firmware_manager.py:134` | Factory facade with 270 defs (delegation to canonical class methods); method inventory audited 1:1 against canonical body. |
+| 3 | `SiteConfigManager` | `MistHelper.py:16926` | `src/mist/resources/site/site_config_manager.py:54` | `_configure_module()` + 4 delegation methods; canonical class exports all 5 with matching signatures. |
+| 4 | `DeviceUtilityCommands` | `MistHelper.py:13527` | `src/mist/resources/device/utility_commands.py:82` | Facade orchestrator with 35 op-subclasses (Command pattern fan-out); canonical class holds all 35 op-classes as nested types or same-module peers. Method-parity audit is the largest of the four (see Decision 12). |
 
 The remaining 43 candidates (rows 5-47 in the Dispatch Queue) are Cat B: no same-name class definition exists under `src/`, so each is a fresh extraction to its pinned landing package.
 
@@ -47,10 +47,10 @@ The remaining 43 candidates (rows 5-47 in the Dispatch Queue) are Cat B: no same
 
 - Cat A: no new file is created. The facade deletion is the only edit to `MistHelper.py`; the existing canonical file is untouched (import-only rewrite of callsites).
 - Cat B: one class → one file. Landing is a domain-fitting existing package per the spec's pinned landing-target column. Concrete groupings from the spec:
-  - `src/site/` — `SiteConfigExporter`, `SiteClientExporter`, `SiteDeviceExporter`, `SiteAnomalyExporter`, `SitesByAPModelExporter`.
-  - `src/export/` — `OrgAlarmEventExporter`, `OrgAdminExporter`, `OrgTemplateExporter`, `OrgConfigExporter`, `OrgClientSecurityExporter`, `OrgDeviceStatsExporter`, `OrgTicketManager`, `OrgExportUtils`, `SelfExportUtils`, `LicenseExportUtils`.
-  - `src/gateway/` — `GatewayHaExporter`, `GatewayTestExporter`.
-  - `src/refactors/` — receives **zero** Cat B candidates. Every Cat B row is pinned per-row to a semantic package in the spec's Dispatch Queue.
+  - `src/mist/resources/site/` — `SiteConfigExporter`, `SiteClientExporter`, `SiteDeviceExporter`, `SiteAnomalyExporter`, `SitesByAPModelExporter`.
+  - `src/operations/exporting/export/` — `OrgAlarmEventExporter`, `OrgAdminExporter`, `OrgTemplateExporter`, `OrgConfigExporter`, `OrgClientSecurityExporter`, `OrgDeviceStatsExporter`, `OrgTicketManager`, `OrgExportUtils`, `SelfExportUtils`, `LicenseExportUtils`.
+  - `src/mist/resources/gateway/` — `GatewayHaExporter`, `GatewayTestExporter`.
+  - `src/foundation/support/refactors/` — receives **zero** Cat B candidates. Every Cat B row is pinned per-row to a semantic package in the spec's Dispatch Queue.
 
 **Rationale**: Discovering facade collisions pre-dispatch is materially cheaper than discovering them mid-PR. The 2026-07-07 audit closes a class of surprise ("this class already exists in src/!") that otherwise blocks a PR mid-implementation. Fixing the action-type at dispatch time also gates the correct FR (FR-025 method-parity for Cat A; FR-006 in-flight decomposition for Cat B) so the reviewer knows which rubric applies before opening the diff.
 
@@ -66,7 +66,7 @@ The remaining 43 candidates (rows 5-47 in the Dispatch Queue) are Cat B: no same
 
 **Decision**: Every Cat B extraction candidate — including tiny ones like `EndpointConfig` (10 LOC) — lands in its own module under the pinned landing package. Small size alone does not trigger folding into an existing file within the landing package. If the landing package holds a natural host class and folding preserves A+/100, folding is permitted only when at least two of the following are true: (1) the candidate's name suggests it as a peer/helper of the host class; (2) the candidate's public API is invoked alongside the host class's methods in `MistHelper.py`; (3) folding does not push the destination file below A+/100 (FR-022 hard gate).
 
-**Rationale**: Uniform one-class-per-module output makes the post-initiative directory grep-friendly (`grep -l "^class EndpointConfig" src/refactors/`) and matches the pattern established by 1010/1011 which landed 30+ single-class modules. Consolidating tiny classes into a shared "small_helpers.py" grab-bag would produce exactly the kind of monolith this initiative is dismantling. The compliance-analyzer overhead per tiny file is negligible (each still scores A+/100 with the mandatory module docstring, class docstring, and comment cadence).
+**Rationale**: Uniform one-class-per-module output makes the post-initiative directory grep-friendly (`grep -l "^class EndpointConfig" src/foundation/support/refactors/`) and matches the pattern established by 1010/1011 which landed 30+ single-class modules. Consolidating tiny classes into a shared "small_helpers.py" grab-bag would produce exactly the kind of monolith this initiative is dismantling. The compliance-analyzer overhead per tiny file is negligible (each still scores A+/100 with the mandatory module docstring, class docstring, and comment cadence).
 
 **Alternatives considered**:
 
@@ -77,7 +77,7 @@ The remaining 43 candidates (rows 5-47 in the Dispatch Queue) are Cat B: no same
 
 ## Decision 3 — `FirmwareManager` resolution superseded by Cat A categorization
 
-**Decision**: The Phase 0 `FirmwareManager` uncertainty (originally recorded as a dispatch-time diff decision) is **resolved by the 2026-07-07 collision audit**: `FirmwareManager` is confirmed **Cat A**. Its `MistHelper.py:17376` body is a factory facade over `src/firmware/firmware_manager.py:134`. The row-2 PR performs the Cat A workflow (facade delete, callsite rewrite, method-parity audit per FR-025) — no `firmware_manager_v2.py`, no `FirmwareManagerLegacy` rename, no `src/refactors/` landing.
+**Decision**: The Phase 0 `FirmwareManager` uncertainty (originally recorded as a dispatch-time diff decision) is **resolved by the 2026-07-07 collision audit**: `FirmwareManager` is confirmed **Cat A**. Its `MistHelper.py:17376` body is a factory facade over `src/operations/execution/firmware/firmware_manager.py:134`. The row-2 PR performs the Cat A workflow (facade delete, callsite rewrite, method-parity audit per FR-025) — no `firmware_manager_v2.py`, no `FirmwareManagerLegacy` rename, no `src/foundation/support/refactors/` landing.
 
 The three outcomes previously enumerated (identical / distinct / ambiguous) collapse to outcome (1) — identical or trivially divergent body — confirmed by the pre-dispatch audit. Outcomes (2) and (3) would have been Cat C candidates, and no Cat C candidates surfaced in the 2026-07-07 audit.
 
@@ -86,7 +86,7 @@ The three outcomes previously enumerated (identical / distinct / ambiguous) coll
 **Alternatives considered**:
 
 - *Retain the dispatch-time diff as a belt-and-braces check*. Rejected — the audit result is deterministic; re-running the same check at dispatch time adds overhead without new information.
-- *Rename the canonical class under `src/firmware/` to disambiguate from the facade*. Rejected — the canonical class name is stable (established by 1011); renaming it would churn every existing callsite that already imports from `src/firmware/firmware_manager.py`.
+- *Rename the canonical class under `src/operations/execution/firmware/` to disambiguate from the facade*. Rejected — the canonical class name is stable (established by 1011); renaming it would churn every existing callsite that already imports from `src/operations/execution/firmware/firmware_manager.py`.
 
 ---
 
@@ -134,7 +134,7 @@ Any additional flag surfaced by an analyzer update is handled with the same "res
 Placeholders:
 
 - `<ClassName>` — the exact class name as it appeared in `MistHelper.py` before deletion (case-sensitive).
-- `<src-path>` (Cat A) — the path to the existing canonical file (e.g. `src/firmware/firmware_manager.py`, `src/device/utility_commands.py`).
+- `<src-path>` (Cat A) — the path to the existing canonical file (e.g. `src/operations/execution/firmware/firmware_manager.py`, `src/mist/resources/device/utility_commands.py`).
 - `<new-module-path>` (Cat B) — the newly-created module path per the Dispatch Queue's Landing target column.
 
 Position: the NOTE replaces the deleted `class <Name>:` line, appearing as the single-line successor at the same source position. No adjacent blank lines are added or removed.
@@ -163,7 +163,7 @@ grep -n "^from .* import <ClassName>$" MistHelper.py  # Expect: 1 hit (the new i
 
 The last grep confirms the import replaces the definition. Any extra hits (e.g. a `<ClassName> = _real_<ClassName>` alias line, or a forwarding `def <ClassName>(...)` factory) fail SC-007 and block merge until removed.
 
-For Cat A, the import target is the existing canonical module (`src/firmware/firmware_manager`, `src/device/utility_commands`, etc.). For Cat B, the import target is the newly-created module under the pinned landing package.
+For Cat A, the import target is the existing canonical module (`src/operations/execution/firmware/firmware_manager`, `src/mist/resources/device/utility_commands`, etc.). For Cat B, the import target is the newly-created module under the pinned landing package.
 
 The pattern is documented in `quickstart.md` step "Verification greps" so contributors invoke it locally before opening the PR.
 
@@ -286,10 +286,10 @@ Batching regenerations (e.g. "regenerate every 5 merges") is prohibited — a st
 
 **Decision**: The Dispatch Queue processes all 4 Cat A candidates (positions 1-4) before any Cat B candidate (positions 5-47). Within each Cat block, ordering is Refs-ASC / LOC-DESC per FR-005. The four Cat A positions specifically:
 
-1. `GatewayTemplateConfigManager` (`MistHelper.py:15596` -> `src/gateway/template_config.py`).
-2. `FirmwareManager` (`MistHelper.py:17376` -> `src/firmware/firmware_manager.py`).
-3. `SiteConfigManager` (`MistHelper.py:16926` -> `src/site/site_config_manager.py`).
-4. `DeviceUtilityCommands` (`MistHelper.py:13527` -> `src/device/utility_commands.py`).
+1. `GatewayTemplateConfigManager` (`MistHelper.py:15596` -> `src/mist/resources/gateway/template_config.py`).
+2. `FirmwareManager` (`MistHelper.py:17376` -> `src/operations/execution/firmware/firmware_manager.py`).
+3. `SiteConfigManager` (`MistHelper.py:16926` -> `src/mist/resources/site/site_config_manager.py`).
+4. `DeviceUtilityCommands` (`MistHelper.py:13527` -> `src/mist/resources/device/utility_commands.py`).
 
 **Rationale**: Cat A-first is a deliberate risk-front-load warmup. Each Cat A PR:
 

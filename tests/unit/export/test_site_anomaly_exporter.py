@@ -1,4 +1,4 @@
-"""Unit tests for ``src.export.site_anomaly_exporter.SiteAnomalyExporter``.
+"""Unit tests for ``src.operations.exporting.export.site_anomaly_exporter.SiteAnomalyExporter``.
 
 Why: Exercises every line and branch of the 17 static methods so that
 un-omitting the module in ``[tool.coverage.run].omit`` keeps overall coverage
@@ -46,18 +46,18 @@ class TestAnomalyEvents:
 
     def test_no_site_selected_returns_early(self, fake_mh, caplog):
         """Returns immediately when the site selection prompt yields nothing."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = None
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         SiteAnomalyExporter.anomaly_events()
 
         assert "No site selected" in caplog.text
 
     def test_no_metrics_discovered_returns_early(self, fake_mh):
         """Returns when discovery yields no metric names."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "site-1"
         fake_mh.AnomalyMetricsDiscovery.discover.return_value = []
@@ -66,7 +66,7 @@ class TestAnomalyEvents:
 
     def test_happy_path_invokes_aggregate_and_export(self, fake_mh):
         """Aggregates metrics and writes CSV on the happy path."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "site-1"
         fake_mh.AnomalyMetricsDiscovery.discover.return_value = [{"metric_name": "m1", "description": "d"}]
@@ -82,11 +82,11 @@ class TestAnomalyEvents:
 
     def test_exception_during_aggregate_logged(self, fake_mh, caplog):
         """Prints and logs when aggregate/export raises."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "site-1"
         fake_mh.AnomalyMetricsDiscovery.discover.return_value = [{"metric_name": "m1", "description": "d"}]
-        caplog.set_level(logging.ERROR, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.ERROR, logger="src.operations.exporting.export.site_anomaly_exporter")
         with (
             patch.object(SiteAnomalyExporter, "_anomaly_resolve_site_name", return_value="Site"),
             patch.object(SiteAnomalyExporter, "_aggregate_site_anomaly_data", side_effect=RuntimeError("boom")),
@@ -101,22 +101,22 @@ class TestDeviceAnomalyEvents:
 
     def test_no_site_selected(self, fake_mh, caplog):
         """Bails on empty site selection."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = None
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         SiteAnomalyExporter.device_anomaly_events()
 
         assert "No site selected" in caplog.text
 
     def test_no_device_selected(self, fake_mh, caplog):
         """Bails on empty device selection."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "site-1"
         fake_mh.PromptUtils.select_device_id_from_inventory.return_value = None
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         with patch.object(SiteAnomalyExporter, "_anomaly_resolve_site_name", return_value="Site"):
             SiteAnomalyExporter.device_anomaly_events()
 
@@ -124,7 +124,7 @@ class TestDeviceAnomalyEvents:
 
     def test_happy_path(self, fake_mh):
         """Fetches, aggregates, exports on happy path."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "site-1"
         fake_mh.PromptUtils.select_device_id_from_inventory.return_value = ("aa:bb", "AP1")
@@ -140,11 +140,11 @@ class TestDeviceAnomalyEvents:
 
     def test_exception_logs(self, fake_mh, caplog):
         """Prints and logs on aggregate exception."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "site-1"
         fake_mh.PromptUtils.select_device_id_from_inventory.return_value = ("aa:bb", "AP1")
-        caplog.set_level(logging.ERROR, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.ERROR, logger="src.operations.exporting.export.site_anomaly_exporter")
         with (
             patch.object(SiteAnomalyExporter, "_anomaly_resolve_site_name", return_value="Site"),
             patch.object(SiteAnomalyExporter, "_aggregate_device_anomaly_data", side_effect=RuntimeError("boom")),
@@ -159,7 +159,7 @@ class TestBuildDeviceFilename:
 
     def test_builds_sanitized_filename(self, fake_mh):
         """Sanitizes site and device parts before composing filename."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         result = SiteAnomalyExporter._build_device_filename("My Site", "My AP")
 
@@ -171,11 +171,11 @@ class TestDiscoverSiteAnomalyMetrics:
 
     def test_empty_metrics_warns(self, fake_mh, caplog):
         """Returns [] and warns when discovery is empty."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.AnomalyMetricsDiscovery.discover.return_value = []
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         result = SiteAnomalyExporter._discover_site_anomaly_metrics()
 
         assert result == []
@@ -183,7 +183,7 @@ class TestDiscoverSiteAnomalyMetrics:
 
     def test_returns_metric_names(self, fake_mh):
         """Returns list of metric names when discovery non-empty."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.AnomalyMetricsDiscovery.discover.return_value = [
             {"metric_name": "m1", "description": "desc" * 20},
@@ -200,7 +200,7 @@ class TestFetchOneAnomalyMetric:
 
     def test_returns_tagged_data(self, fake_mh):
         """Tags the response data with metric, data_type, and caller tags."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = {"row": 1}
@@ -214,13 +214,13 @@ class TestFetchOneAnomalyMetric:
 
     def test_returns_none_on_empty_data(self, fake_mh, caplog):
         """Returns None when response data is empty."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = {}
         fetch = MagicMock(return_value=response)
 
-        caplog.set_level(logging.INFO, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.INFO, logger="src.operations.exporting.export.site_anomaly_exporter")
         result = SiteAnomalyExporter._fetch_one_anomaly_metric(fetch, "metric1", {}, ("scope", "typ"))
 
         assert result is None
@@ -228,11 +228,11 @@ class TestFetchOneAnomalyMetric:
 
     def test_returns_none_on_exception(self, fake_mh, caplog):
         """Returns None and warns when fetch raises."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fetch = MagicMock(side_effect=RuntimeError("boom"))
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         result = SiteAnomalyExporter._fetch_one_anomaly_metric(fetch, "metric1", {}, ("scope", "typ"))
 
         assert result is None
@@ -244,7 +244,7 @@ class TestRunAnomalyMetricLoop:
 
     def test_collects_rows_and_restores_loggers(self, fake_mh):
         """Appends only non-None rows; restore is called via finally."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         with (
             patch.object(SiteAnomalyExporter, "_anomaly_suppress_mistapi_loggers", return_value={"lg": 20}),
@@ -264,7 +264,7 @@ class TestAggregateSiteAnomalyData:
 
     def test_delegates_to_loop(self, fake_mh):
         """Builds site tags/scope and delegates to _run_anomaly_metric_loop."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         with patch.object(
             SiteAnomalyExporter,
@@ -286,7 +286,7 @@ class TestAggregateDeviceAnomalyData:
 
     def test_delegates_to_loop(self, fake_mh):
         """Builds device tags/scope and delegates to _run_anomaly_metric_loop."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         with patch.object(
             SiteAnomalyExporter,
@@ -308,9 +308,9 @@ class TestExportAnomalyData:
 
     def test_writes_flattened_data(self, fake_mh):
         """Flattens + escapes + writes when data present."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        with patch("src.export.site_anomaly_exporter.DataProcessingUtils") as dpu:
+        with patch("src.operations.exporting.export.site_anomaly_exporter.DataProcessingUtils") as dpu:
             dpu.flatten_nested_fields.return_value = [{"flat": 1}]
             dpu.escape_multiline.return_value = [{"escaped": 1}]
             SiteAnomalyExporter._export_anomaly_data([{"raw": 1}], "out.csv", "site anomaly event", 1, "Site")
@@ -321,9 +321,9 @@ class TestExportAnomalyData:
 
     def test_writes_empty_csv_when_no_data(self, fake_mh, caplog):
         """Writes empty CSV when no data collected."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         SiteAnomalyExporter._export_anomaly_data([], "out.csv", "site anomaly event", 0, "Site")
 
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
@@ -337,7 +337,7 @@ class TestAnomalyResolveSiteName:
 
     def test_returns_name_on_match(self, fake_mh):
         """Returns the site name from the single-site response."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock(data={"id": "s1", "name": "MySite"}, status_code=200)  # WHY: getSiteInfo shape.
         fake_mh.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
@@ -349,7 +349,7 @@ class TestAnomalyResolveSiteName:
 
     def test_returns_id_when_no_name(self, fake_mh):
         """Falls back to id when the single-site response has no name."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock(data={"id": "s1"}, status_code=200)  # WHY: no name field tests shape fallback.
         fake_mh.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
@@ -360,12 +360,12 @@ class TestAnomalyResolveSiteName:
 
     def test_api_fault_is_reported(self, fake_mh, caplog):
         """Falls back to id and logs when the API response reports a fault."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock(data={"error": "down"}, status_code=503)  # WHY: status value drives handler.
         fake_mh.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
 
-        with caplog.at_level(logging.ERROR, logger="src.export.site_anomaly_exporter"):
+        with caplog.at_level(logging.ERROR, logger="src.operations.exporting.export.site_anomaly_exporter"):
             result = SiteAnomalyExporter._anomaly_resolve_site_name("s1")
 
         assert result == "s1"
@@ -377,7 +377,7 @@ class TestAnomalyLookupClientHostname:
 
     def test_returns_hostname(self, fake_mh):
         """Reads hostname field on match."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = [{"mac": "aa", "hostname": "H1"}]
@@ -389,7 +389,7 @@ class TestAnomalyLookupClientHostname:
 
     def test_falls_back_to_name(self, fake_mh):
         """Uses name field when hostname missing."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = [{"mac": "aa", "name": "NamedClient"}]
@@ -401,7 +401,7 @@ class TestAnomalyLookupClientHostname:
 
     def test_returns_unknown_when_no_fields(self, fake_mh):
         """Returns 'Unknown' when neither hostname nor name is present."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = [{"mac": "aa"}]
@@ -413,7 +413,7 @@ class TestAnomalyLookupClientHostname:
 
     def test_returns_unknown_when_no_match(self, fake_mh):
         """Returns 'Unknown' when client MAC is absent from stats."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = [{"mac": "other"}]
@@ -425,7 +425,7 @@ class TestAnomalyLookupClientHostname:
 
     def test_returns_mac_on_exception(self, fake_mh):
         """Falls back to MAC when the lookup raises."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.mistapi.api.v1.sites.stats.listSiteWirelessClientsStats.side_effect = RuntimeError("boom")
 
@@ -439,7 +439,7 @@ class TestSuppressAndRestoreLoggers:
 
     def test_suppress_captures_and_sets_critical(self, fake_mh):
         """Captures original level and raises to CRITICAL for known mistapi loggers."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         logging.getLogger("apirequest").setLevel(logging.INFO)
         try:
@@ -451,7 +451,7 @@ class TestSuppressAndRestoreLoggers:
 
     def test_restore_sets_levels_back(self, fake_mh):
         """Restore reinstates the saved logger levels."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         logging.getLogger("apirequest").setLevel(logging.CRITICAL)
         SiteAnomalyExporter._anomaly_restore_loggers({"apirequest": logging.INFO})
@@ -466,7 +466,7 @@ class TestAnomalyFetchOneMetric:
 
     def test_tags_data(self, fake_mh):
         """Tags the returned client anomaly record with site/client metadata."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = {"payload": 1}
@@ -482,7 +482,7 @@ class TestAnomalyFetchOneMetric:
 
     def test_returns_none_on_empty(self, fake_mh):
         """Returns None when the response is empty."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         response = MagicMock()
         response.data = {}
@@ -498,7 +498,7 @@ class TestAnomalyHandleMetricResult:
 
     def test_appends_and_returns_one(self, fake_mh, caplog):
         """Appends record when non-None; returns 1."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         acc: list = []
         result = SiteAnomalyExporter._anomaly_handle_metric_result({"row": 1}, "m1", "aa", acc)
@@ -508,9 +508,9 @@ class TestAnomalyHandleMetricResult:
 
     def test_returns_zero_when_none(self, fake_mh, caplog):
         """Returns 0 without appending when record is None."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        caplog.set_level(logging.INFO, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.INFO, logger="src.operations.exporting.export.site_anomaly_exporter")
         acc: list = []
         result = SiteAnomalyExporter._anomaly_handle_metric_result(None, "m1", "aa", acc)
 
@@ -524,7 +524,7 @@ class TestAnomalyCollectMetrics:
 
     def test_iterates_all_client_metrics(self, fake_mh):
         """Loops the three client anomaly metrics and delegates fetch+handle."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         with (
             patch.object(
@@ -544,9 +544,9 @@ class TestAnomalyCollectMetrics:
 
     def test_exception_in_metric_isolated(self, fake_mh, caplog):
         """Prints and warns on per-metric failure without aborting the loop."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         with patch.object(
             SiteAnomalyExporter,
             "_anomaly_fetch_one_metric",
@@ -563,9 +563,9 @@ class TestAnomalyExport:
 
     def test_writes_flattened_data(self, fake_mh):
         """Flattens and writes when data present."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        with patch("src.export.site_anomaly_exporter.DataProcessingUtils") as dpu:
+        with patch("src.operations.exporting.export.site_anomaly_exporter.DataProcessingUtils") as dpu:
             dpu.flatten_nested_fields.return_value = [{"flat": 1}]
             dpu.escape_multiline.return_value = [{"escaped": 1}]
             SiteAnomalyExporter._anomaly_export([{"raw": 1}], 1, "aa", "out.csv")
@@ -576,9 +576,9 @@ class TestAnomalyExport:
 
     def test_writes_empty_when_no_data(self, fake_mh, caplog):
         """Writes an empty CSV when no data was collected."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         SiteAnomalyExporter._anomaly_export([], 0, "aa", "out.csv")
 
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
@@ -592,7 +592,7 @@ class TestAnomalyPrepare:
 
     def test_happy_path_returns_context(self, fake_mh):
         """Returns tuple of resolved context on happy path."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "s1"
         fake_mh.PromptClientUtils.select_client.return_value = ("aa:bb:cc", None, None)
@@ -612,11 +612,11 @@ class TestAnomalyPrepare:
 
     def test_returns_none_when_no_site(self, fake_mh, caplog):
         """Returns None when the operator cancels site selection."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = None
 
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         result = SiteAnomalyExporter._anomaly_prepare()
 
         assert result is None
@@ -624,11 +624,11 @@ class TestAnomalyPrepare:
 
     def test_returns_none_when_no_client(self, fake_mh, caplog):
         """Returns None when the operator cancels client selection."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         fake_mh.PromptUtils.select_site.return_value = "s1"
         fake_mh.PromptClientUtils.select_client.return_value = (None, None, None)
-        caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.WARNING, logger="src.operations.exporting.export.site_anomaly_exporter")
         with patch.object(SiteAnomalyExporter, "_anomaly_resolve_site_name", return_value="Site"):
             result = SiteAnomalyExporter._anomaly_prepare()
 
@@ -641,7 +641,7 @@ class TestClientAnomalyEvents:
 
     def test_cancelled_returns_early(self, fake_mh):
         """Bails when _anomaly_prepare returns None."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         with (
             patch.object(SiteAnomalyExporter, "_anomaly_prepare", return_value=None),
@@ -653,7 +653,7 @@ class TestClientAnomalyEvents:
 
     def test_happy_path_restores_loggers(self, fake_mh):
         """Collects, exports, and always restores loggers via finally."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
         with (
             patch.object(
@@ -673,9 +673,9 @@ class TestClientAnomalyEvents:
 
     def test_exception_still_restores_loggers(self, fake_mh, caplog):
         """Prints, logs, and still restores loggers when collect/export raises."""
-        from src.export.site_anomaly_exporter import SiteAnomalyExporter
+        from src.operations.exporting.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        caplog.set_level(logging.ERROR, logger="src.export.site_anomaly_exporter")
+        caplog.set_level(logging.ERROR, logger="src.operations.exporting.export.site_anomaly_exporter")
         with (
             patch.object(
                 SiteAnomalyExporter,

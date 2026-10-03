@@ -5,7 +5,7 @@
 
 ## Problem
 
-`src/utils/zscaler_catalogue.py` scored 59.0, grade F, the second-worst file in the repository.
+`src/foundation/support/utils/zscaler_catalogue.py` scored 59.0, grade F, the second-worst file in the repository.
 It carried 47 violations, four of them high severity:
 
 | Line | Rule | Symbol | Detail |

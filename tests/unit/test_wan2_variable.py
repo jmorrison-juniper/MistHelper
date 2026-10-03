@@ -17,10 +17,10 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 try:
-    from src.gateway._wan2_variable_device import _Wan2VariableDevice
-    from src.gateway._wan2_variable_io import _Wan2VariableIO
-    from src.gateway._wan2_variable_reporting import _Wan2VariableReporting
-    from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
+    from src.mist.resources.gateway._wan2_variable_device import _Wan2VariableDevice
+    from src.mist.resources.gateway._wan2_variable_io import _Wan2VariableIO
+    from src.mist.resources.gateway._wan2_variable_reporting import _Wan2VariableReporting
+    from src.mist.resources.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
 finally:
     if _saved_mistapi is not None:
         sys.modules["mistapi"] = _saved_mistapi
@@ -562,14 +562,14 @@ class TestPrintHeader:
     def test_dry_run_header(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = True
-        with caplog.at_level("INFO", logger="src.gateway._wan2_variable_io"):
+        with caplog.at_level("INFO", logger="src.mist.resources.gateway._wan2_variable_io"):
             migrator._print_header()
         assert "DRY-RUN MODE" in caplog.text
 
     def test_live_header(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = False
-        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_io"):
+        with caplog.at_level("WARNING", logger="src.mist.resources.gateway._wan2_variable_io"):
             migrator._print_header()
         assert "modifies gateway templates" in caplog.text
 
@@ -1244,7 +1244,7 @@ class TestPrintFinalGuidance:
         results = [{"status": "DRY-RUN"}]
         device_results = [{"status": "DRY-RUN"}]
         devices = [{"id": "d1"}]
-        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+        with caplog.at_level("WARNING", logger="src.mist.resources.gateway._wan2_variable_reporting"):
             migrator._print_final_guidance(results, device_results, devices)
         assert "DRY-RUN: 1 templates" in capsys.readouterr().out
         assert "DESTRUCTIVE operation complete" in caplog.text
@@ -1256,7 +1256,7 @@ class TestPrintFinalGuidance:
         results = [{"status": "SUCCESS"}, {"status": "FAILED"}]
         device_results = [{"status": "SUCCESS"}, {"status": "FAILED"}]
         devices = [{"id": "d1"}, {"id": "d2"}]
-        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+        with caplog.at_level("WARNING", logger="src.mist.resources.gateway._wan2_variable_reporting"):
             migrator._print_final_guidance(results, device_results, devices)
         assert "1 templates now use" in capsys.readouterr().out
         assert "Device override migration" in caplog.text
@@ -1266,7 +1266,7 @@ class TestPrintFinalGuidance:
         migrator._dry_run = False
         migrator._operation_mode = "apply"
         results = [{"status": "SUCCESS"}]
-        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+        with caplog.at_level("WARNING", logger="src.mist.resources.gateway._wan2_variable_reporting"):
             migrator._print_final_guidance(results, [], [])
         assert "1 templates now use" in capsys.readouterr().out
         assert "DESTRUCTIVE operation complete" in caplog.text
@@ -1331,7 +1331,7 @@ class TestPrintDeviceMigrationHeader:
         migrator._operation_mode = "apply"
         migrator._search_pattern = "ge-0/0/1"
         migrator._replacement_value = "{{wan2_interface}}"
-        with caplog.at_level("INFO", logger="src.gateway._wan2_variable_device"):
+        with caplog.at_level("INFO", logger="src.mist.resources.gateway._wan2_variable_device"):
             migrator._print_device_migration_header()
         assert "Preserving static IP" in caplog.text
 
@@ -1340,7 +1340,7 @@ class TestPrintDeviceMigrationHeader:
         migrator._operation_mode = "revert"
         migrator._search_pattern = "{{wan2_interface}}"
         migrator._replacement_value = "ge-0/0/1"
-        with caplog.at_level("INFO", logger="src.gateway._wan2_variable_device"):
+        with caplog.at_level("INFO", logger="src.mist.resources.gateway._wan2_variable_device"):
             migrator._print_device_migration_header()
         assert "REVERT" in caplog.text
 
@@ -1404,13 +1404,13 @@ class TestLogOperationSummary:
     def test_without_devices(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._operation_mode = "apply"
-        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+        with caplog.at_level("WARNING", logger="src.mist.resources.gateway._wan2_variable_reporting"):
             migrator._log_operation_summary(5, 1, [], [])
         assert "5 templates updated, 1 failed" in caplog.text
 
     def test_with_devices(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._operation_mode = "apply"
-        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+        with caplog.at_level("WARNING", logger="src.mist.resources.gateway._wan2_variable_reporting"):
             migrator._log_operation_summary(5, 1, [{"status": "SUCCESS"}], [{"id": "d1"}])
         assert "Device override migration" in caplog.text

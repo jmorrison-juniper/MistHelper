@@ -12,7 +12,7 @@ stand-in.
 
 ## How the audit runs
 
-`src/upgrade_portal/app/seam_shapes.py` holds the record. Every seam reader calls
+`src/interfaces/portals/upgrade_portal/app/seam_shapes.py` holds the record. Every seam reader calls
 `check_stand_in` the moment it reads an injected stand-in. The function compares
 the stand-in against the recorded call and reports a difference at once.
 

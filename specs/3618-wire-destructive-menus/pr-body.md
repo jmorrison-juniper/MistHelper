@@ -58,7 +58,7 @@ The repository owner reviewed each destructive module in those pull requests.
 ## Local Verification
 - `py_compile` passed for each edited Python file.
 - `ruff check .` passed.
-- `black --check MistHelper.py src/utils/operation_registry.py src/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/unit/test_menu_entry_metadata.py tests/guardrails/test_menu_number_uniqueness.py` passed.
+- `black --check MistHelper.py src/foundation/support/utils/operation_registry.py src/foundation/support/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/unit/test_menu_entry_metadata.py tests/guardrails/test_menu_number_uniqueness.py` passed.
 - `mypy src/ MistHelper.py wsgi.py --config-file pyproject.toml` passed.
 - Focused menu guardrails passed: `tests/unit/test_menu_entry_metadata.py`, `tests/guardrails/test_destructive_menu_docs.py`, `tests/guardrails/test_menu_number_uniqueness.py`, and `tests/guardrails/test_portal_operation_coverage.py`.
 - Required broad pytest command reached `test_guard_proof_audit.py` and timed out in the pre-existing analyzer-generation path under `--timeout=120`.

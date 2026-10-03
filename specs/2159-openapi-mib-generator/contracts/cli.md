@@ -5,7 +5,7 @@ The generator offers one Python class and three command line actions. It offers 
 ## 1. The Python interface (FR-038)
 
 ```python
-from src.mib_generator.runner import MibGeneratorRunner
+from src.operations.hardware.mib_generator.runner import MibGeneratorRunner
 
 runner = MibGeneratorRunner(
     openapi_path=Path("documentation/mist-api-openapi31json.json"),
@@ -57,7 +57,7 @@ Menu entry `243`, in the same dict that holds `239` and `241`:
 ),
 ```
 
-The registry row in `src/utils/operation_registry.py`:
+The registry row in `src/foundation/support/utils/operation_registry.py`:
 
 ```python
 "243": {"category": "safe"},

@@ -1,4 +1,4 @@
-"""Wave 6 P2 coverage for ``src.gateway.overrides.override_report_writer.OverrideReportWriter``.
+"""Wave 6 P2 coverage for ``src.mist.resources.gateway.overrides.override_report_writer.OverrideReportWriter``.
 
 Covers ``write_empty``, ``write_full``, ``_log_summary``, ``_print_summary``,
 and ``_print_summary_lines``. All ``_deps`` module-level slots are patched
@@ -16,8 +16,8 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks.
 
 import pytest  # WHY: caplog fixture for legacy operator log verification.
 
-from src.gateway.overrides import _deps  # WHY: patch module-level DI slots directly.
-from src.gateway.overrides.override_report_writer import (  # WHY: SUT direct import.
+from src.mist.resources.gateway.overrides import _deps  # WHY: patch module-level DI slots directly.
+from src.mist.resources.gateway.overrides.override_report_writer import (  # WHY: SUT direct import.
     _EMPTY_FIELDNAMES,
     OUTPUT_FILENAME,
     OverrideReportWriter,

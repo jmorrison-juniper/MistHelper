@@ -65,14 +65,14 @@ specs/2614-false-failure/
 ### Source Code
 
 ```text
-src/upgrade_portal/api/run_controls/
+src/interfaces/portals/upgrade_portal/api/run_controls/
 ├── routes.py
 └── services/reconciliation.py
 
-src/upgrade_portal/app/routes/
+src/interfaces/portals/upgrade_portal/app/routes/
 └── upgrade.py
 
-src/upgrade_portal/persistence/actions/
+src/interfaces/portals/upgrade_portal/persistence/actions/
 └── models.py
 
 tests/unit/upgrade_portal/test_runs/
@@ -97,10 +97,10 @@ because that package already owns durable run repair.
 
 ## Files Changed
 
-- `src/upgrade_portal/api/run_controls/services/reconciliation.py`
-- `src/upgrade_portal/api/run_controls/routes.py`
-- `src/upgrade_portal/app/routes/upgrade.py`
-- `src/upgrade_portal/persistence/actions/models.py`
+- `src/interfaces/portals/upgrade_portal/api/run_controls/services/reconciliation.py`
+- `src/interfaces/portals/upgrade_portal/api/run_controls/routes.py`
+- `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`
+- `src/interfaces/portals/upgrade_portal/persistence/actions/models.py`
 - `tests/unit/upgrade_portal/test_runs/test_reconciliation.py`
 - `changelog.d/issue-2614-false-failure.md`
 

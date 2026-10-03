@@ -73,15 +73,15 @@ Per-rule linter check across `src/` (adjust `--ignore` to isolate a rule group):
 
 - [X] T012 Produce the Phase 2 target list. Run the linter across `src/` and (delivered: specs/1030-ste-src-cleanup/spec.md)
   filter to STE-S8-SEMICOLON. Group by module cluster.
-- [X] T013 [P] Cluster `firmware`. Review each semicolon. Split prose into two (delivered: src/firmware)
+- [X] T013 [P] Cluster `firmware`. Review each semicolon. Split prose into two (delivered: src/operations/execution/firmware)
   sentences. Keep shell and Python examples unchanged.
-- [X] T014 [P] Cluster `org`. Same review and fix pattern. (delivered: src/org)
-- [X] T015 [P] Cluster `maps`. Same review and fix pattern. (delivered: src/maps)
-- [X] T016 [P] Cluster `site` (includes `address_audit`). Same pattern. (delivered: src/site)
-- [X] T017 [P] Cluster `analytics`. Same pattern. (delivered: src/analytics)
-- [X] T018 [P] Cluster `export`. Same pattern. (delivered: src/export)
-- [X] T019 [P] Cluster `refactors`. Same pattern. (delivered: src/refactors)
-- [X] T020 [P] Remaining clusters (`utils`, `device`, `capture`, `network`, (delivered: src/utils)
+- [X] T014 [P] Cluster `org`. Same review and fix pattern. (delivered: src/mist/resources/org)
+- [X] T015 [P] Cluster `maps`. Same review and fix pattern. (delivered: src/interfaces/visualization/maps)
+- [X] T016 [P] Cluster `site` (includes `address_audit`). Same pattern. (delivered: src/mist/resources/site)
+- [X] T017 [P] Cluster `analytics`. Same pattern. (delivered: src/mist/intelligence/analytics)
+- [X] T018 [P] Cluster `export`. Same pattern. (delivered: src/operations/exporting/export)
+- [X] T019 [P] Cluster `refactors`. Same pattern. (delivered: src/foundation/support/refactors)
+- [X] T020 [P] Remaining clusters (`utils`, `device`, `capture`, `network`, (delivered: src/foundation/support/utils)
   `websocket`, `troubleshooting`, `gateway`, `inventory`, and others). Same
   pattern.
 - [X] T021 Re-run the linter with the semicolon rule on the changed files. (delivered: specs/1030-ste-src-cleanup/spec.md)
@@ -103,16 +103,16 @@ Keep the meaning.
 
 - [X] T024 Produce the Phase 3 target list. Run the linter across `src/` and (delivered: specs/1030-ste-src-cleanup/spec.md)
   filter to STE-S3-PASSIVE, STE-S4-LEN, and STE-S3-TENSE. Group by cluster.
-- [X] T025 [P] Cluster `org` (worst: org_synthetic_probes_manager.py). Rewrite (delivered: src/org)
+- [X] T025 [P] Cluster `org` (worst: org_synthetic_probes_manager.py). Rewrite (delivered: src/mist/resources/org)
   passive to active when the actor is known. Split long sentences. Use present
   tense for instructions.
-- [X] T026 [P] Cluster `firmware` (org_ap_upgrader.py, firmware_manager.py, (delivered: src/firmware)
+- [X] T026 [P] Cluster `firmware` (org_ap_upgrader.py, firmware_manager.py, (delivered: src/operations/execution/firmware)
   bulk_ap_upgrader.py). Same fix pattern.
-- [X] T027 [P] Cluster `maps` (maps_manager.py). Same fix pattern. (delivered: src/maps)
-- [X] T028 [P] Cluster `site` and `address_audit`. Same fix pattern. (delivered: src/site)
-- [X] T029 [P] Cluster `utils` (zscaler_catalogue.py, zscaler_probe.py, (delivered: src/utils)
+- [X] T027 [P] Cluster `maps` (maps_manager.py). Same fix pattern. (delivered: src/interfaces/visualization/maps)
+- [X] T028 [P] Cluster `site` and `address_audit`. Same fix pattern. (delivered: src/mist/resources/site)
+- [X] T029 [P] Cluster `utils` (zscaler_catalogue.py, zscaler_probe.py, (delivered: src/foundation/support/utils)
   address_utils.py). Same fix pattern.
-- [X] T030 [P] Cluster `export`, `analytics`, `refactors`. Same fix pattern. (delivered: src/export)
+- [X] T030 [P] Cluster `export`, `analytics`, `refactors`. Same fix pattern. (delivered: src/operations/exporting/export)
 - [X] T031 [P] Remaining clusters. Same fix pattern. (delivered: src)
 - [X] T032 Re-run the linter with the three judgment rules on each changed (delivered: specs/1030-ste-src-cleanup/spec.md)
   module. Confirm the counts drop and no meaning is lost.

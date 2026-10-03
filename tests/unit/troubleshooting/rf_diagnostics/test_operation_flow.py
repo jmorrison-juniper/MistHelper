@@ -7,12 +7,23 @@ from dataclasses import dataclass  # WHY: fake responses mimic SDK responses.
 from datetime import UTC, datetime  # WHY: fixed clock keeps file names deterministic.
 from typing import Any  # WHY: fake calls carry dynamic payloads.
 
-import src.troubleshooting.rf_diagnostics.operation as operation_module  # WHY: monkeypatch operation seams.
-from src.troubleshooting.rf_diagnostics.file_naming import RfDiagnosticFileNamer  # WHY: inject tmp download path.
-from src.troubleshooting.rf_diagnostics.models import STATUS_CANCELLED, STATUS_SUCCESS  # WHY: assert final states.
-from src.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # WHY: test target.
-from src.troubleshooting.rf_diagnostics.recording import RfDiagnosticRecordingRunner  # WHY: use real runner.
-from src.troubleshooting.rf_diagnostics.spectrum import SpectrumAnalysisRunner  # WHY: use real runner.
+from src.mist.intelligence.troubleshooting.rf_diagnostics import (
+    operation as operation_module,  # Patch the moved operation seams.
+)
+from src.mist.intelligence.troubleshooting.rf_diagnostics.file_naming import (
+    RfDiagnosticFileNamer,
+)  # WHY: inject tmp download path.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.models import (
+    STATUS_CANCELLED,
+    STATUS_SUCCESS,
+)  # WHY: assert final states.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # WHY: test target.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.recording import (
+    RfDiagnosticRecordingRunner,
+)  # WHY: use real runner.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.spectrum import (
+    SpectrumAnalysisRunner,
+)  # WHY: use real runner.
 
 
 @dataclass

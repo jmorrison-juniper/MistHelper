@@ -13,7 +13,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-ASSET_ROOT = Path(__file__).resolve().parents[3] / "src" / "upgrade_portal" / "app" / "assets"  # The portal assets.
+ASSET_ROOT = (
+    Path(__file__).resolve().parents[3] / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets"
+)  # The portal assets.
 TEMPLATE_ROOT = ASSET_ROOT / "templates"  # Every page template and partial template of the portal.
 SCRIPT_ROOT = ASSET_ROOT / "static" / "js"  # The portal script. The vendor folder stays out of scope.
 

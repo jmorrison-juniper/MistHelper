@@ -2,7 +2,7 @@
 
 Verifies that Wave 1 exclusion constraints were not violated:
 1. PacketCaptureManager class was not split out of MistHelper.py.
-2. No new packet-capture decomposition source files were added to src/capture/.
+2. No new packet-capture decomposition source files were added to src/operations/execution/capture/.
 3. Menu action key set has not shrunk from the Wave 1 baseline count.
 4. All destructive-boundary menu keys (90-100) remain present.
 5. Wave-1-touched in-scope classes remain accessible in MistHelper.
@@ -17,7 +17,7 @@ import MistHelper  # Main module under test — must be importable from repo roo
 # Any count below this means menu keys were silently removed
 _MENU_ACTIONS_BASELINE_COUNT = 178
 
-# Expected filenames in src/capture/ at current baseline — no unauthorised new files should appear
+# Expected filenames in src/operations/execution/capture/ at current baseline — no unauthorised new files should appear
 # Wave 1 exclusion: no packet-capture architecture decomposition beyond approved post-Wave-1 additions
 _CAPTURE_MODULE_BASELINE = {
     "__init__.py",
@@ -35,8 +35,8 @@ _CAPTURE_MODULE_BASELINE = {
     "site_pcap_wait_download_workflow.py",  # Approved post-Wave-1: site pcap download poller
 }
 
-# Absolute path to src/capture/ for packet-capture decomposition scan
-_SRC_CAPTURE_PATH = Path(__file__).resolve().parents[2] / "src" / "capture"
+# Absolute path to src/operations/execution/capture/ for packet-capture decomposition scan
+_SRC_CAPTURE_PATH = Path(__file__).resolve().parents[2] / "src" / "operations" / "execution" / "capture"
 
 # Wave-1-touched classes that must remain accessible in MistHelper
 # These were the in-scope classes modified during Wave 1 safe_input and logging work
@@ -79,7 +79,7 @@ class TestWave1ScopeBoundaries:
         )
 
     def test_no_new_packet_capture_files_in_src_capture(self) -> None:
-        """src/capture/ must contain only the baseline files — no new Wave-1 decomposition."""
+        """src/operations/execution/capture/ must contain only the baseline files — no new Wave-1 decomposition."""
         if not _SRC_CAPTURE_PATH.exists():  # If capture dir is absent, no decomposition possible
             return
         actual_files = {  # Collect all filenames, ignoring compiled bytecode directories
@@ -89,7 +89,7 @@ class TestWave1ScopeBoundaries:
         assert (
             new_files == set()
         ), (  # Any new files indicate unauthorized packet-capture decomposition
-            f"New packet-capture decomposition files found in src/capture/: {new_files}"
+            f"New packet-capture decomposition files found in src/operations/execution/capture/: {new_files}"
         )
 
     def test_wave1_in_scope_classes_still_accessible(self) -> None:

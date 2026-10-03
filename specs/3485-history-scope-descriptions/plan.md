@@ -97,9 +97,9 @@ specs/3485-history-scope-descriptions/
 ### Source Code (repository root)
 
 ```text
-src/upgrade_portal/app/routes/review.py
-src/upgrade_portal/app/history_descriptions.py
-src/upgrade_portal/app/assets/templates/review/history.html
+src/interfaces/portals/upgrade_portal/app/routes/review.py
+src/interfaces/portals/upgrade_portal/app/history_descriptions.py
+src/interfaces/portals/upgrade_portal/app/assets/templates/review/history.html
 tests/unit/upgrade_portal/test_history_card_scope.py
 tests/contract/upgrade_portal/test_history_card_scope_routes.py
 tests/e2e/upgrade_portal/test_history_card_scope_journey.py

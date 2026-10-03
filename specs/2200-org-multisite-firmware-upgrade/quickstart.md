@@ -17,8 +17,8 @@ Read these files before implementation:
 - `data-model.md`
 - `contracts/api-contract.md`
 - `contracts/ui-contract.md`
-- `src/firmware/upgrade_service.py`
-- `src/firmware/org_upgrade_service.py`
+- `src/operations/execution/firmware/upgrade_service.py`
+- `src/operations/execution/firmware/org_upgrade_service.py`
 
 ## Step 1: Keep the API Boundary
 
@@ -39,7 +39,7 @@ Reject Mist Edge. Classify every gateway with the existing classifier.
 Create one organization AP child for all selected AP targets.
 
 Create site children for switches and Junos gateways through
-`src/firmware/upgrade_service.py`.
+`src/operations/execution/firmware/upgrade_service.py`.
 
 Keep the existing organization SSR route when the planner classifies an SSR
 gateway.

@@ -4,7 +4,7 @@
 
 - Use the worktree for issue `#3559`.
 - Use the worktree Python at `.venv\Scripts\python.exe`.
-- Keep source and test edits for implementation under `src/reports/ap_scorecard/` and `tests/unit/reports/ap_scorecard/`.
+- Keep source and test edits for implementation under `src/mist/intelligence/reports/ap_scorecard/` and `tests/unit/reports/ap_scorecard/`.
 - Keep shared wiring changes deferred to [wiring.md](wiring.md).
 
 ## Validate the design artifacts
@@ -77,10 +77,10 @@ Expected result:
 Run these commands before the implementation commit:
 
 ```powershell
-.venv\Scripts\python.exe -m py_compile src\reports\ap_scorecard\__init__.py src\reports\ap_scorecard\client.py src\reports\ap_scorecard\model.py src\reports\ap_scorecard\operation.py
-.venv\Scripts\python.exe -m ruff check src\reports\ap_scorecard tests\unit\reports\ap_scorecard
-.venv\Scripts\python.exe -m black --check src\reports\ap_scorecard tests\unit\reports\ap_scorecard
-.venv\Scripts\python.exe -m mypy src\reports\ap_scorecard --config-file pyproject.toml
-.venv\Scripts\python.exe -m pydocstyle src\reports\ap_scorecard
+.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\ap_scorecard\__init__.py src\mist\intelligence\reports\ap_scorecard\client.py src\mist\intelligence\reports\ap_scorecard\model.py src\mist\intelligence\reports\ap_scorecard\operation.py
+.venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard
+.venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard
+.venv\Scripts\python.exe -m mypy src\mist\intelligence\reports\ap_scorecard --config-file pyproject.toml
+.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\reports\ap_scorecard
 .venv\Scripts\python.exe -m pytest tests\unit\reports\ap_scorecard -q --timeout=120
 ```

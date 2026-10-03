@@ -6,8 +6,10 @@ from concurrent.futures import ThreadPoolExecutor  # Wait tests run one read in 
 
 import pytest  # The tests assert contract refusals.
 
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify exact refusal codes.
-from src.websocket_streams.live.terminal.byte_history import ByteHistory  # The tests cover this class.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Tests verify exact refusal codes.
+from src.mist.realtime.websocket_streams.live.terminal.byte_history import ByteHistory  # The tests cover this class.
 
 
 class TestByteHistory:

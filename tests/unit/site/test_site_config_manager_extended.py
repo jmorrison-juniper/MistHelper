@@ -8,14 +8,16 @@ from unittest.mock import MagicMock  # WHY: mock spec'd API surfaces and callabl
 
 import pytest  # WHY: monkeypatch + fixture wiring for isolated per-test state.
 
-from src.site import site_config_manager as module  # WHY: touch module-level _DEPS state directly.
-from src.site.site_config_manager import (  # WHY: import public surface + dataclasses.
+from src.foundation.support.utils.rate_limiting import (
+    AdaptivePacer,
+)  # WHY: build an inert pacer for the write-loop helpers.
+from src.mist.resources.site import site_config_manager as module  # WHY: touch module-level _DEPS state directly.
+from src.mist.resources.site.site_config_manager import (  # WHY: import public surface + dataclasses.
     RfTemplateReport,
     SiteConfigDependencies,
     SiteConfigManager,
     configure_site_config_manager_dependencies,
 )
-from src.utils.rate_limiting import AdaptivePacer  # WHY: build an inert pacer for the write-loop helpers.
 
 
 def _idle_pacer() -> AdaptivePacer:  # WHY: a disabled pacer keeps every unit test free of a real sleep.

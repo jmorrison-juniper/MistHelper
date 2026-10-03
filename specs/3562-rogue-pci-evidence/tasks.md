@@ -6,15 +6,15 @@
 
 ## Phase 1: Setup
 
-- [x] T001 Create package directory and `__init__.py` in `src/reports/rogue_pci_evidence/__init__.py`.
+- [x] T001 Create package directory and `__init__.py` in `src/mist/intelligence/reports/rogue_pci_evidence/__init__.py`.
 - [x] T002 Create test directory and `__init__.py` in `tests/unit/reports/rogue_pci_evidence/__init__.py`.
 - [x] T003 Create release note fragment in `changelog.d/issue-3562-rogue-pci-evidence.md`.
 - [x] T004 Update wiring manifest in `specs/3562-rogue-pci-evidence/wiring.md` with final handler, menu, primary key, and deferred registration details.
 
 ## Phase 2: Foundational
 
-- [x] T005 Implement dataclasses and constants in `src/reports/rogue_pci_evidence/model.py`.
-- [x] T006 Implement CSV row builders and summary builder in `src/reports/rogue_pci_evidence/model.py`.
+- [x] T005 Implement dataclasses and constants in `src/mist/intelligence/reports/rogue_pci_evidence/model.py`.
+- [x] T006 Implement CSV row builders and summary builder in `src/mist/intelligence/reports/rogue_pci_evidence/model.py`.
 - [x] T007 Implement no-network model fixtures in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
 - [x] T008 Implement client test doubles in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_client.py`.
 
@@ -25,9 +25,9 @@
 **Independent Test**: Run the operation with fake client data and fake exporters. Confirm that all three outputs are written with no prompt.
 
 - [x] T009 [P] [US1] Add operation tests for the three evidence outputs in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_operation.py`.
-- [x] T010 [US1] Implement the Mist API client shell in `src/reports/rogue_pci_evidence/client.py`.
-- [x] T011 [US1] Implement `RoguePciEvidencePack.run()` orchestration in `src/reports/rogue_pci_evidence/operation.py`.
-- [x] T012 [US1] Implement Markdown summary writing in `src/reports/rogue_pci_evidence/operation.py`.
+- [x] T010 [US1] Implement the Mist API client shell in `src/mist/intelligence/reports/rogue_pci_evidence/client.py`.
+- [x] T011 [US1] Implement `RoguePciEvidencePack.run()` orchestration in `src/mist/intelligence/reports/rogue_pci_evidence/operation.py`.
+- [x] T012 [US1] Implement Markdown summary writing in `src/mist/intelligence/reports/rogue_pci_evidence/operation.py`.
 
 ## Phase 4: User Story 2 - Classify rogue detections (P2)
 
@@ -36,8 +36,8 @@
 **Independent Test**: Use fixture rows where one SSID equals an org WLAN SSID and the BSSID is not an org AP BSSID. Confirm `honeypot`.
 
 - [x] T013 [P] [US2] Add honeypot, rogue, and neighbor classification tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
-- [x] T014 [US2] Implement detection normalization and classification in `src/reports/rogue_pci_evidence/model.py`.
-- [x] T015 [US2] Implement rogue AP and org event row aggregation in `src/reports/rogue_pci_evidence/client.py`.
+- [x] T014 [US2] Implement detection normalization and classification in `src/mist/intelligence/reports/rogue_pci_evidence/model.py`.
+- [x] T015 [US2] Implement rogue AP and org event row aggregation in `src/mist/intelligence/reports/rogue_pci_evidence/client.py`.
 
 ## Phase 5: User Story 3 - Report site detection settings (P3)
 
@@ -46,21 +46,21 @@
 **Independent Test**: Use fixture settings with one `rogue.enabled` false site. Confirm CSV and summary counts.
 
 - [x] T016 [P] [US3] Add site settings and detection-off summary tests in `tests/unit/reports/rogue_pci_evidence/test_rogue_pci_evidence_model.py`.
-- [x] T017 [US3] Implement paced `getSiteSetting` reads and request cost evidence in `src/reports/rogue_pci_evidence/client.py`.
-- [x] T018 [US3] Implement site settings row mapping in `src/reports/rogue_pci_evidence/model.py`.
+- [x] T017 [US3] Implement paced `getSiteSetting` reads and request cost evidence in `src/mist/intelligence/reports/rogue_pci_evidence/client.py`.
+- [x] T018 [US3] Implement site settings row mapping in `src/mist/intelligence/reports/rogue_pci_evidence/model.py`.
 
 ## Phase 6: Polish and Cross-Cutting
 
 - [x] T019 Run `py_compile`, `ruff`, `black --check`, `mypy`, `pydocstyle`, `pytest`, `radon` with `complexity-gate`, and `test-quality-analyzer` on the new package and tests.
-- [x] T020 Run `vulture` and `interrogate` on `src/reports/rogue_pci_evidence`.
-- [x] T021 Repair any `speckit.analyze` findings in `specs/3562-rogue-pci-evidence/`, `src/reports/rogue_pci_evidence/`, and `tests/unit/reports/rogue_pci_evidence/`.
+- [x] T020 Run `vulture` and `interrogate` on `src/mist/intelligence/reports/rogue_pci_evidence`.
+- [x] T021 Repair any `speckit.analyze` findings in `specs/3562-rogue-pci-evidence/`, `src/mist/intelligence/reports/rogue_pci_evidence/`, and `tests/unit/reports/rogue_pci_evidence/`.
 - [x] T022 Create the draft pull request body in `specs/3562-rogue-pci-evidence/pr-body.md`.
 
 ## Deferred Integration Tasks
 
 - [ ] D001 Register menu 282 in `MistHelper.py` during the integration pull request only.
-- [ ] D002 Register menu 282 in `src/utils/operation_registry.py` during the integration pull request only.
-- [ ] D003 Add primary key strategies to `src/refactors/endpoint_primary_key_strategies.py` during the integration pull request only.
+- [ ] D002 Register menu 282 in `src/foundation/support/utils/operation_registry.py` during the integration pull request only.
+- [ ] D003 Add primary key strategies to `src/foundation/support/refactors/endpoint_primary_key_strategies.py` during the integration pull request only.
 - [ ] D004 Update generated menu references during the integration pull request only.
 - [ ] D005 Update README operation counts and menu documentation during the integration pull request only.
 

@@ -1,4 +1,4 @@
-"""Wave 6 P2 coverage for ``src.gateway.overrides.override_classifier.OverrideClassifier``.
+"""Wave 6 P2 coverage for ``src.mist.resources.gateway.overrides.override_classifier.OverrideClassifier``.
 
 The classifier is a pure module with zero runtime dependencies -- no mocks
 required. Tests import the real class and exercise every branch of the
@@ -11,7 +11,7 @@ from __future__ import annotations  # WHY: PEP 604 unions in test annotations.
 
 from typing import Any  # Broad typing for CSV row / device_info payloads.
 
-from src.gateway.overrides.override_classifier import OverrideClassifier  # Real class under test.
+from src.mist.resources.gateway.overrides.override_classifier import OverrideClassifier  # Real class under test.
 
 
 class TestClassify:

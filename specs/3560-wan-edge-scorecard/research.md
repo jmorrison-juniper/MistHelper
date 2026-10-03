@@ -8,7 +8,7 @@
 
 ## Decision: Reuse the menu 18 gateway statistics path
 
-**Rationale**: Before coding, the implementation must read `src/export/org_device_stats_exporter.py` and the menu `18` gateway stats path named `_dispatch_gateway_stats_device_stats_with_freshness`. That path is the required source for freshness behavior and the shared gateway statistics fetch.
+**Rationale**: Before coding, the implementation must read `src/operations/exporting/export/org_device_stats_exporter.py` and the menu `18` gateway stats path named `_dispatch_gateway_stats_device_stats_with_freshness`. That path is the required source for freshness behavior and the shared gateway statistics fetch.
 
 **Alternatives considered**: Menu `279` could call Mist directly. That was rejected because the fleet contract forbids a second pagination loop.
 

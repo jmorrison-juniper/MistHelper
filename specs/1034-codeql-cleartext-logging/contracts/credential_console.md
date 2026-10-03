@@ -2,7 +2,7 @@
 
 **Feature**: 1034-codeql-cleartext-logging
 
-**Owner module**: `src/utils/console.py`
+**Owner module**: `src/foundation/support/utils/console.py`
 
 **Date**: 2026-08-05
 
@@ -18,7 +18,7 @@ precedent of `specs/1031-warning-echo-refactor/contracts/echo_helper.md`.
 that secret from every other destination. The class exists because a redirected stream, a
 pipe, and a log file all keep a permanent copy of a credential.
 
-The class lives beside `echo()` in `src/utils/console.py`. The module already owns console
+The class lives beside `echo()` in `src/foundation/support/utils/console.py`. The module already owns console
 output, so the new class needs no new module.
 
 ---
@@ -120,7 +120,7 @@ The `outcome` value is `revealed` or `withheld`.
 
 ## C-7: The caller keeps the comment honest
 
-The old comment in `src/device/_utility_commands_action.py` claimed that the tool never logs
+The old comment in `src/mist/resources/device/_utility_commands_action.py` claimed that the tool never logs
 and never saves the password. Requirement FR-013 forbids a comment that claims a behavior
 that the code does not provide.
 
@@ -133,12 +133,12 @@ and names the recording limit.
 
 The test file is `tests/unit/test_credential_console_contract.py`.
 
-The test reads the source of `src/utils/console.py` and the source of
-`src/device/_utility_commands_action.py`. The test fails on any of the conditions below.
+The test reads the source of `src/foundation/support/utils/console.py` and the source of
+`src/mist/resources/device/_utility_commands_action.py`. The test fails on any of the conditions below.
 
 - The credential reveal path contains a `print(` call.
 - The credential reveal path contains a `logging.` call that takes the secret variable.
-- The module `src/device/_utility_commands_action.py` passes the credential to any callable
+- The module `src/mist/resources/device/_utility_commands_action.py` passes the credential to any callable
   other than `CredentialConsole.reveal`.
 
 The test is the durable marker that FR-014 requires. A comment is advice. A test is

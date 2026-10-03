@@ -163,12 +163,12 @@ The command below shows the minimum source and new-test set:
 
 ```bash
 rtk proxy .venv/bin/python -m py_compile MistHelper.py \
-  src/upgrade_portal/app/routes/review.py \
-  src/upgrade_portal/compare/lock_audit.py \
+  src/interfaces/portals/upgrade_portal/app/routes/review.py \
+  src/interfaces/portals/upgrade_portal/compare/lock_audit.py \
   tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py \
   tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py
 rtk proxy .venv/bin/python -m ruff check MistHelper.py \
-  src/upgrade_portal/app/routes/review.py src/upgrade_portal/compare/lock_audit.py \
+  src/interfaces/portals/upgrade_portal/app/routes/review.py src/interfaces/portals/upgrade_portal/compare/lock_audit.py \
   tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py \
   tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py \
   tests/contract/upgrade_portal/test_history_routes.py \
@@ -178,7 +178,7 @@ rtk proxy .venv/bin/python -m ruff check MistHelper.py \
   tests/contract/upgrade_portal/test_upgrade_routes/test_stale_views.py \
   tests/unit/upgrade_portal/test_review_store_seams.py
 rtk proxy .venv/bin/python -m black --check --diff MistHelper.py \
-  src/upgrade_portal/app/routes/review.py src/upgrade_portal/compare/lock_audit.py \
+  src/interfaces/portals/upgrade_portal/app/routes/review.py src/interfaces/portals/upgrade_portal/compare/lock_audit.py \
   tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py \
   tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py \
   tests/contract/upgrade_portal/test_history_routes.py \
@@ -193,11 +193,11 @@ Read the full CI mypy scope from the workflow.
 Local strict typing and security checks cover the two changed source files:
 
 ```bash
-rtk proxy .venv/bin/python -m mypy src/upgrade_portal/app/routes/review.py \
-  src/upgrade_portal/compare/lock_audit.py --config-file pyproject.toml
+rtk proxy .venv/bin/python -m mypy src/interfaces/portals/upgrade_portal/app/routes/review.py \
+  src/interfaces/portals/upgrade_portal/compare/lock_audit.py --config-file pyproject.toml
 rtk proxy .venv/bin/bandit-exclude-check
 rtk proxy .venv/bin/python -m bandit -c pyproject.toml \
-  src/upgrade_portal/app/routes/review.py src/upgrade_portal/compare/lock_audit.py
+  src/interfaces/portals/upgrade_portal/app/routes/review.py src/interfaces/portals/upgrade_portal/compare/lock_audit.py
 ```
 
 Expected result: every applicable check passes.
@@ -228,8 +228,8 @@ rtk proxy .venv/bin/python -m pytest --timeout=120 \
   tests/contract/upgrade_portal/test_comparison_errors.py \
   tests/contract/upgrade_portal/test_comparison_export.py \
   tests/contract/upgrade_portal/test_compare_picker_moment.py \
-  --cov=src.upgrade_portal.app.routes.review \
-  --cov=src.upgrade_portal.compare.lock_audit \
+  --cov=src.interfaces.portals.upgrade_portal.app.routes.review \
+  --cov=src.interfaces.portals.upgrade_portal.compare.lock_audit \
   --cov-report=term-missing --cov-fail-under=80
 ```
 
@@ -238,7 +238,7 @@ Check both module percentages:
 
 ```bash
 rtk proxy .venv/bin/python -m coverage json -o "$VALIDATION_DIR/coverage.json"
-rtk proxy .venv/bin/python -c 'import json, os; from pathlib import Path; report=json.loads((Path(os.environ["VALIDATION_DIR"])/"coverage.json").read_text()); paths=("src/upgrade_portal/app/routes/review.py", "src/upgrade_portal/compare/lock_audit.py"); scores={path: report["files"][path]["summary"]["percent_covered"] for path in paths}; print("Checked", len(scores), "modules:", scores); assert all(score >= 80 for score in scores.values()), "Each changed module must reach 80%"'
+rtk proxy .venv/bin/python -c 'import json, os; from pathlib import Path; report=json.loads((Path(os.environ["VALIDATION_DIR"])/"coverage.json").read_text()); paths=("src/interfaces/portals/upgrade_portal/app/routes/review.py", "src/interfaces/portals/upgrade_portal/compare/lock_audit.py"); scores={path: report["files"][path]["summary"]["percent_covered"] for path in paths}; print("Checked", len(scores), "modules:", scores); assert all(score >= 80 for score in scores.values()), "Each changed module must reach 80%"'
 ```
 
 If either module falls below the floor, add relevant isolated tests.

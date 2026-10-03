@@ -1,6 +1,6 @@
 """Tests for quickstart test-mode behavior."""
 
-from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist
+from src.mist.intelligence.reports.org_security_posture.runner import OrgSecurityPostureChecklist
 
 
 def test_test_mode_uses_fixture_data_without_api_context() -> None:

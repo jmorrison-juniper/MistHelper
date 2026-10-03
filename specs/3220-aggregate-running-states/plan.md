@@ -5,10 +5,10 @@
 ## Technical Context
 
 - Python 3.13, Flask, no new dependency.
-- Files: `src/firmware/aggregate_upgrade_service.py`,
-  `src/upgrade_portal/app/routes/org_upgrade.py`,
-  `src/upgrade_portal/app/assets/templates/upgrade/org_progress.html`,
-  `src/upgrade_portal/app/assets/static/js/portal.js`.
+- Files: `src/operations/execution/firmware/aggregate_upgrade_service.py`,
+  `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`,
+  `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html`,
+  `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`.
 - Evidence: the Mist OpenAPI enums `upgrade_org_devices_upgrade_info.status`,
   `response_site_device_upgrade.status`, and `response_device_upgrade.status`
   in `documentation/mist-api-openapi3json.json`.

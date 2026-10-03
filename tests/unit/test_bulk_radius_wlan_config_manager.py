@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import MistHelper  # Preloaded by conftest.py — provides live class references.
-from src.site import bulk_radius_wlan_config_manager as brwcm
+from src.mist.resources.site import bulk_radius_wlan_config_manager as brwcm
 
 
 def _make_manager() -> brwcm.BulkRadiusWLANConfigManager:

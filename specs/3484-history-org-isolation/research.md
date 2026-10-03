@@ -37,7 +37,7 @@ History must not use it.
 - A new authorization rule can drift from the current identity policy.
   Reject this approach.
 
-**Evidence**: `src/upgrade_portal/app/routes/select.py:455-477` and `:565-600`.
+**Evidence**: `src/interfaces/portals/upgrade_portal/app/routes/select.py:455-477` and `:565-600`.
 
 ## R2: Preserve the current privilege-availability distinction
 
@@ -58,7 +58,7 @@ Stored history cannot authorize an organization.
 - Treating an empty set as unavailable permits excluded selections.
   Reject this approach.
 
-**Evidence**: `src/upgrade_portal/runtime/identity.py:913-1059`.
+**Evidence**: `src/interfaces/portals/upgrade_portal/runtime/identity.py:913-1059`.
 
 ## R3: Scope real adapters without expanding capture and run seams
 
@@ -86,9 +86,9 @@ Changing that seam would cause unnecessary caller and fixture migrations.
 
 **Evidence**:
 
-- `src/upgrade_portal/app/routes/review.py:369-415`, `:902-915`, and `:1180-1234`.
-- `src/upgrade_portal/app/seam_shapes.py:157-175`.
-- `src/upgrade_portal/capture/store.py:1925-2002`, `:2097-2136`, `:2162-2187`, and `:2222-2249`.
+- `src/interfaces/portals/upgrade_portal/app/routes/review.py:369-415`, `:902-915`, and `:1180-1234`.
+- `src/interfaces/portals/upgrade_portal/app/seam_shapes.py:157-175`.
+- `src/interfaces/portals/upgrade_portal/capture/store.py:1925-2002`, `:2097-2136`, `:2162-2187`, and `:2222-2249`.
 
 ## R4: Reuse existing operation scope and ownership rules
 
@@ -106,7 +106,7 @@ The route must add early refusal without changing that ownership rule.
 - Hiding all operations from other browser sessions changes existing history behavior.
   Reject that change.
 
-**Evidence**: `src/upgrade_portal/upgrade/org_history.py:64-145` and `src/upgrade_portal/capture/store.py:1897-1918`.
+**Evidence**: `src/interfaces/portals/upgrade_portal/upgrade/org_history.py:64-145` and `src/interfaces/portals/upgrade_portal/capture/store.py:1897-1918`.
 
 ## R5: Require organization scope on audit reads
 
@@ -130,7 +130,7 @@ No global default or compatibility path is necessary.
 - Filtering rendered audit rows is too late for inference and bounded limits.
   Reject this approach.
 
-**Evidence**: `src/upgrade_portal/app/routes/review.py:2070-2102` and `src/upgrade_portal/compare/lock_audit.py:161-252`.
+**Evidence**: `src/interfaces/portals/upgrade_portal/app/routes/review.py:2070-2102` and `src/interfaces/portals/upgrade_portal/compare/lock_audit.py:161-252`.
 
 ## R6: Filter before inference and retain complete matching context
 
@@ -164,7 +164,7 @@ A negative value retains the existing slice meaning.
 - Keeping the last raw lines before filtering can discard every matching result.
   Reject this approach.
 
-**Evidence**: `src/upgrade_portal/compare/lock_audit.py:88-128` and `:198-252`.
+**Evidence**: `src/interfaces/portals/upgrade_portal/compare/lock_audit.py:88-128` and `:198-252`.
 
 ## R7: Use direct contracts and real query paths
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.juniper_docs.classify.content_sampler import ContentSampler
+from src.mist.intelligence.juniper_docs.classify.content_sampler import ContentSampler
 from tests.unit.juniper_docs.conftest import FIXTURES
 
 
@@ -44,7 +44,7 @@ def test_sampler_returns_empty_when_the_library_is_absent(monkeypatch: pytest.Mo
         raise ImportError("pdfplumber is not installed")  # The absent-library signal.
 
     monkeypatch.setattr(
-        "src.juniper_docs.classify.content_sampler.importlib.import_module", _raise_import
+        "src.mist.intelligence.juniper_docs.classify.content_sampler.importlib.import_module", _raise_import
     )  # Force the import to fail.
     text = ContentSampler().sample(FIXTURES / "sample_uncategorized.pdf")  # Sample the PDF.
     assert text == ""  # A missing library yields an empty sample.

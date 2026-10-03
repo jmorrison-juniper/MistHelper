@@ -1,6 +1,6 @@
 # Contract: `echo()` Helper
 
-**Module**: `src/utils/console.py`
+**Module**: `src/foundation/support/utils/console.py`
 **Feature**: `1031-warning-echo-refactor`
 
 ## Signature
@@ -24,7 +24,7 @@ For every call `echo(msg, *args)`:
 - **Given** `echo("Menu")` is called.
 - **When** the call returns.
 - **Then** `sys.stdout` has received exactly `"Menu\n"`.
-- **And** exactly one log record has been emitted at level `INFO` on `logging.getLogger("src.utils.console")` (or the resolved `__name__`) with `record.msg == "Menu"` and `record.args in ((), None)`.
+- **And** exactly one log record has been emitted at level `INFO` on `logging.getLogger("src.foundation.support.utils.console")` (or the resolved `__name__`) with `record.msg == "Menu"` and `record.args in ((), None)`.
 
 ### C-2: format string with args
 
@@ -46,20 +46,20 @@ For every call `echo(msg, *args)`:
 
 - **Given** any sequence of `echo(...)` calls is made.
 - **When** all calls return.
-- **Then** for every log record emitted by `src.utils.console`, `record.levelno == logging.INFO`. No record is at `WARNING`, `ERROR`, or `CRITICAL`.
+- **Then** for every log record emitted by `src.foundation.support.utils.console`, `record.levelno == logging.INFO`. No record is at `WARNING`, `ERROR`, or `CRITICAL`.
 
 ### C-5: multiple calls do not attach handlers
 
 - **Given** the `console` module has been imported and `echo(...)` has been called any number of times.
-- **When** an observer inspects `logging.getLogger("src.utils.console").handlers`.
+- **When** an observer inspects `logging.getLogger("src.foundation.support.utils.console").handlers`.
 - **Then** the handler count is unchanged from the state that existed immediately after the first import of the module (typically zero handlers on the named logger; records propagate to the root logger's handlers).
 
 ### C-6: import path is stable
 
 - **Given** any file in the tree wants to use the helper.
 - **When** it imports the helper.
-- **Then** the import statement is exactly `from src.utils.console import echo`.
-- **And** the same import statement works from `MistHelper.py`, from any `src/reports/*.py`, and from any `src/auth/interactive/*.py`.
+- **Then** the import statement is exactly `from src.foundation.support.utils.console import echo`.
+- **And** the same import statement works from `MistHelper.py`, from any `src/mist/intelligence/reports/*.py`, and from any `src/mist/access/auth/interactive/*.py`.
 
 ## Non-contract (out of scope)
 

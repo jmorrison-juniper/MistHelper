@@ -1,7 +1,7 @@
 """Tests for the org config migration conflict detection and the ID remapping.
 
 Why:
-    ``src/org/org_config_migration_manager.py`` drives menus 176 and 177. The
+    ``src/mist/resources/org/org_config_migration_manager.py`` drives menus 176 and 177. The
     import path writes into a live org, so the conflict detection is the last
     guard before a duplicate network or an overlapping subnet reaches the Mist
     cloud. The ID remapping is the second guard, because a stale reference from
@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.org import org_config_migration_manager as ocm
-from src.org.org_config_migration_manager import OrgConfigMigrationManager
+from src.mist.resources.org import org_config_migration_manager as ocm
+from src.mist.resources.org.org_config_migration_manager import OrgConfigMigrationManager
 
 
 @pytest.fixture

@@ -1,10 +1,10 @@
-"""Unit tests for src/ui/input_handlers/keyboard_dispatch.py."""
+"""Unit tests for src/interfaces/visualization/ui/input_handlers/keyboard_dispatch.py."""
 
 from __future__ import annotations
 
 import pytest
 
-from src.ui.input_handlers.keyboard_dispatch import KeyboardDispatchTable
+from src.interfaces.visualization.ui.input_handlers.keyboard_dispatch import KeyboardDispatchTable
 
 # --- viewing_results mode ------------------------------------------------------
 

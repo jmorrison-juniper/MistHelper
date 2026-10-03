@@ -32,8 +32,10 @@ from flask import Flask, Response, jsonify, render_template, session
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
-from src.upgrade_portal.app.routes import select  # Issue #1989 patches the organization reader of this module.
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import (
+    select,
+)  # Issue #1989 patches the organization reader of this module.
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 # ---------------------------------------------------------------------------
 # The contract values

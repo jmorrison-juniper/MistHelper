@@ -13,8 +13,8 @@ from __future__ import annotations
 import types
 from unittest.mock import MagicMock
 
-from src.bootstrap.dependency_check import DependencyCheckOrchestrator
-from src.bootstrap.package_installer import PackageInstaller
+from src.foundation.runtime.bootstrap.dependency_check import DependencyCheckOrchestrator
+from src.foundation.runtime.bootstrap.package_installer import PackageInstaller
 
 _UNSET = object()  # WHY: sentinel so a fake sys with NO real_prefix attribute differs from real_prefix=None.
 

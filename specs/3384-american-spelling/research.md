@@ -4,7 +4,7 @@
 
 ## Decision 1: Change the five lines, and keep every identifier
 
-**Evidence**: a search of `src/upgrade_portal/app/assets/templates` found five
+**Evidence**: a search of `src/interfaces/portals/upgrade_portal/app/assets/templates` found five
 lines with "neighbour" or "neighbourhood". Four lines are visible text:
 
 - `options.html`: the legend of the peer-to-peer group.

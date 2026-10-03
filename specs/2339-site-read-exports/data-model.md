@@ -4,7 +4,7 @@ The names below are proposed new symbols. They do not exist yet. Existing symbol
 
 ### EndpointSpec
 
-Create a frozen, slotted dataclass in `src/export/site_read/models.py` with exactly five fields:
+Create a frozen, slotted dataclass in `src/operations/exporting/export/site_read/models.py` with exactly five fields:
 
 1. `operation_id: str`. Use the exact packet operationId.
 2. `module_path: str`. Use the verified dotted SDK module.

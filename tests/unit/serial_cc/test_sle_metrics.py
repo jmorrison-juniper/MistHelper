@@ -3,7 +3,7 @@
 import logging
 from unittest.mock import MagicMock, patch
 
-from src.refactors.serial_cc.sle_metrics import SLEMetricsService
+from src.foundation.support.refactors.serial_cc.sle_metrics import SLEMetricsService
 
 
 class DummyDeps:
@@ -24,7 +24,7 @@ def _make_dependency_bundle():
     return DummyDeps()
 
 
-@patch("src.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
 def test_sle_metrics_normal_mode_fetches_all_categories(mock_resolve_runtime_dependencies):
     """Normal mode fetches all SLE categories and specialized metrics."""
     deps = _make_dependency_bundle()
@@ -42,7 +42,7 @@ def test_sle_metrics_normal_mode_fetches_all_categories(mock_resolve_runtime_dep
     assert deps.DataExporter.write_with_format_selection.call_count == 1
 
 
-@patch("src.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
 def test_sle_metrics_fast_mode_reduces_scope(mock_resolve_runtime_dependencies, caplog):
     """Fast mode only fetches wifi category and summary metric."""
     deps = _make_dependency_bundle()
@@ -62,7 +62,7 @@ def test_sle_metrics_fast_mode_reduces_scope(mock_resolve_runtime_dependencies, 
     assert "SLE data retrieval completed" in out
 
 
-@patch("src.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
 def test_sle_metrics_handles_empty_results(mock_resolve_runtime_dependencies):
     """Service writes empty file when no SLE data is returned."""
     deps = _make_dependency_bundle()

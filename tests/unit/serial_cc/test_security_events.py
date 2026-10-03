@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.refactors.serial_cc.security_events import SecurityEventsService
+from src.foundation.support.refactors.serial_cc.security_events import SecurityEventsService
 
 
 class DummyDeps:
@@ -32,7 +32,7 @@ def _make_dependency_bundle():
     return DummyDeps()
 
 
-@patch("src.refactors.serial_cc.security_events._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.security_events._resolve_runtime_dependencies")
 def test_security_events_fast_mode_returns_on_fresh_cache(
     mock_resolve_runtime_dependencies, caplog: pytest.LogCaptureFixture
 ):
@@ -42,9 +42,9 @@ def test_security_events_fast_mode_returns_on_fresh_cache(
     deps.FilePathUtils.get_csv_path.return_value = "C:/tmp/fresh.csv"
     deps.mistapi = MagicMock()
     with (
-        patch("src.refactors.serial_cc.security_events.os.path.exists", return_value=True),
-        patch("src.refactors.serial_cc.security_events.os.path.getmtime", return_value=0),
-        patch("src.refactors.serial_cc.security_events.time.time", return_value=0),
+        patch("src.foundation.support.refactors.serial_cc.security_events.os.path.exists", return_value=True),
+        patch("src.foundation.support.refactors.serial_cc.security_events.os.path.getmtime", return_value=0),
+        patch("src.foundation.support.refactors.serial_cc.security_events.time.time", return_value=0),
         caplog.at_level(logging.INFO, logger="root"),
     ):
         SecurityEventsService.execute(fast=True)
@@ -53,7 +53,7 @@ def test_security_events_fast_mode_returns_on_fresh_cache(
     assert "cached security data" in out
 
 
-@patch("src.refactors.serial_cc.security_events._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.security_events._resolve_runtime_dependencies")
 def test_security_events_exports_security_policies(mock_resolve_runtime_dependencies):
     """Service exports policy data when API returns records."""
     deps = _make_dependency_bundle()
@@ -68,15 +68,15 @@ def test_security_events_exports_security_policies(mock_resolve_runtime_dependen
     deps.DataProcessingUtils.escape_multiline.side_effect = lambda rows: rows
 
     with (
-        patch("src.refactors.serial_cc.security_events.open", MagicMock()),
-        patch("src.refactors.serial_cc.security_events.csv.DictReader", return_value=[]),
+        patch("src.foundation.support.refactors.serial_cc.security_events.open", MagicMock()),
+        patch("src.foundation.support.refactors.serial_cc.security_events.csv.DictReader", return_value=[]),
     ):
         SecurityEventsService.execute(fast=False)
 
     assert deps.DataExporter.write_with_format_selection.call_count >= 2
 
 
-@patch("src.refactors.serial_cc.security_events._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.security_events._resolve_runtime_dependencies")
 def test_security_events_exports_rogue_data(mock_resolve_runtime_dependencies):
     """Service combines rogue APs and rogue clients into one export."""
     deps = _make_dependency_bundle()
@@ -95,8 +95,8 @@ def test_security_events_exports_rogue_data(mock_resolve_runtime_dependencies):
     site_csv.__enter__.return_value = MagicMock()
     site_csv.__exit__.return_value = False
     with (
-        patch("src.refactors.serial_cc.security_events.open", return_value=site_csv),
-        patch("src.refactors.serial_cc.security_events.csv.DictReader", return_value=[]),
+        patch("src.foundation.support.refactors.serial_cc.security_events.open", return_value=site_csv),
+        patch("src.foundation.support.refactors.serial_cc.security_events.csv.DictReader", return_value=[]),
     ):
         SecurityEventsService.execute(fast=False)
 

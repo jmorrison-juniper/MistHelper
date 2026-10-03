@@ -22,7 +22,7 @@ task workflow creates the source files.
 3. Confirm that the source package exists after implementation.
 
    ```powershell
-   Test-Path -LiteralPath 'src\reports\site_variable_audit'
+   Test-Path -LiteralPath 'src\mist\intelligence\reports\site_variable_audit'
    ```
 
 ## Unit validation
@@ -49,17 +49,17 @@ Run the smallest gates for the new package and tests.
 
 ```powershell
 Set-Location -LiteralPath 'C:\Users\jmorrison\mh-fleet\3556-site-variable-audit'
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m py_compile src\reports\site_variable_audit\client.py src\reports\site_variable_audit\model.py src\reports\site_variable_audit\operation.py
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\site_variable_audit\client.py src\mist\intelligence\reports\site_variable_audit\model.py src\mist\intelligence\reports\site_variable_audit\operation.py
 ```
 
 ```powershell
 Set-Location -LiteralPath 'C:\Users\jmorrison\mh-fleet\3556-site-variable-audit'
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m ruff check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\site_variable_audit tests\unit\reports\site_variable_audit
 ```
 
 ```powershell
 Set-Location -LiteralPath 'C:\Users\jmorrison\mh-fleet\3556-site-variable-audit'
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m black --check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\site_variable_audit tests\unit\reports\site_variable_audit
 ```
 
 Expected result:

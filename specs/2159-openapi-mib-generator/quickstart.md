@@ -101,26 +101,26 @@ snmpwalk -v2c -c public -m ./documentation/mibs/MISTHELPER-MIB.mib localhost .1.
 
 ```bash
 python -m pytest tests/unit/mib_generator tests/contract -v
-python -m pytest tests/unit/mib_generator --cov=src/mib_generator --cov-report=term-missing
+python -m pytest tests/unit/mib_generator --cov=src/operations/hardware/mib_generator --cov-report=term-missing
 ```
 
 **Expected**: every test passes. The `snmptranslate` test reports `SKIPPED` on a Windows workstation
-and it runs in CI. Coverage of `src/mib_generator` reaches 90 percent, which is the repository gate
+and it runs in CI. Coverage of `src/operations/hardware/mib_generator` reaches 90 percent, which is the repository gate
 in `pyproject.toml`.
 
 ## Run the quality gates
 
 ```bash
-python -m ruff check src/mib_generator tests/unit/mib_generator
-python -m black --check src/mib_generator tests/unit/mib_generator
-python -m mypy src/mib_generator
-python -m bandit -r src/mib_generator
-python -m pylint src/mib_generator
-python -m radon cc src/mib_generator -nc
-python -m vulture src/mib_generator
-python -m pydocstyle src/mib_generator
-python -m interrogate -v src/mib_generator
-python -m tools.ste_linter src/mib_generator documentation/mibs/MISTHELPER-MIB.mib
+python -m ruff check src/operations/hardware/mib_generator tests/unit/mib_generator
+python -m black --check src/operations/hardware/mib_generator tests/unit/mib_generator
+python -m mypy src/operations/hardware/mib_generator
+python -m bandit -r src/operations/hardware/mib_generator
+python -m pylint src/operations/hardware/mib_generator
+python -m radon cc src/operations/hardware/mib_generator -nc
+python -m vulture src/operations/hardware/mib_generator
+python -m pydocstyle src/operations/hardware/mib_generator
+python -m interrogate -v src/operations/hardware/mib_generator
+python -m tools.ste_linter src/operations/hardware/mib_generator documentation/mibs/MISTHELPER-MIB.mib
 ```
 
 **Expected**: every command exits 0. Pylint scores 9.5 or better. Radon reports no block above

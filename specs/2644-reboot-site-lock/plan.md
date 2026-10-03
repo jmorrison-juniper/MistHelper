@@ -41,7 +41,7 @@ I rejected an unbounded renewing lock, because a renewing lock can starve a site
 ## Constitution Check
 
 - The change touches existing modules because the upgrade package already exceeds the Five-Item Rule.
-- No new direct child is added under the noncompliant `src\upgrade_portal\upgrade` package.
+- No new direct child is added under the noncompliant `src\interfaces\portals\upgrade_portal\upgrade` package.
 - New behavior stays in named classes and existing classes.
 - Each new executable line has an inline comment.
 - Each meaningful action has logging before and after.
@@ -61,10 +61,10 @@ specs\2644-reboot-site-lock\
 ### Source Code
 
 ```text
-src\upgrade_portal\runtime\lock.py
-src\upgrade_portal\upgrade\options.py
-src\upgrade_portal\upgrade\phase_gate.py
-src\upgrade_portal\upgrade\driver.py
+src\interfaces\portals\upgrade_portal\runtime\lock.py
+src\interfaces\portals\upgrade_portal\upgrade\options.py
+src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py
+src\interfaces\portals\upgrade_portal\upgrade\driver.py
 tests\unit\upgrade_portal\test_phase_gate.py
 tests\unit\upgrade_portal\test_upgrade_driver.py
 tests\unit\upgrade_portal\test_upgrade_ssr_options.py

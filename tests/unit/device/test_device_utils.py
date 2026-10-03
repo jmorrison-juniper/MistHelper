@@ -1,4 +1,4 @@
-"""Wave 5 P2 coverage for src/device/device_utils.py (initiative #1018).
+"""Wave 5 P2 coverage for src/mist/resources/device/device_utils.py (initiative #1018).
 
 Covers all static methods of ``DeviceUtils``:
 - ``get_all_ap_macs_from_site``: success/empty/exception branches.
@@ -22,9 +22,11 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch
 
 import pytest  # WHY: monkeypatch + caplog fixtures.
 
-from src.device import device_utils as device_utils_mod  # WHY: patch the product module SDK and logger.
-from src.device.device_utils import DeviceUtils  # WHY: SUT direct import.
-from src.device.device_utils import DeviceUtils as FailureModeDeviceUtils  # WHY: prove new status tests call src.
+from src.mist.resources.device import device_utils as device_utils_mod  # WHY: patch the product module SDK and logger.
+from src.mist.resources.device.device_utils import DeviceUtils  # WHY: SUT direct import.
+from src.mist.resources.device.device_utils import (
+    DeviceUtils as FailureModeDeviceUtils,
+)  # WHY: prove new status tests call src.
 
 
 def _install_fake_mist_helper(monkeypatch: pytest.MonkeyPatch) -> Any:
@@ -45,7 +47,7 @@ class TestGetAllApMacsFromSite:
         _install_fake_mist_helper(monkeypatch)
         fake_resp = MagicMock(spec=object)  # WHY: opaque response object; only .data used.
         fake_resp.data = [{"mac": "aa"}, {"mac": "bb"}]  # WHY: two AP dicts with macs.
-        with patch("src.device.device_utils.mistapi") as fake_mistapi:
+        with patch("src.mist.resources.device.device_utils.mistapi") as fake_mistapi:
             fake_mistapi.api.v1.sites.devices.listSiteDevices.return_value = fake_resp
             with caplog.at_level(logging.DEBUG):
                 result = DeviceUtils.get_all_ap_macs_from_site("site-1")
@@ -60,7 +62,7 @@ class TestGetAllApMacsFromSite:
         _install_fake_mist_helper(monkeypatch)
         fake_resp = MagicMock(spec=object)
         fake_resp.data = [{"mac": "aa"}, {"mac": ""}, {"other": "x"}]  # WHY: only one has mac.
-        with patch("src.device.device_utils.mistapi") as fake_mistapi:
+        with patch("src.mist.resources.device.device_utils.mistapi") as fake_mistapi:
             fake_mistapi.api.v1.sites.devices.listSiteDevices.return_value = fake_resp
             result = DeviceUtils.get_all_ap_macs_from_site("site-1")
         assert result == ["aa"]  # WHY: falsy-mac and missing-mac entries dropped by `if ap.get("mac")`.
@@ -72,7 +74,7 @@ class TestGetAllApMacsFromSite:
         _install_fake_mist_helper(monkeypatch)
         fake_resp = MagicMock(spec=object)
         fake_resp.data = []  # WHY: empty AP list.
-        with patch("src.device.device_utils.mistapi") as fake_mistapi:
+        with patch("src.mist.resources.device.device_utils.mistapi") as fake_mistapi:
             fake_mistapi.api.v1.sites.devices.listSiteDevices.return_value = fake_resp
             with caplog.at_level(logging.WARNING):
                 result = DeviceUtils.get_all_ap_macs_from_site("site-empty")
@@ -85,7 +87,7 @@ class TestGetAllApMacsFromSite:
     ) -> None:
         """Any exception is swallowed; returns [] and logs the exception line."""
         _install_fake_mist_helper(monkeypatch)
-        with patch("src.device.device_utils.mistapi") as fake_mistapi:
+        with patch("src.mist.resources.device.device_utils.mistapi") as fake_mistapi:
             fake_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("api boom")
             with caplog.at_level(logging.ERROR):
                 result = DeviceUtils.get_all_ap_macs_from_site("site-x")
@@ -102,7 +104,7 @@ class TestGetAllApMacsFromSite:
         response.status_code = 404  # WHY: model a site whose AP list is unavailable by client error.
         response.data = [{"mac": "aa"}]  # WHY: prove the product ignores data from a failed status.
         caplog.set_level(logging.ERROR, logger=device_utils_mod.logger.name)  # WHY: capture the status log.
-        with patch("src.device.device_utils.mistapi") as fake_mistapi:  # WHY: isolate the SDK call.
+        with patch("src.mist.resources.device.device_utils.mistapi") as fake_mistapi:  # WHY: isolate the SDK call.
             fake_mistapi.api.v1.sites.devices.listSiteDevices.return_value = response  # WHY: return the 404 reply.
             result = DeviceUtils.get_all_ap_macs_from_site("site-404")  # WHY: drive the product status path.
         assert result == []  # WHY: a 404 response must not return AP MACs.
@@ -119,7 +121,7 @@ class TestGetAllApMacsFromSite:
         response.status_code = 503  # WHY: model a site whose AP list is unavailable by server error.
         response.data = [{"mac": "aa"}]  # WHY: prove the product ignores data from a failed status.
         caplog.set_level(logging.ERROR, logger=device_utils_mod.logger.name)  # WHY: capture the status log.
-        with patch("src.device.device_utils.mistapi") as fake_mistapi:  # WHY: isolate the SDK call.
+        with patch("src.mist.resources.device.device_utils.mistapi") as fake_mistapi:  # WHY: isolate the SDK call.
             fake_mistapi.api.v1.sites.devices.listSiteDevices.return_value = response  # WHY: return the 503 reply.
             result = FailureModeDeviceUtils.get_all_ap_macs_from_site("site-503")  # WHY: drive the src path.
         assert result == []  # WHY: a 503 response must not return AP MACs.

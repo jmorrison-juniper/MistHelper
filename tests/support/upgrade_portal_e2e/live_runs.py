@@ -55,7 +55,9 @@ class LiveRun:  # One run that can still block a create call at its site.
         Returns:
             The live run, or None for a final run and for a state outside the run model.
         """
-        from src.upgrade_portal.app.routes.upgrade import run_is_live  # Late, so a collection loads no portal.
+        from src.interfaces.portals.upgrade_portal.app.routes.upgrade import (
+            run_is_live,
+        )  # Late, so a collection loads no portal.
 
         if not run_is_live(row):  # The create refusal skips a final run and a state outside the model.
             return None  # The run blocks no create call.

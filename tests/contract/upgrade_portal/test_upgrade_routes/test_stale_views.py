@@ -11,7 +11,7 @@ import pytest  # Build the route fixtures.
 from flask import Flask  # Type the real portal application.
 from flask.testing import FlaskClient  # Type the signed-in route client.
 
-from src.upgrade_portal.runtime import identity  # Use the real signed-session guard.
+from src.interfaces.portals.upgrade_portal.runtime import identity  # Use the real signed-session guard.
 
 logger = logging.getLogger(__name__)  # Keep synthetic setup records separate from portal records.
 

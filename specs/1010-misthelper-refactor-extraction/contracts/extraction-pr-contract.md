@@ -31,8 +31,8 @@ Exactly three files changed (or two for the `AddressComparisonCounters` fold-in)
 
 1. **`MistHelper.py`** — the candidate's definition is removed. Nothing added.
 2. **The target module**:
-   - For 10 of 11 Single-Use PRs: a NEW file under `src/refactors/{snake_name}.py` containing the candidate as a cohesive class (or as a class method for module-level function candidates per FR-005).
-   - For `AddressComparisonCounters` (PR-07 exception per FR-015): the EXISTING `src/inventory/csv_comparator.py` is modified — the counter folds into `CsvComparatorManager` (no new file).
+   - For 10 of 11 Single-Use PRs: a NEW file under `src/foundation/support/refactors/{snake_name}.py` containing the candidate as a cohesive class (or as a class method for module-level function candidates per FR-005).
+   - For `AddressComparisonCounters` (PR-07 exception per FR-015): the EXISTING `src/mist/resources/inventory/csv_comparator.py` is modified — the counter folds into `CsvComparatorManager` (no new file).
 3. **The caller's file** — the single callsite is rewritten. This may be the same file as #2 (for `AddressComparisonCounters`, since the sole caller already lives in `csv_comparator.py`), collapsing to two files.
 
 Additionally allowed:

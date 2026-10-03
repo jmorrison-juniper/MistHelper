@@ -16,14 +16,22 @@ from typing import Any  # Playwright objects are duck typed in these helpers.
 
 import pytest  # Skip journeys until lead-owned code is present.
 
-from src.websocket_streams.intake.start_request.models import DeviceFacts  # Fake picker returns real device facts.
-from src.websocket_streams.live.sessions.settings import StreamSettings  # Tests enable shell starts.
-from src.websocket_streams.web.services.assembly.bundle import WebSocketServiceBundle  # Type real route services.
-from src.websocket_streams.web.services.assembly.collaborators import (
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    DeviceFacts,
+)  # Fake picker returns real device facts.
+from src.mist.realtime.websocket_streams.live.sessions.settings import StreamSettings  # Tests enable shell starts.
+from src.mist.realtime.websocket_streams.web.services.assembly.bundle import (
+    WebSocketServiceBundle,
+)  # Type real route services.
+from src.mist.realtime.websocket_streams.web.services.assembly.collaborators import (
     WebSocketCollaborators,
 )  # Supply fake-cloud collaborators.
-from src.websocket_streams.web.services.assembly.factory import WebSocketServiceFactory  # Build real leaf services.
-from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Install the service bundle.
+from src.mist.realtime.websocket_streams.web.services.assembly.factory import (
+    WebSocketServiceFactory,
+)  # Build real leaf services.
+from src.mist.realtime.websocket_streams.web.services.registry import (
+    WebSocketServiceRegistry,
+)  # Install the service bundle.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession  # Fake Mist REST seam.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
     MonitorFramingScreenDevice,
@@ -242,13 +250,23 @@ class TerminalPortalHarness:
 
     def _services(self, _app: Any) -> WebSocketServiceBundle:
         """Build real WebSocket services with fake app dependencies."""
-        from src.websocket_streams.catalog.channels import ChannelCatalog  # Real channel catalog.
-        from src.websocket_streams.catalog.registry.stream_catalog import StreamCatalog  # Real registry leaf class.
-        from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Real utility leaf class.
-        from src.websocket_streams.intake.start_request.checker import StartRequestChecker  # Real start checker.
-        from src.websocket_streams.live.sessions.manager.factory import RunnerFactory  # Real runner factory.
-        from src.websocket_streams.live.sessions.manager.lifecycle import StreamSessionManager  # Real manager.
-        from src.websocket_streams.live.transport.endpoint import TransportProfile  # Loopback profile.
+        from src.mist.realtime.websocket_streams.catalog.channels import ChannelCatalog  # Real channel catalog.
+        from src.mist.realtime.websocket_streams.catalog.registry.stream_catalog import (
+            StreamCatalog,
+        )  # Real registry leaf class.
+        from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
+            UtilityCatalog,
+        )  # Real utility leaf class.
+        from src.mist.realtime.websocket_streams.intake.start_request.checker import (
+            StartRequestChecker,
+        )  # Real start checker.
+        from src.mist.realtime.websocket_streams.live.sessions.manager.factory import (
+            RunnerFactory,
+        )  # Real runner factory.
+        from src.mist.realtime.websocket_streams.live.sessions.manager.lifecycle import (
+            StreamSessionManager,
+        )  # Real manager.
+        from src.mist.realtime.websocket_streams.live.transport.endpoint import TransportProfile  # Loopback profile.
 
         picker = FakePickerService()  # Use deterministic site and device rows.
         settings = StreamSettings(shell_enabled=True, max_sessions=8, idle_seconds=120)  # Enable shell starts.

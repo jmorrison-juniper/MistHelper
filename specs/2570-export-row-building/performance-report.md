@@ -82,8 +82,8 @@ Measured: The baseline targeted tests passed, with 138 tests passed.
 
 | Rank and status | File and symbol | Measured cost | Expected gain | Risk | Confidence |
 | - | - | - | - | - | - |
-| 1 Measured | `src/upgrade_portal/capture/export.py`, `export_capture()` JSON path | Typical peak traced memory was 25,266,182 bytes | Remove row objects and one dictionary copy | Low, because output bytes are checked | High |
-| 2 Rejected | `src/upgrade_portal/compare/download.py`, full export path | Memory fell in the first candidate run | Large wall time regressed | Medium | High |
+| 1 Measured | `src/interfaces/portals/upgrade_portal/capture/export.py`, `export_capture()` JSON path | Typical peak traced memory was 25,266,182 bytes | Remove row objects and one dictionary copy | Low, because output bytes are checked | High |
+| 2 Rejected | `src/interfaces/portals/upgrade_portal/compare/download.py`, full export path | Memory fell in the first candidate run | Large wall time regressed | Medium | High |
 
 ## 6. Recommended optimizations
 
@@ -101,7 +101,7 @@ Hypothesis: The next benchmark must compare complete JSON bytes and parse behavi
 
 | Field | Required content |
 | - | - |
-| Change ID and location | OPT3-CAPTURE-JSON, `src/upgrade_portal/capture/export.py`, capture JSON path |
+| Change ID and location | OPT3-CAPTURE-JSON, `src/interfaces/portals/upgrade_portal/capture/export.py`, capture JSON path |
 | Evidence | `opt3_export_baseline.json`, `opt3_export_candidate_final.json`, `opt3_export_paired_final2.json`, `opt3_export_parity.json` |
 | Root cause | The old JSON path built `ExportRow` objects, then copied them through `to_dict()` before `json.dumps()` |
 | Change | The JSON path now builds final row dictionaries in file order |

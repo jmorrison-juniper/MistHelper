@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/execution/debug_saver.py."""
+"""Unit tests for src/interfaces/visualization/ui/execution/debug_saver.py."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.ui.execution.debug_saver import DEBUG_DIR, DebugResultSaver, _Serializer
+from src.interfaces.visualization.ui.execution.debug_saver import DEBUG_DIR, DebugResultSaver, _Serializer
 
 
 @pytest.fixture(autouse=True)

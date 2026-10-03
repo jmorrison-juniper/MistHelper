@@ -62,7 +62,7 @@ FR-027, FR-028, and FR-029 forbid these changes.
 | `"C0114"`, `"C0115"`, `"C0116"` | Must stay. Another tool enforces docstrings. |
 | `fail-under = 9.5` | Must stay. FR-024 forbids a lower threshold. |
 | `--ignore=maps,ssh,ui` | Must stay. Issue #891 owns that flag. |
-| The mypy `src.db` override | Must stay. It is a separate slice of issue #887. |
+| The mypy `src.foundation.persistence.db` override | Must stay. It is a separate slice of issue #887. |
 
 ---
 
@@ -91,7 +91,7 @@ Run each command from the repository root.
 | - | - | - |
 | Count the findings (FR-021) | `.venv\Scripts\python.exe -m pylint src/ --disable=all --enable=W0613 --score=n` | No output. Zero findings. |
 | Reproduce the gate locally | `.venv\Scripts\python.exe -m pylint src/ --fail-under=9.5 --ignore=maps,ssh,ui` | Exit code 0. |
-| Confirm the ignored packages (FR-004) | `.venv\Scripts\python.exe -m pylint src/maps src/ssh --disable=all --enable=W0613 --score=n` | No output. Zero findings. |
+| Confirm the ignored packages (FR-004) | `.venv\Scripts\python.exe -m pylint src/interfaces/visualization/maps src/operations/execution/ssh --disable=all --enable=W0613 --score=n` | No output. Zero findings. |
 
 The third command is the manual scan that the spec assumptions require. The gate
 cannot prove those files, because the `--ignore` flag hides them.

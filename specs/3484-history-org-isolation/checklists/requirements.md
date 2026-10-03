@@ -144,8 +144,8 @@ They do not authorize implementation in this step.
 
 The future claimed implementation files are:
 
-1. `src/upgrade_portal/app/routes/review.py`
-2. `src/upgrade_portal/compare/lock_audit.py`
+1. `src/interfaces/portals/upgrade_portal/app/routes/review.py`
+2. `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`
 3. `tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py`
 4. `tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py`
 5. `changelog.d/issue-3484-history-org-isolation.md`, as the issue's Security fragment.

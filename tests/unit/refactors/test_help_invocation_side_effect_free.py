@@ -90,7 +90,7 @@ class TestHelpInvocationGuardWiring:
         Returns:
             UTF-8 source text of the currently imported MistHelper module.
         """
-        module = importlib.import_module("src.refactors.main_entrypoint")  # Live module resolution.
+        module = importlib.import_module("src.foundation.support.refactors.main_entrypoint")  # Live module resolution.
         assert module.__file__ is not None  # WHY: script modules always have __file__ set on disk.
         return Path(module.__file__).read_text(encoding="utf-8")  # Read once; small enough for in-memory search.
 

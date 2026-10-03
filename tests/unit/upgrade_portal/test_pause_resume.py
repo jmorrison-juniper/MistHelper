@@ -10,7 +10,7 @@ Test pause_session(), resume_session() with:
 from datetime import UTC, datetime, timedelta  # WHY: timestamp handling
 from unittest.mock import Mock  # WHY: mock database
 
-from src.upgrade_portal.auth.session import (  # WHY: import under test
+from src.interfaces.portals.upgrade_portal.auth.session import (  # WHY: import under test
     PauseResumeManager,
     PauseState,
     ResumeResult,

@@ -48,7 +48,7 @@ Implementation must use `.venv` or a bootstrapped worktree environment.
 
 ## Decision: Normalize targets to lowercase colon-free form with strict validation
 
-**Rationale**: The existing `src/device/prompt_utils.py` helper `_normalize_mac()` strips colons and hyphens, then lowercases the value.
+**Rationale**: The existing `src/mist/resources/device/prompt_utils.py` helper `_normalize_mac()` strips colons and hyphens, then lowercases the value.
 The feature must also support dotted input.
 Implementation must use a feature normalizer that accepts colon separated, hyphen separated, dotted, and bare forms, then rejects any value that does not produce exactly 12 hexadecimal characters.
 
@@ -117,13 +117,13 @@ Skill citations:
 
 ## Implementation verification on 2026-09-30
 
-Read `src/device/prompt_utils.py` before code work.
+Read `src/mist/resources/device/prompt_utils.py` before code work.
 The existing `_normalize_mac()` helper strips colons and hyphens, then lowercases the value.
 The helper does not strip dots, so the feature package must keep its own normalizer for dotted input.
 The device lookup path compares normalized inventory MAC values with the normalized operator input.
 This confirms that exact normalized comparison is the repository pattern.
 
-Searched `src/device/` for current client and MAC helper patterns before code work.
+Searched `src/mist/resources/device/` for current client and MAC helper patterns before code work.
 No newer public client session control helper was found.
 The implementation must use a focused package and injected fakes in tests.
 

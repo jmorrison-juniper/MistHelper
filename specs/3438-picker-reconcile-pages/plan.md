@@ -41,10 +41,10 @@ reports `cloud_evidence_unavailable`.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/routes/select.py` | `collect_pages` walks each page and returns a `DeviceRead`. `default_cloud_read` returns a `DeviceRead` and keeps a whole read only. New `SiteList`. `build_site_rows` returns a `SiteList`. `sites_page`, `site_choice_refusal`, and `list_sites` read the new type. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | `selected_rows` and `_site_labels` read `SiteList.rows`. |
-| `src/upgrade_portal/app/assets/templates/select/sites.html` | The two Caution notes. |
-| `src/upgrade_portal/api/run_controls/routes.py` | The reader walks each page. Each target of a lost page holds unavailable evidence. New `_target_id` helper. |
+| `src/interfaces/portals/upgrade_portal/app/routes/select.py` | `collect_pages` walks each page and returns a `DeviceRead`. `default_cloud_read` returns a `DeviceRead` and keeps a whole read only. New `SiteList`. `build_site_rows` returns a `SiteList`. `sites_page`, `site_choice_refusal`, and `list_sites` read the new type. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | `selected_rows` and `_site_labels` read `SiteList.rows`. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/select/sites.html` | The two Caution notes. |
+| `src/interfaces/portals/upgrade_portal/api/run_controls/routes.py` | The reader walks each page. Each target of a lost page holds unavailable evidence. New `_target_id` helper. |
 | `specs/1823-upgrade-capture-portal/contracts/http-api.md` | The two new fields of the site list answer. |
 | `tests/unit/upgrade_portal/test_issue_3438_picker_pages.py` | New. The page walk, the cache rule, the flags, the notes, and the answer fields. |
 | `tests/unit/upgrade_portal/test_issue_3438_reconcile_pages.py` | New. The reader walk with real SDK answers, and one full-path service test. |

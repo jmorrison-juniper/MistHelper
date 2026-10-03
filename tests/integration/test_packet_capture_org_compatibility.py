@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from src.capture.org_capture_workflow import OrgCaptureWorkflow
+from src.operations.execution.capture.org_capture_workflow import OrgCaptureWorkflow
 
 
 def test_org_capture_workflow_calls_confirmation_and_execute() -> None:

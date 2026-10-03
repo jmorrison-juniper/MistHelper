@@ -36,8 +36,8 @@ Target D. Issue #433 is closed and its other targets are met:
 
 | Target | Then | Now |
 | - | - | - |
-| `src/firmware/site_auto_upgrade.py` | 27 / F | 100.0 / A+ |
-| `src/maps/maps_manager.py` | 40 / F | 100.0 / A+ |
+| `src/operations/execution/firmware/site_auto_upgrade.py` | 27 / F | 100.0 / A+ |
+| `src/interfaces/visualization/maps/maps_manager.py` | 40 / F | 100.0 / A+ |
 
 The `src/` work landed. These three were never in scope, because at the time
 nothing analyzed `scripts/` or `tests/`.

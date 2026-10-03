@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import Mock
 
-from src.ssh.connection.connector import SshConnector  # T013b: TOFU logic lives here now
+from src.operations.execution.ssh.connection.connector import SshConnector  # T013b: TOFU logic lives here now
 
 
 class FakeHostKeys:

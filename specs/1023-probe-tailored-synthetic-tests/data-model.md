@@ -18,7 +18,7 @@ relationships, validation rules, and state transitions where applicable.
 
 ## 1. `ProbeResult`
 
-**Location**: `src/utils/zscaler_probe.py`
+**Location**: `src/foundation/support/utils/zscaler_probe.py`
 
 **Existing dataclass** extended by this feature. The full list below marks
 which fields exist today and which are added.
@@ -164,7 +164,7 @@ Same v2-string-to-v3-object promotion. Fires once per load with a single
 ## 4. `SyntheticProbeTarget` (transient string)
 
 **Location**: emitted by
-`src/org/org_synthetic_probes_manager.py::_probe_target()` into the value of
+`src/mist/resources/org/org_synthetic_probes_manager.py::_probe_target()` into the value of
 each Mist `custom_probes[i].target` field.
 
 ### Shapes (three-way dispatch)

@@ -42,11 +42,11 @@ parent `specs/1029-ap-profile-migration/tasks.md`.
 **Purpose**: Fix the exact import shape, patch site, and reference
 lines so /speckit.implement cannot re-derive them at implementation time.
 
-- [X] TR001 Read `src/api/api_data_fetcher.py` lines 100-175 and record verbatim in a scratch note: (a) the exact `_apply_rate_limiting` call shape, (b) how it acquires `mh` (`importlib.import_module("MistHelper")`), (c) the `_is_rate_limit_error` two-line status_code check. Source of truth for FR-A01, FR-A03, FR-A07.
-- [X] TR002 Read `src/device/ap_profile_migration_manager.py` module header (lines 1-80) and record verbatim in a scratch note: (a) module-scope imports (already include `import time` at line 33 and `_RETRY_BACKOFF_SECONDS` at line 51), (b) the manager's lazy-import pattern for MistHelper (`import MistHelper as _mh` inside method bodies at lines 147, 265, 471, etc.). Confirm this differs from `api_data_fetcher.py`'s `importlib.import_module("MistHelper")`.
-- [X] TR003 [P] Read `src/utils/rate_limiting.py` and confirm the public surface consumed by the addendum: `RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, api_usage_cache) -> tuple[float | None, float]`, and the cache-invalidation contract used by `_needs_refresh` (setting `api_usage_cache["initialized"] = False` forces a refresh on the next call). Source of truth for FR-A03.
-- [X] TR004 Read `src/device/ap_profile_migration_manager.py` at line 732 (`_reassign_one_ap`), line 777 (`_run_reassignment_loop`), line 358-410 (revert loop inside `revert_ap_profile_migration`), and line 1158 (`_revert_one_ap`). Record the exact signatures and the current `except Exception` sites. Source of truth for FR-A02, FR-A05, and Wiring tasks.
-- [X] TR005 [P] Read `tests/unit/device/test_ap_profile_migration_manager.py` and record: (a) how existing tests patch `time.sleep` (the current pattern is `patch("time.sleep")` at the built-in-module level; the addendum pins `patch("src.device.ap_profile_migration_manager.time.sleep")` per Q4 of research), (b) the fake-mh fixture shape (`fake_mh.InputUtils.safe_input.return_value`, etc.) so new pacing tests can extend it with `fake_mh.RateLimitingUtils.get_rate_limited_delay` and `fake_mh._api_usage_cache`, (c) the existing progress-stride fixture and how the revert loop calls `_revert_one_ap`.
+- [X] TR001 Read `src/mist/access/api/api_data_fetcher.py` lines 100-175 and record verbatim in a scratch note: (a) the exact `_apply_rate_limiting` call shape, (b) how it acquires `mh` (`importlib.import_module("MistHelper")`), (c) the `_is_rate_limit_error` two-line status_code check. Source of truth for FR-A01, FR-A03, FR-A07.
+- [X] TR002 Read `src/mist/resources/device/ap_profile_migration_manager.py` module header (lines 1-80) and record verbatim in a scratch note: (a) module-scope imports (already include `import time` at line 33 and `_RETRY_BACKOFF_SECONDS` at line 51), (b) the manager's lazy-import pattern for MistHelper (`import MistHelper as _mh` inside method bodies at lines 147, 265, 471, etc.). Confirm this differs from `api_data_fetcher.py`'s `importlib.import_module("MistHelper")`.
+- [X] TR003 [P] Read `src/foundation/support/utils/rate_limiting.py` and confirm the public surface consumed by the addendum: `RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, api_usage_cache) -> tuple[float | None, float]`, and the cache-invalidation contract used by `_needs_refresh` (setting `api_usage_cache["initialized"] = False` forces a refresh on the next call). Source of truth for FR-A03.
+- [X] TR004 Read `src/mist/resources/device/ap_profile_migration_manager.py` at line 732 (`_reassign_one_ap`), line 777 (`_run_reassignment_loop`), line 358-410 (revert loop inside `revert_ap_profile_migration`), and line 1158 (`_revert_one_ap`). Record the exact signatures and the current `except Exception` sites. Source of truth for FR-A02, FR-A05, and Wiring tasks.
+- [X] TR005 [P] Read `tests/unit/device/test_ap_profile_migration_manager.py` and record: (a) how existing tests patch `time.sleep` (the current pattern is `patch("time.sleep")` at the built-in-module level; the addendum pins `patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep")` per Q4 of research), (b) the fake-mh fixture shape (`fake_mh.InputUtils.safe_input.return_value`, etc.) so new pacing tests can extend it with `fake_mh.RateLimitingUtils.get_rate_limited_delay` and `fake_mh._api_usage_cache`, (c) the existing progress-stride fixture and how the revert loop calls `_revert_one_ap`.
 
 **Import decision locked** (recorded here so /speckit.implement does not re-open it):
 
@@ -67,7 +67,7 @@ Constitution Principle IV (TDD) requires these to be authored and reviewed BEFOR
 
 ### Unit tests -- US1 (migrate loop, menu 207)
 
-- [X] TR006 [P] [US1] Add `test_migrate_calls_get_rate_limited_delay_once_per_ap` in `tests/unit/device/test_ap_profile_migration_manager.py`. Patches `src.device.ap_profile_migration_manager.time.sleep` and patches `_mh.RateLimitingUtils.get_rate_limited_delay` to return `(None, 0.0)`. Asserts `get_rate_limited_delay.call_count == len(ap_records)` for a 20-AP fixture and asserts each call precedes the matching `_reassign_one_ap` call (use a `MagicMock` order-observer). Covers FR-A01, SC-A01 shape.
+- [X] TR006 [P] [US1] Add `test_migrate_calls_get_rate_limited_delay_once_per_ap` in `tests/unit/device/test_ap_profile_migration_manager.py`. Patches `src.mist.resources.device.ap_profile_migration_manager.time.sleep` and patches `_mh.RateLimitingUtils.get_rate_limited_delay` to return `(None, 0.0)`. Asserts `get_rate_limited_delay.call_count == len(ap_records)` for a 20-AP fixture and asserts each call precedes the matching `_reassign_one_ap` call (use a `MagicMock` order-observer). Covers FR-A01, SC-A01 shape.
 - [X] TR007 [P] [US1] Add `test_migrate_429_invalidates_api_usage_cache` in the same file. Patches `updateSiteDevice` to raise a `mistapi`-style exception whose `.response.status_code == 429` on the 3rd and 7th APs (of 10). Asserts `_mh._api_usage_cache["initialized"]` is toggled to `False` at least twice, and asserts the run completes without invoking the stop-on-failure branch (10 successful APs after retry recovery on 3 and 7). Covers FR-A03, FR-A04, SC-A02.
 - [X] TR008 [P] [US1] Add `test_migrate_hermetic_no_wall_clock_sleep` in the same file. Records every call to the patched `time.sleep` mock and asserts the sum of arguments over a 100-AP run is > 0 (proves pacing was invoked) AND asserts `time.time()` wall-clock delta for the whole test is < 0.5 s. Covers FR-A07, SC-A01.
 - [X] TR009 [P] [US1] Add `test_migrate_non_429_still_halts_stop_on_failure` in the same file. Patches `updateSiteDevice` to raise an HTTP-500-style exception on the 42nd AP. Asserts the loop halts before the 43rd PUT, that `backup["outcome"] == "partial"`, and that `_mh._api_usage_cache["initialized"]` was NOT toggled to `False` (500 is not routed through the throttle feedback path). Covers FR-A04, SC-A04.
@@ -93,11 +93,11 @@ Constitution Principle IV (TDD) requires these to be authored and reviewed BEFOR
 
 ## Phase 3: Implementation (make the failing tests pass)
 
-**Purpose**: Add the constant, the three static helpers, and wire them into both loops. Modify only `src/device/ap_profile_migration_manager.py`. No new module, no new dependency (FR-A10).
+**Purpose**: Add the constant, the three static helpers, and wire them into both loops. Modify only `src/mist/resources/device/ap_profile_migration_manager.py`. No new module, no new dependency (FR-A10).
 
 ### Module scope
 
-- [ ] TR019 Add `_LIMITER_FALLBACK_DELAY: float = 0.75  # seconds` at module scope in `src/device/ap_profile_migration_manager.py`, adjacent to `_RETRY_BACKOFF_SECONDS` at line ~51. Include an inline `#` comment naming Mist's 5000/hour ceiling and the 3600/5000 = 0.72 s theoretical minimum (per research Q1). Value locked; do not re-derive.
+- [ ] TR019 Add `_LIMITER_FALLBACK_DELAY: float = 0.75  # seconds` at module scope in `src/mist/resources/device/ap_profile_migration_manager.py`, adjacent to `_RETRY_BACKOFF_SECONDS` at line ~51. Include an inline `#` comment naming Mist's 5000/hour ceiling and the 3600/5000 = 0.72 s theoretical minimum (per research Q1). Value locked; do not re-derive.
 
 ### Static helpers on `APProfileMigrationManager`
 
@@ -135,7 +135,7 @@ Constitution Principle IV (TDD) requires these to be authored and reviewed BEFOR
 
 - [X] TR034 Grep `src/MistHelper.py` for `apisession =` and `_api_usage_cache =` (both are module-scope assignments in the current codebase, used by `api_data_fetcher.py`). Confirm that menu 207 and menu 208 dispatch happens AFTER those two attributes are set. Record the line numbers in the scratch note. Expected outcome: dispatch happens after login, so both globals are populated by menu-dispatch time -- no plumbing change required.
 - [X] TR035 Run one manual smoke check: in a Python REPL, `python -c "import MistHelper as mh; print(hasattr(mh, 'apisession'), hasattr(mh, '_api_usage_cache'), hasattr(mh, 'RateLimitingUtils'))"`. All three MUST print `True`. If any print `False`, STOP and revise the wiring to pass the value from the caller (MistHelper.py entry points for menus 207 and 208) instead of reading it as a module global. Update TR021 and TR022 helper signatures accordingly.
-- [X] TR036 [P] Confirm the addendum did NOT modify `src/utils/rate_limiting.py` or `src/api/api_data_fetcher.py`. Run `git diff main -- src/utils/rate_limiting.py src/api/api_data_fetcher.py` and expect empty output. Enforces FR-A03 and FR-A10 (no new limiter API, no new module).
+- [X] TR036 [P] Confirm the addendum did NOT modify `src/foundation/support/utils/rate_limiting.py` or `src/mist/access/api/api_data_fetcher.py`. Run `git diff main -- src/foundation/support/utils/rate_limiting.py src/mist/access/api/api_data_fetcher.py` and expect empty output. Enforces FR-A03 and FR-A10 (no new limiter API, no new module).
 
 ---
 
@@ -146,9 +146,9 @@ Constitution Principle IV (TDD) requires these to be authored and reviewed BEFOR
 - [X] TR037 Run `cd src && pytest ../tests/unit/device/test_ap_profile_migration_manager.py -v`. Expect ZERO failures and every new pacing test (TR006-TR018, thirteen tests) reported as PASSED.
 - [X] TR038 Run `cd src && pytest -q`. Expect the full MistHelper suite to exit 0 (SC-A06).
 - [X] TR039 [P] Run `cd src && ruff check .`. Expect zero violations (SC-A06).
-- [X] TR040 [P] Run `interrogate -c pyproject.toml src/device/ap_profile_migration_manager.py`. Expect docstring coverage >= 90% (SC-A06, FR-A12).
-- [X] TR041 [P] Run `pydoclint --style=google src/device/ap_profile_migration_manager.py`. Expect zero violations (DOCS.md rule).
-- [X] TR042 Synthetic 10K-AP dry-load check. Add and run a temporary local script (do NOT commit) that: (a) builds a fixture of 10000 mock AP records, (b) patches `_mh.RateLimitingUtils.get_rate_limited_delay` to return `(None, 0.001)`, (c) patches `src.device.ap_profile_migration_manager.time.sleep` to a counting mock, (d) patches `updateSiteDevice` to always succeed, (e) invokes `_run_reassignment_loop`. Assert `time.sleep.call_count == 10000` (once per AP), assert `get_rate_limited_delay.call_count == 10000`, assert `pacing_stats["http_429_seen"] == 0`, assert `pacing_stats["non_429_failures"] == 0`, assert wall-clock elapsed < 2.0 s (SC-A01). Delete the script after the check; the equivalent is already covered by TR006 + TR008 in the committed suite.
+- [X] TR040 [P] Run `interrogate -c pyproject.toml src/mist/resources/device/ap_profile_migration_manager.py`. Expect docstring coverage >= 90% (SC-A06, FR-A12).
+- [X] TR041 [P] Run `pydoclint --style=google src/mist/resources/device/ap_profile_migration_manager.py`. Expect zero violations (DOCS.md rule).
+- [X] TR042 Synthetic 10K-AP dry-load check. Add and run a temporary local script (do NOT commit) that: (a) builds a fixture of 10000 mock AP records, (b) patches `_mh.RateLimitingUtils.get_rate_limited_delay` to return `(None, 0.001)`, (c) patches `src.mist.resources.device.ap_profile_migration_manager.time.sleep` to a counting mock, (d) patches `updateSiteDevice` to always succeed, (e) invokes `_run_reassignment_loop`. Assert `time.sleep.call_count == 10000` (once per AP), assert `get_rate_limited_delay.call_count == 10000`, assert `pacing_stats["http_429_seen"] == 0`, assert `pacing_stats["non_429_failures"] == 0`, assert wall-clock elapsed < 2.0 s (SC-A01). Delete the script after the check; the equivalent is already covered by TR006 + TR008 in the committed suite.
 - [X] TR043 Synthetic 10K-AP + 100x 429 injection check. Same as TR042 but the mocked `updateSiteDevice` raises a 429-shaped exception on every 100th call. Assert `pacing_stats["http_429_seen"] == 100`, assert stop-on-failure was NOT tripped (loop reached the 10000th AP), assert `_mh._api_usage_cache["initialized"]` was set to `False` >= 100 times. Delete the script after the check.
 - [X] TR044 Confirm the FR-A11 ASD-STE100 lint. If the project ships an ASD-STE100 linter under `tools/ste100_lint/` or similar (see AGENTS.md), run it against the changed strings in the four summary lines and the two WARNING messages. Otherwise, hand-review each new operator-visible string against `documentation/ASD-STE100_writing-guide.md`: one word per meaning, active voice, imperative-free for descriptive output, <=20 words per line, no phrasal verbs, no Latin abbreviations.
 
@@ -156,9 +156,9 @@ Constitution Principle IV (TDD) requires these to be authored and reviewed BEFOR
 
 ## Phase 6: Polish (post-green cleanup)
 
-- [ ] TR045 [P] Update the `## Recent Changes` block of the project-root `CLAUDE.md` with a single line: `1029-ap-profile-migration (rate limiting addendum): menus 207/208 now consult src/utils/rate_limiting.py before each PUT; 429s feed the PID limiter via cache invalidation; four new pacing fields on summary + JSONL audit.` Do NOT edit other CLAUDE.md sections (per project instructions).
+- [ ] TR045 [P] Update the `## Recent Changes` block of the project-root `CLAUDE.md` with a single line: `1029-ap-profile-migration (rate limiting addendum): menus 207/208 now consult src/foundation/support/utils/rate_limiting.py before each PUT; 429s feed the PID limiter via cache invalidation; four new pacing fields on summary + JSONL audit.` Do NOT edit other CLAUDE.md sections (per project instructions).
 - [ ] TR046 [P] Add a single inline `#` comment in `_run_reassignment_loop` and the revert loop pointing to the addendum specs: `# WHY: pacing per specs/1029-ap-profile-migration/spec-addendum-rate-limiting.md FR-A01/A02.` Constitution Principle VI compliance.
-- [ ] TR047 [P] Run `git status` and confirm the changed-file set is EXACTLY two files: `src/device/ap_profile_migration_manager.py` and `tests/unit/device/test_ap_profile_migration_manager.py`. Any third changed file (except `CLAUDE.md` from TR045) is a signal that the addendum scope has leaked; halt and reconcile before commit.
+- [ ] TR047 [P] Run `git status` and confirm the changed-file set is EXACTLY two files: `src/mist/resources/device/ap_profile_migration_manager.py` and `tests/unit/device/test_ap_profile_migration_manager.py`. Any third changed file (except `CLAUDE.md` from TR045) is a signal that the addendum scope has leaked; halt and reconcile before commit.
 - [ ] TR048 Commit sequence: three commits on `1029-ap-profile-migration`. Commit 1 = TR006-TR018 (failing tests). Commit 2 = TR019-TR033 (impl that turns them green). Commit 3 = TR045-TR046 (polish). Rationale: preserves TDD signal in git history for reviewer audit. Message prefix `feat(1029)` for commit 2, `test(1029)` for commit 1, `docs(1029)` for commit 3.
 
 ---
@@ -177,7 +177,7 @@ Constitution Principle IV (TDD) requires these to be authored and reviewed BEFOR
 **Prep tasks (safe together)**: TR003 and TR005 both read reference files independently.
 
 ```text
-Task: TR003 Read src/utils/rate_limiting.py
+Task: TR003 Read src/foundation/support/utils/rate_limiting.py
 Task: TR005 Read tests/unit/device/test_ap_profile_migration_manager.py
 ```
 

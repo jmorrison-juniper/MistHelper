@@ -2,7 +2,7 @@
 
 **Input**: Design documents from `/specs/188-graph-edge-definitions/`
 **Prerequisites**: plan.md, spec.md, data-model.md, research.md, quickstart.md
-**Target File**: `src/db/arango_writer.py` (single-file change)
+**Target File**: `src/foundation/persistence/db/arango_writer.py` (single-file change)
 **Tests**: Not requested — verification via `py_compile` and `--menu 165` runs
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -14,7 +14,7 @@
 
 ## Phase 1: Setup
 
-**Purpose**: No new project structure needed — all changes are additions to existing constants and one new method in `src/db/arango_writer.py`.
+**Purpose**: No new project structure needed — all changes are additions to existing constants and one new method in `src/foundation/persistence/db/arango_writer.py`.
 
 *No tasks in this phase.*
 
@@ -28,7 +28,7 @@
 
 ### Edge Definitions (append to `EDGE_DEFINITIONS` list starting at line 27)
 
-- [ ] T001 Add edge definitions batch 1a — core entity relationships (5 edges) in src/db/arango_writer.py
+- [ ] T001 Add edge definitions batch 1a — core entity relationships (5 edges) in src/foundation/persistence/db/arango_writer.py
 
   Append these 5 entries to the `EDGE_DEFINITIONS` list after the existing `ConfigSnapshotForEntity` entry (line ~86):
   ```python
@@ -38,9 +38,9 @@
   {"edge_collection": "ServiceBelongsToOrg", "from_vertex_collections": ["services"], "to_vertex_collections": ["orgs"]},
   {"edge_collection": "VpnBelongsToOrg", "from_vertex_collections": ["vpns"], "to_vertex_collections": ["orgs"]},
   ```
-  **Acceptance**: `python -m py_compile src/db/arango_writer.py` passes. `EDGE_DEFINITIONS` list has 16 entries (was 11).
+  **Acceptance**: `python -m py_compile src/foundation/persistence/db/arango_writer.py` passes. `EDGE_DEFINITIONS` list has 16 entries (was 11).
 
-- [ ] T002 Add edge definitions batch 1b — events and alarms (3 edges) in src/db/arango_writer.py
+- [ ] T002 Add edge definitions batch 1b — events and alarms (3 edges) in src/foundation/persistence/db/arango_writer.py
 
   Append after batch 1a:
   ```python
@@ -50,7 +50,7 @@
   ```
   **Acceptance**: `EDGE_DEFINITIONS` list has 19 entries. `py_compile` passes.
 
-- [ ] T003 Add edge definitions batch 1c — security and NAC (4 edges) in src/db/arango_writer.py
+- [ ] T003 Add edge definitions batch 1c — security and NAC (4 edges) in src/foundation/persistence/db/arango_writer.py
 
   Append after batch 1b:
   ```python
@@ -61,7 +61,7 @@
   ```
   **Acceptance**: `EDGE_DEFINITIONS` list has 23 entries. `py_compile` passes.
 
-- [ ] T004 Add edge definitions batch 1d — assets and config (5 edges) in src/db/arango_writer.py
+- [ ] T004 Add edge definitions batch 1d — assets and config (5 edges) in src/foundation/persistence/db/arango_writer.py
 
   Append after batch 1c:
   ```python
@@ -73,7 +73,7 @@
   ```
   **Acceptance**: `EDGE_DEFINITIONS` list has 28 entries. `py_compile` passes.
 
-- [ ] T005 Add edge definitions batch 1e — WLAN and template relationships (3 edges) in src/db/arango_writer.py
+- [ ] T005 Add edge definitions batch 1e — WLAN and template relationships (3 edges) in src/foundation/persistence/db/arango_writer.py
 
   Append after batch 1d:
   ```python
@@ -85,7 +85,7 @@
 
 ### Nested FK Field Support
 
-- [ ] T006 Add `_resolve_nested_field()` static method to `ArangoDBWriter` class in src/db/arango_writer.py
+- [ ] T006 Add `_resolve_nested_field()` static method to `ArangoDBWriter` class in src/foundation/persistence/db/arango_writer.py
 
   Add this method to the `ArangoDBWriter` class (after `_edge_key()` or before `_build_edges()`):
   ```python
@@ -103,7 +103,7 @@
   ```
   **Acceptance**: `py_compile` passes. Method is callable as `ArangoDBWriter._resolve_nested_field({"matching": {"site_ids": ["a"]}}, "matching.site_ids")` → `["a"]`.
 
-- [ ] T007 Update `_build_edges()` to use `_resolve_nested_field()` for dot-path fields in src/db/arango_writer.py
+- [ ] T007 Update `_build_edges()` to use `_resolve_nested_field()` for dot-path fields in src/foundation/persistence/db/arango_writer.py
 
   In `_build_edges()` (line ~430), replace the two `record.get()` calls for `from_field`/`to_field` with dot-path-aware logic:
   ```python
@@ -127,7 +127,7 @@
 
 - [ ] T008 Compile validation checkpoint for Phase 2 foundation
 
-  Run: `python -m py_compile src/db/arango_writer.py`
+  Run: `python -m py_compile src/foundation/persistence/db/arango_writer.py`
   **Acceptance**: Zero errors. `EDGE_DEFINITIONS` has 31 entries. `_resolve_nested_field()` exists. `_build_edges()` handles dot-paths.
 
 **Checkpoint**: Foundation ready — all 20 new edge definitions registered, dot-path FK support in place. User story implementation can now begin.
@@ -142,7 +142,7 @@
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Update existing `searchOrgWirelessClients` entry in `COLLECTION_VERTEX_MAP` to add `ClientConnectedToWlan` and `ClientBelongsToSite` edges in src/db/arango_writer.py
+- [ ] T009 [US1] Update existing `searchOrgWirelessClients` entry in `COLLECTION_VERTEX_MAP` to add `ClientConnectedToWlan` and `ClientBelongsToSite` edges in src/foundation/persistence/db/arango_writer.py
 
   The existing entry (line ~171) has 1 edge (`ClientConnectedToDevice`). Add 2 more edges to its `edges` list:
   ```python
@@ -163,7 +163,7 @@
   ```
   **Acceptance**: Entry has 3 edges total (≤5 limit). `py_compile` passes.
 
-- [ ] T010 [US1] Update existing `searchOrgWiredClients` entry in `COLLECTION_VERTEX_MAP` to add `ClientBelongsToSite` edge in src/db/arango_writer.py
+- [ ] T010 [US1] Update existing `searchOrgWiredClients` entry in `COLLECTION_VERTEX_MAP` to add `ClientBelongsToSite` edge in src/foundation/persistence/db/arango_writer.py
 
   The existing entry (line ~158) has 1 edge (`ClientConnectedToDevice`). Add:
   ```python
@@ -177,7 +177,7 @@
   ```
   **Acceptance**: Entry has 2 edges total. `py_compile` passes.
 
-- [ ] T011 [US1] Add `COLLECTION_VERTEX_MAP` entry for `searchOrgNacClients` in src/db/arango_writer.py
+- [ ] T011 [US1] Add `COLLECTION_VERTEX_MAP` entry for `searchOrgNacClients` in src/foundation/persistence/db/arango_writer.py
 
   Add new entry to `COLLECTION_VERTEX_MAP`:
   ```python
@@ -205,7 +205,7 @@
   ```
   **Acceptance**: New entry exists with 2 edges. `py_compile` passes.
 
-- [ ] T012 [US1] Update existing `listOrgWlans` entry in `COLLECTION_VERTEX_MAP` to add `WlanUsesMxTunnel` edge in src/db/arango_writer.py
+- [ ] T012 [US1] Update existing `listOrgWlans` entry in `COLLECTION_VERTEX_MAP` to add `WlanUsesMxTunnel` edge in src/foundation/persistence/db/arango_writer.py
 
   The existing entry (line ~189) has 2 edges (`WlanBelongsToSite`, `WlanUsesTemplate`). Add:
   ```python
@@ -222,7 +222,7 @@
 - [ ] T013 [US1] Compile and verify client-to-WLAN traversal
 
   Run:
-  1. `python -m py_compile src/db/arango_writer.py`
+  1. `python -m py_compile src/foundation/persistence/db/arango_writer.py`
   2. If ArangoDB is available: `python MistHelper.py --menu 165` then verify AQL traversal:
      ```aql
      FOR wlan IN wlans
@@ -245,7 +245,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Add `COLLECTION_VERTEX_MAP` entry for `searchOrgAlarms` in src/db/arango_writer.py
+- [ ] T014 [US2] Add `COLLECTION_VERTEX_MAP` entry for `searchOrgAlarms` in src/foundation/persistence/db/arango_writer.py
 
   Add new entry:
   ```python
@@ -265,7 +265,7 @@
   ```
   **Acceptance**: New entry with 1 edge. `py_compile` passes.
 
-- [ ] T015 [US2] Add `COLLECTION_VERTEX_MAP` entry for `searchOrgDeviceEvents` in src/db/arango_writer.py
+- [ ] T015 [US2] Add `COLLECTION_VERTEX_MAP` entry for `searchOrgDeviceEvents` in src/foundation/persistence/db/arango_writer.py
 
   Add new entry:
   ```python
@@ -296,7 +296,7 @@
 - [ ] T016 [US2] Compile and verify device-to-events traversal
 
   Run:
-  1. `python -m py_compile src/db/arango_writer.py`
+  1. `python -m py_compile src/foundation/persistence/db/arango_writer.py`
   2. If ArangoDB is available: verify AQL traversal:
      ```aql
      FOR device IN devices
@@ -319,7 +319,7 @@
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgNetworks`, `listOrgServices`, `listOrgVpns` in src/db/arango_writer.py
+- [ ] T017 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgNetworks`, `listOrgServices`, `listOrgVpns` in src/foundation/persistence/db/arango_writer.py
 
   Add 3 new entries (org-level entities with simple `org_id` FK):
   ```python
@@ -347,7 +347,7 @@
   ```
   **Acceptance**: 3 new entries, each with 1 edge. `py_compile` passes.
 
-- [ ] T018 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgNacRules` and `listOrgNacTags` in src/db/arango_writer.py
+- [ ] T018 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgNacRules` and `listOrgNacTags` in src/foundation/persistence/db/arango_writer.py
 
   Add 2 new entries (security domain with nested FK fields):
   ```python
@@ -371,7 +371,7 @@
   **Note**: `listOrgNacRules` uses dot-path FK fields (`matching.site_ids`, `matching.sitegroup_ids`) which require the `_resolve_nested_field()` added in T006/T007.
   **Acceptance**: 2 new entries. NAC rules entry uses dot-path FK fields. `py_compile` passes.
 
-- [ ] T019 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgSecPolicies` and `listOrgServicePolicies` in src/db/arango_writer.py
+- [ ] T019 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgSecPolicies` and `listOrgServicePolicies` in src/foundation/persistence/db/arango_writer.py
 
   Add 2 new entries (both map to `security_policies` vertex):
   ```python
@@ -392,7 +392,7 @@
   ```
   **Acceptance**: 2 new entries sharing the same vertex collection. `py_compile` passes.
 
-- [ ] T020 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgPsks` and `listOrgAssets` in src/db/arango_writer.py
+- [ ] T020 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgPsks` and `listOrgAssets` in src/foundation/persistence/db/arango_writer.py
 
   Add 2 new entries (site-level FK entities):
   ```python
@@ -415,7 +415,7 @@
   ```
   **Acceptance**: 2 new entries. Assets entry has `ensure_target_vertices` for maps stubs. `py_compile` passes.
 
-- [ ] T021 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgWebhooks` and `listOrgSiteGroups` in src/db/arango_writer.py
+- [ ] T021 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgWebhooks` and `listOrgSiteGroups` in src/foundation/persistence/db/arango_writer.py
 
   Add 2 new entries:
   ```python
@@ -437,7 +437,7 @@
   **Note**: `listOrgSiteGroups` is a new entry — the `listOrgSites` entry already handles site→sitegroup edges via `SiteBelongsToSiteGroup`. This adds the reverse: sitegroup→site via `site_ids` array field.
   **Acceptance**: 2 new entries. `py_compile` passes.
 
-- [ ] T022 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgMxEdgeClusters`, `listOrgNacPortals`, `listOrgAuditLogs` in src/db/arango_writer.py
+- [ ] T022 [US3] Add `COLLECTION_VERTEX_MAP` entries for `listOrgMxEdgeClusters`, `listOrgNacPortals`, `listOrgAuditLogs` in src/foundation/persistence/db/arango_writer.py
 
   Add 3 new entries (remaining list endpoints):
   ```python
@@ -457,7 +457,7 @@
   **Note**: These have no FK edges (or only `org_id` handled elsewhere). They register vertex collections so data populates the graph as vertices.
   **Acceptance**: 3 new entries (vertex-only, no edges). `py_compile` passes.
 
-- [ ] T023 [US3] Update existing `listOrgTemplates` entry (or add new) in `COLLECTION_VERTEX_MAP` to add `TemplateAppliedToSite` and `TemplateAppliedToSiteGroup` edges in src/db/arango_writer.py
+- [ ] T023 [US3] Update existing `listOrgTemplates` entry (or add new) in `COLLECTION_VERTEX_MAP` to add `TemplateAppliedToSite` and `TemplateAppliedToSiteGroup` edges in src/foundation/persistence/db/arango_writer.py
 
   If `listOrgTemplates` already exists in `COLLECTION_VERTEX_MAP`, add edges. Otherwise create:
   ```python
@@ -473,7 +473,7 @@
   **Note**: Uses dot-path FK fields (`applies.site_ids`, `applies.sitegroup_ids`) requiring `_resolve_nested_field()`.
   **Acceptance**: Entry has 2 edges with dot-path FK fields. `py_compile` passes.
 
-- [ ] T024 [US3] Add `ENTITY_TYPE_TO_VERTEX` entries for new vertex collections in src/db/arango_writer.py
+- [ ] T024 [US3] Add `ENTITY_TYPE_TO_VERTEX` entries for new vertex collections in src/foundation/persistence/db/arango_writer.py
 
   Append to the `ENTITY_TYPE_TO_VERTEX` dict (line ~88):
   ```python
@@ -490,7 +490,7 @@
 - [ ] T025 [US3] Compile and verify config-to-site traversal
 
   Run:
-  1. `python -m py_compile src/db/arango_writer.py`
+  1. `python -m py_compile src/foundation/persistence/db/arango_writer.py`
   2. If ArangoDB is available: verify AQL traversal:
      ```aql
      FOR rule IN nac_rules
@@ -512,7 +512,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Update `ConfigSnapshotForEntity` edge definition in `EDGE_DEFINITIONS` to include new target vertex collections in src/db/arango_writer.py
+- [ ] T026 [US4] Update `ConfigSnapshotForEntity` edge definition in `EDGE_DEFINITIONS` to include new target vertex collections in src/foundation/persistence/db/arango_writer.py
 
   Find the existing `ConfigSnapshotForEntity` entry (line ~83) and expand `to_vertex_collections`:
   ```python
@@ -566,7 +566,7 @@
 
 **Purpose**: Final validation and documentation
 
-- [ ] T031 Final `python -m py_compile src/db/arango_writer.py` validation
+- [ ] T031 Final `python -m py_compile src/foundation/persistence/db/arango_writer.py` validation
 
   Run compile check one final time to confirm no regressions from accumulated edits.
   **Acceptance**: Zero compile errors.
@@ -607,7 +607,7 @@ Phase 7 (Polish)            <- Depends on Phase 6
 
 ### Single-File Constraint
 
-All tasks edit `src/db/arango_writer.py`. While US1/US2/US3 are logically independent, they cannot be parallelized across agents because they modify the same file. Execute sequentially in priority order: US1 → US2 → US3 → US4.
+All tasks edit `src/foundation/persistence/db/arango_writer.py`. While US1/US2/US3 are logically independent, they cannot be parallelized across agents because they modify the same file. Execute sequentially in priority order: US1 → US2 → US3 → US4.
 
 ### Within Each Phase
 

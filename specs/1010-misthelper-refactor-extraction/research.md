@@ -32,7 +32,7 @@ All decisions below inform Phase 1 design (`data-model.md`, `contracts/*`, `quic
 - *Trust analyzer output blindly*: rejected — dynamic dispatch exists in the codebase (e.g. dispatch tables, string-keyed lookups) and could hide a second caller.
 - *Full AST re-analysis with a second tool*: rejected — over-engineered for a one-caller confirmation; text grep is sufficient because a hit outside the analyzer-reported callsite is enough to abort.
 
-**Callsite rewrite pattern**: The single caller's `from MistHelper import SymbolName` (or `SymbolName(...)` bare call) is rewritten in the same commit to `from src.refactors.new_module import SymbolName` and the original definition is deleted from `MistHelper.py`. No intermediate revision on the branch may leave a dangling import or dangling definition (FR-003).
+**Callsite rewrite pattern**: The single caller's `from MistHelper import SymbolName` (or `SymbolName(...)` bare call) is rewritten in the same commit to `from src.foundation.support.refactors.new_module import SymbolName` and the original definition is deleted from `MistHelper.py`. No intermediate revision on the branch may leave a dangling import or dangling definition (FR-003).
 
 ---
 
@@ -68,12 +68,12 @@ All decisions below inform Phase 1 design (`data-model.md`, `contracts/*`, `quic
 
 ## 5. `AddressComparisonCounters` Fold-In Pattern (FR-015 Exception)
 
-**Decision**: `AddressComparisonCounters` does NOT get its own file under `src/refactors/`. Instead it is folded into `src/inventory/csv_comparator.py::CsvComparatorManager` — either as a nested class, an inner data structure, or (preferred) inlined fields on `CsvComparatorManager` if the counter's shape is small enough. The sole caller already lives in `csv_comparator.py`, so the extraction is a *local move* from `MistHelper.py` into the caller's home module.
+**Decision**: `AddressComparisonCounters` does NOT get its own file under `src/foundation/support/refactors/`. Instead it is folded into `src/mist/resources/inventory/csv_comparator.py::CsvComparatorManager` — either as a nested class, an inner data structure, or (preferred) inlined fields on `CsvComparatorManager` if the counter's shape is small enough. The sole caller already lives in `csv_comparator.py`, so the extraction is a *local move* from `MistHelper.py` into the caller's home module.
 
-**Rationale**: FR-015 makes this an explicit exception to the "new module under `src/refactors/`" rule. Creating `src/refactors/address_comparison_counters.py` would introduce a cross-module import from `csv_comparator.py` back into `refactors/`, which is precisely the coupling this initiative is trying to reduce. Landing the symbol next to its only caller minimizes import surface and lets the caller reference it as a private class member (or module-private class in the same file).
+**Rationale**: FR-015 makes this an explicit exception to the "new module under `src/foundation/support/refactors/`" rule. Creating `src/foundation/support/refactors/address_comparison_counters.py` would introduce a cross-module import from `csv_comparator.py` back into `refactors/`, which is precisely the coupling this initiative is trying to reduce. Landing the symbol next to its only caller minimizes import surface and lets the caller reference it as a private class member (or module-private class in the same file).
 
 **Alternatives considered**:
-- *Create `src/refactors/address_comparison_counters.py`*: rejected by FR-015 — introduces avoidable cross-module import for a 62-LoC single-caller helper.
+- *Create `src/foundation/support/refactors/address_comparison_counters.py`*: rejected by FR-015 — introduces avoidable cross-module import for a 62-LoC single-caller helper.
 - *Fold into `csv_comparator.py` at module scope (private, underscore-prefixed)*: acceptable fallback if the counter cannot cleanly become a nested/inner class, but the preferred landing is inside `CsvComparatorManager` per FR-015's explicit target.
 - *Split fields across `CsvComparatorManager` and delete the helper class entirely*: acceptable if the counter is just a bag of ints and the resulting `CsvComparatorManager` still lands at A+/100 with clear inline commentary — this collapses the class rather than moving it.
 

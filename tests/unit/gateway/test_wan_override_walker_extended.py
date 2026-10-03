@@ -12,12 +12,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.gateway.overrides import (
+from src.mist.resources.gateway.overrides import (
     GatewayOverrideDependencies,
     WanOverrideWalker,
     configure_gateway_override_dependencies,
 )
-from src.gateway.overrides import _deps as override_deps  # Module-level DI slots
+from src.mist.resources.gateway.overrides import _deps as override_deps  # Module-level DI slots
 
 
 class _PathResolver:
@@ -97,10 +97,10 @@ def test_run_live_passes_invokes_second_and_third_pass_helpers(tmp_path: Path) -
 
     with (
         patch(
-            "src.gateway.overrides.wan_override_walker.DeviceDataFetcher.fetch_all",
+            "src.mist.resources.gateway.overrides.wan_override_walker.DeviceDataFetcher.fetch_all",
             return_value=fake_cache,
         ) as fetch_all,
-        patch("src.gateway.overrides.wan_override_walker.OverrideReportWriter.write_full") as write_full,
+        patch("src.mist.resources.gateway.overrides.wan_override_walker.OverrideReportWriter.write_full") as write_full,
     ):
         WanOverrideWalker._run_live_passes(
             fast=True,  # Fast mode selects the pool-managed fetch path
@@ -139,11 +139,13 @@ def test_run_pipeline_invokes_write_empty_when_no_overrides(tmp_path: Path) -> N
 
     with (
         patch(
-            "src.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
+            "src.mist.resources.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
             return_value=[],  # Force _classify_row to return None -> no overrides accumulated
         ),
-        patch("src.gateway.overrides.wan_override_walker.OverrideReportWriter.write_empty") as write_empty,
-        patch("src.gateway.overrides.wan_override_walker.OverrideReportWriter.write_full") as write_full,
+        patch(
+            "src.mist.resources.gateway.overrides.wan_override_walker.OverrideReportWriter.write_empty"
+        ) as write_empty,
+        patch("src.mist.resources.gateway.overrides.wan_override_walker.OverrideReportWriter.write_full") as write_full,
     ):
         WanOverrideWalker._run_pipeline(fast=False, target_ports=["ge-0/0/1"])
 
@@ -172,10 +174,10 @@ def test_run_pipeline_dispatches_live_passes_when_overrides_detected(tmp_path: P
 
     with (
         patch(
-            "src.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
+            "src.mist.resources.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
             return_value=["ge-0/0/1"],  # Non-empty -> _classify_row returns a device_info dict
         ),
-        patch("src.gateway.overrides.wan_override_walker.WanOverrideWalker._run_live_passes") as live,
+        patch("src.mist.resources.gateway.overrides.wan_override_walker.WanOverrideWalker._run_live_passes") as live,
     ):
         WanOverrideWalker._run_pipeline(fast=False, target_ports=["ge-0/0/1"])
 
@@ -247,7 +249,7 @@ def test_classify_row_returns_none_when_identifiers_missing() -> None:
 def test_classify_row_returns_none_when_no_overridden_ports_detected() -> None:
     """_classify_row must return None when OverrideClassifier reports no overridden ports."""
     with patch(
-        "src.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
+        "src.mist.resources.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
         return_value=[],  # No overrides on this row
     ):
         result = WanOverrideWalker._classify_row(
@@ -263,7 +265,7 @@ def test_classify_row_returns_none_when_no_overridden_ports_detected() -> None:
 def test_classify_row_returns_device_info_when_overrides_present() -> None:
     """_classify_row must return an 8-key device-info dict when overrides are detected."""
     with patch(
-        "src.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
+        "src.mist.resources.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
         return_value=["ge-0/0/1"],  # One overridden port drives the full path
     ):
         result = WanOverrideWalker._classify_row(
@@ -291,7 +293,7 @@ def test_identify_devices_skips_none_entries_and_keys_by_device_id() -> None:
         {"name": "", "site_id": "", "id": ""},  # Guarded out by _extract_row_identifiers
     ]
     with patch(
-        "src.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
+        "src.mist.resources.gateway.overrides.wan_override_walker.OverrideClassifier.classify",
         return_value=["ge-0/0/1"],  # Non-empty for the valid row
     ):
         result = WanOverrideWalker._identify_devices(
@@ -372,7 +374,7 @@ def test_assemble_entries_builds_one_row_per_device_port_pair() -> None:
         # dev-2 intentionally missing from cache to exercise the ({}, {}) fallback
     }
     with patch(
-        "src.gateway.overrides.wan_override_walker.OverrideClassifier.build_port_entry",
+        "src.mist.resources.gateway.overrides.wan_override_walker.OverrideClassifier.build_port_entry",
         side_effect=lambda device_info, port_name, **_: {  # Return unique identifier per pair
             "device_id": device_info["device_id"],
             "port_name": port_name,

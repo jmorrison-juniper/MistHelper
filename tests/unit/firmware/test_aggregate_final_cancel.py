@@ -16,14 +16,14 @@ from typing import Any
 
 import pytest
 
-from src.firmware.aggregate_upgrade_service import (
+from src.operations.execution.firmware.aggregate_upgrade_service import (
     FINAL_OPERATION_STATES,
     AggregateBuildInput,
     AggregateUpgradeService,
     FinalOperationError,
 )
-from src.firmware.org_upgrade_service import OrgUpgradeResult
-from src.firmware.upgrade_service import CancelOutcome, DeviceTarget, UpgradeOptions
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
+from src.operations.execution.firmware.upgrade_service import CancelOutcome, DeviceTarget, UpgradeOptions
 
 ORG_ID = "44444444-4444-4444-4444-444444444444"  # The organization of the operation.
 SITE_ID = "55555555-5555-5555-5555-555555555555"  # The one site of the operation.

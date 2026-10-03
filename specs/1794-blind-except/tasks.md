@@ -14,7 +14,7 @@
 
 ## Phase 2: Implementation
 
-- [x] T004 [US1] Narrow the firmware stats handler in `src\firmware\running_version.py`. (delivered: `src\firmware\running_version.py`)
+- [x] T004 [US1] Narrow the firmware stats handler in `src\operations\execution\firmware\running_version.py`. (delivered: `src\operations\execution\firmware\running_version.py`)
 - [x] T005 [US1] Add a test for runtime failure reporting in `tests\unit\firmware\test_running_version.py`. (delivered: `tests\unit\firmware\test_running_version.py`)
 - [x] T006 [US1] Add a test for programming error propagation in `tests\unit\firmware\test_running_version.py`. (delivered: `tests\unit\firmware\test_running_version.py`)
 - [x] T007 [US1] Patch SSR flow tests to isolate the running-version overlay in `tests\unit\firmware\test_firmware_manager_ssr.py`. (delivered: `tests\unit\firmware\test_firmware_manager_ssr.py`)

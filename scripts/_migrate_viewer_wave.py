@@ -5,7 +5,7 @@ Usage: `python scripts/_migrate_viewer_wave.py <wave>` where wave is one of
 
 For each wave the script:
 1. Parses `viewer_callbacks.py` with :mod:`ast` to locate the named methods.
-2. Writes a helper module `src/maps/launcher/_viewer_<wave>.py` containing
+2. Writes a helper module `src/interfaces/visualization/maps/launcher/_viewer_<wave>.py` containing
    a `_Viewer<Wave>` class with the extracted method bodies plus a
    `register(app)` method wiring this wave's Dash `app.callback` blocks.
 3. Rewrites `viewer_callbacks.py` in place: replaces the moved methods
@@ -22,12 +22,12 @@ import re
 import sys
 from pathlib import Path
 
-SOURCE = Path("src/maps/launcher/viewer_callbacks.py")
+SOURCE = Path("src/interfaces/visualization/maps/launcher/viewer_callbacks.py")
 
 
 WAVES: dict[str, dict[str, object]] = {
     "ui": {
-        "target": Path("src/maps/launcher/_viewer_ui.py"),
+        "target": Path("src/interfaces/visualization/maps/launcher/_viewer_ui.py"),
         "attr": "_ui",
         "class": "_ViewerUI",
         "public": [
@@ -56,7 +56,7 @@ WAVES: dict[str, dict[str, object]] = {
         ],
     },
     "refresh": {
-        "target": Path("src/maps/launcher/_viewer_refresh.py"),
+        "target": Path("src/interfaces/visualization/maps/launcher/_viewer_refresh.py"),
         "attr": "_refresh",
         "class": "_ViewerRefresh",
         "public": [
@@ -82,7 +82,7 @@ WAVES: dict[str, dict[str, object]] = {
         ],
     },
     "clone": {
-        "target": Path("src/maps/launcher/_viewer_clone.py"),
+        "target": Path("src/interfaces/visualization/maps/launcher/_viewer_clone.py"),
         "attr": "_clone",
         "class": "_ViewerClone",
         "public": [
@@ -103,7 +103,7 @@ WAVES: dict[str, dict[str, object]] = {
         ],
     },
     "drawing": {
-        "target": Path("src/maps/launcher/_viewer_drawing.py"),
+        "target": Path("src/interfaces/visualization/maps/launcher/_viewer_drawing.py"),
         "attr": "_drawing",
         "class": "_ViewerDrawing",
         "public": [
@@ -124,7 +124,7 @@ WAVES: dict[str, dict[str, object]] = {
         ],
     },
     "site": {
-        "target": Path("src/maps/launcher/_viewer_site_switch.py"),
+        "target": Path("src/interfaces/visualization/maps/launcher/_viewer_site_switch.py"),
         "attr": "_site",
         "class": "_ViewerSiteSwitch",
         "public": [
@@ -159,7 +159,7 @@ WAVES: dict[str, dict[str, object]] = {
         ],
     },
     "url": {
-        "target": Path("src/maps/launcher/_viewer_url_switch.py"),
+        "target": Path("src/interfaces/visualization/maps/launcher/_viewer_url_switch.py"),
         "attr": "_url",
         "class": "_ViewerUrlSwitch",
         "public": [

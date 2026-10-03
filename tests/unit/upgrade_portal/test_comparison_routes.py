@@ -9,7 +9,7 @@ from unittest.mock import Mock  # WHY: dependency mocking
 
 from flask import Flask  # WHY: route tests need a small application
 
-from src.upgrade_portal.app.routes.comparison import create_comparison_routes
+from src.interfaces.portals.upgrade_portal.app.routes.comparison import create_comparison_routes
 
 
 class TestGetComparisonResultsRoute:

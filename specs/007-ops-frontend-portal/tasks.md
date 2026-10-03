@@ -18,7 +18,7 @@
 All paths are relative to the repository root. The frontend portal lives in `ops-portal/`:
 
 - Source: `ops-portal/src/`
-- API client & query factories: `ops-portal/src/api/` (5 files: client, config, deploy, audit, sync)
+- API client & query factories: `ops-portal/src/mist/access/api/` (5 files: client, config, deploy, audit, sync)
 - Shared components: `ops-portal/src/components/` (DiffViewer, ConfirmationDialog, PaginatedTable, ProgressTracker)
 - Feature modules: `ops-portal/src/features/` (5 dirs: dashboard, config, deploy, audit, drift)
 - Shared hooks: `ops-portal/src/hooks/` (5 files: useNavigationContext, useSession, useSettings, useConnectivity, useTelemetry)
@@ -53,7 +53,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ### API Client
 
-- [X] T009 Create ApiClient class with typed get/post/put/delete methods, /api/v1 base URL, Authorization header injection, response envelope unwrapping (extract data from {data, meta, errors}), error code mapping (401 redirect, 403 inline, 404 not found, 409 conflict, 429 rate limit, 5xx unavailable), and shared types (ApiResponse, PaginationMeta, ApiError, DiffChange, DiffSummary, NotificationItem, TimezonePreference) per FR-040 in ops-portal/src/api/client.ts
+- [X] T009 Create ApiClient class with typed get/post/put/delete methods, /api/v1 base URL, Authorization header injection, response envelope unwrapping (extract data from {data, meta, errors}), error code mapping (401 redirect, 403 inline, 404 not found, 409 conflict, 429 rate limit, 5xx unavailable), and shared types (ApiResponse, PaginationMeta, ApiError, DiffChange, DiffSummary, NotificationItem, TimezonePreference) per FR-040 in ops-portal/src/mist/access/api/client.ts
 
 ### State Management
 
@@ -91,7 +91,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ### Implementation for User Story 1
 
-- [X] T022 [US1] Create sync query factory (syncQueries, systemQueries) with inventory queries (orgs, sites, devices), sync status query, drift alert count query, notification list query, and Domain 5 types (SyncStatus, EntitySyncCount, InventoryDevice, InventorySite, InventoryOrg, DriftAlert) in ops-portal/src/api/sync.ts
+- [X] T022 [US1] Create sync query factory (syncQueries, systemQueries) with inventory queries (orgs, sites, devices), sync status query, drift alert count query, notification list query, and Domain 5 types (SyncStatus, EntitySyncCount, InventoryDevice, InventorySite, InventoryOrg, DriftAlert) in ops-portal/src/mist/access/api/sync.ts
 - [X] T023 [US1] Create DashboardPage with organization summary cards displaying org name, site count, device count, sync state badge (synced/stale/error), and active alert count (drift + deploy failures), with 30s passive polling via syncQueries per FR-008 in ops-portal/src/pages/dashboard/DashboardPage.tsx
 - [X] T024 [P] [US1] Create OrgDetailPage with paginated site list filtered by orgId showing site name, location, device count, and health indicators, setting orgId/orgName in NavigationContext for hierarchical drill-down per FR-002 in ops-portal/src/pages/dashboard/OrgDetailPage.tsx
 - [X] T025 [P] [US1] Create SiteDetailPage with device list grouped by type tabs (AP, switch, gateway) using PaginatedTable, showing connection status indicator, firmware version, and uptime, setting siteId/siteName in NavigationContext in ops-portal/src/pages/dashboard/SiteDetailPage.tsx
@@ -112,7 +112,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ### Implementation for User Story 2
 
-- [X] T030 [US2] Create config query factory (configQueries) with revision list query, diff mutation, time-travel query, baseline list query, and Domain 2 types (ConfigRevision, ConfigDiff, TimeTravelSnapshot, PortState, ConfigBaseline) in ops-portal/src/api/config.ts
+- [X] T030 [US2] Create config query factory (configQueries) with revision list query, diff mutation, time-travel query, baseline list query, and Domain 2 types (ConfigRevision, ConfigDiff, TimeTravelSnapshot, PortState, ConfigBaseline) in ops-portal/src/mist/access/api/config.ts
 - [X] T031 [US2] Create TimeTravelPage with device selector pre-populated from NavigationContext, date/time picker with calendar and clock inputs, timeline scrubber integration, and main panel displaying HistoricalStatePanel per FR-011 in ops-portal/src/pages/config/TimeTravelPage.tsx
 - [X] T032 [P] [US2] Create TimelineScrubber component with interactive drag-to-select timestamp on a horizontal axis, smooth state updates via TanStack Query without full page reload, and dual display of queried timestamp vs actual data timestamp in ops-portal/src/features/config/TimelineScrubber.tsx
 - [X] T033 [P] [US2] Create HistoricalStatePanel displaying device configuration as key-value tree, port states table (PortState[] with up/down/disabled indicators), connected client count, and health metrics gauges from TimeTravelSnapshot response in ops-portal/src/features/config/HistoricalStatePanel.tsx
@@ -131,7 +131,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ### Implementation for User Story 3
 
-- [X] T036 [US3] Create deploy query factory (deployQueries) with job status query (for install progress tracking), install-from-revision mutation, and Domain 3 types (DeployJob, JobStatus, CheckConfig) in ops-portal/src/api/deploy.ts
+- [X] T036 [US3] Create deploy query factory (deployQueries) with job status query (for install progress tracking), install-from-revision mutation, and Domain 3 types (DeployJob, JobStatus, CheckConfig) in ops-portal/src/mist/access/api/deploy.ts
 - [X] T037 [US3] Create RevisionsPage with paginated revision history using PaginatedTable showing revision ID, captured timestamp (with timezone toggle), actor, source badge (sync/manual/restore), and content hash, scoped to entity from NavigationContext per FR-014 in ops-portal/src/pages/config/RevisionsPage.tsx
 - [X] T038 [US3] Implement revision comparison: checkbox or click-select for two revisions, "Compare" button calling POST /config/diff, and field-level diff rendering using DiffViewer with change summary counts (added, removed, modified) per FR-015 in ops-portal/src/features/config/RevisionDiff.tsx
 - [X] T039 [US3] Implement "Install from Revision" flow: button on revision row, ConfirmationDialog displaying target device count, revision timestamp, blast radius from dry-run, and RESTORE keyword requirement, calling POST /config/install-from-revision on confirmation per FR-016 in ops-portal/src/features/config/InstallFromRevision.tsx
@@ -149,7 +149,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ### Implementation for User Story 4
 
-- [X] T041 [US4] Extend deploy query factory with dry-run mutation, job creation mutation, approval/reject mutations, cancel mutation, and additional Domain 3 types (DryRunResult, BlastRadius, ChangeTemplate, TemplateParam) in ops-portal/src/api/deploy.ts
+- [X] T041 [US4] Extend deploy query factory with dry-run mutation, job creation mutation, approval/reject mutations, cancel mutation, and additional Domain 3 types (DryRunResult, BlastRadius, ChangeTemplate, TemplateParam) in ops-portal/src/mist/access/api/deploy.ts
 - [X] T042 [US4] Create JobsListPage with filterable PaginatedTable (status filter: draft/pending_approval/approved/scheduled/running/completed/failed/cancelled/rolled_back, date range, creator), status badges with color coding, and row links to JobDetailPage per FR-021 in ops-portal/src/pages/deploy/jobs/JobsListPage.tsx
 - [X] T043 [US4] Create JobDetailPage with job metadata (name, status, schedule, creator), target device list, change payload viewer, pre/post-check configuration and results, rollback status, approval state, and ProgressTracker for running jobs in ops-portal/src/pages/deploy/jobs/JobDetailPage.tsx
 - [X] T044 [US4] Create NewJobPage with multi-step wizard: step 1 target selection via org/site/device browser or search, step 2 change payload entry (JSON editor or template selection), step 3 schedule date/time with explicit IANA timezone picker per FR-045, step 4 pre/post-check configuration and auto-rollback toggle, step 5 review and submit per FR-018 in ops-portal/src/pages/deploy/jobs/NewJobPage.tsx
@@ -170,7 +170,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ### Implementation for User Story 5
 
-- [X] T049 [US5] Create audit query factory (auditQueries) with record list query, record detail query, export creation mutation, export status query, compliance pack mutation, pack status query, and correlation queries, plus Domain 4 types (AuditRecord, AuditExport, AuditFilters, IncidentCorrelation, CompliancePack) in ops-portal/src/api/audit.ts
+- [X] T049 [US5] Create audit query factory (auditQueries) with record list query, record detail query, export creation mutation, export status query, compliance pack mutation, pack status query, and correlation queries, plus Domain 4 types (AuditRecord, AuditExport, AuditFilters, IncidentCorrelation, CompliancePack) in ops-portal/src/mist/access/api/audit.ts
 - [X] T050 [US5] Create AuditListPage with filterable PaginatedTable (entity type, actor, date range, change type filters), columns for timestamp, actor, entity type, entity name, change type, and change summary, with row click navigating to AuditDetailPage per FR-022 in ops-portal/src/pages/audit/AuditListPage.tsx
 - [X] T051 [US5] Create AuditDetailPage with full old-to-new field-level diff using DiffViewer (oldValues vs newValues), linked revision ID as clickable link to RevisionsPage, associated deployment job link to JobDetailPage, and audit metadata (timestamp, actor, entity) per FR-023 in ops-portal/src/pages/audit/AuditDetailPage.tsx
 - [X] T052 [US5] Create AuditExportPage with current filter summary, format selector (CSV/JSON radio), "Export" button calling POST /audit/export, ProgressTracker showing generation progress with 5s polling, and download link on completion per FR-024 in ops-portal/src/pages/audit/AuditExportPage.tsx
@@ -190,7 +190,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ### Implementation for User Story 6
 
-- [X] T056 [US6] Extend deploy query factory with rollout list query, rollout detail query, rollout creation mutation, activate/pause/resume/rollback-wave mutations, golden image list query, and Domain 3 types (Rollout, RolloutStatus, RolloutWave, HealthGate, GoldenImage) in ops-portal/src/api/deploy.ts
+- [X] T056 [US6] Extend deploy query factory with rollout list query, rollout detail query, rollout creation mutation, activate/pause/resume/rollback-wave mutations, golden image list query, and Domain 3 types (Rollout, RolloutStatus, RolloutWave, HealthGate, GoldenImage) in ops-portal/src/mist/access/api/deploy.ts
 - [X] T057 [US6] Create RolloutListPage with rollout plans list showing name, status badge (draft/active/paused/completed/cancelled), wave count, overall progress percentage, and creation date, with row links to RolloutDetailPage in ops-portal/src/pages/deploy/rollouts/RolloutListPage.tsx
 - [X] T058 [US6] Create NewRolloutPage with wizard: name input, golden image selection from approved images list, device/site assignment to numbered waves via multi-select, health gate criteria (min client percentage, max alarm count, wait minutes between waves), and promotion mode toggle (automatic/manual) per FR-027 in ops-portal/src/pages/deploy/rollouts/NewRolloutPage.tsx
 - [X] T059 [US6] Create RolloutDetailPage with timeline visualization showing each wave as a horizontal progress bar with completed/pending/failed device counts, health gate status badge (passed/pending/failed), elapsed time, health gate failure alert banner when rollout is paused due to failed health gate (per US6-AS5), auto-promotion event log, and 5s active polling while rollout is active per FR-028 in ops-portal/src/pages/deploy/rollouts/RolloutDetailPage.tsx
@@ -284,7 +284,7 @@ All paths are relative to the repository root. The frontend portal lives in `ops
 
 ```bash
 # Step 1: Create ApiClient (blocking for all query usage)
-Task T009: "Create ApiClient class in ops-portal/src/api/client.ts"
+Task T009: "Create ApiClient class in ops-portal/src/mist/access/api/client.ts"
 
 # Step 2: Launch all stores and connectivity hook in parallel
 Task T010: "Create navigation store in ops-portal/src/hooks/useNavigationContext.ts"
@@ -313,7 +313,7 @@ Task T021: "Create LoginPage in ops-portal/src/pages/shell/LoginPage.tsx"
 
 ```bash
 # Step 1: Create query factory (blocking for all dashboard data)
-Task T022: "Create syncQueries factory in ops-portal/src/api/sync.ts"
+Task T022: "Create syncQueries factory in ops-portal/src/mist/access/api/sync.ts"
 
 # Step 2: Launch dashboard page
 Task T023: "Create DashboardPage in ops-portal/src/pages/dashboard/DashboardPage.tsx"

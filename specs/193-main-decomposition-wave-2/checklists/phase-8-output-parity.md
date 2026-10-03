@@ -6,8 +6,8 @@ Date: 2026-05-26
 
 - WebSocket service ping extraction for menu operation `120`.
 - Extracted manager and discovery/payload composition logic:
-  - `src/websocket/service_ping_manager.py`
-  - `src/websocket/service_ping_discovery.py`
+  - `src/mist/realtime/websocket/service_ping_manager.py`
+  - `src/mist/realtime/websocket/service_ping_discovery.py`
 
 ## Parity Verification Approach
 

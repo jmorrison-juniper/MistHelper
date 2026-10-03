@@ -5,7 +5,7 @@
 
 ## R1: Where the trail path comes from
 
-`src/upgrade_portal/runtime/lock.py` line 531 sets `AUDIT_DIRECTORY` to
+`src/interfaces/portals/upgrade_portal/runtime/lock.py` line 531 sets `AUDIT_DIRECTORY` to
 `data`. The function `_audit_path` reads that constant at call time. It puts
 a relative directory under the checkout root, and it keeps an absolute
 directory as written. Its docstring states the reason: a test points the
@@ -20,7 +20,7 @@ run, inside the test process that serves the portal.
 
 ## R2: Who reads the trail
 
-`read_audit_rows` in `src/upgrade_portal/compare/lock_audit.py` reads
+`read_audit_rows` in `src/interfaces/portals/upgrade_portal/compare/lock_audit.py` reads
 `audit_trail_path()`. The history route `audit_history_rows` calls that
 reader. The Audit log card therefore follows the placement with no other
 change.
@@ -51,7 +51,7 @@ children. `environment.py` already holds more than five members.
 ## R5: The guard
 
 The existing session fixture `persistent_store_baseline` compares three
-header values. `add_e2e_run_header` in `src/upgrade_portal/app/factory.py`
+header values. `add_e2e_run_header` in `src/interfaces/portals/upgrade_portal/app/factory.py`
 sets each value to the fixed text "0". The fixture compares 0 with 0. It
 measured no file while the test portal wrote 176 lines to the trail of the
 #3492 worktree.

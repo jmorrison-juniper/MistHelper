@@ -4,8 +4,8 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 280 | Export the alert digest handover report | src.reports.alert_digest.operation | AlertDigestOperation.run_digest | safe |  | False | False |
-| 281 | Acknowledge recent unacknowledged alarms | src.reports.alert_digest.operation | AlertDigestOperation.run_acknowledge | destructive | Requires typed `ACK <count>` confirmation and supports `--dry-run`. | True | False |
+| 280 | Export the alert digest handover report | src.mist.intelligence.reports.alert_digest.operation | AlertDigestOperation.run_digest | safe |  | False | False |
+| 281 | Acknowledge recent unacknowledged alarms | src.mist.intelligence.reports.alert_digest.operation | AlertDigestOperation.run_acknowledge | destructive | Requires typed `ACK <count>` confirmation and supports `--dry-run`. | True | False |
 
 ## OperationRegistry comment
 
@@ -34,13 +34,13 @@ Add menu `280` to the `safe` category row. Add menu `281` to the `destructive` c
 
 ## Import line for MistHelper.py
 
-`from src.reports.alert_digest.operation import AlertDigestOperation  # Menu 280 and 281 (issue #3561) -- alert digest and alarm acknowledgement`
+`from src.mist.intelligence.reports.alert_digest.operation import AlertDigestOperation  # Menu 280 and 281 (issue #3561) -- alert digest and alarm acknowledgement`
 
 ## Deferred integration notes
 
 - Register menu 280 to call `AlertDigestOperation.run_digest`.
 - Register menu 281 to call `AlertDigestOperation.run_acknowledge`.
-- Keep menu 281 destructive in `src/utils/operation_registry.py`.
+- Keep menu 281 destructive in `src/foundation/support/utils/operation_registry.py`.
 - In `README.md`, add menu 280 to the safe report operations as `280 - Export the alert digest handover report`.
 - In `README.md`, add menu 281 to the destructive operations as `281 - Acknowledge recent unacknowledged alarms`.
 - Run `python scripts/generate_menu_wiki.py` after integration wiring.

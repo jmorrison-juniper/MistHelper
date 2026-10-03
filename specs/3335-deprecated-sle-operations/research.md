@@ -27,8 +27,8 @@ Keep that merge unchanged.
 - A repository-wide string ban would change historical records and the vendored discovery index.
 - Deleting retained strategies would change export routing and persistence metadata.
 
-**Evidence**: `src/export/endpoint_family_exporter.py`, `src/export/endpoint_catalog.py`,
-and `src/refactors/endpoint_primary_key_strategies.py`.
+**Evidence**: `src/operations/exporting/export/endpoint_family_exporter.py`, `src/operations/exporting/export/endpoint_catalog.py`,
+and `src/foundation/support/refactors/endpoint_primary_key_strategies.py`.
 
 ## 2. Real installed trend functions
 

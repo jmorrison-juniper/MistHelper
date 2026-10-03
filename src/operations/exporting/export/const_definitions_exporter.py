@@ -1,0 +1,984 @@
+"""ConstDefinitionsExporter -- dynamic mistapi const endpoint discovery + CSV export.
+
+Extracted from MistHelper.py during initiative 1013 (Cat B, position 17).
+Walks ``mistapi.api.v1.const`` via ``pkgutil.iter_modules``, inspects each
+module's public functions, and dispatches API calls per special-handling flag
+(``all_models`` / ``all_countries`` / ``all_countries_channels`` / ``None``).
+Cached CSVs under 24 hours old are reused. Stale or missing files trigger a
+fresh fetch.  Callers continue to reach the class via the
+``MistHelper.ConstDefinitionsExporter`` re-export alias.
+"""
+
+from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
+
+import importlib  # WHY: source resolver access to reach DataExporter + DataProcessingUtils without circular load.
+import logging  # WHY: structured trace for discovery/fetch/export lifecycle events.
+import re
+import traceback
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Literal
+
+import requests  # WHY: Mist SDK calls use requests exceptions for transport failures.
+
+from src.foundation.models.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+from src.foundation.models.dataclasses.endpoint_config import EndpointConfig  # Const endpoint descriptor.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
+from src.foundation.support.utils.logger_utils import SensitiveFilter
+
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
+@dataclass(frozen=True, slots=True)
+class DefinitionRefreshResult:
+    """Retain the outcome and independent counter differences for one definition refresh."""
+
+    endpoint_name: str
+    outcome: Literal["fresh", "updated", "failed"]
+    counts: Mapping[str, int]
+    http_status: int | None
+    first_error: Exception | None
+
+
+class ConstDefinitionsExporter:  # Const definitions exporter.
+    """Exports all available const definitions from the Mist API to individual CSV files.
+
+    Implements fully dynamic discovery and smart caching:
+    - Automatically discovers all available const endpoints from mistapi library
+    - Dynamically inspects each const module to find correct function names
+    - Checks if each Const{EndpointName}.csv exists and is fresh (< 24 hours old)
+    - If fresh file exists, skips API call for that endpoint
+    - If file is missing or stale, fetches fresh data from API
+
+    Usage:
+        exporter = ConstDefinitionsExporter(apisession)
+        exporter.export_all()
+        result = exporter.export_endpoint("insight_metrics")
+    """
+
+    CACHE_MAX_AGE_HOURS = 24  # Cache freshness window.
+    FALLBACK_GATEWAY_MODELS = ["SRX300", "SRX320", "SRX320-POE", "SRX340", "SRX345", "SRX380"]
+    FALLBACK_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP", "CN", "IN", "BR"]  # Fallback country list.
+    FALLBACK_CHANNEL_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP"]  # Fallback channel countries.
+
+    def __init__(self, api_session: Any) -> None:  # Capture the session.
+        """Initialize exporter with API session and counters."""
+        self.api_session = api_session  # Store the session.
+        self.discovered_endpoints: dict[str, EndpointConfig] = {}  # Discovered endpoints.
+        self.endpoints_processed = 0  # Processed count.
+        self.endpoints_skipped_fresh = 0  # Skipped-fresh count.
+        self.endpoints_updated = 0  # Updated count.
+        self.endpoints_failed = 0  # Failed count.
+
+    def export_endpoint(self, endpoint_name: str) -> DefinitionRefreshResult:
+        """Refresh only the selected SDK definition through the existing export path."""
+        before = self._snapshot_counts()
+        if not self._is_valid_endpoint_name(endpoint_name):
+            first_error: Exception | None = ValueError("Select one public ASCII SDK module name.")
+            logger.error("Invalid const definition selection. Select one public ASCII SDK module name.")
+        else:
+            first_error = self._discover_selected_endpoint(endpoint_name)
+            if first_error is None:
+                first_error = self._process_single_endpoint(self.discovered_endpoints[endpoint_name])
+        if first_error is not None and self.endpoints_failed == before["failed"]:
+            self.endpoints_failed += 1
+        return self._refresh_result(endpoint_name, before, first_error)
+
+    @staticmethod
+    def _is_valid_endpoint_name(endpoint_name: object) -> bool:
+        """Accept one public ASCII module name before constructing an import path."""
+        return isinstance(endpoint_name, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", endpoint_name) is not None
+
+    def _discover_selected_endpoint(self, endpoint_name: str) -> Exception | None:
+        """Discover one definition without reusing a registration from an earlier attempt."""
+        logger.info("Discovering selected const definition %s", endpoint_name)
+        self.discovered_endpoints.pop(endpoint_name, None)  # A failed discovery must not reuse an old registration.
+        first_error = self._inspect_module(f"mistapi.api.v1.const.{endpoint_name}")
+        if first_error is None and endpoint_name not in self.discovered_endpoints:
+            first_error = ImportError(f"No usable const definition was found for {endpoint_name}.")
+            self._report_failure(f"Selected const discovery failed for {endpoint_name}", first_error)
+        if first_error is not None:
+            self.discovered_endpoints.pop(endpoint_name, None)
+        logger.debug(
+            "Selected const discovery %s: registered=%s, outcome=%s",
+            endpoint_name,
+            int(endpoint_name in self.discovered_endpoints),
+            "failed" if first_error is not None else "discovered",
+        )
+        return first_error
+
+    def _snapshot_counts(self) -> dict[str, int]:
+        """Copy the existing counters without introducing another counter owner."""
+        return {
+            "processed": self.endpoints_processed,
+            "skipped_fresh": self.endpoints_skipped_fresh,
+            "updated": self.endpoints_updated,
+            "failed": self.endpoints_failed,
+        }
+
+    def _refresh_result(
+        self, endpoint_name: str, before: Mapping[str, int], first_error: Exception | None
+    ) -> DefinitionRefreshResult:
+        """Build a read-only attempt result and report only its counter differences."""
+        counts = {name: value - before[name] for name, value in self._snapshot_counts().items()}
+        outcome: Literal["fresh", "updated", "failed"] = (
+            "failed" if first_error is not None else "fresh" if counts["skipped_fresh"] else "updated"
+        )
+        selected_name = endpoint_name if isinstance(endpoint_name, str) else ""
+        result = DefinitionRefreshResult(
+            selected_name, outcome, MappingProxyType(counts), self._error_http_status(first_error), first_error
+        )
+        logger.info(
+            "Const definition refresh %s: outcome=%s, HTTP=%s, processed=%s, skipped_fresh=%s, updated=%s, failed=%s",
+            selected_name if self._is_valid_endpoint_name(selected_name) else "<invalid>",
+            result.outcome,
+            result.http_status,
+            counts["processed"],
+            counts["skipped_fresh"],
+            counts["updated"],
+            counts["failed"],
+        )
+        return result
+
+    @staticmethod
+    def _error_http_status(error: Exception | None) -> int | None:
+        """Read the status from the original response without relying on its truth value."""
+        response = getattr(error, "response", None)
+        status_code = getattr(response, "status_code", None)
+        return status_code if isinstance(status_code, int) else None
+
+    @staticmethod
+    def _safe_error_text(value: object) -> str:
+        """Use the SDK redaction boundary before an error reaches any visible output."""
+        from mistapi.__logger import Console
+
+        message = Console().sanitize(str(value))  # LogSanitizer uses this same SDK text boundary.
+        record = logging.LogRecord(__name__, logging.ERROR, __file__, 0, message, (), None)
+        SensitiveFilter().filter(record)
+        message = re.sub(
+            r"\b(?:request[_ -]?headers|headers|authorization|proxy-authorization|cookie|set-cookie|x-api-key)"
+            r"""["']?\s*[:=][^\r\n]*""",
+            "[REDACTED HEADERS]",
+            record.getMessage(),
+            flags=re.IGNORECASE,
+        )
+        message = re.sub(r"""[A-Za-z][A-Za-z0-9+.-]*://[^\s<>"']+""", "[REDACTED URL]", message)
+        return message.encode("ascii", "backslashreplace").decode("ascii")
+
+    @classmethod
+    def _report_failure(cls, context: str, error: Exception, level: int = logging.ERROR) -> str:
+        """Log safe error and traceback text without changing the original exception."""
+        reason = cls._safe_error_text(error)
+        safe_traceback = cls._safe_error_text("".join(traceback.format_exception(error)))
+        logger.log(level, "%s: %s (HTTP %s)\n%s", context, reason, cls._error_http_status(error), safe_traceback)
+        return reason
+
+    def export_all(self) -> None:  # Export every const endpoint.
+        """Main entry point: discover and export all const definitions."""
+        print("Export All Available Const Definitions (Dynamic Discovery):")  # Header.
+        logger.info("Starting comprehensive dynamic export of all const definitions...")  # Log start.
+
+        try:
+            self._discover_endpoints()  # Discover endpoints.
+            if not self.discovered_endpoints:  # None found.
+                print("! No const endpoints discovered from mistapi library")  # Tell the user.
+                logger.error("Dynamic discovery found no const endpoints")  # Log the error.
+                return  # Abort.
+
+            self._process_all_endpoints()  # Process all endpoints.
+            self._print_summary()  # Print the summary.
+
+        except (
+            AttributeError,
+            ImportError,
+            OSError,
+            requests.RequestException,
+        ) as error:  # Discovery or export I/O failed.
+            reason = self._report_failure("Critical error during dynamic const discovery", error)
+            print(f"! Critical error during dynamic const discovery: {reason}")
+
+    def _discover_endpoints(self) -> None:  # Discover const endpoints.
+        """Discover all const modules in mistapi.api.v1.const package."""
+        import pkgutil  # Import pkgutil.
+
+        import mistapi.api.v1.const as const_package  # Import the const package.
+
+        print("! Dynamically discovering const endpoints from mistapi library...")  # Tell the user.
+        logger.info("Starting dynamic discovery of const endpoints")  # Log start.
+
+        # Walk every non-package module under mistapi.api.v1.const for inspection.
+        const_prefix = const_package.__name__ + "."
+        for modname, ispkg in ((m.name, m.ispkg) for m in pkgutil.iter_modules(const_package.__path__, const_prefix)):
+            if ispkg:  # Skip subpackages.
+                continue  # Next module.
+            self._inspect_module(modname)  # Inspect the module.
+
+        print(f"! Successfully discovered {len(self.discovered_endpoints)} const endpoints dynamically")
+        logger.info("Dynamic discovery completed: %s endpoints found", len(self.discovered_endpoints))
+
+    def _inspect_module(self, modname: str) -> Exception | None:
+        """Inspect a single const module for API functions."""
+        endpoint_name = modname.split(".")[-1]  # Endpoint name from path.
+        if endpoint_name.startswith("_"):  # Skip private modules.
+            return  # Skip it.
+
+        print(f"  ! Inspecting const module: {endpoint_name}")  # Tell the user.
+
+        try:
+            module = importlib.import_module(modname)  # Import the module.
+            self._inspect_module_functions(module, endpoint_name, modname)  # Find + register the best API function
+        except (AttributeError, ImportError, OSError, ValueError, requests.RequestException) as error:
+            module_display_name = modname.split(".")[-1] if modname else "unknown"  # Module display name.
+            reason = self._report_failure(f"Error inspecting const module {module_display_name}", error)
+            print(f"    ! Error inspecting {module_display_name}: {reason}")
+            return error
+        return None
+
+    def _inspect_module_functions(self, module, endpoint_name: str, modname: str) -> None:  # Register best API function
+        """Find API functions in a module and register the best one, logging when none qualify."""
+        functions = self._find_api_functions(module, endpoint_name)  # Find candidate API functions.
+        if not functions:  # None found.
+            print(f"    ! No API functions found in {endpoint_name}")  # Tell the user.
+            logger.warning("No functions found in %s", endpoint_name)  # Warn none found.
+            return  # Skip it.
+        api_function = self._select_best_function(functions)  # Pick the best function.
+        if not api_function:  # No suitable function (none accept a session param)
+            print(f"    ! No suitable API functions found in {endpoint_name}")  # Tell the user none.
+            logger.warning("No API functions with mist_session parameter found in %s", endpoint_name)  # Warn
+            return  # Nothing to register
+        self._register_endpoint(endpoint_name, module, api_function, modname)  # Register the endpoint.
+
+    @staticmethod
+    def _is_session_api_function(obj) -> bool:
+        """Return True when ``obj`` is a public function whose signature accepts a session arg."""
+        import inspect  # Local import to keep top-level imports unchanged
+
+        if not inspect.isfunction(obj):  # Skip classes, builtins, and so on
+            return False
+        sig = inspect.signature(obj)  # Inspect parameters
+        param_names = list(sig.parameters.keys())  # Materialize names for membership test
+        if not param_names:  # No params -> cannot be an API call
+            return False
+        return "mist_session" in param_names or "apisession" in param_names  # Session arg required
+
+    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:  # Find candidate API functions.
+        """Find all callable API functions in a module."""
+        import inspect  # Used for getmembers + signature trace
+
+        functions = []  # Collect function names
+        for name, obj in inspect.getmembers(module):  # Walk module members
+            if name.startswith("_"):  # Skip private/dunder
+                continue
+            if not type(self)._is_session_api_function(obj):  # Combined function/session predicate
+                continue
+            functions.append(name)  # Keep the function
+            logger.debug("Found potential API function in %s: %s%s", endpoint_name, name, inspect.signature(obj))
+        return functions  # Return the discovered names
+
+    def _select_best_function(self, functions: list[str]) -> str | None:  # Pick the best function.
+        """Select the best API function from a list (prefer list*, then get*, else the first)."""
+        return (
+            self._first_function_with_prefix(functions, "list")  # Prefer a list* function
+            or self._first_function_with_prefix(functions, "get")  # Then a get* function
+            or (functions[0] if functions else None)  # Fall back to the first (or None when empty)
+        )
+
+    @staticmethod
+    def _first_function_with_prefix(functions: list[str], prefix: str) -> str | None:  # First name with a prefix
+        """Return the first function name whose lowercase form starts with prefix, or None."""
+        for func_name in functions:  # Scan in order
+            if func_name.lower().startswith(prefix):  # Case-insensitive prefix match
+                return func_name  # Use the first match
+        return None  # No function matched this prefix
+
+    def _analyze_api_signature(self, module, api_function: str) -> tuple[list, list[str]]:
+        """Inspect the API function's signature and return (required_params, optional_param_names)."""
+        import inspect  # Import inspect.
+
+        sig = inspect.signature(getattr(module, api_function))  # Read the signature.
+        return self._get_required_params(sig), self._get_optional_params(sig)  # (required, optional).
+
+    def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
+        """Register an endpoint after analyzing its parameters."""
+        filename = self._build_filename(endpoint_name)  # Build the filename.
+        description = f"{endpoint_name.replace('_', ' ').title()} Definitions"  # Build the description.
+        required_params, optional_params = self._analyze_api_signature(module, api_function)  # Read params.
+        special_handling = self._determine_special_handling(  # Decide special handling.
+            endpoint_name, api_function, required_params, optional_params, filename
+        )
+        if special_handling == "skip":  # Endpoint to skip.
+            return  # Skip it.
+        self.discovered_endpoints[endpoint_name] = EndpointConfig(  # Build + register config.
+            endpoint_name=endpoint_name,
+            module=module,
+            function_name=api_function,
+            filename=filename,
+            description=description,
+            modname=modname,
+            special_handling=special_handling,
+        )
+        print(f"    ! Found API function: {api_function}() -> {filename}")  # Tell the user.
+        logger.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)  # Trace the find.
+
+    def _build_filename(self, endpoint_name: str) -> str:  # Build the const filename.
+        """Convert endpoint_name to ConstTitleCase.csv filename."""
+        parts = endpoint_name.split("_")  # Split on underscores.
+        title_name = "".join(word.capitalize() for word in parts)  # Title-case the name.
+        return f"Const{title_name}.csv"  # Return the filename.
+
+    def _get_required_params(self, sig) -> list:  # type: ignore[no-untyped-def, type-arg]
+        """Extract required parameters from function signature."""
+        import inspect  # Import inspect.
+
+        return [  # List required params.
+            p
+            for p in sig.parameters.values()
+            if p.default == inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
+        ]
+
+    def _get_optional_params(self, sig) -> list[str]:  # List optional params.
+        """Extract optional parameter names from function signature."""
+        import inspect  # Import inspect.
+
+        return [  # List optional params.
+            p.name
+            for p in sig.parameters.values()
+            if p.default != inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
+        ]
+
+    def _classify_required_param(
+        self, endpoint_name: str, api_function: str, param_names: list[str], filename: str
+    ) -> str:
+        """Classify endpoints that need a special required-param fan-out (all_models / all_countries / skip)."""
+        if endpoint_name == "default_gateway_config" and "model" in param_names:  # Gateway config special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")  # Tell the user.
+            print(f"    ! Will call for all available gateway models -> {filename}")  # Tell the user.
+            return "all_models"  # All-models handling.
+        if endpoint_name == "states" and "country_code" in param_names:  # States special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")  # Tell user.
+            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
+            return "all_countries"  # All-countries handling.
+        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")  # Tell user skip.
+        logger.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
+        return "skip"  # Skip it.
+
+    def _determine_special_handling(
+        self,
+        endpoint_name: str,
+        api_function: str,
+        required_params: list,  # type: ignore[type-arg]
+        optional_params: list[str],
+        filename: str,
+    ) -> str | None:
+        """Determine special handling type for endpoint."""
+        if endpoint_name == "ap_channels" and "country_code" in optional_params:  # AP channels special case.
+            print(f"    ! Found special endpoint {api_function}() with optional 'country_code' parameter")
+            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
+            return "all_countries_channels"  # All-countries channels.
+        if not required_params:  # No required params.
+            return None  # Standard handling.
+        param_names = [p.name for p in required_params]  # Required param names.
+        return self._classify_required_param(endpoint_name, api_function, param_names, filename)  # Special / skip.
+
+    def _process_all_endpoints(self) -> None:  # Process all endpoints.
+        """Process each discovered endpoint."""
+        for config in self.discovered_endpoints.values():  # Walk endpoints. Keys are unused here.
+            self._process_single_endpoint(config)  # Process each.
+
+    def _process_single_endpoint(self, config: EndpointConfig) -> Exception | None:
+        """Process a single endpoint with cache checking and data export."""
+        print(f"\n! Processing {config.description} ({config.endpoint_name})...")  # Tell the user.
+        try:
+            logger.info("Checking const cache %s for %s", config.filename, config.endpoint_name)
+            fresh = self._is_file_fresh(config)
+            logger.debug("Const cache %s: fresh=%s", config.endpoint_name, fresh)
+            if fresh:
+                self.endpoints_skipped_fresh += 1  # Count skipped-fresh.
+                first_error = None
+            else:
+                first_error = self._fetch_and_export_endpoint(config)
+        except (AttributeError, ImportError, OSError, requests.RequestException) as error:  # Endpoint I/O failed.
+            reason = self._report_failure(f"Critical error processing {config.endpoint_name}", error)
+            print(f"! Critical error processing {config.endpoint_name}: {reason}")
+            self.endpoints_failed += 1  # Count failed.
+            first_error = error
+        self.endpoints_processed += 1
+        return first_error
+
+    def _evaluate_cache_window(self, config: EndpointConfig, file_age_hours: float, file_timestamp: str) -> bool:
+        """Decide whether the file is within the cache window. Emit fresh/stale user messages either way."""
+        if file_age_hours < self.CACHE_MAX_AGE_HOURS:  # Within the window.
+            print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
+            print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
+            logger.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
+            return True  # Fresh.
+        print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
+        print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
+        logger.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
+        return False  # Stale.
+
+    def _is_file_fresh(self, config: EndpointConfig) -> bool:  # Check cache freshness.
+        """Check if cached file exists and is fresh enough to use."""
+        import os  # Import os.
+        import time  # Import time.
+        from datetime import datetime  # Import datetime.
+
+        file_path = os.path.join("data", config.filename)  # Build the file path.
+        if not os.path.exists(file_path):  # File missing.
+            print(f"  ! {config.filename} not found - fetching fresh data from API...")  # Tell the user.
+            logger.info("%s not found, fetching from API", config.filename)  # Log the fetch.
+            return False  # Not fresh.
+        try:
+            file_mtime = os.path.getmtime(file_path)  # Read the mtime.
+            file_age_hours = (time.time() - file_mtime) / 3600  # Compute age in hours.
+            file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")  # Format the timestamp.
+            return self._evaluate_cache_window(config, file_age_hours, file_timestamp)  # Compare window + emit message.
+        except (OSError, OverflowError, ValueError) as error:  # Timestamp check failed.
+            reason = self._report_failure(
+                f"Could not check {config.endpoint_name} file timestamp. Fetching fresh data", error, logging.WARNING
+            )
+            print(f"  ! Error checking file timestamp: {reason}")
+            return False  # Not fresh.
+
+    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> Exception | None:
+        """Fetch data from API and export to file."""
+        print(f"  ! Requesting fresh {config.description.lower()} from Mist API using {config.function_name}()...")
+        logger.info("Fetching const definition %s using %s", config.endpoint_name, config.function_name)
+        try:
+            const_data = self._fetch_endpoint_data(config)  # Fetch the data.
+            logger.debug("Fetched const definition %s using %s", config.endpoint_name, config.function_name)
+            self._export_data(config, const_data)  # Export the data.
+        except (AttributeError, ImportError, OSError, requests.RequestException) as error:
+            self.endpoints_failed += 1  # Count the first failure before the fallback can fail.
+            reason = self._report_failure(
+                f"Failed to export {config.description.lower()} from {config.endpoint_name}", error
+            )
+            print(f"  ! Error exporting {config.description.lower()}: {reason}")
+            self._write_empty_fallback(config)
+            return error
+        return None
+
+    def _write_empty_fallback(self, config: EndpointConfig) -> None:
+        """Retain the empty fallback without replacing or recounting the first failure."""
+        mh = SourceDependencyResolver
+        logger.info("Writing empty const fallback %s using %s: rows=0", config.filename, config.function_name)
+        try:
+            written = mh.DataExporter.write_with_format_selection(
+                [], config.filename, api_function_name=config.function_name
+            )
+            logger.debug("Empty const fallback %s: success=%s, rows=0", config.filename, bool(written))
+            if not written:
+                raise OSError(
+                    f"Empty fallback writer returned False for {config.filename} using {config.function_name}."
+                )
+        except (AttributeError, ImportError, OSError, requests.RequestException) as secondary_error:
+            self._report_failure(f"Secondary empty fallback failure for {config.endpoint_name}", secondary_error)
+
+    def _fetch_endpoint_data(self, config: EndpointConfig):  # Dispatch the fetch type.
+        """Fetch data based on special handling type."""
+        if config.special_handling == "all_models":  # All-models case.
+            return self._fetch_all_gateway_models(config)  # Fetch per model.
+        elif config.special_handling == "all_countries":  # All-countries case.
+            return self._fetch_all_country_states(config)  # Fetch per country.
+        elif config.special_handling == "all_countries_channels":  # All-channels case.
+            return self._fetch_all_country_channels(config)  # Fetch per country.
+        else:
+            return self._fetch_standard_endpoint(config)  # Standard fetch.
+
+    def _fetch_standard_endpoint(self, config: EndpointConfig) -> Any:
+        """Fetch data from a standard endpoint with no special parameters."""
+        api_function = getattr(config.module, config.function_name)  # Resolve the function.
+        logger.info("Requesting const definition %s using %s", config.endpoint_name, config.function_name)
+        response = api_function(self.api_session)  # Call the API.
+        if hasattr(response, "status_code"):
+            status_code = response.status_code
+            logger.debug(
+                "Const definition %s response: HTTP %s",
+                config.endpoint_name,
+                status_code if isinstance(status_code, int) else None,
+            )
+            if status_code is None:
+                raise requests.ConnectionError(
+                    f"No HTTP response for const definition {config.endpoint_name}.", response=response
+                )
+            if isinstance(status_code, int) and 400 <= status_code < 600:
+                reason = self._response_error_text(response)
+                message = f"HTTP {status_code} for const definition {config.endpoint_name}"
+                raise requests.HTTPError(f"{message}: {reason}" if reason else message, response=response)
+        else:
+            logger.debug("Const definition %s returned a raw payload without HTTP status", config.endpoint_name)
+        return getattr(response, "data", response) or {}  # Unwrap data. Default empty.
+
+    @classmethod
+    def _response_error_text(cls, response: Any) -> str:
+        """Keep the first available safe error text instead of treating an error body as definitions."""
+        data = getattr(response, "data", None)
+        if isinstance(data, dict):
+            data = next(
+                (
+                    data[name]
+                    for name in ("detail", "error", "message")
+                    if isinstance(data.get(name), str) and data[name].strip()
+                ),
+                "",
+            )
+        if isinstance(data, str) and data.strip():
+            return cls._safe_error_text(data.strip())
+        text = getattr(response, "raw_data", "")  # The SDK keeps unparsed error bodies in raw_data, not text.
+        if not isinstance(text, str) or not text.strip():
+            text = getattr(response, "text", "")
+        return cls._safe_error_text(text.strip()) if isinstance(text, str) else ""
+
+    def _fetch_one_gateway_model(self, config: EndpointConfig, model: str) -> list:
+        """Call the per-model API and return normalized records (or [] on empty / error)."""
+        try:
+            api_function = getattr(config.module, config.function_name)  # Resolve the function.
+            response = api_function(self.api_session, model=model)  # Call with the model.
+            model_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
+            if model_data:  # Have data.
+                return self._normalize_model_data(model, model_data)  # Normalize and return.
+            return []  # No data for this model.
+        except (AttributeError, requests.RequestException) as error:  # Model fetch failed.
+            logging.warning("Failed to get gateway config for model %s: %s", model, self._safe_error_text(error))
+            raise  # Re-raise so the caller can tally failure count.
+
+    def _fetch_all_gateway_models(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
+        """Fetch gateway configs for all available models."""
+        print(f"  ! Special handling: Calling {config.function_name}() for all available gateway models...")
+        gateway_models = self._get_gateway_models_list()  # List gateway models.
+        all_configs: list = []  # Accumulate configs.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
+        for model in gateway_models:  # Fetch each model.
+            try:
+                records = self._fetch_one_gateway_model(config, model)  # Per-model fetch + normalize.
+                if records:  # Got rows.
+                    all_configs.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except (AttributeError, requests.RequestException):  # Per-model fetch failed with expected SDK errors.
+                failed += 1  # Count failure.
+        print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")  # Tell the user.
+        return all_configs  # Return all configs.
+
+    def _get_gateway_models_list(self) -> list[str]:  # List gateway models.
+        """Get list of gateway models from device_models endpoint."""
+        try:
+            device_models_module = importlib.import_module("mistapi.api.v1.const.device_models")
+            device_models_function = device_models_module.listDeviceModels  # Resolve the function.
+            response = device_models_function(self.api_session)  # Call the API.
+            device_models_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
+
+            gateway_models = self._extract_gateway_models(device_models_data)  # Extract gateway models.
+
+            if gateway_models:  # Have models.
+                print(f"    ! Discovered {len(gateway_models)} gateway models from device definitions")
+                return gateway_models  # Return them.
+
+        except (AttributeError, ImportError, requests.RequestException) as error:  # Fetch failed.
+            logging.warning("Failed to get gateway models list: %s", self._safe_error_text(error))
+
+        print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
+        return self.FALLBACK_GATEWAY_MODELS  # Use the fallback list.
+
+    @staticmethod
+    def _filter_gateway_models_from_dict(device_models_data: dict) -> list[str]:
+        """Filter gateway models from a dict payload (key=model_name, val=details)."""
+        gateway_models = []  # Collect names
+        for model_name, model_details in device_models_data.items():  # Walk dict entries
+            if not isinstance(model_details, dict):  # Skip non-dict values
+                continue
+            if model_details.get("type", "").lower() != "gateway":  # Only keep gateways
+                continue
+            gateway_models.append(model_name)  # Keep this gateway
+        return gateway_models  # Filtered result
+
+    @staticmethod
+    def _filter_gateway_models_from_list(device_models_data: list) -> list[str]:
+        """Filter gateway models from a list payload of model dicts."""
+        gateway_models = []  # Collect names
+        for model_item in device_models_data:  # Walk list items
+            if not isinstance(model_item, dict):  # Skip non-dict items
+                continue
+            model_name = model_item.get("model", model_item.get("name", ""))  # Read the name
+            if not model_name:  # Empty name = unusable
+                continue
+            if model_item.get("type", "").lower() != "gateway":  # Only keep gateways
+                continue
+            gateway_models.append(model_name)  # Keep this gateway
+        return gateway_models  # Filtered result
+
+    def _extract_gateway_models(self, device_models_data) -> list[str]:  # Filter to gateway models.
+        """Extract gateway model names from device models data."""
+        if isinstance(device_models_data, dict):  # Dict payload branch
+            return self._filter_gateway_models_from_dict(device_models_data)
+        if isinstance(device_models_data, list):  # List payload branch
+            return self._filter_gateway_models_from_list(device_models_data)
+        return []  # Unknown shape — empty result
+
+    def _normalize_model_data(self, model: str, model_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
+        """Normalize model data into list of records with model identifier."""
+        records = []  # Collect rows.
+
+        if isinstance(model_data, dict):  # Dict payload.
+            record = {"model": model}  # Start with the model.
+            record.update(model_data)  # Merge the data.
+            records.append(record)  # Collect the row.
+        elif isinstance(model_data, list):  # List payload.
+            for item in model_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["model"] = model  # Tag the model.
+            records.extend(model_data)  # Collect the items.
+        else:
+            records.append({"model": model, "config": str(model_data)})  # Wrap scalar payload.
+
+        return records  # Return the rows.
+
+    def _fetch_all_country_states(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
+        """Fetch states for all available countries."""
+        print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
+
+        country_codes = self._get_country_codes_list()  # List country codes.
+        all_states: list[Any] = []  # Accumulate states.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
+
+        for country_code in country_codes:  # Fetch each country.
+            try:
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, country_code=country_code)  # Call with the country.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
+
+                if country_data:  # Have data.
+                    records = self._normalize_states_data(country_code, country_data)  # Normalize state rows.
+                    all_states.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except (AttributeError, requests.RequestException) as error:  # Country fetch failed.
+                logging.warning("Failed to get states for country %s: %s", country_code, self._safe_error_text(error))
+                failed += 1  # Count failure.
+
+        print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")  # Tell the user.
+        return all_states  # Return all states.
+
+    def _call_countries_api(self):
+        """Call the Mist country definitions endpoint and return raw countries_data ({} on failure)."""
+        try:
+            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Endpoint module
+            countries_function = countries_module.listCountryCodes  # Resolve API entrypoint
+            response = countries_function(self.api_session)  # Call the Mist API
+            return getattr(response, "data", response) or {}  # Unwrap. Default to empty
+        except (AttributeError, ImportError, requests.RequestException) as error:  # Network, import, or auth failure
+            logging.warning("Failed to get countries list: %s", self._safe_error_text(error))
+            return {}  # Empty signals caller to use fallback
+
+    @staticmethod
+    def _is_valid_alpha2(code: str) -> bool:
+        """Return True only when the code is a 2-letter alphabetic string."""
+        if not code:  # Reject empty/None up front
+            return False
+        if len(code) != 2:  # Must be exactly 2 characters per ISO 3166-1 alpha-2
+            return False
+        return code.isalpha()  # Final alpha-only guard
+
+    @staticmethod
+    def _filter_valid_alpha2_codes(country_codes: list[str]) -> list[str]:
+        """Keep only 2-letter alphabetic country codes (logs how many were dropped)."""
+        valid = [
+            c for c in country_codes if ConstDefinitionsExporter._is_valid_alpha2(c)
+        ]  # Delegate predicate to helper
+        if len(valid) < len(country_codes):  # Some entries failed validation
+            logger.debug("Filtered out %s invalid country codes", len(country_codes) - len(valid))
+        return valid
+
+    def _fetch_valid_country_codes_from_api(self) -> list[str]:
+        """Call the countries endpoint and return the validated 2-letter alpha codes (empty on failure)."""
+        countries_data = self._call_countries_api()  # API call with error guard
+        country_codes = self._extract_country_codes(countries_data)  # Extract raw codes
+        if not country_codes:  # API returned nothing usable
+            return []
+        valid = ConstDefinitionsExporter._filter_valid_alpha2_codes(country_codes)  # Drop bad codes
+        print(f"    ! Discovered {len(valid)} country codes from country definitions")  # User-facing count
+        return valid
+
+    def _get_country_codes_list(self) -> list[str]:  # List country codes.
+        """Get list of valid country codes from countries endpoint."""
+        country_codes = self._fetch_valid_country_codes_from_api()  # Attempt API fetch + validation
+        if country_codes:  # API succeeded
+            return country_codes
+        print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")  # User-facing fallback
+        return self.FALLBACK_COUNTRIES  # Built-in fallback list
+
+    @staticmethod
+    def _resolve_country_code(item: dict) -> str:  # Pull a 2-letter ISO code from a heterogenous country dict
+        """Resolve a country code from various dict shapes (code | alpha2 | first 2 letters of name)."""
+        if item.get("code"):  # Preferred explicit code
+            return item["code"]
+        if item.get("alpha2"):  # ISO 3166-1 alpha-2 alternate field
+            return item["alpha2"]
+        return item.get("name", "")[:2].upper()  # Last resort: derive from name
+
+    @staticmethod
+    def _codes_from_list(items: list) -> list[str]:  # type: ignore[type-arg]
+        """Resolve country codes from a list of country dicts (skips non-dicts and empty resolutions)."""
+        codes = []  # Accumulator for resolved codes
+        for item in items:  # Walk each entry
+            if not isinstance(item, dict):  # Skip non-dict items
+                continue
+            code = ConstDefinitionsExporter._resolve_country_code(item)  # Resolve via per-item helper
+            if not code:  # Empty resolution — skip
+                continue
+            codes.append(code)
+        return codes
+
+    def _extract_country_codes(self, countries_data) -> list[str]:  # Extract country codes.
+        """Extract country codes from countries data."""
+        if isinstance(countries_data, dict):  # Dict payload — keys are codes
+            return list(countries_data.keys())
+        if not isinstance(countries_data, list):  # Unknown shape — return empty
+            return []
+        return ConstDefinitionsExporter._codes_from_list(countries_data)  # Delegate list walk to helper
+
+    @staticmethod
+    def _normalize_states_dict(country_code: str, country_data: dict) -> list[dict]:  # type: ignore[type-arg]
+        """Convert a {state_code: state_data} dict into a list of tagged state records."""
+        records = []  # Accumulator
+        for state_code, state_data in country_data.items():  # Walk each state
+            if isinstance(state_data, dict):  # Structured payload
+                record = {"country_code": country_code, "state_code": state_code}
+                record.update(state_data)  # Inline nested fields
+                records.append(record)
+            else:  # Scalar fallback -> use as the state name
+                records.append({"country_code": country_code, "state_code": state_code, "state_name": str(state_data)})
+        return records
+
+    @staticmethod
+    def _normalize_states_list(country_code: str, country_data: list) -> list:  # type: ignore[type-arg]
+        """Tag each dict in the list with ``country_code`` and return the original list (in-place mutation)."""
+        for item in country_data:  # Walk items
+            if isinstance(item, dict):  # Only dicts get tagged
+                item["country_code"] = country_code
+        return country_data
+
+    def _normalize_states_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
+        """Normalize states data into list of records with country identifier."""
+        if isinstance(country_data, dict):  # {state: data} payload
+            return type(self)._normalize_states_dict(country_code, country_data)
+        if isinstance(country_data, list):  # Already a list of records
+            return type(self)._normalize_states_list(country_code, country_data)
+        return []  # Unknown shape -> empty
+
+    def _fetch_all_country_channels(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
+        """Fetch AP channels for all available countries."""
+        print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
+
+        country_codes = self._get_channel_country_codes()  # List channel countries.
+        all_channels: list[Any] = []  # Accumulate channels.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
+
+        for country_code in country_codes:  # Fetch each country.
+            try:
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, country_code=country_code)  # Call with the country.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
+
+                if country_data:  # Have data.
+                    records = self._normalize_channels_data(country_code, country_data)  # Normalize channel rows.
+                    all_channels.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except (AttributeError, requests.RequestException) as error:  # Country fetch failed.
+                logging.debug(
+                    "Failed to get AP channels for country %s: %s", country_code, self._safe_error_text(error)
+                )
+                failed += 1  # Count failure.
+
+        print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")  # Tell the user.
+        return all_channels  # Return all channels.
+
+    @staticmethod
+    def _filter_to_iso2_country_codes(country_codes: list[str]) -> list[str]:
+        """Keep only 2-letter alphabetic ISO country codes. Log when entries were dropped."""
+        original_count = len(country_codes)  # Remember the original count for logging.
+        filtered = [c for c in country_codes if ConstDefinitionsExporter._is_valid_alpha2(c)]  # Delegate predicate
+        if len(filtered) < original_count:  # Some were filtered.
+            logger.debug(  # Trace the filter.
+                "Filtered out %s invalid country codes for ap_channels", original_count - len(filtered)
+            )
+        return filtered  # Return the cleaned list.
+
+    def _get_channel_country_codes(self) -> list[str]:  # List channel countries.
+        """Get list of country codes for AP channel lookup."""
+        try:
+            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Import countries.
+            countries_function = countries_module.listCountryCodes  # Resolve the function.
+            response = countries_function(self.api_session)  # Call the API.
+            countries_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
+            country_codes = self._extract_channel_country_codes(countries_data)  # Extract country codes.
+            if country_codes:  # Have codes.
+                country_codes = self._filter_to_iso2_country_codes(country_codes)  # ISO-2 filter + logging.
+                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
+                return country_codes  # Return them.
+        except (AttributeError, ImportError, requests.RequestException) as error:  # Fetch failed.
+            logging.warning("Failed to get countries list for AP channels: %s", self._safe_error_text(error))
+        print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
+        return self.FALLBACK_CHANNEL_COUNTRIES  # Use the fallback list.
+
+    @staticmethod
+    def _extract_country_code_from_item(item) -> str | None:  # type: ignore[no-untyped-def]
+        """Return the ``alpha2``/``code`` field from a dict item, or None when item is not a dict or has neither."""
+        if not isinstance(item, dict):  # Skip non-dict shapes
+            return None
+        return item.get("alpha2") or item.get("code") or None  # Prefer alpha2, then code
+
+    @staticmethod
+    def _country_codes_from_list(countries_list: list) -> list[str]:  # type: ignore[type-arg]
+        """Walk a list-of-dicts payload and collect non-empty country codes."""
+        candidates = (
+            ConstDefinitionsExporter._extract_country_code_from_item(item) for item in countries_list
+        )  # Per-item lookup
+        return [code for code in candidates if code]  # Filter blanks/Nones
+
+    def _extract_channel_country_codes(self, countries_data) -> list[str]:  # Extract channel countries.
+        """Extract country codes from countries data for channel lookup."""
+        if isinstance(countries_data, dict):  # Dict payload -> keys are codes
+            return list(countries_data.keys())
+        if isinstance(countries_data, list):  # List of dicts -> per-item lookup
+            return type(self)._country_codes_from_list(countries_data)
+        return []  # Unknown shape -> empty
+
+    def _normalize_channels_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
+        """Normalize channels data into list of records with country identifier."""
+        records = []  # Collect rows.
+
+        if isinstance(country_data, dict):  # Dict payload.
+            record = {"country_code": country_code}  # Start with the country.
+            record.update(country_data)  # Merge the data.
+            records.append(record)  # Collect the row.
+        elif isinstance(country_data, list):  # List payload.
+            for item in country_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["country_code"] = country_code  # Tag the country.
+            records.extend(country_data)  # Collect the items.
+
+        return records  # Return the rows.
+
+    def _export_data(self, config: EndpointConfig, const_data: Any) -> None:
+        """Convert data to list format and export to file."""
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
+        logger.info("Normalizing const definition %s", config.endpoint_name)
+        data_list = self._convert_to_list(config.endpoint_name, const_data) if const_data else []
+        processed = DataProcessingUtils.escape_multiline(data_list) if data_list else []  # type: ignore[no-untyped-call]
+        logger.debug("Normalized const definition %s: rows=%s", config.endpoint_name, len(processed))
+        logger.info(
+            "Writing primary const output %s using %s: rows=%s", config.filename, config.function_name, len(processed)
+        )
+        written = mh.DataExporter.write_with_format_selection(
+            processed, config.filename, api_function_name=config.function_name
+        )
+        logger.debug("Primary const output %s: success=%s, rows=%s", config.filename, bool(written), len(processed))
+        if not written:
+            raise OSError(f"Const definition writer returned False for {config.filename} using {config.function_name}.")
+        self.endpoints_updated += 1
+        self._report_export_success(config, len(processed))
+
+    @staticmethod
+    def _report_export_success(config: EndpointConfig, row_count: int) -> None:
+        """Report a completed primary write without claiming that an empty CSV exists."""
+        if not row_count:
+            print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
+            logger.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
+            return
+        print(f"  ! {row_count} {config.description.lower()} exported to {config.filename}")
+        logger.info("Exported %s fresh %s to %s", row_count, config.description.lower(), config.filename)
+
+    def _convert_to_list(self, endpoint_name: str, const_data) -> list:  # type: ignore[no-untyped-def, type-arg]
+        """Convert various data formats to list of records for CSV."""
+        if isinstance(const_data, list):  # List payload.
+            return const_data  # Return it.
+
+        if not isinstance(const_data, dict):  # Non-dict payload.
+            return [const_data] if const_data else []  # Wrap or empty.
+
+        if endpoint_name == "insight_metrics":  # Insight metrics special case.
+            return self._convert_insight_metrics(const_data)  # Convert metrics.
+
+        return self._convert_standard_dict(const_data)  # Standard dict conversion.
+
+    def _convert_insight_metrics(self, const_data: dict) -> list[dict]:  # type: ignore[type-arg]
+        """Convert insight metrics nested structure to flat list."""
+        data_list = []  # Collect rows.
+
+        for metric_name, metric_details in const_data.items():  # Walk metrics.
+            metric_row = {  # Build the row.
+                "metric_name": metric_name,
+                "description": metric_details.get("description", ""),
+                "type": metric_details.get("type", ""),
+                "unit": metric_details.get("unit", ""),
+                "scopes": ", ".join(metric_details.get("scopes", [])),
+                "report_scopes": ", ".join(metric_details.get("report_scopes", [])),
+                "intervals": self._format_intervals(metric_details.get("intervals", {})),
+                "report_intervals": self._format_report_intervals(metric_details.get("report_intervals", {})),
+            }
+            data_list.append(metric_row)  # Collect the row.
+
+        return data_list  # Return the rows.
+
+    def _format_intervals(self, intervals: dict) -> str:  # type: ignore[type-arg]
+        """Format intervals dictionary to string representation."""
+        if not intervals:  # No intervals.
+            return ""  # Empty string.
+
+        interval_info = []  # Collect interval text.
+        for interval_name, interval_data in intervals.items():  # Walk intervals.
+            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s, max_age:{interval_data.get('max_age', 'N/A')}s)"  # noqa: E501
+            interval_info.append(interval_str)  # Collect the text.
+
+        return "; ".join(interval_info)  # Join with semicolons.
+
+    def _format_report_intervals(self, report_intervals: dict) -> str:  # type: ignore[type-arg]
+        """Format report intervals dictionary to string representation."""
+        if not report_intervals:  # No intervals.
+            return ""  # Empty string.
+
+        report_interval_info = []  # Collect interval text.
+        for interval_name, interval_data in report_intervals.items():  # Walk intervals.
+            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s)"  # Format the interval.
+            report_interval_info.append(interval_str)  # Collect the text.
+
+        return "; ".join(report_interval_info)  # Join with semicolons.
+
+    def _convert_standard_dict(self, const_data: dict) -> list[dict]:  # type: ignore[type-arg]
+        """Convert standard dictionary to list of records."""
+        data_list = []  # Collect rows.
+
+        for key, value in const_data.items():  # Walk entries.
+            if isinstance(value, dict):  # Dict value.
+                row = {"name": key}  # Start with the name.
+                row.update(value)  # Merge the value.
+                data_list.append(row)  # Collect the row.
+            else:
+                data_list.append({"name": key, "value": str(value)})  # Scalar value row.
+
+        return data_list  # Return the rows.
+
+    def _print_summary(self) -> None:  # Print the export summary.
+        """Print export summary statistics."""
+        print("\n! Dynamic Const Export Summary:")  # Header.
+        print(f"  ! Total endpoints discovered: {len(self.discovered_endpoints)}")  # Discovered count.
+        print(f"  ! Total endpoints processed: {self.endpoints_processed}")  # Processed count.
+        print(f"  ! Fresh files skipped: {self.endpoints_skipped_fresh}")  # Skipped-fresh count.
+        print(f"  ! Files updated/created: {self.endpoints_updated}")  # Updated count.
+        print(f"  ! Failed endpoints: {self.endpoints_failed}")  # Failed count.
+
+        logger.info(  # Log the totals.
+            "Dynamic const export completed: %s discovered, %s processed, %s skipped (fresh), %s updated, %s failed",
+            len(self.discovered_endpoints),
+            self.endpoints_processed,
+            self.endpoints_skipped_fresh,
+            self.endpoints_updated,
+            self.endpoints_failed,
+        )

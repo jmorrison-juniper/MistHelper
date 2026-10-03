@@ -1,1 +1,1 @@
-"""Tests for the security package under src/security."""
+"""Tests for the security package under src/operations/protection/security."""

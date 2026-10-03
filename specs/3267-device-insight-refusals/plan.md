@@ -2,7 +2,7 @@
 
 ## Design
 
-A new module `src/export/site_insights/metric_refusals.py` holds two types.
+A new module `src/operations/exporting/export/site_insights/metric_refusals.py` holds two types.
 
 - `MetricRefusal` is a frozen record of one refused request. It holds the metric name, the HTTP status, and the reason.
 - `MetricRefusalLog` collects the refusals of one export run. `record(metric, response)` reads the HTTP status of the response. If the status is an integer of 400 or more, the method stores a refusal, logs a warning, and returns True. `report(target_name)` writes one operator line for each refusal.
@@ -13,8 +13,8 @@ Menu 74 and menu 75 can use the same class in their own repairs.
 
 ## Files
 
-- src/export/site_insights/metric_refusals.py (new)
-- src/export/site_insights/device_metric_operation.py
+- src/operations/exporting/export/site_insights/metric_refusals.py (new)
+- src/operations/exporting/export/site_insights/device_metric_operation.py
 - tests/unit/export/site_insights/test_device_metric_refusals.py (new)
 - tests/unit/export/site_insights/test_metric_refusals.py (new)
 - changelog.d/issue-3267-device-insight-refusals.md (new)

@@ -12,8 +12,8 @@ Date: 2026-05-26
 
 ## Delegation Integrity
 
-- Summary ownership moved to `src/inventory/org_device_inventory_summary.py`.
-- MSP ownership moved to `src/inventory/org_device_inventory_msp.py`.
+- Summary ownership moved to `src/mist/resources/inventory/org_device_inventory_summary.py`.
+- MSP ownership moved to `src/mist/resources/inventory/org_device_inventory_msp.py`.
 - `MistHelper.py` remains orchestration-only for operation `13` and related helper entrypoints.
 
 ## Conclusion

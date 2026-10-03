@@ -34,7 +34,7 @@ Add a visible confirmation link to the live run page when a run is awaiting conf
 
 ```text
 specs/2447-confirmation-navigation/{spec.md,plan.md,research.md,data-model.md,quickstart.md,tasks.md}
-src/upgrade_portal/app/assets/templates/upgrade/progress.html
+src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html
 tests/contract/upgrade_portal/test_upgrade_routes.py
 tests/e2e/upgrade_portal/test_capture.py
 ```

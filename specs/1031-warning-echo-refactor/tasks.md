@@ -21,9 +21,9 @@ description: "Task list for feature 1031-warning-echo-refactor"
 ## Path Conventions
 
 - Repo root: `c:/Users/jmorrison/OneDrive - Hewlett Packard Enterprise/Code/MistHelper`.
-- New helper: `src/utils/console.py`.
+- New helper: `src/foundation/support/utils/console.py`.
 - New tests: `tests/unit/utils/test_console.py`.
-- Migrated files: `MistHelper.py`, `src/auth/interactive/clouds.py`, and five files under `src/reports/`.
+- Migrated files: `MistHelper.py`, `src/mist/access/auth/interactive/clouds.py`, and five files under `src/mist/intelligence/reports/`.
 
 ---
 
@@ -43,8 +43,8 @@ description: "Task list for feature 1031-warning-echo-refactor"
 **CRITICAL**: No migration task in Phase 3+ can start until T005 passes.
 
 - [X] T003 Write `tests/unit/utils/test_console.py` with the five cases from `plan.md` and `contracts/echo_helper.md`: `test_echo_plain_literal_prints_stdout_and_logs_info` (C-1), `test_echo_percent_s_percent_d_formats_stdout_and_log_args` (C-2), `test_echo_literal_percent_no_args_does_not_raise` (C-3), `test_echo_never_emits_at_warning` (C-4), `test_echo_multiple_calls_do_not_duplicate_handlers` (C-5). Use `capsys` for stdout and `caplog` at INFO. Confirm the file fails to collect (module does not exist yet), which is the intended TDD red state.
-- [X] T004 Implement `src/utils/console.py` per `contracts/echo_helper.md`: module docstring, module-level `_LOGGER = logging.getLogger(__name__)`, `def echo(msg: str, *args: object) -> None` with `print(msg % args if args else msg)` followed by `_LOGGER.info(msg, *args)`. Google-style docstring with the one-line summary, a Why block naming the WARNING-channel pollution it replaces, and Args / Returns sections. STE compliant.
-- [X] T005 Run `pytest tests/unit/utils/test_console.py -v` from `src/`. All five tests pass. Run `ruff check src/utils/console.py tests/unit/utils/test_console.py`. Zero findings.
+- [X] T004 Implement `src/foundation/support/utils/console.py` per `contracts/echo_helper.md`: module docstring, module-level `_LOGGER = logging.getLogger(__name__)`, `def echo(msg: str, *args: object) -> None` with `print(msg % args if args else msg)` followed by `_LOGGER.info(msg, *args)`. Google-style docstring with the one-line summary, a Why block naming the WARNING-channel pollution it replaces, and Args / Returns sections. STE compliant.
+- [X] T005 Run `pytest tests/unit/utils/test_console.py -v` from `src/`. All five tests pass. Run `ruff check src/foundation/support/utils/console.py tests/unit/utils/test_console.py`. Zero findings.
 
 **Checkpoint**: Helper is green. Migration can begin.
 
@@ -56,7 +56,7 @@ description: "Task list for feature 1031-warning-echo-refactor"
 
 **Pattern applied at every site**:
 
-1. Add `from src.utils.console import echo` once per file (top-of-file imports, alphabetized with existing `src.utils.*` imports).
+1. Add `from src.foundation.support.utils.console import echo` once per file (top-of-file imports, alphabetized with existing `src.foundation.support.utils.*` imports).
 2. Replace `logging.warning(msg, *args)  # Legacy console echo routed via logger.` with `echo(msg, *args)`.
 3. Delete the trailing marker comment. Preserve every other character on the line.
 4. For multi-line calls where the marker rides on the closing `)` line, delete the marker from that line and leave the argument formatting untouched.
@@ -64,35 +64,35 @@ description: "Task list for feature 1031-warning-echo-refactor"
 
 Each file has a paired verification task that runs `pytest`, `ruff check <file>`, and confirms `grep -c "Legacy console echo routed via logger" <file>` returns `0`.
 
-### 3.1 `src/auth/interactive/clouds.py` — 1 site (pilot)
+### 3.1 `src/mist/access/auth/interactive/clouds.py` — 1 site (pilot)
 
-- [X] T006 [US1] [US2] [US3] Migrate the 1 legacy site in `src/auth/interactive/clouds.py`. Add the import. Rewrite the single `logging.warning(...)  # Legacy console echo routed via logger.` to `echo(...)` and delete the marker.
-- [X] T007 [US1] [US2] [US3] Verify `src/auth/interactive/clouds.py`: `cd src && pytest` (relevant subset green), `ruff check src/auth/interactive/clouds.py` (clean), `grep -c "Legacy console echo routed via logger" src/auth/interactive/clouds.py` returns `0`. Confirm the pattern before scaling.
+- [X] T006 [US1] [US2] [US3] Migrate the 1 legacy site in `src/mist/access/auth/interactive/clouds.py`. Add the import. Rewrite the single `logging.warning(...)  # Legacy console echo routed via logger.` to `echo(...)` and delete the marker.
+- [X] T007 [US1] [US2] [US3] Verify `src/mist/access/auth/interactive/clouds.py`: `cd src && pytest` (relevant subset green), `ruff check src/mist/access/auth/interactive/clouds.py` (clean), `grep -c "Legacy console echo routed via logger" src/mist/access/auth/interactive/clouds.py` returns `0`. Confirm the pattern before scaling.
 
-### 3.2 `src/reports/sfp_transceiver_data_processor.py` — 3 sites
+### 3.2 `src/mist/intelligence/reports/sfp_transceiver_data_processor.py` — 3 sites
 
-- [X] T008 [P] [US1] [US2] [US3] Migrate the 3 legacy sites in `src/reports/sfp_transceiver_data_processor.py`. Add the import. Rewrite each marked line and delete the marker.
-- [X] T009 [US1] [US2] [US3] Verify `src/reports/sfp_transceiver_data_processor.py`: `cd src && pytest`, `ruff check src/reports/sfp_transceiver_data_processor.py`, `grep -c "Legacy console echo routed via logger" src/reports/sfp_transceiver_data_processor.py` returns `0`.
+- [X] T008 [P] [US1] [US2] [US3] Migrate the 3 legacy sites in `src/mist/intelligence/reports/sfp_transceiver_data_processor.py`. Add the import. Rewrite each marked line and delete the marker.
+- [X] T009 [US1] [US2] [US3] Verify `src/mist/intelligence/reports/sfp_transceiver_data_processor.py`: `cd src && pytest`, `ruff check src/mist/intelligence/reports/sfp_transceiver_data_processor.py`, `grep -c "Legacy console echo routed via logger" src/mist/intelligence/reports/sfp_transceiver_data_processor.py` returns `0`.
 
-### 3.3 `src/reports/wired_client_manufacturer_report_generator.py` — 8 sites
+### 3.3 `src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py` — 8 sites
 
-- [X] T010 [P] [US1] [US2] [US3] Migrate the 8 legacy sites in `src/reports/wired_client_manufacturer_report_generator.py`. Add the import. Rewrite each marked line and delete the marker.
-- [X] T011 [US1] [US2] [US3] Verify `src/reports/wired_client_manufacturer_report_generator.py`: `cd src && pytest`, `ruff check src/reports/wired_client_manufacturer_report_generator.py`, `grep -c "Legacy console echo routed via logger" src/reports/wired_client_manufacturer_report_generator.py` returns `0`.
+- [X] T010 [P] [US1] [US2] [US3] Migrate the 8 legacy sites in `src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py`. Add the import. Rewrite each marked line and delete the marker.
+- [X] T011 [US1] [US2] [US3] Verify `src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py`: `cd src && pytest`, `ruff check src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py`, `grep -c "Legacy console echo routed via logger" src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py` returns `0`.
 
-### 3.4 `src/reports/global_wired_client_report_generator.py` — 14 sites
+### 3.4 `src/mist/intelligence/reports/global_wired_client_report_generator.py` — 14 sites
 
-- [X] T012 [P] [US1] [US2] [US3] Migrate the 14 legacy sites in `src/reports/global_wired_client_report_generator.py`. Add the import. Rewrite each marked line and delete the marker.
-- [X] T013 [US1] [US2] [US3] Verify `src/reports/global_wired_client_report_generator.py`: `cd src && pytest`, `ruff check src/reports/global_wired_client_report_generator.py`, `grep -c "Legacy console echo routed via logger" src/reports/global_wired_client_report_generator.py` returns `0`.
+- [X] T012 [P] [US1] [US2] [US3] Migrate the 14 legacy sites in `src/mist/intelligence/reports/global_wired_client_report_generator.py`. Add the import. Rewrite each marked line and delete the marker.
+- [X] T013 [US1] [US2] [US3] Verify `src/mist/intelligence/reports/global_wired_client_report_generator.py`: `cd src && pytest`, `ruff check src/mist/intelligence/reports/global_wired_client_report_generator.py`, `grep -c "Legacy console echo routed via logger" src/mist/intelligence/reports/global_wired_client_report_generator.py` returns `0`.
 
-### 3.5 `src/reports/offline_device_reporter.py` — 22 sites
+### 3.5 `src/mist/intelligence/reports/offline_device_reporter.py` — 22 sites
 
-- [X] T014 [P] [US1] [US2] [US3] Migrate the 22 legacy sites in `src/reports/offline_device_reporter.py`. Add the import. Rewrite each marked line and delete the marker.
-- [X] T015 [US1] [US2] [US3] Verify `src/reports/offline_device_reporter.py`: `cd src && pytest`, `ruff check src/reports/offline_device_reporter.py`, `grep -c "Legacy console echo routed via logger" src/reports/offline_device_reporter.py` returns `0`.
+- [X] T014 [P] [US1] [US2] [US3] Migrate the 22 legacy sites in `src/mist/intelligence/reports/offline_device_reporter.py`. Add the import. Rewrite each marked line and delete the marker.
+- [X] T015 [US1] [US2] [US3] Verify `src/mist/intelligence/reports/offline_device_reporter.py`: `cd src && pytest`, `ruff check src/mist/intelligence/reports/offline_device_reporter.py`, `grep -c "Legacy console echo routed via logger" src/mist/intelligence/reports/offline_device_reporter.py` returns `0`.
 
-### 3.6 `src/reports/e911_bssid.py` — 27 sites
+### 3.6 `src/mist/intelligence/reports/e911_bssid.py` — 27 sites
 
-- [X] T016 [P] [US1] [US2] [US3] Migrate the 27 legacy sites in `src/reports/e911_bssid.py`. Add the import. Rewrite each marked line and delete the marker.
-- [X] T017 [US1] [US2] [US3] Verify `src/reports/e911_bssid.py`: `cd src && pytest`, `ruff check src/reports/e911_bssid.py`, `grep -c "Legacy console echo routed via logger" src/reports/e911_bssid.py` returns `0`.
+- [X] T016 [P] [US1] [US2] [US3] Migrate the 27 legacy sites in `src/mist/intelligence/reports/e911_bssid.py`. Add the import. Rewrite each marked line and delete the marker.
+- [X] T017 [US1] [US2] [US3] Verify `src/mist/intelligence/reports/e911_bssid.py`: `cd src && pytest`, `ruff check src/mist/intelligence/reports/e911_bssid.py`, `grep -c "Legacy console echo routed via logger" src/mist/intelligence/reports/e911_bssid.py` returns `0`.
 
 ### 3.7 `MistHelper.py` — 95 sites (last, includes multi-line variants)
 
@@ -114,10 +114,10 @@ Each file has a paired verification task that runs `pytest`, `ruff check <file>`
 - [X] T024 Run `black --check .` from the repo root. Zero reformatting needed.
 - [X] T025 Run `mypy src MistHelper.py`. No new type errors introduced.
 - [X] T026 Run `radon cc -a src MistHelper.py`. No function exceeds CC 10. `echo()` reports A.
-- [X] T027 Run `pydocstyle src/utils/console.py tests/unit/utils/test_console.py` and the project-wide invocation used in CI. Zero findings.
+- [X] T027 Run `pydocstyle src/foundation/support/utils/console.py tests/unit/utils/test_console.py` and the project-wide invocation used in CI. Zero findings.
 - [X] T028 Run `interrogate -c pyproject.toml`. Coverage remains at or above 90 percent.
-- [X] T029 Run `pydoclint --style=google src/utils/console.py tests/unit/utils/test_console.py`. Zero findings.
-- [X] T030 Run the project STE lint (feature 1026 gate) on `src/utils/console.py`, `tests/unit/utils/test_console.py`, and every migrated file. Zero findings (FR-018).
+- [X] T029 Run `pydoclint --style=google src/foundation/support/utils/console.py tests/unit/utils/test_console.py`. Zero findings.
+- [X] T030 Run the project STE lint (feature 1026 gate) on `src/foundation/support/utils/console.py`, `tests/unit/utils/test_console.py`, and every migrated file. Zero findings (FR-018).
 - [ ] T031 Prove SC-003 (byte-identical stdout): re-run the same scripted session from T002, save stdout to `data/1031_stdout_after.txt`, and `diff data/1031_stdout_before.txt data/1031_stdout_after.txt`. The diff is empty. **NOT PERFORMED MECHANICALLY**: T002 baseline was not captured. SC-003 is argued by construction — the rewrite is a mechanical substitution of `logging.warning(msg, *args)` with `echo(msg, *args)`; `echo()` calls `print(msg % args if args else msg)` which produces the identical byte sequence that `logging.warning` produced when routed through the root WARNING-level `StreamHandler(sys.stdout)`. Message text, arg order, and adjacent code were preserved verbatim per FR-012.
 - [ ] T032 Prove SC-004 (WARNING channel is signal, not noise): copy the fresh `data/script.log` to `data/1031_script_after.log`, then `grep -c "WARNING -" data/1031_script_before.log` and `grep -c "WARNING -" data/1031_script_after.log`. The after count is a small number bounded above by the genuine warnings raised during the run; zero of those lines contain menu, prompt, or progress text. Sample-check by grepping the after file for a known menu-item substring at WARNING level — it must return zero. **NOT PERFORMED MECHANICALLY**: T002 baseline was not captured. SC-004 is argued by T020 / T021: zero occurrences of the marker string remain in the tree, and zero `logging.warning(...)` calls carrying menu/prompt/progress text remain. The residual `logging.warning` calls in `MistHelper.py` cover only genuine warnings (matplotlib import failure, UV errors, requirements-file parse errors, mistapi access errors, tqdm fallback).
 - [ ] T033 Smoke run (SC-007): manually launch MistHelper, render the main menu, and confirm `data/script.log` shows the menu entries at level `INFO` (not `WARNING`). Confirm that any legitimate warning raised during the run (for example a forced tqdm fallback in a dev shell) still appears at level `WARNING`. **PENDING OPERATOR STEP**: this is a manual live-launch smoke run and cannot be automated inside the agent session.
@@ -153,11 +153,11 @@ Each file has a paired verification task that runs `pytest`, `ruff check <file>`
 
 ```bash
 # After T006-T007 (clouds.py pilot) passes, launch the five report-file migrations in parallel:
-Task: "T008 Migrate src/reports/sfp_transceiver_data_processor.py (3 sites)"
-Task: "T010 Migrate src/reports/wired_client_manufacturer_report_generator.py (8 sites)"
-Task: "T012 Migrate src/reports/global_wired_client_report_generator.py (14 sites)"
-Task: "T014 Migrate src/reports/offline_device_reporter.py (22 sites)"
-Task: "T016 Migrate src/reports/e911_bssid.py (27 sites)"
+Task: "T008 Migrate src/mist/intelligence/reports/sfp_transceiver_data_processor.py (3 sites)"
+Task: "T010 Migrate src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py (8 sites)"
+Task: "T012 Migrate src/mist/intelligence/reports/global_wired_client_report_generator.py (14 sites)"
+Task: "T014 Migrate src/mist/intelligence/reports/offline_device_reporter.py (22 sites)"
+Task: "T016 Migrate src/mist/intelligence/reports/e911_bssid.py (27 sites)"
 
 # Then verify each serially (they share the pytest suite):
 Task: "T009 Verify sfp_transceiver_data_processor.py"
@@ -202,5 +202,5 @@ With multiple developers:
 - The marker string is exactly `# Legacy console echo routed via logger.` (with the trailing period). Match is exact; the tool MUST NOT match near-variants.
 - The `[P]` marker on T008 / T010 / T012 / T014 / T016 assumes each developer imports and edits their own file. If a scripted rewrite touches all files in one pass, drop parallelism and verify serially per Phase 3.
 - Any surprise delta in the residual `logging.warning` count during T019 verification is a signal that a legacy site is missing its marker (or a legitimate warning has been misclassified). Investigate before merging.
-- No change to `src/utils/operation_registry.py` (FR-017): the refactor introduces no menu entry.
+- No change to `src/foundation/support/utils/operation_registry.py` (FR-017): the refactor introduces no menu entry.
 - No handler-config change (FR-014): the helper writes to stdout via `print()` and emits via `logging.getLogger(__name__).info(...)`. It does not touch root-logger handlers.

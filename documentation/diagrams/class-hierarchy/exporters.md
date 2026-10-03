@@ -232,11 +232,11 @@ classDiagram
 
 | Class | Module path |
 |-------|-------------|
-| `DataExporter` | `src/export/data_exporter.py` |
-| `OrgExportUtils` | `src/export/org_export_utils.py` |
-| `SiteExportUtils` | `src/export/site_export_utils.py` |
-| `GatewayExportUtils` | `src/gateway/gateway_export_utils.py` |
-| `SFPTransceiverDataProcessor` | `src/reports/sfp_transceiver_data_processor.py` |
+| `DataExporter` | `src/operations/exporting/export/data_exporter.py` |
+| `OrgExportUtils` | `src/operations/exporting/export/org_export_utils.py` |
+| `SiteExportUtils` | `src/operations/exporting/export/site_export_utils.py` |
+| `GatewayExportUtils` | `src/mist/resources/gateway/gateway_export_utils.py` |
+| `SFPTransceiverDataProcessor` | `src/mist/intelligence/reports/sfp_transceiver_data_processor.py` |
 
 ## Siblings
 

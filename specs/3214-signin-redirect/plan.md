@@ -5,7 +5,7 @@
 ## Design
 
 1. Add `SIGN_IN_PAGE_PATH` and `SIGN_IN_REDIRECT_STATUS` to
-   `src/upgrade_portal/runtime/identity.py`.
+   `src/interfaces/portals/upgrade_portal/runtime/identity.py`.
 2. Add `_prefers_page()`. It uses the same negotiation as
    `org_upgrade._wants_html`: `best_match(("application/json", "text/html"))`,
    so JSON wins a tie. Only a GET qualifies.

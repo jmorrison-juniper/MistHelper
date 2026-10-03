@@ -8,8 +8,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.utils.menu_entry import MenuEntry
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.menu_entry import MenuEntry
+from src.foundation.support.utils.operation_registry import OperationRegistry
 from web_portal.menu_registry import build_static_menu_actions
 from web_portal.services.operation import OperationExecutor
 

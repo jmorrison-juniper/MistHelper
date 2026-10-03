@@ -5,10 +5,17 @@ from __future__ import annotations  # WHY: keep annotations consistent with sour
 from pathlib import Path  # WHY: verify backup and CSV paths.
 from typing import Any  # WHY: fake clients store arbitrary requests.
 
-from src.inventory.device_replace import operation as operation_module  # WHY: patch the resolver used by the module.
-from src.inventory.device_replace.models import InventoryDevice, ReplaceRequest  # WHY: build fake devices.
-from src.inventory.device_replace.operation import DeviceReplaceOperation  # WHY: test the workflow.
-from src.inventory.device_replace.persistence import DeviceReplacePersistence  # WHY: test evidence files.
+from src.mist.resources.inventory.device_replace import (
+    operation as operation_module,
+)  # WHY: patch the resolver used by the module.
+from src.mist.resources.inventory.device_replace.models import (
+    InventoryDevice,
+    ReplaceRequest,
+)  # WHY: build fake devices.
+from src.mist.resources.inventory.device_replace.operation import DeviceReplaceOperation  # WHY: test the workflow.
+from src.mist.resources.inventory.device_replace.persistence import (
+    DeviceReplacePersistence,
+)  # WHY: test evidence files.
 
 
 class FakeInputUtils:

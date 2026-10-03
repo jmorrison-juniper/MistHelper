@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from src.utils.filter_operator_engine import FilterOperatorEngine
+from src.foundation.support.utils.filter_operator_engine import FilterOperatorEngine
 
 
 class TestCatalogs:

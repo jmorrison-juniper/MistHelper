@@ -10,7 +10,7 @@ This draft pull request adds the organization switch scorecard package for menu 
 
 ## Files
 
-- `src/reports/switch_scorecard/`
+- `src/mist/intelligence/reports/switch_scorecard/`
 - `tests/unit/reports/switch_scorecard/`
 - `specs/3558-switch-scorecard/`
 - `changelog.d/issue-3558-switch-scorecard.md`
@@ -55,14 +55,14 @@ This draft pull request adds the organization switch scorecard package for menu 
 
 ## Local Gate Results
 
-- `py_compile`: passed for `src/reports/switch_scorecard`.
-- `ruff`: passed for `src/reports/switch_scorecard` and `tests/unit/reports/switch_scorecard`.
-- `black --check`: passed for `src/reports/switch_scorecard` and `tests/unit/reports/switch_scorecard`.
-- `mypy`: passed for `src/reports/switch_scorecard`.
-- `pydocstyle`: passed for `src/reports/switch_scorecard`.
+- `py_compile`: passed for `src/mist/intelligence/reports/switch_scorecard`.
+- `ruff`: passed for `src/mist/intelligence/reports/switch_scorecard` and `tests/unit/reports/switch_scorecard`.
+- `black --check`: passed for `src/mist/intelligence/reports/switch_scorecard` and `tests/unit/reports/switch_scorecard`.
+- `mypy`: passed for `src/mist/intelligence/reports/switch_scorecard`.
+- `pydocstyle`: passed for `src/mist/intelligence/reports/switch_scorecard`.
 - `pytest`: `6 passed`.
-- `vulture`: passed for `src/reports/switch_scorecard`.
-- `interrogate`: passed at `100%` for `src/reports/switch_scorecard`.
+- `vulture`: passed for `src/mist/intelligence/reports/switch_scorecard`.
+- `interrogate`: passed at `100%` for `src/mist/intelligence/reports/switch_scorecard`.
 
 ## Deferred Wiring
 

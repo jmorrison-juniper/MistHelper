@@ -3,7 +3,7 @@
 **Feature**: `specs/1992-upgrade-rehearsal/` | **Date**: 2026-09-04
 
 This contract records the call that each shipped reader makes through each
-attachment point. `src/upgrade_portal/app/seam_shapes.py` states the rule of
+attachment point. `src/interfaces/portals/upgrade_portal/app/seam_shapes.py` states the rule of
 issue #1991. A stand-in must answer the call that the caller really makes. This
 document is the record of those calls.
 
@@ -15,7 +15,7 @@ changes its call then fails the suite.
 
 **Attachment point**: `mistapi.api.v1.orgs.stats.listOrgDevicesStats`
 
-**Caller**: `gate.read_fleet_statistics` at `src/upgrade_portal/upgrade/gate.py`
+**Caller**: `gate.read_fleet_statistics` at `src/interfaces/portals/upgrade_portal/upgrade/gate.py`
 line 845.
 
 **Call**: 2 positional arguments, and the keywords `type`, `site_id`, `fields`,
@@ -70,7 +70,7 @@ that the shipped page helper reads, so the two agree.
 **Attachment point**: `mistapi.api.v1.orgs.devices.searchOrgDeviceEvents`
 
 **Caller**: `events.read_device_events` at
-`src/upgrade_portal/upgrade/events.py` line 430.
+`src/interfaces/portals/upgrade_portal/upgrade/events.py` line 430.
 
 **Call**: 2 positional arguments, and the keywords `device_type`, `start`,
 `end`, `limit`, and `search_after`.
@@ -125,9 +125,9 @@ that cache first.
 
 ## 5. The upgrade endpoint resolver
 
-**Attachment point**: `src.firmware.upgrade_service._resolve_endpoint`
+**Attachment point**: `src.operations.execution.firmware.upgrade_service._resolve_endpoint`
 
-**Callers**: `read_upgrade_status` at `src/firmware/upgrade_service.py` line
+**Callers**: `read_upgrade_status` at `src/operations/execution/firmware/upgrade_service.py` line
 1620, and `cancel_upgrade` at line 1486. `stop.py` reaches both.
 
 **Call**: 1 positional argument, which is the endpoint name.

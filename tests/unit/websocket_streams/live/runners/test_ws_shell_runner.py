@@ -8,27 +8,49 @@ import threading  # Raw-output tests delay close until after the client starts r
 import time  # Tests use bounded waits for the reader thread.
 
 import pytest  # The tests use fixtures and exception assertions.
-
 import websocket  # Failure tests build the same exception type as websocket-client.
-from src.websocket_streams.catalog.model import FieldKind, FieldSpec, Safety, UtilityDefinition  # Build requests.
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Write-failure tests check route errors.
-from src.websocket_streams.intake.start_request.models import StartRequest  # Runner input is already checked.
-from src.websocket_streams.live.runners.shell.runners import ShellRunner  # The device shell runner under test.
-from src.websocket_streams.live.sessions.buffer.message_buffer import (
+
+from src.mist.realtime.websocket_streams.catalog.model import (
+    FieldKind,
+    FieldSpec,
+    Safety,
+    UtilityDefinition,
+)  # Build requests.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Write-failure tests check route errors.
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    StartRequest,
+)  # Runner input is already checked.
+from src.mist.realtime.websocket_streams.live.runners.shell.runners import (
+    ShellRunner,
+)  # The device shell runner under test.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message_buffer import (
     MessageBuffer,
 )  # A session needs a small event buffer.
-from src.websocket_streams.live.sessions.record.session import StreamSession
-from src.websocket_streams.live.sessions.record.state import SessionResources, SessionState  # The runner writes here.
-from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Terminal output is byte history.
-from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Shell input queues until output.
-from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Store size and history.
-from src.websocket_streams.live.transport.endpoint import (
+from src.mist.realtime.websocket_streams.live.sessions.record.session import StreamSession
+from src.mist.realtime.websocket_streams.live.sessions.record.state import (
+    SessionResources,
+    SessionState,
+)  # The runner writes here.
+from src.mist.realtime.websocket_streams.live.terminal.byte_history import (
+    ByteHistory,
+)  # Terminal output is byte history.
+from src.mist.realtime.websocket_streams.live.terminal.input_queue import (
+    TerminalInput,
+)  # Shell input queues until output.
+from src.mist.realtime.websocket_streams.live.terminal.state.terminal_state import (
+    TerminalState,
+)  # Store size and history.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
     TransportProfile,
 )  # Test endpoint.
-from src.websocket_streams.live.transport.runtime.logging.bounds import MAX_EVENT_LENGTH, MAX_FIELD_LENGTH
-from src.websocket_streams.live.transport.runtime.logging.fields import SAFE_FIELDS  # The logger allows these fields.
+from src.mist.realtime.websocket_streams.live.transport.runtime.logging.bounds import MAX_EVENT_LENGTH, MAX_FIELD_LENGTH
+from src.mist.realtime.websocket_streams.live.transport.runtime.logging.fields import (
+    SAFE_FIELDS,
+)  # The logger allows these fields.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
 )  # Offline SDK-shaped session.
@@ -128,7 +150,7 @@ class ShellLogCompletion:
         events = {
             json.loads(record.getMessage()).get("event")
             for record in records
-            if record.name == "src.websocket_streams.live.runners.shell.lifecycle.outcomes"
+            if record.name == "src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.outcomes"
         }
         return "terminal_outcome_completed" in events, len(records)
 

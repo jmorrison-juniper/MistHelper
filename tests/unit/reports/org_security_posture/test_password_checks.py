@@ -1,6 +1,9 @@
 """Tests for password policy checks."""
 
-from src.reports.org_security_posture.checks.password import PasswordMinimumLengthCheck, PasswordPolicyEnabledCheck
+from src.mist.intelligence.reports.org_security_posture.checks.password import (
+    PasswordMinimumLengthCheck,
+    PasswordPolicyEnabledCheck,
+)
 from tests.unit.reports.org_security_posture.fixtures.representative_org_security_posture import (
     RepresentativeOrgSecurityPostureFixture,
 )

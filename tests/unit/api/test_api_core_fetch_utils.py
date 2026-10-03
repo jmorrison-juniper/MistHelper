@@ -10,8 +10,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.api.api_core_fetch_utils import APICoreFetchUtils
-from src.config import runtime_settings
+from src.foundation.runtime.config import runtime_settings
+from src.mist.access.api.api_core_fetch_utils import APICoreFetchUtils
 
 # ---------- all_sites_with_limit ----------
 
@@ -26,8 +26,8 @@ def test_all_sites_with_limit_calls_list_org_sites_and_paginates() -> None:
     fake_mistapi.get_all.return_value = paginated_sites
 
     with (
-        patch("src.api.api_core_fetch_utils.mistapi", fake_mistapi),
-        patch("src.api.api_core_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.access.api.api_core_fetch_utils.mistapi", fake_mistapi),
+        patch("src.mist.access.api.api_core_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 500),
     ):
         result = APICoreFetchUtils.all_sites_with_limit("org-uuid")
@@ -50,8 +50,8 @@ def test_all_inventory_with_limit_requests_vc_members_and_paginates() -> None:
     fake_mistapi.get_all.return_value = paginated_inventory
 
     with (
-        patch("src.api.api_core_fetch_utils.mistapi", fake_mistapi),
-        patch("src.api.api_core_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.access.api.api_core_fetch_utils.mistapi", fake_mistapi),
+        patch("src.mist.access.api.api_core_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 250),
     ):
         result = APICoreFetchUtils.all_inventory_with_limit("org-uuid")

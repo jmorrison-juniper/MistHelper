@@ -1,7 +1,7 @@
 """Tests for DatabaseSchemaUtils -- SQLite DDL builder for endpoint-driven persistence.
 
 Why:
-    Covers 100% of ``src/db/database_schema_utils.py``: sanitization helpers,
+    Covers 100% of ``src/foundation/persistence/db/database_schema_utils.py``: sanitization helpers,
     strategy dispatch (natural_pk / composite_pk / autoincrement fallback),
     stack-walking API function detection, and CREATE INDEX generation. These
     tests un-omit the module for the tranche-11 slice of initiative #878.
@@ -13,8 +13,8 @@ import logging
 
 import pytest
 
-from src.db.database_schema_utils import DatabaseSchemaUtils
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.persistence.db.database_schema_utils import DatabaseSchemaUtils
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 
 class TestDetermineApiFunctionNameFromContext:
@@ -54,7 +54,7 @@ class TestDetermineApiFunctionNameFromContext:
 
     def test_handles_stack_inspection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When frame introspection raises, the try/except returns the 'unknown' fallback."""
-        import src.db.database_schema_utils as module
+        import src.foundation.persistence.db.database_schema_utils as module
 
         class _ExplodingFrame:
             """Frame stand-in whose f_code access raises inside the walker loop."""

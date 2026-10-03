@@ -329,7 +329,9 @@ class TypeResolver:
             return None
         candidates = self.index.func_by_simple.get(name, [])  # Every function with this name.
         if owner and len(candidates) > 1:  # Prefer a function in the package of the owner class.
-            package = owner.split(":", 1)[0].rsplit(".", 1)[0] + "."  # For example src.ssid_consolidation.
+            package = (
+                owner.split(":", 1)[0].rsplit(".", 1)[0] + "."
+            )  # For example src.operations.execution.ssid_consolidation.
             local = [key for key in candidates if key.split(":", 1)[0].startswith(package)]
             if len(local) == 1:
                 return local[0]

@@ -528,8 +528,8 @@ rtk proxy .venv/bin/python -B -m mypy \
   --config-file pyproject.toml
 
 rtk proxy .venv/bin/bandit-exclude-check \
-  --include-sample ./src/utils/zen_city_metadata.py \
-  --include-sample '.\src\utils\zen_city_metadata.py'
+  --include-sample ./src/foundation/support/utils/zen_city_metadata.py \
+  --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'
 
 rtk proxy .venv/bin/python -B -m bandit -c pyproject.toml -r .
 

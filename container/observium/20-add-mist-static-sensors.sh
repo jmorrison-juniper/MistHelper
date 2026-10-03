@@ -97,7 +97,7 @@ if ($mist_device_id) {
     // mistOrg subtree of MISTHELPER-MIB.mib: .1.3.6.1.4.1.8072.9999.9999.1.<column>.0
     // Every one of these nine columns is the full set of org-level scalars this
     // org's Mist Cloud data currently returns (checked against a live snapshot;
-    // see src/metrics_gateway/catalog.py for the columns that map to endpoints
+    // see src/interfaces/monitoring/metrics_gateway/catalog.py for the columns that map to endpoints
     // this org has no data for yet, such as BGP or MX Edge stats).
     $mist_base = '.1.3.6.1.4.1.8072.9999.9999.1';
     $config['sensors']['static'][] = ['device_id' => $mist_device_id, 'class' => 'gauge', 'oid' => $mist_base . '.2.0', 'descr' => 'Mist sites', 'multiplier' => 1];

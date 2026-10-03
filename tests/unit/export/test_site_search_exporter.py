@@ -15,8 +15,8 @@ from unittest.mock import MagicMock  # WHY: collaborator doubles and call assert
 
 import pytest  # WHY: monkeypatch and caplog fixtures.
 
-from src.export.site_search_exporter import SiteSearchExporter
-from src.export.site_search_exporter import SiteSearchExporter as FailureModeSiteSearchExporter
+from src.operations.exporting.export.site_search_exporter import SiteSearchExporter
+from src.operations.exporting.export.site_search_exporter import SiteSearchExporter as FailureModeSiteSearchExporter
 
 # Each row maps a menu entry to the operationId, the filename prefix, and the
 # SDK attribute chain that the entry must call.
@@ -76,11 +76,13 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     data_processing = MagicMock(name="DataProcessingUtils")  # Flatten and escape collaborator.
     data_processing.flatten_nested_fields.side_effect = lambda rows: rows  # Identity keeps the payload checkable.
     data_processing.escape_multiline.side_effect = lambda rows: rows  # Identity keeps the payload checkable.
-    monkeypatch.setattr("src.export.site_search_exporter.DataProcessingUtils", data_processing, raising=True)
+    monkeypatch.setattr(
+        "src.operations.exporting.export.site_search_exporter.DataProcessingUtils", data_processing, raising=True
+    )
 
     mistapi_mod = MagicMock(name="mistapi")  # SDK double for every endpoint call.
     mistapi_mod.get_all.side_effect = lambda response, mist_session: response  # Pass the fake rows straight back.
-    monkeypatch.setattr("src.export.site_search_exporter.mistapi", mistapi_mod, raising=True)
+    monkeypatch.setattr("src.operations.exporting.export.site_search_exporter.mistapi", mistapi_mod, raising=True)
 
     data_exporter = MagicMock(name="DataExporter")  # write_with_format_selection is observed.
     apisession = MagicMock(name="apisession")  # Forwarded into every SDK call.

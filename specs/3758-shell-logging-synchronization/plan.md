@@ -20,7 +20,7 @@ Wait for the exact `terminal_outcome_completed` JSON event from the outcomes log
 
 ## Design
 
-Add the class-based helper to `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`. It will inspect live `caplog.records`, select the exact logger name `src.websocket_streams.live.runners.shell.lifecycle.outcomes`, parse each selected JSON message, and accept only the exact event name `terminal_outcome_completed`. Use the existing `time.monotonic()` deadline and `time.sleep(0.01)` polling pattern with a fixed two-second bound.
+Add the class-based helper to `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`. It will inspect live `caplog.records`, select the exact logger name `src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.outcomes`, parse each selected JSON message, and accept only the exact event name `terminal_outcome_completed`. Use the existing `time.monotonic()` deadline and `time.sleep(0.01)` polling pattern with a fixed two-second bound.
 
 Call the helper after the existing STOPPED wait and before the existing log snapshot. Do not alter the original inputs, call identities, AST checks, expected event count, field checks, length checks, or secret checks.
 

@@ -14,10 +14,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.config import runtime_settings
-from src.marvis.actions.alarms import ALARM_COLUMNS, ALARM_MAX_WINDOW_SECONDS
-from src.marvis.actions.model import MarvisActionRecord
-from src.marvis.actions.operation import (
+from src.foundation.runtime.config import runtime_settings
+from src.foundation.support.utils.input_utils import InputUtils
+from src.mist.intelligence.marvis.actions.alarms import ALARM_COLUMNS, ALARM_MAX_WINDOW_SECONDS
+from src.mist.intelligence.marvis.actions.model import MarvisActionRecord
+from src.mist.intelligence.marvis.actions.operation import (
     DEFAULT_MAX_ACTIONS,
     EXPORT_ENDPOINT_NAME,
     EXPORT_FILENAME,
@@ -29,8 +30,7 @@ from src.marvis.actions.operation import (
     MarvisResolveResult,
     MarvisResolveWorkflow,
 )
-from src.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
-from src.utils.input_utils import InputUtils
+from src.mist.intelligence.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
 from tests.unit.marvis.actions.conftest import (
     ORG_ID,
     SITE_NAME,

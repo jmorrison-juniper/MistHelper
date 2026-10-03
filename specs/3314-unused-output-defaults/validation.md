@@ -512,7 +512,7 @@ This supplemental result does not establish the repository-wide source coverage 
 | Ruff | `rtk proxy .venv/bin/python -m ruff check .` | Passed after the final assertion repair. |
 | Black | `rtk proxy .venv/bin/python -m black --check --diff .` | Passed. 2,005 files need no change. |
 | Types | `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed for the exact CI scope of 663 source files. The scope excludes tests. |
-| Bandit exclusions | `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Passed. Both samples remain included. |
+| Bandit exclusions | `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'` | Passed. Both samples remain included. |
 | Bandit | `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed without a severity filter. The optional SARIF formatter lacks `sarif_om`. This scan requested no SARIF output. |
 | Full quality ratchet | `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --report /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-ratchet-full.json --summary /Users/jmorrison/.copilot/session-state/eacdff21-470f-499a-ad7f-6886110f6757/files/issue3314-ratchet-full.md --log-level WARNING` | Passed. 994 files and 725 findings checked. Zero new findings and zero parse errors. The unchanged SDK predicate excluded 48 files. |
 
@@ -798,7 +798,7 @@ This result is not whole-source coverage.
 | `rtk proxy .venv/bin/python -m ruff check .` | Passed with the full configured scope. |
 | `rtk proxy .venv/bin/python -m black --check --diff .` | Passed. 2,024 files need no change. |
 | `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed for the exact CI scope of 665 source files. Tests remain excluded. |
-| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Passed for both samples. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'` | Passed for both samples. |
 | `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed without a severity filter. |
 | `rtk proxy .venv/bin/python -m pylint src/ --fail-under=9.5` | Passed with 9.83 of 10. |
 | `rtk proxy .venv/bin/python -m radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j \| rtk proxy .venv/bin/complexity-gate --max 10` | Passed. No function exceeds the threshold. |

@@ -5,7 +5,7 @@
 ## Design
 
 1. Add the rule `.portal-table .cell-control { white-space: nowrap; }` to
-   section 4 of `src/upgrade_portal/app/assets/static/css/portal.css`. A cell
+   section 4 of `src/interfaces/portals/upgrade_portal/app/assets/static/css/portal.css`. A cell
    that never wraps ignores the inherited `word-break` rule.
 2. Put `class="cell-control"` on the action cell of
    `templates/select/orgs.html` and `templates/select/sites.html`. The site

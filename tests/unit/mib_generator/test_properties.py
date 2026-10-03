@@ -13,8 +13,8 @@ from pathlib import Path  # Path keeps the temporary ledger name free of a separ
 from hypothesis import HealthCheck, given, settings  # The property engine.
 from hypothesis import strategies as st  # The random input builders.
 
-from src.metrics_gateway.catalog import MetricScope  # The scope decides the descriptor prefix.
-from src.mib_generator.assignment import DescriptorMaker, OidLedger  # The two units under test.
+from src.interfaces.monitoring.metrics_gateway.catalog import MetricScope  # The scope decides the descriptor prefix.
+from src.operations.hardware.mib_generator.assignment import DescriptorMaker, OidLedger  # The two units under test.
 
 # A field path in the wild holds letters, digits, dots, and the array marker.
 PATHS = st.text(

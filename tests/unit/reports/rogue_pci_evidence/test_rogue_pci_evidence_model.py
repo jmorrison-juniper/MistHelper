@@ -1,6 +1,6 @@
 """Unit tests for rogue PCI evidence model helpers."""
 
-from src.reports.rogue_pci_evidence.model import (  # Import the pure model under test.
+from src.mist.intelligence.reports.rogue_pci_evidence.model import (  # Import the pure model under test.
     CLASS_HONEYPOT,
     CLASS_NEIGHBOR,
     CLASS_ROGUE,

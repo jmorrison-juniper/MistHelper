@@ -12,8 +12,8 @@ import subprocess  # Raise the real TimeoutExpired the teardown path must handle
 
 import pytest  # Fixtures for a temporary directory and for captured log records.
 
-from src.site.address_audit import MistUIGeocoder  # The class under test.
-from src.site.address_audit import ui_geocoder as ui_mod  # Module handle for monkeypatching.
+from src.mist.resources.site.address_audit import MistUIGeocoder  # The class under test.
+from src.mist.resources.site.address_audit import ui_geocoder as ui_mod  # Module handle for monkeypatching.
 
 
 class FakeProcess:

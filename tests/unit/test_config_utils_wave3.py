@@ -1,7 +1,7 @@
 """Wave 3 top-up tests for ConfigUtils.check_stop_signal (initiative 1018).
 
 Targets the last uncovered branch in
-``src/config/config_utils.py`` -- the ``except OSError: pass`` block
+``src/foundation/runtime/config/config_utils.py`` -- the ``except OSError: pass`` block
 on lines 153-154 of ``check_stop_signal``. The existing test module
 ``test_config_utils.py`` covers the happy path and the missing-file
 path; this file adds the OSError race path.
@@ -13,7 +13,7 @@ from unittest.mock import patch  # WHY: patch os.remove to raise OSError determi
 
 import pytest
 
-from src.config.config_utils import ConfigUtils  # WHY: SUT under test.
+from src.foundation.runtime.config.config_utils import ConfigUtils  # WHY: SUT under test.
 
 
 @pytest.fixture(autouse=True)
@@ -30,6 +30,8 @@ class TestCheckStopSignalOSError:
         """When os.remove raises OSError, check_stop_signal must swallow and still return True."""
         stop_file = tmp_path / "stop_loop.txt"  # WHY: signal file must exist for os.path.exists to be True.
         stop_file.write_text("")  # WHY: sentinel content is irrelevant; presence is what matters.
-        with patch("src.config.config_utils.os.remove", side_effect=OSError("simulated race")):  # WHY: force line 153.
+        with patch(
+            "src.foundation.runtime.config.config_utils.os.remove", side_effect=OSError("simulated race")
+        ):  # WHY: force line 153.
             result = ConfigUtils.check_stop_signal()  # WHY: exercise the except-branch swallow.
         assert result is True  # WHY: the swallow must not change the return contract.

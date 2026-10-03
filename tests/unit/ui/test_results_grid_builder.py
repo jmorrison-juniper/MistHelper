@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/layout/results_grid_builder.py."""
+"""Unit tests for src/interfaces/visualization/ui/layout/results_grid_builder.py."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-from src.ui.layout.results_grid_builder import (
+from src.interfaces.visualization.ui.layout.results_grid_builder import (
     MAX_VISIBLE_ROWS,
     ResultsGridBuilder,
     _HierarchyFlattener,

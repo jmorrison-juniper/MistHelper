@@ -1,6 +1,6 @@
 # Phase 1 Data Model: Site Address Audit from CSV
 
-All entities are Python `@dataclass` types in `src/site/address_audit/models.py`
+All entities are Python `@dataclass` types in `src/mist/resources/site/address_audit/models.py`
 (one module, one cohesive "models" responsibility). Plus one SQLite table.
 
 Conventions: full-word field names; type hints required; ASCII-only; no logic in

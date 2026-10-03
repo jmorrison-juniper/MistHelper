@@ -58,10 +58,10 @@ An instance-only cache also repeats work across same-scope writers.
 
 ## Structure and workflow
 
-**Decision**: Add semantic index classes to `src/db/database_schema_utils.py`.
+**Decision**: Add semantic index classes to `src/foundation/persistence/db/database_schema_utils.py`.
 Apply the existing SpecKit templates to this feature directory only.
 
-**Rationale**: `src/db` already exceeds the file limit.
+**Rationale**: `src/foundation/persistence/db` already exceeds the file limit.
 The existing schema module is the appropriate free owner.
 The legacy Git hook creates branches outside the app's branch manager.
 PowerShell is unavailable, and the task prohibits shared `.specify` edits.

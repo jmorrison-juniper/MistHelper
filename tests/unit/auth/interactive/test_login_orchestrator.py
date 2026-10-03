@@ -1,4 +1,4 @@
-"""Wave 11 P2 coverage for src/auth/interactive/login_orchestrator.py (initiative #1018).
+"""Wave 11 P2 coverage for src/mist/access/auth/interactive/login_orchestrator.py (initiative #1018).
 
 Covers every branch of ``LoginOrchestrator`` including:
 - ``execute`` early-abort paths (mistapi missing, cloud cancelled, credentials cancelled) + success.
@@ -28,9 +28,11 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch
 
 import pytest  # WHY: fixtures + parametrize.
 
-from src.auth.interactive.clouds import CloudSelector  # WHY: shared class object for patch.object.
-from src.auth.interactive.credential_prompter import CredentialPrompter  # WHY: shared class for patch.object.
-from src.auth.interactive.login_orchestrator import LoginOrchestrator  # WHY: SUT direct import.
+from src.mist.access.auth.interactive.clouds import CloudSelector  # WHY: shared class object for patch.object.
+from src.mist.access.auth.interactive.credential_prompter import (
+    CredentialPrompter,
+)  # WHY: shared class for patch.object.
+from src.mist.access.auth.interactive.login_orchestrator import LoginOrchestrator  # WHY: SUT direct import.
 
 
 def _make_orchestrator(
@@ -496,10 +498,12 @@ class TestConfigureSessionTimeout:
         import sys  # WHY: inject a fake module into sys.modules for deferred import.
         import types  # WHY: build a ModuleType stub for the deferred import target.
 
-        fake_module = types.ModuleType("src.auth.session_timeout")  # WHY: real module type for import machinery.
+        fake_module = types.ModuleType(
+            "src.mist.access.auth.session_timeout"
+        )  # WHY: real module type for import machinery.
         fake_helper = MagicMock()  # WHY: replaced helper we can assert on.
         cast(Any, fake_module).configure_session_timeout = fake_helper  # WHY: cast(Any) satisfies mypy + ruff.
-        monkeypatch.setitem(sys.modules, "src.auth.session_timeout", fake_module)
+        monkeypatch.setitem(sys.modules, "src.mist.access.auth.session_timeout", fake_module)
         fake_session = MagicMock(spec=object)
         LoginOrchestrator._configure_session_timeout(fake_session)
         fake_helper.assert_called_once_with(fake_session)  # WHY: delegation contract.
@@ -511,13 +515,13 @@ class TestConfigureSessionTimeout:
         import sys  # WHY: inject fake module for the deferred import.
         import types  # WHY: build a ModuleType stub.
 
-        fake_module = types.ModuleType("src.auth.session_timeout")
+        fake_module = types.ModuleType("src.mist.access.auth.session_timeout")
 
         def _boom(_session: Any) -> None:
             raise RuntimeError("timeout wiring broken")  # WHY: reach the except Exception branch.
 
         cast(Any, fake_module).configure_session_timeout = _boom  # WHY: cast(Any) satisfies mypy + ruff.
-        monkeypatch.setitem(sys.modules, "src.auth.session_timeout", fake_module)
+        monkeypatch.setitem(sys.modules, "src.mist.access.auth.session_timeout", fake_module)
         with caplog.at_level(logging.DEBUG):
             LoginOrchestrator._configure_session_timeout(MagicMock(spec=object))  # SUT should not raise.
         assert "timeout wiring broken" in caplog.text  # WHY: swallowed optional timeout failure must be observable.
@@ -529,7 +533,7 @@ class TestConfigureSessionTimeout:
         real_import = builtins.__import__  # WHY: all unrelated imports must still work.
 
         def blocked_import(name: str, *args: Any, **kwargs: Any) -> Any:
-            if name == "src.auth.session_timeout":  # WHY: target only the optional helper.
+            if name == "src.mist.access.auth.session_timeout":  # WHY: target only the optional helper.
                 raise ImportError("session timeout missing")  # WHY: exercise the missing-module branch.
             return real_import(name, *args, **kwargs)  # WHY: keep all other imports normal.
 

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`src.utils.zscaler_catalogue`.
+"""Unit tests for :mod:`src.foundation.support.utils.zscaler_catalogue`.
 
 Why:
     The catalogue module owns menu 206's auto-refresh gate for the Zscaler
@@ -22,8 +22,8 @@ from typing import Any
 
 import pytest
 
-from src.utils import zscaler_catalogue as zc_mod
-from src.utils.zscaler_catalogue import (
+from src.foundation.support.utils import zscaler_catalogue as zc_mod
+from src.foundation.support.utils.zscaler_catalogue import (
     _CLOUDS,
     _FRESHNESS_TTL,
     ensure_fresh,
@@ -306,7 +306,9 @@ class TestFetchCloud:
             def __exit__(self, *_a):
                 return False
 
-        caplog.set_level("WARNING", logger="src.utils.zscaler_catalogue")  # Capture the parse-failure status.
+        caplog.set_level(
+            "WARNING", logger="src.foundation.support.utils.zscaler_catalogue"
+        )  # Capture the parse-failure status.
         monkeypatch.setattr(zc_mod.urllib.request, "urlopen", lambda *_a, **_kw: _Resp())
         assert fetch_cloud("zscaler.net") is None
         assert "JSON parse failed" in caplog.text  # The operator must see the malformed body cause.
@@ -526,7 +528,9 @@ def _promote_v2_fixture(name: str, kind: str, caplog: pytest.LogCaptureFixture) 
     """
     legacy_doc = _load_v2_fixture(name)  # Load fresh data so tests do not share mutations.
     assert legacy_doc.get("schema_version") != 3  # Prove the fixture is still legacy-shaped.
-    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):  # Capture the promotion notice.
+    with caplog.at_level(
+        "INFO", logger="src.foundation.support.utils.zscaler_catalogue"
+    ):  # Capture the promotion notice.
         promoted_doc = zc_mod.promote_cache_document(legacy_doc, kind=kind)  # Convert v2 cache data to v3 shape.
     assert promoted_doc["schema_version"] == 3  # Prove the adapter stamped the v3 schema.
     return promoted_doc  # Return the promoted document for focused assertions.
@@ -693,7 +697,9 @@ def _catalogue_info_records(caplog: pytest.LogCaptureFixture) -> list[Any]:
         Promotion tests must ignore unrelated loggers.
     """
     return [
-        r for r in caplog.records if r.levelname == "INFO" and r.name == "src.utils.zscaler_catalogue"
+        r
+        for r in caplog.records
+        if r.levelname == "INFO" and r.name == "src.foundation.support.utils.zscaler_catalogue"
     ]  # Preserve the old log filter.
 
 
@@ -756,7 +762,9 @@ def test_v3_cache_promotion_is_silent(caplog: pytest.LogCaptureFixture) -> None:
     )  # Create one promoted ZCC doc.
     _assert_promotion_info_lines(caplog, 2)  # Verify both first-promotion notices.
     caplog.clear()  # Remove first-promotion log records before the silent check.
-    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):  # Capture any unexpected idempotency notices.
+    with caplog.at_level(
+        "INFO", logger="src.foundation.support.utils.zscaler_catalogue"
+    ):  # Capture any unexpected idempotency notices.
         zc_mod.promote_cache_document(cenr_v3, kind="cenr")  # Re-promote the CENR v3 document.
         zc_mod.promote_cache_document(zcc_v3, kind="zcc")  # Re-promote the ZCC v3 document.
     assert [r for r in caplog.records if r.levelname == "INFO"] == []  # Require silence for v3 re-promotion.
@@ -805,7 +813,7 @@ def _make_probe_result(
     Returns:
         A ``ProbeResult`` instance ready to hand to the merge helper.
     """
-    from src.utils.zscaler_probe import ProbeResult  # local import; only tests need it
+    from src.foundation.support.utils.zscaler_probe import ProbeResult  # local import; only tests need it
 
     return ProbeResult(
         fqdn=fqdn,

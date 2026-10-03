@@ -41,37 +41,37 @@ The fleet uses five lanes. No two lanes change the same file.
 
 **Purpose**: Make the package layout and the shared values before the lanes start.
 
-- [X] T001 Move `src/websocket_streams/live/runners/utility.py` to
-  `src/websocket_streams/live/runners/utility/runner.py` with `git mv`. Add an `__init__.py`
+- [X] T001 Move `src/mist/realtime/websocket_streams/live/runners/utility.py` to
+  `src/mist/realtime/websocket_streams/live/runners/utility/runner.py` with `git mv`. Add an `__init__.py`
   that holds a docstring only. Change each import to
-  `src.websocket_streams.live.runners.utility.runner`. Move
+  `src.mist.realtime.websocket_streams.live.runners.utility.runner`. Move
   `tests/unit/websocket_streams/live/runners/test_ws_utility_runner.py` to
   `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py` with an
   `__init__.py`. Run the moved tests.
-  (delivered: `src/websocket_streams/live/runners/utility/runner.py`, `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/utility/runner.py`, `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`)
 - [X] T002 Create each new package with an `__init__.py` that holds a docstring only:
-  `src/websocket_streams/live/transport/`, `src/websocket_streams/live/terminal/`,
+  `src/mist/realtime/websocket_streams/live/transport/`, `src/mist/realtime/websocket_streams/live/terminal/`,
   `tests/unit/websocket_streams/live/transport/`,
   `tests/unit/websocket_streams/live/terminal/`, and `tests/unit/websocket_streams/live/transport/fake_mist_cloud/`.
   T062 moved the fake cloud package to this path.
-  (delivered: `src/websocket_streams/live/transport/`, `src/websocket_streams/live/terminal/`, `tests/unit/websocket_streams/live/transport/`, `tests/unit/websocket_streams/live/terminal/`, `tests/unit/websocket_streams/live/transport/fake_mist_cloud/`)
+  (delivered: `src/mist/realtime/websocket_streams/live/transport/`, `src/mist/realtime/websocket_streams/live/terminal/`, `tests/unit/websocket_streams/live/transport/`, `tests/unit/websocket_streams/live/terminal/`, `tests/unit/websocket_streams/live/transport/fake_mist_cloud/`)
 - [X] T003 [P] Copy xterm.js 6.0.0 and the fit addon 0.11.0 into
-  `src/websocket_streams/web/static/vendor/xterm/`. Copy `lib/xterm.js` as `xterm.min.js`,
+  `src/mist/realtime/websocket_streams/web/static/vendor/xterm/`. Copy `lib/xterm.js` as `xterm.min.js`,
   `lib/addon-fit.js` as `addon-fit.min.js`, and `css/xterm.css`. Put the MIT license text of
   both packages in `LICENSE`. Add `README.md` with the versions, the source address, and the
   SHA-256 value of each file.
-  (delivered: `src/websocket_streams/web/static/vendor/xterm/`)
+  (delivered: `src/mist/realtime/websocket_streams/web/static/vendor/xterm/`)
 - [X] T004 [P] Add the codes `not_terminal` (409), `read_only` (409), `input_full` (409),
   `too_large` (413), and `rate_limited` (429) to `StreamRequestError.STATUS_BY_CODE` in
-  `src/websocket_streams/intake/fields.py`. Test each code in
+  `src/mist/realtime/websocket_streams/intake/fields.py`. Test each code in
   `tests/unit/websocket_streams/intake/test_ws_field_checker.py`.
-  (delivered: `src/websocket_streams/intake/fields.py`, `tests/unit/websocket_streams/intake/test_ws_field_checker.py`)
+  (delivered: `src/mist/realtime/websocket_streams/intake/fields.py`, `tests/unit/websocket_streams/intake/test_ws_field_checker.py`)
 - [X] T005 [P] Add `terminal_history_bytes` to `StreamSettings` in
-  `src/websocket_streams/live/sessions/settings.py`. Read `PORTAL_WS_TERMINAL_HISTORY_KB`.
+  `src/mist/realtime/websocket_streams/live/sessions/settings.py`. Read `PORTAL_WS_TERMINAL_HISTORY_KB`.
   The range is 256 to 8,192, and the default is 1,024. Document the setting in
   `deploy/.env.example`. Test the default, the range, and a bad value in
   `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py`.
-  (delivered: `src/websocket_streams/live/sessions/settings.py`, `deploy/.env.example`, `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/sessions/settings.py`, `deploy/.env.example`, `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py`)
 
 ---
 
@@ -118,18 +118,18 @@ The fleet uses five lanes. No two lanes change the same file.
   prefix, the resize frame, and a send from a second thread.
   (delivered: `tests/unit/websocket_streams/live/transport/clients/test_ws_stream_client.py`, `tests/unit/websocket_streams/live/transport/clients/test_ws_shell_client.py`)
 - [X] T012 Implement `MistStreamEndpoint` and `ShellAddressPolicy` in
-  `src/websocket_streams/live/transport/endpoint.py` per `contracts/transport.md`.
-  (delivered: `src/websocket_streams/live/transport/endpoint.py`)
-- [X] T013 [P] Implement `FrameDecoder` in `src/websocket_streams/live/transport/frames.py`
+  `src/mist/realtime/websocket_streams/live/transport/endpoint.py` per `contracts/transport.md`.
+  (delivered: `src/mist/realtime/websocket_streams/live/transport/endpoint.py`)
+- [X] T013 [P] Implement `FrameDecoder` in `src/mist/realtime/websocket_streams/live/transport/frames.py`
   per `contracts/transport.md`.
-  (delivered: `src/websocket_streams/live/transport/frames.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/transport/frames.py`)
 - [X] T014 Implement `StreamClient` in
-  `src/websocket_streams/live/transport/stream_client.py` and `ShellClient` in
-  `src/websocket_streams/live/transport/shell_client.py`. Use `websocket.create_connection`
+  `src/mist/realtime/websocket_streams/live/transport/stream_client.py` and `ShellClient` in
+  `src/mist/realtime/websocket_streams/live/transport/shell_client.py`. Use `websocket.create_connection`
   with `enable_multithread=True`. Take the socket factory and the clock as constructor
   values. T014 depends on T009 through T013, including the tests and both transport
   components.
-  (delivered: `src/websocket_streams/live/transport/stream_client.py`, `src/websocket_streams/live/transport/shell_client.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/transport/stream_client.py`, `src/mist/realtime/websocket_streams/live/transport/shell_client.py`)
 - [X] T015 [P] Pin the private API session attributes `_cloud_uri`, `_apitoken`,
   `_apitoken_index`, and `_session` in
   `tests/contract/websocket_streams/test_ws_sdk_contract.py`.
@@ -141,33 +141,33 @@ The fleet uses five lanes. No two lanes change the same file.
   queue limit, the release order, the 16 KiB limit, and the rate limit.
   (delivered: `tests/unit/websocket_streams/live/terminal/test_ws_byte_history.py`, `tests/unit/websocket_streams/live/terminal/test_ws_terminal_input.py`)
 - [X] T017 [P] Implement `ByteHistory` in
-  `src/websocket_streams/live/terminal/byte_history.py` per `data-model.md`.
-  (delivered: `src/websocket_streams/live/terminal/byte_history.py`)
+  `src/mist/realtime/websocket_streams/live/terminal/byte_history.py` per `data-model.md`.
+  (delivered: `src/mist/realtime/websocket_streams/live/terminal/byte_history.py`)
 - [X] T018 [P] Implement `TerminalInput` in
-  `src/websocket_streams/live/terminal/input_queue.py` per `data-model.md`.
-  (delivered: `src/websocket_streams/live/terminal/input_queue.py`)
+  `src/mist/realtime/websocket_streams/live/terminal/input_queue.py` per `data-model.md`.
+  (delivered: `src/mist/realtime/websocket_streams/live/terminal/input_queue.py`)
 - [X] T019 Implement `TerminalState` and `TerminalChunk` in
-  `src/websocket_streams/live/terminal/state.py` per `data-model.md`.
-  (delivered: `src/websocket_streams/live/terminal/state.py`)
-- [X] T020 Change `StreamSession` in `src/websocket_streams/live/sessions/record.py`. Add
+  `src/mist/realtime/websocket_streams/live/terminal/state.py` per `data-model.md`.
+  (delivered: `src/mist/realtime/websocket_streams/live/terminal/state.py`)
+- [X] T020 Change `StreamSession` in `src/mist/realtime/websocket_streams/live/sessions/record.py`. Add
   the `terminal` value and the `add_bytes(data)` method to the record and to the
   `SessionSink` protocol. Release the input queue in `mark_input_ready`. Close the history
   and the input in `finish`. Add the payload field `terminal`. Test the change in
   `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`. T020 depends on
   T016 through T019, including the core tests and all three terminal components.
-  (delivered: `src/websocket_streams/live/sessions/record.py`, `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/sessions/record.py`, `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`)
 - [x] T063 [P] Prove the proxy part of FR-005 in
   `tests/unit/websocket_streams/live/transport/clients/test_ws_shell_client.py`. The client
   gives no proxy option to websocket-client. The library then reads `https_proxy` and
   `no_proxy` from the host.
   (delivered: `tests/unit/websocket_streams/live/transport/clients/test_ws_shell_client.py`)
-- [x] T064 Add `ConnectFailure` to `src/websocket_streams/live/transport/endpoint.py`. It
+- [x] T064 Add `ConnectFailure` to `src/mist/realtime/websocket_streams/live/transport/endpoint.py`. It
   changes each open error to a plain reason. In
-  `src/websocket_streams/live/runners/channel.py`, a channel stream does not connect again
+  `src/mist/realtime/websocket_streams/live/runners/channel.py`, a channel stream does not connect again
   after an HTTP 4xx refusal, except 408 and 429 (finding M1). Test the reasons in
   `tests/unit/websocket_streams/live/transport/test_ws_endpoint.py` and the rule in
   `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`.
-  (delivered: `src/websocket_streams/live/transport/endpoint.py`, `src/websocket_streams/live/runners/channel.py`, `tests/unit/websocket_streams/live/transport/test_ws_endpoint.py`, `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/transport/endpoint.py`, `src/mist/realtime/websocket_streams/live/runners/channel.py`, `tests/unit/websocket_streams/live/transport/test_ws_endpoint.py`, `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`)
 
 **Checkpoint**: The connection classes, the fake cloud, and the terminal core pass their
 tests.
@@ -204,40 +204,40 @@ keys, and resize the panel. The fake device receives each byte in order.
 
 ### Implementation for User Story 1
 
-- [X] T024 [US1] Rewrite `ShellRunner` in `src/websocket_streams/live/runners/shell.py`.
+- [X] T024 [US1] Rewrite `ShellRunner` in `src/mist/realtime/websocket_streams/live/runners/shell.py`.
   Send the shell trigger with `mist_post`, check the address, and open `ShellClient` with
   the stored size. Append each output to the history. Remove the import of the software
   kit shell.
-  (delivered: `src/websocket_streams/live/runners/shell.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/shell.py`)
 - [X] T025 [US1] Remove `MessageShaper.clean_shell_text` from
-  `src/websocket_streams/live/runners/text.py`, and remove its test from
+  `src/mist/realtime/websocket_streams/live/runners/text.py`, and remove its test from
   `tests/unit/websocket_streams/live/runners/test_ws_message_text.py`. Keep
   `ShellAddressFilter`, because the REST layer of the software kit can log the address.
-  (delivered: `src/websocket_streams/live/runners/text.py`, `tests/unit/websocket_streams/live/runners/test_ws_message_text.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/text.py`, `tests/unit/websocket_streams/live/runners/test_ws_message_text.py`)
 - [X] T026 [US1] Implement `TerminalGateway` in
-  `src/websocket_streams/live/terminal/gateway.py` per `contracts/terminal-http.md`.
-  (delivered: `src/websocket_streams/live/terminal/gateway.py`)
-- [X] T027 [US1] Change `src/websocket_streams/live/sessions/manager.py`. Build a
+  `src/mist/realtime/websocket_streams/live/terminal/gateway.py` per `contracts/terminal-http.md`.
+  (delivered: `src/mist/realtime/websocket_streams/live/terminal/gateway.py`)
+- [X] T027 [US1] Change `src/mist/realtime/websocket_streams/live/sessions/manager.py`. Build a
   `TerminalState` for each shell session and each screen session, and bind the input
   sender. Replace `send_input`, `_input_text`, `_key_text`, and `KEY_INPUTS` with a public
   `session(session_id)` method. Give `RunnerFactory` an optional transport profile for the
   tests. Update `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`.
-  (delivered: `src/websocket_streams/live/sessions/manager.py`, `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/sessions/manager.py`, `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`)
 - [X] T028 [US1] Add `terminal_read`, `terminal_input`, and `terminal_resize` to
-  `WebSocketsServices` in `src/websocket_streams/web/services.py`, and remove the old
-  `send_input`. Add the three routes to `src/websocket_streams/web/blueprint.py`. Update
+  `WebSocketsServices` in `src/mist/realtime/websocket_streams/web/services.py`, and remove the old
+  `send_input`. Add the three routes to `src/mist/realtime/websocket_streams/web/blueprint.py`. Update
   `tests/unit/websocket_streams/web/test_ws_web_services.py`.
-  (delivered: `src/websocket_streams/web/services.py`, `src/websocket_streams/web/blueprint.py`, `tests/unit/websocket_streams/web/test_ws_web_services.py`)
+  (delivered: `src/mist/realtime/websocket_streams/web/services.py`, `src/mist/realtime/websocket_streams/web/blueprint.py`, `tests/unit/websocket_streams/web/test_ws_web_services.py`)
 - [x] T029 [US1] Add `TerminalController` in
-  `src/websocket_streams/web/static/websockets_terminal.js` per
+  `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js` per
   `contracts/terminal-page.md`. It starts xterm.js and the fit addon, runs the read loop,
   and sends the keys and the size. It shows the status line, the warning, the time notice,
   and the gap notice. Load the vendored files and add the panel in
-  `src/websocket_streams/web/templates/websockets_page.html`. Give each session with
-  `terminal: true` to the controller in `src/websocket_streams/web/static/websockets.js`,
+  `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`. Give each session with
+  `terminal: true` to the controller in `src/mist/realtime/websocket_streams/web/static/websockets.js`,
   and remove the old shell line field. Add the panel styles to
-  `src/websocket_streams/web/static/websockets.css`.
-  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/web/templates/websockets_page.html`, `src/websocket_streams/web/static/websockets.js`, `src/websocket_streams/web/static/websockets.css`)
+  `src/mist/realtime/websocket_streams/web/static/websockets.css`.
+  (delivered: `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`, `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`, `src/mist/realtime/websocket_streams/web/static/websockets.js`, `src/mist/realtime/websocket_streams/web/static/websockets.css`)
 - [x] T030 [US1] Write the journeys J1 to J8 in `tests/e2e/websockets_tab/test_websockets_terminal.py`.
   Use the real services, the real manager, the real runners, and the fake Mist cloud.
   Cover the banner, typed text, each special key, Ctrl+C with no selection, the resize,
@@ -252,10 +252,10 @@ keys, and resize the panel. The fake device receives each byte in order.
   request body lists each screenshot.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`, `test-artifacts/websockets-terminal/`)
 - [x] T065 [US1] Keep 5,000 lines of scrollback in
-  `src/websocket_streams/web/static/websockets_terminal.js` (FR-014). Prove it with the
+  `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js` (FR-014). Prove it with the
   journey `test_review_fr014_history_keeps_five_thousand_lines` in
   `tests/e2e/websockets_tab/test_websockets_terminal.py`.
-  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `tests/e2e/websockets_tab/test_websockets_terminal.py`)
+  (delivered: `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`, `tests/e2e/websockets_tab/test_websockets_terminal.py`)
 - [x] T066 [US1] Show the full history again when the operator returns to a session
   (FR-018). Prove it with the journey `test_review_17_session_switch_drops_stale_read` in
   `tests/e2e/websockets_tab/test_websockets_terminal.py`. Use
@@ -266,13 +266,13 @@ keys, and resize the panel. The fake device receives each byte in order.
   idle limit stops the shell after page reads end.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`, `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`)
 - [x] T067 [US1] Show the 20-second notice for a silent shell in
-  `src/websocket_streams/web/static/websockets_terminal.js`. If the far side closes the
+  `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`. If the far side closes the
   shell before any output, end the session as failed with `NO_ANSWER_REASON` in
-  `src/websocket_streams/live/runners/shell.py` (FR-019, issue #3710). Test the runner in
+  `src/mist/realtime/websocket_streams/live/runners/shell.py` (FR-019, issue #3710). Test the runner in
   `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`. Test the page with
   the journey `test_review_3710_silent_device_shows_notice_and_failed_reason` in
   `tests/e2e/websockets_tab/test_websockets_terminal.py`.
-  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/live/runners/shell.py`, `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`, `tests/e2e/websockets_tab/test_websockets_terminal.py`)
+  (delivered: `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`, `src/mist/realtime/websocket_streams/live/runners/shell.py`, `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`, `tests/e2e/websockets_tab/test_websockets_terminal.py`)
 - [x] T068 [US1] Keep the shell lock and the typed device name (FR-045). Prove both rules
   with `test_start_request_locks_shell_and_checks_confirmation` in
   `tests/unit/websocket_streams/intake/test_ws_start_request.py`.
@@ -290,14 +290,14 @@ keys, and resize the panel. The fake device receives each byte in order.
 command, and compare the bytes that the fake device receives.
 
 - [x] T031 [US2] Add the clipboard classes to
-  `src/websocket_streams/web/static/websockets_terminal.js`. The class `TerminalClipboard`
+  `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`. The class `TerminalClipboard`
   copies on a secure page and on an HTTP page. The class `PasteFlow` applies the limit, the
   confirmation, parts of 4 KiB with one request in flight, and the progress. The class
   `TerminalKeys` applies the copy and paste key rules. The class `TerminalMenu` holds Copy,
   Paste, Select all, and Clear. The class `TerminalPreferences` keeps the settings in local
   storage. Add the dialog, the menu, the settings, and the notice to
-  `src/websocket_streams/web/templates/websockets_page.html`.
-  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/web/templates/websockets_page.html`)
+  `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`.
+  (delivered: `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`, `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`)
 - [x] T032 [US2] Write the journeys J9 to J18 in `tests/e2e/websockets_tab/test_websockets_terminal.py`.
   Cover copy by selection on and off, each copy key, and Ctrl+C with a selection. Cover
   each paste key with exact bytes, UTF-8 text, line-end conversion, bracketed markers,
@@ -334,19 +334,19 @@ Each run shows the full output.
   `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_filters.py`.
   (delivered: `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_triggers.py`, `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_filters.py`)
 - [X] T036 [P] [US3] Implement `UtilityTriggerTable` and `UtilityRequest` in
-  `src/websocket_streams/live/runners/utility/triggers.py`. Hold the quiet time of each
+  `src/mist/realtime/websocket_streams/live/runners/utility/triggers.py`. Hold the quiet time of each
   command, with 5 seconds or more.
-  (delivered: `src/websocket_streams/live/runners/utility/triggers.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/utility/triggers.py`)
 - [X] T037 [P] [US3] Implement `UtilityMessageFilter` in
-  `src/websocket_streams/live/runners/utility/filters.py`. Keep the early events. Filter
+  `src/mist/realtime/websocket_streams/live/runners/utility/filters.py`. Keep the early events. Filter
   command events by `session` and capture events by `capture_id`.
-  (delivered: `src/websocket_streams/live/runners/utility/filters.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/utility/filters.py`)
 - [X] T038 [US3] Rewrite `UtilityRunner` in
-  `src/websocket_streams/live/runners/utility/runner.py`. Open `StreamClient`, wait for the
+  `src/mist/realtime/websocket_streams/live/runners/utility/runner.py`. Open `StreamClient`, wait for the
   subscription, send the trigger with `mist_post`, and filter the events. Apply the first
   output limit, the quiet time, and the total limit. Stop within 3 seconds. Keep
   `CaptureStopper`.
-  (delivered: `src/websocket_streams/live/runners/utility/runner.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/utility/runner.py`)
 - [X] T039 [US3] Update the runner tests in
   `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`. Add the
   order test, the early event test, the three limit tests, and the stop test. Add 100 runs
@@ -373,14 +373,14 @@ shows the correct screen.
   that no second size frame reaches the device.
   (delivered: `tests/unit/websocket_streams/live/runners/utility/test_ws_screen_runner.py`)
 - [X] T041 [US4] Implement `ScreenRunner` in
-  `src/websocket_streams/live/runners/utility/screen.py`. Send the trigger, check the
+  `src/mist/realtime/websocket_streams/live/runners/utility/screen.py`. Send the trigger, check the
   address, and append the raw bytes to the history. Build it in `RunnerFactory` for Top
   and Monitor Traffic.
-  (delivered: `src/websocket_streams/live/runners/utility/screen.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/utility/screen.py`)
 - [x] T042 [US4] Show each screen session in a read-only terminal in
-  `src/websocket_streams/web/static/websockets_terminal.js` and
-  `src/websocket_streams/web/static/websockets.js`. Remove the old screen view.
-  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`, `src/websocket_streams/web/static/websockets.js`)
+  `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js` and
+  `src/mist/realtime/websocket_streams/web/static/websockets.js`. Remove the old screen view.
+  (delivered: `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`, `src/mist/realtime/websocket_streams/web/static/websockets.js`)
 - [x] T043 [US4] Write the journeys J19 and J20 in `tests/e2e/websockets_tab/test_websockets_terminal.py`.
   Send 100 consecutive screen updates with split control sequences in one session. Check
   the complete screen text after all 100 updates (SC-008). Check that typed keys send nothing. Show row 1 and row 40 at a fixed 80 by 40
@@ -404,9 +404,9 @@ Compare the messages, the states, and the end reasons.
   refused channel and the source map.
   (delivered: `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`)
 - [X] T045 [US5] Rewrite `ChannelStreamRunner` in
-  `src/websocket_streams/live/runners/channel.py` to use `StreamClient`. Remove the import
+  `src/mist/realtime/websocket_streams/live/runners/channel.py` to use `StreamClient`. Remove the import
   of the private `_MistWebsocket` class.
-  (delivered: `src/websocket_streams/live/runners/channel.py`)
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/channel.py`)
 - [X] T046 [US5] Test the capture path in
   `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`. Cover the
   capture filter, the packet summary, and the stop request.
@@ -428,9 +428,9 @@ Compare the messages, the states, and the end reasons.
 **Independent Test**: Run commands, select Download, and compare the file with the screen.
 
 - [x] T048 [US6] Add the history file to
-  `src/websocket_streams/web/static/websockets_terminal.js`. Build the text from the
+  `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`. Build the text from the
   xterm.js buffer with no control codes, and save it as a file.
-  (delivered: `src/websocket_streams/web/static/websockets_terminal.js`)
+  (delivered: `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js`)
 - [x] T049 [US6] Write the journey J21 in `tests/e2e/websockets_tab/test_websockets_terminal.py`. Compare
   the file text with the screen text.
   (delivered: `tests/e2e/websockets_tab/test_websockets_terminal.py`)
@@ -490,12 +490,12 @@ Compare the messages, the states, and the end reasons.
 - [x] T070 Fix issue #3740. Consume the retry budget after immediate post-subscription
   drops. Reset it only after one event or 5 stable seconds. Prove exhaustion and reset
   behavior with channel runner unit tests.
-  (delivered: `src/websocket_streams/live/runners/channel.py`,
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/channel.py`,
   `tests/unit/websocket_streams/live/runners/test_ws_channel_runner.py`)
 - [x] T071 Fix issue #3741. Report failed local input and live resize writes as failed
   sessions with `WRITE_FAILED_REASON`. Return the transport refusal to the HTTP route.
   Preserve deferred resize before the connection opens and explicit operator-stop behavior.
-  (delivered: `src/websocket_streams/live/runners/shell.py`,
+  (delivered: `src/mist/realtime/websocket_streams/live/runners/shell.py`,
   `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`)
 
 ### Delivery pipeline (constitution Principle IV)
@@ -685,8 +685,8 @@ Start each next task only after its listed prerequisite finishes.
 ## Phase 10: Convergence
 
 - [X] T072 [P] CRITICAL: Replace
-  `src/websocket_streams/live/transport/frames.py` with the package
-  `src/websocket_streams/live/transport/runtime/`, and keep its `__init__.py`
+  `src/mist/realtime/websocket_streams/live/transport/frames.py` with the package
+  `src/mist/realtime/websocket_streams/live/transport/runtime/`, and keep its `__init__.py`
   docstring-only.
   Put frame reading, frame decoding, and shared structured logging in separate leaf modules.
   The logger MUST write each record as ASCII JSON, permit only bounded safe fields, and
@@ -698,9 +698,9 @@ Start each next task only after its listed prerequisite finishes.
   I, V, and VII, FR-009, and SC-006 require (contradicts).
 
 - [X] T073 CRITICAL: After T072, decompose every noncompliant class and function in
-  `src/websocket_streams/live/transport/endpoint.py`,
-  `src/websocket_streams/live/transport/stream_client.py`, and
-  `src/websocket_streams/live/transport/shell_client.py`. Use named collaborator classes,
+  `src/mist/realtime/websocket_streams/live/transport/endpoint.py`,
+  `src/mist/realtime/websocket_streams/live/transport/stream_client.py`, and
+  `src/mist/realtime/websocket_streams/live/transport/shell_client.py`. Use named collaborator classes,
   not wrappers, and keep each hierarchy within the five-item limits. Use the shared
   structured logger from T072, and update the endpoint and client tests under
   `tests/unit/websocket_streams/live/transport/`. Preserve authentication, TLS, proxy,
@@ -708,19 +708,19 @@ Start each next task only after its listed prerequisite finishes.
   FR-001 through FR-009 require this behavior (contradicts).
 
 - [X] T074 [P] CRITICAL: After T072, decompose every noncompliant class and function in
-  `src/websocket_streams/live/terminal/byte_history.py`,
-  `src/websocket_streams/live/terminal/input_queue.py`, and
-  `src/websocket_streams/live/terminal/gateway.py`. Use named collaborator classes, not
-  wrappers, and keep `src/websocket_streams/live/terminal/state.py` compliant. Use the
+  `src/mist/realtime/websocket_streams/live/terminal/byte_history.py`,
+  `src/mist/realtime/websocket_streams/live/terminal/input_queue.py`, and
+  `src/mist/realtime/websocket_streams/live/terminal/gateway.py`. Use named collaborator classes, not
+  wrappers, and keep `src/mist/realtime/websocket_streams/live/terminal/state.py` compliant. Use the
   shared structured logger from T072, and update the matching tests under
   `tests/unit/websocket_streams/live/terminal/`. Preserve history, queue order, rate, read,
   input, and resize. Constitution I, II, V, and VII, FR-011 through FR-019, and FR-046
   require this behavior (contradicts).
 
 - [X] T075 [P] CRITICAL: After T072, replace each noncompliant utility module with a
-  compliant package at `src/websocket_streams/live/runners/utility/filters/`,
-  `src/websocket_streams/live/runners/utility/runner/`, and
-  `src/websocket_streams/live/runners/utility/triggers/`. Keep each `__init__.py`
+  compliant package at `src/mist/realtime/websocket_streams/live/runners/utility/filters/`,
+  `src/mist/realtime/websocket_streams/live/runners/utility/runner/`, and
+  `src/mist/realtime/websocket_streams/live/runners/utility/triggers/`. Keep each `__init__.py`
   docstring-only, and move behavior into named leaf classes. Do not add a wrapper or a
   compatibility export. Use the shared structured logger from T072, and update imports
   and tests under `tests/unit/websocket_streams/live/runners/utility/` and
@@ -729,8 +729,8 @@ Start each next task only after its listed prerequisite finishes.
   FR-004 require this behavior (contradicts).
 
 - [X] T076 [P] CRITICAL: After T072, replace
-  `src/websocket_streams/live/runners/shell.py` with the compliant package
-  `src/websocket_streams/live/runners/shell/`, and keep its `__init__.py` docstring-only.
+  `src/mist/realtime/websocket_streams/live/runners/shell.py` with the compliant package
+  `src/mist/realtime/websocket_streams/live/runners/shell/`, and keep its `__init__.py` docstring-only.
   Split terminal opening, reading, outcomes, input, and screen behavior into named classes.
   Do not add wrappers or compatibility exports. Use the shared structured logger from T072,
   and update imports and
@@ -739,13 +739,13 @@ Start each next task only after its listed prerequisite finishes.
   writes. Constitution I, II, V, and VII and US1 require this behavior (contradicts).
 
 - [X] T077 [P] CRITICAL: Replace
-  `src/websocket_streams/web/static/websockets_terminal.js` with compliant leaf modules
-  under `src/websocket_streams/web/static/terminal/`. Group controller, input, clipboard,
+  `src/mist/realtime/websocket_streams/web/static/websockets_terminal.js` with compliant leaf modules
+  under `src/mist/realtime/websocket_streams/web/static/terminal/`. Group controller, input, clipboard,
   menu, paste, and preference behavior into nested folders with five entries or fewer.
   Keep each class at five methods or fewer. Remove the pass-through wrapper, and load each
   leaf script in dependency order from
-  `src/websocket_streams/web/templates/websockets_page.html`. Update
-  `src/websocket_streams/web/static/websockets.js` and the tests under
+  `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`. Update
+  `src/mist/realtime/websocket_streams/web/static/websockets.js` and the tests under
   `tests/e2e/websockets_tab/`. Preserve every journey for the terminal and clipboard as
   required by Constitution I and II, US1, and US2 (contradicts).
 
@@ -812,8 +812,8 @@ Start each next task only after its listed prerequisite finishes.
 ## Phase 11: Convergence Correction
 
 - [X] T085 [P] CRITICAL: After T072, replace
-  `src/websocket_streams/catalog/registry.py` and
-  `src/websocket_streams/catalog/utilities.py` with compliant packages. Keep each
+  `src/mist/realtime/websocket_streams/catalog/registry.py` and
+  `src/mist/realtime/websocket_streams/catalog/utilities.py` with compliant packages. Keep each
   `__init__.py` docstring-only, and move behavior into named leaf classes without wrappers.
   Use the shared structured logger from T072. Update imports and tests under
   `tests/unit/websocket_streams/catalog/`. Preserve catalog discovery, lock flags, fields,
@@ -821,10 +821,10 @@ Start each next task only after its listed prerequisite finishes.
   (contradicts).
 
 - [X] T086 [P] CRITICAL: After T072, replace
-  `src/websocket_streams/intake/fields.py`,
-  `src/websocket_streams/intake/identifiers.py`,
-  `src/websocket_streams/intake/pickers.py`, and
-  `src/websocket_streams/intake/start_request.py` with compliant packages. Keep each
+  `src/mist/realtime/websocket_streams/intake/fields.py`,
+  `src/mist/realtime/websocket_streams/intake/identifiers.py`,
+  `src/mist/realtime/websocket_streams/intake/pickers.py`, and
+  `src/mist/realtime/websocket_streams/intake/start_request.py` with compliant packages. Keep each
   `__init__.py` docstring-only, and move behavior into named leaf classes without wrappers.
   Use the shared structured logger from T072. Update imports and tests under
   `tests/unit/websocket_streams/intake/`. Preserve validation, identifiers, picker caches,
@@ -832,8 +832,8 @@ Start each next task only after its listed prerequisite finishes.
   VII (contradicts).
 
 - [X] T087 [P] CRITICAL: After T073, replace
-  `src/websocket_streams/live/runners/channel.py` and
-  `src/websocket_streams/live/runners/text.py` with compliant packages. Keep each
+  `src/mist/realtime/websocket_streams/live/runners/channel.py` and
+  `src/mist/realtime/websocket_streams/live/runners/text.py` with compliant packages. Keep each
   `__init__.py` docstring-only, and move behavior into named leaf classes without wrappers.
   Use the shared structured logger from T072. Update imports and tests under
   `tests/unit/websocket_streams/live/runners/`. Preserve retry budgets, healthy resets,
@@ -841,9 +841,9 @@ Start each next task only after its listed prerequisite finishes.
   II, V, and VII, FR-007, FR-009, and T070 require this behavior (contradicts).
 
 - [X] T088 CRITICAL: After T074 through T076 and T085 through T087, replace
-  `src/websocket_streams/live/sessions/buffer.py`,
-  `src/websocket_streams/live/sessions/manager.py`, and
-  `src/websocket_streams/live/sessions/record.py` with compliant packages. Keep each
+  `src/mist/realtime/websocket_streams/live/sessions/buffer.py`,
+  `src/mist/realtime/websocket_streams/live/sessions/manager.py`, and
+  `src/mist/realtime/websocket_streams/live/sessions/record.py` with compliant packages. Keep each
   `__init__.py` docstring-only. Move behavior into named leaf classes without wrappers.
   Use the shared structured logger from T072. Update imports and tests under
   `tests/unit/websocket_streams/live/sessions/`. Preserve buffer limits, session states,
@@ -851,8 +851,8 @@ Start each next task only after its listed prerequisite finishes.
   I, II, V, and VII and FR-013 through FR-019 require this behavior (contradicts).
 
 - [X] T089 [P] CRITICAL: After T074, replace
-  `src/websocket_streams/live/terminal/state.py` with the compliant package
-  `src/websocket_streams/live/terminal/state/`. Keep its `__init__.py` docstring-only.
+  `src/mist/realtime/websocket_streams/live/terminal/state.py` with the compliant package
+  `src/mist/realtime/websocket_streams/live/terminal/state/`. Keep its `__init__.py` docstring-only.
   Split size, status, state, and chunk payload behavior into named leaf classes without
   wrappers. Use the shared structured logger from T072. Update imports and tests under
   `tests/unit/websocket_streams/live/terminal/`. Preserve terminal state, size, close, and
@@ -860,8 +860,8 @@ Start each next task only after its listed prerequisite finishes.
   (contradicts).
 
 - [X] T090 CRITICAL: After T085 through T089, replace
-  `src/websocket_streams/web/blueprint.py` and
-  `src/websocket_streams/web/services.py` with compliant packages. Keep each `__init__.py`
+  `src/mist/realtime/websocket_streams/web/blueprint.py` and
+  `src/mist/realtime/websocket_streams/web/services.py` with compliant packages. Keep each `__init__.py`
   docstring-only, and move route, request, service, and picker behavior into named leaf
   classes without wrappers. Use the shared structured logger from T072. Update all imports,
   route tests, service tests, and browser journeys under `tests/unit/websocket_streams/web/`

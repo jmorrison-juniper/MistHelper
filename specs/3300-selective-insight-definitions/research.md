@@ -29,7 +29,7 @@ Selected discovery therefore removes unrelated work without a second export impl
 - Reject direct `listInsightMetrics` calls from the helper. They duplicate exporter ownership.
 - Reject a new forwarding service or compatibility shim. It adds no semantic responsibility.
 
-**Evidence**: [Exporter discovery and processing](../../src/export/const_definitions_exporter.py).
+**Evidence**: [Exporter discovery and processing](../../src/operations/exporting/export/const_definitions_exporter.py).
 
 ## 2. Return evidence for the selected attempt
 
@@ -54,8 +54,8 @@ A local result retains error evidence without shared failure state or changes to
 - Reject failure state on the shared helper. Another caller could inherit it.
 - Reject a new exception policy for caller methods. It changes their existing behavior.
 
-**Evidence**: [Exporter counters](../../src/export/const_definitions_exporter.py) and
-[helper availability check](../../src/analytics/insight_metrics_utils.py).
+**Evidence**: [Exporter counters](../../src/operations/exporting/export/const_definitions_exporter.py) and
+[helper availability check](../../src/mist/intelligence/analytics/insight_metrics_utils.py).
 
 ## 3. Preserve the first failure and count it once
 
@@ -90,8 +90,8 @@ These repairs directly support a truthful selected result.
 - Reject additional retries, atomic-output redesign, or changes to `DataExporter`.
 - Reject a broad exception handler that converts programming faults into normal refresh failures.
 
-**Evidence**: [Shared fetch and output methods](../../src/export/const_definitions_exporter.py),
-[writer Boolean contract](../../src/export/data_exporter.py), and
+**Evidence**: [Shared fetch and output methods](../../src/operations/exporting/export/const_definitions_exporter.py),
+[writer Boolean contract](../../src/operations/exporting/export/data_exporter.py), and
 [existing failure tests](../../tests/unit/export/test_const_definitions_exporter.py).
 
 ## 4. Keep the cache and output authorities unchanged
@@ -115,8 +115,8 @@ Do not add a cache policy for files that remain after a failed attempt.
 - Reject alternate filenames, a fixed metric list, or a new serialization path.
 - Reject new cache invalidation or stale-data policy.
 
-**Evidence**: [Cache and normalization methods](../../src/export/const_definitions_exporter.py) and
-[scope reader](../../src/analytics/insight_metrics_utils.py).
+**Evidence**: [Cache and normalization methods](../../src/operations/exporting/export/const_definitions_exporter.py) and
+[scope reader](../../src/mist/intelligence/analytics/insight_metrics_utils.py).
 
 ## 5. Use the existing shared helper in all four callers
 
@@ -140,10 +140,10 @@ The helper must report the failed refresh and must not claim current definitions
 - Reject four separate selected-refresh implementations.
 - Reject caller changes that impose a new abort or stale-file deletion policy.
 
-**Evidence**: [Site caller](../../src/export/site_insights/site_metric_operation.py),
-[device caller](../../src/export/site_insights/device_metric_operation.py),
-[organization caller](../../src/export/org_export_utils.py), and
-[client caller and dependency bundle](../../src/refactors/serial_cc/site_client_insights.py).
+**Evidence**: [Site caller](../../src/operations/exporting/export/site_insights/site_metric_operation.py),
+[device caller](../../src/operations/exporting/export/site_insights/device_metric_operation.py),
+[organization caller](../../src/operations/exporting/export/org_export_utils.py), and
+[client caller and dependency bundle](../../src/foundation/support/refactors/serial_cc/site_client_insights.py).
 
 ## 6. Preserve full coverage and measure actual elapsed time
 
@@ -187,7 +187,7 @@ Actual elapsed time includes discovery, cache checks, normalization, and output.
 - Reject direct-exporter-only timing or replacement of a caller's refresh method.
 - Reject live requests or comparison claims against the reported live 67.3-second run.
 
-**Evidence**: [Baseline discovery and special handling](../../src/export/const_definitions_exporter.py),
+**Evidence**: [Baseline discovery and special handling](../../src/operations/exporting/export/const_definitions_exporter.py),
 [required acceptance evidence](spec.md#required-acceptance-evidence), and
 [issue #3300](https://github.com/jmorrison-juniper/MistHelper/issues/3300).
 

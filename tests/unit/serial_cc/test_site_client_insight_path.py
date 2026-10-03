@@ -17,7 +17,7 @@ from urllib.parse import unquote  # WHY: Read the metric name back from the requ
 
 import pytest  # WHY: Parametrize the FR-006 cases and capture the log.
 
-from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService, _ExportContext
+from src.foundation.support.refactors.serial_cc.site_client_insights import SiteClientInsightsService, _ExportContext
 
 SITE_ID = "site-alamo"  # WHY: A fixed site identifier for the path.
 SITE_NAME = "AlamoSanAntonio"  # WHY: The site name that tags each record.

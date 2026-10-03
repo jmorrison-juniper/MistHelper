@@ -58,7 +58,7 @@
 
 - [ ] T004 [US2] Confirm that issue #1792 landed. Run `.venv\Scripts\python.exe -m ruff check . --select BLE001 --statistics` and the same command with `--ignore-noqa`. Both values must read 500. Stop if the default value reads 412, because the inert directives still exist.
 - [ ] T005 [US2] Measure the pylint count on the current tree. Run `.venv\Scripts\python.exe -m pylint MistHelper.py src --disable=all --enable=W0718 --score=n` and count the reported lines. Do not trust the value of 493 in the `pyproject.toml` comment, because the tree changed since that comment.
-- [ ] T006 [US2] Record the root that each tool reads. Ruff reads the whole repository and drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`. Pylint reads `MistHelper.py` and `src` only. Write both lists into [plan.md](plan.md).
+- [ ] T006 [US2] Record the root that each tool reads. Ruff reads the whole repository and drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`. Pylint reads `MistHelper.py` and `src` only. Write both lists into [plan.md](plan.md).
 - [ ] T007 [US2] Explain every site in the difference between the two counts. List the ruff sites outside the pylint root, such as the 8 sites in `starlink_dashboard.py` and every site under `tools/` and `tests/`. List the pylint sites outside the ruff root. Requirement FR-003 blocks the first slice until each site holds an explanation.
 - [ ] T008 [US2] Record the per-area counts with `--ignore-noqa`. Run `.venv\Scripts\python.exe -m ruff check . --select BLE001 --ignore-noqa --output-format concise` and group the results by area. Compare the result against the table in [spec.md](spec.md). Record any drift.
 - [ ] T009 [US2] Read the state of issue [#1709](https://github.com/jmorrison-juniper/MistHelper/issues/1709) with `gh issue view 1709`. That issue covers the 33 sites in `MistHelper.py`. Record the decision to land it first or to fold it into slice 11.
@@ -84,10 +84,10 @@
 
 ### The four small slices
 
-- [ ] T016 [US3] Run slice 2. The scope is `src/analytics`, `src/ui`, and `starlink_dashboard.py`, which hold 30 sites. Repeat the T010 to T015 steps. Note that pylint never reads `starlink_dashboard.py`, so those 8 sites need a ruff-only check.
-- [ ] T017 [US3] Run slice 3. The scope is `src/api`, `src/utils`, and `src/websocket`, which hold 44 sites. Split the slice by area, because 44 exceeds the limit of 40. Read `src/utils/logger_utils.py` with care, because a log call inside a logging filter can recurse without end.
-- [ ] T018 [P] [US3] Run slice 4. The scope is `src/site` and `src/db`, which hold 35 sites. Repeat the T010 to T015 steps.
-- [ ] T019 [P] [US3] Run slice 5. The scope is `src/gateway`, which holds 24 sites. Repeat the T010 to T015 steps.
+- [ ] T016 [US3] Run slice 2. The scope is `src/mist/intelligence/analytics`, `src/interfaces/visualization/ui`, and `starlink_dashboard.py`, which hold 30 sites. Repeat the T010 to T015 steps. Note that pylint never reads `starlink_dashboard.py`, so those 8 sites need a ruff-only check.
+- [ ] T017 [US3] Run slice 3. The scope is `src/mist/access/api`, `src/foundation/support/utils`, and `src/mist/realtime/websocket`, which hold 44 sites. Split the slice by area, because 44 exceeds the limit of 40. Read `src/foundation/support/utils/logger_utils.py` with care, because a log call inside a logging filter can recurse without end.
+- [ ] T018 [P] [US3] Run slice 4. The scope is `src/mist/resources/site` and `src/foundation/persistence/db`, which hold 35 sites. Repeat the T010 to T015 steps.
+- [ ] T019 [P] [US3] Run slice 5. The scope is `src/mist/resources/gateway`, which holds 24 sites. Repeat the T010 to T015 steps.
 
 **Checkpoint**: The count reads about 367. Slice 6 can start.
 
@@ -99,13 +99,13 @@
 
 **Independent Test**: The `BLE001` count drops by the slice size after each slice.
 
-**Caution**: The `src/ssh` area holds 18 sites that the default ruff run hides today. Those sites received no earlier review at all.
+**Caution**: The `src/operations/execution/ssh` area holds 18 sites that the default ruff run hides today. Those sites received no earlier review at all.
 
-- [ ] T020 [US3] Run slice 6. The scope is `src/ssh`, which holds 32 sites. 18 of them carried an inert directive before issue #1792 landed. Read those 18 with extra care, because no earlier reviewer saw them.
-- [ ] T021 [US3] Run slice 7. The scope is `src/device`, which holds 34 sites. Read `src/device/virtual_chassis.py` with care, because it holds 10 sites.
-- [ ] T022 [US3] Run slice 8. The scope is `src/refactors`, which holds 43 sites. Split the slice into two pull requests, because 43 exceeds the limit of 40.
-- [ ] T023 [US3] Run slice 9. The file is `src/firmware/firmware_manager.py`, which holds 28 sites. Repeat the T010 to T015 steps for that file alone.
-- [ ] T024 [US3] Run slice 10. The scope is the rest of `src/firmware`, which holds 34 sites. `src/firmware/bulk_switch_upgrader.py` holds 10 and `src/firmware/bulk_ap_upgrader.py` holds 11.
+- [ ] T020 [US3] Run slice 6. The scope is `src/operations/execution/ssh`, which holds 32 sites. 18 of them carried an inert directive before issue #1792 landed. Read those 18 with extra care, because no earlier reviewer saw them.
+- [ ] T021 [US3] Run slice 7. The scope is `src/mist/resources/device`, which holds 34 sites. Read `src/mist/resources/device/virtual_chassis.py` with care, because it holds 10 sites.
+- [ ] T022 [US3] Run slice 8. The scope is `src/foundation/support/refactors`, which holds 43 sites. Split the slice into two pull requests, because 43 exceeds the limit of 40.
+- [ ] T023 [US3] Run slice 9. The file is `src/operations/execution/firmware/firmware_manager.py`, which holds 28 sites. Repeat the T010 to T015 steps for that file alone.
+- [ ] T024 [US3] Run slice 10. The scope is the rest of `src/operations/execution/firmware`, which holds 34 sites. `src/operations/execution/firmware/bulk_switch_upgrader.py` holds 10 and `src/operations/execution/firmware/bulk_ap_upgrader.py` holds 11.
 - [ ] T025 [US3] Run slice 11. The file is `MistHelper.py`, which holds 33 sites. Confirm the T009 decision about issue #1709 first. Run `.venv\Scripts\python.exe -m mypy src/ MistHelper.py --config-file pyproject.toml` after the edit, because issue #888 widened the mypy scope to cover this file.
 
 **Checkpoint**: The count reads about 161. Slice 12 can start.
@@ -114,13 +114,13 @@
 
 ## Phase 5: User Story 1 and 3, Slices 12 to 14 - The export area and the remainder (Priority: P1)
 
-**Goal**: Audit the last 161 sites. `src/export` holds 94 of them, so that area splits into three slices.
+**Goal**: Audit the last 161 sites. `src/operations/exporting/export` holds 94 of them, so that area splits into three slices.
 
 **Independent Test**: The `BLE001` count reaches zero under `--ignore-noqa`.
 
-- [ ] T026 [US1] Split `src/export` into groups of at most 40 sites. List the files with `.venv\Scripts\python.exe -m ruff check src/export --select BLE001 --ignore-noqa --output-format concise` and record the group boundary in [plan.md](plan.md). Note that `src/export/const_definitions_exporter.py` holds 11 sites.
-- [ ] T027 [US1] Run slice 12. The scope is the first `src/export` group. Repeat the T010 to T015 steps. This area holds the highest defect risk, because an export handler that returns an empty list produces a silent empty report.
-- [ ] T028 [US1] Run slice 13. The scope is the second `src/export` group. Repeat the T010 to T015 steps.
+- [ ] T026 [US1] Split `src/operations/exporting/export` into groups of at most 40 sites. List the files with `.venv\Scripts\python.exe -m ruff check src/operations/exporting/export --select BLE001 --ignore-noqa --output-format concise` and record the group boundary in [plan.md](plan.md). Note that `src/operations/exporting/export/const_definitions_exporter.py` holds 11 sites.
+- [ ] T027 [US1] Run slice 12. The scope is the first `src/operations/exporting/export` group. Repeat the T010 to T015 steps. This area holds the highest defect risk, because an export handler that returns an empty list produces a silent empty report.
+- [ ] T028 [US1] Run slice 13. The scope is the second `src/operations/exporting/export` group. Repeat the T010 to T015 steps.
 - [ ] T029 [US1] List every area that the earlier slices did not cover. Run `.venv\Scripts\python.exe -m ruff check . --select BLE001 --output-format concise` and group the remaining files by area. Record the group boundary in [plan.md](plan.md).
 - [ ] T030 [US1] Run slice 14 and every further slice that the remainder needs. Repeat the T010 to T015 steps for each one. Keep every pull request at or below 40 sites.
 - [ ] T031 [US1] Verify the whole audit. Run `.venv\Scripts\python.exe -m ruff check . --select BLE001 --ignore-noqa --statistics` and confirm zero results. SC-002 depends on this run.
@@ -207,7 +207,7 @@ A slice must reduce the count by its own size and must move no other count. Each
 
 ### Minimum viable delivery
 
-Slice 12 delivers the largest value on its own. The `src/export` area holds 94 sites, and an export handler that returns an empty collection produces a silent empty report. A reviewer who has time for one slice should pick that one.
+Slice 12 delivers the largest value on its own. The `src/operations/exporting/export` area holds 94 sites, and an export handler that returns an empty collection produces a silent empty report. A reviewer who has time for one slice should pick that one.
 
 ### Order of risk
 

@@ -2,7 +2,7 @@
 
 Warning: this page is written by hand, so it can fall behind the code.
 [The menu reference](menu_reference.md) is generated from
-`src/utils/operation_registry.py` and is the authoritative list. Read that page
+`src/foundation/support/utils/operation_registry.py` and is the authoritative list. Read that page
 when the two disagree. Run `python scripts/generate_menu_wiki.py` to rebuild it.
 
 This page names the operations that arrived most recently.

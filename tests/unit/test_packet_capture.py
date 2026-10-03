@@ -1,4 +1,4 @@
-"""Unit tests for PacketCaptureManager in src/capture/packet_capture.py."""
+"""Unit tests for PacketCaptureManager in src/operations/execution/capture/packet_capture.py."""
 
 import logging
 import os
@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.capture.packet_capture import PacketCaptureManager
-from src.capture.packet_capture_download import PacketCaptureDownloadManager
+from src.operations.execution.capture.packet_capture import PacketCaptureManager
+from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
 
 
 # ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ def mock_session():
 @pytest.fixture()
 def manager(mock_session):
     """Return a PacketCaptureManager with mocked dependencies."""
-    with patch("src.capture.packet_capture._get_config_utils") as mock_config:
+    with patch("src.operations.execution.capture.packet_capture._get_config_utils") as mock_config:
         mock_config.return_value.get_cached_or_prompted_org_id.return_value = "test-org-id"
         mgr = PacketCaptureManager(mock_session)
     return mgr
@@ -180,42 +180,42 @@ class TestInit:
 class TestTcpdumpExpressionSelection:
     """Tests for _get_tcpdump_expression_selection()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_default_no_filter(self, mock_iu, manager):
         """Choice '1' returns empty string (no filter)."""
         mock_iu.return_value.safe_input.return_value = "1"
         result = manager._get_tcpdump_expression_selection()
         assert result == ""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_https_filter(self, mock_iu, manager):
         """Choice '2' returns HTTPS port filter."""
         mock_iu.return_value.safe_input.return_value = "2"
         result = manager._get_tcpdump_expression_selection()
         assert result == "port 443"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_dns_filter(self, mock_iu, manager):
         """Choice '4' returns DNS filter."""
         mock_iu.return_value.safe_input.return_value = "4"
         result = manager._get_tcpdump_expression_selection()
         assert result == "port 53"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_icmp_filter(self, mock_iu, manager):
         """Choice '8' returns ICMP filter."""
         mock_iu.return_value.safe_input.return_value = "8"
         result = manager._get_tcpdump_expression_selection()
         assert result == "icmp"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_tcp_filter(self, mock_iu, manager):
         """Choice '10' returns TCP filter."""
         mock_iu.return_value.safe_input.return_value = "10"
         result = manager._get_tcpdump_expression_selection()
         assert result == "tcp"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_custom_expression(self, mock_iu, manager):
         """Choice '40' prompts for custom expression."""
         mock_iu.return_value.safe_input.side_effect = [
@@ -225,14 +225,14 @@ class TestTcpdumpExpressionSelection:
         result = manager._get_tcpdump_expression_selection()
         assert result == "host 10.0.0.1 and port 80"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_dhcp_filter(self, mock_iu, manager):
         """Choice '33' returns DHCP filter."""
         mock_iu.return_value.safe_input.return_value = "33"
         result = manager._get_tcpdump_expression_selection()
         assert result == "port 67 or port 68"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_invalid_choice_returns_empty(self, mock_iu, manager):
         """Invalid choice returns empty string."""
         mock_iu.return_value.safe_input.return_value = "99"
@@ -246,14 +246,14 @@ class TestTcpdumpExpressionSelection:
 class TestCaptureFormatSelection:
     """Tests for _get_capture_format_selection()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_default_pcap(self, mock_iu, manager):
         """Choice '1' returns pcap format."""
         mock_iu.return_value.safe_input.return_value = "1"
         result = manager._get_capture_format_selection()
         assert result == "pcap"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_stream_format(self, mock_iu, manager):
         """Choice '2' returns stream format."""
         mock_iu.return_value.safe_input.return_value = "2"
@@ -267,21 +267,21 @@ class TestCaptureFormatSelection:
 class TestStartSitePacketCapture:
     """Tests for start_site_packet_capture() menu routing."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_cancel_choice(self, mock_iu, manager):
         """Choice '0' cancels and returns without calling any capture."""
         mock_iu.return_value.safe_input.return_value = "0"
         manager.start_site_packet_capture()
         assert mock_iu.return_value.safe_input.call_count == 1  # Prove the menu reads one operator choice.
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_invalid_choice(self, mock_iu, manager):
         """Invalid choice prints error and returns."""
         mock_iu.return_value.safe_input.return_value = "99"
         manager.start_site_packet_capture()
         assert mock_iu.return_value.safe_input.call_count == 1  # Prove the menu reads one operator choice.
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_routes_to_wireless(self, mock_iu, manager):
         """Choice '1' routes to wireless capture."""
         mock_iu.return_value.safe_input.return_value = "1"
@@ -290,7 +290,7 @@ class TestStartSitePacketCapture:
             mock_method.assert_called_once()
             assert mock_method.call_count == 1  # Prove the wireless route runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_routes_to_wired(self, mock_iu, manager):
         """Choice '2' routes to wired capture."""
         mock_iu.return_value.safe_input.return_value = "2"
@@ -299,7 +299,7 @@ class TestStartSitePacketCapture:
             mock_method.assert_called_once()
             assert mock_method.call_count == 1  # Prove the wired route runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_routes_to_gateway(self, mock_iu, manager):
         """Choice '3' routes to gateway capture."""
         mock_iu.return_value.safe_input.return_value = "3"
@@ -308,7 +308,7 @@ class TestStartSitePacketCapture:
             mock_method.assert_called_once()
             assert mock_method.call_count == 1  # Prove the gateway route runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_routes_to_switch(self, mock_iu, manager):
         """Choice '4' routes to switch capture."""
         mock_iu.return_value.safe_input.return_value = "4"
@@ -317,7 +317,7 @@ class TestStartSitePacketCapture:
             mock_method.assert_called_once()
             assert mock_method.call_count == 1  # Prove the switch route runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_routes_to_new_association(self, mock_iu, manager):
         """Choice '5' routes to new association capture."""
         mock_iu.return_value.safe_input.return_value = "5"
@@ -326,7 +326,7 @@ class TestStartSitePacketCapture:
             mock_method.assert_called_once()
             assert mock_method.call_count == 1  # Prove the association route runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_routes_to_scan(self, mock_iu, manager):
         """Choice '6' routes to scan capture."""
         mock_iu.return_value.safe_input.return_value = "6"
@@ -342,7 +342,7 @@ class TestStartSitePacketCapture:
 class TestExecuteSiteCapture:
     """Tests for _execute_site_capture()."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_successful_pcap_capture(self, mock_mistapi, manager):
         """Successful PCAP capture calls download."""
         mock_response = MagicMock()
@@ -360,7 +360,7 @@ class TestExecuteSiteCapture:
                 manager._execute_site_capture("site-123", {"type": "client"})
                 mock_dl.assert_called_once_with("site-123", "cap-123", 60)
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_successful_stream_capture(self, mock_mistapi, manager):
         """Successful stream capture subscribes to WebSocket."""
         mock_response = MagicMock()
@@ -377,7 +377,7 @@ class TestExecuteSiteCapture:
                 manager._execute_site_capture("site-123", {"type": "client"})
                 mock_sub.assert_called_once_with("site-123", "cap-456")
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_api_error_response(self, mock_mistapi, manager):
         """Non-200 response logs error."""
         mock_response = MagicMock()
@@ -389,7 +389,7 @@ class TestExecuteSiteCapture:
         api_call = mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture  # Name the API mock for a focused count.
         assert api_call.call_count == 1  # Prove the site capture API was attempted once.
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_recording_already_in_progress(self, mock_mistapi, manager):
         """400 with 'Recording already in progress' handled gracefully."""
         mock_response = MagicMock()
@@ -401,7 +401,7 @@ class TestExecuteSiteCapture:
         api_call = mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture  # Name the API mock for a focused count.
         assert api_call.call_count == 1  # Prove the conflict path still attempts one API call.
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_exception_handled(self, mock_mistapi, manager):
         """Exception during API call is caught and logged."""
         mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture.side_effect = RuntimeError("Network error")
@@ -417,7 +417,7 @@ class TestExecuteSiteCapture:
 class TestExecuteOrgCapture:
     """Tests for _execute_org_capture()."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_successful_org_capture(self, mock_mistapi, manager):
         """Successful org capture with PCAP format."""
         mock_response = MagicMock()
@@ -435,7 +435,7 @@ class TestExecuteOrgCapture:
                 mock_dl.assert_called_once()
                 assert mock_dl.call_count == 1  # Prove the PCAP download path runs once.
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_org_capture_stream_format(self, mock_mistapi, manager):
         """Stream format subscribes to org WebSocket."""
         mock_response = MagicMock()
@@ -453,7 +453,7 @@ class TestExecuteOrgCapture:
                 mock_sub.assert_called_once_with("org-cap-stream")
                 assert mock_sub.call_count == 1  # Prove the stream subscription path runs once.
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_org_capture_api_failure(self, mock_mistapi, manager):
         """Non-200 org capture handled gracefully."""
         mock_response = MagicMock()
@@ -465,7 +465,7 @@ class TestExecuteOrgCapture:
         api_call = mock_mistapi.api.v1.orgs.pcaps.startOrgPacketCapture  # Name the API mock for a focused count.
         assert api_call.call_count == 1  # Prove the org capture API was attempted once.
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_org_capture_exception(self, mock_mistapi, manager):
         """Exception during org capture is caught."""
         mock_mistapi.api.v1.orgs.pcaps.startOrgPacketCapture.side_effect = RuntimeError("API down")
@@ -481,7 +481,7 @@ class TestExecuteOrgCapture:
 class TestExportCaptureInfoToCsv:
     """Tests for _export_capture_info_to_csv()."""
 
-    @patch("src.capture.packet_capture._get_data_exporter")
+    @patch("src.operations.execution.capture.packet_capture._get_data_exporter")
     def test_export_creates_csv(self, mock_exporter_factory, manager):
         """Export calls DataExporter with capture data."""
         mock_exporter = MagicMock()
@@ -498,7 +498,9 @@ class TestExportCaptureInfoToCsv:
 
     def test_export_handles_exception(self, manager, caplog):
         """Exception during export is logged, not raised."""
-        with patch("src.capture.packet_capture._get_data_exporter", side_effect=ImportError("No module")):
+        with patch(
+            "src.operations.execution.capture.packet_capture._get_data_exporter", side_effect=ImportError("No module")
+        ):
             with caplog.at_level(logging.ERROR):
                 manager._export_capture_info_to_csv({}, "site", "site-abc")
         assert "No module" in caplog.text  # Prove the import failure is logged for the operator.
@@ -510,8 +512,8 @@ class TestExportCaptureInfoToCsv:
 class TestWaitForCaptureCompletion:
     """Tests for _wait_for_capture_completion()."""
 
-    @patch("src.capture.packet_capture.mistapi")
-    @patch("src.capture.packet_capture.time.sleep", return_value=None)
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.time.sleep", return_value=None)
     def test_capture_completes(self, mock_sleep, mock_mistapi, manager):
         """Completed capture returns True."""
         mock_response = MagicMock()
@@ -524,8 +526,8 @@ class TestWaitForCaptureCompletion:
         result = manager._wait_for_capture_completion("site-123", "cap-123", 10)
         assert result is True
 
-    @patch("src.capture.packet_capture.mistapi")
-    @patch("src.capture.packet_capture.time.sleep", return_value=None)
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.time.sleep", return_value=None)
     def test_capture_timeout(self, mock_sleep, mock_mistapi, manager):
         """Timeout returns False when capture not found."""
         mock_response = MagicMock()
@@ -536,8 +538,8 @@ class TestWaitForCaptureCompletion:
         result = manager._wait_for_capture_completion("site-123", "cap-123", 5)
         assert result is False
 
-    @patch("src.capture.packet_capture.mistapi")
-    @patch("src.capture.packet_capture.time.sleep", return_value=None)
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.time.sleep", return_value=None)
     def test_api_error_during_wait(self, mock_sleep, mock_mistapi, manager):
         """API error during polling returns False."""
         mock_response = MagicMock()
@@ -555,8 +557,8 @@ class TestWaitForCaptureCompletion:
 class TestStartOrgPacketCapture:
     """Tests for start_org_packet_capture() menu routing."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_cancel_choice(self, mock_pu, mock_iu, manager):
         """Choice '0' cancels org capture."""
         mock_pu.return_value.select_site.return_value = "site-123"
@@ -564,8 +566,8 @@ class TestStartOrgPacketCapture:
         manager.start_org_packet_capture()
         assert not mock_iu.return_value.safe_input.called  # Prove the no-MxEdge guard stops before prompting.
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_invalid_choice(self, mock_pu, mock_iu, manager):
         """Invalid choice handled gracefully."""
         mock_pu.return_value.select_site.return_value = "site-123"
@@ -580,7 +582,7 @@ class TestStartOrgPacketCapture:
 class TestSubscribeToCaptureStream:
     """Tests for _subscribe_to_site_capture_stream()."""
 
-    @patch("src.capture.packet_capture._get_websocket_manager")
+    @patch("src.operations.execution.capture.packet_capture._get_websocket_manager")
     def test_site_stream_subscribe(self, mock_ws_factory, manager):
         """Site stream creates WebSocketManager and subscribes."""
         mock_ws = MagicMock()
@@ -591,14 +593,14 @@ class TestSubscribeToCaptureStream:
         mock_ws.subscribe_to_channel.assert_called_once()
         assert mock_ws.subscribe_to_channel.call_count == 1  # Prove the site channel subscription runs once.
 
-    @patch("src.capture.packet_capture._get_websocket_manager")
+    @patch("src.operations.execution.capture.packet_capture._get_websocket_manager")
     def test_site_stream_exception(self, mock_ws_factory, manager):
         """Exception during WebSocket subscribe is handled."""
         mock_ws_factory.return_value.side_effect = RuntimeError("WS error")
         manager._subscribe_to_site_capture_stream("site-123", "cap-456")
         assert mock_ws_factory.return_value.call_count == 1  # Prove the WebSocket creation was attempted once.
 
-    @patch("src.capture.packet_capture._get_websocket_manager")
+    @patch("src.operations.execution.capture.packet_capture._get_websocket_manager")
     def test_org_stream_subscribe(self, mock_ws_factory, manager):
         """Org stream creates WebSocketManager and subscribes."""
         mock_ws = MagicMock()
@@ -609,7 +611,7 @@ class TestSubscribeToCaptureStream:
         mock_ws.subscribe_to_channel.assert_called_once()
         assert mock_ws.subscribe_to_channel.call_count == 1  # Prove the org channel subscription runs once.
 
-    @patch("src.capture.packet_capture._get_websocket_manager")
+    @patch("src.operations.execution.capture.packet_capture._get_websocket_manager")
     def test_org_stream_exception(self, mock_ws_factory, manager):
         """Exception during org WebSocket subscribe is handled."""
         mock_ws_factory.return_value.side_effect = RuntimeError("WS error")
@@ -623,9 +625,9 @@ class TestSubscribeToCaptureStream:
 class TestNewAssociationCapture:
     """Tests for _start_site_new_association_capture()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
     def test_new_assoc_cancel(self, mock_pndu, mock_pu, mock_iu, manager, capsys):
         """Cancellation during site selection returns."""
         mock_pu.return_value.select_site.return_value = None
@@ -641,14 +643,14 @@ class TestLazyImports:
 
     def test_get_config_utils(self):
         """_get_config_utils returns the ConfigUtils class."""
-        with patch("src.capture.packet_capture._get_config_utils") as mock:
+        with patch("src.operations.execution.capture.packet_capture._get_config_utils") as mock:
             mock.return_value = MagicMock()
             result = mock()
             assert result is mock.return_value
 
     def test_get_input_utils(self):
         """_get_input_utils returns the InputUtils class."""
-        with patch("src.capture.packet_capture._get_input_utils") as mock:
+        with patch("src.operations.execution.capture.packet_capture._get_input_utils") as mock:
             mock.return_value = MagicMock()
             result = mock()
             assert result is mock.return_value
@@ -656,7 +658,7 @@ class TestLazyImports:
     def test_get_websocket_manager(self):
         """_get_websocket_manager returns the WebSocketManager class."""
         with patch(
-            "src.capture.packet_capture._get_websocket_manager",
+            "src.operations.execution.capture.packet_capture._get_websocket_manager",
         ) as mock:
             mock.return_value = MagicMock()
             result = mock()
@@ -867,8 +869,8 @@ class TestBuildOrgPayload:
 class TestPromptClientMac:
     """Tests for _prompt_client_mac()."""
 
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_select_from_list(self, mock_iu, mock_pcu, manager):
         """Select client from connected clients list."""
         mock_iu.return_value.safe_input.return_value = "1"
@@ -876,24 +878,24 @@ class TestPromptClientMac:
         result = manager._prompt_client_mac("site-1")
         assert result == "aa:bb:cc:dd:ee:ff"
 
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_manual_valid(self, mock_iu, mock_pcu, manager):
         """Manually enter a valid MAC address."""
         mock_iu.return_value.safe_input.side_effect = ["2", "aa:bb:cc:dd:ee:ff"]
         result = manager._prompt_client_mac("site-1")
         assert result == "aa:bb:cc:dd:ee:ff"
 
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_manual_invalid(self, mock_iu, mock_pcu, manager):
         """Return None for invalid manual MAC entry."""
         mock_iu.return_value.safe_input.side_effect = ["2", "not-a-mac"]
         result = manager._prompt_client_mac("site-1")
         assert result is None
 
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_select_cancelled(self, mock_iu, mock_pcu, manager):
         """Return None when client selection cancelled."""
         mock_iu.return_value.safe_input.return_value = "1"
@@ -905,8 +907,8 @@ class TestPromptClientMac:
 class TestPromptApMacFilter:
     """Tests for _prompt_ap_mac_filter()."""
 
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_select_from_list(self, mock_iu, mock_pndu, manager):
         """Select AP from list returns normalized MAC."""
         mock_iu.return_value.safe_input.return_value = "1"
@@ -914,23 +916,23 @@ class TestPromptApMacFilter:
         result = manager._prompt_ap_mac_filter("site-1")
         assert result == "aa:bb:cc:dd:ee:ff"
 
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_manual_valid(self, mock_iu, mock_pndu, manager):
         """Manually enter valid AP MAC."""
         mock_iu.return_value.safe_input.side_effect = ["2", "aa:bb:cc:dd:ee:ff"]
         result = manager._prompt_ap_mac_filter("site-1")
         assert result == "aa:bb:cc:dd:ee:ff"
 
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_manual_invalid(self, mock_iu, mock_pndu, manager):
         """Return None for invalid manual AP MAC."""
         mock_iu.return_value.safe_input.side_effect = ["2", "bad"]
         result = manager._prompt_ap_mac_filter("site-1")
         assert result is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_skip(self, mock_iu, manager):
         """Return None when user skips AP filter."""
         mock_iu.return_value.safe_input.return_value = "3"
@@ -941,13 +943,13 @@ class TestPromptApMacFilter:
 class TestPromptMulticast:
     """Tests for _prompt_multicast()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_yes(self, mock_iu, manager):
         """Return True for 'y'."""
         mock_iu.return_value.safe_input.return_value = "y"
         assert manager._prompt_multicast() is True
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_no(self, mock_iu, manager):
         """Return False for 'n'."""
         mock_iu.return_value.safe_input.return_value = "n"
@@ -957,25 +959,25 @@ class TestPromptMulticast:
 class TestPromptScanBand:
     """Tests for _prompt_scan_band()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_24ghz(self, mock_iu, manager):
         """Select 2.4 GHz band."""
         mock_iu.return_value.safe_input.return_value = "1"
         assert manager._prompt_scan_band() == "24"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_5ghz(self, mock_iu, manager):
         """Select 5 GHz band (default)."""
         mock_iu.return_value.safe_input.return_value = "2"
         assert manager._prompt_scan_band() == "5"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_6ghz(self, mock_iu, manager):
         """Select 6 GHz band."""
         mock_iu.return_value.safe_input.return_value = "3"
         assert manager._prompt_scan_band() == "6"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_invalid_defaults_5ghz(self, mock_iu, manager):
         """Invalid choice defaults to 5 GHz."""
         mock_iu.return_value.safe_input.return_value = "99"
@@ -985,25 +987,25 @@ class TestPromptScanBand:
 class TestPromptScanChannel:
     """Tests for _prompt_scan_channel()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_24ghz_valid(self, mock_iu, manager):
         """Valid 2.4 GHz channel."""
         mock_iu.return_value.safe_input.return_value = "6"
         assert manager._prompt_scan_channel("24") == 6
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_5ghz_valid(self, mock_iu, manager):
         """Valid 5 GHz channel."""
         mock_iu.return_value.safe_input.return_value = "36"
         assert manager._prompt_scan_channel("5") == 36
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_6ghz_valid(self, mock_iu, manager):
         """Valid 6 GHz channel."""
         mock_iu.return_value.safe_input.return_value = "1"
         assert manager._prompt_scan_channel("6") == 1
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_invalid(self, mock_iu, manager):
         """Return None for non-integer channel."""
         mock_iu.return_value.safe_input.return_value = "abc"
@@ -1013,25 +1015,25 @@ class TestPromptScanChannel:
 class TestPromptScanBandwidth:
     """Tests for _prompt_scan_bandwidth()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_20mhz(self, mock_iu, manager):
         """Select 20 MHz bandwidth."""
         mock_iu.return_value.safe_input.return_value = "1"
         assert manager._prompt_scan_bandwidth("5") == "20"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_40mhz(self, mock_iu, manager):
         """Select 40 MHz bandwidth."""
         mock_iu.return_value.safe_input.return_value = "2"
         assert manager._prompt_scan_bandwidth("5") == "40"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_80mhz_on_5ghz(self, mock_iu, manager):
         """80 MHz valid on 5 GHz."""
         mock_iu.return_value.safe_input.return_value = "3"
         assert manager._prompt_scan_bandwidth("5") == "80"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_80mhz_invalid_on_24ghz(self, mock_iu, manager):
         """80 MHz invalid on 2.4 GHz returns None."""
         mock_iu.return_value.safe_input.return_value = "3"
@@ -1041,31 +1043,31 @@ class TestPromptScanBandwidth:
 class TestPromptCaptureDuration:
     """Tests for _prompt_capture_duration()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_valid(self, mock_iu, manager):
         """Valid duration within range."""
         mock_iu.return_value.safe_input.return_value = "120"
         assert manager._prompt_capture_duration() == 120
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_too_low(self, mock_iu, manager):
         """Duration below min returns None."""
         mock_iu.return_value.safe_input.return_value = "5"
         assert manager._prompt_capture_duration() is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_too_high(self, mock_iu, manager):
         """Duration above max returns None."""
         mock_iu.return_value.safe_input.return_value = "999999"
         assert manager._prompt_capture_duration() is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_non_integer(self, mock_iu, manager):
         """Non-integer input returns None."""
         mock_iu.return_value.safe_input.return_value = "abc"
         assert manager._prompt_capture_duration() is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_custom_min_val(self, mock_iu, manager):
         """Custom min_val is respected."""
         mock_iu.return_value.safe_input.return_value = "30"
@@ -1075,31 +1077,31 @@ class TestPromptCaptureDuration:
 class TestPromptNumPackets:
     """Tests for _prompt_num_packets()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_valid(self, mock_iu, manager):
         """Valid packet count."""
         mock_iu.return_value.safe_input.return_value = "500"
         assert manager._prompt_num_packets() == 500
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_zero_unlimited(self, mock_iu, manager):
         """Zero means unlimited."""
         mock_iu.return_value.safe_input.return_value = "0"
         assert manager._prompt_num_packets() == 0
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_negative(self, mock_iu, manager):
         """Negative returns None."""
         mock_iu.return_value.safe_input.return_value = "-1"
         assert manager._prompt_num_packets() is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_too_high(self, mock_iu, manager):
         """Above 10000 returns None."""
         mock_iu.return_value.safe_input.return_value = "99999"
         assert manager._prompt_num_packets() is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_non_integer(self, mock_iu, manager):
         """Non-integer returns None."""
         mock_iu.return_value.safe_input.return_value = "abc"
@@ -1109,25 +1111,25 @@ class TestPromptNumPackets:
 class TestPromptMaxPacketLength:
     """Tests for _prompt_max_packet_length()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_valid(self, mock_iu, manager):
         """Valid packet length."""
         mock_iu.return_value.safe_input.return_value = "256"
         assert manager._prompt_max_packet_length() == 256
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_too_low(self, mock_iu, manager):
         """Below 64 returns None."""
         mock_iu.return_value.safe_input.return_value = "10"
         assert manager._prompt_max_packet_length() is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_too_high(self, mock_iu, manager):
         """Above 2048 returns None."""
         mock_iu.return_value.safe_input.return_value = "9999"
         assert manager._prompt_max_packet_length() is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_non_integer(self, mock_iu, manager):
         """Non-integer returns None."""
         mock_iu.return_value.safe_input.return_value = "abc"
@@ -1137,19 +1139,19 @@ class TestPromptMaxPacketLength:
 class TestPromptLoopMode:
     """Tests for _prompt_loop_mode()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_yes(self, mock_iu, manager):
         """'y' enables loop mode."""
         mock_iu.return_value.safe_input.return_value = "y"
         assert manager._prompt_loop_mode() is True
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_no(self, mock_iu, manager):
         """'n' disables loop mode."""
         mock_iu.return_value.safe_input.return_value = "n"
         assert manager._prompt_loop_mode() is False
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_default_no(self, mock_iu, manager):
         """Default is no loop."""
         mock_iu.return_value.safe_input.return_value = "N"
@@ -1159,35 +1161,35 @@ class TestPromptLoopMode:
 class TestPromptOrgFormatSelection:
     """Tests for _prompt_org_format_selection()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_stream_default(self, mock_iu, manager):
         """Default choice returns stream format."""
         mock_iu.return_value.safe_input.return_value = "1"
         result = manager._prompt_org_format_selection()
         assert result == ("stream", None, None)
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_tzsp_valid(self, mock_iu, manager):
         """Valid TZSP choice returns host and port."""
         mock_iu.return_value.safe_input.side_effect = ["2", "10.0.0.1", "37008"]
         result = manager._prompt_org_format_selection()
         assert result == ("tzsp", "10.0.0.1", 37008)
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_tzsp_invalid_port(self, mock_iu, manager):
         """Invalid TZSP port returns None."""
         mock_iu.return_value.safe_input.side_effect = ["2", "10.0.0.1", "99999"]
         result = manager._prompt_org_format_selection()
         assert result is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_tzsp_no_host(self, mock_iu, manager):
         """Empty TZSP host returns None."""
         mock_iu.return_value.safe_input.side_effect = ["2", ""]
         result = manager._prompt_org_format_selection()
         assert result is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_tzsp_non_numeric_port(self, mock_iu, manager):
         """Non-numeric TZSP port returns None."""
         mock_iu.return_value.safe_input.side_effect = ["2", "10.0.0.1", "abc"]
@@ -1201,7 +1203,7 @@ class TestPromptOrgFormatSelection:
 class TestDisplayClientCaptureSummary:
     """Tests for _display_client_capture_summary()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_basic_summary(self, mock_iu, manager, capsys):
         """Display basic wireless client summary."""
         mock_iu.return_value.safe_input.return_value = ""
@@ -1217,7 +1219,7 @@ class TestDisplayClientCaptureSummary:
         assert "Wireless Client" in captured.out
         assert "aa:bb:cc:dd:ee:ff" in captured.out
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_with_ap_mac(self, mock_iu, manager, capsys):
         """Include AP MAC filter in summary."""
         mock_iu.return_value.safe_input.return_value = ""
@@ -1231,7 +1233,7 @@ class TestDisplayClientCaptureSummary:
 class TestDisplayScanCaptureSummary:
     """Tests for _display_scan_capture_summary()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_basic_scan_summary(self, mock_iu, manager, capsys):
         """Display scan capture summary."""
         mock_iu.return_value.safe_input.return_value = ""
@@ -1252,7 +1254,7 @@ class TestDisplayScanCaptureSummary:
 class TestDisplayDeviceCaptureSummary:
     """Tests for _display_device_capture_summary()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_gateway_summary(self, mock_iu, manager, capsys):
         """Display gateway capture summary."""
         mock_iu.return_value.safe_input.return_value = ""
@@ -1267,7 +1269,7 @@ class TestDisplayDeviceCaptureSummary:
         assert "Gateway" in captured.out
         assert "ge-0/0/0" in captured.out
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_loop_enabled(self, mock_iu, manager, capsys):
         """Show loop mode enabled."""
         mock_iu.return_value.safe_input.return_value = ""
@@ -1320,7 +1322,7 @@ class TestPrintLoopBanner:
 class TestLogExistingSiteCaptures:
     """Tests for _log_existing_site_captures()."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_with_captures(self, mock_mistapi, manager, capsys):
         """Log count when captures exist."""
         mock_resp = MagicMock()
@@ -1331,7 +1333,7 @@ class TestLogExistingSiteCaptures:
         captured = capsys.readouterr()
         assert "2 existing capture(s)" in captured.out
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_api_error(self, mock_mistapi, manager, capsys):
         """Silently handle API error."""
         mock_resp = MagicMock()
@@ -1341,7 +1343,7 @@ class TestLogExistingSiteCaptures:
         captured = capsys.readouterr()
         assert "existing capture" not in captured.out
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_empty_captures(self, mock_mistapi, manager, capsys):
         """No output when no captures exist."""
         mock_resp = MagicMock()
@@ -1400,7 +1402,7 @@ class TestDisplayMxedgePorts:
 class TestCheckExistingApCapture:
     """Tests for _check_existing_ap_capture()."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_no_conflict(self, mock_mistapi, manager):
         """No conflict returns True."""
         mock_resp = MagicMock()
@@ -1409,8 +1411,8 @@ class TestCheckExistingApCapture:
         mock_mistapi.api.v1.sites.pcaps.listSitePacketCaptures.return_value = mock_resp
         assert manager._check_existing_ap_capture("site-1", "aa:bb:cc:dd:ee:ff") is True
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_conflict_user_cancels(self, mock_mistapi, mock_iu, manager):
         """Conflict and user says no returns False."""
         mock_resp = MagicMock()
@@ -1420,8 +1422,8 @@ class TestCheckExistingApCapture:
         mock_iu.return_value.safe_input.return_value = "n"
         assert manager._check_existing_ap_capture("site-1", "aa:bb:cc:dd:ee:ff") is False
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_conflict_user_proceeds(self, mock_mistapi, mock_iu, manager):
         """Conflict and user says yes returns True."""
         mock_resp = MagicMock()
@@ -1431,7 +1433,7 @@ class TestCheckExistingApCapture:
         mock_iu.return_value.safe_input.return_value = "y"
         assert manager._check_existing_ap_capture("site-1", "aa:bb:cc:dd:ee:ff") is True
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_api_error_proceeds(self, mock_mistapi, manager):
         """API error still returns True (safe to proceed)."""
         mock_mistapi.api.v1.sites.pcaps.listSitePacketCaptures.side_effect = RuntimeError("fail")
@@ -1441,7 +1443,7 @@ class TestCheckExistingApCapture:
 class TestFetchCompletedPcaps:
     """Tests for _fetch_completed_pcaps()."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_success_with_results(self, mock_mistapi, manager):
         """Return completed PCAPs with URLs."""
         mock_resp = MagicMock()
@@ -1457,14 +1459,14 @@ class TestFetchCompletedPcaps:
         assert len(result) == 1
         assert result[0]["id"] == "cap-1"
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_api_error(self, mock_mistapi, manager):
         """Return empty list on API error."""
         mock_mistapi.api.v1.sites.pcaps.listSitePacketCaptures.side_effect = RuntimeError("fail")
         result = manager._fetch_completed_pcaps("site-1", 1)
         assert result == []
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_non_200(self, mock_mistapi, manager):
         """Return empty list on non-200 status."""
         mock_resp = MagicMock()
@@ -1473,7 +1475,7 @@ class TestFetchCompletedPcaps:
         result = manager._fetch_completed_pcaps("site-1", 1)
         assert result == []
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_list_format_response(self, mock_mistapi, manager):
         """Handle list-format response data."""
         mock_resp = MagicMock()
@@ -1487,7 +1489,7 @@ class TestFetchCompletedPcaps:
 class TestDownloadSinglePcap:
     """Tests for PacketCaptureDownloadManager.download_single_pcap()."""
 
-    @patch("src.capture.packet_capture_download.requests")
+    @patch("src.operations.execution.capture.packet_capture_download.requests")
     def test_success(self, mock_requests, manager):
         """Download succeeds with HTTP 200."""
         mock_resp = MagicMock()
@@ -1500,7 +1502,7 @@ class TestDownloadSinglePcap:
         )
         assert result == 1
 
-    @patch("src.capture.packet_capture_download.requests")
+    @patch("src.operations.execution.capture.packet_capture_download.requests")
     def test_http_error(self, mock_requests, manager):
         """Return 0 on non-200 HTTP response."""
         mock_resp = MagicMock()
@@ -1511,7 +1513,7 @@ class TestDownloadSinglePcap:
         )
         assert result == 0
 
-    @patch("src.capture.packet_capture_download.requests")
+    @patch("src.operations.execution.capture.packet_capture_download.requests")
     def test_exception(self, mock_requests, manager):
         """Return 0 on exception."""
         mock_requests.get.side_effect = ConnectionError("fail")
@@ -1548,8 +1550,8 @@ class TestDownloadPendingPcaps:
 class TestAttemptLoopCapture:
     """Tests for _attempt_loop_capture()."""
 
-    @patch("src.capture.packet_capture._get_data_exporter")
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture._get_data_exporter")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_success(self, mock_mistapi, mock_exporter, manager):
         """Successful capture returns start time."""
         mock_resp = MagicMock()
@@ -1560,7 +1562,7 @@ class TestAttemptLoopCapture:
         assert isinstance(result, float)
         assert result >= 0.0
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_api_error(self, mock_mistapi, manager):
         """API error returns None."""
         mock_resp = MagicMock()
@@ -1570,7 +1572,7 @@ class TestAttemptLoopCapture:
         result = manager._attempt_loop_capture("site-1", {"type": "client"}, 1)
         assert result is None
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_conflict_detected(self, mock_mistapi, manager):
         """Recording conflict returns None with message."""
         mock_resp = MagicMock()
@@ -1580,7 +1582,7 @@ class TestAttemptLoopCapture:
         result = manager._attempt_loop_capture("site-1", {"type": "client"}, 1)
         assert result is None
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_exception(self, mock_mistapi, manager):
         """Exception returns None."""
         mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture.side_effect = RuntimeError("fail")
@@ -1591,7 +1593,7 @@ class TestAttemptLoopCapture:
 class TestSavePcapFile:
     """Tests for PacketCaptureDownloadManager.save_pcap_file()."""
 
-    @patch("src.capture.packet_capture_download.requests")
+    @patch("src.operations.execution.capture.packet_capture_download.requests")
     def test_success(self, mock_requests, capsys):
         """Download and save PCAP file successfully."""
         mock_resp = MagicMock()
@@ -1603,7 +1605,7 @@ class TestSavePcapFile:
         assert "downloaded successfully" in captured.out
         assert os.path.exists(os.path.join("data", "PacketCapture_cap-1.pcap"))
 
-    @patch("src.capture.packet_capture_download.requests")
+    @patch("src.operations.execution.capture.packet_capture_download.requests")
     def test_with_prefix(self, mock_requests):
         """Save PCAP with org_ prefix."""
         mock_resp = MagicMock()
@@ -1615,7 +1617,7 @@ class TestSavePcapFile:
         )
         assert os.path.exists(os.path.join("data", "PacketCapture_org_cap-1.pcap"))
 
-    @patch("src.capture.packet_capture_download.requests")
+    @patch("src.operations.execution.capture.packet_capture_download.requests")
     def test_http_error(self, mock_requests, capsys):
         """Handle non-200 HTTP response."""
         mock_resp = MagicMock()
@@ -1629,7 +1631,7 @@ class TestSavePcapFile:
 class TestFetchOrgMxedges:
     """Tests for _fetch_org_mxedges()."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_success(self, mock_mistapi, manager):
         """Return mxedges and stats on success."""
         # get_all returns the list directly, not a response object
@@ -1649,7 +1651,7 @@ class TestFetchOrgMxedges:
         mxedges, stats_map = result
         assert len(mxedges) == 1
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_empty(self, mock_mistapi, manager):
         """Return None when no MxEdges found."""
         mock_mistapi.get_all.return_value = []
@@ -1664,13 +1666,13 @@ class TestCheckCaptureReadiness:
         """First capture (None last_capture_time) is always ready."""
         assert manager._check_capture_readiness(None, 60) == 0
 
-    @patch("src.capture.packet_capture.time")
+    @patch("src.operations.execution.capture.packet_capture.time")
     def test_enough_elapsed(self, mock_time, manager):
         """Ready when enough time has elapsed."""
         mock_time.time.return_value = 1000.0
         assert manager._check_capture_readiness(900.0, 60) == 0
 
-    @patch("src.capture.packet_capture.time")
+    @patch("src.operations.execution.capture.packet_capture.time")
     def test_not_ready(self, mock_time, manager):
         """Returns wait time when not ready."""
         mock_time.time.return_value = 950.0
@@ -1750,7 +1752,7 @@ class TestGatherOrgCaptureParams:
 class TestExecuteSiteCaptureLoop:
     """Tests for _execute_site_capture_loop()."""
 
-    @patch("src.capture.packet_capture.time")
+    @patch("src.operations.execution.capture.packet_capture.time")
     def test_keyboard_interrupt(self, mock_time, manager):
         """KeyboardInterrupt stops loop gracefully."""
         manager._print_loop_banner = MagicMock()
@@ -1759,7 +1761,7 @@ class TestExecuteSiteCaptureLoop:
         manager._print_loop_banner.assert_called_once()
         assert manager._print_loop_banner.call_count == 1  # Prove the loop banner appears before interruption.
 
-    @patch("src.capture.packet_capture.time")
+    @patch("src.operations.execution.capture.packet_capture.time")
     def test_exception_handled(self, mock_time, manager):
         """Generic exception is caught and logged."""
         manager._print_loop_banner = MagicMock()
@@ -1771,7 +1773,7 @@ class TestExecuteSiteCaptureLoop:
 class TestHandleMultiApCaptureResult:
     """Tests for _handle_multi_ap_capture_result()."""
 
-    @patch("src.capture.packet_capture._get_data_exporter")
+    @patch("src.operations.execution.capture.packet_capture._get_data_exporter")
     def test_success_pcap(self, mock_exporter, manager, capsys):
         """HTTP 200 with pcap format triggers download."""
         mock_resp = MagicMock()
@@ -1783,7 +1785,7 @@ class TestHandleMultiApCaptureResult:
         assert "Multi-AP capture started" in captured.out
         manager._wait_and_download_pcap.assert_called_once()
 
-    @patch("src.capture.packet_capture._get_data_exporter")
+    @patch("src.operations.execution.capture.packet_capture._get_data_exporter")
     def test_success_stream(self, mock_exporter, manager, capsys):
         """HTTP 200 with stream format subscribes to WebSocket."""
         mock_resp = MagicMock()
@@ -1820,7 +1822,9 @@ class TestPollAndDownloadPcap:
         """Download PCAP after polling via the download manager."""
         manager._download_manager = MagicMock()  # Replace the download manager collaborator
         manager._download_manager.poll_for_pcap_url.return_value = "https://url"  # URL ready immediately
-        with patch("src.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file") as mock_save:
+        with patch(
+            "src.operations.execution.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file"
+        ) as mock_save:
             manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
             mock_save.assert_called_once()
             assert mock_save.call_count == 1  # Prove the PCAP save runs once when the URL is ready.
@@ -1829,7 +1833,9 @@ class TestPollAndDownloadPcap:
         """No download when poll returns None."""
         manager._download_manager = MagicMock()  # Replace the download manager collaborator
         manager._download_manager.poll_for_pcap_url.return_value = None  # No URL within timeout
-        with patch("src.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file") as mock_save:
+        with patch(
+            "src.operations.execution.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file"
+        ) as mock_save:
             manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
             assert mock_save.call_count == 0  # Prove no file is saved when the URL is missing.
             mock_save.assert_not_called()
@@ -1846,21 +1852,21 @@ class TestPollAndDownloadPcap:
 class TestSelectPortByIndex:
     """Tests for _select_port_by_index()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_valid_selection(self, mock_iu, manager):
         """Valid index returns port."""
         mock_iu.return_value.safe_input.return_value = "0"
         result = manager._select_port_by_index(["eth0", "eth1"], "Edge1", "mx-1")
         assert result == ["eth0"]
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_invalid_index(self, mock_iu, manager):
         """Out-of-range index returns None."""
         mock_iu.return_value.safe_input.return_value = "5"
         result = manager._select_port_by_index(["eth0"], "Edge1", "mx-1")
         assert result is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_non_numeric(self, mock_iu, manager):
         """Non-numeric input returns None."""
         mock_iu.return_value.safe_input.return_value = "abc"
@@ -1871,8 +1877,8 @@ class TestSelectPortByIndex:
 class TestFetchAndSelectMxedgePort:
     """Tests for _fetch_and_select_mxedge_port()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_success(self, mock_mistapi, mock_iu, manager):
         """Fetch stats and select port successfully."""
         stats_resp = MagicMock()
@@ -1884,14 +1890,14 @@ class TestFetchAndSelectMxedgePort:
         result = manager._fetch_and_select_mxedge_port(mxedge)
         assert result == ["eth0"]
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_api_error(self, mock_mistapi, manager):
         """Return None on API error."""
         mock_mistapi.api.v1.orgs.stats.getOrgMxEdgeStats.side_effect = RuntimeError("fail")
         result = manager._fetch_and_select_mxedge_port({"id": "mx-1", "name": "Edge1"})
         assert result is None
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_no_port_stat(self, mock_mistapi, manager):
         """Return None when no port_stat in stats."""
         stats_resp = MagicMock()
@@ -1905,7 +1911,7 @@ class TestFetchAndSelectMxedgePort:
 class TestDisplayAndSelectMxedge:
     """Tests for _display_and_select_mxedge()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_valid_selection(self, mock_iu, manager):
         """Select MxEdge by valid index."""
         mock_iu.return_value.safe_input.return_value = "0"
@@ -1913,7 +1919,7 @@ class TestDisplayAndSelectMxedge:
         result = manager._display_and_select_mxedge(mxedges, {})
         assert result["id"] == "mx-1"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_invalid_index(self, mock_iu, manager):
         """Invalid index returns None."""
         mock_iu.return_value.safe_input.return_value = "99"
@@ -1921,7 +1927,7 @@ class TestDisplayAndSelectMxedge:
         result = manager._display_and_select_mxedge(mxedges, {})
         assert result is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_non_numeric(self, mock_iu, manager):
         """Non-numeric input returns None."""
         mock_iu.return_value.safe_input.return_value = "abc"
@@ -1933,9 +1939,9 @@ class TestDisplayAndSelectMxedge:
 class TestStartSiteClientCaptureWireless:
     """Tests for _start_site_client_capture_wireless()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_site_selected(self, mock_pu, mock_pcu, mock_iu, manager):
         """Return early when site selection cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
@@ -1943,9 +1949,9 @@ class TestStartSiteClientCaptureWireless:
         mock_pcu.return_value.select_client_mac.assert_not_called()
         assert mock_pcu.return_value.select_client_mac.call_count == 0  # Prove site cancellation blocks client select.
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_client_selected(self, mock_pu, mock_pcu, mock_iu, manager):
         """Return early when client selection cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -1954,10 +1960,10 @@ class TestStartSiteClientCaptureWireless:
         manager._start_site_client_capture_wireless()
         assert mock_pcu.return_value.select_client_mac.call_count == 1  # Prove client selection runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_full_flow(self, mock_pu, mock_pcu, mock_pndu, mock_iu, manager):
         """Complete flow triggers _run_site_capture."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -1983,18 +1989,18 @@ class TestStartSiteClientCaptureWireless:
 class TestStartSiteClientCaptureWired:
     """Tests for _start_site_client_capture_wired()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_site_selected(self, mock_pu, mock_pcu, mock_iu, manager):
         """Return early when site selection cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_client_capture_wired()
         assert mock_pu.return_value.select_site_with_logging.call_count == 1  # Prove site selection runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_client_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_client_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_full_flow(self, mock_pu, mock_pcu, mock_iu, manager):
         """Complete wired flow triggers _run_site_capture."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2018,18 +2024,18 @@ class TestStartSiteClientCaptureWired:
 class TestStartSiteGatewayCapture:
     """Tests for _start_site_gateway_capture()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_site(self, mock_pu, mock_pndu, mock_iu, manager):
         """Return early when site cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_gateway_capture()
         assert mock_pu.return_value.select_site_with_logging.call_count == 1  # Prove site selection runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_gateway(self, mock_pu, mock_pndu, mock_iu, manager):
         """Return early when gateway cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2037,9 +2043,9 @@ class TestStartSiteGatewayCapture:
         manager._start_site_gateway_capture()
         assert mock_pndu.return_value.select_gateway_mac.call_count == 1  # Prove gateway selection runs once.
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_full_flow(self, mock_pu, mock_pndu, mock_iu, manager):
         """Complete gateway flow executes capture."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2065,26 +2071,26 @@ class TestStartSiteGatewayCapture:
 class TestStartSiteSwitchCapture:
     """Tests for _start_site_switch_capture()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_site(self, mock_pu, mock_pndu, mock_iu, manager):
         """Return early when site cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_switch_capture()
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_switch(self, mock_pu, mock_pndu, mock_iu, manager):
         """Return early when switch cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
         mock_pndu.return_value.select_switch_mac.return_value = None
         manager._start_site_switch_capture()
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_full_flow(self, mock_pu, mock_pndu, mock_iu, manager):
         """Complete switch flow executes capture."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2127,7 +2133,7 @@ class TestStartOrgPacketCaptureFlow:
         manager._fetch_and_select_mxedge_port = MagicMock(return_value=None)
         manager.start_org_packet_capture()
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_full_flow(self, mock_iu, manager):
         """Complete org capture flow executes capture."""
         manager._fetch_org_mxedges = MagicMock(return_value=([{"id": "mx-1", "name": "Edge1"}], {}))
@@ -2144,14 +2150,14 @@ class TestStartOrgPacketCaptureFlow:
 class TestWaitAndDownloadPcap:
     """Tests for _wait_and_download_pcap()."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_calls_poll(self, mock_mistapi, manager):
         """Calls _poll_and_download_pcap with correct args."""
         manager._poll_and_download_pcap = MagicMock()
         manager._wait_and_download_pcap("site-1", "cap-1", 60)
         manager._poll_and_download_pcap.assert_called_once()
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_org_calls_poll(self, mock_mistapi, manager):
         """Org variant calls _poll_and_download_pcap."""
         manager._poll_and_download_pcap = MagicMock()
@@ -2214,15 +2220,15 @@ class TestGatherScanRadioParams:
 class TestStartSiteNewAssociationCaptureDetailed:
     """Extended tests for _start_site_new_association_capture()."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_site(self, mock_pu, mock_iu, manager):
         """Return early when site cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_new_association_capture()
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_full_flow_no_ssid(self, mock_pu, mock_iu, manager):
         """Complete flow without SSID filter."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2237,8 +2243,8 @@ class TestStartSiteNewAssociationCaptureDetailed:
         manager._start_site_new_association_capture()
         manager._execute_site_capture.assert_called_once()
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_full_flow_with_ssid(self, mock_pu, mock_iu, manager):
         """Complete flow with SSID filter."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2255,8 +2261,8 @@ class TestStartSiteNewAssociationCaptureDetailed:
         payload = call_args[0][1]
         assert payload["ssid"] == "Corp-WiFi"
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_with_loop_mode(self, mock_pu, mock_iu, manager):
         """Loop mode invokes _execute_site_capture_loop."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2271,8 +2277,8 @@ class TestStartSiteNewAssociationCaptureDetailed:
         manager._start_site_new_association_capture()
         manager._execute_site_capture_loop.assert_called_once()
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_duration_cancelled(self, mock_pu, mock_iu, manager):
         """Return early when duration cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2291,22 +2297,22 @@ class TestStartSiteNewAssociationCaptureDetailed:
 class TestStartSiteScanCapture:
     """Tests for _start_site_scan_capture()."""
 
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_site(self, mock_pu, manager):
         """Return early when site cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_scan_capture()
 
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_no_ap(self, mock_pu, mock_pndu, manager):
         """Return early when AP cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
         mock_pndu.return_value.select_ap_mac.return_value = None
         manager._start_site_scan_capture()
 
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_all_aps_delegates(self, mock_pu, mock_pndu, manager):
         """ALL_APS selection delegates to multi-AP method."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2315,9 +2321,9 @@ class TestStartSiteScanCapture:
         manager._start_site_scan_capture()
         manager._start_site_scan_capture_all_aps.assert_called_once_with("site-1")
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_full_flow(self, mock_pu, mock_pndu, mock_iu, manager):
         """Complete scan capture flow."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2336,9 +2342,9 @@ class TestStartSiteScanCapture:
         manager._start_site_scan_capture()
         manager._run_site_capture.assert_called_once()
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    @patch("src.capture.packet_capture._get_prompt_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_utils")
     def test_scan_params_cancelled(self, mock_pu, mock_pndu, mock_iu, manager):
         """Return early when scan params cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
@@ -2358,7 +2364,7 @@ class TestStartSiteScanCapture:
 class TestStartSiteScanCaptureAllAps:
     """Tests for _start_site_scan_capture_all_aps()."""
 
-    @patch("src.capture.packet_capture._get_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_device_utils")
     def test_no_aps(self, mock_du, manager, capsys):
         """Return early when no APs at site."""
         mock_du.return_value.get_all_ap_macs_from_site.return_value = []
@@ -2366,9 +2372,9 @@ class TestStartSiteScanCaptureAllAps:
         captured = capsys.readouterr()
         assert "No APs found" in captured.out
 
-    @patch("src.capture.packet_capture.mistapi")
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_device_utils")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_device_utils")
     def test_full_flow(self, mock_du, mock_iu, mock_mistapi, manager, capsys):
         """Complete multi-AP scan flow."""
         mock_du.return_value.get_all_ap_macs_from_site.return_value = [
@@ -2396,8 +2402,8 @@ class TestStartSiteScanCaptureAllAps:
         captured = capsys.readouterr()
         assert "2 APs" in captured.out
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_device_utils")
     def test_channel_cancelled(self, mock_du, mock_iu, manager):
         """Return early when channel cancelled."""
         mock_du.return_value.get_all_ap_macs_from_site.return_value = ["AA:BB:CC:DD:EE:01"]
@@ -2408,9 +2414,9 @@ class TestStartSiteScanCaptureAllAps:
         ]
         manager._start_site_scan_capture_all_aps("site-1")
 
-    @patch("src.capture.packet_capture.mistapi")
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_device_utils")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_device_utils")
     def test_api_error(self, mock_du, mock_iu, mock_mistapi, manager, capsys):
         """Handle API error during capture start."""
         mock_du.return_value.get_all_ap_macs_from_site.return_value = ["AA:BB:CC:DD:EE:01"]
@@ -2429,8 +2435,8 @@ class TestStartSiteScanCaptureAllAps:
         captured = capsys.readouterr()
         assert "Error" in captured.out
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_device_utils")
     def test_duration_cancelled(self, mock_du, mock_iu, manager):
         """Return early when duration cancelled."""
         mock_du.return_value.get_all_ap_macs_from_site.return_value = ["AA:BB:CC:DD:EE:01"]
@@ -2443,8 +2449,8 @@ class TestStartSiteScanCaptureAllAps:
         ]
         manager._start_site_scan_capture_all_aps("site-1")
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_device_utils")
     def test_num_packets_cancelled(self, mock_du, mock_iu, manager):
         """Return early when num_packets cancelled."""
         mock_du.return_value.get_all_ap_macs_from_site.return_value = ["AA:BB:CC:DD:EE:01"]
@@ -2465,7 +2471,7 @@ class TestStartSiteScanCaptureAllAps:
 class TestTcpdumpCustomEmpty:
     """Cover empty custom tcpdump expression path (line 859-860)."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_custom_empty(self, mock_iu, manager):
         """Choice '40' with empty expression returns empty string."""
         mock_iu.return_value.safe_input.side_effect = ["40", ""]
@@ -2476,15 +2482,15 @@ class TestTcpdumpCustomEmpty:
 class TestApMacFilterManualInvalid:
     """Cover invalid manual AP MAC path (line 201)."""
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_manual_invalid_mac(self, mock_iu, manager):
         """Choice '2' with invalid MAC returns None."""
         mock_iu.return_value.safe_input.side_effect = ["2", "not-a-mac"]
         result = manager._prompt_ap_mac_filter("site-1")
         assert result is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
     def test_list_no_selection(self, mock_pndu, mock_iu, manager):
         """Choice '1' with no AP selected returns None."""
         mock_iu.return_value.safe_input.return_value = "1"
@@ -2492,8 +2498,8 @@ class TestApMacFilterManualInvalid:
         result = manager._prompt_ap_mac_filter("site-1")
         assert result is None
 
-    @patch("src.capture.packet_capture._get_input_utils")
-    @patch("src.capture.packet_capture._get_prompt_network_device_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_prompt_network_device_utils")
     def test_list_valid(self, mock_pndu, mock_iu, manager):
         """Choice '1' with valid AP returns normalized MAC."""
         mock_iu.return_value.safe_input.return_value = "1"
@@ -2501,7 +2507,7 @@ class TestApMacFilterManualInvalid:
         result = manager._prompt_ap_mac_filter("site-1")
         assert result == "aa:bb:cc:dd:ee:ff"
 
-    @patch("src.capture.packet_capture._get_input_utils")
+    @patch("src.operations.execution.capture.packet_capture._get_input_utils")
     def test_manual_valid_mac(self, mock_iu, manager):
         """Choice '2' with valid MAC returns normalized MAC."""
         mock_iu.return_value.safe_input.side_effect = ["2", "AA:BB:CC:DD:EE:FF"]
@@ -2512,13 +2518,13 @@ class TestApMacFilterManualInvalid:
 class TestLogExistingSiteCapturesEdge:
     """Cover _log_existing_site_captures exception path (line 343-344)."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_exception(self, mock_mistapi, manager):
         """Exception during API call is caught gracefully."""
         mock_mistapi.api.v1.sites.pcaps.listSitePacketCaptures.side_effect = RuntimeError("boom")
         manager._log_existing_site_captures("site-1")
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_non_200(self, mock_mistapi, manager):
         """Non-200 response returns early."""
         resp = MagicMock()
@@ -2526,7 +2532,7 @@ class TestLogExistingSiteCapturesEdge:
         mock_mistapi.api.v1.sites.pcaps.listSitePacketCaptures.return_value = resp
         manager._log_existing_site_captures("site-1")
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_with_existing(self, mock_mistapi, manager, capsys):
         """Existing captures are logged."""
         resp = MagicMock()
@@ -2541,7 +2547,7 @@ class TestLogExistingSiteCapturesEdge:
 class TestCheckExistingApCaptureEdge:
     """Cover _check_existing_ap_capture exception and user-cancel paths."""
 
-    @patch("src.capture.packet_capture.mistapi")
+    @patch("src.operations.execution.capture.packet_capture.mistapi")
     def test_exception_returns_true(self, mock_mistapi, manager):
         """Exception returns True (safe to proceed)."""
         mock_mistapi.api.v1.sites.pcaps.listSitePacketCaptures.side_effect = RuntimeError("boom")
@@ -2557,7 +2563,7 @@ class TestReadStreamPackets:
         manager.websocket_manager = None
         manager._read_stream_packets(1, "cap-1")
 
-    @patch("src.capture.packet_capture.time")
+    @patch("src.operations.execution.capture.packet_capture.time")
     def test_packet_received_complete(self, mock_time, manager, capsys):
         """Process packets and complete when pcap_dict is None."""
         mock_time.time.return_value = 100.0
@@ -2574,7 +2580,7 @@ class TestReadStreamPackets:
         captured = capsys.readouterr()
         assert "Capture completed" in captured.out
 
-    @patch("src.capture.packet_capture.time")
+    @patch("src.operations.execution.capture.packet_capture.time")
     def test_keyboard_interrupt(self, mock_time, manager, capsys):
         """Handle KeyboardInterrupt gracefully."""
         mock_time.time.return_value = 100.0

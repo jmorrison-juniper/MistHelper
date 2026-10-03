@@ -10,8 +10,8 @@ from unittest.mock import MagicMock  # WHY: attach call assertions and side effe
 
 import pytest  # WHY: fixture support and monkeypatch access.
 
-from src.gateway import wan2_migration_manager as module  # WHY: patch module-level slots directly.
-from src.gateway.wan2_migration_manager import (
+from src.mist.resources.gateway import wan2_migration_manager as module  # WHY: patch module-level slots directly.
+from src.mist.resources.gateway.wan2_migration_manager import (
     OverrideAnalysisContext,  # WHY: build override analysis contexts in helper tests.
     WAN2MigrationDependencies,  # WHY: dependency bundle for wiring helper.
     WAN2MigrationManager,  # WHY: system under test.

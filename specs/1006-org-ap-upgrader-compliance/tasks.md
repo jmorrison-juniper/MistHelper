@@ -10,7 +10,7 @@ description: "Task list for the Org AP Upgrader Compliance Refactor (specs/1006-
 
 **Feature branch**: `refactor/org-ap-upgrader-compliance` (already checked out).
 
-**Tests**: NOT added. No pre-existing unit test file for `src/firmware/org_ap_upgrader.py` exists and NG-001 forbids creating one. The compliance analyzer, `ruff`, `black --check`, `mypy --strict`, `py_compile`, and the byte-identity diff against MistHelper.py are the sole gates.
+**Tests**: NOT added. No pre-existing unit test file for `src/operations/execution/firmware/org_ap_upgrader.py` exists and NG-001 forbids creating one. The compliance analyzer, `ruff`, `black --check`, `mypy --strict`, `py_compile`, and the byte-identity diff against MistHelper.py are the sole gates.
 
 **Organization**: Tasks are grouped by phase. Every task's verification gate is the six-command block below unless noted otherwise.
 
@@ -21,28 +21,28 @@ description: "Task list for the Org AP Upgrader Compliance Refactor (specs/1006-
 Every task in this file is not complete until ALL SIX commands report clean:
 
 ```bash
-python -m py_compile src/firmware/org_ap_upgrader.py                       # exit 0
-python -m ruff check src/firmware/org_ap_upgrader.py                       # zero errors, zero warnings
-python -m black --check src/firmware/org_ap_upgrader.py                    # zero reformat needed
-python -m mypy --strict src/firmware/org_ap_upgrader.py                    # zero errors
-python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py        # score trends toward 100.0 / A+
+python -m py_compile src/operations/execution/firmware/org_ap_upgrader.py                       # exit 0
+python -m ruff check src/operations/execution/firmware/org_ap_upgrader.py                       # zero errors, zero warnings
+python -m black --check src/operations/execution/firmware/org_ap_upgrader.py                    # zero reformat needed
+python -m mypy --strict src/operations/execution/firmware/org_ap_upgrader.py                    # zero errors
+python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py        # score trends toward 100.0 / A+
 git diff main..HEAD -- MistHelper.py                                       # EMPTY output (byte-identity)
 ```
 
 Any task that regresses ruff / black / mypy / py_compile is reverted before moving on. Compliance score is expected to climb monotonically; a within-task dip is only acceptable if the very next task recovers it. The final target is exactly **100.0 / A+** with zero HIGH / zero MEDIUM / zero LOW findings across every analyzer rule bucket. `git diff main..HEAD -- MistHelper.py` must be **empty** for the entire duration of the refactor — no exceptions.
 
-If `pytest tests/unit/` contains any tests that import `src.firmware.org_ap_upgrader`, they must also pass on every task. Currently zero such tests exist (NG-001), so this check is a spot-grep only.
+If `pytest tests/unit/` contains any tests that import `src.operations.execution.firmware.org_ap_upgrader`, they must also pass on every task. Currently zero such tests exist (NG-001), so this check is a spot-grep only.
 
 ## Format: `[ID] [P?] Description`
 
-- **[P]**: Task edits a file that no concurrent task is also editing. Because ~100% of this refactor lives in `src/firmware/org_ap_upgrader.py`, [P] appears sparingly (only baseline/artifact capture and the final read-only verification tasks).
+- **[P]**: Task edits a file that no concurrent task is also editing. Because ~100% of this refactor lives in `src/operations/execution/firmware/org_ap_upgrader.py`, [P] appears sparingly (only baseline/artifact capture and the final read-only verification tasks).
 - Every task lists the exact file path being edited.
 - Every task has a "Done when:" line stating the acceptance criterion for that task in isolation.
 
 ## Path Conventions
 
 - Repository root is the current working directory.
-- **Sole edit target**: `src/firmware/org_ap_upgrader.py` (2393 lines pre-refactor, ~3800 lines post-refactor).
+- **Sole edit target**: `src/operations/execution/firmware/org_ap_upgrader.py` (2393 lines pre-refactor, ~3800 lines post-refactor).
 - **Zero permitted off-file diffs**: `MistHelper.py` at lines 20237-20314 must remain byte-identical (FR-018, SC-007). Any drift is a scope violation — halt and revert.
 - Optional plan reference update: `.github/copilot-instructions.md` between the SPECKIT markers.
 - Artifact drop directory: `specs/1006-org-ap-upgrader-compliance/artifacts/` (pre-populated with `baseline_compliance_report.md` and `baseline_lint.txt`).
@@ -66,7 +66,7 @@ If a task's diff would introduce a violation of items 1-8, the task is not compl
 
 **Purpose**: Freeze the pre-refactor test-runnability baseline so every subsequent task can be measured against a known starting point. The compliance baseline is already captured at `specs/1006-org-ap-upgrader-compliance/artifacts/baseline_compliance_report.md` — do not modify it. No source code is changed in this phase.
 
-- [X] **T-001** [P] Capture pre-refactor lint / compile / type baseline by running `python -m py_compile src/firmware/org_ap_upgrader.py`, `python -m ruff check src/firmware/org_ap_upgrader.py`, `python -m black --check src/firmware/org_ap_upgrader.py`, and `python -m mypy --strict src/firmware/org_ap_upgrader.py` in sequence. Save combined stdout+stderr to `specs/1006-org-ap-upgrader-compliance/artifacts/baseline_toolchain.txt`. Confirm each tool's exit code.
+- [X] **T-001** [P] Capture pre-refactor lint / compile / type baseline by running `python -m py_compile src/operations/execution/firmware/org_ap_upgrader.py`, `python -m ruff check src/operations/execution/firmware/org_ap_upgrader.py`, `python -m black --check src/operations/execution/firmware/org_ap_upgrader.py`, and `python -m mypy --strict src/operations/execution/firmware/org_ap_upgrader.py` in sequence. Save combined stdout+stderr to `specs/1006-org-ap-upgrader-compliance/artifacts/baseline_toolchain.txt`. Confirm each tool's exit code.
   - **Done when:** file records exit codes for all four tools; any pre-refactor tool failure is documented (baseline may not be clean under mypy --strict — this is expected and does not block the refactor).
 - [X] **T-002** [P] Capture pre-refactor unit-test runnability by running `python -m pytest tests/unit/ -k org_ap_upgrader --collect-only` and saving output to `specs/1006-org-ap-upgrader-compliance/artifacts/baseline_pytest.txt`. Expected outcome: zero tests collected (NG-001 forbids creating new tests, and no pre-existing tests reference this module).
   - **Done when:** artifact file confirms `no tests ran` or equivalent zero-collection status; if any tests are found, list them here and confirm none are modified during the refactor.
@@ -85,13 +85,13 @@ If a task's diff would introduce a violation of items 1-8, the task is not compl
 
 **CRITICAL**: No structural work can begin until this phase is complete.
 
-- [X] **T-005** [T-DATACLASS] Add the `OrgAPUpgraderConfig` frozen dataclass to `src/firmware/org_ap_upgrader.py` per `data-model.md`. Placement: below the module imports and above the `OrgLevelAPFirmwareUpgrader` class at line 41. Requirements:
+- [X] **T-005** [T-DATACLASS] Add the `OrgAPUpgraderConfig` frozen dataclass to `src/operations/execution/firmware/org_ap_upgrader.py` per `data-model.md`. Placement: below the module imports and above the `OrgLevelAPFirmwareUpgrader` class at line 41. Requirements:
   - Decorator: `@dataclass(frozen=True, slots=True, kw_only=True)`.
   - Eleven fields matching the pre-refactor 11-parameter `__init__` 1:1 (see `data-model.md` field-mapping table): `org_id: str`, `apisession: Any`, `dry_run: bool = False`, `safe_input_fn: Optional[Any] = None`, `check_stop_fn: Optional[Any] = None`, `get_org_id_fn: Optional[Any] = None`, `fetch_sites_fn: Optional[Any] = None`, `write_results_fn: Optional[Any] = None`, `is_debug_fn: Optional[Any] = None`, `msp_privileges: Optional[list[Any]] = None`, `selected_msp: Optional[dict[str, Any]] = None`.
   - Add `__post_init__` per `data-model.md` "Validation Rules" table: `isinstance(org_id, str)` (empty allowed for MSP-select callsites at 20289/20305), `apisession is not None`, permissive `bool(dry_run)` coercion via `object.__setattr__`, each `*_fn` `None` or `callable(...)`, `msp_privileges` normalized from `None` to `[]` via `object.__setattr__`, `selected_msp` `None` or `dict`.
   - Every field declaration and every executable line inside `__post_init__` carries a `# WHY: <intent>` inline comment (fields count as executable lines for the analyzer).
   - Imports: add `from dataclasses import dataclass` and `from typing import Optional` if not already present. `Any` is already imported.
-  - Verification: `python -m py_compile src/firmware/org_ap_upgrader.py` exits 0; `python -m ruff check src/firmware/org_ap_upgrader.py` clean; `python -c "from src.firmware.org_ap_upgrader import OrgAPUpgraderConfig; print(list(OrgAPUpgraderConfig.__dataclass_fields__))"` prints all eleven field names.
+  - Verification: `python -m py_compile src/operations/execution/firmware/org_ap_upgrader.py` exits 0; `python -m ruff check src/operations/execution/firmware/org_ap_upgrader.py` clean; `python -c "from src.operations.execution.firmware.org_ap_upgrader import OrgAPUpgraderConfig; print(list(OrgAPUpgraderConfig.__dataclass_fields__))"` prints all eleven field names.
   - **Done when:** `OrgAPUpgraderConfig` is importable at module level; `__post_init__` rejects the seven invalid cases from `data-model.md` "Failure-Mode Diagnostics"; no analyzer regression is introduced (pre-refactor 11-param `__init__` is still present at line 41 and still flagged — that is expected and cleared in Phase 3); `git diff main..HEAD -- MistHelper.py` is still empty.
 
 **Checkpoint**: `OrgAPUpgraderConfig` exists and is importable. `__init__` still has its pre-refactor 11-parameter shape (unchanged). Phase 3 kwargs-passthrough migration can now proceed.
@@ -102,11 +102,11 @@ If a task's diff would introduce a violation of items 1-8, the task is not compl
 
 **Goal**: Reshape `OrgLevelAPFirmwareUpgrader.__init__` from 11 parameters / 45 lines / STRUCT-PARAMS + STRUCT-LENGTH violation to `def __init__(self, **cfg: Any) -> None` (1 formal parameter, `<=15` executable lines). Preserve every module-side effect and pre-refactor `self.<attr>` surface via a `_apply_config_to_attributes()` helper (research.md R-1).
 
-**Independent Test**: `python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py` shows `__init__` no longer flagged for STRUCT-PARAMS or STRUCT-LENGTH. All four MistHelper.py callsites (20247/20269/20289/20305) succeed under `python -m py_compile` with zero diff. Direct positional invocation `OrgLevelAPFirmwareUpgrader("org", session)` raises `TypeError` (contract C-2). Kwargs invocation with all four callsite shapes (11-kwarg, 9-kwarg, 5-kwarg with `org_id=""`, 3-kwarg with `org_id=""`) succeeds (contracts C-1, C-3, C-4, C-5, C-6).
+**Independent Test**: `python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py` shows `__init__` no longer flagged for STRUCT-PARAMS or STRUCT-LENGTH. All four MistHelper.py callsites (20247/20269/20289/20305) succeed under `python -m py_compile` with zero diff. Direct positional invocation `OrgLevelAPFirmwareUpgrader("org", session)` raises `TypeError` (contract C-2). Kwargs invocation with all four callsite shapes (11-kwarg, 9-kwarg, 5-kwarg with `org_id=""`, 3-kwarg with `org_id=""`) succeeds (contracts C-1, C-3, C-4, C-5, C-6).
 
-- [X] **T-006** Add module-level (or class-level, per implementer's choice — must be `<=25` lines, CC `<=5`) private helper `_apply_config_to_attributes(self) -> None` to `src/firmware/org_ap_upgrader.py`. Body: reads each field from `self._config` and sets the corresponding pre-refactor attribute (`self.org_id = self._config.org_id`, `self.apisession = self._config.apisession`, `self.dry_run = self._config.dry_run`, `self.safe_input_fn = self._config.safe_input_fn or self._default_safe_input`, ... same pattern for the other five `*_fn` hooks with their pre-refactor `_default_*` fallbacks, `self.msp_privileges = self._config.msp_privileges`, `self.selected_msp = self._config.selected_msp`). This preserves the pre-refactor `self.<attr>` surface every downstream helper reads today, so no other helper needs to change simultaneously. Every executable line carries a `# WHY:` inline comment. Bracket with `logging.info("Applying config to instance attributes for org %s", self._config.org_id)` at entry and `logging.debug("Applied %d config fields to instance", 11)` at exit. Ceiling: `<=25` lines, `<=5` params (this one has 1), `<=5` blocks, `<=4` nesting, CC `<=5`.
+- [X] **T-006** Add module-level (or class-level, per implementer's choice — must be `<=25` lines, CC `<=5`) private helper `_apply_config_to_attributes(self) -> None` to `src/operations/execution/firmware/org_ap_upgrader.py`. Body: reads each field from `self._config` and sets the corresponding pre-refactor attribute (`self.org_id = self._config.org_id`, `self.apisession = self._config.apisession`, `self.dry_run = self._config.dry_run`, `self.safe_input_fn = self._config.safe_input_fn or self._default_safe_input`, ... same pattern for the other five `*_fn` hooks with their pre-refactor `_default_*` fallbacks, `self.msp_privileges = self._config.msp_privileges`, `self.selected_msp = self._config.selected_msp`). This preserves the pre-refactor `self.<attr>` surface every downstream helper reads today, so no other helper needs to change simultaneously. Every executable line carries a `# WHY:` inline comment. Bracket with `logging.info("Applying config to instance attributes for org %s", self._config.org_id)` at entry and `logging.debug("Applied %d config fields to instance", 11)` at exit. Ceiling: `<=25` lines, `<=5` params (this one has 1), `<=5` blocks, `<=4` nesting, CC `<=5`.
   - **Done when:** helper exists; calling it inside `__init__` rebinds all eleven pre-refactor attribute names; ruff+black+py_compile clean; no new analyzer violations introduced; MistHelper.py still byte-identical.
-- [X] **T-007** Rewrite `OrgLevelAPFirmwareUpgrader.__init__` in `src/firmware/org_ap_upgrader.py` line 41 to the exact shape shown in `data-model.md` "Usage — Consumer Side": signature is `def __init__(self, **cfg: Any) -> None`; body is exactly 6 executable lines — `logging.info(...)`, `self._config = OrgAPUpgraderConfig(**cfg)`, `self._apply_config_to_attributes()`, `self._init_selection_state()`, `self._init_device_state()`, `self._init_results_state()`, `logging.debug(...)`. Each line carries a `# WHY:` inline comment. **Delete** the pre-existing `# pylint: disable=too-many-arguments` marker on the pre-refactor line 41 signature (FR-015). **Delete** the pre-existing module-level `# pylint: disable=too-many-lines,logging-fstring-interpolation` at line 9 (the `too-many-lines` half is scoped out and the `logging-fstring-interpolation` half is rendered moot by R-8 lazy-format conversion in Phase 7). Also add the two read-only properties `org_id`, `apisession`, and `dry_run` from `data-model.md` "Usage — Consumer Side" so downstream helpers that already read `self.org_id` / `self.apisession` / `self.dry_run` continue to work byte-identically — note that `_apply_config_to_attributes()` already assigns these as instance attributes, so the properties may be omitted if the attribute assignment is preferred; pick one strategy and apply it uniformly. Every helper method in the file that reads `self.safe_input_fn` / `self.check_stop_fn` / etc. continues to work unchanged because `_apply_config_to_attributes()` reassigns those names. This task DEPENDS ON T-005 + T-006.
+- [X] **T-007** Rewrite `OrgLevelAPFirmwareUpgrader.__init__` in `src/operations/execution/firmware/org_ap_upgrader.py` line 41 to the exact shape shown in `data-model.md` "Usage — Consumer Side": signature is `def __init__(self, **cfg: Any) -> None`; body is exactly 6 executable lines — `logging.info(...)`, `self._config = OrgAPUpgraderConfig(**cfg)`, `self._apply_config_to_attributes()`, `self._init_selection_state()`, `self._init_device_state()`, `self._init_results_state()`, `logging.debug(...)`. Each line carries a `# WHY:` inline comment. **Delete** the pre-existing `# pylint: disable=too-many-arguments` marker on the pre-refactor line 41 signature (FR-015). **Delete** the pre-existing module-level `# pylint: disable=too-many-lines,logging-fstring-interpolation` at line 9 (the `too-many-lines` half is scoped out and the `logging-fstring-interpolation` half is rendered moot by R-8 lazy-format conversion in Phase 7). Also add the two read-only properties `org_id`, `apisession`, and `dry_run` from `data-model.md` "Usage — Consumer Side" so downstream helpers that already read `self.org_id` / `self.apisession` / `self.dry_run` continue to work byte-identically — note that `_apply_config_to_attributes()` already assigns these as instance attributes, so the properties may be omitted if the attribute assignment is preferred; pick one strategy and apply it uniformly. Every helper method in the file that reads `self.safe_input_fn` / `self.check_stop_fn` / etc. continues to work unchanged because `_apply_config_to_attributes()` reassigns those names. This task DEPENDS ON T-005 + T-006.
   - **Done when:** `__init__` body is `<=15` executable lines with 1 formal parameter (`**cfg`); analyzer no longer reports STRUCT-PARAMS or STRUCT-LENGTH on `__init__` at line 41; two `# pylint: disable` markers are removed from the file; ruff + black + mypy --strict + py_compile all exit 0; `git diff main..HEAD -- MistHelper.py` is empty; all four MistHelper.py callsites succeed under a REPL smoke that calls each with its pre-refactor kwargs shape.
 
 **Checkpoint**: `__init__` is `<=15` executable lines with 1 formal parameter. STRUCT-PARAMS clears. STRUCT-LENGTH clears on `__init__`. Both `# pylint: disable` suppressions are gone. Score climbs materially. Downstream method bodies continue to read collaborators via the same `self.<attr>` names as pre-refactor. All four MistHelper.py callsites are functional and byte-identical.
@@ -117,11 +117,11 @@ If a task's diff would introduce a violation of items 1-8, the task is not compl
 
 **Goal**: Bring each of the ten remaining STRUCT-LENGTH offenders (all except `__init__` which cleared in Phase 3) to `<=25` executable lines, `<=5` blocks, CC `<=5`, nesting `<=4` by applying the **PCPP pattern** (Prepare / Compute / Present / Persist) plus named phase helpers (research.md R-3, R-4). Each orchestrator ends as a 4-8 line sequence of helper calls; each helper is `<=25` lines with `# WHY:` comments on every executable line and `logging.info` before / `logging.debug` after brackets.
 
-**Independent Test**: For each of the ten offenders, `python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py` shows the method removed from the flagged-offenders list. Every MistHelper.py callsite dry-run smoke reaches identical prompt sequences vs. the pre-refactor branch (FR-003).
+**Independent Test**: For each of the ten offenders, `python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py` shows the method removed from the flagged-offenders list. Every MistHelper.py callsite dry-run smoke reaches identical prompt sequences vs. the pre-refactor branch (FR-003).
 
 **Rule for every task in this phase**: apply PCPP; helpers named `_prepare_<action>_context`, `_compute_<action>_plan`, `_present_<action>_preview`, `_persist_<action>_results` (omit any slice that would be `<=3` executable lines — inline it, per FR-011). Where R-4 defines named phase helpers (`_msp_phase_*`, `_org_phase_*`, `_canary_phase_*`, `_upgrade_phase_*`), use those names in preference to generic PCPP names. Every helper carries `# WHY:` on every executable line + `logging.info` before / `logging.debug` after brackets. Every helper `<=25` lines / `<=5` blocks / CC `<=5` / nesting `<=4` / `<=5` parameters. The public method is rewritten as a thin orchestrator whose executable lines also carry `# WHY:` comments. Every `input(...)` in touched code paths is routed through `safe_input(..., context="org-ap-upgrader.<kebab-tag>")`. Every filesystem path uses `os.path.join(...)` or `pathlib.Path(...)`.
 
-Tasks are ordered by pre-refactor line number (offenders enumerated in `plan.md` bullet 3). All edit `src/firmware/org_ap_upgrader.py` sequentially — no [P] because same file.
+Tasks are ordered by pre-refactor line number (offenders enumerated in `plan.md` bullet 3). All edit `src/operations/execution/firmware/org_ap_upgrader.py` sequentially — no [P] because same file.
 
 - [X] **T-008** Decompose `_execute_msp_mode` at pre-refactor line 178 (28 executable lines, STRUCT-LENGTH). Apply R-4 MSP phase helpers: `_msp_phase_fetch` (calls `_fetch_msp_orgs`), `_msp_phase_confirm` (wraps `_confirm_msp_orgs`), `_msp_phase_iterate` (drives the per-org loop). Rewrite `_execute_msp_mode` as a 4-6 line orchestrator that calls the three phase helpers in strict pre-refactor order. Preserve every prompt string, CSV output path, and API call byte-for-byte.
   - **Done when:** analyzer shows `_execute_msp_mode` at `<=25` executable lines with no flags; every phase helper is `<=25` lines / `<=5` blocks / CC `<=5`; MistHelper.py diff empty.
@@ -152,11 +152,11 @@ Tasks are ordered by pre-refactor line number (offenders enumerated in `plan.md`
 
 **Goal**: Bring each of the twelve remaining STRUCT-COMPLEXITY offenders (all except `_fetch_org_aps` and `_process_upgrade_response` which cleared in Phase 4) to CC `<=5` by applying **dispatch tables** for the parser trio (research.md R-5) and **guard-clause predicate helpers** for the print/organize/build quartet (research.md R-6). Where an offender's complexity is driven by branching that overlaps with the STRUCT-LENGTH decomposition, the PCPP split already brought it under threshold; otherwise apply the dedicated dispatch/predicate strategy.
 
-**Independent Test**: `python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py` reports zero STRUCT-COMPLEXITY findings. Zero STRUCT-BLOCKS. Zero STRUCT-NESTING. Score `>=90`.
+**Independent Test**: `python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py` reports zero STRUCT-COMPLEXITY findings. Zero STRUCT-BLOCKS. Zero STRUCT-NESTING. Score `>=90`.
 
 **Rule for every task in this phase**: same helper ceilings as Phase 4 (`<=25` lines / `<=5` blocks / CC `<=5` / nesting `<=4` / `<=5` params). Every executable line new or edited carries `# WHY:` inline commentary. `logging.info` before / `logging.debug` after brackets on every helper. Predicates that return `bool` are excepted from the info/debug bracket rule if they are `<=3` lines and CC `<=2` (no I/O, no mutation). Every `input(...)` in touched code paths -> `safe_input(..., context="org-ap-upgrader.<kebab-tag>")`. Every filesystem path -> `os.path.join(...)` or `pathlib.Path(...)`.
 
-Tasks are batched by cohesive strategy. All edit `src/firmware/org_ap_upgrader.py` sequentially (no [P]):
+Tasks are batched by cohesive strategy. All edit `src/operations/execution/firmware/org_ap_upgrader.py` sequentially (no [P]):
 
 ### Batch A: Parser Trio (Dispatch Tables — R-5)
 
@@ -197,16 +197,16 @@ Tasks are batched by cohesive strategy. All edit `src/firmware/org_ap_upgrader.p
 
 **Goal**: Push inline-comment coverage from 16.0% to `>=80%` (analyzer threshold — spec target is a small buffer above threshold). This is the largest single-diff phase in the plan because every executable line in the file that lacks `# WHY: <intent>` must acquire one. Most of the coverage is picked up incrementally in Phases 3-5 as helpers are extracted with `# WHY:` on every line; this phase is the sweep that closes the gap on methods the earlier phases did not touch.
 
-**Independent Test**: `python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py` reports zero CONV-COMMENTS findings and inline-comment coverage `>=80%`. Grep `git grep -c "# WHY:" src/firmware/org_ap_upgrader.py` returns a count matching the analyzer's reported executable-line total scaled by 0.80.
+**Independent Test**: `python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py` reports zero CONV-COMMENTS findings and inline-comment coverage `>=80%`. Grep `git grep -c "# WHY:" src/operations/execution/firmware/org_ap_upgrader.py` returns a count matching the analyzer's reported executable-line total scaled by 0.80.
 
-- [X] **T-029** Sweep the constructor cohort in `src/firmware/org_ap_upgrader.py` — `__init__`, `_apply_config_to_attributes`, `OrgAPUpgraderConfig` (fields + `__post_init__`), and any `org_id` / `apisession` / `dry_run` properties — and confirm every executable line carries a `# WHY: <intent>` inline comment. Add missing comments. Every comment explains WHY the line exists (Constitution VI), not WHAT it does. Since these were introduced fresh in Phase 2-3, coverage should already be at 100% here — this task is the audit.
+- [X] **T-029** Sweep the constructor cohort in `src/operations/execution/firmware/org_ap_upgrader.py` — `__init__`, `_apply_config_to_attributes`, `OrgAPUpgraderConfig` (fields + `__post_init__`), and any `org_id` / `apisession` / `dry_run` properties — and confirm every executable line carries a `# WHY: <intent>` inline comment. Add missing comments. Every comment explains WHY the line exists (Constitution VI), not WHAT it does. Since these were introduced fresh in Phase 2-3, coverage should already be at 100% here — this task is the audit.
   - **Done when:** grep of the constructor cohort shows every executable line ends in `# WHY:` (or a functionally equivalent trailing `# <intent>` for the rare case where `# WHY:` reads awkwardly).
-- [X] **T-030** Sweep every helper introduced in Phase 4 (the ~30-40 helpers from T-008..T-017) in `src/firmware/org_ap_upgrader.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Also confirm each helper has `logging.info(...)` on its first executable line and `logging.debug(...)` on its last executable line before return (FR-012). This task may be split into two review-friendly sub-tasks (`T-030a` covering Batch A/B, `T-030b` covering Batch C) if the diff exceeds 500 changed lines.
+- [X] **T-030** Sweep every helper introduced in Phase 4 (the ~30-40 helpers from T-008..T-017) in `src/operations/execution/firmware/org_ap_upgrader.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Also confirm each helper has `logging.info(...)` on its first executable line and `logging.debug(...)` on its last executable line before return (FR-012). This task may be split into two review-friendly sub-tasks (`T-030a` covering Batch A/B, `T-030b` covering Batch C) if the diff exceeds 500 changed lines.
   - **Done when:** grep on each Phase-4 helper's body shows every executable line ends in `# WHY:` and each helper is bracketed by info-before / debug-after logging.
-- [X] **T-031** Sweep every helper introduced in Phase 5 (the ~20-30 helpers from T-018..T-028) in `src/firmware/org_ap_upgrader.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Confirm each helper has the info/debug bracket (except predicates `<=3` lines / CC `<=2`).
+- [X] **T-031** Sweep every helper introduced in Phase 5 (the ~20-30 helpers from T-018..T-028) in `src/operations/execution/firmware/org_ap_upgrader.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Confirm each helper has the info/debug bracket (except predicates `<=3` lines / CC `<=2`).
   - **Done when:** analyzer's inline-comment coverage on the file is `>=80%`; grep confirms info-before / debug-after brackets at every non-predicate helper.
-- [X] **T-032** Sweep every remaining executable line in `src/firmware/org_ap_upgrader.py` that was NOT touched by Phases 3-5 (i.e. methods the analyzer never flagged, but which still contribute to the file-wide `>=80%` coverage threshold). Add `# WHY:` comments to those lines. The measurement is file-wide, so untouched code that was already commented stays; untouched code that had no comment picks one up now. This is the largest sub-task in the phase and may be split into `T-032a` / `T-032b` / `T-032c` grouped by class-method-region if the diff exceeds 500 changed lines.
-  - **Done when:** `python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py` reports CONV-COMMENTS count 0 and inline-comment coverage `>=80%`.
+- [X] **T-032** Sweep every remaining executable line in `src/operations/execution/firmware/org_ap_upgrader.py` that was NOT touched by Phases 3-5 (i.e. methods the analyzer never flagged, but which still contribute to the file-wide `>=80%` coverage threshold). Add `# WHY:` comments to those lines. The measurement is file-wide, so untouched code that was already commented stays; untouched code that had no comment picks one up now. This is the largest sub-task in the phase and may be split into `T-032a` / `T-032b` / `T-032c` grouped by class-method-region if the diff exceeds 500 changed lines.
+  - **Done when:** `python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py` reports CONV-COMMENTS count 0 and inline-comment coverage `>=80%`.
 
 **Checkpoint**: Analyzer reports zero findings across every rule bucket. Inline-comment coverage `>=80%`. Compliance score is 100.0 / A+. **The refactor's compliance work is complete.** MistHelper.py diff still empty.
 
@@ -216,16 +216,16 @@ Tasks are batched by cohesive strategy. All edit `src/firmware/org_ap_upgrader.p
 
 **Goal**: Guarantee every `logging.*` call is ASCII-only lazy-form. Guarantee every `input(...)` is `safe_input(..., context=...)`. Guarantee every filesystem path is `os.path.join` / `pathlib.Path`. Most of this hygiene was handled opportunistically in Phases 4-5; this phase is the audit sweep that catches anything missed.
 
-**Independent Test**: The two Python one-liners below (ASCII scan + f-string scan) emit zero lines. `grep -nE "^\\s*[^#]*[^_a-zA-Z]input\\(" src/firmware/org_ap_upgrader.py` (excluding `safe_input`) returns nothing. Every `logging.*` call uses `%s` / `%d` lazy form.
+**Independent Test**: The two Python one-liners below (ASCII scan + f-string scan) emit zero lines. `grep -nE "^\\s*[^#]*[^_a-zA-Z]input\\(" src/operations/execution/firmware/org_ap_upgrader.py` (excluding `safe_input`) returns nothing. Every `logging.*` call uses `%s` / `%d` lazy form.
 
 ```bash
-python -c "import re,sys; s=open('src/firmware/org_ap_upgrader.py',encoding='utf-8').read(); [print(f'{i+1}: {l}') for i,l in enumerate(s.splitlines()) if not l.isascii()]"
-python -c "import re,sys; s=open('src/firmware/org_ap_upgrader.py',encoding='utf-8').read(); [print(f'{m.start()}: {m.group()}') for m in re.finditer(r'logging\\.\\w+\\(f[\"\\'']', s)]"
+python -c "import re,sys; s=open('src/operations/execution/firmware/org_ap_upgrader.py',encoding='utf-8').read(); [print(f'{i+1}: {l}') for i,l in enumerate(s.splitlines()) if not l.isascii()]"
+python -c "import re,sys; s=open('src/operations/execution/firmware/org_ap_upgrader.py',encoding='utf-8').read(); [print(f'{m.start()}: {m.group()}') for m in re.finditer(r'logging\\.\\w+\\(f[\"\\'']', s)]"
 ```
 
-- [X] **T-033** Audit every `logging.*(...)` and every `print(...)` call in `src/firmware/org_ap_upgrader.py` for non-ASCII characters per FR-013 and for f-string usage per FR-012. Replace emoji with ASCII markers (`[OK]`, `[FAIL]`, `[SKIP]`), replace curly quotes with straight, replace en/em-dash with `-`, replace non-ASCII arrows with `->`. Convert any `logging.info(f"... {x}")` to `logging.info("... %s", x)` (lazy form). Every edited string carries an updated `# WHY:` inline comment.
+- [X] **T-033** Audit every `logging.*(...)` and every `print(...)` call in `src/operations/execution/firmware/org_ap_upgrader.py` for non-ASCII characters per FR-013 and for f-string usage per FR-012. Replace emoji with ASCII markers (`[OK]`, `[FAIL]`, `[SKIP]`), replace curly quotes with straight, replace en/em-dash with `-`, replace non-ASCII arrows with `->`. Convert any `logging.info(f"... {x}")` to `logging.info("... %s", x)` (lazy form). Every edited string carries an updated `# WHY:` inline comment.
   - **Done when:** both Python one-liners emit zero lines; grep confirms no f-strings inside `logging.*` calls.
-- [X] **T-034** Audit every `input(...)` call in `src/firmware/org_ap_upgrader.py`. Every remaining raw `input(...)` (Phases 4-5 wrapped the touched ones opportunistically; this sweeps the rest) is wrapped in `safe_input(..., context="org-ap-upgrader.<kebab-tag>")`. Grep-verify: `grep -nE "^\\s*[^#]*[^_a-zA-Z]input\\(" src/firmware/org_ap_upgrader.py` returns nothing (excluding `safe_input` matches). Also audit every filesystem path construction — replace any raw `/` or `\\` string concatenation with `os.path.join(...)` or `pathlib.Path(...)`, particularly around CSV output paths. Every edited call carries a `# WHY:` inline comment.
+- [X] **T-034** Audit every `input(...)` call in `src/operations/execution/firmware/org_ap_upgrader.py`. Every remaining raw `input(...)` (Phases 4-5 wrapped the touched ones opportunistically; this sweeps the rest) is wrapped in `safe_input(..., context="org-ap-upgrader.<kebab-tag>")`. Grep-verify: `grep -nE "^\\s*[^#]*[^_a-zA-Z]input\\(" src/operations/execution/firmware/org_ap_upgrader.py` returns nothing (excluding `safe_input` matches). Also audit every filesystem path construction — replace any raw `/` or `\\` string concatenation with `os.path.join(...)` or `pathlib.Path(...)`, particularly around CSV output paths. Every edited call carries a `# WHY:` inline comment.
   - **Done when:** no raw `input(...)` remains in the file; every prompt is `safe_input(..., context=...)`; every user-facing filesystem path uses `os.path.join` / `pathlib.Path` (URL patterns like `/api/v1/orgs/{org_id}` are unaffected — those are mistapi paths, not filesystem paths).
 
 **Checkpoint**: All ASCII / lazy-format / safe_input / path hygiene sweeps complete. Analyzer still at 100.0 / A+. MistHelper.py diff still empty.
@@ -236,11 +236,11 @@ python -c "import re,sys; s=open('src/firmware/org_ap_upgrader.py',encoding='utf
 
 **Purpose**: Final verification, artifact capture, and reviewer-friendly documentation updates. Executes each of the six standing-gate commands in order and drops all outputs to `specs/1006-org-ap-upgrader-compliance/artifacts/`.
 
-- [X] **T-035** Run the final compliance analyzer gate: `python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py`. Save output to `specs/1006-org-ap-upgrader-compliance/artifacts/final_compliance_report.md`. Confirm score is **exactly 100.0**, grade is **A+**, and every rule bucket (`CONV-COMMENTS`, `CONV-NAME`, `STRUCT-BLOCKS`, `STRUCT-COMPLEXITY`, `STRUCT-LENGTH`, `STRUCT-NESTING`, `STRUCT-PARAMS`) reports 0 findings (FR-001, FR-002, FR-003, SC-001, SC-002, SC-003). Any single LOW-severity finding is a failure — no partial credit.
+- [X] **T-035** Run the final compliance analyzer gate: `python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py`. Save output to `specs/1006-org-ap-upgrader-compliance/artifacts/final_compliance_report.md`. Confirm score is **exactly 100.0**, grade is **A+**, and every rule bucket (`CONV-COMMENTS`, `CONV-NAME`, `STRUCT-BLOCKS`, `STRUCT-COMPLEXITY`, `STRUCT-LENGTH`, `STRUCT-NESTING`, `STRUCT-PARAMS`) reports 0 findings (FR-001, FR-002, FR-003, SC-001, SC-002, SC-003). Any single LOW-severity finding is a failure — no partial credit.
   - **Done when:** artifact file reports `Score: 100.0`, `Grade: A+`, and zero findings across every rule bucket.
-- [X] **T-036** [P] Run the final ruff gate: `python -m ruff check src/firmware/org_ap_upgrader.py`. Save output to `specs/1006-org-ap-upgrader-compliance/artifacts/final_ruff.txt`. Confirm zero errors, zero warnings (FR-005).
+- [X] **T-036** [P] Run the final ruff gate: `python -m ruff check src/operations/execution/firmware/org_ap_upgrader.py`. Save output to `specs/1006-org-ap-upgrader-compliance/artifacts/final_ruff.txt`. Confirm zero errors, zero warnings (FR-005).
   - **Done when:** artifact file records exit code 0 and empty output.
-- [X] **T-037** [P] Run the final black + mypy + py_compile gate: `python -m py_compile src/firmware/org_ap_upgrader.py`, `python -m black --check src/firmware/org_ap_upgrader.py`, `python -m mypy --strict src/firmware/org_ap_upgrader.py`. Save exit codes + any stderr to `specs/1006-org-ap-upgrader-compliance/artifacts/final_toolchain.txt`. Confirm all three exit 0 (FR-004, SC-006).
+- [X] **T-037** [P] Run the final black + mypy + py_compile gate: `python -m py_compile src/operations/execution/firmware/org_ap_upgrader.py`, `python -m black --check src/operations/execution/firmware/org_ap_upgrader.py`, `python -m mypy --strict src/operations/execution/firmware/org_ap_upgrader.py`. Save exit codes + any stderr to `specs/1006-org-ap-upgrader-compliance/artifacts/final_toolchain.txt`. Confirm all three exit 0 (FR-004, SC-006).
   - **Done when:** artifact file records exit code 0 for all three tools.
 - [X] **T-038** [P] Run the byte-identity gate: `git diff main..HEAD -- MistHelper.py` and save output to `specs/1006-org-ap-upgrader-compliance/artifacts/misthelper_diff.txt`. Confirm output is **empty** (SC-007, FR-018). Also run `grep -n "from src\.firmware\.org_ap_upgrader" MistHelper.py` and confirm the four expected lines at 20247, 20269, 20289, 20305 match the baseline capture from T-003.
   - **Done when:** artifact file is empty (zero bytes or one trailing newline); MistHelper.py callsite grep matches T-003 baseline exactly.
@@ -304,7 +304,7 @@ python -c "import re,sys; s=open('src/firmware/org_ap_upgrader.py',encoding='utf
 
 - T-001 / T-002 / T-003 / T-004 (baseline capture) can run in parallel — different artifact files.
 - T-036 / T-037 / T-038 / T-039 / T-040 / T-042 (final verification gates + doc update) can run in parallel — read-only against the primary file (or edit an unrelated file).
-- Everything else touches `src/firmware/org_ap_upgrader.py` and must serialize.
+- Everything else touches `src/operations/execution/firmware/org_ap_upgrader.py` and must serialize.
 
 ---
 
@@ -314,10 +314,10 @@ python -c "import re,sys; s=open('src/firmware/org_ap_upgrader.py',encoding='utf
 # After T-035 (analyzer 100.0 / A+ confirmed):
 
 # Terminal 1 (ruff artifact):
-Task: T-036 python -m ruff check src/firmware/org_ap_upgrader.py > artifacts/final_ruff.txt
+Task: T-036 python -m ruff check src/operations/execution/firmware/org_ap_upgrader.py > artifacts/final_ruff.txt
 
 # Terminal 2 (toolchain artifact):
-Task: T-037 python -m py_compile src/firmware/org_ap_upgrader.py; python -m black --check src/firmware/org_ap_upgrader.py; python -m mypy --strict src/firmware/org_ap_upgrader.py > artifacts/final_toolchain.txt
+Task: T-037 python -m py_compile src/operations/execution/firmware/org_ap_upgrader.py; python -m black --check src/operations/execution/firmware/org_ap_upgrader.py; python -m mypy --strict src/operations/execution/firmware/org_ap_upgrader.py > artifacts/final_toolchain.txt
 
 # Terminal 3 (byte-identity artifact):
 Task: T-038 git diff main..HEAD -- MistHelper.py > artifacts/misthelper_diff.txt
@@ -373,7 +373,7 @@ The following are **hard-banned** by this task list. Any occurrence is a merge b
 1. `# noqa`, `# type: ignore`, `# pragma: no cover` on any line the analyzer would otherwise flag (FR-015).
 2. Analyzer threshold relaxation via config file, environment variable, or command-line flag (FR-001).
 3. Wrapper / delegator / alias / shim helpers that forward to another function with no additional logic (FR-011).
-4. **Any** change to `MistHelper.py` — not a comment, not a whitespace, not a blank line, not a docstring tweak (FR-018, SC-007). The **only** permitted diff on this branch is inside `src/firmware/org_ap_upgrader.py` (and optionally `.github/copilot-instructions.md` between SPECKIT markers at T-042).
+4. **Any** change to `MistHelper.py` — not a comment, not a whitespace, not a blank line, not a docstring tweak (FR-018, SC-007). The **only** permitted diff on this branch is inside `src/operations/execution/firmware/org_ap_upgrader.py` (and optionally `.github/copilot-instructions.md` between SPECKIT markers at T-042).
 5. Unicode or emoji in log strings, print strings, or any user-facing output (FR-013). ASCII only. Use `[OK]` / `[FAIL]` / `[SKIP]` / `->` markers.
 6. f-strings inside `logging.*(...)` calls (FR-012). Lazy `%s` / `%d` form only.
 7. Creating new test files under `tests/unit/` or `tests/integration/` (NG-001). The pytest gate is spot-grep only; if it finds nothing, that is a passing state.
@@ -385,14 +385,14 @@ If a task's diff would introduce any of items 1-8, the task is not complete and 
 
 ## Notes
 
-- Every task edits `src/firmware/org_ap_upgrader.py` unless otherwise noted. One exception: T-042 edits `.github/copilot-instructions.md` between the SPECKIT markers only. Baseline/verification tasks (T-001..T-004, T-035..T-041) write to `specs/1006-org-ap-upgrader-compliance/artifacts/`.
+- Every task edits `src/operations/execution/firmware/org_ap_upgrader.py` unless otherwise noted. One exception: T-042 edits `.github/copilot-instructions.md` between the SPECKIT markers only. Baseline/verification tasks (T-001..T-004, T-035..T-041) write to `specs/1006-org-ap-upgrader-compliance/artifacts/`.
 - Every task's success is measured against the standing six-command gate at the top of this file — plus the task's own "Done when:" line.
 - No wrapper / delegator / shim helpers may be introduced (FR-011). If a PCPP slice would be a 1-line forward, inline it.
 - Every executable line new or edited must carry `# WHY:` inline commentary (Constitution VI, AGENTS.md non-negotiable, FR-005).
 - Every new operation must be bracketed by `logging.info` before / `logging.debug` after (Constitution VII, AGENTS.md non-negotiable, FR-012).
 - All log strings must be ASCII-only lazy `%s` / `%d` form (FR-013). All `input(...)` calls must use `safe_input(..., context=...)` (opportunistically applied in Phases 4-5, swept in Phase 7). All filesystem paths must use `os.path.join(...)` or `pathlib.Path(...)`.
 - No `# noqa`, `# type: ignore`, or `# pragma: no cover` markers may be added by this refactor on lines the analyzer would otherwise flag (FR-015). The pre-existing `# pylint: disable=too-many-arguments` (line 41) and `# pylint: disable=too-many-lines,logging-fstring-interpolation` (line 9) are **removed** by T-007 — no suppression remains on the class or module after Phase 3.
-- The `OrgAPUpgraderConfig` dataclass lives in `src/firmware/org_ap_upgrader.py` (FR-009). No new module is created (NG-004).
+- The `OrgAPUpgraderConfig` dataclass lives in `src/operations/execution/firmware/org_ap_upgrader.py` (FR-009). No new module is created (NG-004).
 - **Zero MistHelper.py diff** is the strictest constraint of this refactor. It is asserted by `git diff main..HEAD -- MistHelper.py` returning empty output after every single task. Any drift halts the refactor.
 - Task IDs are gap-friendly. If a task needs to be split during implementation, assign `T-XXXa`, `T-XXXb` rather than renumbering.
 

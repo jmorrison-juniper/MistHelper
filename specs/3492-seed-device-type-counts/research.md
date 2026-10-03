@@ -11,7 +11,7 @@ the device index, the device records, and the client lists of the seed.
 
 **Evidence**:
 
-1. The function `_body_fields` in `src/upgrade_portal/capture/assembly.py`
+1. The function `_body_fields` in `src/interfaces/portals/upgrade_portal/capture/assembly.py`
    writes `"counts": build_counts(sections)`. No other code in the capture
    package writes the count map.
 2. The function `build_counts` returns the nine keys of `COUNT_KEYS`, in the
@@ -48,7 +48,7 @@ again after it sets the guest list.
    then replaces the guest list with one record.
 2. The base count map comes from the base lists, so it counts no guest
    client.
-3. The function `row_counts` in `src/upgrade_portal/app/routes/review.py`
+3. The function `row_counts` in `src/interfaces/portals/upgrade_portal/app/routes/review.py`
    adds the three keys of `CLIENT_COUNT_KEYS` for the Clients cell of the
    history page. The cell of the Tier 3 row therefore reads 3 today. The real
    capture of the same lists reads 4.

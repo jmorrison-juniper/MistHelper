@@ -1,4 +1,4 @@
-"""Wave 4 P2 coverage for src/refactors/anomaly_metrics_discovery.py (initiative #1018).
+"""Wave 4 P2 coverage for src/foundation/support/refactors/anomaly_metrics_discovery.py (initiative #1018).
 
 Covers `AnomalyMetricsDiscovery.discover` end-to-end plus the `_MistHelperProxy`
 `__getattr__` lazy-lookup path. `FilePathUtils.get_csv_path` on MistHelper is
@@ -18,8 +18,10 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch/tmp_path/caplog fixtures.
 
-from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
-from src.refactors.anomaly_metrics_discovery import (  # WHY: SUT + proxy direct imports.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver,
+)  # WHY: assert the source dependency seam.
+from src.foundation.support.refactors.anomaly_metrics_discovery import (  # WHY: SUT + proxy direct imports.
     _MH,
     AnomalyMetricsDiscovery,
 )

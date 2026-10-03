@@ -58,25 +58,25 @@ Two sources of local noise exist. Both stay outside the scope of this work.
 | File | Count |
 | - | - |
 | starlink_dashboard.py | 10 |
-| src/export/data_exporter.py | 5 |
-| src/firmware/firmware_manager.py | 5 |
-| src/maps/plotly_map_templates.py | 5 |
-| src/firmware/site_auto_upgrade.py | 3 |
-| src/maps/plotly_map_figure_builder.py | 3 |
-| src/utils/zscaler_probe.py | 3 |
+| src/operations/exporting/export/data_exporter.py | 5 |
+| src/operations/execution/firmware/firmware_manager.py | 5 |
+| src/interfaces/visualization/maps/plotly_map_templates.py | 5 |
+| src/operations/execution/firmware/site_auto_upgrade.py | 3 |
+| src/interfaces/visualization/maps/plotly_map_figure_builder.py | 3 |
+| src/foundation/support/utils/zscaler_probe.py | 3 |
 | tools/compliance_analyzer/engine.py | 3 |
-| mist-ops-platform/src/api/routes/health.py | 2 |
-| src/gateway/wan_probe_device_override_manager.py | 2 |
-| src/site/address_audit/ui_geocoder.py | 2 |
-| src/wan_vpn_builder.py | 2 |
+| mist-ops-platform/src/mist/access/api/routes/health.py | 2 |
+| src/mist/resources/gateway/wan_probe_device_override_manager.py | 2 |
+| src/mist/resources/site/address_audit/ui_geocoder.py | 2 |
+| src/operations/wan/wan_vpn_builder.py | 2 |
 | mist-ops-platform/src/shared/mist/session.py | 1 |
 | mist-ops-platform/src/shared/services/notification.py | 1 |
-| src/auth/interactive/login_orchestrator.py | 1 |
-| src/db/redis_writer.py | 1 |
-| src/export/site_insights/device_metric_operation.py | 1 |
-| src/gateway/_wan2_variable_device.py | 1 |
-| src/maps/_flask_viewer.py | 1 |
-| src/utils/logger_utils.py | 1 |
+| src/mist/access/auth/interactive/login_orchestrator.py | 1 |
+| src/foundation/persistence/db/redis_writer.py | 1 |
+| src/operations/exporting/export/site_insights/device_metric_operation.py | 1 |
+| src/mist/resources/gateway/_wan2_variable_device.py | 1 |
+| src/interfaces/visualization/maps/_flask_viewer.py | 1 |
+| src/foundation/support/utils/logger_utils.py | 1 |
 | tools/ste_linter/parsing/wordcount.py | 1 |
 
 ---
@@ -190,7 +190,7 @@ The table states the default decision for each rule. A reviewer may choose a dif
 | Rule | Count | Default decision | Escalate when |
 | - | - | - | - |
 | B101 assert_used | 18 | Replace the `assert` with an explicit check that raises `RuntimeError` or `ValueError`. `MistHelper.py` already applies this pattern. | The `assert` only narrows a type for the type checker. Then add a suppression comment that states the absence of a runtime duty. |
-| B105 hardcoded_password_string | 11 | Confirm that the value is a field name, a sentinel, or a placeholder. Add a suppression comment that names the value and states the role. `src/ssh/config/env_loader.py` line 67 shows the model. | The value is a real credential. Then move the value to the environment and rotate the credential. |
+| B105 hardcoded_password_string | 11 | Confirm that the value is a field name, a sentinel, or a placeholder. Add a suppression comment that names the value and states the role. `src/operations/execution/ssh/config/env_loader.py` line 67 shows the model. | The value is a real credential. Then move the value to the environment and rotate the credential. |
 | B603 subprocess_without_shell_equals_true | 9 | Confirm that the call passes a list of arguments and that no user input reaches the list without validation. Add a suppression comment that states the source of each argument. | Any argument comes from user input without validation. Then validate the input first. |
 | B110 try_except_pass | 7 | Narrow the exception type and log the event at debug level. | The silence is correct, such as a best effort cleanup. Then add a suppression comment that states the reason. Coordinate with issue #1709. |
 | B404 blacklist (subprocess import) | 4 | Add a suppression comment in the style of `MistHelper.py` line 47. State the seam and name the runner class. | The module calls `subprocess` directly. Then route the call through the shared runner first. |

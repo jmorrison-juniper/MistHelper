@@ -13,7 +13,7 @@ alert that a code change can fix.
 
 The technical approach has four parts.
 
-1. Add a `CredentialConsole` class to `src/utils/console.py`. The class checks the output
+1. Add a `CredentialConsole` class to `src/foundation/support/utils/console.py`. The class checks the output
    destination, warns the operator, and withholds the ZTP credential from any destination
    that is not an interactive terminal.
 2. Convert the two flagged SSH echo lines to the `echo()` helper that spec 1031 introduced.
@@ -125,8 +125,8 @@ tests/unit/
 ```
 
 **Structure Decision**: The feature keeps the existing single-project layout. The new class
-joins `src/utils/console.py`, because that module already owns console output. A new module
-would add a fifteenth file to `src/utils/`, and the existing module is the correct semantic
+joins `src/foundation/support/utils/console.py`, because that module already owns console output. A new module
+would add a fifteenth file to `src/foundation/support/utils/`, and the existing module is the correct semantic
 home.
 
 ## The order of work

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from src.metrics_gateway.snmp import protect_protocol_streams
+from src.interfaces.monitoring.metrics_gateway.snmp import protect_protocol_streams
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # The folder that holds `src`.
 
@@ -39,11 +39,11 @@ import logging, sys
 sys.path.insert(0, {root!r})
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-from src.metrics_gateway.snmp import SnmpPassPersistResponder, protect_protocol_streams
+from src.interfaces.monitoring.metrics_gateway.snmp import SnmpPassPersistResponder, protect_protocol_streams
 protect_protocol_streams()
 
-from src.metrics_gateway.cache import MetricsCache
-from src.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.cache import MetricsCache
+from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
 
 class R:
     def __init__(self, data):
@@ -213,7 +213,7 @@ class TestTheSnmpPathNeedsNoWebFramework:
 
 
             sys.meta_path.insert(0, Block())
-            import src.metrics_gateway.snmp as module
+            import src.interfaces.monitoring.metrics_gateway.snmp as module
 
             assert module.SnmpPassPersistResponder is not None
             assert "flask" not in sys.modules
@@ -231,13 +231,13 @@ class TestTheSnmpPathNeedsNoWebFramework:
 
     def test_the_web_layer_is_still_reachable(self) -> None:
         """A lazy export must still answer, or the Prometheus path would break."""
-        import src.metrics_gateway as package
+        import src.interfaces.monitoring.metrics_gateway as package
 
         assert callable(package.create_app)  # WHY: the lazy export must return an application factory.
 
     def test_an_unknown_name_still_raises(self) -> None:
         """The lazy lookup must not hide an ordinary mistake."""
-        import src.metrics_gateway as package
+        import src.interfaces.monitoring.metrics_gateway as package
 
         with pytest.raises(AttributeError):
             _ = package.not_a_real_name

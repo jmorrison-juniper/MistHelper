@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.db import host_resolver
-from src.db.host_resolver import BoundedHostResolver, ResolverLimits
+from src.foundation.persistence.db import host_resolver
+from src.foundation.persistence.db.host_resolver import BoundedHostResolver, ResolverLimits
 
 type AddressRecord = tuple[int, int, int, str, tuple[str, int] | tuple[str, int, int, int]]
 

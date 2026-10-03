@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import store
+from src.interfaces.portals.upgrade_portal.capture import store
 
 _SITE = "site-a"  # WHY: The site whose pre-check the run adopts.
 _OTHER_SITE = "site-b"  # WHY: A second site the reader must never return.

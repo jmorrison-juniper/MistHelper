@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import store
+from src.interfaces.portals.upgrade_portal.capture import store
 
 _LIVE_RUN = "run-live"  # WHY: The run that the live edge points at.
 _MISSING_RUN = "run-missing"  # WHY: The run that the dangling edge names but no document holds.

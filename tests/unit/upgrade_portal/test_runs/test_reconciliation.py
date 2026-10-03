@@ -7,8 +7,10 @@ from typing import Any, Final  # Type safe evidence fields and fixed test times.
 
 import pytest  # Exercise the evidence validation refusals.
 
-from src.upgrade_portal.api.run_controls.services.reconciliation import StoppingRunReconciler  # Test the service.
-from src.upgrade_portal.persistence.actions import (  # Test only action source and evidence placeholders.
+from src.interfaces.portals.upgrade_portal.api.run_controls.services.reconciliation import (
+    StoppingRunReconciler,
+)  # Test the service.
+from src.interfaces.portals.upgrade_portal.persistence.actions import (  # Import the moved dependency.
     RUN_COLLECTION,
     ActionIdentity,
     ActionInitialization,

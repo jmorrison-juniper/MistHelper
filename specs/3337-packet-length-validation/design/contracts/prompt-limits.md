@@ -14,7 +14,7 @@ No payload format, command option, SDK version, or public signature changes.
 | Shared | `PacketCapturePrompts.prompt_max_packet_length(default: int = 128)` | `int | None` |
 | Wireless | `SiteWirelessClientCaptureService._collect_bounded_ints(InputUtils)` | `tuple[int, ...] | None` |
 
-The shared path must resolve the real `src.utils.input_utils.InputUtils`.
+The shared path must resolve the real `src.foundation.support.utils.input_utils.InputUtils`.
 The wireless path receives that same real class.
 Tests may substitute `builtins.input` only.
 

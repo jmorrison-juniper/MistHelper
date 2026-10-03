@@ -95,8 +95,8 @@ DEVICE*.csv
 data/
 Data/
 DATA/
-!src/data/
-!src/data/**
+!src/foundation/models/data/
+!src/foundation/models/data/**
 compliance_report.md
 output/
 Output/

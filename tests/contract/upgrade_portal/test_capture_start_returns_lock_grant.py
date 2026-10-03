@@ -32,14 +32,17 @@ from flask import Flask  # The smallest application that can hold the blueprint.
 from flask.testing import FlaskClient  # Drives a route with no server and no browser.
 from werkzeug.test import TestResponse  # The answer that the test client returns.
 
-from src.upgrade_portal.app.routes import capture  # The module under test.
-from src.upgrade_portal.app.routes.select import (  # The real seam and session names.
+from src.interfaces.portals.upgrade_portal.app.routes import capture  # The module under test.
+from src.interfaces.portals.upgrade_portal.app.routes.select import (  # The real seam and session names.
     LOCK_CLIENT_KEY,
     LOCK_READER_KEY,
     MIST_READER_KEY,
     SELECTED_ORG_KEY,
 )
-from src.upgrade_portal.runtime import identity, lock  # The registry, the session fields, and the record.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+    lock,
+)  # The registry, the session fields, and the record.
 from tests.support.lock_store_double import FakeLockStore  # The store stand-in that every test below shares.
 
 # --------------------------------------------------------------------------

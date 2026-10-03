@@ -18,17 +18,22 @@ from typing import Any
 import mistapi
 import pytest
 
-from src.upgrade_portal.runtime.runs import PHASE_ORDER
-from src.upgrade_portal.upgrade.org_cascade import readers
-from src.upgrade_portal.upgrade.org_cascade.record import (
+from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade import readers
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import (
     FAILED_NOTE,
     FINISHED_NOTE,
     STOPPED_NOTE,
     WATCH_KEY,
     OrgPhaseEntries,
 )
-from src.upgrade_portal.upgrade.org_cascade.walk import OrgCascade, OrgCascadeDeps, OrgCascadeRegistry, OrgPhaseGates
-from src.upgrade_portal.upgrade.org_postcheck import OrgPostCheckRows
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.walk import (
+    OrgCascade,
+    OrgCascadeDeps,
+    OrgCascadeRegistry,
+    OrgPhaseGates,
+)
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck import OrgPostCheckRows
 from tests.support.org_cascade import (
     OPERATION_ID,
     SITE_IDS,

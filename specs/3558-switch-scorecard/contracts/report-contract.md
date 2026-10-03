@@ -6,7 +6,7 @@
 | - | - |
 | Menu | `277` |
 | Category | `safe` |
-| Handler import | `src.reports.switch_scorecard.operation` |
+| Handler import | `src.mist.intelligence.reports.switch_scorecard.operation` |
 | Handler attribute | `SwitchScorecard.run` |
 | Prompt behavior | No prompt |
 | Mist API | `listOrgDevicesStats` |

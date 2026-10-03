@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import mistapi
 
-from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport
+from src.mist.intelligence.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport
 
 
 def test_find_missing_sites_uses_exact_ssid_and_ignores_disabled_wlans(monkeypatch):

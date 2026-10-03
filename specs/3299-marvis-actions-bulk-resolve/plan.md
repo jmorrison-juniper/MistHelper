@@ -110,7 +110,7 @@ changes nothing.
 ### New source files
 
 ```text
-src/marvis/actions/
+src/mist/intelligence/marvis/actions/
 ├── __init__.py    # Public names: MarvisActionsOperation, MarvisCatalog
 ├── model.py       # ResolutionCode, MarvisCatalog, MarvisFieldReader,
 │                  # MarvisActionRecord, MarvisActionRecordBuilder
@@ -121,7 +121,7 @@ src/marvis/actions/
                    # MarvisResolveWorkflow, MarvisActionsOperation
 ```
 
-`src/marvis/` holds `__init__.py` and `marvis_utils.py` today. After the change,
+`src/mist/intelligence/marvis/` holds `__init__.py` and `marvis_utils.py` today. After the change,
 it holds three children, which respects the 5-Item Rule.
 
 ### New test files
@@ -143,8 +143,8 @@ tests/guardrails/test_marvis_actions_portal_exposure.py
 | File | Change |
 | - | - |
 | `MistHelper.py` | One import and one `MenuEntry` row for menu 270. |
-| `src/utils/operation_registry.py` | Row `"270"` as `interactive_safe`, with a WHY comment. |
-| `src/refactors/endpoint_primary_key_strategies.py` | Strategies `listOrgMarvisActions` and `resolveOrgMarvisActions`. |
+| `src/foundation/support/utils/operation_registry.py` | Row `"270"` as `interactive_safe`, with a WHY comment. |
+| `src/foundation/support/refactors/endpoint_primary_key_strategies.py` | Strategies `listOrgMarvisActions` and `resolveOrgMarvisActions`. |
 | `web_portal/services/operation.py` | `CATEGORY_RANGES` row `(270, 270, "Marvis Actions")` and `registry["270"]`. |
 | `web_portal/menu_registry.py` | Regenerated with `scripts/generate_portal_menu_registry.py`. |
 | `documentation/wiki/Menu-Reference.md`, `documentation/menu_reference.md` | Regenerated with `scripts/generate_menu_wiki.py`. |

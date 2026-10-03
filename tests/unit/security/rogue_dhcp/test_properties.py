@@ -15,7 +15,7 @@ pytest.importorskip("hypothesis")  # Skip these tests when Hypothesis is absent.
 from hypothesis import given, settings  # The decorator that drives the property tests.
 from hypothesis import strategies as st  # Builds the input strategies.
 
-from src.security.rogue_dhcp.records import (
+from src.operations.protection.security.rogue_dhcp.records import (
     SOURCE_ORG_ALARM,
     SOURCE_ORG_EVENT,
     STATE_ACTIVE,

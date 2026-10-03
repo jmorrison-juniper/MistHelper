@@ -27,7 +27,7 @@ import pytest
 # package skips this module together with the rest of the folder.
 pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
-from src.upgrade_portal.capture import assembly  # WHY: The skip above runs first.
+from src.interfaces.portals.upgrade_portal.capture import assembly  # WHY: The skip above runs first.
 from tests.e2e.upgrade_portal.conftest import (  # WHY: The skip above runs first.
     POST_CAPTURE_ID,
     PRE_CAPTURE_ID,

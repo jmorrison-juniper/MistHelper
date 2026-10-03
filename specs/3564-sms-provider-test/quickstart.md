@@ -9,11 +9,11 @@
 ## Validate the package
 
 ```powershell
-C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m py_compile src\troubleshooting\sms_provider_test\__init__.py src\troubleshooting\sms_provider_test\client.py src\troubleshooting\sms_provider_test\inputs.py src\troubleshooting\sms_provider_test\model.py src\troubleshooting\sms_provider_test\operation.py
-C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m ruff check src\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test
-C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m black --check src\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test
-C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m mypy src\troubleshooting\sms_provider_test --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m pydocstyle src\troubleshooting\sms_provider_test
+C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\troubleshooting\sms_provider_test\__init__.py src\mist\intelligence\troubleshooting\sms_provider_test\client.py src\mist\intelligence\troubleshooting\sms_provider_test\inputs.py src\mist\intelligence\troubleshooting\sms_provider_test\model.py src\mist\intelligence\troubleshooting\sms_provider_test\operation.py
+C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test
+C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m black --check src\mist\intelligence\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test
+C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m mypy src\mist\intelligence\troubleshooting\sms_provider_test --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\troubleshooting\sms_provider_test
 C:\Users\jmorrison\mh-fleet\3564-sms-provider-test\.venv\Scripts\python.exe -m pytest tests\unit\troubleshooting\sms_provider_test -q --timeout=120
 ```
 

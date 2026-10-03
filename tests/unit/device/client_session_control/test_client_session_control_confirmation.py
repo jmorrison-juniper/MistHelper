@@ -3,8 +3,13 @@
 from dataclasses import dataclass, field  # WHY: fakes need small state bundles for assertions.
 from typing import Any  # WHY: fakes accept the same broad session object as mistapi.
 
-from src.device.client_session_control.handler import ClientSessionControl, HandlerDependencies  # WHY: run flow.
-from src.device.client_session_control.models import confirmation_matches  # WHY: pure confirmation check.
+from src.mist.resources.device.client_session_control.handler import (
+    ClientSessionControl,
+    HandlerDependencies,
+)  # WHY: run flow.
+from src.mist.resources.device.client_session_control.models import (
+    confirmation_matches,
+)  # WHY: pure confirmation check.
 
 
 @dataclass

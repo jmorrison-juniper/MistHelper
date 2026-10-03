@@ -79,7 +79,7 @@ The ordered list of common entity identifier field names.
 | Name | `BATCH_ENTITY_FALLBACK_KEYS` |
 | Type | `tuple[str, ...]` |
 | Order | `device_id`, `site_id`, `org_id`, `mac`, `id` |
-| Scope | Module level in `src/db/redis_writer.py` |
+| Scope | Module level in `src/foundation/persistence/db/redis_writer.py` |
 | Readers | `_pick_entity_field` and `_resolve_entity_id` |
 
 **Validation rules**:

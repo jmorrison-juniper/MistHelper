@@ -32,13 +32,15 @@ from flask import Flask, session  # The smallest application, and the signed ses
 from flask.testing import FlaskClient  # Drives a route with no server and no browser.
 from werkzeug.test import TestResponse  # The answer that the test client returns.
 
-from src.upgrade_portal.app.routes import capture  # The module under test.
-from src.upgrade_portal.app.routes.select import (  # The real seam and session names.
+from src.interfaces.portals.upgrade_portal.app.routes import capture  # The module under test.
+from src.interfaces.portals.upgrade_portal.app.routes.select import (  # The real seam and session names.
     LOCK_READER_KEY,
     MIST_READER_KEY,
     SELECTED_ORG_KEY,
 )
-from src.upgrade_portal.runtime import identity  # The registry, the cookie name, and the session fields.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The registry, the cookie name, and the session fields.
 
 # --------------------------------------------------------------------------
 # The fixed values. Each one repeats a line of the specification.

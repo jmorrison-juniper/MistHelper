@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`src.utils.zscaler_probe`.
+"""Unit tests for :mod:`src.foundation.support.utils.zscaler_probe`.
 
 Why:
     The probe module is the live-validation half of menu 206's Zscaler
@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from src.utils import zscaler_probe as zp_mod
-from src.utils.zscaler_probe import (
+from src.foundation.support.utils import zscaler_probe as zp_mod
+from src.foundation.support.utils.zscaler_probe import (
     _CENR_SYNTHETIC_ROLE,
     COMMON_TCP_PORTS,
     DEFAULT_TIMEOUT,

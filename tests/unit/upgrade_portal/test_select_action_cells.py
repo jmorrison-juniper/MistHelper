@@ -29,7 +29,7 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.app.routes import select
 
 # The asset folder of the portal, beside the routes package. The template
 # folder and the stylesheet both sit below it, so one anchor finds each of them.

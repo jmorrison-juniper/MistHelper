@@ -29,9 +29,9 @@ import pytest
 import redis
 from flask.testing import FlaskClient
 
-from src.db import router as db_router
-from src.upgrade_portal.app import factory
-from src.upgrade_portal.capture import store
+from src.foundation.persistence.db import router as db_router
+from src.interfaces.portals.upgrade_portal.app import factory
+from src.interfaces.portals.upgrade_portal.capture import store
 
 # WHY: The contract names this exact path. A constant keeps every request on it.
 HEALTH_PATH = "/healthz"

@@ -34,7 +34,7 @@ No Unicode normalization.
 
 ## Constitution Check
 
-The shared class enters `src/upgrade_portal/api/`, which currently has three direct children.
+The shared class enters `src/interfaces/portals/upgrade_portal/api/`, which currently has three direct children.
 Its methods keep the existing parameter, block, and length limits.
 The three large caller modules remain existing structural debt.
 This repair changes only the affected reader blocks and their imports.
@@ -74,10 +74,10 @@ specs/3395-bounded-numeric-inputs/
 ### Source Code (repository root)
 
 ```text
-src/upgrade_portal/api/numeric_input.py
-src/upgrade_portal/app/routes/select.py
-src/upgrade_portal/app/routes/capture.py
-src/upgrade_portal/capture/clients.py
+src/interfaces/portals/upgrade_portal/api/numeric_input.py
+src/interfaces/portals/upgrade_portal/app/routes/select.py
+src/interfaces/portals/upgrade_portal/app/routes/capture.py
+src/interfaces/portals/upgrade_portal/capture/clients.py
 tests/unit/upgrade_portal/test_bounded_numeric_inputs.py
 tests/contract/upgrade_portal/test_bounded_numeric_routes.py
 changelog.d/issue-3395-bounded-numeric-inputs.md

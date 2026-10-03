@@ -98,7 +98,7 @@ It failed with 39 failures, 95 passes, and zero skips.
 The final focused coverage command was:
 
 ```bash
-rtk proxy env COVERAGE_FILE="$ARTIFACTS/3395.coverage" .venv/bin/python -m coverage run --branch --source=src.upgrade_portal.api.numeric_input,src.upgrade_portal.app.routes.select,src.upgrade_portal.app.routes.capture,src.upgrade_portal.capture.clients -m pytest tests/unit/upgrade_portal/test_bounded_numeric_inputs.py tests/contract/upgrade_portal/test_bounded_numeric_routes.py tests/unit/upgrade_portal/test_capture_clients.py tests/unit/upgrade_portal/test_org_picker.py tests/contract/upgrade_portal/test_select.py tests/contract/upgrade_portal/test_capture_start.py tests/contract/upgrade_portal/test_capture_start_returns_lock_grant.py tests/integration/test_mistapi_sdk_compatibility.py --no-cov -q --tb=short --hypothesis-show-statistics -o junit_logging=system-out --junitxml="$ARTIFACTS/3395-covered.xml"
+rtk proxy env COVERAGE_FILE="$ARTIFACTS/3395.coverage" .venv/bin/python -m coverage run --branch --source=src.interfaces.portals.upgrade_portal.api.numeric_input,src.interfaces.portals.upgrade_portal.app.routes.select,src.interfaces.portals.upgrade_portal.app.routes.capture,src.interfaces.portals.upgrade_portal.capture.clients -m pytest tests/unit/upgrade_portal/test_bounded_numeric_inputs.py tests/contract/upgrade_portal/test_bounded_numeric_routes.py tests/unit/upgrade_portal/test_capture_clients.py tests/unit/upgrade_portal/test_org_picker.py tests/contract/upgrade_portal/test_select.py tests/contract/upgrade_portal/test_capture_start.py tests/contract/upgrade_portal/test_capture_start_returns_lock_grant.py tests/integration/test_mistapi_sdk_compatibility.py --no-cov -q --tb=short --hypothesis-show-statistics -o junit_logging=system-out --junitxml="$ARTIFACTS/3395-covered.xml"
 rtk proxy env COVERAGE_FILE="$ARTIFACTS/3395.coverage" .venv/bin/python -m coverage json --fail-under=0 -o "$ARTIFACTS/3395-coverage.json"
 rtk proxy .venv/bin/python "$ARTIFACTS/3395-coverage-proof.py"
 ```
@@ -109,11 +109,11 @@ The coverage proof checked eight functions and one complete new module.
 
 | Command | Result |
 | - | - |
-| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/upgrade_portal/api/numeric_input.py src/upgrade_portal/app/routes/select.py src/upgrade_portal/app/routes/capture.py src/upgrade_portal/capture/clients.py tests/unit/upgrade_portal/test_bounded_numeric_inputs.py tests/contract/upgrade_portal/test_bounded_numeric_routes.py` | Passed. |
+| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/interfaces/portals/upgrade_portal/api/numeric_input.py src/interfaces/portals/upgrade_portal/app/routes/select.py src/interfaces/portals/upgrade_portal/app/routes/capture.py src/interfaces/portals/upgrade_portal/capture/clients.py tests/unit/upgrade_portal/test_bounded_numeric_inputs.py tests/contract/upgrade_portal/test_bounded_numeric_routes.py` | Passed. |
 | `rtk proxy .venv/bin/python -m ruff check .` | Passed with zero findings. |
 | `rtk proxy .venv/bin/python -m black --check .` | Passed for 2003 files. |
 | `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed for 664 source files. |
-| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Passed both include samples and separator forms. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'` | Passed both include samples and separator forms. |
 | `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed with zero findings. |
 | `rtk proxy .venv/bin/python -m pylint src/ --fail-under=9.5` | Passed with score 9.83/10. |
 | `rtk proxy .venv/bin/python -m radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j` | Passed. The JSON report supplies the complexity gate. |

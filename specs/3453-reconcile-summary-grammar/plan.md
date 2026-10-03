@@ -39,7 +39,7 @@ so it can call the noun method.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/upgrade/org_reconcile.py` | The new first sentence, the new unread sentence, and the static noun method. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_reconcile.py` | The new first sentence, the new unread sentence, and the static noun method. |
 | `tests/unit/upgrade_portal/test_issue_3453_reconcile_summary.py` | New. The whole text for a child job of one device and of three devices. |
 | `tests/contract/upgrade_portal/test_org_child_controls_routes.py` | The stored text of a real check. |
 | `tests/e2e/upgrade_portal/test_org_recovery_controls.py` | The page text of a real check. The run passes `--basetemp`, so a reviewer can read each screenshot. |

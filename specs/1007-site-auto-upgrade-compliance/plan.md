@@ -1,6 +1,6 @@
 # Plan 1007 — site_auto_upgrade.py Compliance Refactor
 
-Phased plan to move `src/firmware/site_auto_upgrade.py` from **63.0 / D** to
+Phased plan to move `src/operations/execution/firmware/site_auto_upgrade.py` from **63.0 / D** to
 **100.0 / A+** while preserving byte-identical `MistHelper.py` callsites.
 
 ## Approach summary

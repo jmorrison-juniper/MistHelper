@@ -2,7 +2,7 @@
 
 This guide shows how to run the harvester and how to prove that it works. It is a
 validation guide, not an implementation guide. See `data-model.md` and the `contracts/`
-folder for the field-level detail. The code lives in `src/juniper_docs/`.
+folder for the field-level detail. The code lives in `src/mist/intelligence/juniper_docs/`.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ folder for the field-level detail. The code lives in `src/juniper_docs/`.
 
 ```powershell
 # Run the whole US and EN harvest with safe defaults
-python -m src.juniper_docs.harvest.runner
+python -m src.mist.intelligence.juniper_docs.harvest.runner
 ```
 
 Expected outcome:
@@ -32,7 +32,7 @@ Expected outcome:
 
 ```powershell
 # Point the tool at a recorded sitemap subset to validate quickly
-python -m src.juniper_docs.harvest.runner --sitemap-source tests/unit/juniper_docs/fixtures/sitemap_subset.xml
+python -m src.mist.intelligence.juniper_docs.harvest.runner --sitemap-source tests/unit/juniper_docs/fixtures/sitemap_subset.xml
 ```
 
 Expected outcome: the tool builds the inventory and applies the release-note filter on
@@ -54,7 +54,7 @@ the subset. Then it resolves and downloads each companion PDF from the fixture h
 
 ```powershell
 # Run only the classify stage on already-downloaded uncategorized PDFs
-python -m src.juniper_docs.harvest.runner --retry-failed
+python -m src.mist.intelligence.juniper_docs.harvest.runner --retry-failed
 ```
 
 Expected outcome:
@@ -122,15 +122,15 @@ Get-ChildItem $corpusRoot -Recurse -File -Filter *.pdf | Measure-Object
 
 ```powershell
 # Run the gates the repository enforces on the new package
-ruff check src/juniper_docs
-black --check src/juniper_docs
-mypy src/juniper_docs
-pytest tests/unit/juniper_docs --cov=src/juniper_docs --cov-report=term-missing
-bandit -r src/juniper_docs
-pydocstyle src/juniper_docs
-interrogate src/juniper_docs
-radon cc src/juniper_docs -nc
-vulture src/juniper_docs
+ruff check src/mist/intelligence/juniper_docs
+black --check src/mist/intelligence/juniper_docs
+mypy src/mist/intelligence/juniper_docs
+pytest tests/unit/juniper_docs --cov=src/mist/intelligence/juniper_docs --cov-report=term-missing
+bandit -r src/mist/intelligence/juniper_docs
+pydocstyle src/mist/intelligence/juniper_docs
+interrogate src/mist/intelligence/juniper_docs
+radon cc src/mist/intelligence/juniper_docs -nc
+vulture src/mist/intelligence/juniper_docs
 ```
 
 Expected outcome: every gate passes. Coverage is 90 percent or higher. Every function

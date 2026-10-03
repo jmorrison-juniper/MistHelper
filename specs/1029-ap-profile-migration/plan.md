@@ -26,7 +26,7 @@ org-level device profiles safely:
   Missing APs are skipped with a warning; a JSONL audit line is appended
   via the existing `TelemetryEmitter` (matching feature 1020's shape).
 
-Both operations are registered in `src/utils/operation_registry.py` with
+Both operations are registered in `src/foundation/support/utils/operation_registry.py` with
 `category = "destructive"` and a `skip_reason` string that names the
 operation. Both require a typed uppercase confirmation keyword
 (`MIGRATE` and `REVERT`) via the standard `safe_input()` helper before
@@ -35,7 +35,7 @@ confirmation prompt) prints the same plan the live run would print,
 writes no backup, and issues no PUT.
 
 The implementation adds one new class-based module
-(`src/device/ap_profile_migration_manager.py`) that owns both menu
+(`src/mist/resources/device/ap_profile_migration_manager.py`) that owns both menu
 handlers as static methods, with the same static-method decomposition
 pattern already used by `SiteConfigManager` (menu 174) — small, testable
 helpers behind two public entry points. The device-side binding
@@ -98,7 +98,7 @@ per AP (at most 2 retries with short backoff) prevents runaway loops.
   Google-style docstring with a "Why" section per `DOCS.md`.
 - No new destructive-registry lint failure and no new coverage
   regression (SC-006). Both menu entries added to
-  `src/utils/operation_registry.py` with `category = "destructive"`.
+  `src/foundation/support/utils/operation_registry.py` with `category = "destructive"`.
 - Backup file is written before the first PUT (FR-011). If the write
   fails, no PUT is issued.
 - Never re-use `mistapi.api.v1.orgs.devices.assignOrgDeviceProfile`
@@ -122,7 +122,7 @@ Principles).
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Five-Item Rule | PASS | Both menu handlers use a single class (`APProfileMigrationManager`) with static-method decomposition. Each helper stays under 5 items of local complexity by design — the top-level handler orchestrates, and each helper does one thing (discover, back-up, confirm, PUT-loop, summarize). |
-| II. Class-Based Architecture | PASS | `APProfileMigrationManager` in `src/device/ap_profile_migration_manager.py` mirrors the pattern of `SiteConfigManager` (menu 174) and `OrgSyntheticProbesManager` (menu 206). Public entry points are `migrate_aps_between_device_profiles()` and `revert_ap_profile_migration()`, both class-level static methods. |
+| II. Class-Based Architecture | PASS | `APProfileMigrationManager` in `src/mist/resources/device/ap_profile_migration_manager.py` mirrors the pattern of `SiteConfigManager` (menu 174) and `OrgSyntheticProbesManager` (menu 206). Public entry points are `migrate_aps_between_device_profiles()` and `revert_ap_profile_migration()`, both class-level static methods. |
 | III. Safety-First (Destructive Operations) | PASS | Both operations register as `destructive` in `operation_registry.py` (FR-001). Both require an uppercase typed keyword via `safe_input()` (`MIGRATE` / `REVERT`) that names the exact source and target profile IDs and the count of APs (FR-005). Menu 207 offers a dry-run at the confirmation prompt (FR-015). Backup is written before the first PUT (FR-011). On first failure, the backup file is updated with the actual reassigned set (FR-017). |
 | IV. Full Deployment Pipeline | PASS | Feature ships behind existing CI (ruff, black, mypy, pytest, interrogate, pydoclint, ASD-STE100 lint, destructive-registry guardrail). No new gates required — SC-006 asserts the guardrail passes without modification. |
 | V. Observability (Action Logging non-negotiable) | PASS | Every menu entry logs a `logger.warning("Menu #207 DESTRUCTIVE: ... started")` at start (matches existing pattern), `logger.info(...)` for each successful PUT ("reassigned AP <id> from <source> to <target>"), `logger.error(...)` on PUT failure with AP ID and error, and a final `logger.info(...)` summary line. Revert emits a JSONL audit line via `TelemetryEmitter` (FR-025). |
@@ -188,7 +188,7 @@ data/                                     # No new committed files.
 ```
 
 **Structure Decision**: Existing single-project CLI layout under `src/`
-and `tests/` is preserved. The new module goes under `src/device/`
+and `tests/` is preserved. The new module goes under `src/mist/resources/device/`
 because the operation acts on device (AP) objects. The static-method
 decomposition pattern from `SiteConfigManager` (menu 174) is reused so
 the class stays discoverable to the existing menu dispatch, and each

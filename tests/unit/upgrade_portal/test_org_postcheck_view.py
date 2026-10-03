@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_cascade.record import WATCH_KEY
-from src.upgrade_portal.upgrade.org_postcheck import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import WATCH_KEY
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck import (
     HELD_MESSAGE,
     RUNNING_MESSAGE,
     SKIPPED_MESSAGE,
@@ -23,7 +23,7 @@ from src.upgrade_portal.upgrade.org_postcheck import (
     PostCheckSite,
     PostCheckState,
 )
-from src.upgrade_portal.upgrade.org_postcheck_view import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck_view import (
     LOST_MESSAGE,
     NO_PAIR_MESSAGE,
     NOT_TAKEN_MESSAGE,

@@ -66,7 +66,7 @@ The WSGI host imports the bootstrap class and calls the web bootstrap. The web p
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST expose an `ApplicationBootstrap` class in `src/refactors/main_entrypoint.py`.
+- **FR-001**: The system MUST expose an `ApplicationBootstrap` class in `src/foundation/support/refactors/main_entrypoint.py`.
 - **FR-002**: The CLI host MUST parse arguments one time through argparse before startup side effects run.
 - **FR-003**: The bootstrap object MUST store the parsed `Namespace` for all later startup decisions.
 - **FR-004**: `MistHelper.py` MUST NOT read `sys.argv` at module scope.

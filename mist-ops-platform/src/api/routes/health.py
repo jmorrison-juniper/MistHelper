@@ -16,9 +16,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_authenticated_user, get_db_session, get_scoped_org_id
-from src.api.middleware.auth import CurrentUser, require_org_access
-from src.api.schemas.common import ResponseEnvelope
+from src.mist.access.api.deps import get_authenticated_user, get_db_session, get_scoped_org_id
+from src.mist.access.api.middleware.auth import CurrentUser, require_org_access
+from src.mist.access.api.schemas.common import ResponseEnvelope
 from src.shared.models.operations import NotificationChannel
 
 if TYPE_CHECKING:
@@ -301,7 +301,7 @@ def _dispatch_inventory_sync(org_ids: list[str]) -> None:
 
 def _create_session(request: Request, token: str, privs: MistPrivileges) -> str:
     """Store *token* in the server-side session record and return its identifier."""
-    from src.api.middleware.auth import get_session_store, privilege_cache_payload
+    from src.mist.access.api.middleware.auth import get_session_store, privilege_cache_payload
 
     store = get_session_store(request)  # Reuse the store that the auth middleware also reads.
     # WHY: the login already verified the token, so the first request needs no second Mist call.
@@ -362,7 +362,7 @@ async def refresh_token(request: Request) -> ResponseEnvelope[TokenRefreshRespon
     """
     from fastapi import HTTPException
 
-    from src.api.middleware.auth import SESSION_COOKIE_NAME, get_session_store
+    from src.mist.access.api.middleware.auth import SESSION_COOKIE_NAME, get_session_store
 
     logger.info("Session refresh starts.")  # Announce the refresh before the store read.
     session_id = request.cookies.get(SESSION_COOKIE_NAME, "")  # The cookie carries the identifier.
@@ -382,7 +382,7 @@ async def refresh_token(request: Request) -> ResponseEnvelope[TokenRefreshRespon
 @auth_router.delete("/session")
 async def logout(request: Request) -> JSONResponse:
     """Invalidate current session and clear cookie."""
-    from src.api.middleware.auth import SESSION_COOKIE_NAME, get_session_store
+    from src.mist.access.api.middleware.auth import SESSION_COOKIE_NAME, get_session_store
 
     logger.info("Operator logout starts.")  # Announce the logout before the delete.
     session_id = request.cookies.get(SESSION_COOKIE_NAME, "")  # Address the record to delete.

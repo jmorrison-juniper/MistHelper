@@ -14,9 +14,11 @@ from typing import Any  # Type Flask test client answers.
 
 import pytest  # Use fixtures for the portal app lifetime.
 
-from src.websocket_streams.live.sessions.buffer.message import StreamMessage
-from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
-from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Inject the fake service bundle.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message import StreamMessage
+from src.mist.realtime.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
+from src.mist.realtime.websocket_streams.web.services.registry import (
+    WebSocketServiceRegistry,
+)  # Inject the fake service bundle.
 from web_portal.app import WebPortalApp  # Build the real portal app as the browser tests do.
 from web_portal.menu_registry import build_static_menu_actions  # Supply normal menu actions.
 

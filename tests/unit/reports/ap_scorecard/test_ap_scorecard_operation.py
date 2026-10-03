@@ -6,7 +6,7 @@ import logging
 from collections.abc import Mapping
 from types import SimpleNamespace
 
-from src.reports.ap_scorecard import operation
+from src.mist.intelligence.reports.ap_scorecard import operation
 
 
 def test_ap_scorecard_operation_logs_console_summary(

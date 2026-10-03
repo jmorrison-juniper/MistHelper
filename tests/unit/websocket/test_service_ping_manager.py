@@ -2,7 +2,7 @@
 
 Why:
     Comprehensive tests exercising every method and branch of
-    ``src.websocket.service_ping_manager`` so the module can graduate out of
+    ``src.mist.realtime.websocket.service_ping_manager`` so the module can graduate out of
     the coverage omit list. Covers module-level helpers, dependency wiring,
     manager construction, discovery/preflight orchestration, websocket
     setup, dispatch, wait, display, cleanup, and the ``execute`` entry point.
@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 import pytest
 
 import MistHelper
-from src.websocket import service_ping_manager as spm_module
-from src.websocket.service_ping_manager import (
+from src.mist.realtime.websocket import service_ping_manager as spm_module
+from src.mist.realtime.websocket.service_ping_manager import (
     ServicePingManager,
     _short_session_preview,
     configure_service_ping_manager_dependencies,
@@ -1206,7 +1206,7 @@ def test_execute_handles_generic_exception(capsys: pytest.CaptureFixture[str]) -
 def test_misthelper_menu_120_launcher_delegates_execute(monkeypatch: pytest.MonkeyPatch) -> None:
     """Menu 120 launcher should wire deps and delegate execute() to the canonical manager."""
     fake_manager = SimpleNamespace(execute=MagicMock())
-    launcher_module = importlib.import_module("src.refactors.service_ping_launcher")
+    launcher_module = importlib.import_module("src.foundation.support.refactors.service_ping_launcher")
     monkeypatch.setattr(
         launcher_module.ServicePingLauncher,
         "_build_manager",

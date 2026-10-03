@@ -22,8 +22,8 @@
     },
     {
       "gate": "ruff",
-      "path": "src/maps",
-      "scan_path": "src/maps",
+      "path": "src/interfaces/visualization/maps",
+      "scan_path": "src/interfaces/visualization/maps",
       "recorded_count": 45
     },
     {
@@ -40,8 +40,8 @@
     },
     {
       "gate": "mypy",
-      "path": "src/maps",
-      "scan_path": "src/maps",
+      "path": "src/interfaces/visualization/maps",
+      "scan_path": "src/interfaces/visualization/maps",
       "recorded_count": 394
     },
     {
@@ -88,11 +88,11 @@
     },
     {
       "gate": "pylint",
-      "path": "src/maps,src/ssh,src/ui",
+      "path": "src/interfaces/visualization/maps,src/operations/execution/ssh,src/interfaces/visualization/ui",
       "scan_path": [
-        "src/maps",
-        "src/ssh",
-        "src/ui"
+        "src/interfaces/visualization/maps",
+        "src/operations/execution/ssh",
+        "src/interfaces/visualization/ui"
       ],
       "recorded_count": 529
     }

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock  # WHY: MagicMock(spec=Callable) is mandator
 import pytest  # WHY: caplog, monkeypatch fixtures drive banner assertions and env-var patching
 import requests  # WHY: model expected Mist transport failures.
 
-from src.inventory.org_device_inventory_summary import (  # WHY: SUT plus DI seam
+from src.mist.resources.inventory.org_device_inventory_summary import (  # WHY: SUT plus DI seam
     OrgDeviceInventorySummaryCore,
     configure_org_device_inventory_summary_dependencies,
 )
@@ -265,8 +265,10 @@ def test_run_version_report_returns_rows_and_exports(monkeypatch: pytest.MonkeyP
 def test_run_pivot_report_uses_lazy_imported_collaborators(monkeypatch: pytest.MonkeyPatch) -> None:
     """_run_pivot_report calls the lazy-imported VersionPerModelFetcher and PivotRenderer once each."""
     _reset_dependencies()  # WHY: hydrate module DI seams
-    from src.inventory.inventory_summary import pivot_renderer as pivot_mod  # WHY: patch the real symbol
-    from src.inventory.inventory_summary import version_per_model_fetcher as vpm_mod  # WHY: patch the real symbol
+    from src.mist.resources.inventory.inventory_summary import pivot_renderer as pivot_mod  # WHY: patch the real symbol
+    from src.mist.resources.inventory.inventory_summary import (
+        version_per_model_fetcher as vpm_mod,
+    )  # WHY: patch the real symbol
 
     vpm_rows = [{"device_type": "ap", "model": "AP41", "version": "0.12", "count": 1}]  # WHY: fixture
     fetch_mock = MagicMock(spec=lambda *args, **kwargs: vpm_rows)  # WHY: strict spec on VersionPerModelFetcher.fetch

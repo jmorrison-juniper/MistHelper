@@ -8,20 +8,38 @@ from unittest.mock import MagicMock, patch  # WHY: replace cloud and writer boun
 
 import pytest  # WHY: pytest fixtures drive the real product functions.
 
-from src.export import site_export_utils as site_utils_module  # WHY: patch and drive the real site exporter.
-from src.export.site_export_utils import SiteExportUtils  # WHY: construct the real site export class.
-from src.firmware import firmware_manager as firmware_module  # WHY: patch module globals for firmware tests.
-from src.firmware.firmware_manager import FirmwareUpgradeStatusChecker  # WHY: drive the real firmware checker.
-from src.gateway import gateway_export_utils as gateway_module  # WHY: patch module globals for gateway tests.
-from src.gateway import gateway_ha_exporter as gateway_ha_module  # WHY: patch module globals for HA tests.
-from src.gateway.gateway_export_utils import GatewayExportUtils  # WHY: drive the real gateway template exporter.
-from src.gateway.gateway_ha_exporter import GatewayHaExporter  # WHY: drive the real HA gateway helper.
-from src.reports import e911_bssid as e911_module  # WHY: patch module dependencies for E911 tests.
-from src.reports import offline_device_reporter as offline_module  # WHY: patch module dependencies for offline tests.
-from src.reports.global_wired_client_report_generator import (  # WHY: drive the real wired client helper.
+from src.mist.intelligence.reports import e911_bssid as e911_module  # WHY: patch module dependencies for E911 tests.
+from src.mist.intelligence.reports import (
+    offline_device_reporter as offline_module,
+)  # WHY: patch module dependencies for offline tests.
+from src.mist.intelligence.reports.global_wired_client_report_generator import (  # Import the moved dependency.
     GlobalWiredClientReportGenerator,
 )
-from src.reports.offline_device_reporter import OfflineDeviceReporter  # WHY: drive the real offline report helper.
+from src.mist.intelligence.reports.offline_device_reporter import (
+    OfflineDeviceReporter,
+)  # WHY: drive the real offline report helper.
+from src.mist.resources.gateway import (
+    gateway_export_utils as gateway_module,
+)  # WHY: patch module globals for gateway tests.
+from src.mist.resources.gateway import (
+    gateway_ha_exporter as gateway_ha_module,
+)  # WHY: patch module globals for HA tests.
+from src.mist.resources.gateway.gateway_export_utils import (
+    GatewayExportUtils,
+)  # WHY: drive the real gateway template exporter.
+from src.mist.resources.gateway.gateway_ha_exporter import GatewayHaExporter  # WHY: drive the real HA gateway helper.
+from src.operations.execution.firmware import (
+    firmware_manager as firmware_module,
+)  # WHY: patch module globals for firmware tests.
+from src.operations.execution.firmware.firmware_manager import (
+    FirmwareUpgradeStatusChecker,
+)  # WHY: drive the real firmware checker.
+from src.operations.exporting.export import (
+    site_export_utils as site_utils_module,
+)  # WHY: patch and drive the real site exporter.
+from src.operations.exporting.export.site_export_utils import (
+    SiteExportUtils,
+)  # WHY: construct the real site export class.
 
 
 class _FailedResponse:
@@ -204,10 +222,12 @@ def test_fetch_radio_bulk_503_returns_empty_bundle_and_suppresses_success(caplog
 def test_fetch_clients_503_returns_empty_and_suppresses_success(caplog: pytest.LogCaptureFixture) -> None:
     """A wired-client 503 must not report a successful zero-client fetch."""
     resolver = _resolver_with_writer(MagicMock())  # WHY: control resolver dependencies.
-    with patch("src.reports.global_wired_client_report_generator.SourceDependencyResolver", resolver):
-        with patch("src.reports.global_wired_client_report_generator.mistapi.get_all", return_value=[]):
+    with patch("src.mist.intelligence.reports.global_wired_client_report_generator.SourceDependencyResolver", resolver):
+        with patch(
+            "src.mist.intelligence.reports.global_wired_client_report_generator.mistapi.get_all", return_value=[]
+        ):
             with patch(
-                "src.reports.global_wired_client_report_generator.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
+                "src.mist.intelligence.reports.global_wired_client_report_generator.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
                 return_value=_FailedResponse(),
             ):
                 with caplog.at_level(logging.INFO):  # WHY: capture echo and module logs.

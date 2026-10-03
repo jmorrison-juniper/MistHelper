@@ -1,4 +1,4 @@
-"""Unit tests for src.export.org_config_exporter.
+"""Unit tests for src.operations.exporting.export.org_config_exporter.
 
 Why:
     #878 tranche 19 -- un-omit org_config_exporter.py and drive it to 100% line
@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import mistapi
 import pytest
 
-from src.export.org_config_exporter import OrgConfigExporter
+from src.operations.exporting.export.org_config_exporter import OrgConfigExporter
 
 
 @pytest.fixture
@@ -290,11 +290,11 @@ class TestProcessMspOrgs:
         orgs = [{"id": "org1", "name": "Org1"}, {"id": "org2", "name": "Org2"}]
         with (
             patch(
-                "src.export.org_config_exporter.DataProcessingUtils.flatten_nested_fields",
+                "src.operations.exporting.export.org_config_exporter.DataProcessingUtils.flatten_nested_fields",
                 side_effect=lambda x: x,
             ) as flatten,
             patch(
-                "src.export.org_config_exporter.DataProcessingUtils.escape_multiline",
+                "src.operations.exporting.export.org_config_exporter.DataProcessingUtils.escape_multiline",
                 side_effect=lambda x: x,
             ) as escape,
         ):
@@ -332,7 +332,7 @@ class TestPrintMspOrgsSummary:
 
 def test_smoke_module_symbols():
     """Guardrail: ensure the public API surface stays intact."""
-    from src.export import org_config_exporter as mod
+    from src.operations.exporting.export import org_config_exporter as mod
 
     for attr in ("psks", "webhooks", "wlans", "mx_edges", "msp"):
         assert hasattr(mod.OrgConfigExporter, attr)

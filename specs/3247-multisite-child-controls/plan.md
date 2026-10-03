@@ -12,7 +12,7 @@
 
 ## Design
 
-### The model: three modules in `src/upgrade_portal/upgrade/`
+### The model: three modules in `src/interfaces/portals/upgrade_portal/upgrade/`
 
 Each module reads the durable record only. No module makes a cloud call or a write.
 
@@ -26,14 +26,14 @@ Each module reads the durable record only. No module makes a cloud call or a wri
 
 The signed session cookie holds only the operation identifier and the organization of the retry plan. The portal builds the plan again from the durable record on each use. A long device list therefore never enters the cookie. If the record holds no retry device, the plan holds no device, and the save refuses the options.
 
-### The service: `src/firmware/aggregate_upgrade_service.py`
+### The service: `src/operations/execution/firmware/aggregate_upgrade_service.py`
 
 Two public methods use the nested `update` pattern of `record_device_versions`.
 
 - `reschedule(record, store, change)` checks the planned state again inside the compare-and-set. It then sets or removes `start_time` in each child body, and it sets the new reboot moment when the plan holds a reboot delay.
 - `reconcile(record, store, evidence)` applies a verdict only when the child job is still uncertain. It stores the readings in `device_versions`, and it computes the aggregate state again.
 
-### The routes: `src/upgrade_portal/app/routes/org_controls.py`
+### The routes: `src/interfaces/portals/upgrade_portal/app/routes/org_controls.py`
 
 A new blueprint `org_controls_bp` holds four POST routes. The factory registers it after `org_upgrade`.
 

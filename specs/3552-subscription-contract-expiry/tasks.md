@@ -12,7 +12,7 @@ implemented and tested as an independent increment where possible.
 
 **Branch boundary**: This branch may edit only these paths:
 
-- `src/reports/subscription_expiry/**`
+- `src/mist/intelligence/reports/subscription_expiry/**`
 - `tests/unit/reports/subscription_expiry/**`
 - `changelog.d/issue-3552-subscription-contract-expiry.md`
 - `specs/3552-subscription-contract-expiry/**`
@@ -20,7 +20,7 @@ implemented and tested as an independent increment where possible.
 **Deferred to the integration pull request**:
 
 - `MistHelper.py` menu registration
-- `src/utils/operation_registry.py` registration
+- `src/foundation/support/utils/operation_registry.py` registration
 - `README.md` operation count and menu table updates
 - Generated menu reference updates
 - Generated menu API map updates
@@ -39,7 +39,7 @@ implemented and tested as an independent increment where possible.
 
 **Purpose**: Create the package and test directories without integration wiring.
 
-- [X] T001 Create the report package files `src/reports/subscription_expiry/__init__.py`, `src/reports/subscription_expiry/client.py`, `src/reports/subscription_expiry/model.py`, and `src/reports/subscription_expiry/operation.py`
+- [X] T001 Create the report package files `src/mist/intelligence/reports/subscription_expiry/__init__.py`, `src/mist/intelligence/reports/subscription_expiry/client.py`, `src/mist/intelligence/reports/subscription_expiry/model.py`, and `src/mist/intelligence/reports/subscription_expiry/operation.py`
 - [X] T002 Create the unit test files `tests/unit/reports/subscription_expiry/test_client.py`, `tests/unit/reports/subscription_expiry/test_model.py`, and `tests/unit/reports/subscription_expiry/test_operation.py`
 - [X] T003 Review `specs/3552-subscription-contract-expiry/wiring.md` and confirm the deferred integration boundary before implementation starts
 
@@ -52,11 +52,11 @@ implemented and tested as an independent increment where possible.
 **Critical**: Do not start user story implementation until this phase is
 complete.
 
-- [X] T004 [P] Define report constants, missing value markers, band names, bucket names, and status values in `src/reports/subscription_expiry/model.py`
-- [X] T005 [P] Define `ReportContext`, `LicenseSummarySource`, `LicenseUsageSource`, and `JsiContractSource` dataclasses in `src/reports/subscription_expiry/model.py`
-- [X] T006 [P] Define `SubscriptionExpiryRow`, `ContractExpiryRow`, and `ConsoleSummary` dataclasses in `src/reports/subscription_expiry/model.py`
-- [X] T007 Implement date normalization for ISO strings, Unix timestamps, missing values, and invalid values in `src/reports/subscription_expiry/model.py`
-- [X] T008 Implement `SubscriptionExpiryClient` response-wrapper conversion without scoring or export logic in `src/reports/subscription_expiry/client.py`
+- [X] T004 [P] Define report constants, missing value markers, band names, bucket names, and status values in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T005 [P] Define `ReportContext`, `LicenseSummarySource`, `LicenseUsageSource`, and `JsiContractSource` dataclasses in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T006 [P] Define `SubscriptionExpiryRow`, `ContractExpiryRow`, and `ConsoleSummary` dataclasses in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T007 Implement date normalization for ISO strings, Unix timestamps, missing values, and invalid values in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T008 Implement `SubscriptionExpiryClient` response-wrapper conversion without scoring or export logic in `src/mist/intelligence/reports/subscription_expiry/client.py`
 - [X] T009 Add client unit tests for plain-container conversion and JSI pagination in `tests/unit/reports/subscription_expiry/test_client.py`
 
 **Checkpoint**: Source data can be normalized and API seams can be tested with
@@ -81,12 +81,12 @@ type and all expected column values.
 
 ### Implementation for User Story 1
 
-- [X] T013 [US1] Implement license usage aggregation by subscription type in `src/reports/subscription_expiry/model.py`
-- [X] T014 [US1] Implement subscription end date selection and days remaining calculation in `src/reports/subscription_expiry/model.py`
-- [X] T015 [US1] Implement subscription status and band scoring in `src/reports/subscription_expiry/model.py`
-- [X] T016 [US1] Implement subscription row ordering and one-row-per-type output in `src/reports/subscription_expiry/model.py`
-- [X] T017 [US1] Add subscription export orchestration for `SubscriptionExpiry.csv` in `src/reports/subscription_expiry/operation.py`
-- [X] T018 [US1] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k subscription` and fix defects in `src/reports/subscription_expiry/model.py`
+- [X] T013 [US1] Implement license usage aggregation by subscription type in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T014 [US1] Implement subscription end date selection and days remaining calculation in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T015 [US1] Implement subscription status and band scoring in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T016 [US1] Implement subscription row ordering and one-row-per-type output in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T017 [US1] Add subscription export orchestration for `SubscriptionExpiry.csv` in `src/mist/intelligence/reports/subscription_expiry/operation.py`
+- [X] T018 [US1] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k subscription` and fix defects in `src/mist/intelligence/reports/subscription_expiry/model.py`
 
 **Checkpoint**: User Story 1 produces independently testable subscription rows.
 
@@ -109,12 +109,12 @@ device and all expected column values.
 
 ### Implementation for User Story 2
 
-- [X] T022 [US2] Implement contract end date selection from JSI source fields in `src/reports/subscription_expiry/model.py`
-- [X] T023 [US2] Implement contract status and contract state scoring in `src/reports/subscription_expiry/model.py`
-- [X] T024 [US2] Implement contract bucket scoring with three-month and twelve-month boundaries in `src/reports/subscription_expiry/model.py`
-- [X] T025 [US2] Implement contract row ordering and one-row-per-device output in `src/reports/subscription_expiry/model.py`
-- [X] T026 [US2] Add contract export orchestration for `ContractExpiry.csv` in `src/reports/subscription_expiry/operation.py`
-- [X] T027 [US2] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k contract` and fix defects in `src/reports/subscription_expiry/model.py`
+- [X] T022 [US2] Implement contract end date selection from JSI source fields in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T023 [US2] Implement contract status and contract state scoring in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T024 [US2] Implement contract bucket scoring with three-month and twelve-month boundaries in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T025 [US2] Implement contract row ordering and one-row-per-device output in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T026 [US2] Add contract export orchestration for `ContractExpiry.csv` in `src/mist/intelligence/reports/subscription_expiry/operation.py`
+- [X] T027 [US2] Run `python -m pytest tests\unit\reports\subscription_expiry\test_model.py -k contract` and fix defects in `src/mist/intelligence/reports/subscription_expiry/model.py`
 
 **Checkpoint**: User Story 2 produces independently testable contract rows.
 
@@ -136,11 +136,11 @@ bucket. Verify that the summary counts match the row counts.
 
 ### Implementation for User Story 3
 
-- [X] T031 [US3] Implement summary count creation for all bands and buckets in `src/reports/subscription_expiry/model.py`
-- [X] T032 [US3] Implement `SubscriptionExpiryReport.run()` with `SourceDependencyResolver` context resolution in `src/reports/subscription_expiry/operation.py`
-- [X] T033 [US3] Implement logging before and after client calls, scoring, export, and summary output in `src/reports/subscription_expiry/operation.py`
-- [X] T034 [US3] Implement clear handling for a JSI `400` no-linked-account response in `src/reports/subscription_expiry/operation.py`
-- [X] T035 [US3] Run `python -m pytest tests\unit\reports\subscription_expiry\test_operation.py` and fix defects in `src/reports/subscription_expiry/operation.py`
+- [X] T031 [US3] Implement summary count creation for all bands and buckets in `src/mist/intelligence/reports/subscription_expiry/model.py`
+- [X] T032 [US3] Implement `SubscriptionExpiryReport.run()` with `SourceDependencyResolver` context resolution in `src/mist/intelligence/reports/subscription_expiry/operation.py`
+- [X] T033 [US3] Implement logging before and after client calls, scoring, export, and summary output in `src/mist/intelligence/reports/subscription_expiry/operation.py`
+- [X] T034 [US3] Implement clear handling for a JSI `400` no-linked-account response in `src/mist/intelligence/reports/subscription_expiry/operation.py`
+- [X] T035 [US3] Run `python -m pytest tests\unit\reports\subscription_expiry\test_operation.py` and fix defects in `src/mist/intelligence/reports/subscription_expiry/operation.py`
 
 **Checkpoint**: User Story 3 prints summary counts that match scored rows.
 
@@ -151,11 +151,11 @@ bucket. Verify that the summary counts match the row counts.
 **Purpose**: Verify the package, preserve the integration boundary, and prepare
 pull request evidence.
 
-- [X] T036 [P] Add public package exports for implementation classes in `src/reports/subscription_expiry/__init__.py`
+- [X] T036 [P] Add public package exports for implementation classes in `src/mist/intelligence/reports/subscription_expiry/__init__.py`
 - [X] T037 [P] Create `changelog.d/issue-3552-subscription-contract-expiry.md` only if the pull request needs a release-note fragment for this implementation branch
 - [X] T038 Run `python -m pytest tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
-- [X] T039 Run `python -m ruff check src\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
-- [X] T040 Run `python -m black --check src\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
+- [X] T039 Run `python -m ruff check src\mist\intelligence\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
+- [X] T040 Run `python -m black --check src\mist\intelligence\reports\subscription_expiry tests\unit\reports\subscription_expiry` and record the result in the pull request evidence
 - [X] T041 Confirm `specs/3552-subscription-contract-expiry/wiring.md` still lists the deferred menu, registry, README, generated reference, and primary key work
 
 ---
@@ -181,7 +181,7 @@ pull request evidence.
 
 The integration pull request must complete work in `wiring.md` after this branch
 lands. This branch must not edit `MistHelper.py`,
-`src/utils/operation_registry.py`, `README.md`, generated menu references, or
+`src/foundation/support/utils/operation_registry.py`, `README.md`, generated menu references, or
 primary key strategy files.
 
 ### Within Each User Story

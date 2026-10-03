@@ -3,7 +3,7 @@
 import pytest  # WHY: skip guard and assertions use pytest helpers.
 
 import MistHelper  # WHY: integration target exposes the runtime menu_actions mapping.
-from src.utils.menu_entry import MenuEntry  # WHY: patched menu rows must match production rows.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: patched menu rows must match production rows.
 
 _HAS_MENU_WIRING = all(  # WHY: skip in stripped test environments.
     hasattr(MistHelper, attr_name) for attr_name in ("menu_actions", "SiteClientExporter")

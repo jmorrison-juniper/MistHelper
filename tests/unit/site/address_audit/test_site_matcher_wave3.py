@@ -1,7 +1,7 @@
 """Wave 3 top-up tests for SiteMatchingEngine (initiative 1018).
 
 Targets the last uncovered branch in
-``src/site/address_audit/site_matcher.py`` -- the ``continue`` on
+``src/mist/resources/site/address_audit/site_matcher.py`` -- the ``continue`` on
 line 86 of ``_build_choice_map`` when a site record lacks an ``id``.
 Existing test module ``test_site_matcher.py`` already covers every
 other branch; this file only adds the malformed-site-record path.
@@ -9,7 +9,7 @@ other branch; this file only adds the malformed-site-record path.
 
 from __future__ import annotations  # WHY: PEP 604 unions retained across whole test module.
 
-from src.site.address_audit.site_matcher import SiteMatchingEngine  # WHY: SUT under test.
+from src.mist.resources.site.address_audit.site_matcher import SiteMatchingEngine  # WHY: SUT under test.
 
 # WHY: Minimal inventory + sites_by_id keep the engine construction cheap; not exercised here.
 _INVENTORY: dict[str, dict[str, object]] = {}  # WHY: no serial lookups in these tests.

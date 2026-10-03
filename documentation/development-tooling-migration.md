@@ -31,10 +31,10 @@ from this repository, so every local command still works.
 | A guard keeps the tooling out of both artifacts. | `tests/guardrails/test_shipped_artifacts.py` |
 
 Phase 1 also moved one file. `scripts/build_zen_city_metadata.py` held the
-hand-curated Zscaler city map, and `src/utils/zscaler_catalogue.py` read that
+hand-curated Zscaler city map, and `src/foundation/support/utils/zscaler_catalogue.py` read that
 map at run time. The map is product code, so it moved to
-`src/utils/zen_city_metadata.py`. The maintenance command stays in `scripts/`
-and it imports the new module. `src/utils/zscaler_probe.py` was promoted the
+`src/foundation/support/utils/zen_city_metadata.py`. The maintenance command stays in `scripts/`
+and it imports the new module. `src/foundation/support/utils/zscaler_probe.py` was promoted the
 same way in an earlier change.
 
 `pyproject.toml` still holds the optional dependency group named `ste-linter`.

@@ -83,7 +83,7 @@ Acceptance:
 
 ## Out of scope
 
-- The standalone map viewer in `src/maps/`. It has its own image route.
+- The standalone map viewer in `src/interfaces/visualization/maps/`. It has its own image route.
 - A server cache of the image bytes.
 - The thumbnail image of a map.
 

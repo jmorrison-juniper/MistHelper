@@ -1,4 +1,4 @@
-"""Unit tests for ``src.export.org_site_exporter.OrgSiteExporter``.
+"""Unit tests for ``src.operations.exporting.export.org_site_exporter.OrgSiteExporter``.
 
 Why: Exercises every branch of the 5 static methods on OrgSiteExporter so that
 un-omitting the module in ``[tool.coverage.run].omit`` keeps overall coverage
@@ -44,7 +44,7 @@ class TestSites:
 
     def test_default_csv_no_emitter(self, fake_mh):
         """CSV backend + no emitter uses APIDataFetcher with SiteList filename."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         OrgSiteExporter.sites()
 
@@ -57,7 +57,7 @@ class TestSites:
 
     def test_sqlite_format(self, fake_mh):
         """OUTPUT_FORMAT=sqlite is accepted (log-only branch)."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         fake_mh.OUTPUT_FORMAT = "sqlite"
         OrgSiteExporter.sites()
@@ -66,7 +66,7 @@ class TestSites:
 
     def test_with_emitter(self, fake_mh):
         """PROGRESS_EMITTER receives start + complete when present."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         emitter = MagicMock()
         fake_mh.PROGRESS_EMITTER = emitter
@@ -88,9 +88,9 @@ class TestSitesListApi:
 
     def test_cache_hit_short_circuits(self, fake_mh):
         """Existing cache file skips API + write."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
-        with patch("src.export.org_site_exporter.os.path.exists", return_value=True):
+        with patch("src.operations.exporting.export.org_site_exporter.os.path.exists", return_value=True):
             OrgSiteExporter.sites_list_api()
 
         fake_mh.APICoreFetchUtils.all_sites_with_limit.assert_not_called()
@@ -98,23 +98,23 @@ class TestSitesListApi:
 
     def test_empty_sites_returns_early(self, fake_mh):
         """Empty site list logs + returns without writing."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         fake_mh.APICoreFetchUtils.all_sites_with_limit.return_value = []
-        with patch("src.export.org_site_exporter.os.path.exists", return_value=False):
+        with patch("src.operations.exporting.export.org_site_exporter.os.path.exists", return_value=False):
             OrgSiteExporter.sites_list_api()
 
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
     def test_happy_path_writes_output(self, fake_mh):
         """Non-empty list flows through flatten/escape/write."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         raw = [{"id": "s1"}, {"id": "s2"}]
         fake_mh.APICoreFetchUtils.all_sites_with_limit.return_value = raw
         with (
-            patch("src.export.org_site_exporter.os.path.exists", return_value=False),
-            patch("src.export.org_site_exporter.DataProcessingUtils") as dpu,
+            patch("src.operations.exporting.export.org_site_exporter.os.path.exists", return_value=False),
+            patch("src.operations.exporting.export.org_site_exporter.DataProcessingUtils") as dpu,
         ):
             dpu.flatten_nested_fields.return_value = raw
             dpu.escape_multiline.return_value = raw
@@ -133,11 +133,11 @@ class TestSitesWithLocation:
 
     def test_writes_flattened_sites(self, fake_mh):
         """Fetches sites, flattens, escapes, writes to SitesWithLocations.csv."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         raw = [{"id": "s1", "name": "site1"}]
         fake_mh.APICoreFetchUtils.all_sites_with_limit.return_value = raw
-        with patch("src.export.org_site_exporter.DataProcessingUtils") as dpu:
+        with patch("src.operations.exporting.export.org_site_exporter.DataProcessingUtils") as dpu:
             dpu.flatten_nested_fields.return_value = raw
             dpu.escape_multiline.return_value = raw
             OrgSiteExporter.sites_with_location()
@@ -155,20 +155,20 @@ class TestCurrentGuests:
 
     def test_writes_current_guests_csv(self, fake_mh):
         """Calls guest search API, flattens, writes to OrgCurrentGuests.csv."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         guests = [{"mac": "aa:bb:cc"}]
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
         with (
             patch(
-                "src.export.org_site_exporter.mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization",
+                "src.operations.exporting.export.org_site_exporter.mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization",
                 return_value=MagicMock(),
             ) as search,
             patch(
-                "src.export.org_site_exporter.mistapi.get_all",
+                "src.operations.exporting.export.org_site_exporter.mistapi.get_all",
                 return_value=guests,
             ) as get_all,
-            patch("src.export.org_site_exporter.DataProcessingUtils") as dpu,
+            patch("src.operations.exporting.export.org_site_exporter.DataProcessingUtils") as dpu,
         ):
             dpu.flatten_nested_fields.return_value = guests
             dpu.escape_multiline.return_value = guests
@@ -186,21 +186,21 @@ class TestHistoricalGuests:
 
     def test_seven_day_window(self, fake_mh):
         """Historical guests use a 7-day window ending now."""
-        from src.export.org_site_exporter import OrgSiteExporter
+        from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         guests = [{"mac": "dd:ee:ff"}]
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org2"
         with (
-            patch("src.export.org_site_exporter.time.time", return_value=1_000_000),
+            patch("src.operations.exporting.export.org_site_exporter.time.time", return_value=1_000_000),
             patch(
-                "src.export.org_site_exporter.mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization",
+                "src.operations.exporting.export.org_site_exporter.mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization",
                 return_value=MagicMock(),
             ) as search,
             patch(
-                "src.export.org_site_exporter.mistapi.get_all",
+                "src.operations.exporting.export.org_site_exporter.mistapi.get_all",
                 return_value=guests,
             ),
-            patch("src.export.org_site_exporter.DataProcessingUtils") as dpu,
+            patch("src.operations.exporting.export.org_site_exporter.DataProcessingUtils") as dpu,
         ):
             dpu.flatten_nested_fields.return_value = guests
             dpu.escape_multiline.return_value = guests

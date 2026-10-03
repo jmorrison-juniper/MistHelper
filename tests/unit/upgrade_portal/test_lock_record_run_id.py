@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.app.routes import select
 
 FORBIDDEN = "None"  # The text that `str(None)` writes. No field may ever hold it.
 

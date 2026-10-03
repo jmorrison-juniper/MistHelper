@@ -16,7 +16,7 @@ Result: no matches.
 
 ## Repairs
 
-- Replaced the direct `subprocess` import with the audited subprocess module re-export from `src.utils.subprocess_runner`.
+- Replaced the direct `subprocess` import with the audited subprocess module re-export from `src.foundation.support.utils.subprocess_runner`.
 - Replaced the PyPI `urlopen` call with a bounded `requests.get` call after an HTTPS scheme check.
 - Replaced optional `paramiko` imports with dynamic imports and typed casts.
 - Replaced the dynamic `mistapi` attribute write with a module dictionary binding.

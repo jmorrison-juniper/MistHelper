@@ -7,7 +7,7 @@
 ## Summary
 
 Add menu 273 as a read-only admin and organization API token hygiene report.
-The implementation will add `src/reports/admin_token_hygiene/` with a client,
+The implementation will add `src/mist/intelligence/reports/admin_token_hygiene/` with a client,
 models, and an operation class. The operation will fetch administrators,
 organization API tokens, and organization settings with the installed `mistapi`
 SDK, score hygiene findings, and write `data/AdminHygiene.csv` and
@@ -53,7 +53,7 @@ Never write token keys to logs, console output, files, or exceptions.
 
 | Principle | Status | Evidence |
 | - | - | - |
-| Five-Item Rule | PASS | New code enters the nested package `src/reports/admin_token_hygiene/`, with four module files and no new direct child under `src/`. |
+| Five-Item Rule | PASS | New code enters the nested package `src/mist/intelligence/reports/admin_token_hygiene/`, with four module files and no new direct child under `src/`. |
 | Class-Based Architecture | PASS | The design uses classes in `client.py`, `model.py`, and `operation.py`. It adds no wrapper functions. |
 | Safety-First | PASS | The operation is read-only, needs no prompt, and redacts token keys at the model boundary. |
 | Full Deployment Pipeline | PASS | This step creates planning artifacts only. Implementation tasks must run local gates before commit. |

@@ -37,7 +37,7 @@ class TestWebhookAuditDispatch:
     """Verify audit payloads dispatched to snapshot handler."""
 
     def test_audit_calls_handle_webhook_audit(self) -> None:
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = MagicMock(spec=DatabaseRouter)
         payload = {
@@ -53,7 +53,7 @@ class TestRedisWebhookIngestion:
     """Verify stats payloads dispatch to Redis writer."""
 
     def test_ingest_webhook_called_for_stats(self) -> None:
-        from src.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
         writer = MagicMock(spec=RedisTimeSeriesWriter)
         records = [{"mac": "aa:bb:cc", "rssi": -65, "duration": 120}]
@@ -74,7 +74,7 @@ class TestWebhookRegistration:
     def test_registration_skipped_when_disabled(self) -> None:
         """WEBHOOK_ENABLED=false should skip registration."""
         with patch.dict("os.environ", {"WEBHOOK_ENABLED": "false"}):
-            from src.db import DatabaseConfig
+            from src.foundation.persistence.db import DatabaseConfig
 
             config = DatabaseConfig.from_env()
             assert config.standalone_mode or True  # registration skipped

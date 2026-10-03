@@ -1,6 +1,6 @@
 """Unit tests for the ArpDeviceExecutor.
 
-Covers src/websocket/diagnostics/arp_executor.py. The executor orchestrates the
+Covers src/mist/realtime/websocket/diagnostics/arp_executor.py. The executor orchestrates the
 interactive ARP-over-WebSocket workflow: site + device prompts, compat gating,
 WebSocket connect + subscribe, HTTP POST of the ARP command, session-id demux,
 and result rendering (raw echo, gateway JSON table, empty-result diagnostics,
@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.websocket.diagnostics import arp_executor as arp_mod
-from src.websocket.diagnostics.arp_executor import ArpDeviceExecutor
+from src.mist.realtime.websocket.diagnostics import arp_executor as arp_mod
+from src.mist.realtime.websocket.diagnostics.arp_executor import ArpDeviceExecutor
 
 
 def _make_deps(

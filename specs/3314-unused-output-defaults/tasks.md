@@ -477,7 +477,7 @@ State that the configured mypy scope excludes tests.
 Do not claim that this run types the new test package.
 
 T043 keeps all configured severity levels and exclusions.
-Use both CI samples: `./src/utils/zen_city_metadata.py` and `.\src\utils\zen_city_metadata.py`.
+Use both CI samples: `./src/foundation/support/utils/zen_city_metadata.py` and `.\src\foundation\support\utils\zen_city_metadata.py`.
 Do not add severity filters or suppressions.
 
 T044 uses `.github/test-quality-config.toml` and `.github/test-quality-baseline.json` unchanged.

@@ -10,7 +10,7 @@
 
 ## Phase 1: Setup
 
-- [x] T001 Verify the issue claim and all open pull request files before reserving `src/db/__init__.py`. (delivered: plan.md)
+- [x] T001 Verify the issue claim and all open pull request files before reserving `src/foundation/persistence/db/__init__.py`. (delivered: plan.md)
 - [x] T002 Create the file-only specification and design documents in `specs/3318-bounded-database-discovery/`. (delivered: spec.md, plan.md, design/)
 - [x] T003 Validate the specification checklist in `checklists/requirements.md`. (delivered: checklists/requirements.md)
 
@@ -25,8 +25,8 @@
 
 **Independent Test**: Measure a blocked resolver with a real caller deadline.
 
-- [x] T006 [US1] Add the bounded resolver, cache, and worker classes in `src/db/host_resolver.py`. (delivered: src/db/host_resolver.py)
-- [x] T007 [US1] Use the shared resolver for `_hosts_unreachable` in `src/db/__init__.py` and remove `_can_resolve`. (delivered: src/db/__init__.py)
+- [x] T006 [US1] Add the bounded resolver, cache, and worker classes in `src/foundation/persistence/db/host_resolver.py`. (delivered: src/foundation/persistence/db/host_resolver.py)
+- [x] T007 [US1] Use the shared resolver for `_hosts_unreachable` in `src/foundation/persistence/db/__init__.py` and remove `_can_resolve`. (delivered: src/foundation/persistence/db/__init__.py)
 - [x] T008 [US1] Prove the single-name deadline and repeated failed cache results in `tests/unit/db_discovery/test_resolver.py`. (delivered: tests/unit/db_discovery/test_resolver.py)
 - [x] T009 [US1] Preserve explicit standalone mode and credential validation in `tests/unit/db_discovery/test_config.py`. (delivered: tests/unit/db_discovery/test_config.py)
 
@@ -46,23 +46,23 @@
 
 **Independent Test**: Count controlled resolver workers and verify numeric socket connection targets.
 
-- [x] T013 [US3] Use cached numeric addresses for `_can_connect` in `src/db/__init__.py`. (delivered: src/db/__init__.py)
+- [x] T013 [US3] Use cached numeric addresses for `_can_connect` in `src/foundation/persistence/db/__init__.py`. (delivered: src/foundation/persistence/db/__init__.py)
 - [x] T014 [US3] Prove single-flight, capacity refusal, zero queued jobs, cache limits, and recovery in `tests/unit/db_discovery/test_resolver.py`. (delivered: tests/unit/db_discovery/test_resolver.py)
 - [x] T015 [US3] Prove bounded shutdown and complete controlled helper cleanup in `tests/unit/db_discovery/test_resolver.py`. (delivered: tests/unit/db_discovery/test_resolver.py)
 - [x] T016 [US3] Prove DNS and TCP distinction, address reuse, IPv6, and TCP budgets in `tests/unit/db_discovery/test_probe.py`. (delivered: tests/unit/db_discovery/test_probe.py)
 - [x] T017 [US3] Isolate all new tests from production DNS and service connections in `tests/unit/db_discovery/conftest.py`. (delivered: tests/unit/db_discovery/conftest.py)
-- [x] T017a [US3] Share the DNS preflight in `src/db/redis_writer.py` after fresh exact ownership checks. (delivered: src/db/redis_writer.py)
-- [x] T017b [US3] Add the shared DNS preflight in `src/upgrade_portal/capture/store.py` without changing client URLs or errors. (delivered: src/upgrade_portal/capture/store.py)
+- [x] T017a [US3] Share the DNS preflight in `src/foundation/persistence/db/redis_writer.py` after fresh exact ownership checks. (delivered: src/foundation/persistence/db/redis_writer.py)
+- [x] T017b [US3] Add the shared DNS preflight in `src/interfaces/portals/upgrade_portal/capture/store.py` without changing client URLs or errors. (delivered: src/interfaces/portals/upgrade_portal/capture/store.py)
 - [x] T017c [US3] Preserve directly coupled test isolation in `tests/unit/test_standalone.py`, `tests/unit/test_redis_writer.py`, and `tests/unit/upgrade_portal/test_store.py`. (delivered: all three named test files)
 - [x] T017d [US3] Expose the current owned ArangoDB preflight boundary in `tests/unit/db_discovery/test_config.py`. (delivered: tests/unit/db_discovery/test_config.py)
-- [x] T017e [US3] After the verified position-25 release, migrate only the inherited DNS preflight in `src/db/arango_writer.py`. (delivered: the preflight and necessary imports on accepted 67a1ca625ab3526c68a8e54d1580dc1c92d3abc4)
+- [x] T017e [US3] After the verified position-25 release, migrate only the inherited DNS preflight in `src/foundation/persistence/db/arango_writer.py`. (delivered: the preflight and necessary imports on accepted 67a1ca625ab3526c68a8e54d1580dc1c92d3abc4)
 - [x] T017f [US3] Prove the inherited ArangoDB preflight with controlled red, green, deadline, and resource tests before publication. (delivered: tests/unit/db_discovery/test_probe.py, five current red cases, and passing native proofs)
 
 ## Phase 6: Documentation and local delivery
 
 - [x] T018 [P] Document the central discovery contract and writer boundary in `documentation/bounded-database-discovery.md`. (delivered: documentation/bounded-database-discovery.md)
 - [x] T019 [P] Add the release note in `changelog.d/issue-3318-bounded-database-discovery.md`. (delivered: changelog.d/issue-3318-bounded-database-discovery.md)
-- [x] T020 Run the focused regression suite and changed-method coverage for `src/db/__init__.py` and `src/db/host_resolver.py`. (delivered: 354 passing cases, 194 covered resolver statements, and six fully covered changed call boundaries)
+- [x] T020 Run the focused regression suite and changed-method coverage for `src/foundation/persistence/db/__init__.py` and `src/foundation/persistence/db/host_resolver.py`. (delivered: 354 passing cases, 194 covered resolver statements, and six fully covered changed call boundaries)
 - [x] T021 Run all requested feasible local gates and analyze the specification, plan, tasks, and implementation. (delivered: configured lint, format, 664-file type scope, Bandit, 995-file ratchet, complexity, source score, dead-code, docstrings, and 10-file links)
 - [x] T022 Commit only the reserved files locally with the required coauthor trailer. (delivered: original preparation commit 4477312b0c891a59954c07044efc2f4afabf905f, preserved before the authorized local rebase)
 - [ ] T023 Stop before any push or pull request until the coordinator issues a separate explicit publication grant.

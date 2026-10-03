@@ -14,9 +14,9 @@ from typing import Any
 
 import pytest
 
-from src.firmware.running_version import RunningFirmwareVersionResolver
-from src.upgrade_portal.upgrade.org_devices import LISTED_FAILURE, OrgChildDevices, OrgDeviceRows
-from src.upgrade_portal.upgrade.org_versions import OrgVersionRefresh
+from src.interfaces.portals.upgrade_portal.upgrade.org_devices import LISTED_FAILURE, OrgChildDevices, OrgDeviceRows
+from src.interfaces.portals.upgrade_portal.upgrade.org_versions import OrgVersionRefresh
+from src.operations.execution.firmware.running_version import RunningFirmwareVersionResolver
 
 SITE_ONE = "11111111-1111-1111-1111-111111111111"
 SITE_TWO = "22222222-2222-2222-2222-222222222222"

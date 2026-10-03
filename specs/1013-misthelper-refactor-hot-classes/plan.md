@@ -31,7 +31,7 @@ Sum of the 47 candidates' LoC across both categories: ~12,150. SC-002 target: `M
 **Project Type**: Single-project CLI tool with a monolithic entrypoint (`MistHelper.py`) being decomposed into `src/*` sub-packages
 **Performance Goals**: No performance regression at any callsite after extraction; interactive CLI menu latency unchanged; extracted class bodies preserve their original method contracts byte-for-byte, with any in-flight decomposition (E-2) only splitting internal method bodies rather than altering call semantics
 **Constraints**: Zero wrapper shims may be left in `MistHelper.py` (FR-003 carry-forward, formalized across Cat A + Cat B); every new/edited module lands at A+/100 compliance (FR-016); repo-wide baseline stays `>=99.6/A+` (FR-017); `MistHelper.py` pylint stays non-regressing against the pre-initiative baseline (FR-018); no `--admin` merge bypass as a routine unblock (per `feedback_no_admin_bypass.md` — check `mergeStateStatus: CLEAN` first); every extraction site carries the pinned NOTE breadcrumb (FR-007, SC-012); `refactor_candidates.md` is regenerated after every merged PR before the next dispatch (FR-014); pre-dispatch grep audit is mandatory for every PR (FR-013); no new SKIPPED CI conditionals introduced (FR-019); every Cat A PR carries a method-parity audit in its PR description (FR-025); Cat A candidates occupy dispatch positions 1-4 as a low-risk warmup (FR-026)
-**Scale/Scope**: 47 serial PRs (one class per PR: 4 Cat A + 43 Cat B); ~12,150 LoC total addressed; SC-002 requires `MistHelper.py` shrinks by `>=8,000` physical lines; landing distribution spans 15 existing packages (see Project Structure below); `src/refactors/` receives **zero** candidates; 47 mandatory NOTE breadcrumbs (one per merged PR); at most one open PR at a time (FR-023)
+**Scale/Scope**: 47 serial PRs (one class per PR: 4 Cat A + 43 Cat B); ~12,150 LoC total addressed; SC-002 requires `MistHelper.py` shrinks by `>=8,000` physical lines; landing distribution spans 15 existing packages (see Project Structure below); `src/foundation/support/refactors/` receives **zero** candidates; 47 mandatory NOTE breadcrumbs (one per merged PR); at most one open PR at a time (FR-023)
 
 ## Constitution Check
 
@@ -154,7 +154,7 @@ src/
     `-- (pre-existing 1010/1011/1012 files)  # Prior extractions preserved; not extended.
 ```
 
-**Structure Decision**: Single-project layout preserved from 1010/1011/1012. Every row of the Dispatch Queue is pinned to a specific landing target in `spec.md` — `src/refactors/` receives **zero** candidates in this initiative, breaking from the 1010/1011 "default landing zone" pattern in favour of per-row semantic-fit destinations. The four Cat A rows target the pre-existing `src/gateway/template_config.py`, `src/firmware/firmware_manager.py`, `src/site/site_config_manager.py`, and `src/device/utility_commands.py` — the PR only deletes the facade + rewires callsites, no file is created. The 43 Cat B rows spread across 15 existing packages: `src/export/` accepts 20 (accepted as flat for this initiative; sub-partitioning explicitly deferred pending noise emergence), `src/device/` accepts 4 Cat B + 1 Cat A, `src/utils/` accepts 4, `src/reports/` accepts 4, `src/analytics/` accepts 2, `src/ui/` accepts 2, `src/org/` accepts 2, `src/site/` accepts 2 Cat B + 1 Cat A, `src/gateway/` accepts 1 Cat A, `src/firmware/` accepts 1 Cat A, all others accept 1. No candidate is split across multiple PRs — even the seven very-large Cat B candidates (E-10: `OrgExportUtils` 653 LoC, `OrgConfigMigrationManager` 675 LoC, `ConstDefinitionsExporter` 759 LoC, `BulkRadiusWLANConfigManager` 587 LoC, `OrgTicketManager` 475 LoC, `OperationRegistry` 461 LoC, `OrgDeviceStatsExporter` 414 LoC) land as one PR each, with internal decomposition (E-2 / FR-006) folded into the same PR to satisfy the `<=25`-line-per-method rule and the aggregate score floor.
+**Structure Decision**: Single-project layout preserved from 1010/1011/1012. Every row of the Dispatch Queue is pinned to a specific landing target in `spec.md` — `src/foundation/support/refactors/` receives **zero** candidates in this initiative, breaking from the 1010/1011 "default landing zone" pattern in favour of per-row semantic-fit destinations. The four Cat A rows target the pre-existing `src/mist/resources/gateway/template_config.py`, `src/operations/execution/firmware/firmware_manager.py`, `src/mist/resources/site/site_config_manager.py`, and `src/mist/resources/device/utility_commands.py` — the PR only deletes the facade + rewires callsites, no file is created. The 43 Cat B rows spread across 15 existing packages: `src/operations/exporting/export/` accepts 20 (accepted as flat for this initiative; sub-partitioning explicitly deferred pending noise emergence), `src/mist/resources/device/` accepts 4 Cat B + 1 Cat A, `src/foundation/support/utils/` accepts 4, `src/mist/intelligence/reports/` accepts 4, `src/mist/intelligence/analytics/` accepts 2, `src/interfaces/visualization/ui/` accepts 2, `src/mist/resources/org/` accepts 2, `src/mist/resources/site/` accepts 2 Cat B + 1 Cat A, `src/mist/resources/gateway/` accepts 1 Cat A, `src/operations/execution/firmware/` accepts 1 Cat A, all others accept 1. No candidate is split across multiple PRs — even the seven very-large Cat B candidates (E-10: `OrgExportUtils` 653 LoC, `OrgConfigMigrationManager` 675 LoC, `ConstDefinitionsExporter` 759 LoC, `BulkRadiusWLANConfigManager` 587 LoC, `OrgTicketManager` 475 LoC, `OperationRegistry` 461 LoC, `OrgDeviceStatsExporter` 414 LoC) land as one PR each, with internal decomposition (E-2 / FR-006) folded into the same PR to satisfy the `<=25`-line-per-method rule and the aggregate score floor.
 
 ### Dispatch Queue (Authoritative)
 
@@ -162,53 +162,53 @@ Per FR-001, FR-023, and FR-026, the 47 candidates dispatch in a two-block order:
 
 | # | Refs | LoC | Class | Cat | Landing target |
 |---:|---:|---:|---|:-:|---|
-| 1 | 6 | 56 | GatewayTemplateConfigManager | A | `src/gateway/template_config.py` |
-| 2 | 8 | 22 | FirmwareManager | A | `src/firmware/firmware_manager.py` |
-| 3 | 16 | 43 | SiteConfigManager | A | `src/site/site_config_manager.py` |
-| 4 | 70 | 188 | DeviceUtilityCommands | A | `src/device/utility_commands.py` |
-| 5 | 4 | 675 | OrgConfigMigrationManager | B | `src/org/` |
-| 6 | 4 | 97 | DeviceUtils | B | `src/device/` |
-| 7 | 4 | 40 | SelfExportUtils | B | `src/export/` |
-| 8 | 5 | 386 | MSPInventoryExporter | B | `src/export/` |
-| 9 | 5 | 214 | TelemetryEmitter | B | `src/analytics/` |
-| 10 | 8 | 72 | InteractiveDisplayUtils | B | `src/ui/` |
-| 11 | 8 | 70 | DisplayUtils | B | `src/ui/` |
-| 12 | 8 | 66 | AuditAnalysisOps | B | `src/audit/` |
-| 13 | 9 | 461 | OperationRegistry | B | `src/utils/` |
-| 14 | 10 | 85 | SiteClientExporter | B | `src/export/` |
-| 15 | 13 | 587 | BulkRadiusWLANConfigManager | B | `src/site/` |
-| 16 | 13 | 10 | EndpointConfig | B | `src/dataclasses/` |
-| 17 | 14 | 759 | ConstDefinitionsExporter | B | `src/export/` |
-| 18 | 14 | 129 | OrgAlarmEventExporter | B | `src/export/` |
-| 19 | 14 | 100 | SiteConfigExporter | B | `src/export/` |
-| 20 | 14 | 94 | OrgAdminExporter | B | `src/export/` |
-| 21 | 16 | 328 | APIDataFetcher | B | `src/api/` |
-| 22 | 18 | 144 | OrgTemplateExporter | B | `src/export/` |
-| 23 | 18 | 139 | GatewayHaExporter | B | `src/export/` |
-| 24 | 20 | 168 | LicenseExportUtils | B | `src/export/` |
-| 25 | 20 | 156 | DataCollectionManager | B | `src/analytics/` |
-| 26 | 20 | 129 | WiredClientManufacturerReportGenerator | B | `src/reports/` |
-| 27 | 22 | 180 | SFPTransceiverDataProcessor | B | `src/reports/` |
-| 28 | 22 | 146 | SitesByAPModelExporter | B | `src/export/` |
-| 29 | 22 | 69 | OrgDeviceInventorySummary | B | `src/inventory/` |
-| 30 | 23 | 161 | CLIShellManager | B | `src/ssh/` |
-| 31 | 24 | 168 | OrgConfigExporter | B | `src/export/` |
-| 32 | 26 | 162 | OrgClientSecurityExporter | B | `src/export/` |
-| 33 | 28 | 114 | EnvironmentUtils | B | `src/utils/` |
-| 34 | 30 | 203 | SiteDeviceExporter | B | `src/export/` |
-| 35 | 31 | 210 | PromptClientUtils | B | `src/input/` |
-| 36 | 32 | 251 | GlobalWiredClientReportGenerator | B | `src/reports/` |
-| 37 | 34 | 245 | GatewayTestExporter | B | `src/export/` |
-| 38 | 34 | 179 | DatabaseSchemaUtils | B | `src/db/` |
-| 39 | 36 | 127 | TroubleshootUtils | B | `src/troubleshooting/` |
-| 40 | 37 | 110 | FilterOperatorEngine | B | `src/utils/` |
-| 41 | 46 | 396 | DeviceRebootManager | B | `src/device/` |
-| 42 | 46 | 289 | ARPCommandManager | B | `src/device/` |
-| 43 | 54 | 341 | SiteAnomalyExporter | B | `src/export/` |
-| 44 | 54 | 273 | OfflineDeviceReporter | B | `src/reports/` |
-| 45 | 58 | 414 | OrgDeviceStatsExporter | B | `src/export/` |
-| 46 | 66 | 475 | OrgTicketManager | B | `src/org/` |
-| 47 | 128 | 653 | OrgExportUtils | B | `src/export/` |
+| 1 | 6 | 56 | GatewayTemplateConfigManager | A | `src/mist/resources/gateway/template_config.py` |
+| 2 | 8 | 22 | FirmwareManager | A | `src/operations/execution/firmware/firmware_manager.py` |
+| 3 | 16 | 43 | SiteConfigManager | A | `src/mist/resources/site/site_config_manager.py` |
+| 4 | 70 | 188 | DeviceUtilityCommands | A | `src/mist/resources/device/utility_commands.py` |
+| 5 | 4 | 675 | OrgConfigMigrationManager | B | `src/mist/resources/org/` |
+| 6 | 4 | 97 | DeviceUtils | B | `src/mist/resources/device/` |
+| 7 | 4 | 40 | SelfExportUtils | B | `src/operations/exporting/export/` |
+| 8 | 5 | 386 | MSPInventoryExporter | B | `src/operations/exporting/export/` |
+| 9 | 5 | 214 | TelemetryEmitter | B | `src/mist/intelligence/analytics/` |
+| 10 | 8 | 72 | InteractiveDisplayUtils | B | `src/interfaces/visualization/ui/` |
+| 11 | 8 | 70 | DisplayUtils | B | `src/interfaces/visualization/ui/` |
+| 12 | 8 | 66 | AuditAnalysisOps | B | `src/mist/access/audit/` |
+| 13 | 9 | 461 | OperationRegistry | B | `src/foundation/support/utils/` |
+| 14 | 10 | 85 | SiteClientExporter | B | `src/operations/exporting/export/` |
+| 15 | 13 | 587 | BulkRadiusWLANConfigManager | B | `src/mist/resources/site/` |
+| 16 | 13 | 10 | EndpointConfig | B | `src/foundation/models/dataclasses/` |
+| 17 | 14 | 759 | ConstDefinitionsExporter | B | `src/operations/exporting/export/` |
+| 18 | 14 | 129 | OrgAlarmEventExporter | B | `src/operations/exporting/export/` |
+| 19 | 14 | 100 | SiteConfigExporter | B | `src/operations/exporting/export/` |
+| 20 | 14 | 94 | OrgAdminExporter | B | `src/operations/exporting/export/` |
+| 21 | 16 | 328 | APIDataFetcher | B | `src/mist/access/api/` |
+| 22 | 18 | 144 | OrgTemplateExporter | B | `src/operations/exporting/export/` |
+| 23 | 18 | 139 | GatewayHaExporter | B | `src/operations/exporting/export/` |
+| 24 | 20 | 168 | LicenseExportUtils | B | `src/operations/exporting/export/` |
+| 25 | 20 | 156 | DataCollectionManager | B | `src/mist/intelligence/analytics/` |
+| 26 | 20 | 129 | WiredClientManufacturerReportGenerator | B | `src/mist/intelligence/reports/` |
+| 27 | 22 | 180 | SFPTransceiverDataProcessor | B | `src/mist/intelligence/reports/` |
+| 28 | 22 | 146 | SitesByAPModelExporter | B | `src/operations/exporting/export/` |
+| 29 | 22 | 69 | OrgDeviceInventorySummary | B | `src/mist/resources/inventory/` |
+| 30 | 23 | 161 | CLIShellManager | B | `src/operations/execution/ssh/` |
+| 31 | 24 | 168 | OrgConfigExporter | B | `src/operations/exporting/export/` |
+| 32 | 26 | 162 | OrgClientSecurityExporter | B | `src/operations/exporting/export/` |
+| 33 | 28 | 114 | EnvironmentUtils | B | `src/foundation/support/utils/` |
+| 34 | 30 | 203 | SiteDeviceExporter | B | `src/operations/exporting/export/` |
+| 35 | 31 | 210 | PromptClientUtils | B | `src/foundation/runtime/input/` |
+| 36 | 32 | 251 | GlobalWiredClientReportGenerator | B | `src/mist/intelligence/reports/` |
+| 37 | 34 | 245 | GatewayTestExporter | B | `src/operations/exporting/export/` |
+| 38 | 34 | 179 | DatabaseSchemaUtils | B | `src/foundation/persistence/db/` |
+| 39 | 36 | 127 | TroubleshootUtils | B | `src/mist/intelligence/troubleshooting/` |
+| 40 | 37 | 110 | FilterOperatorEngine | B | `src/foundation/support/utils/` |
+| 41 | 46 | 396 | DeviceRebootManager | B | `src/mist/resources/device/` |
+| 42 | 46 | 289 | ARPCommandManager | B | `src/mist/resources/device/` |
+| 43 | 54 | 341 | SiteAnomalyExporter | B | `src/operations/exporting/export/` |
+| 44 | 54 | 273 | OfflineDeviceReporter | B | `src/mist/intelligence/reports/` |
+| 45 | 58 | 414 | OrgDeviceStatsExporter | B | `src/operations/exporting/export/` |
+| 46 | 66 | 475 | OrgTicketManager | B | `src/mist/resources/org/` |
+| 47 | 128 | 653 | OrgExportUtils | B | `src/operations/exporting/export/` |
 
 **Reordering rule (FR-014 / FR-026 / User Story 3)**: After every merged PR, regenerate `refactor_candidates.md` and re-sort the *remaining Cat B candidates* by fresh Refs-ASC / LOC-DESC before dispatching the next PR. The Cat A block cannot shift because it only contains 4 entries and they are already correctly ordered by Refs-ASC / LOC-DESC (6/56 → 8/22 → 16/43 → 70/188). A Cat B candidate whose ref count shifts (e.g. because an earlier extraction indirectly removed some of its callers) is repositioned within the Cat B block. A candidate whose classification drops below Hot bucket is deferred out of scope per FR-020. A candidate whose grep audit surfaces a new `src/` caller is deferred per FR-013. Under no circumstances does a Cat B PR interleave into the Cat A block or vice versa.
 
@@ -220,8 +220,8 @@ Per FR-001, FR-023, and FR-026, the 47 candidates dispatch in a two-block order:
 
 Per-Cat variation:
 
-- **Cat A PRs** place the breadcrumb at the **facade-deletion site**. `<new-module-path>` points at the pre-existing `src/` file that already houses the real implementation (e.g. `src/gateway/template_config.py`, `src/firmware/firmware_manager.py`, `src/site/site_config_manager.py`, `src/device/utility_commands.py`). No file is created by the Cat A PR.
-- **Cat B PRs** place the breadcrumb at the **class-body-deletion site**. `<new-module-path>` points at the newly created `src/` file inside the landing package (e.g. `src/org/org_config_migration_manager.py`).
+- **Cat A PRs** place the breadcrumb at the **facade-deletion site**. `<new-module-path>` points at the pre-existing `src/` file that already houses the real implementation (e.g. `src/mist/resources/gateway/template_config.py`, `src/operations/execution/firmware/firmware_manager.py`, `src/mist/resources/site/site_config_manager.py`, `src/mist/resources/device/utility_commands.py`). No file is created by the Cat A PR.
+- **Cat B PRs** place the breadcrumb at the **class-body-deletion site**. `<new-module-path>` points at the newly created `src/` file inside the landing package (e.g. `src/mist/resources/org/org_config_migration_manager.py`).
 
 Post-merge grep audit: `grep -n "# NOTE: .* extracted to .*::.* See specs/1013-misthelper-refactor-hot-classes/spec.md." MistHelper.py` should return exactly `N` hits after `N` merged PRs.
 
@@ -273,4 +273,4 @@ Re-evaluated after Phase 1 design artifacts landed (`research.md` and this `plan
 - Does not raise the compliance baseline. The initiative preserves `>=99.6/A+` aggregate; it does not attempt to reach 100/A+.
 - Does not enumerate the 29 excluded Hot-bucket classes or the future initiative that will address them; those are out of scope for this spec.
 - Does not add a `contracts/` directory or `data-model.md`. The initiative's contracts are exhaustively captured in `spec.md` (FR-001-FR-026, SC-001-SC-017) and `research.md` (decisions); adding duplicate documents would not add audit value.
-- Does not use `src/refactors/` as a landing target for any of the 47 rows. Every row is pinned to a domain-fitting existing package in `spec.md`.
+- Does not use `src/foundation/support/refactors/` as a landing target for any of the 47 rows. Every row is pinned to a domain-fitting existing package in `spec.md`.

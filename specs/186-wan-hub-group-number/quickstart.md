@@ -10,7 +10,7 @@ Menu operation `163` that lets NOC engineers manage the `pod` (group number) fie
 
 | File | Action | Purpose |
 | - | - | - |
-| `src/wan_hub_group_manager.py` | CREATE | `WanHubGroupNumberManager` class — all feature logic |
+| `src/operations/wan/wan_hub_group_manager.py` | CREATE | `WanHubGroupNumberManager` class — all feature logic |
 | `MistHelper.py` | MODIFY (+3 lines) | Import, menu_actions entry, test classification |
 | `README.md` | MODIFY | Operation count bump, menu table entry |
 | `CHANGELOG.md` | MODIFY | Version entry |
@@ -24,9 +24,9 @@ Menu operation `163` that lets NOC engineers manage the `pod` (group number) fie
 
 # After making changes, validate
 python -m py_compile MistHelper.py
-python -m py_compile src/wan_hub_group_manager.py
-python -m ruff check MistHelper.py src/wan_hub_group_manager.py
-python -m black MistHelper.py src/wan_hub_group_manager.py
+python -m py_compile src/operations/wan/wan_hub_group_manager.py
+python -m ruff check MistHelper.py src/operations/wan/wan_hub_group_manager.py
+python -m black MistHelper.py src/operations/wan/wan_hub_group_manager.py
 
 # Run interactively to test
 python MistHelper.py --menu 163
@@ -43,7 +43,7 @@ python MistHelper.py --menu 163
 This is the first menu operation in an external module. The pattern:
 
 ```python
-# src/wan_hub_group_manager.py
+# src/operations/wan/wan_hub_group_manager.py
 class WanHubGroupNumberManager:
     def __init__(self, apisession, org_id: str):
         self.apisession = apisession
@@ -57,7 +57,7 @@ class WanHubGroupNumberManager:
         manager.run()
 
 # MistHelper.py (2 lines added)
-from src.wan_hub_group_manager import WanHubGroupNumberManager
+from src.operations.wan.wan_hub_group_manager import WanHubGroupNumberManager
 # ...
 "163": (WanHubGroupNumberManager.execute, "WAN Hub Group Number Manager"),
 ```

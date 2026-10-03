@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.db import DatabaseConfig
+from src.foundation.persistence.db import DatabaseConfig
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def config() -> DatabaseConfig:
 @pytest.fixture
 def mock_redis():
     """Patch redis.Redis and return mock objects."""
-    with patch("src.db.redis_writer.redis.Redis") as mock_cls:
+    with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as mock_cls:
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
         mock_client.module_list.return_value = [{"name": b"ReJSON", "ver": 20600}]
@@ -43,7 +43,7 @@ class TestRedisJSONWriterInit:
     """Tests for RedisJSONWriter.__init__."""
 
     def test_connects_and_verifies_json_module(self, config, mock_redis):
-        from src.db.redis_writer import RedisJSONWriter
+        from src.foundation.persistence.db.redis_writer import RedisJSONWriter
 
         writer = RedisJSONWriter(config)
         mock_redis["client_cls"].assert_called_once()
@@ -51,7 +51,7 @@ class TestRedisJSONWriterInit:
         assert writer is not None
 
     def test_raises_if_json_module_missing(self, config, mock_redis):
-        from src.db.redis_writer import RedisJSONWriter
+        from src.foundation.persistence.db.redis_writer import RedisJSONWriter
 
         mock_redis["client"].module_list.return_value = []
         with pytest.raises(RuntimeError, match="JSON"):
@@ -62,7 +62,7 @@ class TestRedisJSONWriterWrite:
     """Tests for RedisJSONWriter.write."""
 
     def test_writes_documents_with_ttl(self, config, mock_redis):
-        from src.db.redis_writer import RedisJSONWriter
+        from src.foundation.persistence.db.redis_writer import RedisJSONWriter
 
         writer = RedisJSONWriter(config)
         # json().set() + expire() per record, pipeline.execute returns pairs
@@ -79,7 +79,7 @@ class TestRedisJSONWriterWrite:
         assert result.records_written == 1
 
     def test_empty_data_returns_success(self, config, mock_redis):
-        from src.db.redis_writer import RedisJSONWriter
+        from src.foundation.persistence.db.redis_writer import RedisJSONWriter
 
         writer = RedisJSONWriter(config)
         strategy = {"type": "composite_pk", "primary_key": ["id"]}
@@ -89,7 +89,7 @@ class TestRedisJSONWriterWrite:
         assert result.records_written == 0
 
     def test_handles_write_error(self, config, mock_redis):
-        from src.db.redis_writer import RedisJSONWriter
+        from src.foundation.persistence.db.redis_writer import RedisJSONWriter
 
         writer = RedisJSONWriter(config)
         mock_redis["pipeline"].execute.return_value = [
@@ -103,7 +103,7 @@ class TestRedisJSONWriterWrite:
         assert result.records_failed == 1
 
     def test_close(self, config, mock_redis):
-        from src.db.redis_writer import RedisJSONWriter
+        from src.foundation.persistence.db.redis_writer import RedisJSONWriter
 
         writer = RedisJSONWriter(config)
         writer.close()
@@ -114,11 +114,11 @@ class TestRedisTimeSeriesClose:
     """Test close method for RedisTimeSeriesWriter."""
 
     def test_close(self, config):
-        with patch("src.db.redis_writer.redis.Redis") as mock_cls:
+        with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as mock_cls:
             mock_client = MagicMock()
             mock_cls.return_value = mock_client
             mock_client.module_list.return_value = [{"name": b"timeseries", "ver": 11006}]
-            from src.db.redis_writer import RedisTimeSeriesWriter
+            from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
             writer = RedisTimeSeriesWriter(config)
             writer.close()
@@ -129,13 +129,13 @@ class TestRedisTimeSeriesWebhookIngestion:
     """Tests for ingest_webhook method."""
 
     def test_ingests_numeric_fields(self, config):
-        with patch("src.db.redis_writer.redis.Redis") as mock_cls:
+        with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as mock_cls:
             mock_client = MagicMock()
             mock_cls.return_value = mock_client
             mock_client.module_list.return_value = [{"name": b"timeseries", "ver": 11006}]
             mock_pipeline = MagicMock()
             mock_client.pipeline.return_value = mock_pipeline
-            from src.db.redis_writer import RedisTimeSeriesWriter
+            from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
             writer = RedisTimeSeriesWriter(config)
             events = [{"mac": "aa:bb:cc:dd:ee:ff", "rssi": -65, "snr": 30}]
@@ -144,13 +144,13 @@ class TestRedisTimeSeriesWebhookIngestion:
             mock_pipeline.execute.assert_called_once()
 
     def test_no_numeric_fields_skips_execute(self, config):
-        with patch("src.db.redis_writer.redis.Redis") as mock_cls:
+        with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as mock_cls:
             mock_client = MagicMock()
             mock_cls.return_value = mock_client
             mock_client.module_list.return_value = [{"name": b"timeseries", "ver": 11006}]
             mock_pipeline = MagicMock()
             mock_client.pipeline.return_value = mock_pipeline
-            from src.db.redis_writer import RedisTimeSeriesWriter
+            from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
             writer = RedisTimeSeriesWriter(config)
             events = [{"mac": "aa:bb:cc:dd:ee:ff", "status": "connected"}]
@@ -163,7 +163,7 @@ class TestBuildLabels:
     """Tests for _build_labels static method."""
 
     def test_includes_api_function_and_metric(self):
-        from src.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
         labels = RedisTimeSeriesWriter._build_labels(
             {"org_id": "org-1", "site_id": "site-1"},
@@ -175,7 +175,7 @@ class TestBuildLabels:
         assert labels["org_id"] == "org-1"
 
     def test_custom_label_fields(self):
-        from src.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
         labels = RedisTimeSeriesWriter._build_labels(
             {"custom_field": "val"},
@@ -191,7 +191,7 @@ class TestExtractListedFields:
     """Tests for _extract_listed_fields static method."""
 
     def test_extracts_only_named_numeric(self):
-        from src.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
         result = RedisTimeSeriesWriter._extract_listed_fields(
             {"cpu": 42.0, "mem": 78, "name": "test", "disk": 90.0},

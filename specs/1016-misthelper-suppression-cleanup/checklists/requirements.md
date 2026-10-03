@@ -32,7 +32,7 @@
 ## Notes
 
 - Validation performed on the initial draft written 2026-07-13.
-- The spec contains explicit references to lint tool names (ruff, pylint, mypy, bandit, black) and one file path (`src/utils/misthelper_facade.py`, `src/_bootstrap.py`). These are treated as accepted stakeholder-visible artifacts because the feature IS about lint suppressions — the reader cannot understand the requirements without those names. This is consistent with the "Content Quality" rule's intent (no *unnecessary* implementation leakage) rather than a strict prohibition.
+- The spec contains explicit references to lint tool names (ruff, pylint, mypy, bandit, black) and one file path (`src/foundation/support/utils/misthelper_facade.py`, `src/_bootstrap.py`). These are treated as accepted stakeholder-visible artifacts because the feature IS about lint suppressions — the reader cannot understand the requirements without those names. This is consistent with the "Content Quality" rule's intent (no *unnecessary* implementation leakage) rather than a strict prohibition.
 - The workflow's success is measured by grep counts on suppression comment patterns; those patterns are the actual product surface, not implementation choices, so they appear directly in acceptance criteria and success criteria.
 - No `[NEEDS CLARIFICATION]` markers were introduced. All ambiguity in the input was resolved via the informed-guess/reasonable-default rule and documented under Assumptions.
 - Items marked incomplete require spec updates before `/speckit.clarify` or `/speckit.plan`.

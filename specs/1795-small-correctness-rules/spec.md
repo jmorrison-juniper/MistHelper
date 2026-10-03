@@ -69,11 +69,11 @@ The 5 sites are as follows.
 | - | - |
 | MistHelper.py | 777 |
 | MistHelper.py | 1154 |
-| src/config/config_utils.py | 84 |
-| src/utils/rate_limiting.py | 134 |
-| src/utils/rate_limiting.py | 163 |
+| src/foundation/runtime/config/config_utils.py | 84 |
+| src/foundation/support/utils/rate_limiting.py | 134 |
+| src/foundation/support/utils/rate_limiting.py | 163 |
 
-Two of these files hold state that moves between a workstation and a container. `src/utils/rate_limiting.py` reads and writes the adaptive delay metrics. `src/config/config_utils.py` reads the project configuration.
+Two of these files hold state that moves between a workstation and a container. `src/foundation/support/utils/rate_limiting.py` reads and writes the adaptive delay metrics. `src/foundation/runtime/config/config_utils.py` reads the project configuration.
 
 ### DTZ005 changes behavior, so it needs the most care
 
@@ -89,12 +89,12 @@ The six files with the most sites are as follows.
 
 | File | Count |
 | - | - |
-| src/firmware/bulk_switch_upgrader.py | 5 |
-| src/firmware/firmware_manager.py | 5 |
-| src/site/bulk_radius_wlan_config_manager.py | 4 |
-| src/ssh/batch/interactive_batch_executor.py | 4 |
-| src/firmware/org_ap_upgrader.py | 3 |
-| src/reports/e911_bssid.py | 3 |
+| src/operations/execution/firmware/bulk_switch_upgrader.py | 5 |
+| src/operations/execution/firmware/firmware_manager.py | 5 |
+| src/mist/resources/site/bulk_radius_wlan_config_manager.py | 4 |
+| src/operations/execution/ssh/batch/interactive_batch_executor.py | 4 |
+| src/operations/execution/firmware/org_ap_upgrader.py | 3 |
+| src/mist/intelligence/reports/e911_bssid.py | 3 |
 
 ### RUF012 is a typing rule, not a runtime defect
 
@@ -106,12 +106,12 @@ The six files with the most sites are as follows.
 
 | File | Count |
 | - | - |
-| src/analytics/site_analytics_configurator.py | 6 |
-| src/utils/address_utils.py | 4 |
+| src/mist/intelligence/analytics/site_analytics_configurator.py | 6 |
+| src/foundation/support/utils/address_utils.py | 4 |
 | starlink_dashboard.py | 4 |
-| src/export/const_definitions_exporter.py | 3 |
-| src/firmware/firmware_manager.py | 3 |
-| src/reports/e911_bssid.py | 3 |
+| src/operations/exporting/export/const_definitions_exporter.py | 3 |
+| src/operations/execution/firmware/firmware_manager.py | 3 |
+| src/mist/intelligence/reports/e911_bssid.py | 3 |
 
 ### ISC004, SIM103, and C408 are small and mechanical
 
@@ -121,16 +121,16 @@ Rule `ISC004` reports 13 sites in 3 files. The rule finds two string parts joine
 | - | - |
 | tools/refactor_analyzer/reporting.py | 8 |
 | MistHelper.py | 4 |
-| src/websocket/diagnostics/arp_executor.py | 1 |
+| src/mist/realtime/websocket/diagnostics/arp_executor.py | 1 |
 
 Rule `SIM103` reports 9 sites in 9 files. Each site holds an `if` block that returns `True` and an `else` block that returns `False`. The repair returns the condition directly.
 
 | File | Line |
 | - | - |
-| src/api/api_data_fetcher.py | 163 |
-| src/audit/filter.py | 50 |
-| src/cache/cache_utils.py | 198 |
-| src/websocket/service_ping_manager.py | 416 |
+| src/mist/access/api/api_data_fetcher.py | 163 |
+| src/mist/access/audit/filter.py | 50 |
+| src/foundation/persistence/cache/cache_utils.py | 198 |
+| src/mist/realtime/websocket/service_ping_manager.py | 416 |
 | tests/unit/org/test_org_synthetic_probes_manager.py | 2491 |
 | tools/codemod_logging_lazy.py | 276 |
 | tools/compliance_analyzer/analyzers.py | 935 |
@@ -207,7 +207,7 @@ A contributor adds a naive `datetime.now()` call. The CI lint gate reports the c
 - A `SIM103` site returns the condition where the condition is not a boolean. The repair then changes the return type. Read each site and confirm that the condition is a boolean.
 - One `DTZ005` site hides behind a `# noqa` directive. Ruff reports 56 by default and 57 with `--ignore-noqa`. Issue #1792 removes the directive.
 - A `W1514` site opens a binary file. A binary mode takes no encoding argument, and the rule does not report it. Confirm the mode before the edit.
-- The `RUF012` and `DTZ005` families both touch `src/firmware/firmware_manager.py` and `src/reports/e911_bssid.py`. The two repairs must not run at the same time in the same file.
+- The `RUF012` and `DTZ005` families both touch `src/operations/execution/firmware/firmware_manager.py` and `src/mist/intelligence/reports/e911_bssid.py`. The two repairs must not run at the same time in the same file.
 
 ---
 

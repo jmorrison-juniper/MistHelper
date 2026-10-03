@@ -12,11 +12,11 @@
 
 ## Phase 2: Implementation
 
-- [x] T004 [US1] Narrow seven bulk switch upgrade handlers. (delivered: `src\firmware\bulk_switch_upgrader.py`)
-- [x] T005 [US1] Narrow five site auto-upgrade handlers. (delivered: `src\firmware\site_auto_upgrade.py`)
-- [x] T006 [US1] Narrow one destructive reboot handler. (delivered: `src\device\device_reboot_manager.py`)
-- [x] T007 [US1] Narrow one service-ping SDK handler. (delivered: `src\websocket\service_ping_manager.py`)
-- [x] T008 [US1] Narrow three Mist SDK export handlers. (delivered: `src\export\site_config_exporter.py`, `src\export\site_client_exporter.py`)
+- [x] T004 [US1] Narrow seven bulk switch upgrade handlers. (delivered: `src\operations\execution\firmware\bulk_switch_upgrader.py`)
+- [x] T005 [US1] Narrow five site auto-upgrade handlers. (delivered: `src\operations\execution\firmware\site_auto_upgrade.py`)
+- [x] T006 [US1] Narrow one destructive reboot handler. (delivered: `src\mist\resources\device\device_reboot_manager.py`)
+- [x] T007 [US1] Narrow one service-ping SDK handler. (delivered: `src\mist\realtime\websocket\service_ping_manager.py`)
+- [x] T008 [US1] Narrow three Mist SDK export handlers. (delivered: `src\operations\exporting\export\site_config_exporter.py`, `src\operations\exporting\export\site_client_exporter.py`)
 
 ## Phase 3: Tests
 

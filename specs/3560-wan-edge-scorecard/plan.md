@@ -8,7 +8,7 @@
 
 ## Summary
 
-Add menu `279` as a safe organization WAN edge scorecard. The later implementation will use `WanEdgeScorecard` with static `run()` in `src/reports/wan_edge_scorecard/`. It will reuse the existing gateway statistics fetch from menu `15` or menu `18`, with `listOrgDevicesStats` and `type=gateway`. It will write one gateway scorecard, one DHCP pool detail report, one site scorecard, and a console summary.
+Add menu `279` as a safe organization WAN edge scorecard. The later implementation will use `WanEdgeScorecard` with static `run()` in `src/mist/intelligence/reports/wan_edge_scorecard/`. It will reuse the existing gateway statistics fetch from menu `15` or menu `18`, with `listOrgDevicesStats` and `type=gateway`. It will write one gateway scorecard, one DHCP pool detail report, one site scorecard, and a console summary.
 
 ## Technical Context
 
@@ -36,7 +36,7 @@ Add menu `279` as a safe organization WAN edge scorecard. The later implementati
 
 | Principle | Status | Plan evidence |
 | - | - | - |
-| Five-Item Rule | Pass | Later code enters `src/reports/wan_edge_scorecard/`, which is a nested feature package. |
+| Five-Item Rule | Pass | Later code enters `src/mist/intelligence/reports/wan_edge_scorecard/`, which is a nested feature package. |
 | Class-Based Architecture | Pass | Later code uses `WanEdgeScorecard` with static `run()`. |
 | Safety-First | Pass | Menu `279` is safe and must run in `--test` without a prompt. |
 | Full Deployment Pipeline | Pass with fleet limit | This step creates planning artifacts only. Later code work must run the normal gates. |
@@ -84,7 +84,7 @@ changelog.d/
 └── issue-3560-wan-edge-scorecard.md
 
 MistHelper.py
-src/utils/operation_registry.py
+src/foundation/support/utils/operation_registry.py
 documentation/menu_reference.md
 ```
 

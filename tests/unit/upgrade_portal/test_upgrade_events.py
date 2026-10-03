@@ -1,4 +1,4 @@
-"""Unit tests for ``src/upgrade_portal/upgrade/events.py``.
+"""Unit tests for ``src/interfaces/portals/upgrade_portal/upgrade/events.py``.
 
 Why:
     Three rules of the event read fail in silence, so each one needs a test that
@@ -25,7 +25,7 @@ from typing import Any
 import mistapi
 import pytest
 
-from src.upgrade_portal.upgrade import events as module
+from src.interfaces.portals.upgrade_portal.upgrade import events as module
 
 ORG_ID = "org-1"
 

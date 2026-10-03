@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_cancel_outcomes import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_outcomes import (
     ENDED_NOTE,
     NEVER_STARTED_NOTE,
     UNSORTED_NOTE,

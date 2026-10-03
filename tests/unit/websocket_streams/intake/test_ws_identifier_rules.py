@@ -5,9 +5,15 @@ import logging  # Caplog captures the shared standard logging target.
 
 import pytest  # The logging test uses the typed capture fixture.
 
-from src.websocket_streams.intake.identifiers.identity_rules import IdentityIdentifierRules  # UUID and MAC checks.
-from src.websocket_streams.intake.identifiers.network_rules import NetworkIdentifierRules  # Host and network checks.
-from src.websocket_streams.intake.identifiers.text_rules import TextIdentifierRules  # Port and plain text checks.
+from src.mist.realtime.websocket_streams.intake.identifiers.identity_rules import (
+    IdentityIdentifierRules,
+)  # UUID and MAC checks.
+from src.mist.realtime.websocket_streams.intake.identifiers.network_rules import (
+    NetworkIdentifierRules,
+)  # Host and network checks.
+from src.mist.realtime.websocket_streams.intake.identifiers.text_rules import (
+    TextIdentifierRules,
+)  # Port and plain text checks.
 
 
 def test_identifier_rules_accept_valid_values() -> None:
@@ -39,7 +45,9 @@ def test_identifier_logs_use_bounded_json_without_identifier_text(
 ) -> None:
     """Identifier checks log safe structured metadata only."""
     identifier = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"  # Use recognizable text for the leak check.
-    logger_name = "src.websocket_streams.intake.identifiers.identity_rules"  # Capture the production logger.
+    logger_name = (
+        "src.mist.realtime.websocket_streams.intake.identifiers.identity_rules"  # Capture the production logger.
+    )
     with caplog.at_level(logging.DEBUG, logger=logger_name):  # Capture one identifier check.
         assert IdentityIdentifierRules.is_uuid(identifier)  # Run the real structured logging path.
     record = json.loads(caplog.records[-1].message)  # Parse the exact emitted JSON record.

@@ -1,4 +1,4 @@
-"""Unit tests for ``read_upgrade_status`` in ``src/firmware/upgrade_service.py``.
+"""Unit tests for ``read_upgrade_status`` in ``src/operations/execution/firmware/upgrade_service.py``.
 
 Why:
     The portal polls this function every 30 seconds and shows the answer to the
@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from src.firmware import upgrade_service
-from src.firmware.upgrade_service import GatewayFamily
+from src.operations.execution.firmware import upgrade_service
+from src.operations.execution.firmware.upgrade_service import GatewayFamily
 
 MAC_FIRST = "5c5b350e0001"
 MAC_SECOND = "5c5b350e0002"

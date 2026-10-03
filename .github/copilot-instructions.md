@@ -56,7 +56,7 @@ Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV / SQLite 
 ## Database Strategy (CRITICAL)
 
 ### Hybrid Primary Key System
-MistHelper uses **natural business keys** from the Mist API, not artificial IDs. Configuration is centralized in the `ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary in `src/refactors/endpoint_primary_key_strategies.py`.
+MistHelper uses **natural business keys** from the Mist API, not artificial IDs. Configuration is centralized in the `ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary in `src/foundation/support/refactors/endpoint_primary_key_strategies.py`.
 
 **Three Primary Key Types**:
 
@@ -124,7 +124,7 @@ branch its own package under `src/` and its own test directory. Each branch
 also writes a `specs/<issue>-<slug>/wiring.md` manifest. The manifest lists
 the menu row, the registry entry, the primary key strategies, and the import
 line. One integration pull request for each batch then applies every manifest
-to `MistHelper.py`, to `src/utils/operation_registry.py`, to the category
+to `MistHelper.py`, to `src/foundation/support/utils/operation_registry.py`, to the category
 table above, and to the generated references. Pull requests #3643, #3644,
 #3645, and #3679 show the shape. A feature branch never touches a shared file,
 so two feature branches never conflict.
@@ -555,7 +555,7 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ### Menu Categories (Full Range: 0-293)
 
-`src/utils/operation_registry.py` is the single source of truth. Read it before
+`src/foundation/support/utils/operation_registry.py` is the single source of truth. Read it before
 you trust this table. Counts were measured on 2026-10-01. Run
 `python scripts/generate_menu_wiki.py` to regenerate the full reference.
 `tests/guardrails/test_destructive_menu_docs.py` proves that this table matches
@@ -632,7 +632,7 @@ upgrade on production hardware.
 version = listSiteDevices(site_id, type="all").data[0]["version"]
 
 # CORRECT: read the running version through the shared resolver
-from src.firmware.running_version import RunningFirmwareVersionResolver
+from src.operations.execution.firmware.running_version import RunningFirmwareVersionResolver
 
 resolver = RunningFirmwareVersionResolver(apisession)
 running = resolver.fetch_site_running_versions(site_id)

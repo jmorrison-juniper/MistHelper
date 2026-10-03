@@ -44,27 +44,27 @@ def create_app() -> FastAPI:
 
 def _mount_middleware(app: FastAPI, settings) -> None:  # noqa: ANN001
     """Register middleware layers in order (outermost first)."""
-    from src.api.middleware.logging import StructuredLoggingMiddleware
+    from src.mist.access.api.middleware.logging import StructuredLoggingMiddleware
 
     app.add_middleware(StructuredLoggingMiddleware)
     # WHY: issue #2049. Per-org rate limiting moved to a dependency that runs
     # after auth, so an anonymous caller can no longer burn any org's budget.
-    # See get_scoped_org_id in src/api/deps.py.
+    # See get_scoped_org_id in src/mist/access/api/deps.py.
 
 
 def _mount_routers(app: FastAPI) -> None:
     """Include all API routers under /api/v1."""
-    from src.api.routes.audit import router as audit_router
-    from src.api.routes.config import router as config_router
-    from src.api.routes.deploy import router as deploy_router
-    from src.api.routes.health import auth_router, router as health_router
-    from src.api.routes.sync import (
+    from src.mist.access.api.routes.audit import router as audit_router
+    from src.mist.access.api.routes.config import router as config_router
+    from src.mist.access.api.routes.deploy import router as deploy_router
+    from src.mist.access.api.routes.health import auth_router, router as health_router
+    from src.mist.access.api.routes.sync import (
         drift_router,
         inv_router,
         policy_router,
         router as sync_router,
     )
-    from src.api.routes.webhooks import router as webhook_router
+    from src.mist.access.api.routes.webhooks import router as webhook_router
 
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(sync_router, prefix="/api/v1")

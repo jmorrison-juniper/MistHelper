@@ -21,16 +21,16 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime import lock
-from src.upgrade_portal.runtime.identity import SessionOwner
-from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
-from src.upgrade_portal.upgrade import driver
+from src.interfaces.portals.upgrade_portal.runtime import lock
+from src.interfaces.portals.upgrade_portal.runtime.identity import SessionOwner
+from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
+from src.interfaces.portals.upgrade_portal.upgrade import driver
 
 RUN_ID = "run-" + "b" * 32
 LOCK_TOKEN = "token-that-no-log-line-may-hold"  # A value a test can search every log record for
 ACTOR_EMAIL = "sam@example.com"  # A plain address that no log record may hold either
 BROWSER_ID = "browser-0123456789"  # 18 URL-safe characters, inside the 16 to 128 the identity module asks for
-POLL_SECONDS = 20.0  # The poll round of src/upgrade_portal/upgrade/phase_gate.py
+POLL_SECONDS = 20.0  # The poll round of src/interfaces/portals/upgrade_portal/upgrade/phase_gate.py
 ROUNDS_PER_PHASE = 50  # 1000 simulated seconds for one phase, so the four phases pass the 3600-second lock life
 
 

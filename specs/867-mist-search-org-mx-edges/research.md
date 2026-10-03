@@ -25,11 +25,11 @@ matches the real SDK contract.
 
 - `MistHelper.py` already registers menu 253 as
   `OrgSearchExporter.mx_edges`.
-- `src/export/org_search_exporter.py` already calls
+- `src/operations/exporting/export/org_search_exporter.py` already calls
   `mistapi.api.v1.orgs.mxedges.searchOrgMxEdges`, prompts with
   `InputUtils.safe_input`, paginates with `mistapi.get_all`, and persists
   through `DataExporter.write_with_format_selection`.
-- `src/refactors/endpoint_primary_key_strategies.py` already registers
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` already registers
   `searchOrgMxEdges` with the composite primary key `["id", "mac"]`.
 - `tests/unit/export/test_org_search_exporter.py` already covers the menu
   binding, the optional filters, the hostname prompt, the empty-filter path,

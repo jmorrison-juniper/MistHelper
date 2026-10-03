@@ -15,12 +15,12 @@ from pathlib import Path, PurePath
 
 import pytest
 
-from src.juniper_docs.acquire.downloader import CorpusDownloader
-from src.juniper_docs.acquire.pdf_paths import PdfPathAllocator
-from src.juniper_docs.classify.slug_classifier import UNCATEGORIZED
-from src.juniper_docs.harvest.runner import HarvestConfig, HarvestRunner, TuningConfig, _sanitize
-from src.juniper_docs.harvest.state_store import HarvestStateStore
-from src.juniper_docs.models import DocumentType, InventoryRecord, PdfCandidate
+from src.mist.intelligence.juniper_docs.acquire.downloader import CorpusDownloader
+from src.mist.intelligence.juniper_docs.acquire.pdf_paths import PdfPathAllocator
+from src.mist.intelligence.juniper_docs.classify.slug_classifier import UNCATEGORIZED
+from src.mist.intelligence.juniper_docs.harvest.runner import HarvestConfig, HarvestRunner, TuningConfig, _sanitize
+from src.mist.intelligence.juniper_docs.harvest.state_store import HarvestStateStore
+from src.mist.intelligence.juniper_docs.models import DocumentType, InventoryRecord, PdfCandidate
 from tests.unit.juniper_docs.conftest import FakeCatalogClient
 
 # The recorded manifest from the run that lost 50 documents (measured evidence).

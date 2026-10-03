@@ -10,11 +10,11 @@ in the same phase, because the two tasks touch no common file.
 ## Phase 1: Foundation
 
 - [ ] **T001** Add the primary key strategy `scanOrgRogueDhcpServers` to
-  `src/refactors/endpoint_primary_key_strategies.py`. Use `composite_pk` with the
+  `src/foundation/support/refactors/endpoint_primary_key_strategies.py`. Use `composite_pk` with the
   key `["record_id", "site_id", "last_seen"]` and the index list from the plan.
   The constitution requires this entry before any code writes a row.
 
-- [ ] **T002** Create the package `src/security/rogue_dhcp/` with an `__init__.py`
+- [ ] **T002** Create the package `src/operations/protection/security/rogue_dhcp/` with an `__init__.py`
   that exports `RogueDhcpScanOperation`, `RogueDhcpScanner`, `RogueDhcpFinding`,
   and `RogueDhcpSignalMatcher`. Create `tests/unit/security/rogue_dhcp/__init__.py`.
 
@@ -22,7 +22,7 @@ in the same phase, because the two tasks touch no common file.
 
 ### The matcher
 
-- [ ] **T003** Write `src/security/rogue_dhcp/signals.py`. Define
+- [ ] **T003** Write `src/operations/protection/security/rogue_dhcp/signals.py`. Define
   `ROGUE_ALARM_TYPES`, `ROGUE_EVENT_TYPES`, `MARVIS_CONFIG_EVENT_TYPE`,
   `MARVIS_ROGUE_REASON`, `REJECTED_DHCP_TYPES`, and `KEYWORD_PAIR`. Define the
   class `RogueDhcpSignalMatcher` with `matches`, `is_rejected`,
@@ -34,7 +34,7 @@ in the same phase, because the two tasks touch no common file.
 
 ### The record shape
 
-- [ ] **T005** Write `src/security/rogue_dhcp/records.py`. Define the frozen
+- [ ] **T005** Write `src/operations/protection/security/rogue_dhcp/records.py`. Define the frozen
   dataclass `RogueDhcpFinding` with the 19 columns from the plan and a
   `column_names()` class method. Define `RogueDhcpRecordNormalizer` with one
   method for each source shape, one state method, and one merge method.
@@ -47,7 +47,7 @@ in the same phase, because the two tasks touch no common file.
 
 ### The scanner
 
-- [ ] **T007** Write `src/security/rogue_dhcp/scanner.py`. Define
+- [ ] **T007** Write `src/operations/protection/security/rogue_dhcp/scanner.py`. Define
   `RogueDhcpScanResult` and `RogueDhcpScanner`. Implement `scan`,
   `query_organization`, `query_site`, and `resolve_site_names`. Use
   `mistapi.get_all` for paging. Wrap each site query in a try block that records
@@ -59,7 +59,7 @@ in the same phase, because the two tasks touch no common file.
 
 ### The operation
 
-- [ ] **T009** Write `src/security/rogue_dhcp/operation.py`. Define
+- [ ] **T009** Write `src/operations/protection/security/rogue_dhcp/operation.py`. Define
   `RogueDhcpScanOperation.run`. Resolve the organization, run the scanner, print
   the table and the per-source counts, and call
   `DataExporter.write_with_format_selection` with the endpoint name
@@ -73,7 +73,7 @@ in the same phase, because the two tasks touch no common file.
 ### The menu
 
 - [ ] **T011** Add `"269": {"category": "safe"}` to
-  `src/utils/operation_registry.py`. Satisfies FR-002.
+  `src/foundation/support/utils/operation_registry.py`. Satisfies FR-002.
 
 - [ ] **T012** Add the `menu_actions` row for `"269"` in `MistHelper.py`. Point
   the handler at `RogueDhcpScanOperation.run`. Add the import. Satisfies FR-001.
@@ -108,7 +108,7 @@ in the same phase, because the two tasks touch no common file.
   unparseable key, and that the allowlist cannot admit an operation the registry
   does not call safe. Satisfies the guard proof rule.
 
-- [ ] **T019** Confirm that no file under `src/upgrade_portal/` changed. Satisfies
+- [ ] **T019** Confirm that no file under `src/interfaces/portals/upgrade_portal/` changed. Satisfies
   FR-031.
 
 ## Phase 5: Documentation and release note

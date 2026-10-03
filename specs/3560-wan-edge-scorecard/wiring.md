@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 279 | Organization WAN Edge Scorecard | src.reports.wan_edge_scorecard.scorecard | WanEdgeScorecard.run | safe |  | False | False |
+| 279 | Organization WAN Edge Scorecard | src.mist.intelligence.reports.wan_edge_scorecard.scorecard | WanEdgeScorecard.run | safe |  | False | False |
 
 ## OperationRegistry comment
 
@@ -37,20 +37,20 @@ Add menu `279` to the `safe` category row.
 ## Import line for MistHelper.py
 
 ```python
-from src.reports.wan_edge_scorecard.scorecard import WanEdgeScorecard  # Menu 279 (issue #3560) -- export the organization WAN edge scorecard.
+from src.mist.intelligence.reports.wan_edge_scorecard.scorecard import WanEdgeScorecard  # Menu 279 (issue #3560) -- export the organization WAN edge scorecard.
 ```
 
 ## Deferred integration notes
 
 - Register menu `279` in `MistHelper.py` with the title `Organization WAN Edge Scorecard`.
-- Register menu `279` as `safe` in `src/utils/operation_registry.py`.
+- Register menu `279` as `safe` in `src/foundation/support/utils/operation_registry.py`.
 - Update the operation count and menu table in `README.md`.
 - Regenerate the menu reference and the menu API endpoint map in the integration pull request.
 - Confirm the generated references include menu `279`.
 
 ## Verified data source
 
-- `src/export/org_device_stats_exporter.py` uses `listOrgDevicesStats` through the shared `APIDataFetcher` seam.
+- `src/operations/exporting/export/org_device_stats_exporter.py` uses `listOrgDevicesStats` through the shared `APIDataFetcher` seam.
 - `MistHelper.py` dispatches menu `18` through `_dispatch_gateway_stats_device_stats_with_freshness`.
 - `listOrgDevicesStats` maps to `GET /api/v1/orgs/{org_id}/stats/devices`.
 - The query parameters include `type`, `status`, `site_id`, and `fields`.

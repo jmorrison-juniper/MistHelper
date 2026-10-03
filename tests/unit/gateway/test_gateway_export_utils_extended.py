@@ -1,4 +1,4 @@
-"""Wave 11 P2 coverage for src/gateway/gateway_export_utils.py (initiative #1018).
+"""Wave 11 P2 coverage for src/mist/resources/gateway/gateway_export_utils.py (initiative #1018).
 
 Covers the module-level helper functions and the ``GatewayExportUtils`` static methods that
 are not exercised by the existing test_gateway_export_utils.py smoke tests. All external
@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch
 
 import pytest  # WHY: fixtures + caplog for behaviour assertions.
 
-from src.gateway.gateway_export_utils import (  # WHY: SUT direct import for helpers + class.
+from src.mist.resources.gateway.gateway_export_utils import (  # WHY: SUT direct import for helpers + class.
     EMPTY_CELL_MARKERS,
     MGMT_IP_MISSING_LABEL,
     NO_TEMPLATE_LABEL,
@@ -704,7 +704,9 @@ class TestGatewayExportUtilsStaticMethods:
             data_exporter=SimpleNamespace(write_with_format_selection=writer),
         )  # WHY: wire the product helper to controlled dependencies.
         configure_gateway_export_utils_dependencies(**bundle)  # WHY: drive the real dependency seam.
-        with caplog.at_level(logging.ERROR, logger="src.gateway.gateway_export_utils"):  # WHY: capture status log.
+        with caplog.at_level(
+            logging.ERROR, logger="src.mist.resources.gateway.gateway_export_utils"
+        ):  # WHY: capture status log.
             result = GatewayExportUtils.templates()  # WHY: drive the product status path.
         assert result is None  # WHY: preserve the existing exporter return contract.
         assert "HTTP 404" in caplog.text  # WHY: the operator must see the exact client-error status.
@@ -805,7 +807,9 @@ class TestGatewayExportUtilsStaticMethods:
     def test_with_wan_overrides_delegates_to_walker(self, tmp_path: Path) -> None:
         """Static entry-point calls WanOverrideWalker.walk with the fast flag."""
         configure_gateway_export_utils_dependencies(**_build_dependency_bundle(tmp_path))  # WHY: DI wiring.
-        from src.gateway.overrides import WanOverrideWalker  # WHY: explicit re-import from its true home.
+        from src.mist.resources.gateway.overrides import (
+            WanOverrideWalker,
+        )  # WHY: explicit re-import from its true home.
 
         with patch.object(WanOverrideWalker, "walk") as stub:
             GatewayExportUtils.with_wan_overrides(fast=True)
@@ -814,7 +818,7 @@ class TestGatewayExportUtilsStaticMethods:
     def test_wan2_variable_migration_invokes_migrator_execute(self, tmp_path: Path) -> None:
         """Entry-point wires deps into GatewayWan2VariableMigrator and calls execute()."""
         configure_gateway_export_utils_dependencies(**_build_dependency_bundle(tmp_path))  # WHY: DI wiring.
-        import src.gateway.wan2_variable as wan2_module  # WHY: local import to allow patching.
+        import src.mist.resources.gateway.wan2_variable as wan2_module  # WHY: local import to allow patching.
 
         captured: dict[str, Any] = {}
 

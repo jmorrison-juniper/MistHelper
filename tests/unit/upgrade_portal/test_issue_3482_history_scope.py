@@ -19,8 +19,8 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import review
-from src.upgrade_portal.compare import render
+from src.interfaces.portals.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.compare import render
 
 _TEMPLATE_ROOT = Path(review.__file__).resolve().parents[1] / "assets" / "templates"  # The real template folder.
 _HISTORY_TEMPLATE = "review/history.html"  # The capture history.

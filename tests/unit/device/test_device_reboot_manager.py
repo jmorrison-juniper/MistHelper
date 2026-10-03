@@ -1,4 +1,4 @@
-"""Tests for :mod:`src.device.device_reboot_manager`.
+"""Tests for :mod:`src.mist.resources.device.device_reboot_manager`.
 
 Why:
     ``DeviceRebootManager`` executes destructive gateway reboots and is
@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.device.device_reboot_manager import DeviceRebootManager
+from src.mist.resources.device.device_reboot_manager import DeviceRebootManager
 
 # ---------------------------------------------------------------------------
 # Fixtures

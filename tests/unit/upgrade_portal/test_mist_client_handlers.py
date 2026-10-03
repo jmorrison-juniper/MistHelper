@@ -9,8 +9,8 @@ from unittest.mock import Mock
 import pytest
 from flask import Flask
 
-from src.upgrade_portal.api.mist_client import MistAPIClient
-from src.upgrade_portal.app.routes.mist import create_mist_routes
+from src.interfaces.portals.upgrade_portal.api.mist_client import MistAPIClient
+from src.interfaces.portals.upgrade_portal.app.routes.mist import create_mist_routes
 
 
 def test_list_sites_missing_sdk_endpoint_reaches_the_route_caller() -> None:

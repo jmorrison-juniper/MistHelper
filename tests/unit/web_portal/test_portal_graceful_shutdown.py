@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from src.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
 from web_portal.app import WebPortalApp
 from web_portal.menu_registry import build_static_menu_actions
 from web_portal.services.event_bus import PortalEventBus

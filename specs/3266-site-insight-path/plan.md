@@ -10,7 +10,7 @@ Replace the SDK call in `SiteMetricOperation._fetch_one_metric` with a GET of th
 ## Technical context
 
 - Python 3.13 and mistapi 0.64.0. The change adds no dependency.
-- Pull request #3301 makes the same change for menu 75. `src/export/org_export_utils.py` already calls the path form `/api/v1/orgs/{org_id}/insights/{metric}` through `mist_get`.
+- Pull request #3301 makes the same change for menu 75. `src/operations/exporting/export/org_export_utils.py` already calls the path form `/api/v1/orgs/{org_id}/insights/{metric}` through `mist_get`.
 - `DeviceMetricOperation` of menu 76 holds its `MetricRefusalLog` on the instance. It clears the log in `_collect_metrics`, and it reports the log after `_finalize`. This plan uses the same design.
 
 ## Design

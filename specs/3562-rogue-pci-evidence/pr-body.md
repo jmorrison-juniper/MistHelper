@@ -12,7 +12,7 @@ This branch is a package-only precursor. The operation is not integration-comple
 
 ## Files changed
 
-- `src/reports/rogue_pci_evidence/`
+- `src/mist/intelligence/reports/rogue_pci_evidence/`
 - `tests/unit/reports/rogue_pci_evidence/`
 - `specs/3562-rogue-pci-evidence/`
 - `changelog.d/issue-3562-rogue-pci-evidence.md`
@@ -58,16 +58,16 @@ This branch is a package-only precursor. The operation is not integration-comple
 ## Local gate results
 
 - `py_compile`: passed.
-- `ruff check src\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence`: passed.
-- `black --check src\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence`: passed.
-- `mypy src\reports\rogue_pci_evidence --config-file pyproject.toml`: passed.
-- `pydocstyle src\reports\rogue_pci_evidence`: passed.
+- `ruff check src\mist\intelligence\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence`: passed.
+- `black --check src\mist\intelligence\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence`: passed.
+- `mypy src\mist\intelligence\reports\rogue_pci_evidence --config-file pyproject.toml`: passed.
+- `pydocstyle src\mist\intelligence\reports\rogue_pci_evidence`: passed.
 - `pytest tests\unit\reports\rogue_pci_evidence -q --timeout=120`: 12 passed.
-- `pytest tests\unit\reports\rogue_pci_evidence -q --timeout=120 --cov=src\reports\rogue_pci_evidence --cov-report=term --cov-fail-under=80`: 12 passed, 85.96 percent coverage.
-- `vulture src\reports\rogue_pci_evidence --min-confidence 70`: passed.
-- `interrogate -v src\reports\rogue_pci_evidence`: 100.0 percent.
-- `bandit -c pyproject.toml -r src\reports\rogue_pci_evidence -q`: passed.
-- `radon cc src\reports\rogue_pci_evidence -j | complexity-gate --max 10`: passed.
+- `pytest tests\unit\reports\rogue_pci_evidence -q --timeout=120 --cov=src\mist\intelligence\reports\rogue_pci_evidence --cov-report=term --cov-fail-under=80`: 12 passed, 85.96 percent coverage.
+- `vulture src\mist\intelligence\reports\rogue_pci_evidence --min-confidence 70`: passed.
+- `interrogate -v src\mist\intelligence\reports\rogue_pci_evidence`: 100.0 percent.
+- `bandit -c pyproject.toml -r src\mist\intelligence\reports\rogue_pci_evidence -q`: passed.
+- `radon cc src\mist\intelligence\reports\rogue_pci_evidence -j | complexity-gate --max 10`: passed.
 - `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main`: passed.
 - `pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120`: 8 passed, checked 488 Mist SDK call signatures.
 - `pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120`: 27 passed.
@@ -93,7 +93,7 @@ This branch is a package-only precursor. The operation is not integration-comple
 The integration pull request must apply `specs/3562-rogue-pci-evidence/wiring.md` to:
 
 - register menu 282 in `MistHelper.py`,
-- register menu 282 in `src/utils/operation_registry.py`,
+- register menu 282 in `src/foundation/support/utils/operation_registry.py`,
 - add primary key strategy entries,
 - update generated menu references,
 - update README operation counts and menu documentation.

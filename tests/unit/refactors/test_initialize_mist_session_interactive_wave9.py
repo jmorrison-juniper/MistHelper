@@ -1,4 +1,4 @@
-"""Wave 9 P2 coverage for src/refactors/initialize_mist_session_interactive.py (initiative #1018).
+"""Wave 9 P2 coverage for src/foundation/support/refactors/initialize_mist_session_interactive.py (initiative #1018).
 
 Covers `_MistHelperProxy.__getattr__` and `MistSessionInteractiveInitializer.initialize`:
 - Proxy attribute lookup resolves to live MistHelper module attributes.
@@ -22,8 +22,10 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock doubles.
 
 import pytest  # WHY: monkeypatch fixture.
 
-from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
-from src.refactors.initialize_mist_session_interactive import (  # WHY: SUT direct imports.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver,
+)  # WHY: assert the source dependency seam.
+from src.foundation.support.refactors.initialize_mist_session_interactive import (  # WHY: SUT direct imports.
     _MH,
     MistSessionInteractiveInitializer,
 )
@@ -149,7 +151,7 @@ class TestInitializeInteractive:
             name="detect_msp_privileges_stub", return_value=fake_detector_return
         )
         monkeypatch.setattr(  # WHY: patch the imported symbol in the SUT module namespace.
-            "src.refactors.initialize_mist_session_interactive.detect_msp_privileges",
+            "src.foundation.support.refactors.initialize_mist_session_interactive.detect_msp_privileges",
             detector_stub,
         )
         MistSessionInteractiveInitializer.initialize()  # WHY: build the adapter closure.

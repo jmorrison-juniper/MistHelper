@@ -75,7 +75,7 @@ Issue [#1792](https://github.com/jmorrison-juniper/MistHelper/issues/1792) remov
 
 Ruff reports 500 with `--ignore-noqa`. Pylint recorded 493. The gap is 7.
 
-The two tools read different roots. Pylint reads `MistHelper.py` and `src` only. Ruff reads the whole repository, and its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`. Ruff therefore reports 8 sites in `starlink_dashboard.py` that pylint never reads.
+The two tools read different roots. Pylint reads `MistHelper.py` and `src` only. Ruff reads the whole repository, and its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`. Ruff therefore reports 8 sites in `starlink_dashboard.py` that pylint never reads.
 
 The first task of this work reconciles the two counts and records the reason for each difference. A wrong baseline produces a wrong scope.
 
@@ -83,22 +83,22 @@ The first task of this work reconciles the two counts and records the reason for
 
 | Area | Count with `--ignore-noqa` | Count by default |
 | - | - | - |
-| src/export | 94 | 75 |
-| src/firmware | 62 | 58 |
-| src/refactors | 43 | 38 |
-| src/device | 34 | 28 |
+| src/operations/exporting/export | 94 | 75 |
+| src/operations/execution/firmware | 62 | 58 |
+| src/foundation/support/refactors | 43 | 38 |
+| src/mist/resources/device | 34 | 28 |
 | MistHelper.py | 33 | 33 |
-| src/ssh | 32 | 14 |
-| src/gateway | 24 | 22 |
-| src/site | 18 | 8 |
-| src/db | 17 | 17 |
-| src/api | 16 | 16 |
-| src/utils | 14 | 12 |
-| src/websocket | 14 | 11 |
-| src/ui | 12 | 12 |
-| src/analytics | 10 | 6 |
+| src/operations/execution/ssh | 32 | 14 |
+| src/mist/resources/gateway | 24 | 22 |
+| src/mist/resources/site | 18 | 8 |
+| src/foundation/persistence/db | 17 | 17 |
+| src/mist/access/api | 16 | 16 |
+| src/foundation/support/utils | 14 | 12 |
+| src/mist/realtime/websocket | 14 | 11 |
+| src/interfaces/visualization/ui | 12 | 12 |
+| src/mist/intelligence/analytics | 10 | 6 |
 
-The `src/ssh` area shows the largest hidden count. 18 of its 32 sites carry an inert directive today.
+The `src/operations/execution/ssh` area shows the largest hidden count. 18 of its 32 sites carry an inert directive today.
 
 ---
 
@@ -157,7 +157,7 @@ A reviewer opens one pull request. The pull request holds one area and states th
 ### Edge Cases
 
 - A handler sits on a shutdown path or a cleanup path. A raised error there can leave a resource open or can hide the first error. The broad catch is correct, and the audit keeps it with a comment.
-- A handler sits inside a logging filter. A log call from that block can re-enter the filter and can recurse without end. Specification `1032-bandit-severity-gate` already records this case for `src/utils/logger_utils.py`.
+- A handler sits inside a logging filter. A log call from that block can re-enter the filter and can recurse without end. Specification `1032-bandit-severity-gate` already records this case for `src/foundation/support/utils/logger_utils.py`.
 - A handler wraps a third-party call that documents no exception type. A narrow type would miss an error that the library adds in a later release. The audit keeps the broad catch and states the library name.
 - A handler catches `Exception` and then re-raises. That site loses nothing, so the audit records it as safe with a short comment.
 - A handler returns an empty list or an empty dictionary. A caller then reports zero rows and reports no error. This is the highest risk category, and the audit must narrow or log every one of these sites.

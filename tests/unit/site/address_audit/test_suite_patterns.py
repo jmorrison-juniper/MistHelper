@@ -2,7 +2,7 @@
 
 import re
 
-from src.site.address_audit.suite_patterns import (
+from src.mist.resources.site.address_audit.suite_patterns import (
     HASH_UNIT_PATTERN,
     SUITE_KEYWORDS,
     SUITE_PATTERN,

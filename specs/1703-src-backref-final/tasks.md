@@ -13,7 +13,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T003 Add the source dependency resolver in `src/config/source_dependency_resolver.py`.
+- [ ] T003 Add the source dependency resolver in `src/foundation/runtime/config/source_dependency_resolver.py`.
 - [ ] T004 Bind the extracted main entrypoint to the root module without importing the root module from `src`.
 
 ## Phase 3: User Story 1 - Source imports stay inside `src` (Priority: P1)

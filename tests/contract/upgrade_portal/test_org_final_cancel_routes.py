@@ -23,11 +23,11 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
-from src.firmware.org_upgrade_service import OrgUpgradeResult
-from src.firmware.upgrade_service import CancelOutcome, DeviceTarget, UpgradeOptions
-from src.upgrade_portal.app.routes import org_upgrade, select
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade, select
+from src.interfaces.portals.upgrade_portal.runtime import identity
+from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
+from src.operations.execution.firmware.upgrade_service import CancelOutcome, DeviceTarget, UpgradeOptions
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
 

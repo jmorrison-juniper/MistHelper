@@ -4,7 +4,7 @@ from __future__ import annotations  # Keep annotations import-safe during test c
 
 from datetime import date  # Build deterministic report dates.
 
-from src.reports.subscription_expiry.model import (
+from src.mist.intelligence.reports.subscription_expiry.model import (
     CONTRACT_RECORD_ABSENT_NOTE,
     MISSING_VALUE,
     ConsoleSummary,

@@ -55,8 +55,8 @@ specs\2751-success-reports\
 ### Source Code
 
 ```text
-src\gateway\wan_probe_device_override_manager.py
-src\refactors\wanprobe_config_manager.py
+src\mist\resources\gateway\wan_probe_device_override_manager.py
+src\foundation\support\refactors\wanprobe_config_manager.py
 tests\unit\gateway\test_wan_probe_override_pipeline.py
 tests\unit\refactors\test_wanprobe_config_manager.py
 changelog.d\issue-2751-success-reports.md

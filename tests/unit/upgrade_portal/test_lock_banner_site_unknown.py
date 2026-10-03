@@ -24,8 +24,8 @@ from collections.abc import Callable  # The injected lock reader is a callable s
 import pytest  # The test framework.
 from flask import Flask  # The smallest application that can hold the seam.
 
-from src.upgrade_portal.app.routes import upgrade  # The run page owns ``run_lock_banner``.
-from src.upgrade_portal.app.routes.select import (  # The banner builder and the three store words.
+from src.interfaces.portals.upgrade_portal.app.routes import upgrade  # The run page owns ``run_lock_banner``.
+from src.interfaces.portals.upgrade_portal.app.routes.select import (  # The banner builder and the three store words.
     LOCK_READER_KEY,
     LOCK_STATE_FREE,
     LOCK_STATE_UNKNOWN,

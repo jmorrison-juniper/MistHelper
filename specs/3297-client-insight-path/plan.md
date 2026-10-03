@@ -10,8 +10,8 @@ Replace the SDK call in `SiteClientInsightsService._fetch_single_metric` with a 
 ## Technical context
 
 - Python 3.13 and mistapi 0.64.0. The change adds no dependency.
-- `src/export/org_export_utils.py` already calls `session.mist_get(uri=uri, query=query)` where the SDK cannot build the request. This plan uses the same pattern.
-- `MetricRefusalLog` lives in `src/export/site_insights/metric_refusals.py`. Pull request #3298 adds it, so this branch rebases onto `main` after that merge.
+- `src/operations/exporting/export/org_export_utils.py` already calls `session.mist_get(uri=uri, query=query)` where the SDK cannot build the request. This plan uses the same pattern.
+- `MetricRefusalLog` lives in `src/operations/exporting/export/site_insights/metric_refusals.py`. Pull request #3298 adds it, so this branch rebases onto `main` after that merge.
 
 ## Design
 

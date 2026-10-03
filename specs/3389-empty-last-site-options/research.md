@@ -40,7 +40,7 @@ and then it states the count of the other sites.
 ## D5: Put the rule in a small class outside the route module
 
 `OrgSiteRecords` collects the targets and the options of each site. It lives in
-`src/upgrade_portal/upgrade/org_site_records.py`, and it imports no route
+`src/interfaces/portals/upgrade_portal/upgrade/org_site_records.py`, and it imports no route
 module. `OrgSiteRefusal` is a `ValueError`, so `save_options` already answers it
 with status 400 and the message text.
 

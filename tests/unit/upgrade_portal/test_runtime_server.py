@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime import server
+from src.interfaces.portals.upgrade_portal.runtime import server
 
 # WHY: The WSGI target the browser fixture passes. A realistic value shows a
 # reader where the target sits inside the command.

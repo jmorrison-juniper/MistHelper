@@ -19,10 +19,17 @@ from flask import Flask, session  # Exercise the existing signed selection autho
 from werkzeug.exceptions import HTTPException  # Inspect authoritative adapter refusal responses.
 from werkzeug.test import TestResponse  # Type complete Flask responses.
 
-from src.upgrade_portal.app.routes import review  # Call the production history routes and real adapters.
-from src.upgrade_portal.capture import store  # Preserve real query types, filters, and store readers.
-from src.upgrade_portal.compare import lock_audit  # Read only the synthetic temporary audit trail.
-from src.upgrade_portal.runtime import identity, lock  # Preserve sign-in policy and construct a synthetic hold.
+from src.interfaces.portals.upgrade_portal.app.routes import (
+    review,
+)  # Call the production history routes and real adapters.
+from src.interfaces.portals.upgrade_portal.capture import (
+    store,
+)  # Preserve real query types, filters, and store readers.
+from src.interfaces.portals.upgrade_portal.compare import lock_audit  # Read only the synthetic temporary audit trail.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+    lock,
+)  # Preserve sign-in policy and construct a synthetic hold.
 
 logger = logging.getLogger(__name__)  # Keep synthetic validation records separate from application records.
 

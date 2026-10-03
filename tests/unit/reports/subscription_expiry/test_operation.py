@@ -5,8 +5,8 @@ from __future__ import annotations  # Keep annotations import-safe during test c
 from dataclasses import dataclass, field  # Build compact fake dependency classes.
 from datetime import date  # Build deterministic report contexts.
 
-from src.reports.subscription_expiry.client import JsiAccountNotLinkedError
-from src.reports.subscription_expiry.model import (
+from src.mist.intelligence.reports.subscription_expiry.client import JsiAccountNotLinkedError
+from src.mist.intelligence.reports.subscription_expiry.model import (
     CONTRACT_RECORD_ABSENT_NOTE,
     MISSING_VALUE,
     STATE_UNSUPPORTED,
@@ -15,7 +15,7 @@ from src.reports.subscription_expiry.model import (
     LicenseUsageSource,
     ReportContext,
 )
-from src.reports.subscription_expiry.operation import (
+from src.mist.intelligence.reports.subscription_expiry.operation import (
     CONTRACT_FILENAME,
     SUBSCRIPTION_FILENAME,
     SubscriptionExpiryReport,

@@ -22,8 +22,8 @@ import pathlib  # The test reads the template tree and the script.
 
 # The templates and the script of the portal, found from this file.
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-TEMPLATE_ROOT = REPO_ROOT / "src/upgrade_portal/app/assets/templates"
-SCRIPT_PATH = REPO_ROOT / "src/upgrade_portal/app/assets/static/js/portal.js"
+TEMPLATE_ROOT = REPO_ROOT / "src/interfaces/portals/upgrade_portal/app/assets/templates"
+SCRIPT_PATH = REPO_ROOT / "src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js"
 
 # ---------------------------------------------------------------------------
 # Issue #2027: every table offers a sort on every column

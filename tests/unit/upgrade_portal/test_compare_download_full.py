@@ -28,10 +28,10 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import review
-from src.upgrade_portal.compare import clients as client_compare
-from src.upgrade_portal.compare import diff as device_compare
-from src.upgrade_portal.compare import download
+from src.interfaces.portals.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.compare import clients as client_compare
+from src.interfaces.portals.upgrade_portal.compare import diff as device_compare
+from src.interfaces.portals.upgrade_portal.compare import download
 
 # ---------------------------------------------------------------------------
 # The test values

@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from src.juniper_docs.acquire.catalog_client import (
+from src.mist.intelligence.juniper_docs.acquire.catalog_client import (
     MAX_CONSECUTIVE_HOST_FAILURES,
     MAX_HOST_PAUSE_CYCLES,
     MAX_REDIRECTS,
@@ -27,7 +27,7 @@ from src.juniper_docs.acquire.catalog_client import (
     JvdCatalogClient,
     is_transient_error,
 )
-from src.juniper_docs.acquire.http_config import HttpConfig
+from src.mist.intelligence.juniper_docs.acquire.http_config import HttpConfig
 
 
 class _FakeResponse:
@@ -171,7 +171,7 @@ class _FlakyOpener:
 
 def test_client_retries_a_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The client retries a transient error with a backoff, then succeeds (defect 3)."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)
+    monkeypatch.setattr("src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     client._opener = _FlakyOpener(2, ConnectionResetError("reset"))  # Two resets, then ok.
     assert client.fetch_text("https://x/page") == "ok body"  # The retry recovers the read.
@@ -180,7 +180,7 @@ def test_client_retries_a_transient_error(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_client_does_not_retry_a_permanent_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The client never retries a permanent 404 error (defect 3)."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)
+    monkeypatch.setattr("src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)
     error = urllib.error.HTTPError("https://x/page", 404, "not found", {}, None)  # A 404.
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     client._opener = _FlakyOpener(99, error)  # Always raises the 404 error.
@@ -207,7 +207,7 @@ class _AlwaysTimeout:
 
 def test_one_slow_document_does_not_flag_a_healthy_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every retry of one document counts once, so one slow file keeps the host alive."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)
+    monkeypatch.setattr("src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     client._opener = _AlwaysTimeout(0)  # Every read of this one document times out.
     with pytest.raises(OSError):  # The document itself fails after every retry.
@@ -392,7 +392,7 @@ def test_redirect_to_a_different_host_is_allowed_and_logged(caplog: pytest.LogCa
     final = "https://www.hpe.com/psnow/doc/ap47-datasheet.pdf"  # HPE now hosts the datasheet.
     script = {start: _ScriptedResponse(301, b"", final), final: _ScriptedResponse(200, _PDF_BODY)}
     client = _redirect_client(lambda url: script[url])  # Drive the cross-host redirect.
-    with caplog.at_level(logging.DEBUG, logger="src.juniper_docs.acquire.catalog_client"):  # Capture.
+    with caplog.at_level(logging.DEBUG, logger="src.mist.intelligence.juniper_docs.acquire.catalog_client"):  # Capture.
         payload = client.fetch_bytes(start)  # Fetch the datasheet that redirects to HPE.
     assert payload == _PDF_BODY  # The cross-host destination serves the real PDF.
     assert any(
@@ -514,8 +514,10 @@ def _trip_host(client: JvdCatalogClient, base: str) -> None:
 
 def test_repeated_no_response_marks_the_host_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
     """A host that times out repeatedly is flagged unreachable after the threshold."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)  # No sleep.
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
+    monkeypatch.setattr(
+        "src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0
+    )  # No sleep.
+    monkeypatch.setattr("src.mist.intelligence.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     opener = _SilentOpener()  # Every read on this host times out.
     client._opener = opener  # Replace the network opener with the silent opener.
@@ -526,8 +528,10 @@ def test_repeated_no_response_marks_the_host_unreachable(monkeypatch: pytest.Mon
 
 def test_a_later_url_on_an_unreachable_host_fails_without_opening(monkeypatch: pytest.MonkeyPatch) -> None:
     """A later URL on a flagged host fails fast, so it never waits the full timeout."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)  # No sleep.
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
+    monkeypatch.setattr(
+        "src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0
+    )  # No sleep.
+    monkeypatch.setattr("src.mist.intelligence.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     opener = _SilentOpener()  # Every read on this host times out.
     client._opener = opener  # Replace the network opener with the silent opener.
@@ -540,8 +544,10 @@ def test_a_later_url_on_an_unreachable_host_fails_without_opening(monkeypatch: p
 
 def test_a_different_host_is_unaffected_by_an_unreachable_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """One flagged host does not stop a read from a different, reachable host."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)  # No sleep.
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
+    monkeypatch.setattr(
+        "src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0
+    )  # No sleep.
+    monkeypatch.setattr("src.mist.intelligence.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     client._opener = _SelectiveOpener()  # The HPE host hangs, the Juniper host answers.
     _trip_host(client, "https://www.hpe.com/psnow")  # Flag the blocked host.
@@ -552,8 +558,10 @@ def test_a_different_host_is_unaffected_by_an_unreachable_host(monkeypatch: pyte
 
 def test_the_unreachable_reason_names_the_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """The failure reason names the host and states it is unreachable from this network."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)  # No sleep.
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
+    monkeypatch.setattr(
+        "src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0
+    )  # No sleep.
+    monkeypatch.setattr("src.mist.intelligence.juniper_docs.acquire.catalog_client.MAX_HOST_PAUSE_CYCLES", 0)
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     client._opener = _SilentOpener()  # Every read on this host times out.
     _trip_host(client, "https://www.hpe.com/psnow")  # Flag the blocked host first.
@@ -566,7 +574,9 @@ def test_the_unreachable_reason_names_the_host(monkeypatch: pytest.MonkeyPatch) 
 
 def test_a_reachable_host_still_retries_a_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """A transient blip on a reachable host still retries, so the retry does not regress."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)  # No sleep.
+    monkeypatch.setattr(
+        "src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0
+    )  # No sleep.
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     client._opener = _FlakyOpener(2, ConnectionResetError("reset"))  # Two blips, then a success.
     assert client.fetch_bytes(_JUNIPER_URL) == b"ok body"  # The retry recovers the read.
@@ -576,7 +586,9 @@ def test_a_reachable_host_still_retries_a_transient_error(monkeypatch: pytest.Mo
 
 def test_a_persistent_server_error_retries_without_flagging_the_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """A 5xx means the host answered, so it retries fully and is never flagged unreachable."""
-    monkeypatch.setattr("src.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0)  # No sleep.
+    monkeypatch.setattr(
+        "src.mist.intelligence.juniper_docs.acquire.catalog_client.RETRY_BASE_SECONDS", 0.0
+    )  # No sleep.
     client = JvdCatalogClient(HttpConfig.from_tls_mode("insecure"))  # A real client.
     opener = _ServerErrorOpener()  # Every read returns a 503 server error.
     client._opener = opener  # Replace the network opener with the 503 opener.

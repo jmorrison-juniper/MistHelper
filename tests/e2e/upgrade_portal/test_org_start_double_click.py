@@ -24,7 +24,7 @@ from urllib.parse import urlsplit  # Read the path of each request address.
 
 import pytest  # Skip the module when Playwright is not installed.
 
-from src.upgrade_portal.app.routes.upgrade import LOCK_STORE_DOWN_CODE, LOCK_STORE_DOWN_MESSAGE
+from src.interfaces.portals.upgrade_portal.app.routes.upgrade import LOCK_STORE_DOWN_CODE, LOCK_STORE_DOWN_MESSAGE
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, RELOAD_TIMEOUT_MS, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Issue #3243: the pre-check gate.
 from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Select actual targets.

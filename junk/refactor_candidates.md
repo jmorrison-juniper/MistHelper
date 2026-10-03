@@ -52,13 +52,13 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
   - `MistHelper.py`
-  - `src/export/count_exporter.py`
-  - `src/refactors/run_interactive_test.py`
-  - `src/refactors/run_systematic_test.py`
-  - `src/troubleshooting/interactive_test_runner.py`
-  - `src/utils/operation_registry.py`
-  - `src/wan_hub_group_manager.py`
-  - `src/wan_vpn_builder.py`
+  - `src/operations/exporting/export/count_exporter.py`
+  - `src/foundation/support/refactors/run_interactive_test.py`
+  - `src/foundation/support/refactors/run_systematic_test.py`
+  - `src/mist/intelligence/troubleshooting/interactive_test_runner.py`
+  - `src/foundation/support/utils/operation_registry.py`
+  - `src/operations/wan/wan_hub_group_manager.py`
+  - `src/operations/wan/wan_vpn_builder.py`
 
 ## Skipped (1)
 

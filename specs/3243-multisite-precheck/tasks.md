@@ -13,8 +13,8 @@
 
 ## Phase 2. The view layer and the store
 
-- [x] T005 Add `src/upgrade_portal/upgrade/org_precheck.py` with `SitePrecheck`, `OrgPrecheckState`, and `OrgPrecheckGate`.
-- [x] T006 Change `_PRECHECK_QUERY` in `src/upgrade_portal/capture/store.py` to return the seven fields of the plan.
+- [x] T005 Add `src/interfaces/portals/upgrade_portal/upgrade/org_precheck.py` with `SitePrecheck`, `OrgPrecheckState`, and `OrgPrecheckGate`.
+- [x] T006 Change `_PRECHECK_QUERY` in `src/interfaces/portals/upgrade_portal/capture/store.py` to return the seven fields of the plan.
 
 ## Phase 3. The routes
 
@@ -22,7 +22,7 @@
 - [x] T008 Add `_record_prechecks` to `_submit_aggregate`.
 - [x] T009 Split `_acquire_operation_locks`. Add `_operation_lock` and `_bind_precheck_lock`.
 - [x] T010 Add `prechecks` to `_aggregate_record_view`.
-- [x] T011 Add `src/upgrade_portal/app/routes/org_precheck.py`. Register `org_precheck` in `BLUEPRINT_NAMES` of `factory.py`.
+- [x] T011 Add `src/interfaces/portals/upgrade_portal/app/routes/org_precheck.py`. Register `org_precheck` in `BLUEPRINT_NAMES` of `factory.py`.
 
 ## Phase 4. The pages and the script
 

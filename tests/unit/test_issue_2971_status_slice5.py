@@ -8,16 +8,32 @@ from unittest.mock import MagicMock, patch  # WHY: replace cloud and writer boun
 
 import pytest  # WHY: pytest fixtures drive the real product functions.
 
-from src.refactors import device_data_fetcher as fetcher_module  # WHY: patch the real device fetcher resolver.
-from src.refactors.device_data_fetcher import DeviceDataFetcher  # WHY: drive the real device fetcher.
-from src.reports import ssid_broadcast_gap_report as ssid_gap_module  # WHY: drive the real SSID report.
-from src.reports import wired_client_manufacturer_report_generator as wired_report_module  # WHY: real report.
-from src.ssid_consolidation import _ssid_template_phase1 as phase1_module  # WHY: drive the phase helper.
-from src.ssid_consolidation import ssid_template_consolidation as ssid_template_module  # WHY: drive parent helper.
-from src.ui import interactive_display_utils as display_module  # WHY: patch and drive real display functions.
-from src.ui import prompt_utils as prompt_module  # WHY: patch and drive real prompt helpers.
-from src.ui.interactive_display_utils import InteractiveDisplayUtils  # WHY: import the real product class.
-from src.ui.prompt_utils import PromptUtils  # WHY: import the real prompt helper.
+from src.foundation.support.refactors import (
+    device_data_fetcher as fetcher_module,
+)  # WHY: patch the real device fetcher resolver.
+from src.foundation.support.refactors.device_data_fetcher import (
+    DeviceDataFetcher,
+)  # WHY: drive the real device fetcher.
+from src.interfaces.visualization.ui import (
+    interactive_display_utils as display_module,
+)  # WHY: patch and drive real display functions.
+from src.interfaces.visualization.ui import prompt_utils as prompt_module  # WHY: patch and drive real prompt helpers.
+from src.interfaces.visualization.ui.interactive_display_utils import (
+    InteractiveDisplayUtils,
+)  # WHY: import the real product class.
+from src.interfaces.visualization.ui.prompt_utils import PromptUtils  # WHY: import the real prompt helper.
+from src.mist.intelligence.reports import (
+    ssid_broadcast_gap_report as ssid_gap_module,
+)  # WHY: drive the real SSID report.
+from src.mist.intelligence.reports import (
+    wired_client_manufacturer_report_generator as wired_report_module,
+)  # WHY: real report.
+from src.operations.execution.ssid_consolidation import (
+    _ssid_template_phase1 as phase1_module,
+)  # WHY: drive the phase helper.
+from src.operations.execution.ssid_consolidation import (
+    ssid_template_consolidation as ssid_template_module,
+)  # WHY: drive parent helper.
 
 
 class _FailedResponse:
@@ -127,7 +143,7 @@ def test_device_stats_503_returns_none_suppresses_success_and_writes_no_file(
     _run_display_with_failed_fetch(
         caplog,
         "device_stats",
-        "src.ui.interactive_display_utils.mistapi.api.v1.sites.stats.getSiteDeviceStats",
+        "src.interfaces.visualization.ui.interactive_display_utils.mistapi.api.v1.sites.stats.getSiteDeviceStats",
         "Completed device_stats execution.",
     )  # WHY: share the real display/fetcher assertion flow.
 
@@ -139,7 +155,7 @@ def test_device_tests_503_returns_none_suppresses_success_and_writes_no_file(
     _run_display_with_failed_fetch(
         caplog,
         "device_tests",
-        "src.ui.interactive_display_utils.mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest",
+        "src.interfaces.visualization.ui.interactive_display_utils.mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest",
         "Completed device_tests execution.",
     )  # WHY: share the real display/fetcher assertion flow.
 
@@ -151,7 +167,7 @@ def test_device_config_503_returns_none_suppresses_success_and_writes_no_file(
     _run_display_with_failed_fetch(
         caplog,
         "device_config",
-        "src.ui.interactive_display_utils.mistapi.api.v1.sites.devices.getSiteDevice",
+        "src.interfaces.visualization.ui.interactive_display_utils.mistapi.api.v1.sites.devices.getSiteDevice",
         "Completed device_config execution.",
     )  # WHY: share the real display/fetcher assertion flow.
 

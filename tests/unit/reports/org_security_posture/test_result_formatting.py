@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.reports.org_security_posture.io.formatting import SecurityPostureFormatting
+from src.mist.intelligence.reports.org_security_posture.io.formatting import SecurityPostureFormatting
 
 
 def test_display_value_redacts_secret_fields() -> None:

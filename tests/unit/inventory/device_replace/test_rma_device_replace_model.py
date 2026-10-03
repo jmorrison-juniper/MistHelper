@@ -4,7 +4,10 @@ from __future__ import annotations  # WHY: keep annotations consistent with sour
 
 import pytest  # WHY: assert validation failures in pure model tests.
 
-from src.inventory.device_replace.models import DeviceReplaceValidator, InventoryDevice  # WHY: test pure behavior.
+from src.mist.resources.inventory.device_replace.models import (
+    DeviceReplaceValidator,
+    InventoryDevice,
+)  # WHY: test pure behavior.
 
 
 def _device(**overrides: str) -> InventoryDevice:

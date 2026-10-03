@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: match package type syntax.
 
 import pytest  # WHY: validate model refusal paths.
 
-from src.org.mxedge_lifecycle.models import (  # WHY: pure builders are the contract surface.
+from src.mist.resources.org.mxedge_lifecycle.models import (  # WHY: pure builders are the contract surface.
     REDACTED_VALUE,
     STEP_ASSIGN,
     STEP_BOUNCE,

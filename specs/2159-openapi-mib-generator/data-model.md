@@ -149,7 +149,7 @@ small diff. A worked example, seeded from the catalog:
 }
 ```
 
-`base_oid` in this file must equal `DEFAULT_BASE_OID` in `src/metrics_gateway/snmp.py`. A difference
+`base_oid` in this file must equal `DEFAULT_BASE_OID` in `src/interfaces/monitoring/metrics_gateway/snmp.py`. A difference
 stops the run (FR-017).
 
 ### 3.1 The column bands

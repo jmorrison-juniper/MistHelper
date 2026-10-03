@@ -13,13 +13,13 @@ A NOC engineer picks a site from the pick list and runs menu 69. The Execution L
 **Acceptance Scenarios**:
 
 1. **Given** a site-scoped run, **When** the Execution Log renders, **Then** it holds no `Available Sites:` heading and no `[N] SiteName` row.
-2. **Given** the same run, **When** the refresh writes the polyglot store, **Then** no `src.db`, `redis_writer`, or `redis_json_writer` INFO line and no `Polyglot write:` or `Polyglot DatabaseRouter initialized` line appears.
+2. **Given** the same run, **When** the refresh writes the polyglot store, **Then** no `src.foundation.persistence.db`, `redis_writer`, or `redis_json_writer` INFO line and no `Polyglot write:` or `Polyglot DatabaseRouter initialized` line appears.
 3. **Given** a site name that does not match, **When** the prompt logs `Site not found by name or index`, **Then** that line appears.
 4. **Given** a database warning, **When** the log renders, **Then** the warning appears.
 
 ## Requirements *(mandatory)*
 
-- **FR-001**: The portal MUST route the site menu heading and rows of `src.ui.prompt_utils` to the debug channel.
+- **FR-001**: The portal MUST route the site menu heading and rows of `src.interfaces.visualization.ui.prompt_utils` to the debug channel.
 - **FR-002**: The portal MUST route INFO lines of the polyglot store to the debug channel, and it MUST keep every WARNING visible.
 - **FR-003**: A numbered line from any other logger MUST stay in the Execution Log.
 - **FR-004**: A test MUST fail when the menu calls in the source change shape.

@@ -8,15 +8,32 @@ from concurrent.futures import ThreadPoolExecutor  # The thread test returns the
 
 import pytest  # Terminal close tests capture contract errors.
 
-from src.websocket_streams.catalog.model import ChannelDefinition  # Tests build a local definition.
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Terminal close tests verify contract errors.
-from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.sessions.buffer.message_buffer import MessageBuffer  # Tests inject a small buffer.
-from src.websocket_streams.live.sessions.record.session import StreamSession  # The tests cover the session sink.
-from src.websocket_streams.live.sessions.record.state import SessionResources, SessionState  # Build resources.
-from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Terminal tests inspect raw byte history.
-from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Terminal tests verify input release.
-from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Attach terminal state.
+from src.mist.realtime.websocket_streams.catalog.model import ChannelDefinition  # Tests build a local definition.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Terminal close tests verify contract errors.
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    StartRequest,
+)  # Tests build checked requests by hand.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message_buffer import (
+    MessageBuffer,
+)  # Tests inject a small buffer.
+from src.mist.realtime.websocket_streams.live.sessions.record.session import (
+    StreamSession,
+)  # The tests cover the session sink.
+from src.mist.realtime.websocket_streams.live.sessions.record.state import (
+    SessionResources,
+    SessionState,
+)  # Build resources.
+from src.mist.realtime.websocket_streams.live.terminal.byte_history import (
+    ByteHistory,
+)  # Terminal tests inspect raw byte history.
+from src.mist.realtime.websocket_streams.live.terminal.input_queue import (
+    TerminalInput,
+)  # Terminal tests verify input release.
+from src.mist.realtime.websocket_streams.live.terminal.state.terminal_state import (
+    TerminalState,
+)  # Attach terminal state.
 
 
 class FakeClock:

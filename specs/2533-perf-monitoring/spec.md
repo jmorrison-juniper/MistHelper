@@ -65,7 +65,7 @@ A record contains an adversarial label. The sink stores a JSON Lines record with
 
 ### Functional Requirements
 
-- **FR-001**: The package MUST import from `src.utils.performance`.
+- **FR-001**: The package MUST import from `src.foundation.support.utils.performance`.
 - **FR-002**: The default recorder MUST emit no event.
 - **FR-003**: A level MUST select the event families that can emit.
 - **FR-004**: A span MUST measure wall time with `time.perf_counter_ns()`.

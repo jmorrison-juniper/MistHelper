@@ -10,7 +10,7 @@
 
 ## Overview
 
-MistHelper serves Mist Cloud health over SNMP. The gateway is in `src/metrics_gateway/`. It reads three Mist endpoints and it publishes 35 readings. A person wrote the MIB at `documentation/mibs/MISTHELPER-MIB.mib` by hand. A person must edit that file each time Mist adds a field. The hand work already made one defect. The first version put every table one level too deep, so no table object was reachable by name.
+MistHelper serves Mist Cloud health over SNMP. The gateway is in `src/interfaces/monitoring/metrics_gateway/`. It reads three Mist endpoints and it publishes 35 readings. A person wrote the MIB at `documentation/mibs/MISTHELPER-MIB.mib` by hand. A person must edit that file each time Mist adds a field. The hand work already made one defect. The first version put every table one level too deep, so no table object was reachable by name.
 
 This feature adds a module that reads the Mist OpenAPI file and writes the MIB. The module removes the hand editing. A person runs the module after Mist ships a new OpenAPI file, and the MIB is correct again.
 
@@ -118,13 +118,13 @@ An engineer replaces the hand-written MIB with the generated MIB. Every object t
 #### Coverage of the generated MIB (design answer 2)
 
 - **FR-013**: The generated MIB MUST describe only the readings that the agent serves. A MIB object that the agent never answers returns "No Such Instance" and a NOC engineer reads that as a fault.
-- **FR-014**: The module MUST take the served set from the gateway catalog in `src/metrics_gateway/catalog.py`. The OpenAPI file gives the type, the description, and the check that the field still exists. The catalog gives the truth about what the agent answers.
+- **FR-014**: The module MUST take the served set from the gateway catalog in `src/interfaces/monitoring/metrics_gateway/catalog.py`. The OpenAPI file gives the type, the description, and the check that the field still exists. The catalog gives the truth about what the agent answers.
 - **FR-015**: The module MUST stop with an error when the catalog names a source field that the selected OpenAPI schema no longer holds. That error tells the team that Mist removed a field.
 - **FR-016**: The module MUST report, but MUST NOT emit, a field that the OpenAPI file holds and the catalog does not. That report is the work list for the next catalog change.
 
 #### OID layout and stability
 
-- **FR-017**: The MIB root MUST be `.1.3.6.1.4.1.11.2147483646`. That value MUST match `DEFAULT_BASE_OID` in `src/metrics_gateway/snmp.py`. The module MUST stop with an error when the two differ.
+- **FR-017**: The MIB root MUST be `.1.3.6.1.4.1.11.2147483646`. That value MUST match `DEFAULT_BASE_OID` in `src/interfaces/monitoring/metrics_gateway/snmp.py`. The module MUST stop with an error when the two differ.
 - **FR-018**: A scalar MUST sit at `<base>.<subtree>.<column>.0`.
 - **FR-019**: A table cell MUST sit at `<base>.<subtree>.1.<column>.<row>`. The module MUST NOT add a level below the table entry.
 - **FR-020**: A subtree number MUST come from `SUBTREE_BY_SCOPE`. Column 99 MUST hold the row identity, as `ROW_IDENTITY_COLUMN` states.
@@ -183,7 +183,7 @@ An engineer replaces the hand-written MIB with the generated MIB. Every object t
 - **Unit**: The number keeper. Hypothesis adds and removes fields in a random order and checks that a kept field never changes its number.
 - **Unit**: The type mapper. Each JSON type gives the stated SNMP type, and a scaled ratio gives a whole number.
 - **Contract**: The generated MIB parses with `snmptranslate`. The test skips when Net-SNMP is absent, and CI installs Net-SNMP so the test runs there.
-- **Contract**: Every OID in the generated MIB matches an OID that `src/metrics_gateway/snmp.py` answers.
+- **Contract**: Every OID in the generated MIB matches an OID that `src/interfaces/monitoring/metrics_gateway/snmp.py` answers.
 - **Regression**: The 35 objects of the hand-written MIB keep the same name and the same OID.
 - **Performance**: A run against the 16.6 MB file finishes inside the stated limit and stays inside the stated memory limit.
 - **Manual, once**: Import the output into Observium and into SolarWinds and record the result in the pull request.

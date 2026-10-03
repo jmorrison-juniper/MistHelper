@@ -1,4 +1,4 @@
-"""Unit tests for the pure functions of the ``src.upgrade_portal`` package.
+"""Unit tests for the pure functions of the ``src.interfaces.portals.upgrade_portal`` package.
 
 Why:
     These tests cover the pure functions only. They make no network request

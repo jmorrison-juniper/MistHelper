@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_site_records import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_site_records import (
     NAME_LIMIT,
     SHORT_MESSAGE,
     UNPLANNED_MESSAGE,

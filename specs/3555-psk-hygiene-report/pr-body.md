@@ -5,15 +5,15 @@
 Closes #3555
 
 ## Summary
-- Added `src/reports/psk_hygiene/` with the PSK hygiene client, model, and operation.
+- Added `src/mist/intelligence/reports/psk_hygiene/` with the PSK hygiene client, model, and operation.
 - Added unit tests under `tests/unit/reports/psk_hygiene/`.
 - Added `changelog.d/issue-3555-psk-hygiene-report.md`.
 - Deferred menu wiring to `specs/3555-psk-hygiene-report/wiring.md`.
 
 ## Deferred integration work
 - `MistHelper.py` menu 274 registration is deferred.
-- `src/utils/operation_registry.py` is deferred.
-- `src/refactors/endpoint_primary_key_strategies.py` is deferred.
+- `src/foundation/support/utils/operation_registry.py` is deferred.
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` is deferred.
 - `README.md` and generated menu references are deferred.
 - The integration pull request must run `python MistHelper.py --test --menu 274`.
 
@@ -27,7 +27,7 @@ Closes #3555
 - [x] New or changed guards state the measured count and prove one failing path.
 - [x] No new Ruff lint violations for the feature scope.
 - [x] Code formatted with Black for the feature scope.
-- [x] mypy passes for `src/reports/psk_hygiene`.
+- [x] mypy passes for `src/mist/intelligence/reports/psk_hygiene`.
 
 ## Security
 - [x] No hardcoded secrets, tokens, or passwords.
@@ -51,13 +51,13 @@ Closes #3555
 
 ## Local validation
 - `python -m py_compile` passed for all new PSK hygiene source and test files.
-- `python -m ruff check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
-- `python -m black --check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
-- `python -m mypy src\reports\psk_hygiene --config-file pyproject.toml` passed.
-- `python -m pydocstyle src\reports\psk_hygiene` passed.
+- `python -m ruff check src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
+- `python -m black --check src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
+- `python -m mypy src\mist\intelligence\reports\psk_hygiene --config-file pyproject.toml` passed.
+- `python -m pydocstyle src\mist\intelligence\reports\psk_hygiene` passed.
 - `python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120` passed with 26 tests.
-- `python -m vulture src\reports\psk_hygiene --min-confidence 70` passed.
-- `python -m interrogate -v src\reports\psk_hygiene` passed at 100 percent.
+- `python -m vulture src\mist\intelligence\reports\psk_hygiene --min-confidence 70` passed.
+- `python -m interrogate -v src\mist\intelligence\reports\psk_hygiene` passed at 100 percent.
 
 ## Known draft blocker
 - Final SpecKit analysis still reports a class-based model helper concern. The current implementation exposes `PskHygieneScorer`, but private module helpers remain.

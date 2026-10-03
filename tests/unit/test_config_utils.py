@@ -1,4 +1,4 @@
-"""Unit tests for src.config.config_utils.ConfigUtils (1015 T-12).
+"""Unit tests for src.foundation.runtime.config.config_utils.ConfigUtils (1015 T-12).
 
 Covers the full public surface of the extracted class:
 - Class-level cache (``_org_id_cache``) via setters/getters and the resolver.
@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.config.config_utils import ConfigUtils
+from src.foundation.runtime.config.config_utils import ConfigUtils
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +100,9 @@ class TestGetCachedOrPromptedOrgId:
     def test_prompt_path_uses_injected_session(self):
         session = MagicMock(name="session")
         ConfigUtils.set_apisession(session)
-        with patch("src.config.config_utils.mistapi.cli.select_org", return_value=["picked-org"]) as picker:
+        with patch(
+            "src.foundation.runtime.config.config_utils.mistapi.cli.select_org", return_value=["picked-org"]
+        ) as picker:
             result = ConfigUtils.get_cached_or_prompted_org_id()
         picker.assert_called_once_with(session)
         assert result == "picked-org"
@@ -114,7 +116,7 @@ class TestGetCachedOrPromptedOrgId:
 
     def test_prompt_path_empty_selection_exits(self):
         ConfigUtils.set_apisession(MagicMock())
-        with patch("src.config.config_utils.mistapi.cli.select_org", return_value=[]):
+        with patch("src.foundation.runtime.config.config_utils.mistapi.cli.select_org", return_value=[]):
             with pytest.raises(SystemExit) as excinfo:
                 ConfigUtils.get_cached_or_prompted_org_id()
         assert excinfo.value.code == 1
@@ -123,7 +125,7 @@ class TestGetCachedOrPromptedOrgId:
     def test_prompt_path_http_failure_reaches_caller(self, status_code: int) -> None:
         ConfigUtils.set_apisession(MagicMock())
         with patch(
-            "src.config.config_utils.mistapi.cli.select_org",
+            "src.foundation.runtime.config.config_utils.mistapi.cli.select_org",
             side_effect=RuntimeError(f"HTTP {status_code}"),
         ):
             with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):

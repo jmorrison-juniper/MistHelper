@@ -10,7 +10,7 @@ Measured: Keep the comparison download behavior unchanged.
 
 ## Scope
 
-Measured: This change covers `src/upgrade_portal/capture/export.py`.
+Measured: This change covers `src/interfaces/portals/upgrade_portal/capture/export.py`.
 
 Rejected: The comparison full export experiment reduced memory, but it made the large wall time worse.
 

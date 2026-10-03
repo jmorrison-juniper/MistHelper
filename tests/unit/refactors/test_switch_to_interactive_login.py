@@ -1,4 +1,4 @@
-"""Wave 7 P2 coverage for src/refactors/switch_to_interactive_login.py (initiative #1018).
+"""Wave 7 P2 coverage for src/foundation/support/refactors/switch_to_interactive_login.py (initiative #1018).
 
 Covers every branch of ``SwitchToInteractiveLoginManager`` plus the module-level
 ``_resolve_runtime_dependencies`` helper:
@@ -29,7 +29,7 @@ from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + 
 
 import pytest  # WHY: fixture + monkeypatch + caplog fixtures.
 
-from src.refactors.switch_to_interactive_login import (  # WHY: direct SUT imports.
+from src.foundation.support.refactors.switch_to_interactive_login import (  # WHY: direct SUT imports.
     SwitchToInteractiveLoginManager,
     _resolve_runtime_dependencies,
 )

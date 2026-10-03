@@ -15,9 +15,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from src.juniper_docs.discovery.inventory_builder import InventoryBuilder
-from src.juniper_docs.discovery.sitemap_reader import SitemapReader
-from src.juniper_docs.harvest.runner import (
+from src.mist.intelligence.juniper_docs.discovery.inventory_builder import InventoryBuilder
+from src.mist.intelligence.juniper_docs.discovery.sitemap_reader import SitemapReader
+from src.mist.intelligence.juniper_docs.harvest.runner import (
     DEFAULT_INDEX_URL,
     DEFAULT_MARKETING_URL,
     SOURCE_BOTH,
@@ -27,7 +27,7 @@ from src.juniper_docs.harvest.runner import (
     TuningConfig,
     _sanitize,
 )
-from src.juniper_docs.models import DocumentType
+from src.mist.intelligence.juniper_docs.models import DocumentType
 from tests.unit.juniper_docs.conftest import FIXTURES, FakeCatalogClient
 
 _SUBSET = str(FIXTURES / "sitemap_subset.xml")

@@ -20,7 +20,7 @@ import logging
 
 import pytest
 
-from src.troubleshooting.interactive_test_runner import _LoggedErrorObserver
+from src.mist.intelligence.troubleshooting.interactive_test_runner import _LoggedErrorObserver
 
 
 def _record(logger_name: str, level: int = logging.ERROR) -> logging.LogRecord:
@@ -58,7 +58,7 @@ def test_child_logger_of_a_third_party_root_is_also_ignored() -> None:
 
 @pytest.mark.parametrize(
     "logger_name",
-    ["src.export.site_insights", "MistHelper", "root", ""],
+    ["src.operations.exporting.export.site_insights", "MistHelper", "root", ""],
 )
 def test_misthelper_error_still_fails_the_option(logger_name: str) -> None:
     """Issue #1636 must keep working. A MistHelper ERROR still fails the option."""
@@ -71,7 +71,7 @@ def test_misthelper_error_still_fails_the_option(logger_name: str) -> None:
 def test_below_error_level_is_never_counted() -> None:
     """A WARNING must not fail an option."""
     observer = _LoggedErrorObserver()
-    observer.emit(_record("src.export", level=logging.WARNING))
+    observer.emit(_record("src.operations.exporting.export", level=logging.WARNING))
     assert observer.error_count == 0
     assert observer.ignored_count == 0
 
@@ -90,6 +90,6 @@ def test_a_real_error_beside_sdk_noise_still_fails() -> None:
     """SDK noise must not mask a genuine swallowed error in the same option."""
     observer = _LoggedErrorObserver()
     observer.emit(_record("mistapi"))
-    observer.emit(_record("src.device.prompt_utils"))
+    observer.emit(_record("src.mist.resources.device.prompt_utils"))
     assert observer.ignored_count == 1
     assert observer.error_count == 1, "the MistHelper error must survive the filter"

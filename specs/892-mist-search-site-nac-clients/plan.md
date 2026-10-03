@@ -13,9 +13,9 @@ key and Arango mapping already cover this operation.
 
 ## Files
 
-- `src/export/site_search_exporter.py`: Add the endpoint binding and label.
+- `src/operations/exporting/export/site_search_exporter.py`: Add the endpoint binding and label.
 - `MistHelper.py`: Register menu 257.
-- `src/utils/operation_registry.py`: Classify menu 257 as `interactive_safe`.
+- `src/foundation/support/utils/operation_registry.py`: Classify menu 257 as `interactive_safe`.
 - `tests/unit/export/test_site_search_exporter.py`: Test the endpoint binding.
 - `README.md`: Update the operation count and menu description.
 - `CHANGELOG.md`: Record the new menu operation.

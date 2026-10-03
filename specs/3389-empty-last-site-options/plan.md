@@ -21,8 +21,8 @@ view read stops a retry save too.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/upgrade/org_site_records.py` | New. `OrgSiteRecords` and `OrgSiteRefusal`. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | `_aggregate_option_record` uses the class. `_site_labels` reads the names. `_site_option_record` returns the empty record for an empty view. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_site_records.py` | New. `OrgSiteRecords` and `OrgSiteRefusal`. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | `_aggregate_option_record` uses the class. `_site_labels` reads the names. `_site_option_record` returns the empty record for an empty view. |
 | `tests/unit/upgrade_portal/test_org_site_records.py` | New. The rules of the class and the name cap. |
 | `tests/contract/upgrade_portal/test_org_site_records_routes.py` | New. The save route with real Flask and the shipped build. A failed view read. |
 | `tests/e2e/upgrade_portal/empty_site_seeds.py` | New. The empty site and its operator. |

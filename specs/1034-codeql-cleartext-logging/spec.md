@@ -20,10 +20,10 @@ token preview and used a position label such as `2/3` instead.
 
 | Issue | File | Alerts | Data in the log line |
 | - | - | - | - |
-| #1733 | `src/site/address_audit/address_resolver.py` | 10 | Physical street addresses |
-| #1734 | `src/capture/packet_capture.py` | 4 | 3 MAC addresses and 1 constructed payload |
-| #1735 | `src/device/_utility_commands_action.py` | 1 | A live ZTP password on the console |
-| #1736 | `src/ssh/ssh_runner_manager.py` | 2 | A target host list and a user name |
+| #1733 | `src/mist/resources/site/address_audit/address_resolver.py` | 10 | Physical street addresses |
+| #1734 | `src/operations/execution/capture/packet_capture.py` | 4 | 3 MAC addresses and 1 constructed payload |
+| #1735 | `src/mist/resources/device/_utility_commands_action.py` | 1 | A live ZTP password on the console |
+| #1736 | `src/operations/execution/ssh/ssh_runner_manager.py` | 2 | A target host list and a user name |
 | #1737 | `starlink_dashboard.py` | 2 | A GPS latitude and a GPS longitude |
 
 An alert is not proof of a defect. A MAC address is a device identifier that this tool
@@ -191,7 +191,7 @@ earlier sweep missed.
 
 **Independent Test**: Start a bulk SSH run. Confirm that the plan echo still appears on the
 screen with the same text. Confirm that the log records the echo at the information level.
-Then search `src/ssh/` for the `!?` prefix and confirm the result matches the register.
+Then search `src/operations/execution/ssh/` for the `!?` prefix and confirm the result matches the register.
 
 **Acceptance Scenarios**:
 
@@ -199,7 +199,7 @@ Then search `src/ssh/` for the `!?` prefix and confirm the result matches the re
    the screen text matches the earlier text.
 2. **Given** the echo runs, **When** a reviewer reads the log, **Then** the log holds the
    echo at the information level and not at the warning level.
-3. **Given** the sweep of `src/ssh/` finishes, **When** a reviewer reads the register,
+3. **Given** the sweep of `src/operations/execution/ssh/` finishes, **When** a reviewer reads the register,
    **Then** the register lists each remaining `!?` echo or states that none remain.
 
 ---
@@ -272,7 +272,7 @@ Then search `src/ssh/` for the `!?` prefix and confirm the result matches the re
   `echo()` helper that spec 1031 introduced.
 - **FR-016**: The converted echo MUST keep the operator-visible text and MUST log at the
   information level instead of the warning level.
-- **FR-017**: The team MUST search `src/ssh/` for every remaining `!?` console echo. The
+- **FR-017**: The team MUST search `src/operations/execution/ssh/` for every remaining `!?` console echo. The
   team MUST convert each one or MUST list each one in the register with a reason.
 
 #### Street address stance (issue #1733)
@@ -351,7 +351,7 @@ Then search `src/ssh/` for the `!?` prefix and confirm the result matches the re
   next review trigger.
 - **SC-005**: A ZTP password request with a redirected output stream produces 0 occurrences
   of the credential in the captured output.
-- **SC-006**: `src/ssh/` holds 0 unconverted `!?` console echoes, or the register lists each
+- **SC-006**: `src/operations/execution/ssh/` holds 0 unconverted `!?` console echoes, or the register lists each
   remaining one with a reason.
 - **SC-007**: All five tracking issues reach the closed state.
 - **SC-008**: The feature introduces 0 new alerts of the same query.
@@ -368,7 +368,7 @@ Then search `src/ssh/` for the `!?` prefix and confirm the result matches the re
   line number.
 - A dismissal in the GitHub security tab is the recorded representation of the verdict
   `false_positive` and of the verdict `accepted_with_rationale`.
-- The `echo()` helper that spec 1031 introduced is available to `src/ssh/` and is the correct
+- The `echo()` helper that spec 1031 introduced is available to `src/operations/execution/ssh/` and is the correct
   target for the two flagged lines.
 - Menu 101 builds the site support package, and that package can hold the address audit log.
 - The container serves SSH on port 2200 with a forced command launch, so a recorded session

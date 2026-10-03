@@ -55,10 +55,10 @@ must apply to each selected site child.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_options.html` | Add the `reboot_at` form control with a stable `data-testid`. |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html` | Show the reboot delay when the operator set it. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | Read, validate, store, and display `reboot_at`. |
-| `src/firmware/aggregate_upgrade_service.py` | Store the converted `reboot_at` epoch seconds on each non-AP site child. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html` | Add the `reboot_at` form control with a stable `data-testid`. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html` | Show the reboot delay when the operator set it. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | Read, validate, store, and display `reboot_at`. |
+| `src/operations/execution/firmware/aggregate_upgrade_service.py` | Store the converted `reboot_at` epoch seconds on each non-AP site child. |
 | `tests/contract/upgrade_portal/test_org_upgrade_routes.py` | Add offline route, form, confirmation, validation, and aggregate service tests. |
 | `changelog.d/issue-2575-reboot-delay.md` | Add the release note fragment. |
 

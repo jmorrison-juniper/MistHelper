@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import select
-from src.upgrade_portal.runtime.cloud_cache import CloudReadCache
+from src.interfaces.portals.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.runtime.cloud_cache import CloudReadCache
 
 SITES = [{"id": "site-1", "name": "One"}, {"id": "site-2", "name": "Two"}]  # One cloud answer.
 KEY = ("owner-a", "listOrgSites", "org-1", 1)  # One operator, one read, one organization, one session.

@@ -8,10 +8,10 @@ from socket import socket as RealSocket  # The TLS fake wraps a real idle socket
 from socket import socketpair  # Select needs a real socket with no data.
 
 import pytest  # Close frame tests assert structured errors.
-
-from src.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed, FrameRead
-from src.websocket_streams.live.transport.runtime.reader.frame_reader import FrameReader
 from websocket import ABNF  # Tests use concrete opcode values.
+
+from src.mist.realtime.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed, FrameRead
+from src.mist.realtime.websocket_streams.live.transport.runtime.reader.frame_reader import FrameReader
 
 
 class FrameSocket:

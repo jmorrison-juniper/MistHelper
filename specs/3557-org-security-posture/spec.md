@@ -137,4 +137,4 @@ A reviewer can distinguish missing API-policy information from confirmed failure
 - Recommended values reflect conservative enterprise security defaults suitable for a security review; documented compensating controls may justify a `review` outcome rather than an automatic pass.
 - `--test` mode uses representative fixture data and must not require network access, operator prompts, or live organization credentials.
 - Existing CSV export behavior may be reused as long as the exported evidence file has the required name, location, rows, and columns.
-- The integration pull request registers menu 276 in `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, generated menu references, and user-facing menu documentation.
+- The integration pull request registers menu 276 in `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py`, generated menu references, and user-facing menu documentation.

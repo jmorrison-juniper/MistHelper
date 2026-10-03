@@ -60,6 +60,6 @@ def test_the_menu_offers_the_generator() -> None:
 
 def test_the_registry_marks_the_menu_entry_safe() -> None:
     """The registry must class 243 as safe, or the guard blocks the entry."""
-    from src.utils.operation_registry import OperationRegistry  # The guard owns the table.
+    from src.foundation.support.utils.operation_registry import OperationRegistry  # The guard owns the table.
 
     assert OperationRegistry._REGISTRY["243"]["category"] == "safe"  # A read-only action is safe.

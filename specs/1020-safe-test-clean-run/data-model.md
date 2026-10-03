@@ -26,7 +26,7 @@ options are static for the duration of a process.
 ## 2. Operation Classification
 
 Represents one entry in `OperationRegistry._REGISTRY`
-(`src/utils/operation_registry.py:51-274`).
+(`src/foundation/support/utils/operation_registry.py:51-274`).
 
 | Field | Type | Notes |
 |---|---|---|
@@ -59,8 +59,8 @@ capability the coverage guardrail depends on):
 ## 3. Systematic Test Run
 
 Represents one execution of `RunSystematicTestManager.run()`
-(`src/refactors/run_systematic_test.py:75-99`) or the analogous
-`--testinteractive` runner (`src/refactors/run_interactive_test.py`).
+(`src/foundation/support/refactors/run_systematic_test.py:75-99`) or the analogous
+`--testinteractive` runner (`src/foundation/support/refactors/run_interactive_test.py`).
 
 | Field | Type | Source |
 |---|---|---|
@@ -101,7 +101,7 @@ per process invocation, never written to disk or logged with secret values.
 
 New conceptual entity — the outcome of the new
 `_is_running_in_isolated_venv()` predicate (R3) on
-`DependencyCheckOrchestrator` (`src/bootstrap/dependency_check.py`).
+`DependencyCheckOrchestrator` (`src/foundation/runtime/bootstrap/dependency_check.py`).
 
 | Field | Type | Notes |
 |---|---|---|

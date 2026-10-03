@@ -19,7 +19,7 @@
 
 **Purpose**: Project scaffold, dependencies, tooling, container definitions
 
-- [X] T001 Create project directory structure per plan.md (src/api/, src/worker/, src/shared/, tests/, migrations/, deploy/, docs/) - Delivered: `mist-ops-platform\src\api\main.py:30`, `mist-ops-platform\src\worker\celeryconfig.py:16`, `mist-ops-platform\src\shared\db.py:13`, `mist-ops-platform\migrations\env.py:44`, `mist-ops-platform\deploy\compose.yml:1`, and `mist-ops-platform\docs\architecture.md:1`.
+- [X] T001 Create project directory structure per plan.md (src/mist/access/api/, src/worker/, src/shared/, tests/, migrations/, deploy/, docs/) - Delivered: `mist-ops-platform\src\mist\access\api\main.py:30`, `mist-ops-platform\src\worker\celeryconfig.py:16`, `mist-ops-platform\src\shared\db.py:13`, `mist-ops-platform\migrations\env.py:44`, `mist-ops-platform\deploy\compose.yml:1`, and `mist-ops-platform\docs\architecture.md:1`.
 - [X] T002 Create pyproject.toml with all 21 runtime and 7 dev dependencies from research.md R-11 - Delivered: `mist-ops-platform\pyproject.toml:14` defines runtime dependencies, and `mist-ops-platform\pyproject.toml:35` defines dev dependencies.
 - [X] T003 [P] Configure ruff linter and mypy type checker in pyproject.toml (enforce max 25 lines per function, max 5 params) - Delivered: `mist-ops-platform\pyproject.toml:48` configures Ruff, and `mist-ops-platform\pyproject.toml:83` configures mypy.
 - [X] T004 [P] Create deploy/Containerfile.api for the FastAPI service container - Delivered: `mist-ops-platform\deploy\Containerfile.api:1`.
@@ -54,13 +54,13 @@
 
 ### FastAPI Scaffold
 
-- [X] T019 Create FastAPI app factory with router mounting and lifespan in src/api/main.py - Delivered: `mist-ops-platform\src\api\main.py:30`.
-- [X] T020 [P] Create auth middleware (Bearer token + session cookie, Mist privilege cache, scope enforcement per FR-025: filter query results to user's MSP/org/site privileges) in src/api/middleware/auth.py (R-07) - Delivered: `mist-ops-platform\src\api\middleware\auth.py:15`.
-- [X] T021 [P] Create request/response structured logging middleware in src/api/middleware/logging.py - Delivered: `mist-ops-platform\src\api\middleware\logging.py:16`.
-- [X] T022 [P] Create per-org rate-limit middleware in src/api/middleware/rate_limit.py - Delivered: `mist-ops-platform\src\api\middleware\rate_limit.py:31`.
-- [X] T023 Create common Pydantic schemas (ResponseEnvelope, ErrorDetail, PaginationMeta, ConfirmBody) in src/api/schemas/common.py - Delivered: `mist-ops-platform\src\api\schemas\common.py:17`, `mist-ops-platform\src\api\schemas\common.py:25`, `mist-ops-platform\src\api\schemas\common.py:34`, and `mist-ops-platform\src\api\schemas\common.py:43`.
-- [X] T024 Create dependency injection providers (get_db_session, get_current_user, get_mist_session) in src/api/deps.py - Delivered: `mist-ops-platform\src\api\deps.py:26`.
-- [X] T025 Create health and readiness endpoints (/healthz, /readyz, /metrics) in src/api/routes/health.py - Delivered: `mist-ops-platform\src\api\routes\health.py:32`, `mist-ops-platform\src\api\routes\health.py:39`, and `mist-ops-platform\src\api\routes\health.py:47`.
+- [X] T019 Create FastAPI app factory with router mounting and lifespan in src/mist/access/api/main.py - Delivered: `mist-ops-platform\src\mist\access\api\main.py:30`.
+- [X] T020 [P] Create auth middleware (Bearer token + session cookie, Mist privilege cache, scope enforcement per FR-025: filter query results to user's MSP/org/site privileges) in src/mist/access/api/middleware/auth.py (R-07) - Delivered: `mist-ops-platform\src\mist\access\api\middleware\auth.py:15`.
+- [X] T021 [P] Create request/response structured logging middleware in src/mist/access/api/middleware/logging.py - Delivered: `mist-ops-platform\src\mist\access\api\middleware\logging.py:16`.
+- [X] T022 [P] Create per-org rate-limit middleware in src/mist/access/api/middleware/rate_limit.py - Delivered: `mist-ops-platform\src\mist\access\api\middleware\rate_limit.py:31`.
+- [X] T023 Create common Pydantic schemas (ResponseEnvelope, ErrorDetail, PaginationMeta, ConfirmBody) in src/mist/access/api/schemas/common.py - Delivered: `mist-ops-platform\src\mist\access\api\schemas\common.py:17`, `mist-ops-platform\src\mist\access\api\schemas\common.py:25`, `mist-ops-platform\src\mist\access\api\schemas\common.py:34`, and `mist-ops-platform\src\mist\access\api\schemas\common.py:43`.
+- [X] T024 Create dependency injection providers (get_db_session, get_current_user, get_mist_session) in src/mist/access/api/deps.py - Delivered: `mist-ops-platform\src\mist\access\api\deps.py:26`.
+- [X] T025 Create health and readiness endpoints (/healthz, /readyz, /metrics) in src/mist/access/api/routes/health.py - Delivered: `mist-ops-platform\src\mist\access\api\routes\health.py:32`, `mist-ops-platform\src\mist\access\api\routes\health.py:39`, and `mist-ops-platform\src\mist\access\api\routes\health.py:47`.
 
 ### Celery Scaffold
 
@@ -73,10 +73,10 @@
 - [X] T029 Create inventory sync logic (orgs, sites, devices from Mist API) in src/worker/sync/inventory.py - Delivered: `mist-ops-platform\src\worker\sync\inventory.py:38`.
 - [X] T030 Create sync_tasks (periodic inventory sync Celery task, Beat every 5 min) in src/worker/tasks/sync_tasks.py - Delivered: `mist-ops-platform\src\worker\tasks\sync_tasks.py:3` and `mist-ops-platform\src\worker\celeryconfig.py:51`.
 - [X] T031 Create auth service (Mist session mgmt, privilege cache in Redis) in src/shared/services/auth.py - Delivered: `mist-ops-platform\src\shared\services\auth.py:67`.
-- [X] T032 Create inventory and sync-status Pydantic schemas in src/api/schemas/sync.py (inventory + sync status only) - Delivered: `mist-ops-platform\src\api\schemas\sync.py:25` and `mist-ops-platform\src\api\schemas\sync.py:47`.
-- [X] T033 Create sync route with GET /sync/status, POST /sync/trigger, GET /inventory/* in src/api/routes/sync.py - Delivered: `mist-ops-platform\src\api\routes\sync.py:139`, `mist-ops-platform\src\api\routes\sync.py:153`, and `mist-ops-platform\src\api\routes\sync.py:169`.
+- [X] T032 Create inventory and sync-status Pydantic schemas in src/mist/access/api/schemas/sync.py (inventory + sync status only) - Delivered: `mist-ops-platform\src\mist\access\api\schemas\sync.py:25` and `mist-ops-platform\src\mist\access\api\schemas\sync.py:47`.
+- [X] T033 Create sync route with GET /sync/status, POST /sync/trigger, GET /inventory/* in src/mist/access/api/routes/sync.py - Delivered: `mist-ops-platform\src\mist\access\api\routes\sync.py:139`, `mist-ops-platform\src\mist\access\api\routes\sync.py:153`, and `mist-ops-platform\src\mist\access\api\routes\sync.py:169`.
 - [X] T034 Create NotificationChannel model (E-18) in src/shared/models/operations.py - Delivered: `mist-ops-platform\src\shared\models\operations.py:266`.
-- [X] T035 Create notification channel CRUD endpoints in src/api/routes/health.py (notification channels are a system-level concern, co-located with health endpoints per api-overview.md) - Delivered: `mist-ops-platform\src\api\routes\health.py:110`.
+- [X] T035 Create notification channel CRUD endpoints in src/mist/access/api/routes/health.py (notification channels are a system-level concern, co-located with health endpoints per api-overview.md) - Delivered: `mist-ops-platform\src\mist\access\api\routes\health.py:110`.
 
 **Checkpoint**: Foundation ready — inventory syncing from Mist, API serving health + inventory, Celery processing tasks
 
@@ -98,9 +98,9 @@
 - [X] T041 [US1] Create event sync logic (audit logs from Mist for actor attribution) in src/worker/sync/events.py
 - [X] T042 [US1] Add config and status sync tasks to sync_tasks.py (extend periodic sync to capture config + status) in src/worker/tasks/sync_tasks.py
 - [X] T043 [US1] Create Mist webhook receiver and processing logic in src/worker/sync/webhook.py (R-02 dual strategy)
-- [X] T044 [US1] Create webhook receiver endpoint POST /webhooks/mist with HMAC validation in src/api/routes/sync.py
-- [X] T045 [US1] Create config Pydantic schemas (RevisionResponse, TimeTravel request/response) in src/api/schemas/config.py
-- [X] T046 [US1] Create time-travel query endpoint GET /config/time-travel in src/api/routes/config.py (R-04 temporal query)
+- [X] T044 [US1] Create webhook receiver endpoint POST /webhooks/mist with HMAC validation in src/mist/access/api/routes/sync.py
+- [X] T045 [US1] Create config Pydantic schemas (RevisionResponse, TimeTravel request/response) in src/mist/access/api/schemas/config.py
+- [X] T046 [US1] Create time-travel query endpoint GET /config/time-travel in src/mist/access/api/routes/config.py (R-04 temporal query)
 
 **Checkpoint**: Operators can sync inventory + config + status from Mist and query any historical timestamp. US1 is fully functional.
 
@@ -118,10 +118,10 @@
 - [X] T048 [US2] Create config push executor (install-from-revision via mistapi write endpoints) in src/worker/deploy/executor.py (R-05)
 - [X] T049 [US2] Create rollback logic (pre-snapshot + compensating transactions for atomic multi-device) in src/worker/deploy/rollback.py (R-08)
 - [X] T050 [US2] Create deploy_tasks for install-from-revision Celery task in src/worker/tasks/deploy_tasks.py (partial — job creation)
-- [X] T051 [US2] Extend config Pydantic schemas with DiffRequest, DiffResponse, InstallFromRevisionRequest in src/api/schemas/config.py
-- [X] T052 [US2] Create config revision list and detail endpoints (GET /config/revisions, GET /config/revisions/{id}) in src/api/routes/config.py
-- [X] T053 [US2] Create config diff endpoint POST /config/diff in src/api/routes/config.py
-- [X] T054 [US2] Create install-from-revision endpoint POST /config/install-from-revision (202 Accepted, async job) in src/api/routes/config.py
+- [X] T051 [US2] Extend config Pydantic schemas with DiffRequest, DiffResponse, InstallFromRevisionRequest in src/mist/access/api/schemas/config.py
+- [X] T052 [US2] Create config revision list and detail endpoints (GET /config/revisions, GET /config/revisions/{id}) in src/mist/access/api/routes/config.py
+- [X] T053 [US2] Create config diff endpoint POST /config/diff in src/mist/access/api/routes/config.py
+- [X] T054 [US2] Create install-from-revision endpoint POST /config/install-from-revision (202 Accepted, async job) in src/mist/access/api/routes/config.py
 
 **Checkpoint**: Operators can browse revision history, diff any two revisions, and restore prior configs. US1 + US2 fully functional.
 
@@ -142,9 +142,9 @@
 - [X] T059 [US3] Create post-check implementations (service health, client connectivity) in src/worker/checks/post_checks.py
 - [X] T060 [US3] Create check_tasks Celery tasks (run_pre_checks, run_post_checks) in src/worker/tasks/check_tasks.py
 - [X] T061 [US3] Extend deploy_tasks with scheduled job execution (poll for due jobs, execute with pre/post checks, auto-rollback) in src/worker/tasks/deploy_tasks.py
-- [X] T062 [US3] Create deploy Pydantic schemas (JobCreate, JobResponse, DryRunRequest, DryRunResponse) in src/api/schemas/deploy.py
-- [X] T063 [US3] Create deploy job CRUD endpoints (GET/POST/PUT/DELETE /deploy/jobs, POST /deploy/jobs/{id}/approve) in src/api/routes/deploy.py
-- [X] T064 [US3] Create dry-run validation endpoint POST /deploy/dry-run (risk score, blast radius, policy violations) in src/api/routes/deploy.py
+- [X] T062 [US3] Create deploy Pydantic schemas (JobCreate, JobResponse, DryRunRequest, DryRunResponse) in src/mist/access/api/schemas/deploy.py
+- [X] T063 [US3] Create deploy job CRUD endpoints (GET/POST/PUT/DELETE /deploy/jobs, POST /deploy/jobs/{id}/approve) in src/mist/access/api/routes/deploy.py
+- [X] T064 [US3] Create dry-run validation endpoint POST /deploy/dry-run (risk score, blast radius, policy violations) in src/mist/access/api/routes/deploy.py
 - [X] T065 [US3] Create dry-run validation logic (schema check, policy check, blast radius estimation) in src/worker/deploy/dry_run.py
 
 **Checkpoint**: Change managers can schedule, approve, and auto-execute deployments with safety gates. US1 + US2 + US3 functional.
@@ -166,9 +166,9 @@
 - [X] T070 [US4] Create compliance service (audit pack generation, bundling change records + diffs + approvals) in src/shared/services/compliance.py
 - [X] T071 [US4] Create incident-change correlation logic (temporal + scope matching) in src/worker/checks/correlation.py (SC-016 <2min)
 - [X] T072 [US4] Create audit_tasks Celery tasks (audit export, compliance pack generation) in src/worker/tasks/audit_tasks.py
-- [X] T073 [US4] Create audit Pydantic schemas (AuditRecordResponse, ExportRequest, CorrelationResponse, CompliancePackResponse) in src/api/schemas/audit.py
-- [X] T074 [US4] Create audit trail endpoints (GET /audit/records, GET /audit/records/{id}, POST /audit/export) in src/api/routes/audit.py
-- [X] T075 [US4] Create correlation and compliance-pack endpoints (GET /audit/correlations, POST /audit/compliance-packs) in src/api/routes/audit.py
+- [X] T073 [US4] Create audit Pydantic schemas (AuditRecordResponse, ExportRequest, CorrelationResponse, CompliancePackResponse) in src/mist/access/api/schemas/audit.py
+- [X] T074 [US4] Create audit trail endpoints (GET /audit/records, GET /audit/records/{id}, POST /audit/export) in src/mist/access/api/routes/audit.py
+- [X] T075 [US4] Create correlation and compliance-pack endpoints (GET /audit/correlations, POST /audit/compliance-packs) in src/mist/access/api/routes/audit.py
 
 **Checkpoint**: Auditors can query, filter, and export change records with full old/new diffs. US1-US4 functional.
 
@@ -189,9 +189,9 @@
 - [X] T080 [US5] Create multi-wave rollout orchestration logic (wave execution, health gate evaluation, promotion) in src/worker/deploy/rollout.py
 - [X] T081 [US5] Create firmware upgrade orchestration logic (golden image validation, staged deployment) in src/worker/deploy/firmware.py
 - [X] T082 [US5] Extend deploy_tasks with rollout execution and wave promotion Celery tasks in src/worker/tasks/deploy_tasks.py
-- [X] T083 [US5] Extend deploy Pydantic schemas with RolloutCreate, WaveResponse, GoldenImageResponse in src/api/schemas/deploy.py
-- [X] T084 [US5] Create rollout endpoints (GET/POST /deploy/rollouts, POST activate/pause/resume, POST wave promote/rollback) in src/api/routes/deploy.py
-- [X] T085 [US5] Create golden image endpoints (GET/POST /deploy/golden-images, POST approve/retire) in src/api/routes/deploy.py
+- [X] T083 [US5] Extend deploy Pydantic schemas with RolloutCreate, WaveResponse, GoldenImageResponse in src/mist/access/api/schemas/deploy.py
+- [X] T084 [US5] Create rollout endpoints (GET/POST /deploy/rollouts, POST activate/pause/resume, POST wave promote/rollback) in src/mist/access/api/routes/deploy.py
+- [X] T085 [US5] Create golden image endpoints (GET/POST /deploy/golden-images, POST approve/retire) in src/mist/access/api/routes/deploy.py
 
 **Checkpoint**: Operators can plan, execute, and control multi-wave rollouts with automatic health gating. US1-US5 functional.
 
@@ -211,10 +211,10 @@
 - [X] T089 [US6] Create migration for baselines, drift_alerts, network_policies in migrations/versions/
 - [X] T090 [US6] Create drift detection logic (baseline vs actual comparison using DiffService) in src/worker/checks/drift.py (SC-010 <10min)
 - [X] T091 [US6] Add drift check to sync_tasks (after each config sync, compare against baselines) in src/worker/tasks/sync_tasks.py
-- [X] T092 [US6] Extend sync Pydantic schemas with BaselineCreate, DriftAlertResponse, PolicyCreate in src/api/schemas/sync.py
-- [X] T093 [US6] Create baseline endpoints (GET/POST /config/baselines, POST accept-drift, POST remediate) in src/api/routes/config.py
-- [X] T094 [US6] Create drift alert endpoints (GET /drift/alerts, GET /drift/alerts/{id}, POST acknowledge) in src/api/routes/sync.py
-- [X] T095 [US6] Create network policy endpoints (GET/POST /policies, POST recertify) in src/api/routes/sync.py
+- [X] T092 [US6] Extend sync Pydantic schemas with BaselineCreate, DriftAlertResponse, PolicyCreate in src/mist/access/api/schemas/sync.py
+- [X] T093 [US6] Create baseline endpoints (GET/POST /config/baselines, POST accept-drift, POST remediate) in src/mist/access/api/routes/config.py
+- [X] T094 [US6] Create drift alert endpoints (GET /drift/alerts, GET /drift/alerts/{id}, POST acknowledge) in src/mist/access/api/routes/sync.py
+- [X] T095 [US6] Create network policy endpoints (GET/POST /policies, POST recertify) in src/mist/access/api/routes/sync.py
 
 **Checkpoint**: Platform continuously monitors for drift and offers remediation. All 6 user stories fully functional.
 
@@ -225,7 +225,7 @@
 **Purpose**: Extended features, documentation, security hardening, performance
 
 - [X] T096 [P] Create ChangeTemplate model (E-13) and template instantiation service in src/shared/models/governance.py and src/shared/services/template.py (FR-031)
-- [X] T097 [P] Create change template endpoints (GET/POST /deploy/templates, POST instantiate) in src/api/routes/deploy.py
+- [X] T097 [P] Create change template endpoints (GET/POST /deploy/templates, POST instantiate) in src/mist/access/api/routes/deploy.py
 - [X] T098 Create retention policy Celery Beat task (nightly cleanup per data-model.md retention table) in src/worker/tasks/audit_tasks.py
 - [X] T099 [P] Create architecture.md documentation in docs/architecture.md
 - [X] T100 [P] Create operator runbook in docs/operations.md
@@ -248,7 +248,7 @@
 
 ### Additional Coverage Tasks
 
-- [X] T114 [P] Create auth token and session endpoints (POST /auth/token, POST /auth/login, DELETE /auth/session) in src/api/routes/health.py (FR-018)
+- [X] T114 [P] Create auth token and session endpoints (POST /auth/token, POST /auth/login, DELETE /auth/session) in src/mist/access/api/routes/health.py (FR-018)
 - [X] T115 [P] Create daily automated backup Celery Beat task in src/worker/tasks/sync_tasks.py (FR-034, SC-018 — pre-change + daily schedule)
 - [X] T116 Document SC-011 UX acceptance criteria ("90% of operators complete time-travel investigation in <5 min") with test script and validation methodology in docs/operations.md
 - [X] T117 Research feasibility of deferred requirements FR-026 (Path Analysis), FR-027 (App-Centric Modeling), FR-030 (App Discovery) — document findings in specs/001-mist-ops-platform/research.md

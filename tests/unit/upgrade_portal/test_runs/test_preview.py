@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.upgrade_portal.api.run_controls.models import BulkPreviewRequest
-from src.upgrade_portal.api.run_controls.services import BulkActionPreviewService, PreviewError
+from src.interfaces.portals.upgrade_portal.api.run_controls.models import BulkPreviewRequest
+from src.interfaces.portals.upgrade_portal.api.run_controls.services import BulkActionPreviewService, PreviewError
 
 NOW = datetime(2026, 9, 11, 8, 0, tzinfo=UTC)
 

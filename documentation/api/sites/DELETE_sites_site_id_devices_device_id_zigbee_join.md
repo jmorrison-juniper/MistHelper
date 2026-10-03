@@ -76,4 +76,4 @@ Common use cases:
 
 MistHelper does not currently call `stopSiteDeviceZigbeeJoin`.
 Verification source: `git grep -n "stopSiteDeviceZigbeeJoin" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.
+`src/operations/exporting/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

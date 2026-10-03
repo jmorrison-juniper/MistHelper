@@ -132,7 +132,7 @@ misthelper:
 
 ## 8. Structured Logging
 
-**Decision**: Use `structlog` for all new `src/db/` modules
+**Decision**: Use `structlog` for all new `src/foundation/persistence/db/` modules
 **Rationale**: Constitution Principle V requires structured, machine-parseable logging for new modules. `structlog` integrates with stdlib `logging` and produces JSON-formatted entries compatible with monitoring tools.
 **Alternatives considered**:
 - stdlib `logging` only: Rejected — not structured, harder to parse programmatically

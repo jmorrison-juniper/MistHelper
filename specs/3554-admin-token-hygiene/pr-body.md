@@ -11,7 +11,7 @@ The integration pull request will wire the menu entry from `specs/3554-admin-tok
 
 ## Files
 
-- `src/reports/admin_token_hygiene/**`
+- `src/mist/intelligence/reports/admin_token_hygiene/**`
 - `tests/unit/reports/admin_token_hygiene/**`
 - `specs/3554-admin-token-hygiene/**`
 - `changelog.d/issue-3554-admin-token-hygiene.md`
@@ -57,15 +57,15 @@ The integration pull request will wire the menu entry from `specs/3554-admin-tok
 ## Local Gate Results
 
 - `py_compile`: pass.
-- `ruff check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`: pass.
-- `black --check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`: pass.
-- `mypy src\reports\admin_token_hygiene --config-file pyproject.toml`: pass.
-- `pydocstyle src\reports\admin_token_hygiene`: pass.
+- `ruff check src\mist\intelligence\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`: pass.
+- `black --check src\mist\intelligence\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene`: pass.
+- `mypy src\mist\intelligence\reports\admin_token_hygiene --config-file pyproject.toml`: pass.
+- `pydocstyle src\mist\intelligence\reports\admin_token_hygiene`: pass.
 - `pytest tests\unit\reports\admin_token_hygiene -q --timeout=120`: 19 passed.
-- `bandit -c pyproject.toml -r src\reports\admin_token_hygiene -q`: pass.
-- `radon cc src\reports\admin_token_hygiene -j | complexity-gate --max 10`: pass.
-- `vulture src\reports\admin_token_hygiene --min-confidence 70`: pass.
-- `interrogate -q src\reports\admin_token_hygiene`: pass.
+- `bandit -c pyproject.toml -r src\mist\intelligence\reports\admin_token_hygiene -q`: pass.
+- `radon cc src\mist\intelligence\reports\admin_token_hygiene -j | complexity-gate --max 10`: pass.
+- `vulture src\mist\intelligence\reports\admin_token_hygiene --min-confidence 70`: pass.
+- `interrogate -q src\mist\intelligence\reports\admin_token_hygiene`: pass.
 - `test-quality-analyzer --gate --changed-from origin/main`: pass.
 - `pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120`: pass.
 - `pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120`: pass.

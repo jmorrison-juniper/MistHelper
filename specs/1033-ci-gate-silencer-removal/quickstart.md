@@ -223,7 +223,7 @@ Each file must score 80 or above.
 The feature is complete when every line below is true.
 
 - [ ] `.github/workflows/ci.yml` holds no `--ignore` flag on the pylint step.
-- [ ] The pylint job passes in CI and the log names `src/maps`, `src/ssh`, and `src/ui`.
+- [ ] The pylint job passes in CI and the log names `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui`.
 - [ ] Both `vulture-confidence` values in `.github/workflows/ci.yml` read `'70'`.
 - [ ] The vulture job passes in CI with 0 findings.
 - [ ] The pylint step and the vulture step each carry a comment with the three required facts.

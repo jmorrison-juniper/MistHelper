@@ -12,9 +12,9 @@ and writes through `DataExporter`.
 ## Existing implementation
 
 - `MistHelper.py` registers menu 228.
-- `src/export/site_search_exporter.py` calls
+- `src/operations/exporting/export/site_search_exporter.py` calls
   `mistapi.api.v1.sites.stats.searchSiteDiscoveredSwitches`.
-- `src/refactors/endpoint_primary_key_strategies.py` uses the composite key
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` uses the composite key
   `system_name`, `mgmt_addr`, and `timestamp`.
 - The API and menu reference pages already document the endpoint.
 

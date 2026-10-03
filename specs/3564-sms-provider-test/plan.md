@@ -61,7 +61,7 @@ specs/3564-sms-provider-test/
 ### Source code for this feature
 
 ```text
-src/troubleshooting/sms_provider_test/
+src/mist/intelligence/troubleshooting/sms_provider_test/
 ├── __init__.py
 ├── client.py
 ├── inputs.py

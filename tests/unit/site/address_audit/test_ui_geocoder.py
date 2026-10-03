@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.site.address_audit import MistUIGeocoder, ResolverResult, UIGeocoderConfig
-from src.site.address_audit import ui_geocoder as ui_mod
+from src.mist.resources.site.address_audit import MistUIGeocoder, ResolverResult, UIGeocoderConfig
+from src.mist.resources.site.address_audit import ui_geocoder as ui_mod
 
 
 def _fake_playwright(browser):

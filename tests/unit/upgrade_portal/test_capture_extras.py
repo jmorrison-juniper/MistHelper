@@ -27,7 +27,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import extras
+from src.interfaces.portals.upgrade_portal.capture import extras
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 _SCOPE = extras.SiteScope("org-0001", "site-0001")  # WHY: One scope serves every test in this module.

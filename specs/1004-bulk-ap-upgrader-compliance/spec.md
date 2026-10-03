@@ -3,23 +3,23 @@
 **Feature Branch**: `refactor/bulk-ap-upgrader-compliance`
 **Created**: 2026-07-01
 **Status**: Draft
-**Input**: User description: "Refactor `src/firmware/bulk_ap_upgrader.py` to raise its compliance-analyzer grade from F (50.0/100) to at least B (>=80.0/100). 62 violations reported. Preserve behavior; do not create wrappers/shims; real decomposition only."
+**Input**: User description: "Refactor `src/operations/execution/firmware/bulk_ap_upgrader.py` to raise its compliance-analyzer grade from F (50.0/100) to at least B (>=80.0/100). 62 violations reported. Preserve behavior; do not create wrappers/shims; real decomposition only."
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Restore Compliance Grade to Passing (Priority: P1)
 
-As a maintainer running the project's compliance analyzer as part of the code-review workflow, I need `src/firmware/bulk_ap_upgrader.py` to score at least a B (>=80.0/100) so the file stops appearing on the failing-grade dashboard and blocking downstream module audits.
+As a maintainer running the project's compliance analyzer as part of the code-review workflow, I need `src/operations/execution/firmware/bulk_ap_upgrader.py` to score at least a B (>=80.0/100) so the file stops appearing on the failing-grade dashboard and blocking downstream module audits.
 
 **Why this priority**: The file currently scores 50.0/100 (grade F) with 62 recorded violations. Every audit run flags it as one of the worst offenders in the `firmware/` package. Fixing the top-severity structural issues is the only path to green-lighting the module for downstream consumers of the AP-upgrade workflow (`org_ap_upgrader`, `site_auto_upgrade`, menu 195). Nothing else in this feature has value without this outcome.
 
-**Independent Test**: Run `python -m tools.compliance_analyzer src/firmware/bulk_ap_upgrader.py` from the repository root against the refactored file and confirm the numeric score reported is >=80.0 and the grade letter reported is B or better. No other module needs to change for this validation.
+**Independent Test**: Run `python -m tools.compliance_analyzer src/operations/execution/firmware/bulk_ap_upgrader.py` from the repository root against the refactored file and confirm the numeric score reported is >=80.0 and the grade letter reported is B or better. No other module needs to change for this validation.
 
 **Acceptance Scenarios**:
 
-1. **Given** the refactored `bulk_ap_upgrader.py` file on the `refactor/bulk-ap-upgrader-compliance` branch, **When** a maintainer runs `python -m tools.compliance_analyzer src/firmware/bulk_ap_upgrader.py`, **Then** the reported score is >=80.0/100 and the reported grade is B or better.
-2. **Given** the refactored file, **When** a maintainer runs `python -m py_compile src/firmware/bulk_ap_upgrader.py`, **Then** the command exits with status 0 and no syntax errors.
-3. **Given** the refactored file, **When** a maintainer runs `python -m ruff check src/firmware/bulk_ap_upgrader.py`, **Then** ruff reports zero errors and zero warnings.
+1. **Given** the refactored `bulk_ap_upgrader.py` file on the `refactor/bulk-ap-upgrader-compliance` branch, **When** a maintainer runs `python -m tools.compliance_analyzer src/operations/execution/firmware/bulk_ap_upgrader.py`, **Then** the reported score is >=80.0/100 and the reported grade is B or better.
+2. **Given** the refactored file, **When** a maintainer runs `python -m py_compile src/operations/execution/firmware/bulk_ap_upgrader.py`, **Then** the command exits with status 0 and no syntax errors.
+3. **Given** the refactored file, **When** a maintainer runs `python -m ruff check src/operations/execution/firmware/bulk_ap_upgrader.py`, **Then** ruff reports zero errors and zero warnings.
 4. **Given** the refactored file, **When** a maintainer greps for `def __init__(` in the file, **Then** the constructor signature accepts at most 5 parameters (excluding `self`), matching the AGENTS.md parameter-count ceiling.
 
 ---
@@ -101,9 +101,9 @@ As a maintainer, I need the LOW-severity findings (single-letter loop variables 
 
 ### Functional Requirements
 
-- **FR-001**: The compliance analyzer (`python -m tools.compliance_analyzer src/firmware/bulk_ap_upgrader.py`) MUST report a numeric score >=80.0 and a letter grade of B or better for the refactored file.
-- **FR-002**: The refactored file MUST pass `python -m ruff check src/firmware/bulk_ap_upgrader.py` with zero errors and zero warnings.
-- **FR-003**: The refactored file MUST pass `python -m py_compile src/firmware/bulk_ap_upgrader.py` with exit status 0.
+- **FR-001**: The compliance analyzer (`python -m tools.compliance_analyzer src/operations/execution/firmware/bulk_ap_upgrader.py`) MUST report a numeric score >=80.0 and a letter grade of B or better for the refactored file.
+- **FR-002**: The refactored file MUST pass `python -m ruff check src/operations/execution/firmware/bulk_ap_upgrader.py` with zero errors and zero warnings.
+- **FR-003**: The refactored file MUST pass `python -m py_compile src/operations/execution/firmware/bulk_ap_upgrader.py` with exit status 0.
 - **FR-004**: The `BulkAPFirmwareUpgrader.__init__` method MUST accept at most 5 parameters (excluding `self`). The current 10-parameter list MUST be consolidated into a single dataclass or configuration object.
 - **FR-005**: The `BulkAPFirmwareUpgrader.__init__` method body MUST be <=25 executable lines. Setup logic that exceeds this budget MUST be extracted into private helper methods that themselves conform to the size limits.
 - **FR-006**: The refactored file's inline-comment coverage MUST be >=80% as measured by the compliance analyzer. Every executable line MUST carry an inline `# ...` comment explaining WHY the line exists, not WHAT it does.
@@ -128,7 +128,7 @@ As a maintainer, I need the LOW-severity findings (single-letter loop variables 
 - **FR-015**: The 11-step workflow ordering (`_step1_determine_sites` -> `_step2_discover_aps` -> ... -> `_step11_write_results`) driven by `execute()` MUST be preserved. The refactor MUST NOT reorder, merge, or skip steps.
 - **FR-016**: Every extracted helper method MUST itself conform to the size limits: <=5 parameters, <=25 lines, <=5 logical blocks, <=5 cyclomatic complexity, <=4 nesting levels. Splitting a large method into two 40-line helpers is NOT acceptable.
 - **FR-017**: The refactor MUST NOT alter the observable side effects of the workflow: files written by `_step11_write_results`, log lines emitted at INFO level, `mistapi` calls made in `_step8_execute_upgrades`, and prompts shown to the user MUST match the pre-refactor behavior for equivalent inputs.
-- **FR-018**: Any new dataclass or configuration object introduced to consolidate the constructor parameters MUST live in the same file (`src/firmware/bulk_ap_upgrader.py`) unless a separate module is required to avoid a circular import, in which case placement MUST be justified in the plan phase.
+- **FR-018**: Any new dataclass or configuration object introduced to consolidate the constructor parameters MUST live in the same file (`src/operations/execution/firmware/bulk_ap_upgrader.py`) unless a separate module is required to avoid a circular import, in which case placement MUST be justified in the plan phase.
 
 ### Key Entities
 
@@ -140,13 +140,13 @@ As a maintainer, I need the LOW-severity findings (single-letter loop variables 
 
 ### Measurable Outcomes
 
-- **SC-001**: The compliance-analyzer score for `src/firmware/bulk_ap_upgrader.py` improves from 50.0/100 (grade F) to >=80.0/100 (grade B or better), a minimum absolute improvement of 30 points.
+- **SC-001**: The compliance-analyzer score for `src/operations/execution/firmware/bulk_ap_upgrader.py` improves from 50.0/100 (grade F) to >=80.0/100 (grade B or better), a minimum absolute improvement of 30 points.
 - **SC-002**: The total count of compliance-analyzer violations for the file drops from 62 to a number consistent with grade B (empirically, <=15 remaining LOW-severity findings; zero HIGH-severity findings; at most 2 MEDIUM-severity findings, none of which appear in the in-scope list under FR-012).
 - **SC-003**: 100% of the ten MEDIUM-severity function-complexity offenders enumerated in FR-012 no longer appear in the analyzer report after refactor.
 - **SC-004**: 100% of HIGH-severity findings currently reported against `__init__` at line 43 (parameter count and body length) and against inline-comment coverage are resolved.
-- **SC-005**: All existing production callers of `BulkAPFirmwareUpgrader` (currently at least `MistHelper.py` menu 195 and any callers in `src/firmware/`) continue to instantiate and execute the class without raising `TypeError` or `AttributeError` attributable to the refactor.
-- **SC-006**: `python -m ruff check src/firmware/bulk_ap_upgrader.py` reports zero errors and zero warnings.
-- **SC-007**: `python -m py_compile src/firmware/bulk_ap_upgrader.py` exits with status 0.
+- **SC-005**: All existing production callers of `BulkAPFirmwareUpgrader` (currently at least `MistHelper.py` menu 195 and any callers in `src/operations/execution/firmware/`) continue to instantiate and execute the class without raising `TypeError` or `AttributeError` attributable to the refactor.
+- **SC-006**: `python -m ruff check src/operations/execution/firmware/bulk_ap_upgrader.py` reports zero errors and zero warnings.
+- **SC-007**: `python -m py_compile src/operations/execution/firmware/bulk_ap_upgrader.py` exits with status 0.
 - **SC-008**: All existing automated tests that reference `bulk_ap_upgrader` continue to pass without test-code modification.
 - **SC-009**: A reviewer randomly sampling 25 executable lines from the refactored file finds an inline `# why` comment on at least 20 of them (80% floor).
 - **SC-010**: A reviewer scanning the refactored file for `logging.info(` before and `logging.debug(` after every non-trivial operation finds the pattern consistently applied in the ten targeted refactor sites listed in FR-012.
@@ -162,4 +162,4 @@ As a maintainer, I need the LOW-severity findings (single-letter loop variables 
 - Test coverage for `bulk_ap_upgrader.py` is currently thin. This feature does not add new tests; the acceptance test is the compliance analyzer's own output plus manual smoke-execution of menu 195. Adding test coverage is a follow-on feature.
 - LOW-severity STRUCT-COMPLEXITY findings that do not overlap the touched code paths (roughly 20-25 of the 26 reported) will remain unaddressed by this feature. They are explicitly deferred to a future compliance sweep. The B grade must be reachable without touching them.
 - The refactor is performed on the existing branch `refactor/bulk-ap-upgrader-compliance` off `main`. No sub-branches or worktrees are required.
-- The file `src/firmware/bulk_ap_upgrader.py` is 1673 lines long as of the start of this feature. The refactor may increase line count due to added `# why` comments and helper method boilerplate; there is no upper bound on total file length, only on per-method size.
+- The file `src/operations/execution/firmware/bulk_ap_upgrader.py` is 1673 lines long as of the start of this feature. The refactor may increase line count due to added `# why` comments and helper method boilerplate; there is no upper bound on total file length, only on per-method size.

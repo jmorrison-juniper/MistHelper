@@ -8,8 +8,11 @@ from typing import Any  # WHY: fake SDK calls store arbitrary body payloads.
 import mistapi  # WHY: monkeypatch the same SDK functions that the client calls.
 import pytest  # WHY: assert client behavior for failed HTTP responses.
 
-from src.inventory.device_replace.client import DeviceReplaceClient  # WHY: test the API seam.
-from src.inventory.device_replace.models import InventoryDevice, ReplaceRequest  # WHY: build typed inputs.
+from src.mist.resources.inventory.device_replace.client import DeviceReplaceClient  # WHY: test the API seam.
+from src.mist.resources.inventory.device_replace.models import (
+    InventoryDevice,
+    ReplaceRequest,
+)  # WHY: build typed inputs.
 
 
 @dataclass(slots=True)

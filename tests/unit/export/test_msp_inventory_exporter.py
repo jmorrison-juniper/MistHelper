@@ -1,4 +1,4 @@
-"""Wave 10 P2 coverage for src/export/msp_inventory_exporter.py (initiative #1018).
+"""Wave 10 P2 coverage for src/operations/exporting/export/msp_inventory_exporter.py (initiative #1018).
 
 Covers ``MSPInventoryExporter`` static + instance methods:
 - ``_normalize_msp_orgs_response``: list/dict/None coercion.
@@ -35,8 +35,10 @@ import mistapi.api.v1.orgs  # WHY: capture real 'orgs' submodule for restoration
 import mistapi.api.v1.orgs.inventory as org_inventory_api  # WHY: patch getOrgInventory attribute directly.
 import pytest  # WHY: monkeypatch fixture + capsys for stdout capture.
 
-from src.dataclasses.msp_org_context import MspOrgContext  # WHY: dataclass passed to _enrich_device_context.
-from src.export.msp_inventory_exporter import MSPInventoryExporter  # WHY: SUT direct import.
+from src.foundation.models.dataclasses.msp_org_context import (
+    MspOrgContext,
+)  # WHY: dataclass passed to _enrich_device_context.
+from src.operations.exporting.export.msp_inventory_exporter import MSPInventoryExporter  # WHY: SUT direct import.
 
 # WHY: capture real mistapi module chain at test-collection time to defend against sys.modules pollution
 # from module-scope `patch.dict(sys.modules, {"mistapi": MagicMock(), ...})` blocks in sibling test files
@@ -361,7 +363,7 @@ def test_write_results_invokes_data_exporter(monkeypatch: pytest.MonkeyPatch) ->
     write_mock = MagicMock()  # WHY: capture write invocation.
     mh.DataExporter = types.SimpleNamespace(write_with_format_selection=write_mock)  # WHY: attach exporter.
 
-    with patch("src.export.msp_inventory_exporter.DataProcessingUtils") as fake_dp:
+    with patch("src.operations.exporting.export.msp_inventory_exporter.DataProcessingUtils") as fake_dp:
         fake_dp.flatten_nested_fields.side_effect = lambda rows: rows  # WHY: identity flatten.
         exporter = MSPInventoryExporter()  # WHY: instance.
         exporter.all_devices = [{"type": "ap", "_msp_name": "M", "_org_name": "O", "_site_name": "S", "name": "x"}]
@@ -411,7 +413,10 @@ def test_execute_login_and_validate_returns_false_when_login_fails(
 ) -> None:
     """Login failure returns False and prints diagnostic."""
     _install_fake_mh(monkeypatch)  # WHY: fake MistHelper.
-    with patch("src.export.msp_inventory_exporter.MistSessionInteractiveInitializer.initialize", return_value=False):
+    with patch(
+        "src.operations.exporting.export.msp_inventory_exporter.MistSessionInteractiveInitializer.initialize",
+        return_value=False,
+    ):
         exporter = MSPInventoryExporter()  # WHY: instance.
         assert exporter._execute_login_and_validate() is False  # WHY: initialize returned False.
     assert "Login failed" in capsys.readouterr().out  # WHY: user informed.
@@ -423,8 +428,13 @@ def test_execute_login_and_validate_returns_false_when_no_privileges_after_login
     """Successful login but no privileges obtained yields False + warning."""
     mh = _install_fake_mh(monkeypatch)  # WHY: fake MistHelper.
     with (
-        patch("src.export.msp_inventory_exporter.MistSessionInteractiveInitializer.initialize", return_value=True),
-        patch("src.export.msp_inventory_exporter.detect_msp_privileges", return_value=[]) as detect_mock,
+        patch(
+            "src.operations.exporting.export.msp_inventory_exporter.MistSessionInteractiveInitializer.initialize",
+            return_value=True,
+        ),
+        patch(
+            "src.operations.exporting.export.msp_inventory_exporter.detect_msp_privileges", return_value=[]
+        ) as detect_mock,
     ):
         exporter = MSPInventoryExporter()  # WHY: instance.
         assert exporter._execute_login_and_validate() is False  # WHY: no privileges post-login.
@@ -440,8 +450,11 @@ def test_execute_login_and_validate_returns_true_when_privileges_detected(
     mh = _install_fake_mh(monkeypatch)  # WHY: fake MistHelper.
     detected = [{"msp_id": "m", "msp_name": "Acme"}]  # WHY: single detected privilege.
     with (
-        patch("src.export.msp_inventory_exporter.MistSessionInteractiveInitializer.initialize", return_value=True),
-        patch("src.export.msp_inventory_exporter.detect_msp_privileges", return_value=detected),
+        patch(
+            "src.operations.exporting.export.msp_inventory_exporter.MistSessionInteractiveInitializer.initialize",
+            return_value=True,
+        ),
+        patch("src.operations.exporting.export.msp_inventory_exporter.detect_msp_privileges", return_value=detected),
     ):
         exporter = MSPInventoryExporter()  # WHY: instance.
         assert exporter._execute_login_and_validate() is True  # WHY: happy path.

@@ -10,22 +10,48 @@ from unittest.mock import MagicMock, patch  # WHY: replace cloud and writer boun
 
 import pytest  # WHY: caplog and monkeypatch fixtures drive the real product functions.
 
-from src.api import api_data_fetcher as fetcher_module  # WHY: patch the shared fetcher dependencies directly.
-from src.api.api_data_fetcher import APIDataFetcher  # WHY: route product functions through the real fetcher.
-from src.export import org_admin_exporter as admin_module  # WHY: patch module globals in the real admin exporter.
-from src.export import org_alarm_event_exporter as alarm_module  # WHY: patch module globals in the real alarm exporter.
-from src.export import org_client_security_exporter as security_module  # WHY: patch the real rogue helper.
-from src.export import org_device_stats_exporter as stats_module  # WHY: patch the real port-stats helper.
-from src.export import org_export_utils as export_utils_module  # WHY: patch the real audit-log helper.
-from src.export import (
+from src.mist.access.api import (
+    api_data_fetcher as fetcher_module,
+)  # WHY: patch the shared fetcher dependencies directly.
+from src.mist.access.api.api_data_fetcher import (
+    APIDataFetcher,
+)  # WHY: route product functions through the real fetcher.
+from src.operations.exporting.export import (
+    org_admin_exporter as admin_module,
+)  # WHY: patch module globals in the real admin exporter.
+from src.operations.exporting.export import (
+    org_alarm_event_exporter as alarm_module,
+)  # WHY: patch module globals in the real alarm exporter.
+from src.operations.exporting.export import (
+    org_client_security_exporter as security_module,
+)  # WHY: patch the real rogue helper.
+from src.operations.exporting.export import (
+    org_device_stats_exporter as stats_module,
+)  # WHY: patch the real port-stats helper.
+from src.operations.exporting.export import (
+    org_export_utils as export_utils_module,
+)  # WHY: patch the real audit-log helper.
+from src.operations.exporting.export import (
     org_inventory_exporter as inventory_module,  # WHY: patch module globals in the real inventory exporter.
 )
-from src.export.org_admin_exporter import OrgAdminExporter  # WHY: import the real product class under test.
-from src.export.org_alarm_event_exporter import OrgAlarmEventExporter  # WHY: import the real product class under test.
-from src.export.org_client_security_exporter import OrgClientSecurityExporter  # WHY: import the real product class.
-from src.export.org_device_stats_exporter import OrgDeviceStatsExporter  # WHY: import the real product class.
-from src.export.org_export_utils import OrgExportUtils  # WHY: import the real product class under test.
-from src.export.org_inventory_exporter import OrgInventoryExporter  # WHY: import the real product class under test.
+from src.operations.exporting.export.org_admin_exporter import (
+    OrgAdminExporter,
+)  # WHY: import the real product class under test.
+from src.operations.exporting.export.org_alarm_event_exporter import (
+    OrgAlarmEventExporter,
+)  # WHY: import the real product class under test.
+from src.operations.exporting.export.org_client_security_exporter import (
+    OrgClientSecurityExporter,
+)  # WHY: import the real product class.
+from src.operations.exporting.export.org_device_stats_exporter import (
+    OrgDeviceStatsExporter,
+)  # WHY: import the real product class.
+from src.operations.exporting.export.org_export_utils import (
+    OrgExportUtils,
+)  # WHY: import the real product class under test.
+from src.operations.exporting.export.org_inventory_exporter import (
+    OrgInventoryExporter,
+)  # WHY: import the real product class under test.
 
 
 class _FailedResponse:
@@ -94,7 +120,9 @@ def test_usage_503_returns_none_suppresses_success_and_writes_no_file(
     """A license-usage 503 must not report a completed empty export."""
     writer = MagicMock()  # WHY: the failing path must not write a valid empty export.
     with _api_fetcher_context(admin_module.__name__, monkeypatch, writer):  # WHY: patch shared dependencies.
-        with _patch_api_function("src.export.org_admin_exporter.mistapi.api.v1.orgs.licenses.getOrgLicensesBySite"):
+        with _patch_api_function(
+            "src.operations.exporting.export.org_admin_exporter.mistapi.api.v1.orgs.licenses.getOrgLicensesBySite"
+        ):
             with caplog.at_level(logging.INFO):  # WHY: capture success and failure logs from both modules.
                 result = OrgAdminExporter.usage()  # WHY: drive the real product function.
     assert result is None  # WHY: the existing failure contract for this exporter is None.
@@ -111,7 +139,9 @@ def test_alarms_503_returns_none_suppresses_success_and_writes_no_file(
     writer = MagicMock()  # WHY: the failing path must not write a valid empty export.
     with _api_fetcher_context(alarm_module.__name__, monkeypatch, writer):  # WHY: patch shared dependencies.
         _freeze_lookback(monkeypatch, alarm_module)  # WHY: keep the duration parameter deterministic.
-        with _patch_api_function("src.export.org_alarm_event_exporter.mistapi.api.v1.orgs.alarms.searchOrgAlarms"):
+        with _patch_api_function(
+            "src.operations.exporting.export.org_alarm_event_exporter.mistapi.api.v1.orgs.alarms.searchOrgAlarms"
+        ):
             with caplog.at_level(logging.INFO):  # WHY: capture success and failure logs from both modules.
                 result = OrgAlarmEventExporter.alarms()  # WHY: drive the real product function.
     assert result is None  # WHY: the existing failure contract for this exporter is None.
@@ -131,7 +161,7 @@ def test_device_events_503_returns_none_suppresses_success_and_writes_no_file(
     with patch.object(alarm_module, "SourceDependencyResolver", resolver):  # WHY: avoid live org resolution.
         with patch.object(alarm_module.mistapi, "get_all", return_value=[]):  # WHY: reproduce empty 503 payload.
             with patch(
-                "src.export.org_alarm_event_exporter.mistapi.api.v1.orgs.devices.searchOrgDeviceEvents",
+                "src.operations.exporting.export.org_alarm_event_exporter.mistapi.api.v1.orgs.devices.searchOrgDeviceEvents",
                 return_value=_FailedResponse(),
             ):
                 with caplog.at_level(logging.INFO, logger=alarm_module.logger.name):  # WHY: capture module logs.
@@ -188,7 +218,7 @@ def test_audit_logs_503_returns_none_suppresses_success_and_writes_no_file(
     with patch.object(export_utils_module, "SourceDependencyResolver", resolver):  # WHY: avoid live org resolution.
         with patch.object(export_utils_module.mistapi, "get_all", return_value=[]):  # WHY: reproduce empty 503 payload.
             with patch(
-                "src.export.org_export_utils.mistapi.api.v1.orgs.logs.listOrgAuditLogs",
+                "src.operations.exporting.export.org_export_utils.mistapi.api.v1.orgs.logs.listOrgAuditLogs",
                 return_value=_FailedResponse(),
             ):
                 with caplog.at_level(logging.INFO, logger=export_utils_module.logger.name):  # WHY: capture logs.
@@ -206,7 +236,9 @@ def test_inventory_503_returns_none_suppresses_success_and_writes_no_file(
     """An inventory 503 must not report a completed empty export."""
     writer = MagicMock()  # WHY: the failing path must not write a valid empty export.
     with _api_fetcher_context(inventory_module.__name__, monkeypatch, writer):  # WHY: patch shared dependencies.
-        with _patch_api_function("src.export.org_inventory_exporter.mistapi.api.v1.orgs.inventory.getOrgInventory"):
+        with _patch_api_function(
+            "src.operations.exporting.export.org_inventory_exporter.mistapi.api.v1.orgs.inventory.getOrgInventory"
+        ):
             with caplog.at_level(logging.INFO):  # WHY: capture success and failure logs from both modules.
                 result = OrgInventoryExporter.inventory()  # WHY: drive the real product function.
     assert result is None  # WHY: the existing failure contract for this exporter is None.
@@ -223,7 +255,9 @@ def test_devices_503_returns_none_suppresses_success_and_writes_no_file(
     """An org-devices 503 must not report a completed empty export."""
     writer = MagicMock()  # WHY: the failing path must not write a valid empty export.
     with _api_fetcher_context(inventory_module.__name__, monkeypatch, writer):  # WHY: patch shared dependencies.
-        with _patch_api_function("src.export.org_inventory_exporter.mistapi.api.v1.orgs.devices.listOrgDevices"):
+        with _patch_api_function(
+            "src.operations.exporting.export.org_inventory_exporter.mistapi.api.v1.orgs.devices.listOrgDevices"
+        ):
             with caplog.at_level(logging.INFO):  # WHY: capture success and failure logs from both modules.
                 result = OrgInventoryExporter.devices()  # WHY: drive the real product function.
     assert result is None  # WHY: the existing failure contract for this exporter is None.

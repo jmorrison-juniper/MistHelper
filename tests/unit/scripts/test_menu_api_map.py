@@ -72,7 +72,7 @@ ENTRY_POINT = '''
     """Fixture entry point with one menu table."""
     from src.handlers.reports import ConstExporter, RawClient, SiteReport
     from src.helpers.input_utils import InputUtils
-    from src.utils.operation_registry import OperationRegistry
+    from src.foundation.support.utils.operation_registry import OperationRegistry
 
 
     class GlobalImportManager:
@@ -164,8 +164,8 @@ FIXTURE_FILES = {  # Repository path to its source text.
     "src/handlers/reports.py": HANDLERS,
     "src/helpers/__init__.py": "",
     "src/helpers/input_utils.py": HELPER,
-    "src/utils/__init__.py": "",
-    "src/utils/operation_registry.py": REGISTRY,
+    "src/foundation/support/utils/__init__.py": "",
+    "src/foundation/support/utils/operation_registry.py": REGISTRY,
 }
 
 

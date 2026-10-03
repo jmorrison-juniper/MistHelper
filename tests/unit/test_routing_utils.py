@@ -24,7 +24,12 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 try:
-    from src.network.routing_utils import RoutingDeps, RoutingTableContext, RoutingUtils, SsrRouteContext
+    from src.mist.networking.network.routing_utils import (
+        RoutingDeps,
+        RoutingTableContext,
+        RoutingUtils,
+        SsrRouteContext,
+    )
 finally:
     if _saved_mistapi is not None:
         sys.modules["mistapi"] = _saved_mistapi
@@ -652,7 +657,7 @@ class TestSetupDebugMode:
     """Configure logging for debug mode."""
 
     def test_debug_enabled(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
+        caplog.set_level(logging.DEBUG, logger="src.mist.networking.network.routing_utils")
         ru._setup_debug_mode(True)
         assert "[DEBUG] DEBUG MODE ENABLED" in caplog.text
 
@@ -672,7 +677,7 @@ class TestGetDeviceInfo:
     def test_device_found(self, ru: RoutingUtils) -> None:
         resp = MagicMock()
         resp.data = [{"id": "dev-1", "type": "gateway", "model": "SSR"}]
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.mist.networking.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             result = ru._get_device_info("site-1", "dev-1", "all", False)
         assert result["id"] == "dev-1"
@@ -681,14 +686,14 @@ class TestGetDeviceInfo:
     def test_device_not_found(self, ru: RoutingUtils) -> None:
         resp = MagicMock()
         resp.data = [{"id": "other-dev", "type": "switch"}]
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.mist.networking.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             result = ru._get_device_info("site-1", "dev-1", "all", False)
         assert result is None
 
     def test_api_error(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.INFO, logger="src.network.routing_utils")
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        caplog.set_level(logging.INFO, logger="src.mist.networking.network.routing_utils")
+        with patch("src.mist.networking.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("timeout")
             result = ru._get_device_info("site-1", "dev-1", "all", False)
         assert result is None
@@ -708,14 +713,14 @@ class TestConnectWebsocket:
         ws_mgr.connect.return_value = True
         ws_mgr.subscribe_to_channel.return_value = True
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
-        with patch("src.network.routing_utils.time"):
+        with patch("src.mist.networking.network.routing_utils.time"):
             result = ru._connect_websocket("site-1", "dev-1", False)
         assert result is ws_mgr
 
     def test_connect_fails(
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
-        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
+        caplog.set_level(logging.WARNING, logger="src.mist.networking.network.routing_utils")
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = False
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
@@ -831,7 +836,7 @@ class TestExecuteForwardingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-abc-123"}
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {"prefix": "0.0.0.0/0"}, False)
         assert result == "sess-abc-123"
@@ -842,7 +847,7 @@ class TestExecuteForwardingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         mock_resp.text = "Internal Server Error"
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -860,7 +865,7 @@ class TestExecuteForwardingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"status": "ok"}
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -880,7 +885,7 @@ class TestExecuteRoutingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-def-456"}
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {"protocol": "any"}, False)
         assert result == "sess-def-456"
@@ -891,7 +896,7 @@ class TestExecuteRoutingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 403
         mock_resp.text = "Forbidden"
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -908,7 +913,7 @@ class TestExecuteSsrRouteCommand:
     def test_success(self, ru: RoutingUtils) -> None:
         resp = MagicMock()
         resp.data = {"session": "ssr-sess-789"}
-        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
+        with patch("src.mist.networking.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {"protocol": "bgp"}, False)
         assert result == "ssr-sess-789"
@@ -916,15 +921,15 @@ class TestExecuteSsrRouteCommand:
     def test_no_session_in_response(self, ru: RoutingUtils) -> None:
         resp = MagicMock()
         resp.data = {"status": "ok"}
-        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
+        with patch("src.mist.networking.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
         assert result is None
 
     def test_api_exception(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
         with (
-            caplog.at_level(logging.WARNING, logger="src.network._routing_utils_payload"),
-            patch("src.network._routing_utils_payload.mistapi") as mock_api,
+            caplog.at_level(logging.WARNING, logger="src.mist.networking.network._routing_utils_payload"),
+            patch("src.mist.networking.network._routing_utils_payload.mistapi") as mock_api,
         ):
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.side_effect = RuntimeError("fail")
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
@@ -933,7 +938,7 @@ class TestExecuteSsrRouteCommand:
 
     def test_no_data_attr(self, ru: RoutingUtils) -> None:
         resp = MagicMock(spec=[])
-        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
+        with patch("src.mist.networking.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -948,12 +953,12 @@ class TestErrorHandling:
     """Error handling and WebSocket cleanup."""
 
     def test_handle_routing_error(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.ERROR, logger="src.network.routing_utils")
+        caplog.set_level(logging.ERROR, logger="src.mist.networking.network.routing_utils")
         ru._handle_routing_error("forwarding table", RuntimeError("test"), False)
         assert "forwarding table operation failed" in caplog.text
 
     def test_handle_routing_error_debug(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
+        caplog.set_level(logging.DEBUG, logger="src.mist.networking.network.routing_utils")
         ru._handle_routing_error("routing", ValueError("bad"), True)
         assert "[DEBUG] Exception details" in caplog.text
 
@@ -990,14 +995,14 @@ class TestExecuteShowForwardingTable:
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
     ) -> None:
         mock_deps["select_device_fn"].return_value = None
-        with patch("src.network.routing_utils.mistapi"):
+        with patch("src.mist.networking.network.routing_utils.mistapi"):
             ru.execute_show_forwarding_table()
         assert "No gateway device selected" in capsys.readouterr().out
 
     def test_exception_handled(
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
-        caplog.set_level(logging.ERROR, logger="src.network.routing_utils")
+        caplog.set_level(logging.ERROR, logger="src.mist.networking.network.routing_utils")
         mock_deps["select_site_fn"].side_effect = RuntimeError("boom")
         ru.execute_show_forwarding_table()
         assert "operation failed" in caplog.text
@@ -1017,7 +1022,7 @@ class TestExecuteShowRoutingTable:
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
     ) -> None:
         mock_deps["select_device_fn"].return_value = None
-        with patch("src.network.routing_utils.mistapi"):
+        with patch("src.mist.networking.network.routing_utils.mistapi"):
             ru.execute_show_routing_table()
         assert "No device selected" in capsys.readouterr().out
 
@@ -1043,7 +1048,7 @@ class TestExecuteShowSsrRoutes:
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
     ) -> None:
         mock_deps["select_device_fn"].return_value = None
-        with patch("src.network.routing_utils.mistapi"):
+        with patch("src.mist.networking.network.routing_utils.mistapi"):
             ru.execute_show_ssr_routes()
         assert "No device selected" in capsys.readouterr().out
 
@@ -1057,7 +1062,7 @@ class TestExecuteShowSsrRoutes:
     def test_exception_handled(
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
-        caplog.set_level(logging.ERROR, logger="src.network.routing_utils")
+        caplog.set_level(logging.ERROR, logger="src.mist.networking.network.routing_utils")
         mock_deps["select_site_fn"].side_effect = RuntimeError("fail")
         ru.execute_show_ssr_routes()
         assert "operation failed" in caplog.text
@@ -1178,7 +1183,7 @@ class TestDisplayForwardingTableOutput:
         assert "10.0.0.0/8" in output
 
     def test_no_data(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
+        caplog.set_level(logging.WARNING, logger="src.mist.networking.network.routing_utils")
         result = {"session": "s"}
         ru._display_forwarding_table_output(result, "dev-1", None, False)
         assert "No forwarding table data" in caplog.text
@@ -1239,7 +1244,7 @@ class TestDisplayRoutingTableOutput:
         assert "ROUTING TABLE RESULTS" in output
 
     def test_no_data(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
+        caplog.set_level(logging.WARNING, logger="src.mist.networking.network.routing_utils")
         result = {"session": "s"}
         ctx = RoutingTableContext(
             websocket_manager=MagicMock(),
@@ -1296,7 +1301,7 @@ class TestDisplaySsrRouteOutput:
         assert "SSR/SRX ROUTING TABLE RESULTS" in output
 
     def test_no_data(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
+        caplog.set_level(logging.WARNING, logger="src.mist.networking.network.routing_utils")
         result = {"session": "s"}
         ctx = SsrRouteContext(
             websocket_manager=MagicMock(),
@@ -1326,14 +1331,14 @@ class TestSelectForwardingTableDevice:
 
     def test_no_device(self, ru: RoutingUtils, mock_deps: dict[str, MagicMock]) -> None:
         mock_deps["select_device_fn"].return_value = None
-        with patch("src.network.routing_utils.mistapi"):
+        with patch("src.mist.networking.network.routing_utils.mistapi"):
             site, dev, info = ru._select_forwarding_table_device(False)
         assert dev is None
 
     def test_success(self, ru: RoutingUtils, mock_deps: dict[str, MagicMock]) -> None:
         resp = MagicMock()
         resp.data = [{"id": "dev-1", "type": "gateway", "model": "SSR"}]
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.mist.networking.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             site, dev, info = ru._select_forwarding_table_device(False)
         assert site == "site-1"
@@ -1350,7 +1355,7 @@ class TestSelectRoutingTableDevice:
 
     def test_no_device(self, ru: RoutingUtils, mock_deps: dict[str, MagicMock]) -> None:
         mock_deps["select_device_fn"].return_value = None
-        with patch("src.network.routing_utils.mistapi"):
+        with patch("src.mist.networking.network.routing_utils.mistapi"):
             site, dev, info = ru._select_routing_table_device(False)
         assert dev is None
 
@@ -1358,7 +1363,7 @@ class TestSelectRoutingTableDevice:
         mock_deps["safe_input_fn"].return_value = "n"
         resp = MagicMock()
         resp.data = [{"id": "dev-1", "type": "gateway", "model": "SSR"}]
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.mist.networking.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             site, dev, info = ru._select_routing_table_device(False)
         assert site is None
@@ -1374,7 +1379,7 @@ class TestSelectSsrDevice:
 
     def test_no_device(self, ru: RoutingUtils, mock_deps: dict[str, MagicMock]) -> None:
         mock_deps["select_device_fn"].return_value = None
-        with patch("src.network.routing_utils.mistapi"):
+        with patch("src.mist.networking.network.routing_utils.mistapi"):
             site, dev, info = ru._select_ssr_device(False)
         assert dev is None
 
@@ -1382,7 +1387,7 @@ class TestSelectSsrDevice:
         mock_deps["safe_input_fn"].return_value = "n"
         resp = MagicMock()
         resp.data = [{"id": "dev-1", "type": "gateway", "model": "Other"}]
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.mist.networking.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             site, dev, info = ru._select_ssr_device(False)
         assert site is None
@@ -1426,7 +1431,7 @@ class TestDisplayPrefixTableImplException:
 
     def test_prettytable_exception_fallback(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         entries = [{"destination": "10.0.0.0/8", "next_hop": "gw1", "interface": "eth0", "service": "svc"}]
-        with patch("src.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
+        with patch("src.mist.networking.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
             ru._display_prefix_table_impl(entries)
         output = capsys.readouterr().out
         assert "10.0.0.0/8" in output
@@ -1453,7 +1458,7 @@ class TestDisplayRoutingDetailsException:
                 "admin_distance": "170",
             },
         ]
-        with patch("src.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
+        with patch("src.mist.networking.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
             ru._display_routing_details(entries)
         output = capsys.readouterr().out
         assert "10.0.0.0/8" in output
@@ -1519,7 +1524,7 @@ class TestDisplaySsrRoutingDetailed:
                 "vrf": "default",
             },
         ]
-        with patch("src.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
+        with patch("src.mist.networking.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
             ru._display_ssr_routing(entries)
         output = capsys.readouterr().out
         assert "10.0.0.0/8" in output
@@ -1589,8 +1594,8 @@ class TestExecuteForwardingTableCommandDebug:
         mock_resp.json.return_value = {"session": "sess-abc-123"}
         mock_resp.text = '{"session": "sess-abc-123"}'
         with (
-            caplog.at_level(logging.DEBUG, logger="src.network._routing_utils_payload"),
-            patch("src.network._routing_utils_payload.requests") as mock_req,
+            caplog.at_level(logging.DEBUG, logger="src.mist.networking.network._routing_utils_payload"),
+            patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req,
         ):
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {"prefix": "0.0.0.0/0"}, True)
@@ -1610,7 +1615,7 @@ class TestExecuteRoutingTableCommandDebug:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-def-456"}
         mock_resp.text = '{"session": "sess-def-456"}'
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {"protocol": "any"}, True)
         output = capsys.readouterr().out
@@ -1624,7 +1629,7 @@ class TestExecuteSsrRouteCommandDebug:
     def test_debug_output(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         resp = MagicMock()
         resp.data = {"session": "ssr-sess-789"}
-        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
+        with patch("src.mist.networking.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {"protocol": "bgp"}, True)
         output = capsys.readouterr().out
@@ -1641,7 +1646,7 @@ class TestDisplayForwardingTableOutputDebug:
     """Cover debug mode and additional output fields."""
 
     def test_debug_extra_fields(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
+        caplog.set_level(logging.DEBUG, logger="src.mist.networking.network.routing_utils")
         result = {
             "raw": json.dumps([{"prefix": "10.0.0.0/8", "nextHop": "gw1"}]),
             "session": "s",
@@ -1669,7 +1674,7 @@ class TestDisplayRoutingTableOutputDebug:
     """Cover debug mode and additional output fields."""
 
     def test_debug_extra_fields(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
+        caplog.set_level(logging.DEBUG, logger="src.mist.networking.network.routing_utils")
         result = {
             "raw": json.dumps([{"prefix": "10.0.0.0/8", "nextHop": "gw1", "protocol": "BGP"}]),
             "session": "s",
@@ -1737,7 +1742,7 @@ class TestDisplaySsrRouteOutputDebug:
     """Cover debug and Output fields in SSR display."""
 
     def test_debug_extra_fields(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
+        caplog.set_level(logging.DEBUG, logger="src.mist.networking.network.routing_utils")
         ssr_data = {
             "status": "SUCCESS",
             "columns": ["prefix"],
@@ -1841,9 +1846,9 @@ class TestExecuteShowForwardingTableHappyPath:
         mock_http_resp.json.return_value = {"session": "sess-abc"}
 
         with (
-            patch("src.network.routing_utils.mistapi") as mock_api,
-            patch("src.network._routing_utils_payload.requests") as mock_req,
-            patch("src.network.routing_utils.time"),
+            patch("src.mist.networking.network.routing_utils.mistapi") as mock_api,
+            patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req,
+            patch("src.mist.networking.network.routing_utils.time"),
         ):
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             mock_req.post.return_value = mock_http_resp
@@ -1878,9 +1883,9 @@ class TestExecuteShowRoutingTableHappyPath:
         mock_http_resp.json.return_value = {"session": "sess-def"}
 
         with (
-            patch("src.network.routing_utils.mistapi") as mock_api,
-            patch("src.network._routing_utils_payload.requests") as mock_req,
-            patch("src.network.routing_utils.time"),
+            patch("src.mist.networking.network.routing_utils.mistapi") as mock_api,
+            patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req,
+            patch("src.mist.networking.network.routing_utils.time"),
         ):
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             mock_req.post.return_value = mock_http_resp
@@ -1918,9 +1923,9 @@ class TestExecuteShowSsrRoutesHappyPath:
         api_resp.data = {"session": "ssr-sess"}
 
         with (
-            patch("src.network.routing_utils.mistapi") as mock_api,
-            patch("src.network._routing_utils_payload.mistapi") as mock_payload_api,
-            patch("src.network.routing_utils.time"),
+            patch("src.mist.networking.network.routing_utils.mistapi") as mock_api,
+            patch("src.mist.networking.network._routing_utils_payload.mistapi") as mock_payload_api,
+            patch("src.mist.networking.network.routing_utils.time"),
         ):
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             mock_payload_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = api_resp
@@ -1944,7 +1949,7 @@ class TestExecuteForwardingTableCommandEnvFallback:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "env-sess"}
         with (
-            patch("src.network._routing_utils_payload.requests") as mock_req,
+            patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req,
             patch.dict("os.environ", {"MIST_HOST": "env.mist.com", "MIST_APITOKEN": "env-tok"}),
         ):
             mock_req.post.return_value = mock_resp
@@ -1962,7 +1967,7 @@ class TestExecuteRoutingTableCommandEnvFallback:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "env-sess-r"}
         with (
-            patch("src.network._routing_utils_payload.requests") as mock_req,
+            patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req,
             patch.dict("os.environ", {"MIST_HOST": "env.mist.com", "MIST_APITOKEN": "env-tok"}),
         ):
             mock_req.post.return_value = mock_resp
@@ -1982,7 +1987,7 @@ class TestExecuteRoutingTableCommandEnvFallback:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"status": "ok"}
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with patch("src.mist.networking.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -1997,10 +2002,10 @@ class TestGetDeviceInfoDebug:
     """Cover debug mode paths in device info retrieval."""
 
     def test_debug_output(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
-        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
+        caplog.set_level(logging.DEBUG, logger="src.mist.networking.network.routing_utils")
         resp = MagicMock()
         resp.data = [{"id": "dev-1", "type": "gateway", "model": "SSR"}]
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.mist.networking.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             result = ru._get_device_info("site-1", "dev-1", "all", True)
         assert result["id"] == "dev-1"
@@ -2018,12 +2023,12 @@ class TestConnectWebsocketDebug:
     def test_debug_output(
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
-        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
+        caplog.set_level(logging.DEBUG, logger="src.mist.networking.network.routing_utils")
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = True
         ws_mgr.subscribe_to_channel.return_value = True
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
-        with patch("src.network.routing_utils.time"):
+        with patch("src.mist.networking.network.routing_utils.time"):
             result = ru._connect_websocket("site-1", "dev-1", True)
         assert result is ws_mgr
         assert "[DEBUG]" in caplog.text

@@ -17,8 +17,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import src.firmware.firmware_manager as fm_mod
-from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
+import src.operations.execution.firmware.firmware_manager as fm_mod
+from src.operations.execution.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
 
 
 def _make_manager(**overrides: Any) -> FirmwareManager:
@@ -665,7 +665,7 @@ class TestDispatchBulkAPUpgrade:
     """``_dispatch_bulk_ap_upgrade`` builds config + drives the upgrader."""
 
     def test_builds_config_and_calls_execute(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import src.firmware.bulk_ap_upgrader as bau
+        import src.operations.execution.firmware.bulk_ap_upgrader as bau
 
         mgr = _make_manager()
         built_cfg = object()

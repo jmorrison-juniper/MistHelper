@@ -6,13 +6,19 @@ import importlib  # The test calls each SDK family facade.
 import inspect  # The test reads SDK signatures for sample arguments.
 import threading  # The recorder waits for SDK background trigger threads.
 
-from src.websocket_streams.catalog.model import Safety  # The shell entry uses a separate trigger helper.
-from src.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # The test converts SDK enum values.
-from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Read the utility leaf class.
-from src.websocket_streams.intake.start_request.models import (
+from src.mist.realtime.websocket_streams.catalog.model import Safety  # The shell entry uses a separate trigger helper.
+from src.mist.realtime.websocket_streams.catalog.sdk_annotation import (
+    SdkAnnotation,
+)  # The test converts SDK enum values.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
+    UtilityCatalog,
+)  # Read the utility leaf class.
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
     StartRequest,  # The trigger table accepts checked requests.
 )
-from src.websocket_streams.live.runners.utility.triggers.table import UtilityTriggerTable  # The table under test.
+from src.mist.realtime.websocket_streams.live.runners.utility.triggers.table import (
+    UtilityTriggerTable,
+)  # The table under test.
 
 
 class RecordedResponse:

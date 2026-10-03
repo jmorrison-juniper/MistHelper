@@ -17,15 +17,15 @@ Verify:
 - `data/zscaler_cenr_hostnames.json` exists (~22 KB, schema_version 1, 104 proxy + 104 vpn hostnames).
 - `specs/1022-org-synthetic-probes/spec.md`, `plan.md`, `tasks.md` exist.
 
-## T002 — Confirm `src/org/` package structure
+## T002 — Confirm `src/mist/resources/org/` package structure
 
-Check whether `src/org/__init__.py` exists. If not, create an empty one (with a one-line module docstring) so Python can import the new module.
+Check whether `src/mist/resources/org/__init__.py` exists. If not, create an empty one (with a one-line module docstring) so Python can import the new module.
 
 ## T003 — Confirm `tests/unit/org/` package structure
 
 Check whether `tests/unit/org/__init__.py` exists. If not, create an empty one.
 
-## T004 — Author `src/org/org_synthetic_probes_manager.py`
+## T004 — Author `src/mist/resources/org/org_synthetic_probes_manager.py`
 
 Write the module implementing all helpers named in `plan.md §1.2`, using Google-style docstrings per `~/.claude/DOCS.md` (every public/private function documented with a **Why:** section where the summary is not self-evident).
 
@@ -52,7 +52,7 @@ Cover, at minimum, one test per acceptance scenario in `spec.md`:
 
 Use `unittest.mock.patch` to stub `mistapi.api.v1.orgs.setting.getOrgSettings` / `updateOrgSettings` and `input()`.
 
-## T006 [P] — Register op "206" in `src/utils/operation_registry.py`
+## T006 [P] — Register op "206" in `src/foundation/support/utils/operation_registry.py`
 
 Append entry:
 
@@ -88,8 +88,8 @@ pytest tests/unit/org/test_org_synthetic_probes_manager.py -q
 pytest tests/unit/test_operation_registry_guardrail.py -q
 ruff check .
 black --check .
-interrogate -c ../pyproject.toml src/org/org_synthetic_probes_manager.py
-pydoclint --style=google src/org/org_synthetic_probes_manager.py
+interrogate -c ../pyproject.toml src/mist/resources/org/org_synthetic_probes_manager.py
+pydoclint --style=google src/mist/resources/org/org_synthetic_probes_manager.py
 ```
 
 Fix anything red. Do not proceed to T009 until every gate is green.

@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.refactors.serial_cc.import_initialization_service import ImportInitializationService
+from src.foundation.support.refactors.serial_cc.import_initialization_service import ImportInitializationService
 
 
 def _build_manager():

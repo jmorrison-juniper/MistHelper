@@ -19,8 +19,8 @@ from typing import Any
 
 import mistapi
 
-from src.firmware import upgrade_service
-from src.upgrade_portal.upgrade import gate
+from src.interfaces.portals.upgrade_portal.upgrade import gate
+from src.operations.execution.firmware import upgrade_service
 
 from .clock import START_EPOCH_SECONDS
 from .cloud import StandInCloud, StandInResponse

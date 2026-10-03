@@ -14,20 +14,20 @@ Configuration appears by variable name only. This document reproduces no value f
 
 ### A1. ConnectionPoolExecutor
 
-File: `src/refactors/connection_pool_executor.py` (339 lines).
+File: `src/foundation/support/refactors/connection_pool_executor.py` (339 lines).
 
 The module docstring records the extraction. The class came from `MistHelper.py:7545`.
 The private `_pool_*` helper chain came from `MistHelper.py:7374-7542`. See
-`src/refactors/connection_pool_executor.py:1-15`.
+`src/foundation/support/refactors/connection_pool_executor.py:1-15`.
 
 **Class**
 
-`class ConnectionPoolExecutor:` at `src/refactors/connection_pool_executor.py:59`.
+`class ConnectionPoolExecutor:` at `src/foundation/support/refactors/connection_pool_executor.py:59`.
 Every member is a `@staticmethod`. The class holds no instance state.
 
 **Public entry point**
 
-`src/refactors/connection_pool_executor.py:314-326`:
+`src/foundation/support/refactors/connection_pool_executor.py:314-326`:
 
 ```python
 @staticmethod
@@ -44,14 +44,14 @@ The signature takes four parameters. The Five-Item Rule allows five.
 **Return shape**
 
 `execute` returns `(successful_results, failed_items)`. Both members are lists. The
-empty-input path returns `[], []` at `src/refactors/connection_pool_executor.py:326`. The
+empty-input path returns `[], []` at `src/foundation/support/refactors/connection_pool_executor.py:326`. The
 normal path returns through `_pool_finalize_execution` at
-`src/refactors/connection_pool_executor.py:295`.
+`src/foundation/support/refactors/connection_pool_executor.py:295`.
 
 **Worker contract**
 
 The executor calls `executor.submit(config.worker_function, item, config.connection_semaphore)`
-at `src/refactors/connection_pool_executor.py:178`. A worker function must accept two
+at `src/foundation/support/refactors/connection_pool_executor.py:178`. A worker function must accept two
 positional arguments. The first is one work item. The second is a
 `threading.Semaphore`.
 
@@ -60,39 +60,39 @@ positional arguments. The first is one work item. The second is a
 The bound has two layers.
 
 1. Thread count. `_pool_resolve_thread_sizing` at
-   `src/refactors/connection_pool_executor.py:63` picks the thread count. In
+   `src/foundation/support/refactors/connection_pool_executor.py:63` picks the thread count. In
    connection-aware mode the thread count equals the maximum connection count
-   (`src/refactors/connection_pool_executor.py:67`). Otherwise the thread count comes from
+   (`src/foundation/support/refactors/connection_pool_executor.py:67`). Otherwise the thread count comes from
    `os.cpu_count()` with a fallback constant
-   (`src/refactors/connection_pool_executor.py:73`).
+   (`src/foundation/support/refactors/connection_pool_executor.py:73`).
 2. Connection count. `_pool_configure` builds
    `connection_semaphore = threading.Semaphore(max_conn)` at
-   `src/refactors/connection_pool_executor.py:90`. The executor passes this semaphore to
+   `src/foundation/support/refactors/connection_pool_executor.py:90`. The executor passes this semaphore to
    every worker. The worker must acquire it around each API call.
 
 The pool creates `ThreadPoolExecutor(max_workers=config.max_threads)` at
-`src/refactors/connection_pool_executor.py:176`.
+`src/foundation/support/refactors/connection_pool_executor.py:176`.
 
 Work runs in batches. The batch size is `max_threads * FastModeDevicesPerThread.VALUE`
-(`src/refactors/connection_pool_executor.py:92`).
+(`src/foundation/support/refactors/connection_pool_executor.py:92`).
 
 The drain loop uses `wait(pending, return_when=FIRST_COMPLETED)` at
-`src/refactors/connection_pool_executor.py:152`, inside a `tqdm` progress context at
-`src/refactors/connection_pool_executor.py:148`.
+`src/foundation/support/refactors/connection_pool_executor.py:152`, inside a `tqdm` progress context at
+`src/foundation/support/refactors/connection_pool_executor.py:148`.
 
 **Retry hook**
 
-`_pool_apply_retry` at `src/refactors/connection_pool_executor.py:245` calls
+`_pool_apply_retry` at `src/foundation/support/refactors/connection_pool_executor.py:245` calls
 `retry_function(failed_items, connection_semaphore)` at
-`src/refactors/connection_pool_executor.py:254`. The retry function must return
+`src/foundation/support/refactors/connection_pool_executor.py:254`. The retry function must return
 `(retry_results, still_failed)`. `_pool_maybe_retry` at
-`src/refactors/connection_pool_executor.py:279` skips the retry when nothing failed.
+`src/foundation/support/refactors/connection_pool_executor.py:279` skips the retry when nothing failed.
 
 **Circular-import guard**
 
-`_resolve_fast_mode_env` at `src/refactors/connection_pool_executor.py:31` late-binds
+`_resolve_fast_mode_env` at `src/foundation/support/refactors/connection_pool_executor.py:31` late-binds
 `import MistHelper` inside the function body at
-`src/refactors/connection_pool_executor.py:46`. New modules that need MistHelper globals
+`src/foundation/support/refactors/connection_pool_executor.py:46`. New modules that need MistHelper globals
 must use the same late-binding pattern.
 
 **Every caller**
@@ -102,15 +102,15 @@ must use the same late-binding pattern.
 | `MistHelper.py` public export list | `MistHelper.py:141` |
 | `MistHelper.py` import | `MistHelper.py:536` |
 | `MistHelper.py` dependency injection | `MistHelper.py:3232` (`execute_fn=ConnectionPoolExecutor.execute`) |
-| `src/api/api_fetch_utils.py` | `src/api/api_fetch_utils.py:213-214` |
-| `src/export/gateway_test_exporter.py` | `src/export/gateway_test_exporter.py:187,196` |
-| `src/export/org_device_stats_exporter.py` | `src/export/org_device_stats_exporter.py:372,381` |
-| `src/gateway/gateway_export_utils.py` | `src/gateway/gateway_export_utils.py:16,569` |
-| `src/refactors/serial_cc/test_results_by_site.py` | `src/refactors/serial_cc/test_results_by_site.py:10,29,107` |
-| `src/gateway/gateway_stats_exporter.py` | `src/gateway/gateway_stats_exporter.py:12` (injected, no direct import) |
-| `src/gateway/overrides/_deps.py` | `src/gateway/overrides/_deps.py:18,37` (the `execute_fn` injection slot) |
+| `src/mist/access/api/api_fetch_utils.py` | `src/mist/access/api/api_fetch_utils.py:213-214` |
+| `src/operations/exporting/export/gateway_test_exporter.py` | `src/operations/exporting/export/gateway_test_exporter.py:187,196` |
+| `src/operations/exporting/export/org_device_stats_exporter.py` | `src/operations/exporting/export/org_device_stats_exporter.py:372,381` |
+| `src/mist/resources/gateway/gateway_export_utils.py` | `src/mist/resources/gateway/gateway_export_utils.py:16,569` |
+| `src/foundation/support/refactors/serial_cc/test_results_by_site.py` | `src/foundation/support/refactors/serial_cc/test_results_by_site.py:10,29,107` |
+| `src/mist/resources/gateway/gateway_stats_exporter.py` | `src/mist/resources/gateway/gateway_stats_exporter.py:12` (injected, no direct import) |
+| `src/mist/resources/gateway/overrides/_deps.py` | `src/mist/resources/gateway/overrides/_deps.py:18,37` (the `execute_fn` injection slot) |
 
-`src/refactors/serial_cc/test_results_by_site.py:57` shows a correct worker shape:
+`src/foundation/support/refactors/serial_cc/test_results_by_site.py:57` shows a correct worker shape:
 `_invoke_search_api(deps, site_id, connection_semaphore)`.
 
 ---
@@ -119,10 +119,10 @@ must use the same late-binding pattern.
 
 | Variable name | Definition site | Role |
 | --- | --- | --- |
-| `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` | `src/refactors/fast_mode_constants.py:21-22` | Bounds simultaneous API connections. Also sets the thread count in connection-aware mode. |
-| `FAST_MODE_USE_CONNECTION_AWARE_THREADING` | `src/refactors/fast_mode_constants.py:30-31` | Selects connection-aware sizing or CPU-aware sizing. |
+| `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` | `src/foundation/support/refactors/fast_mode_constants.py:21-22` | Bounds simultaneous API connections. Also sets the thread count in connection-aware mode. |
+| `FAST_MODE_USE_CONNECTION_AWARE_THREADING` | `src/foundation/support/refactors/fast_mode_constants.py:30-31` | Selects connection-aware sizing or CPU-aware sizing. |
 | `FAST_MODE_FALLBACK_THREADS` | `MistHelper.py:2392` | Thread count when `os.cpu_count()` returns nothing. |
-| `FAST_MODE_DEVICES_PER_THREAD` | `src/refactors/fast_mode_devices_per_thread.py:26-27` | Devices per worker thread. Multiplies into the batch size. |
+| `FAST_MODE_DEVICES_PER_THREAD` | `src/foundation/support/refactors/fast_mode_devices_per_thread.py:26-27` | Devices per worker thread. Multiplies into the batch size. |
 
 `MistHelper.py:113` exports `FAST_MODE_FALLBACK_THREADS` in the public surface list.
 `specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt:50` records
@@ -151,7 +151,7 @@ FastAPI project. It is tracked in this repository as ordinary files. `git ls-fil
 reports 110 files there. The repository has no `.gitmodules` file, so the directory is
 not a submodule.
 
-One further match is prose inside a docstring at `src/websocket/commands.py:33`. It is
+One further match is prose inside a docstring at `src/mist/realtime/websocket/commands.py:33`. It is
 not code.
 
 **Conclusion.** Feature 1823 must use threads. No asyncio event loop exists to join.
@@ -163,24 +163,24 @@ The mistapi SDK calls are blocking calls.
 
 **The constant**
 
-`src/utils/rate_limiting.py:56` defines `_DEFAULT_REQUEST_LIMIT = 5000`. The inline
+`src/foundation/support/utils/rate_limiting.py:56` defines `_DEFAULT_REQUEST_LIMIT = 5000`. The inline
 comment describes it as the fallback API request quota per hour when the API omits the
 value.
 
 `MistHelper.py:2275` sets the same default per-window quota with `"limit": 5000`.
 
-`src/reports/e911_bssid.py:937` names the same figure in prose as the 5000 API calls per
+`src/mist/intelligence/reports/e911_bssid.py:937` names the same figure in prose as the 5000 API calls per
 clock-hour rate limit.
 
 **Where enforcement happens**
 
 Enforcement is per call, not per pool.
 
-- `src/api/api_data_fetcher.py:167` defines `_apply_rate_limiting`.
-- `src/api/api_data_fetcher.py:170` calls `mh.RateLimitingUtils.get_rate_limited_delay`.
-- `src/utils/rate_limiting.py:571` defines that helper.
-- `src/api/api_data_fetcher.py:263` defines `_is_rate_limit_error`, which detects HTTP 429.
-- `src/api/api_data_fetcher.py:268` defines `_handle_rate_limit`, which performs recovery.
+- `src/mist/access/api/api_data_fetcher.py:167` defines `_apply_rate_limiting`.
+- `src/mist/access/api/api_data_fetcher.py:170` calls `mh.RateLimitingUtils.get_rate_limited_delay`.
+- `src/foundation/support/utils/rate_limiting.py:571` defines that helper.
+- `src/mist/access/api/api_data_fetcher.py:263` defines `_is_rate_limit_error`, which detects HTTP 429.
+- `src/mist/access/api/api_data_fetcher.py:268` defines `_handle_rate_limit`, which performs recovery.
 
 The delay is adaptive. Each call sleeps before it runs.
 
@@ -201,7 +201,7 @@ Design consequences follow.
 1. Poll the fleet with one bulk request where a bulk endpoint exists. Do not poll each
    device separately.
 2. Share one rate-limit accounting path. Every thread must pass through
-   `src/api/api_data_fetcher.py:167`. A new module that calls the SDK directly bypasses
+   `src/mist/access/api/api_data_fetcher.py:167`. A new module that calls the SDK directly bypasses
    the accounting and breaks the quota model.
 3. Back off the poll interval as the device count grows. A fixed 20-second interval does
    not scale to a large fleet.
@@ -253,7 +253,7 @@ one of those slots for its whole duration. A long upgrade must never block a han
 - `web_portal/services/operation.py:345` exposes `stop_operation(run_id)`, which writes
   the `stop_loop.txt` sentinel.
 
-`src/config/config_utils.py:159` defines `check_stop_signal`, which reads and removes
+`src/foundation/runtime/config/config_utils.py:159` defines `check_stop_signal`, which reads and removes
 that sentinel. Long loops call it once per iteration.
 
 `web_portal/services/event_bus.py:37-39` runs a heartbeat on a daemon thread with a lock
@@ -265,7 +265,7 @@ Use three distinct layers. Do not merge them.
 
 1. **Capture collection (fan-out, bounded, short).** Use
    `ConnectionPoolExecutor.execute` at
-   `src/refactors/connection_pool_executor.py:314`. Write a worker with the
+   `src/foundation/support/refactors/connection_pool_executor.py:314`. Write a worker with the
    `(item, connection_semaphore)` signature. Supply a retry function that returns
    `(retry_results, still_failed)`. This layer already respects the connection semaphore
    and already reports progress.
@@ -280,7 +280,7 @@ Use three distinct layers. Do not merge them.
    service object. Build its `ThreadPoolExecutor` once in the constructor, exactly as
    `web_portal/services/operation.py:318` does. Submit the driver and return the run
    identifier at once. Expose a status endpoint that reads guarded state. Expose a stop
-   path that honours `check_stop_signal` at `src/config/config_utils.py:159`.
+   path that honours `check_stop_signal` at `src/foundation/runtime/config/config_utils.py:159`.
 
 **Durability warning.** In-memory run state dies with the worker process. If an upgrade
 must survive a restart, the driver must persist its state to disk and must reload that
@@ -299,11 +299,11 @@ Any value the driver needs must pass as an explicit argument.
 
 ### B1. LoginOrchestrator
 
-File: `src/auth/interactive/login_orchestrator.py` (311 lines).
+File: `src/mist/access/auth/interactive/login_orchestrator.py` (311 lines).
 
 **Signature**
 
-`src/auth/interactive/login_orchestrator.py:16-21`:
+`src/mist/access/auth/interactive/login_orchestrator.py:16-21`:
 
 ```python
 def __init__(
@@ -314,7 +314,7 @@ def __init__(
 ) -> None:
 ```
 
-`execute(self) -> bool` at `src/auth/interactive/login_orchestrator.py:27` returns `True`
+`execute(self) -> bool` at `src/mist/access/auth/interactive/login_orchestrator.py:27` returns `True`
 on success.
 
 The orchestrator writes results into the shared `state` dictionary. It writes no module
@@ -322,22 +322,22 @@ global itself.
 
 **Flow**
 
-1. Resolve the SDK (`src/auth/interactive/login_orchestrator.py:30`).
+1. Resolve the SDK (`src/mist/access/auth/interactive/login_orchestrator.py:30`).
 2. Prompt for the cloud through `CloudSelector`
-   (`src/auth/interactive/login_orchestrator.py:34`).
+   (`src/mist/access/auth/interactive/login_orchestrator.py:34`).
 3. Collect the email and the password
-   (`src/auth/interactive/login_orchestrator.py:38`).
-4. Authenticate (`src/auth/interactive/login_orchestrator.py:44`).
+   (`src/mist/access/auth/interactive/login_orchestrator.py:38`).
+4. Authenticate (`src/mist/access/auth/interactive/login_orchestrator.py:44`).
 
 **How it forces credential login over token login**
 
 `_create_api_session` builds the session at
-`src/auth/interactive/login_orchestrator.py:136-142` with `email`, `password`, `host`,
+`src/mist/access/auth/interactive/login_orchestrator.py:136-142` with `email`, `password`, `host`,
 `console_log_level`, and `show_cli_notif`.
 
 It then calls `_clear_pre_existing_token` at
-`src/auth/interactive/login_orchestrator.py:147`. That helper wipes the SDK token slots
-at `src/auth/interactive/login_orchestrator.py:161-162`:
+`src/mist/access/auth/interactive/login_orchestrator.py:147`. That helper wipes the SDK token slots
+at `src/mist/access/auth/interactive/login_orchestrator.py:161-162`:
 
 ```python
 apisession._apitoken = []  # Force the SDK to use the email/password credentials
@@ -349,24 +349,24 @@ supplied credentials.
 
 **Two-factor handling**
 
-- `_needs_two_factor` at `src/auth/interactive/login_orchestrator.py:174` checks
+- `_needs_two_factor` at `src/mist/access/auth/interactive/login_orchestrator.py:174` checks
   `error_data.get("two_factor_required")` at
-  `src/auth/interactive/login_orchestrator.py:179`. It then falls back to the flat key at
-  `src/auth/interactive/login_orchestrator.py:181`. Two response shapes exist.
-- `_handle_two_factor` at `src/auth/interactive/login_orchestrator.py:183` prompts through
+  `src/mist/access/auth/interactive/login_orchestrator.py:179`. It then falls back to the flat key at
+  `src/mist/access/auth/interactive/login_orchestrator.py:181`. Two response shapes exist.
+- `_handle_two_factor` at `src/mist/access/auth/interactive/login_orchestrator.py:183` prompts through
   `CredentialPrompter(self.safe_input).prompt_two_factor()` at
-  `src/auth/interactive/login_orchestrator.py:187`.
+  `src/mist/access/auth/interactive/login_orchestrator.py:187`.
 - It replays the login with `apisession.login_with_return(two_factor=code)` at
-  `src/auth/interactive/login_orchestrator.py:193`.
+  `src/mist/access/auth/interactive/login_orchestrator.py:193`.
 - An aborted prompt clears the session at
-  `src/auth/interactive/login_orchestrator.py:189` and returns `None`.
+  `src/mist/access/auth/interactive/login_orchestrator.py:189` and returns `None`.
 
 **Session finalisation**
 
-`_finalize_session` at `src/auth/interactive/login_orchestrator.py:216` writes
-`self.state["apisession"]` at `src/auth/interactive/login_orchestrator.py:218`. It then
-applies a timeout at `src/auth/interactive/login_orchestrator.py:222` and announces MSP
-grants at `src/auth/interactive/login_orchestrator.py:223`.
+`_finalize_session` at `src/mist/access/auth/interactive/login_orchestrator.py:216` writes
+`self.state["apisession"]` at `src/mist/access/auth/interactive/login_orchestrator.py:218`. It then
+applies a timeout at `src/mist/access/auth/interactive/login_orchestrator.py:222` and announces MSP
+grants at `src/mist/access/auth/interactive/login_orchestrator.py:223`.
 
 **Portal consequence.** The prompts read from stdin through the injected `safe_input`.
 A web portal must inject a different callable that reads the submitted form field. The
@@ -376,20 +376,20 @@ constructor already supports that, because `safe_input` is a parameter.
 
 ### B2. MSP privilege detection
 
-File: `src/refactors/msp_privilege_detection.py` (176 lines).
+File: `src/foundation/support/refactors/msp_privilege_detection.py` (176 lines).
 
 **Signature**
 
 `detect_msp_privileges(session: Any) -> list[dict[str, Any]]` at
-`src/refactors/msp_privilege_detection.py:141`.
+`src/foundation/support/refactors/msp_privilege_detection.py:141`.
 
 `session` is a required positional parameter. The function writes no global. The module
-docstring states this at `src/refactors/msp_privilege_detection.py:11-16`. The caller
+docstring states this at `src/foundation/support/refactors/msp_privilege_detection.py:11-16`. The caller
 publishes the result if it wants to.
 
 **Normalized return shape**
 
-`src/refactors/msp_privilege_detection.py:93-98`:
+`src/foundation/support/refactors/msp_privilege_detection.py:93-98`:
 
 ```python
 msp_info: dict[str, Any] = {
@@ -404,63 +404,63 @@ The function returns a list of these dictionaries.
 
 **Source of the data**
 
-`_msp_fetch_user_data` at `src/refactors/msp_privilege_detection.py:124` calls
-`self_api.getSelf(session)` at `src/refactors/msp_privilege_detection.py:129`.
+`_msp_fetch_user_data` at `src/foundation/support/refactors/msp_privilege_detection.py:124` calls
+`self_api.getSelf(session)` at `src/foundation/support/refactors/msp_privilege_detection.py:129`.
 `_msp_extract_from_user_data` reads `user_data["privileges"]` at
-`src/refactors/msp_privilege_detection.py:113`. Only dictionary grants that carry
-`msp_id` qualify (`src/refactors/msp_privilege_detection.py:82`).
+`src/foundation/support/refactors/msp_privilege_detection.py:113`. Only dictionary grants that carry
+`msp_id` qualify (`src/foundation/support/refactors/msp_privilege_detection.py:82`).
 
-`_msp_resolve_name` at `src/refactors/msp_privilege_detection.py:67` resolves a display
+`_msp_resolve_name` at `src/foundation/support/refactors/msp_privilege_detection.py:67` resolves a display
 name. It falls back to a second API call through `_fetch_msp_name` at
-`src/refactors/msp_privilege_detection.py:49`. That call is per MSP grant, so it costs
+`src/foundation/support/refactors/msp_privilege_detection.py:49`. That call is per MSP grant, so it costs
 requests.
 
 **Failure behaviour**
 
 The function returns an empty list on every failure path. It returns `[]` with no session
-(`src/refactors/msp_privilege_detection.py:155`), on a malformed payload
-(`src/refactors/msp_privilege_detection.py:163`), and on any exception
-(`src/refactors/msp_privilege_detection.py:175`). It never raises. A portal cannot
+(`src/foundation/support/refactors/msp_privilege_detection.py:155`), on a malformed payload
+(`src/foundation/support/refactors/msp_privilege_detection.py:163`), and on any exception
+(`src/foundation/support/refactors/msp_privilege_detection.py:175`). It never raises. A portal cannot
 distinguish "no MSP access" from "detection failed" by return value alone.
 
 ---
 
 ### B3. MSP organization selector — the searchable-list problem
 
-File: `src/auth/interactive/msp_org_selector.py` (236 lines).
+File: `src/mist/access/auth/interactive/msp_org_selector.py` (236 lines).
 
 **Signature**
 
-`class MspOrgSelector:` at `src/auth/interactive/msp_org_selector.py:10`. The constructor
-at `src/auth/interactive/msp_org_selector.py:13-18` takes `state`, `safe_input`, and
-`select_org_fallback`. `select()` at `src/auth/interactive/msp_org_selector.py:24` runs
+`class MspOrgSelector:` at `src/mist/access/auth/interactive/msp_org_selector.py:10`. The constructor
+at `src/mist/access/auth/interactive/msp_org_selector.py:13-18` takes `state`, `safe_input`, and
+`select_org_fallback`. `select()` at `src/mist/access/auth/interactive/msp_org_selector.py:24` runs
 the workflow.
 
 `MistHelper.py:2556` constructs the selector.
 
 **How it fetches organizations**
 
-`_fetch_msp_orgs` at `src/auth/interactive/msp_org_selector.py:120` calls
+`_fetch_msp_orgs` at `src/mist/access/auth/interactive/msp_org_selector.py:120` calls
 `mistapi_module.api.v1.msps.orgs.listMspOrgs(apisession, msp_id)` at
-`src/auth/interactive/msp_org_selector.py:124`. It sorts by lowercase name at
-`src/auth/interactive/msp_org_selector.py:136`.
+`src/mist/access/auth/interactive/msp_org_selector.py:124`. It sorts by lowercase name at
+`src/mist/access/auth/interactive/msp_org_selector.py:136`.
 
 **Pagination does not work. It is dead code.**
 
-`_paginated_pick` at `src/auth/interactive/msp_org_selector.py:153` hard-codes both page
+`_paginated_pick` at `src/mist/access/auth/interactive/msp_org_selector.py:153` hard-codes both page
 variables.
 
-- `current_page = 0` at `src/auth/interactive/msp_org_selector.py:155`.
-- `total_pages = 1` at `src/auth/interactive/msp_org_selector.py:156`.
+- `current_page = 0` at `src/mist/access/auth/interactive/msp_org_selector.py:155`.
+- `total_pages = 1` at `src/mist/access/auth/interactive/msp_org_selector.py:156`.
 
 The inline comments state the intent openly. Line 156 reads "Force single-page rendering
 so the full org list shows as one index."
 
-`_render_page` at `src/auth/interactive/msp_org_selector.py:172` also hard-codes the
+`_render_page` at `src/mist/access/auth/interactive/msp_org_selector.py:172` also hard-codes the
 slice.
 
-- `start_index = 0` at `src/auth/interactive/msp_org_selector.py:179`.
-- `end_index = len(orgs)` at `src/auth/interactive/msp_org_selector.py:180`.
+- `start_index = 0` at `src/mist/access/auth/interactive/msp_org_selector.py:179`.
+- `end_index = len(orgs)` at `src/mist/access/auth/interactive/msp_org_selector.py:180`.
 
 The whole list always renders at once.
 
@@ -468,52 +468,52 @@ The navigation branches in `_interpret_choice` can never run. Line 208 requires
 `current_page < total_pages - 1`, which is `0 < 0`. Line 210 requires `current_page > 0`,
 which is `0 > 0`. Both are always false.
 
-The multi-page hint at `src/auth/interactive/msp_org_selector.py:189` also never prints,
+The multi-page hint at `src/mist/access/auth/interactive/msp_org_selector.py:189` also never prints,
 because it requires `total_pages > 1`.
 
 **No text filter exists.**
 
-`_interpret_choice` at `src/auth/interactive/msp_org_selector.py:198` accepts exactly
+`_interpret_choice` at `src/mist/access/auth/interactive/msp_org_selector.py:198` accepts exactly
 three input classes.
 
-1. Blank or `"q"` means skip (`src/auth/interactive/msp_org_selector.py:205`).
+1. Blank or `"q"` means skip (`src/mist/access/auth/interactive/msp_org_selector.py:205`).
 2. `"n"` or `"p"` means navigate. Both branches are unreachable, as shown above.
 3. A one-based integer index means select
-   (`src/auth/interactive/msp_org_selector.py:212-218`).
+   (`src/mist/access/auth/interactive/msp_org_selector.py:212-218`).
 
 Any other text falls to `logging.warning("  X Invalid input - try again")` at
-`src/auth/interactive/msp_org_selector.py:215`.
+`src/mist/access/auth/interactive/msp_org_selector.py:215`.
 
 **Conclusion for feature 1823.** The new portal cannot reuse this picker for a searchable
 organization list. It must build a new picker. The reusable part is `_fetch_msp_orgs` at
-`src/auth/interactive/msp_org_selector.py:120`, which returns a sorted list of
+`src/mist/access/auth/interactive/msp_org_selector.py:120`, which returns a sorted list of
 dictionaries. Each dictionary carries `name` and `id`
-(`src/auth/interactive/msp_org_selector.py:183-184`).
+(`src/mist/access/auth/interactive/msp_org_selector.py:183-184`).
 
-`_record_org_selection` at `src/auth/interactive/msp_org_selector.py:222` writes
-`self.state["org_id"]` at `src/auth/interactive/msp_org_selector.py:226`.
+`_record_org_selection` at `src/mist/access/auth/interactive/msp_org_selector.py:222` writes
+`self.state["org_id"]` at `src/mist/access/auth/interactive/msp_org_selector.py:226`.
 
 ---
 
 ### B4. Organization identifier resolution — exact precedence and exact spelling
 
-File: `src/config/config_utils.py`.
+File: `src/foundation/runtime/config/config_utils.py`.
 
-`get_cached_or_prompted_org_id` at `src/config/config_utils.py:133` resolves the value.
-Its docstring at `src/config/config_utils.py:134` states the precedence.
+`get_cached_or_prompted_org_id` at `src/foundation/runtime/config/config_utils.py:133` resolves the value.
+Its docstring at `src/foundation/runtime/config/config_utils.py:134` states the precedence.
 
 **The exact order**
 
 | Step | Source | Line |
 | --- | --- | --- |
-| 1 | Class cache `ConfigUtils._org_id_cache` | `src/config/config_utils.py:142-144` |
-| 2 | Environment variable `org_id`, then `ORG_ID` | `src/config/config_utils.py:145` |
-| 3 | The `.env` file, matched on a line that starts with `org_id=` | `src/config/config_utils.py:150`, matcher at `src/config/config_utils.py:86` |
-| 4 | Interactive prompt through `mistapi.cli.select_org` | `src/config/config_utils.py:155`, call at `src/config/config_utils.py:123` |
+| 1 | Class cache `ConfigUtils._org_id_cache` | `src/foundation/runtime/config/config_utils.py:142-144` |
+| 2 | Environment variable `org_id`, then `ORG_ID` | `src/foundation/runtime/config/config_utils.py:145` |
+| 3 | The `.env` file, matched on a line that starts with `org_id=` | `src/foundation/runtime/config/config_utils.py:150`, matcher at `src/foundation/runtime/config/config_utils.py:86` |
+| 4 | Interactive prompt through `mistapi.cli.select_org` | `src/foundation/runtime/config/config_utils.py:155`, call at `src/foundation/runtime/config/config_utils.py:123` |
 
 **The exact spelling and letter case**
 
-`src/config/config_utils.py:145` reads:
+`src/foundation/runtime/config/config_utils.py:145` reads:
 
 ```python
 org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
@@ -523,7 +523,7 @@ The primary name is **lowercase `org_id`**. The secondary name is **uppercase `O
 
 **`MIST_ORG_ID` is not read by this resolver.** This is the trap.
 
-`src/config/config_utils.py:111-115` prints operator guidance that names `org_id`, not
+`src/foundation/runtime/config/config_utils.py:111-115` prints operator guidance that names `org_id`, not
 `MIST_ORG_ID`. `MistHelper.py:2724` prints a matching error that reads "also set org_id
 (or ORG_ID) - not MIST_ORG_ID".
 
@@ -532,7 +532,7 @@ The primary name is **lowercase `org_id`**. The secondary name is **uppercase `O
 - `wsgi.py:47` reads `MIST_ORG_ID` during the portal bootstrap.
 - `wsgi.py:88` then writes the resolved value back into `os.environ["ORG_ID"]`. That write
   is what makes `ConfigUtils` see the value at all.
-- `src/maps/maps_manager.py:2720` reads all three names in order, `org_id`, then `ORG_ID`,
+- `src/interfaces/visualization/maps/maps_manager.py:2720` reads all three names in order, `org_id`, then `ORG_ID`,
   then `MIST_ORG_ID`.
 - `tests/integration/conftest.py:34,85` read `MIST_ORG_ID` first, then `org_id`.
 - `deploy/.env.example:17-19` documents that the main path reads the lowercase `org_id`
@@ -540,40 +540,40 @@ The primary name is **lowercase `org_id`**. The secondary name is **uppercase `O
 - `CHANGELOG.md:3059` and `CHANGELOG.md:3243-3245` record the same trap.
 
 **Recommendation.** Feature 1823 must read `org_id` first and `ORG_ID` second, exactly as
-`src/config/config_utils.py:145` does. If the feature also honours `MIST_ORG_ID`, it must
+`src/foundation/runtime/config/config_utils.py:145` does. If the feature also honours `MIST_ORG_ID`, it must
 follow the `wsgi.py:88` pattern and normalize into `ORG_ID`. It must not invent a fourth
 name.
 
 **Fail-closed behaviour under test flags.** `_resolve_org_id_via_prompt` at
-`src/config/config_utils.py:93` refuses to prompt under `--test` and `--testinteractive`
-(`src/config/config_utils.py:106`).
+`src/foundation/runtime/config/config_utils.py:93` refuses to prompt under `--test` and `--testinteractive`
+(`src/foundation/runtime/config/config_utils.py:106`).
 
 ---
 
 ### B5. Site selection and the missing searchable picker
 
-File: `src/ui/prompt_utils.py`.
+File: `src/interfaces/visualization/ui/prompt_utils.py`.
 
-`select_site_id_from_csv(csv_file: str = "SiteList.csv")` at `src/ui/prompt_utils.py:127`
+`select_site_id_from_csv(csv_file: str = "SiteList.csv")` at `src/interfaces/visualization/ui/prompt_utils.py:127`
 is the site picker.
 
 Behaviour:
 
 1. Regenerate the CSV through `CacheUtils.check_and_generate_csv`
-   (`src/ui/prompt_utils.py:130`).
-2. Load the index map and the name map (`src/ui/prompt_utils.py:131`).
-3. Print **every** site in an unbounded loop (`src/ui/prompt_utils.py:135-136`).
-4. Prompt once (`src/ui/prompt_utils.py:137`).
-5. Accept a numeric index (`src/ui/prompt_utils.py:139`) or an exact name match
-   (`src/ui/prompt_utils.py:144`).
+   (`src/interfaces/visualization/ui/prompt_utils.py:130`).
+2. Load the index map and the name map (`src/interfaces/visualization/ui/prompt_utils.py:131`).
+3. Print **every** site in an unbounded loop (`src/interfaces/visualization/ui/prompt_utils.py:135-136`).
+4. Prompt once (`src/interfaces/visualization/ui/prompt_utils.py:137`).
+5. Accept a numeric index (`src/interfaces/visualization/ui/prompt_utils.py:139`) or an exact name match
+   (`src/interfaces/visualization/ui/prompt_utils.py:144`).
 
-Helpers: `_load_site_csv_maps` at `src/ui/prompt_utils.py:154`, `_pick_site_by_index` at
-`src/ui/prompt_utils.py:164`, `_pick_site_by_name` at `src/ui/prompt_utils.py:179`,
-`select_site` at `src/ui/prompt_utils.py:189`, `select_site_with_logging` at
-`src/ui/prompt_utils.py:200`.
+Helpers: `_load_site_csv_maps` at `src/interfaces/visualization/ui/prompt_utils.py:154`, `_pick_site_by_index` at
+`src/interfaces/visualization/ui/prompt_utils.py:164`, `_pick_site_by_name` at `src/interfaces/visualization/ui/prompt_utils.py:179`,
+`select_site` at `src/interfaces/visualization/ui/prompt_utils.py:189`, `select_site_with_logging` at
+`src/interfaces/visualization/ui/prompt_utils.py:200`.
 
 The function writes the module global `mh.LAST_SELECTED_SITE_ID` at
-`src/ui/prompt_utils.py:142` and `src/ui/prompt_utils.py:146`.
+`src/interfaces/visualization/ui/prompt_utils.py:142` and `src/interfaces/visualization/ui/prompt_utils.py:146`.
 
 **No searchable site picker exists anywhere in the repository.**
 
@@ -587,8 +587,8 @@ SQLite previews. It does not select a site.
 prompts.
 
 **Conclusion.** Feature 1823 must build its own searchable site picker. It can reuse the
-CSV cache path at `src/ui/prompt_utils.py:130` and the map loader at
-`src/ui/prompt_utils.py:154`. It must not reuse the prompt loop.
+CSV cache path at `src/interfaces/visualization/ui/prompt_utils.py:130` and the map loader at
+`src/interfaces/visualization/ui/prompt_utils.py:154`. It must not reuse the prompt loop.
 
 ---
 
@@ -598,19 +598,19 @@ Two distinct layers of shared global state block it today.
 
 **Layer 1. `ConfigUtils` class variables**
 
-`src/config/config_utils.py:43` declares `class ConfigUtils:`. Two class variables act as
+`src/foundation/runtime/config/config_utils.py:43` declares `class ConfigUtils:`. Two class variables act as
 process-wide singletons.
 
 ```python
-_org_id_cache: ClassVar[str | None] = None   # src/config/config_utils.py:50
-_apisession: ClassVar[Any] = None            # src/config/config_utils.py:51
+_org_id_cache: ClassVar[str | None] = None   # src/foundation/runtime/config/config_utils.py:50
+_apisession: ClassVar[Any] = None            # src/foundation/runtime/config/config_utils.py:51
 ```
 
-Writers: `set_apisession` at `src/config/config_utils.py:54` and `set_cached_org_id` at
-`src/config/config_utils.py:65`. Reader: `get_cached_org_id` at
-`src/config/config_utils.py:76`.
+Writers: `set_apisession` at `src/foundation/runtime/config/config_utils.py:54` and `set_cached_org_id` at
+`src/foundation/runtime/config/config_utils.py:65`. Reader: `get_cached_org_id` at
+`src/foundation/runtime/config/config_utils.py:76`.
 
-The cache short-circuits every later lookup at `src/config/config_utils.py:142-144`. A
+The cache short-circuits every later lookup at `src/foundation/runtime/config/config_utils.py:142-144`. A
 second user who sets a different organization overwrites the first user's value for the
 whole process.
 
@@ -650,7 +650,7 @@ login overwrites the first. Two users cannot hold two different sessions.
 
 **Inference.** A per-user session in feature 1823 needs a session registry keyed by user,
 plus explicit session passing through every call path. `detect_msp_privileges` at
-`src/refactors/msp_privilege_detection.py:141` already takes an explicit session and is
+`src/foundation/support/refactors/msp_privilege_detection.py:141` already takes an explicit session and is
 therefore safe. Any code path that reads `mh.apisession` is not safe, and there are many
 such paths.
 
@@ -690,79 +690,79 @@ when the level filters the record out, and it stops attacker-supplied text from 
 the format string.
 
 Working examples of the log style appear throughout
-`src/refactors/msp_privilege_detection.py`, for example at
-`src/refactors/msp_privilege_detection.py:100-105`.
+`src/foundation/support/refactors/msp_privilege_detection.py`, for example at
+`src/foundation/support/refactors/msp_privilege_detection.py:100-105`.
 
 ---
 
 ### C2. Operation registry
 
-**File:** `src/utils/operation_registry.py`.
+**File:** `src/foundation/support/utils/operation_registry.py`.
 
 **Shape**
 
-`_OptionEntry = dict[str, str]` at `src/utils/operation_registry.py:29`.
+`_OptionEntry = dict[str, str]` at `src/foundation/support/utils/operation_registry.py:29`.
 
-`_REGISTRY: dict[str, _OptionEntry]` at `src/utils/operation_registry.py:55`. The key is
+`_REGISTRY: dict[str, _OptionEntry]` at `src/foundation/support/utils/operation_registry.py:55`. The key is
 the menu number **as a string**. The value is a dictionary with a required `category` key
 and an optional `skip_reason` key
-(`src/utils/operation_registry.py:49-50`).
+(`src/foundation/support/utils/operation_registry.py:49-50`).
 
 Two entry forms appear in practice.
 
 ```python
-"1": {"category": "safe"},                                     # src/utils/operation_registry.py:330
-"0": {"category": "interactive", "skip_reason": "Exit option"} # src/utils/operation_registry.py:57
+"1": {"category": "safe"},                                     # src/foundation/support/utils/operation_registry.py:330
+"0": {"category": "interactive", "skip_reason": "Exit option"} # src/foundation/support/utils/operation_registry.py:57
 ```
 
 **Category names**
 
-The docstring lists them at `src/utils/operation_registry.py:8-20`.
+The docstring lists them at `src/foundation/support/utils/operation_registry.py:8-20`.
 
 | Category | Meaning | Line |
 | --- | --- | --- |
-| `safe` | Automated GET. Runs in `--test` | `src/utils/operation_registry.py:10` |
-| `interactive_safe` | Read-only but needs a site or a device. Runs in `--testinteractive` | `src/utils/operation_registry.py:11` |
-| `destructive` | Modifies state. Always skipped | `src/utils/operation_registry.py:12` |
-| `wip` | Work in progress. Unstable | `src/utils/operation_registry.py:13` |
-| `resource_intensive` | Takes over one hour or hits rate limits | `src/utils/operation_registry.py:14` |
-| `websocket` | Needs a WebSocket and interactive selection | `src/utils/operation_registry.py:15` |
-| `continuous_loop` | Never terminates without a user stop | `src/utils/operation_registry.py:16` |
-| `interactive` | Needs user input that no runner can automate | `src/utils/operation_registry.py:17` |
-| `unregistered` | Fail-closed fallback. Never written by hand | `src/utils/operation_registry.py:18-20` |
+| `safe` | Automated GET. Runs in `--test` | `src/foundation/support/utils/operation_registry.py:10` |
+| `interactive_safe` | Read-only but needs a site or a device. Runs in `--testinteractive` | `src/foundation/support/utils/operation_registry.py:11` |
+| `destructive` | Modifies state. Always skipped | `src/foundation/support/utils/operation_registry.py:12` |
+| `wip` | Work in progress. Unstable | `src/foundation/support/utils/operation_registry.py:13` |
+| `resource_intensive` | Takes over one hour or hits rate limits | `src/foundation/support/utils/operation_registry.py:14` |
+| `websocket` | Needs a WebSocket and interactive selection | `src/foundation/support/utils/operation_registry.py:15` |
+| `continuous_loop` | Never terminates without a user stop | `src/foundation/support/utils/operation_registry.py:16` |
+| `interactive` | Needs user input that no runner can automate | `src/foundation/support/utils/operation_registry.py:17` |
+| `unregistered` | Fail-closed fallback. Never written by hand | `src/foundation/support/utils/operation_registry.py:18-20` |
 
 Membership sets:
 
-- `SAFE_CATEGORIES = frozenset({"safe"})` at `src/utils/operation_registry.py:455`.
+- `SAFE_CATEGORIES = frozenset({"safe"})` at `src/foundation/support/utils/operation_registry.py:455`.
 - `INTERACTIVE_SAFE_CATEGORIES = frozenset({"interactive_safe"})` at
-  `src/utils/operation_registry.py:457`.
-- `SKIP_CATEGORIES` at `src/utils/operation_registry.py:459-472`, which holds
+  `src/foundation/support/utils/operation_registry.py:457`.
+- `SKIP_CATEGORIES` at `src/foundation/support/utils/operation_registry.py:459-472`, which holds
   `destructive`, `wip`, `resource_intensive`, `websocket`, `continuous_loop`,
   `interactive`, and `unregistered`.
 
 **What a new menu number must add**
 
-Add one key to `_REGISTRY` at `src/utils/operation_registry.py:55`. The key is the menu
+Add one key to `_REGISTRY` at `src/foundation/support/utils/operation_registry.py:55`. The key is the menu
 number as a string. The value must carry a `category`. Add a `skip_reason` whenever the
 category sits in `SKIP_CATEGORIES`.
 
 For feature 1823 the likely correct categories are `interactive` for the portal launch
 entry and `destructive` for any entry that starts an upgrade. **Inference**, based on the
 category definitions and on the existing entries such as
-`src/utils/operation_registry.py:101-104`.
+`src/foundation/support/utils/operation_registry.py:101-104`.
 
 **Failure mode when a number is missing**
 
-`get` at `src/utils/operation_registry.py:475` fails closed.
+`get` at `src/foundation/support/utils/operation_registry.py:475` fails closed.
 
-- It looks the option up at `src/utils/operation_registry.py:482`.
-- On a miss it logs a warning at `src/utils/operation_registry.py:486-488`.
+- It looks the option up at `src/foundation/support/utils/operation_registry.py:482`.
+- On a miss it logs a warning at `src/foundation/support/utils/operation_registry.py:486-488`.
 - It returns `{"category": "unregistered", "skip_reason": "Unregistered menu option - fail-closed pending classification"}`
-  at `src/utils/operation_registry.py:489-492`.
+  at `src/foundation/support/utils/operation_registry.py:489-492`.
 
 Because `unregistered` sits in `SKIP_CATEGORIES`, `is_safe`
-(`src/utils/operation_registry.py:495`) and `is_interactive_safe`
-(`src/utils/operation_registry.py:500`) both return `False`. The option never runs in
+(`src/foundation/support/utils/operation_registry.py:495`) and `is_interactive_safe`
+(`src/foundation/support/utils/operation_registry.py:500`) both return `False`. The option never runs in
 `--test` or in `--testinteractive`.
 
 **Practical effect.** A missing entry does not crash. It silently disables automated test

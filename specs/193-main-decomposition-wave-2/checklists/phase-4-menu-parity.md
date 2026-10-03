@@ -5,7 +5,7 @@ Date: 2026-05-26
 ## Operation 171 - Create test sites from CSV
 
 - Menu entry remains option `171` with unchanged description and destructive classification.
-- `MistHelper.py` now delegates `SiteConfigManager.create_test_sites_from_csv()` into `src/site/site_config_manager.py`.
+- `MistHelper.py` now delegates `SiteConfigManager.create_test_sites_from_csv()` into `src/mist/resources/site/site_config_manager.py`.
 - Confirmation keyword (`CREATE`) and output artifact flow remain unchanged.
 
 ## Operation 172 - Create country RF templates and assign
@@ -29,4 +29,4 @@ Date: 2026-05-26
 ## Conclusion
 
 - Menu IDs, dispatch keys, and user-facing descriptions for `171-174` are unchanged.
-- Runtime behavior is preserved while canonical implementation ownership moved from `MistHelper.py` to `src/site/site_config_manager.py`.
+- Runtime behavior is preserved while canonical implementation ownership moved from `MistHelper.py` to `src/mist/resources/site/site_config_manager.py`.

@@ -11,13 +11,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]  # Locate the checkout from this
 if str(REPO_ROOT) not in sys.path:  # Make direct pytest invocation behave like the CI runner.
     sys.path.insert(0, str(REPO_ROOT))  # Let imports find local packages before installed packages.
 
-from src.export import endpoint_family_exporter  # noqa: E402
-from src.export.count_exporter import _MSP_OPS as COUNT_MSP_OPS  # noqa: E402
-from src.export.count_exporter import _ORG_OPS as COUNT_ORG_OPS  # noqa: E402
-from src.export.endpoint_catalog import menu_text  # noqa: E402
-from src.export.simple_endpoint_exporter import _MSP_OPS as ENDPOINT_MSP_OPS  # noqa: E402
-from src.export.simple_endpoint_exporter import _NONE_OPS as ENDPOINT_NONE_OPS  # noqa: E402
-from src.export.simple_endpoint_exporter import _ORG_OPS as ENDPOINT_ORG_OPS  # noqa: E402
+from src.operations.exporting.export import endpoint_family_exporter  # noqa: E402
+from src.operations.exporting.export.count_exporter import _MSP_OPS as COUNT_MSP_OPS  # noqa: E402
+from src.operations.exporting.export.count_exporter import _ORG_OPS as COUNT_ORG_OPS  # noqa: E402
+from src.operations.exporting.export.endpoint_catalog import menu_text  # noqa: E402
+from src.operations.exporting.export.simple_endpoint_exporter import _MSP_OPS as ENDPOINT_MSP_OPS  # noqa: E402
+from src.operations.exporting.export.simple_endpoint_exporter import _NONE_OPS as ENDPOINT_NONE_OPS  # noqa: E402
+from src.operations.exporting.export.simple_endpoint_exporter import _ORG_OPS as ENDPOINT_ORG_OPS  # noqa: E402
 from web_portal.services.operation import PARAMETER_REGISTRY  # noqa: E402
 
 CHOOSER_EXPECTATIONS = {  # Map each chooser row to its source table and parameter name.

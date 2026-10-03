@@ -35,7 +35,7 @@ Radon CC Report:
 
 ## Extracted Service
 
-**File**: `src/refactors/serial_cc/sle_metrics.py`
+**File**: `src/foundation/support/refactors/serial_cc/sle_metrics.py`
 **Class**: `SLEMetricsService`
 **Method**: `execute(fast: bool = False)`
 
@@ -100,7 +100,7 @@ File: `tests/integration/serial_cc/test_sle_metrics_integration.py`
 
 | File | Change |
 |------|--------|
-| `src/refactors/serial_cc/sle_metrics.py` | ✨ Created (SLEMetricsService class) |
+| `src/foundation/support/refactors/serial_cc/sle_metrics.py` | ✨ Created (SLEMetricsService class) |
 | `MistHelper.py` (line 15425) | 🔄 Replaced method body with delegator to SLEMetricsService.execute() |
 | `tests/unit/serial_cc/test_sle_metrics.py` | ✨ Created (3 unit tests) |
 | `tests/integration/serial_cc/test_sle_metrics_integration.py` | ✨ Created (1 integration test) |

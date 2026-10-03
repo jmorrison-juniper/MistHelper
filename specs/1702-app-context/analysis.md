@@ -25,13 +25,13 @@
 
 These modules still reach into `MistHelper` through an import and must move next under issue #1703:
 
-- `src/export/org_admin_exporter.py`
-- `src/maps/maps_manager.py`
-- `src/maps/_maps_coverage.py`
-- `src/maps/launcher/_viewer_refresh.py`
-- `src/maps/launcher/_viewer_url_switch.py`
-- `src/inventory/org_device_inventory_summary.py`
-- `src/ui/execution/function_executor.py`
+- `src/operations/exporting/export/org_admin_exporter.py`
+- `src/interfaces/visualization/maps/maps_manager.py`
+- `src/interfaces/visualization/maps/_maps_coverage.py`
+- `src/interfaces/visualization/maps/launcher/_viewer_refresh.py`
+- `src/interfaces/visualization/maps/launcher/_viewer_url_switch.py`
+- `src/mist/resources/inventory/org_device_inventory_summary.py`
+- `src/interfaces/visualization/ui/execution/function_executor.py`
 
 `MistHelper.py` keeps legacy attribute reads and writes routed to `MainEntrypoint.context` so those call sites do not break.
 

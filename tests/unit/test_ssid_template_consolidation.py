@@ -1,4 +1,4 @@
-"""Tests for src.ssid_consolidation.ssid_template_consolidation.
+"""Tests for src.operations.execution.ssid_consolidation.ssid_template_consolidation.
 
 Covers all pure helper functions, class __init__, execute entry point,
 phase menu dispatch, cache/resume logic, matrix building, deviation
@@ -68,8 +68,8 @@ def _restore_mistapi_modules() -> None:
 # import. See issue #1739.
 _install_mistapi_stubs()
 try:
-    import src.ssid_consolidation.ssid_template_consolidation as _mod
-    from src.ssid_consolidation.ssid_template_consolidation import (
+    import src.operations.execution.ssid_consolidation.ssid_template_consolidation as _mod
+    from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
         SSIDTemplateConsolidationManager,
         SsidTemplateDeps,
         TemplateOpParams,
@@ -1272,7 +1272,7 @@ class TestAssembleSiteRow:
     """_assemble_site_row tests."""
 
     def test_basic_row(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _assemble_site_row,
         )
 
@@ -1304,7 +1304,7 @@ class TestAssembleSiteRow:
         assert row["ssid_count_in_template"] == 2
 
     def test_no_matched_wlan(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _assemble_site_row,
         )
 
@@ -1363,7 +1363,7 @@ class TestAnalyzeGroupDeviations:
     """_analyze_group_deviations tests."""
 
     def test_no_wlan_configs(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _analyze_group_deviations,
         )
 
@@ -1382,7 +1382,7 @@ class TestAnalyzeGroupDeviations:
         assert canonicals == {}
 
     def test_with_matching_configs(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _analyze_group_deviations,
         )
 
@@ -1417,7 +1417,7 @@ class TestWriteSingleSiteVars:
     """_write_single_site_vars tests."""
 
     def test_writes_successfully(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _write_single_site_vars,
         )
 
@@ -1470,7 +1470,7 @@ class TestBuildAssignResults:
     """_build_assign_results and _build_failed_assign_results tests."""
 
     def test_build_assign_results(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _build_assign_results,
         )
 
@@ -1486,7 +1486,7 @@ class TestBuildAssignResults:
         assert results[1]["status"] == "assigned"
 
     def test_build_failed_assign_results(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _build_failed_assign_results,
         )
 
@@ -1503,7 +1503,7 @@ class TestAssignGroupSites:
     """_assign_group_sites tests."""
 
     def test_assigns_new_sites(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _assign_group_sites,
         )
 
@@ -1534,7 +1534,7 @@ class TestAssignGroupSites:
         assert len(results) == 2
 
     def test_skips_completed(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _assign_group_sites,
         )
 
@@ -1581,7 +1581,7 @@ class TestResolveSingleDeviation:
     """_resolve_single_deviation tests."""
 
     def test_resolves_with_valid_choice(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _resolve_single_deviation,
         )
 
@@ -1601,7 +1601,7 @@ class TestResolveSingleDeviation:
         assert resolutions[("East", "vlan_id")] == 100
 
     def test_invalid_choice_skips(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _resolve_single_deviation,
         )
 
@@ -1620,7 +1620,7 @@ class TestResolveSingleDeviation:
         assert ("East", "vlan_id") not in resolutions
 
     def test_out_of_range_skips(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _resolve_single_deviation,
         )
 
@@ -1695,7 +1695,7 @@ class TestDisableSingleSsid:
         assert result["status"] == "disabled"
 
     def test_ssid_not_found(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _disable_single_ssid,
         )
 
@@ -1736,7 +1736,7 @@ class TestCreateOrUpdateSingleTemplate:
     """_create_or_update_single_template tests."""
 
     def test_creates_new_template(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _create_or_update_single_template,
         )
 
@@ -1761,7 +1761,7 @@ class TestCreateOrUpdateSingleTemplate:
         assert result["action"] == "created"
 
     def test_updates_existing_misthelper(self) -> None:
-        from src.ssid_consolidation.ssid_template_consolidation import (
+        from src.operations.execution.ssid_consolidation.ssid_template_consolidation import (
             _create_or_update_single_template,
         )
 

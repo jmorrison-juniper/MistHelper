@@ -28,8 +28,8 @@ history already holds it.
 | - | - |
 | `.cm1802.txt` | A commit message draft for issue #1802. |
 | `HANDOFF.md` | A run handoff note for the fiber and device catalog work. |
-| `PHASE1_COMPLETION_REPORT.md` | A historical status report for issue #1823. Current facts live in `src/upgrade_portal/` and `specs/1823-upgrade-capture-portal/`. |
-| `PHASE1_EXECUTION_REPORT.md` | A historical status report for the Plotly map templates. Current files are `src/maps/plotly_map_templates.py` and `tests/maps/test_plotly_map_templates.py`. |
+| `PHASE1_COMPLETION_REPORT.md` | A historical status report for issue #1823. Current facts live in `src/interfaces/portals/upgrade_portal/` and `specs/1823-upgrade-capture-portal/`. |
+| `PHASE1_EXECUTION_REPORT.md` | A historical status report for the Plotly map templates. Current files are `src/interfaces/visualization/maps/plotly_map_templates.py` and `tests/maps/test_plotly_map_templates.py`. |
 | `refactor_candidates.md` | A generated analyzer report. `specs/1014-misthelper-refactor-hot-classes-with-src-callers/plan.md` records that this catalog is local-only and must not sit in the branch state. The generator now lives in the external devtools package. |
 | `pip_audit_report.json` | Generated scanner output. The `pip-audit` gate regenerates it in CI. |
 | `build-output.txt` | A captured 54-step container build log. |

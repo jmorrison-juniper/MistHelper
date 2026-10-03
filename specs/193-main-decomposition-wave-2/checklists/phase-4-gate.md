@@ -5,9 +5,9 @@ Scope: T028/T029/T030/T031/T031A/T031B/T032/T033/T034/T035/T036
 
 ## Code Extraction and Delegation
 
-- Extracted `SiteConfigManager` implementation from `MistHelper.py` into `src/site/site_config_manager.py`.
+- Extracted `SiteConfigManager` implementation from `MistHelper.py` into `src/mist/resources/site/site_config_manager.py`.
 - Updated `MistHelper.py` `SiteConfigManager` to orchestration/delegation wrapper for menu operations `171-174`.
-- Added `src/site/__init__.py` and unit test coverage at `tests/unit/site/test_site_config_manager.py`.
+- Added `src/mist/resources/site/__init__.py` and unit test coverage at `tests/unit/site/test_site_config_manager.py`.
 - No changes were made to `GlobalImportManager`.
 
 ## Mandatory Validation Commands (T031)
@@ -31,7 +31,7 @@ Scope: T028/T029/T030/T031/T031A/T031B/T032/T033/T034/T035/T036
 ## Constitution Compliance (T031A)
 
 - `MistHelper.py` now contains delegation-only entrypoints for SiteConfigManager menu operations `171-174`.
-- Runtime dependency wiring is explicit from `MistHelper.py` into `src/site/site_config_manager.py`.
+- Runtime dependency wiring is explicit from `MistHelper.py` into `src/mist/resources/site/site_config_manager.py`.
 - Scope guard respected: `GlobalImportManager` unchanged.
 
 ## Full Deployment Pipeline Attempt (T031B)

@@ -17,15 +17,15 @@
 
 | File | The change |
 | - | - |
-| `src/upgrade_portal/upgrade/org_advanced_options.py` | New. `OrgAdvancedOptions` reads, passes on, and shows the advanced values. `OrgAdvancedRules` holds the two rules of the multi-site plan. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | Read the advanced values, give them to the mapper, apply the rules, and show the values. |
-| `src/upgrade_portal/upgrade/options.py` | Add the label and the rule of each new control to `ORG_OPTION_HELP`. |
-| `src/firmware/upgrade_service.py` | Make the canary rule and the access point rule public. |
-| `src/firmware/aggregate_upgrade_service.py` | Build the access point child with the shared rules, and refuse the stable build. |
-| `src/firmware/org_upgrade_body.py` | Accept and check the nine access point fields. |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_options.html` | Add the advanced controls. |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html` | Add the advanced summary. |
-| `src/upgrade_portal/app/assets/static/js/portal.js` | Show each control only when its rule allows it. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_advanced_options.py` | New. `OrgAdvancedOptions` reads, passes on, and shows the advanced values. `OrgAdvancedRules` holds the two rules of the multi-site plan. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | Read the advanced values, give them to the mapper, apply the rules, and show the values. |
+| `src/interfaces/portals/upgrade_portal/upgrade/options.py` | Add the label and the rule of each new control to `ORG_OPTION_HELP`. |
+| `src/operations/execution/firmware/upgrade_service.py` | Make the canary rule and the access point rule public. |
+| `src/operations/execution/firmware/aggregate_upgrade_service.py` | Build the access point child with the shared rules, and refuse the stable build. |
+| `src/operations/execution/firmware/org_upgrade_body.py` | Accept and check the nine access point fields. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html` | Add the advanced controls. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html` | Add the advanced summary. |
+| `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js` | Show each control only when its rule allows it. |
 
 ## The data flow
 

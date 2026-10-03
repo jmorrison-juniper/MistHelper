@@ -56,15 +56,15 @@
 
 ### Implementation for User Story 1
 
-- [X] T018 [US1] Implement `MultiApScanCaptureWorkflow` for `_start_site_scan_capture_all_aps` in `src/capture/multi_ap_scan_workflow.py`
+- [X] T018 [US1] Implement `MultiApScanCaptureWorkflow` for `_start_site_scan_capture_all_aps` in `src/operations/execution/capture/multi_ap_scan_workflow.py`
 - [X] T019 [US1] Delegate `_start_site_scan_capture_all_aps` facade to extracted workflow in `MistHelper.py`
-- [X] T020 [US1] Implement `SitePcapWaitDownloadWorkflow` for `_wait_and_download_pcap` in `src/capture/site_pcap_wait_download_workflow.py`
+- [X] T020 [US1] Implement `SitePcapWaitDownloadWorkflow` for `_wait_and_download_pcap` in `src/operations/execution/capture/site_pcap_wait_download_workflow.py`
 - [X] T021 [US1] Delegate `_wait_and_download_pcap` facade to extracted workflow in `MistHelper.py`
-- [X] T022 [US1] Implement `OrgPcapWaitDownloadWorkflow` for `_wait_and_download_pcap_org` in `src/capture/org_pcap_wait_download_workflow.py`
+- [X] T022 [US1] Implement `OrgPcapWaitDownloadWorkflow` for `_wait_and_download_pcap_org` in `src/operations/execution/capture/org_pcap_wait_download_workflow.py`
 - [X] T023 [US1] Delegate `_wait_and_download_pcap_org` facade to extracted workflow in `MistHelper.py`
-- [X] T024 [US1] Implement `WifiClientsExporter` for `wifi_clients` in `src/export/wifi_clients_exporter.py`
+- [X] T024 [US1] Implement `WifiClientsExporter` for `wifi_clients` in `src/operations/exporting/export/wifi_clients_exporter.py`
 - [X] T025 [US1] Delegate `wifi_clients` facade to extracted exporter in `MistHelper.py`
-- [X] T026 [US1] Implement `InteractiveTestRunner` for `run_interactive_test` in `src/troubleshooting/interactive_test_runner.py`
+- [X] T026 [US1] Implement `InteractiveTestRunner` for `run_interactive_test` in `src/mist/intelligence/troubleshooting/interactive_test_runner.py`
 - [X] T027 [US1] Delegate `run_interactive_test` facade to extracted runner in `MistHelper.py`
 - [X] T028 [US1] Update imports/wiring for new extraction modules in `MistHelper.py`
 - [X] T029 [US1] Record per-target implementation notes and ownership responsibilities in `specs/196-decompose-next5-functions/evidence/function-module-test-mapping.md`

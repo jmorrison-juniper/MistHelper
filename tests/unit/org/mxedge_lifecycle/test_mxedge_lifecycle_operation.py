@@ -8,9 +8,9 @@ from typing import Any  # WHY: fake clients and monkeypatch use dynamic values.
 
 import pytest  # WHY: monkeypatch fixture drives prompts and time.
 
-import src.org.mxedge_lifecycle.operation as operation_module  # WHY: patch module time safely.
-from src.org.mxedge_lifecycle.models import STATUS_DRY_RUN, MxEdgeLifecycleModels
-from src.org.mxedge_lifecycle.operation import MxEdgeLifecycleOperation  # WHY: system under test.
+import src.mist.resources.org.mxedge_lifecycle.operation as operation_module  # WHY: patch module time safely.
+from src.mist.resources.org.mxedge_lifecycle.models import STATUS_DRY_RUN, MxEdgeLifecycleModels
+from src.mist.resources.org.mxedge_lifecycle.operation import MxEdgeLifecycleOperation  # WHY: system under test.
 
 
 class FakeClient:

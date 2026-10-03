@@ -21,7 +21,7 @@ Why:
     4. One device family polls at a time. The event stream and the statistics
        stream each cost 180 calls an hour, so the pair costs 360 calls an hour.
     5. `gate.HOURLY_CALL_QUOTA` is 5000, which mirrors the shared limiter
-       default `_DEFAULT_REQUEST_LIMIT` in `src/utils/rate_limiting.py`.
+       default `_DEFAULT_REQUEST_LIMIT` in `src/foundation/support/utils/rate_limiting.py`.
     6. 360 of 5000 is 7.2 percent.
 
     Every assertion below uses whole numbers. The direct float expression
@@ -31,8 +31,11 @@ Why:
 
 from __future__ import annotations  # Keeps every annotation as text, per the repository style.
 
-from src.upgrade_portal.upgrade import gate, phase_gate  # The two modules that hold the budget constants.
-from src.utils import rate_limiting  # The shared limiter that owns the real hourly quota.
+from src.foundation.support.utils import rate_limiting  # The shared limiter that owns the real hourly quota.
+from src.interfaces.portals.upgrade_portal.upgrade import (
+    gate,
+    phase_gate,
+)  # The two modules that hold the budget constants.
 
 BUDGET_PARTS_PER_THOUSAND = 72  # 7.2 percent written as a whole number of parts per thousand.
 PARTS_PER_THOUSAND = 1000  # The scale that turns the percentage into exact integer arithmetic.

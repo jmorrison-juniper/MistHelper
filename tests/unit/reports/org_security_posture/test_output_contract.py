@@ -1,6 +1,6 @@
 """Tests for organization security posture output contract."""
 
-from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist
+from src.mist.intelligence.reports.org_security_posture.runner import OrgSecurityPostureChecklist
 from tests.unit.reports.org_security_posture.fixtures.representative_org_security_posture import (
     RepresentativeOrgSecurityPostureFixture,
 )

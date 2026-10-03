@@ -38,7 +38,7 @@ The continuous integration job runs this command:
 pylint src/ --fail-under=9.5 --ignore=maps,ssh,ui
 ```
 
-The `--ignore` flag hides `src/maps`, `src/ssh`, and `src/ui`. Four of the 21 findings sit inside `src/maps` and `src/ssh`. Those four findings do not change the gate score today. Issue #891 tracks the removal of the `--ignore` flag. This feature does not change that flag.
+The `--ignore` flag hides `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui`. Four of the 21 findings sit inside `src/interfaces/visualization/maps` and `src/operations/execution/ssh`. Those four findings do not change the gate score today. Issue #891 tracks the removal of the `--ignore` flag. This feature does not change that flag.
 
 ### Prior failure to avoid
 
@@ -122,7 +122,7 @@ A maintainer removes `W0613` from the `disable` list in `pyproject.toml`. The ma
 - **FR-001**: The feature MUST assign exactly one outcome to each of the 21 measured findings. The outcome set is A, B, and C.
 - **FR-002**: The triage record MUST name the file, the line, the function, the parameter, the outcome, and a one-sentence justification for each finding.
 - **FR-003**: The feature MUST re-measure the baseline before the triage starts. If the count differs from 21, the feature MUST record the new count and triage every finding in the new list.
-- **FR-004**: The feature MUST triage the four findings that sit in `src/maps` and `src/ssh`, even though the gate ignores those packages today.
+- **FR-004**: The feature MUST triage the four findings that sit in `src/interfaces/visualization/maps` and `src/operations/execution/ssh`, even though the gate ignores those packages today.
 
 #### Outcome A, remove the parameter
 
@@ -161,7 +161,7 @@ A maintainer removes `W0613` from the `disable` list in `pyproject.toml`. The ma
 - **FR-025**: The runtime behavior MUST NOT change at any Outcome A or Outcome B site.
 - **FR-026**: Every existing test MUST still pass. The feature MUST update any test that calls a changed signature in the same change.
 - **FR-027**: The feature MUST NOT change the `W0718` suppression.
-- **FR-028**: The feature MUST NOT change the mypy `src.db` override.
+- **FR-028**: The feature MUST NOT change the mypy `src.foundation.persistence.db` override.
 - **FR-029**: The feature MUST NOT change the `--ignore=maps,ssh,ui` flag on the pylint gate.
 
 #### Project conventions
@@ -189,29 +189,29 @@ The table lists the measured baseline. The outcome column is empty for every row
 
 | # | File | Line | Function | Parameter | Gate sees it | Outcome |
 | - | - | - | - | - | - | - |
-| 1 | `src/capture/packet_capture.py` | 911 | `PacketCaptureManager._multi_ap_gather_params` | `ap_macs` | Yes | To triage |
-| 2 | `src/firmware/bulk_ap_upgrader.py` | 1487 | `BulkAPFirmwareUpgrader._upgrade_version_group` | `mistapi` | Yes | To triage |
-| 3 | `src/firmware/org_ap_upgrader.py` | 675 | `OrgLevelAPFirmwareUpgrader._display_org_list` | `msp_name` | Yes | To triage |
-| 4 | `src/inventory/inventory_summary/version_per_model_fetcher.py` | 188 | `VersionPerModelFetcher._rows_for_model` | `target_org_id` | Yes | To triage |
-| 5 | `src/maps/_maps_clone.py` | 149 | `_MapsClone._confirm_clone` | `clone_payload` | No | Outcome A, verified |
-| 6 | `src/maps/maps_manager.py` | 532 | `MapsManager._render_site_maps_table` | `site_name` | No | To triage |
-| 7 | `src/org/org_synthetic_probes_manager.py` | 1619 | `_build_probe_set` | `vlan_ids` | Yes | Outcome B, verified |
-| 8 | `src/site/address_audit/address_resolver.py` | 93 | `AddressResolver._combine` | `candidates` | Yes | Outcome A, verified |
-| 9 | `src/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `env_cmds` | No | To triage |
-| 10 | `src/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `csv_cmds` | No | To triage |
-| 11 | `src/ssid_consolidation/_ssid_template_cache.py` | 193 | `_SsidTemplateCacheCluster._offer_resume` | `results` | Yes | To triage |
-| 12 | `src/ssid_consolidation/_ssid_template_phase1.py` | 121 | `_resolve_template` | `sitegroup_lookup` | Yes | To triage |
-| 13 | `src/ssid_consolidation/_ssid_template_phase45.py` | 267 | `_build_template_config` | `resolutions` | Yes | To triage |
-| 14 | `src/utils/address_utils.py` | 494 | `AddressUtils.apply_business_context_rules` | `debug` | Yes | To triage |
-| 15 | `src/utils/address_utils.py` | 902 | `NominatimValidator._make_api_request` | `source` | Yes | To triage |
-| 16 | `src/utils/address_utils.py` | 947 | `NominatimValidator._calculate_component_match` | `source` | Yes | To triage |
-| 17 | `src/utils/address_utils.py` | 977 | `NominatimValidator._calculate_quality_boost` | `source` | Yes | To triage |
-| 18 | `src/websocket/manager.py` | 318 | `WebSocketManager._on_open` | `websocket_connection` | Yes | Outcome B, verified |
-| 19 | `src/websocket/manager.py` | 323 | `WebSocketManager._on_message` | `websocket_connection` | Yes | Outcome B, verified |
-| 20 | `src/websocket/manager.py` | 336 | `WebSocketManager._on_error` | `websocket_connection` | Yes | Outcome B, verified |
-| 21 | `src/websocket/manager.py` | 343 | `WebSocketManager._on_close` | `websocket_connection` | Yes | Outcome B, verified |
+| 1 | `src/operations/execution/capture/packet_capture.py` | 911 | `PacketCaptureManager._multi_ap_gather_params` | `ap_macs` | Yes | To triage |
+| 2 | `src/operations/execution/firmware/bulk_ap_upgrader.py` | 1487 | `BulkAPFirmwareUpgrader._upgrade_version_group` | `mistapi` | Yes | To triage |
+| 3 | `src/operations/execution/firmware/org_ap_upgrader.py` | 675 | `OrgLevelAPFirmwareUpgrader._display_org_list` | `msp_name` | Yes | To triage |
+| 4 | `src/mist/resources/inventory/inventory_summary/version_per_model_fetcher.py` | 188 | `VersionPerModelFetcher._rows_for_model` | `target_org_id` | Yes | To triage |
+| 5 | `src/interfaces/visualization/maps/_maps_clone.py` | 149 | `_MapsClone._confirm_clone` | `clone_payload` | No | Outcome A, verified |
+| 6 | `src/interfaces/visualization/maps/maps_manager.py` | 532 | `MapsManager._render_site_maps_table` | `site_name` | No | To triage |
+| 7 | `src/mist/resources/org/org_synthetic_probes_manager.py` | 1619 | `_build_probe_set` | `vlan_ids` | Yes | Outcome B, verified |
+| 8 | `src/mist/resources/site/address_audit/address_resolver.py` | 93 | `AddressResolver._combine` | `candidates` | Yes | Outcome A, verified |
+| 9 | `src/operations/execution/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `env_cmds` | No | To triage |
+| 10 | `src/operations/execution/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `csv_cmds` | No | To triage |
+| 11 | `src/operations/execution/ssid_consolidation/_ssid_template_cache.py` | 193 | `_SsidTemplateCacheCluster._offer_resume` | `results` | Yes | To triage |
+| 12 | `src/operations/execution/ssid_consolidation/_ssid_template_phase1.py` | 121 | `_resolve_template` | `sitegroup_lookup` | Yes | To triage |
+| 13 | `src/operations/execution/ssid_consolidation/_ssid_template_phase45.py` | 267 | `_build_template_config` | `resolutions` | Yes | To triage |
+| 14 | `src/foundation/support/utils/address_utils.py` | 494 | `AddressUtils.apply_business_context_rules` | `debug` | Yes | To triage |
+| 15 | `src/foundation/support/utils/address_utils.py` | 902 | `NominatimValidator._make_api_request` | `source` | Yes | To triage |
+| 16 | `src/foundation/support/utils/address_utils.py` | 947 | `NominatimValidator._calculate_component_match` | `source` | Yes | To triage |
+| 17 | `src/foundation/support/utils/address_utils.py` | 977 | `NominatimValidator._calculate_quality_boost` | `source` | Yes | To triage |
+| 18 | `src/mist/realtime/websocket/manager.py` | 318 | `WebSocketManager._on_open` | `websocket_connection` | Yes | Outcome B, verified |
+| 19 | `src/mist/realtime/websocket/manager.py` | 323 | `WebSocketManager._on_message` | `websocket_connection` | Yes | Outcome B, verified |
+| 20 | `src/mist/realtime/websocket/manager.py` | 336 | `WebSocketManager._on_error` | `websocket_connection` | Yes | Outcome B, verified |
+| 21 | `src/mist/realtime/websocket/manager.py` | 343 | `WebSocketManager._on_close` | `websocket_connection` | Yes | Outcome B, verified |
 
-"Gate sees it" is "No" when the file sits in `src/maps` or `src/ssh`. The `--ignore=maps,ssh,ui` flag hides those packages from the score.
+"Gate sees it" is "No" when the file sits in `src/interfaces/visualization/maps` or `src/operations/execution/ssh`. The `--ignore=maps,ssh,ui` flag hides those packages from the score.
 
 ---
 
@@ -219,19 +219,19 @@ The table lists the measured baseline. The outcome column is empty for every row
 
 The team already read the code at five of the 21 findings. The notes below are evidence for the triage. The triage must still record them in the triage record.
 
-### Rows 18 to 21, `src/websocket/manager.py`
+### Rows 18 to 21, `src/mist/realtime/websocket/manager.py`
 
 The four methods are callbacks for the `websocket-client` library. The library calls each method with the connection object as the first argument. The signature is protocol-mandated. These four findings match the committed rationale. Expected outcome: B.
 
-### Row 7, `src/org/org_synthetic_probes_manager.py`
+### Row 7, `src/mist/resources/org/org_synthetic_probes_manager.py`
 
 The docstring of `_build_probe_set` already documents the ignore. The text states that the parameter is kept for signature and back-compat with the caller, and that VLAN scoping belongs on the `tests[]` row that references the probe, not on the `custom_probes` definition. This is a deliberate, documented ignore. It is not a defect. Expected outcome: B.
 
-### Row 8, `src/site/address_audit/address_resolver.py`
+### Row 8, `src/mist/resources/site/address_audit/address_resolver.py`
 
 The parameter `candidates` is a leftover. The body of `_combine` delegates to `_pick_tier_winner(ui, internal, osm)` and to `_resolve_validated(winner, ui, osm)`. Neither helper needs `candidates`. A previous refactor extracted those helpers and left the parameter behind. The removal is safe. Expected outcome: A.
 
-### Row 5, `src/maps/_maps_clone.py`
+### Row 5, `src/interfaces/visualization/maps/_maps_clone.py`
 
 The method `_confirm_clone` prints a clone plan and prompts for confirmation. It never reads `clone_payload`. The minimal correct change is to remove the parameter. Expected outcome: A.
 
@@ -260,7 +260,7 @@ The method `_confirm_clone` prints a clone plan and prompts for confirmation. It
 The items below belong to other issues. This feature MUST NOT change them.
 
 - `W0718` (broad-exception-caught). The repository holds 507 sites. This is a separate slice of issue #887.
-- The mypy `src.db` override. This is a separate slice of issue #887.
+- The mypy `src.foundation.persistence.db` override. This is a separate slice of issue #887.
 - The `--ignore=maps,ssh,ui` flag on the pylint gate. Issue #891 tracks that work.
 - The `C0114`, `C0115`, and `C0116` docstring suppressions.
 - The redesign of the maps clone confirmation text. The feature records the observation and files a companion issue only.
@@ -272,8 +272,8 @@ The items below belong to other issues. This feature MUST NOT change them.
 
 - The measured baseline of 21 findings holds at commit `45c7b8d` on `main`. Other work may land first and change the count. The feature re-measures before the triage starts.
 - The pylint version on the runner matches the version that produced the baseline. A version change can add or remove findings.
-- The four `src/websocket/manager.py` callbacks are expected to be Outcome B. The triage still records the evidence rather than assuming the result.
-- The `src/org/org_synthetic_probes_manager.py` site is expected to be Outcome B, because the docstring already documents the ignore.
+- The four `src/mist/realtime/websocket/manager.py` callbacks are expected to be Outcome B. The triage still records the evidence rather than assuming the result.
+- The `src/mist/resources/org/org_synthetic_probes_manager.py` site is expected to be Outcome B, because the docstring already documents the ignore.
 - Companion issues use the repository issue templates and the standard labels. Each issue carries a type label and a scope label.
 - The team accepts a longer review for this feature, because a signature change needs a call-site search for each removal.
 - The 4 findings in the ignored packages still get the full triage. The gate cannot prove that they are fixed, so a manual scan of those files confirms the result.

@@ -24,8 +24,8 @@ import pytest
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
-from src.upgrade_portal.app.routes import auth
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import auth
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 logger = logging.getLogger(__name__)
 

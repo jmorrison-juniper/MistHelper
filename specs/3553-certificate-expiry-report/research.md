@@ -128,9 +128,9 @@ explicitly requires `cryptography`, and `ssl` does not provide the required dire
 ## R7. SourceDependencyResolver operation pattern
 
 Decision: `operation.py` will import `SourceDependencyResolver` from
-`src.config.source_dependency_resolver`.
+`src.foundation.runtime.config.source_dependency_resolver`.
 
-Rationale: `src/security/rogue_dhcp/operation.py` and `src/marvis/actions/operation.py` resolve the
+Rationale: `src/operations/protection/security/rogue_dhcp/operation.py` and `src/mist/intelligence/marvis/actions/operation.py` resolve the
 organization, session, and exporter through `SourceDependencyResolver`. The new operation must follow
 the same pattern to avoid importing the root CLI module.
 

@@ -1,4 +1,4 @@
-"""Wave 4 P2 coverage for src/refactors/maps_manager_launcher.py (initiative #1018).
+"""Wave 4 P2 coverage for src/foundation/support/refactors/maps_manager_launcher.py (initiative #1018).
 
 Covers `MapsManagerLauncher` construction plus every helper method and every
 branch of `launch()`:
@@ -9,21 +9,21 @@ branch of `launch()`:
 - Defensive branch (`_external_class` unset before `_run_interactive_menu`).
 
 MistHelper attributes are monkeypatched with MagicMock doubles; the lazy import
-`from src.maps.maps_manager import MapsManager` is patched by publishing the
-symbol on `src.maps.maps_manager`. No source edits, no live I/O.
+`from src.interfaces.visualization.maps.maps_manager import MapsManager` is patched by publishing the
+symbol on `src.interfaces.visualization.maps.maps_manager`. No source edits, no live I/O.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
 
 import logging  # WHY: verify structured logs emitted at launch/wire/build stages.
 import sys  # WHY: manipulate sys.modules to force ImportError branch.
-import types  # WHY: build a minimal fake module for src.maps.maps_manager.
+import types  # WHY: build a minimal fake module for src.interfaces.visualization.maps.maps_manager.
 from typing import Any  # WHY: dict-of-mocks return-type annotation.
 from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) doubles.
 
 import pytest  # WHY: monkeypatch/caplog fixtures.
 
-from src.refactors.maps_manager_launcher import (  # WHY: SUT + helper direct imports.
+from src.foundation.support.refactors.maps_manager_launcher import (  # WHY: SUT + helper direct imports.
     MapsManagerLauncher,
     _resolve_runtime_dependencies,
 )
@@ -31,7 +31,7 @@ from src.refactors.maps_manager_launcher import (  # WHY: SUT + helper direct im
 
 @pytest.fixture
 def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Wire MistHelper attributes and publish a stub MapsManager on src.maps.maps_manager."""
+    """Wire MistHelper attributes and publish a stub MapsManager on src.interfaces.visualization.maps.maps_manager."""
     apisession_sentinel = MagicMock(name="apisession_sentinel")  # WHY: identity handle for apisession.
     config_utils_mock = MagicMock(name="ConfigUtils")  # WHY: class handle; has get_cached_or_prompted_org_id.
     config_utils_mock.get_cached_or_prompted_org_id.return_value = "org-uuid-123"  # WHY: happy-path org id.
@@ -47,13 +47,17 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         name="MapsManager_class", return_value=maps_manager_instance
     )  # WHY: class handle.
 
-    # WHY: build (or reuse) the target module so `from src.maps.maps_manager import MapsManager` succeeds.
-    fake_module = types.ModuleType("src.maps.maps_manager")  # WHY: minimal stand-in module object.
+    # Preserve the existing behavior.
+    fake_module = types.ModuleType(
+        "src.interfaces.visualization.maps.maps_manager"
+    )  # WHY: minimal stand-in module object.
     fake_module.__dict__["MapsManager"] = (
         maps_manager_class_mock  # WHY: publish class attribute via __dict__ (avoids mypy attr-defined + ruff B010).
     )
-    # Also ensure the parent packages exist so `from src.maps.maps_manager import ...` resolves.
-    monkeypatch.setitem(sys.modules, "src.maps.maps_manager", fake_module)  # WHY: intercept import path.
+    # Preserve the existing behavior.
+    monkeypatch.setitem(
+        sys.modules, "src.interfaces.visualization.maps.maps_manager", fake_module
+    )  # WHY: intercept import path.
 
     return {  # WHY: expose everything needed for post-condition assertions.
         "apisession": apisession_sentinel,
@@ -130,9 +134,14 @@ class TestLaunchImportFailure:
         monkeypatch: pytest.MonkeyPatch,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """When `from src.maps.maps_manager import MapsManager` raises, launch logs guidance and returns."""
+        """Verify that a failed canonical MapsManager import stops the launch.
+
+        The launch logs guidance and returns after the import failure.
+        """
         # WHY: install a module whose MapsManager attribute access raises ImportError.
-        broken_module = types.ModuleType("src.maps.maps_manager")  # WHY: stand-in for the target module.
+        broken_module = types.ModuleType(
+            "src.interfaces.visualization.maps.maps_manager"
+        )  # WHY: stand-in for the target module.
 
         def _raise_on_access(name: str) -> Any:
             """Force ImportError when the `MapsManager` symbol is looked up on the fake module."""
@@ -143,14 +152,18 @@ class TestLaunchImportFailure:
         broken_module.__dict__["__getattr__"] = (
             _raise_on_access  # WHY: install module-level __getattr__ hook via __dict__ (mypy + ruff clean).
         )
-        monkeypatch.setitem(sys.modules, "src.maps.maps_manager", broken_module)  # WHY: intercept import.
+        monkeypatch.setitem(
+            sys.modules, "src.interfaces.visualization.maps.maps_manager", broken_module
+        )  # WHY: intercept import.
 
         launcher = MapsManagerLauncher()  # WHY: build launcher post-install.
         with caplog.at_level(logging.INFO):  # WHY: import failure logs error + info banners.
             launcher.launch()  # WHY: exercise import-failure branch; should return cleanly.
 
         assert "Could not load Maps Manager module" in caplog.text  # WHY: user-visible failure banner.
-        assert "Ensure src/maps/maps_manager.py exists" in caplog.text  # WHY: remediation shown.
+        assert (
+            "Ensure src/interfaces/visualization/maps/maps_manager.py exists" in caplog.text
+        )  # WHY: remediation shown.
         assert "Failed to import MapsManager" in caplog.text  # WHY: error log emitted.
 
     def test_import_failure_direct_call(

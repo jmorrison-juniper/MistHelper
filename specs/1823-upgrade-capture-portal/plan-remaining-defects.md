@@ -111,7 +111,7 @@ specs/1823-upgrade-capture-portal/
 ### Source code (repository root)
 
 The table names the source file for each story and the change it carries. Every
-path lives under `src/upgrade_portal/` unless the row states otherwise.
+path lives under `src/interfaces/portals/upgrade_portal/` unless the row states otherwise.
 
 | Story | File | Change |
 | --- | --- | --- |

@@ -17,7 +17,7 @@ research.md holds the decisions R1 through R11.
 ## Technical Context
 
 **Language/Version**: Python 3.13.
-**Primary Dependencies**: pytest, Playwright with Edge, the lock module `src/upgrade_portal/runtime/lock.py`, and the audit reader `src/upgrade_portal/compare/lock_audit.py`.
+**Primary Dependencies**: pytest, Playwright with Edge, the lock module `src/interfaces/portals/upgrade_portal/runtime/lock.py`, and the audit reader `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`.
 **Storage**: The trail is one JSON Lines file in the artifact folder of each browser run. The change adds no store.
 **Testing**: pytest. The direct tests use stand-in pages and temporary trail files.
 **Target Platform**: Windows 11 on this computer, and Ubuntu on the CI runners.

@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_child_controls import OrgControlsView, OrgScheduleView
-from src.upgrade_portal.upgrade.org_reconcile import OrgReconcileCheck
-from src.upgrade_portal.upgrade.org_retry import OrgRetryPlan, OrgRetrySelection
+from src.interfaces.portals.upgrade_portal.upgrade.org_child_controls import OrgControlsView, OrgScheduleView
+from src.interfaces.portals.upgrade_portal.upgrade.org_reconcile import OrgReconcileCheck
+from src.interfaces.portals.upgrade_portal.upgrade.org_retry import OrgRetryPlan, OrgRetrySelection
 
 ORG_ID = "11111111-1111-1111-1111-111111111111"
 SITE_ONE = "22222222-2222-2222-2222-222222222222"

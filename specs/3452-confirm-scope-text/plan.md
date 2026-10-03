@@ -36,7 +36,7 @@ plural scope.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html` | The Boolean value, the three texts, and the test identifier of the Warning. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html` | The Boolean value, the three texts, and the test identifier of the Warning. |
 | `tests/contract/upgrade_portal/test_issue_3452_confirm_scope_text.py` | New. The whole texts for one site, two sites, and a retry of one site. |
 | `tests/e2e/upgrade_portal/test_selected_site_count.py` | The one-site journey reads the new texts. The two-site journey continues to the confirm page. |
 | `changelog.d/issue-3452-confirm-scope-text.md` | New. The release note. |

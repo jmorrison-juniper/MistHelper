@@ -11,7 +11,7 @@ import logging
 
 import pytest
 
-from src.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
 from web_portal.services.operation import (
     DEFAULT_RUN_OUTPUT_FILES_MAX,
     OperationExecutor,

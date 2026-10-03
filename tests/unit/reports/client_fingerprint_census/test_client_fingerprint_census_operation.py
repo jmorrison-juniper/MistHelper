@@ -8,9 +8,9 @@ from typing import Any  # WHY: fakes capture exporter values of multiple types.
 import pytest  # WHY: use monkeypatch and log capture fixtures.
 from pytest import LogCaptureFixture, MonkeyPatch  # WHY: type pytest fixtures used here.
 
-from src.reports.client_fingerprint_census import operation as operation_module
-from src.reports.client_fingerprint_census.model import EMPTY_CENSUS_MESSAGE, FingerprintCensusRow
-from src.reports.client_fingerprint_census.operation import ClientFingerprintCensus
+from src.mist.intelligence.reports.client_fingerprint_census import operation as operation_module
+from src.mist.intelligence.reports.client_fingerprint_census.model import EMPTY_CENSUS_MESSAGE, FingerprintCensusRow
+from src.mist.intelligence.reports.client_fingerprint_census.operation import ClientFingerprintCensus
 
 
 class _FakeClient:

@@ -153,4 +153,4 @@ Common use cases:
 
 Menu Operation **235** offers this org count endpoint.
 Verification source: `git grep -n "countOrgMarvisClientsStats" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.
+`src/operations/exporting/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

@@ -1,9 +1,9 @@
-"""Wave 2 P2 coverage for src/refactors/tui_launcher.py (initiative #1018).
+"""Wave 2 P2 coverage for src/foundation/support/refactors/tui_launcher.py (initiative #1018).
 
 Covers `TUILauncher` construction plus every helper method and every branch of
 `launch()` (session-init failure early-return, normal path, KeyboardInterrupt path,
 generic Exception path). MistHelper module attributes (`apisession`, `args`,
-`initialize_mist_session`) and `src.ui.tui.MistHelperTUI` are monkeypatched so no
+`initialize_mist_session`) and `src.interfaces.visualization.ui.tui.MistHelperTUI` are monkeypatched so no
 Rich event loop, network call, or real logger mutation escapes the test process.
 No source edits, no live I/O.
 """
@@ -23,7 +23,9 @@ class TestResolveRuntimeDependencies:
 
     def test_returns_bundle_with_misthelper_module(self) -> None:
         """The returned SimpleNamespace exposes the live MistHelper module under `misthelper_module`."""
-        from src.refactors.tui_launcher import _resolve_runtime_dependencies  # WHY: import inside test for isolation.
+        from src.foundation.support.refactors.tui_launcher import (
+            _resolve_runtime_dependencies,
+        )  # WHY: import inside test for isolation.
 
         deps = _resolve_runtime_dependencies()  # WHY: exercise the helper directly.
         assert deps.misthelper_module is not None  # WHY: the module attribute must be resolved, not None.
@@ -35,7 +37,9 @@ class TestTUILauncherInit:
 
     def test_init_sets_default_state(self) -> None:
         """Newly-constructed launcher has empty handler list and debug_mode=False."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test to avoid cross-test state.
+        from src.foundation.support.refactors.tui_launcher import (
+            TUILauncher,
+        )  # WHY: fresh import per test to avoid cross-test state.
 
         launcher = TUILauncher()  # WHY: exercise the construction path.
         assert launcher.console_handlers == []  # WHY: no handlers captured before launch.
@@ -43,7 +47,7 @@ class TestTUILauncherInit:
 
     def test_init_resolves_runtime_dependencies(self) -> None:
         """__init__ populates `_deps.misthelper_module` via the lazy resolver."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         launcher = TUILauncher()  # WHY: exercise resolver via constructor.
         assert launcher._deps.misthelper_module.__name__ == "MistHelper"  # WHY: name-check on the resolved module.
@@ -54,7 +58,7 @@ class TestApisessionAccessor:
 
     def test_returns_none_when_module_lacks_apisession(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Missing apisession falls back to None (getattr default)."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         launcher = TUILauncher()  # WHY: build launcher to inspect _apisession.
         monkeypatch.delattr("MistHelper.apisession", raising=False)  # WHY: ensure absence to trigger fallback branch.
@@ -62,7 +66,7 @@ class TestApisessionAccessor:
 
     def test_returns_current_binding(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When MistHelper.apisession is set, `_apisession()` returns that value."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         launcher = TUILauncher()  # WHY: build launcher to inspect _apisession.
         sentinel = MagicMock(name="apisession_sentinel")  # WHY: unique object to identity-check.
@@ -75,7 +79,7 @@ class TestPrintWelcome:
 
     def test_prints_activation_banner(self, caplog: pytest.LogCaptureFixture) -> None:
         """Two lines are printed: activation notice + navigation hint."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via bare logging.info -> root logger.
             TUILauncher()._print_welcome()  # WHY: exercise banner emission.
@@ -89,7 +93,7 @@ class TestEnsureApiSession:
 
     def test_reuses_existing_session(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
         """When apisession is already set, no initialize call happens and no user-visible log is emitted."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr("MistHelper.apisession", MagicMock(name="existing_session"), raising=False)  # WHY: exist.
         init_mock = MagicMock(name="initialize_mist_session")  # WHY: sentinel to catch unintended invocation.
@@ -105,7 +109,7 @@ class TestEnsureApiSession:
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         """When apisession is missing and initialize_mist_session returns truthy, session is treated as ready."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.delattr("MistHelper.apisession", raising=False)  # WHY: force the initialize branch.
         init_mock = MagicMock(return_value=True, name="initialize_mist_session")  # WHY: success sentinel.
@@ -122,7 +126,7 @@ class TestEnsureApiSession:
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         """When initialize_mist_session returns falsy, ERROR is logged and False is returned."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.delattr("MistHelper.apisession", raising=False)  # WHY: force the initialize branch.
         init_mock = MagicMock(return_value=False, name="initialize_mist_session")  # WHY: failure sentinel.
@@ -139,7 +143,7 @@ class TestSuppressAndRestoreConsoleLogging:
 
     def test_suppress_captures_streamhandler_but_not_filehandler(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """StreamHandler instances are captured & removed; FileHandler instances stay attached."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         stream_handler = logging.StreamHandler()  # WHY: eligible for suppression.
         file_handler = MagicMock(spec=logging.FileHandler)  # WHY: mocked FileHandler avoids opening a real file.
@@ -167,21 +171,21 @@ class TestGetDebugMode:
 
     def test_returns_false_when_args_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When MistHelper.args is missing, the fallback obj yields debug=False."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.delattr("MistHelper.args", raising=False)  # WHY: ensure absence to trigger fallback.
         assert TUILauncher()._get_debug_mode() is False  # WHY: fallback obj's debug attribute is False.
 
     def test_returns_debug_flag_from_args(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When MistHelper.args.debug is True, `_get_debug_mode` returns True."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr("MistHelper.args", SimpleNamespace(debug=True), raising=False)  # WHY: publish args.
         assert TUILauncher()._get_debug_mode() is True  # WHY: reads args.debug and returns it.
 
     def test_returns_false_when_args_lacks_debug_attribute(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When args exists but lacks `debug`, fallback default kicks in."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr(
             "MistHelper.args", SimpleNamespace(other="x"), raising=False
@@ -194,15 +198,19 @@ class TestRunTui:
 
     def test_run_tui_builds_and_runs(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exercises the happy path where MistHelperTUI.run() returns cleanly."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
-        from src.ui import tui as tui_module  # WHY: SUT lazy-imports MistHelperTUI from this module.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.interfaces.visualization.ui import (
+            tui as tui_module,
+        )  # WHY: SUT lazy-imports MistHelperTUI from this module.
 
         session_sentinel = MagicMock(name="apisession_sentinel")  # WHY: sentinel routed to tui.apisession.
         monkeypatch.setattr("MistHelper.apisession", session_sentinel, raising=False)  # WHY: publish session.
         monkeypatch.setattr("MistHelper.args", SimpleNamespace(debug=True), raising=False)  # WHY: enable debug branch.
         tui_instance = MagicMock(spec=tui_module.MistHelperTUI)  # WHY: FR-008 MagicMock(spec=...).
         tui_class_mock = MagicMock(return_value=tui_instance, name="MistHelperTUI")  # WHY: intercept constructor.
-        monkeypatch.setattr("src.ui.tui.MistHelperTUI", tui_class_mock)  # WHY: replace lazy-imported class.
+        monkeypatch.setattr(
+            "src.interfaces.visualization.ui.tui.MistHelperTUI", tui_class_mock
+        )  # WHY: replace lazy-imported class.
         launcher = TUILauncher()  # WHY: build launcher after globals published.
         launcher._run_tui()  # WHY: exercise the happy path.
         tui_class_mock.assert_called_once_with(debug_mode=True)  # WHY: debug flag latched from args.
@@ -215,7 +223,7 @@ class TestHandlerHelpers:
 
     def test_keyboard_interrupt_prints_exit_banner(self, caplog: pytest.LogCaptureFixture) -> None:
         """Ctrl+C banner is emitted via the logger."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
             TUILauncher()._handle_keyboard_interrupt()  # WHY: exercise banner emission.
@@ -224,7 +232,7 @@ class TestHandlerHelpers:
 
     def test_fatal_error_prints_crash_banner(self, caplog: pytest.LogCaptureFixture) -> None:
         """Fatal error message contains the exception string."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
             TUILauncher()._handle_fatal_error(RuntimeError("boom!"))  # WHY: exercise error branch.
@@ -237,7 +245,7 @@ class TestPrintExitMessage:
 
     def test_exit_message_no_debug(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
         """Without debug mode only the return banner is emitted."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr(
             "MistHelper.args", SimpleNamespace(debug=False), raising=False
@@ -249,7 +257,7 @@ class TestPrintExitMessage:
 
     def test_exit_message_with_debug(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
         """With debug mode, the additional debug trace + return banner are both emitted."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr("MistHelper.args", SimpleNamespace(debug=True), raising=False)  # WHY: enable debug branch.
         with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
@@ -263,7 +271,7 @@ class TestLaunchFullFlow:
 
     def _mock_launcher(self, monkeypatch: pytest.MonkeyPatch) -> Any:
         """Build a launcher with `_ensure_api_session`, `_run_tui`, and `_get_debug_mode` stubbed."""
-        from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
+        from src.foundation.support.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr("MistHelper.args", SimpleNamespace(debug=False), raising=False)  # WHY: predictable args.
         launcher = TUILauncher()  # WHY: build the SUT.

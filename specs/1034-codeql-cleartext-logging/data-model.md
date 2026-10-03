@@ -114,7 +114,7 @@ A textual key that identifies a log call site after a line move.
 **Example**:
 
 ```text
-src/ssh/ssh_runner_manager.py::SSHRunnerManager._echo_plan :: "!? Target hosts: %s"
+src/operations/execution/ssh/ssh_runner_manager.py::SSHRunnerManager._echo_plan :: "!? Target hosts: %s"
 ```
 
 **Rules**:
@@ -155,7 +155,7 @@ the GitHub security tab, and the comment records the reason beside the code.
 
 The small code object that carries a secret to the operator screen.
 
-**Owner**: `CredentialConsole` in `src/utils/console.py`.
+**Owner**: `CredentialConsole` in `src/foundation/support/utils/console.py`.
 
 | Field | Type | Rule |
 | - | - | - |

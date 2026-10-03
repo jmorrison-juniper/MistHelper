@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/runtime/level_discoverer.py."""
+"""Unit tests for src/interfaces/visualization/ui/runtime/level_discoverer.py."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from src.ui.runtime.level_discoverer import DOC_SHORT_LIMIT, LevelDiscoverer
+from src.interfaces.visualization.ui.runtime.level_discoverer import DOC_SHORT_LIMIT, LevelDiscoverer
 
 
 def _install_fake_module(monkeypatch: pytest.MonkeyPatch, dotted: str, contents: dict[str, Any]) -> types.ModuleType:

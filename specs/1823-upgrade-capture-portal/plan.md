@@ -12,10 +12,10 @@ state again, and reports every difference between the two records.
 
 The technical approach has five parts.
 
-1. A new Python package at `src/upgrade_portal/` holds the application. The
+1. A new Python package at `src/interfaces/portals/upgrade_portal/` holds the application. The
    package sits outside `web_portal/`, because the repository excludes
    `web_portal/` from ruff and from mypy.
-2. A new module at `src/firmware/upgrade_service.py` gives the portal a clean
+2. A new module at `src/operations/execution/firmware/upgrade_service.py` gives the portal a clean
    seam into the upgrade endpoints. The four existing upgrade classes hold 1271
    `print` calls and 80 `input` calls, so a web request cannot drive them.
 3. A capture reads six independent call groups in parallel through
@@ -35,7 +35,7 @@ The technical approach has five parts.
 **Primary Dependencies**: `mistapi` 0.63.3 (installed and verified), Flask 3.x with
 `flask-wtf` for cross-site request forgery protection, `redis` for the site lock,
 `python-arango` through the existing `DatabaseRouter`, and `structlog` inside
-`src/db` only. The plan adds no new third-party dependency. Bootstrap 5 is already
+`src/foundation/persistence/db` only. The plan adds no new third-party dependency. Bootstrap 5 is already
 vendored under `web_portal/static/vendor/bootstrap/` and the new application
 vendors its own copy.
 
@@ -82,8 +82,8 @@ and 25 lines.
 **Scale/Scope**: Up to 10 concurrent operators. Up to 6 sites under upgrade at the
 same time, one operator for each site. A site of up to 250 devices and up to 5000
 clients. About 106 functional requirements across 6 user stories. The estimated
-new code is 25 modules inside `src/upgrade_portal/`, 1 module inside
-`src/firmware/`, and about 14 templates.
+new code is 25 modules inside `src/interfaces/portals/upgrade_portal/`, 1 module inside
+`src/operations/execution/firmware/`, and about 14 templates.
 
 ## Constitution Check
 
@@ -97,14 +97,14 @@ Constitution version 1.4.0.
 | II. Class-Based Architecture | PASS | Every unit of behavior is a class or a pure function inside a named module. No module wraps another module for the sake of a shorter import. Variable names use full words. No AI marker text appears. |
 | III. Safety-First | PASS | The upgrade start requires a typed confirmation. The stop control requires the typed word `STOP` (FR-038b). The lock takeover requires the typed word `CONFIRM`. Viewing data never requires typing. Every handler validates early and returns early. No credential value reaches a log, a page, or an error message. |
 | IV. Full Deployment Pipeline | PASS | The feature edits `Containerfile`, `compose.yml`, and `container/scripts/start.sh` for port 8056 in the same change. The pipeline runs unchanged. |
-| V. Observability and Logging | PASS | Every log record is ASCII. Every record uses `%s` placeholders. Records carry a run identifier and a site identifier, so an operator can follow one run through a shared log. `structlog` stays inside `src/db`, as the repository already does. |
+| V. Observability and Logging | PASS | Every log record is ASCII. Every record uses `%s` placeholders. Records carry a run identifier and a site identifier, so an operator can follow one run through a shared log. `structlog` stays inside `src/foundation/persistence/db`, as the repository already does. |
 | VI. Inline Comments | PASS | The implementation phase adds a comment on each generated line that states why the line exists. This plan sets the expectation and the task list enforces it. |
 | VII. Action Logging | PASS | Every action logs at info level before the action and at debug level after the action. The portal wraps every cloud call and every database write in that pair. |
 
 Two further repository rules apply and both pass.
 
 - **Menu registration.** The portal needs one new menu number. The next free
-  number is **238**. The change adds a row to `src/utils/operation_registry.py`.
+  number is **238**. The change adds a row to `src/foundation/support/utils/operation_registry.py`.
   Without that row the fail-closed guardrail breaks the build.
 - **Primary key strategy.** The constitution requires a natural business key with
   a strategy declared in `ENDPOINT_PRIMARY_KEY_STRATEGIES` before any new
@@ -144,7 +144,7 @@ specs/1823-upgrade-capture-portal/
 ### Source code (repository root)
 
 ```text
-src/upgrade_portal/               # New package. Ruff and mypy already cover src/.
+src/interfaces/portals/upgrade_portal/               # New package. Ruff and mypy already cover src/.
 ├── __init__.py
 ├── app/                          # The web layer
 │   ├── __init__.py
@@ -193,7 +193,7 @@ src/upgrade_portal/               # New package. Ruff and mypy already cover src
     ├── pools.py                  # Thread pool sizing and shutdown
     └── signals.py                # Stop request store, no file sentinel
 
-src/firmware/upgrade_service.py   # New seam. No print. No input. Thread safe.
+src/operations/execution/firmware/upgrade_service.py   # New seam. No print. No input. Thread safe.
 
 tests/
 ├── unit/upgrade_portal/          # Pure function tests
@@ -207,8 +207,8 @@ Files changed outside the new package.
 
 | File | Change |
 | --- | --- |
-| `src/utils/operation_registry.py` | Add menu 238 with the correct category |
-| `src/refactors/endpoint_primary_key_strategies.py` | Add two `natural_pk` entries |
+| `src/foundation/support/utils/operation_registry.py` | Add menu 238 with the correct category |
+| `src/foundation/support/refactors/endpoint_primary_key_strategies.py` | Add two `natural_pk` entries |
 | `MistHelper.py` | Add the menu entry and the launcher for menu 238 |
 | `Containerfile` | Add `ENV CAPTURE_PORT=8056` and extend `EXPOSE` |
 | `compose.yml` | Publish port 8056 |
@@ -219,7 +219,7 @@ Files changed outside the new package.
 package under `src/`. The repository is one Python application with an optional
 web front end, so the two-project layout does not apply.
 
-The package sits at `src/upgrade_portal/` for one reason above all others.
+The package sits at `src/interfaces/portals/upgrade_portal/` for one reason above all others.
 `pyproject.toml:161` excludes `web_portal` from ruff, and `pyproject.toml:273-281`
 exclude the same directory from mypy. Any code placed there loses both gates. The
 mypy command already names `src/`, so the new package gains full coverage with no
@@ -249,7 +249,7 @@ upgrade plan at one time, because a stop that arrives late saves no device.
 
 Three rules protect correctness.
 
-- The portal never calls `src/firmware/firmware_manager.py`. The module holds four
+- The portal never calls `src/operations/execution/firmware/firmware_manager.py`. The module holds four
   globals at `:34-37`, and the save-and-restore blocks at `:1736` and `:1797` are
   not thread safe. Two concurrent web requests would corrupt each other.
 - Concurrency belongs at the call-group level or above. A per-device fan-out costs
@@ -330,19 +330,19 @@ version and digest. FR-031 requires the portal to verify its own write, and issu
 |-----------|------------|-------------------------------------|
 | `src/` gains a sixth or later child directory, above the Five-Item Rule limit of 5 children for each level | `src/` already holds far more than 5 children today. The feature needs one package that ruff and mypy check. Every alternative location loses a gate. | A package inside `web_portal/` loses ruff (`pyproject.toml:161`) and mypy (`pyproject.toml:273-281`). A package at the repository root escapes the mypy target list. Merging the code into an existing `src/` child would break that child's own five-module limit. |
 | A second long-running server process inside the container | The existing portal owns port 8055 and one Gunicorn worker with process-level global state. The new portal cannot share that process. | A shared process would inherit the run map, the event bus subscriber map, and the module-level API session of the existing portal. Those three items already force one worker and would corrupt a second application. |
-| A new module in `src/firmware/`, which raises that package above five modules | The upgrade seam must live next to the upgrade code, and it must expose no `print` and no `input`. | Reuse of the four existing classes fails. They hold 1271 `print` calls and 80 `input` calls. Reuse through the input interceptor fails, because the prompt order changes with the inventory. |
+| A new module in `src/operations/execution/firmware/`, which raises that package above five modules | The upgrade seam must live next to the upgrade code, and it must expose no `print` and no `input`. | Reuse of the four existing classes fails. They hold 1271 `print` calls and 80 `input` calls. Reuse through the input interceptor fails, because the prompt order changes with the inventory. |
 
 ## Dependencies outside this plan
 
 **Issue #1824 is a prerequisite for the repository, not for this feature.**
-`_is_standalone_mode()` at `src/export/data_exporter.py:141` gates every polyglot
-write on a container check, and `_csv_fallback` at `src/db/router.py:372-382`
+`_is_standalone_mode()` at `src/operations/exporting/export/data_exporter.py:141` gates every polyglot
+write on a container check, and `_csv_fallback` at `src/foundation/persistence/db/router.py:372-382`
 returns `success=True` after it writes zero rows. FR-031 requires the portal to
 verify its own database write, so this plan does not wait for the repair. The
 repair still matters for every other caller. **Do not implement the repair inside
 this feature.**
 
-**Do not repair `src/db/retention.py`.** Line 100 reads an attribute named
+**Do not repair `src/foundation/persistence/db/retention.py`.** Line 100 reads an attribute named
 `_database`, while the writer names the handle `self._db`. The purge therefore
 never runs. That failure is harmless here, because FR-032 asks for unlimited
 retention. A repair would start deleting captures.

@@ -121,7 +121,7 @@ repaired it. The capture of scenario A ran after that repair.
 | pytest flag | `-p no:playwright` on every call |
 
 Gunicorn cannot run on this platform, because `gunicorn.util` imports `fcntl`
-and Windows ships no such module. `src/upgrade_portal/runtime/server.py:52`
+and Windows ships no such module. `src/interfaces/portals/upgrade_portal/runtime/server.py:52`
 selects Waitress on Windows for this reason. The choice is by design.
 
 The port was clear before each start. Waitress sets `SO_REUSEADDR`, so a stale
@@ -158,7 +158,7 @@ the two that name live hardware.
 | 9 | Scenario F, the history view (section 8) | BLOCKED | The history page reads stored captures. No capture exists without the database credential. |
 | 10 | pytest unit and contract (section 9) | PASS | `pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -p no:playwright` reported 2616 passed and 0 failed. |
 | 11 | pytest browser journeys (section 9) | BLOCKED | The task requires `-p no:playwright`. That flag removes the `context` and `page` fixtures, so all 129 tests skipped with cause `('context', <SubRequest 'page' ...>)`. Playwright and its Chromium build are installed, so the browsers are not the blocker. |
-| 12 | ruff (section 9) | PASS | `ruff check src/upgrade_portal src/firmware/upgrade_service.py` exited zero with no finding. |
+| 12 | ruff (section 9) | PASS | `ruff check src/interfaces/portals/upgrade_portal src/operations/execution/firmware/upgrade_service.py` exited zero with no finding. |
 | 13 | mypy (section 9) | PASS | `Success: no issues found in 40 source files`. |
 | 14 | black --check (section 9) | PASS | 40 files reported unchanged. |
 | 15 | interrogate (section 9) | PASS | Coverage reached 100.0 percent against the floor of 90.0 percent. |
@@ -172,7 +172,7 @@ the two that name live hardware.
 | 23 | Every asset loads from the portal (section 11.2) | PASS | The content security policy is `'self'` only. The vendored Bootstrap asset answered 200 from the portal. No outside host appears in any page. |
 | 24 | The log is ASCII only (section 11.3) | PASS | No character above the ASCII range appears in the log output. |
 | 25 | The packet-capture word never appears (section 11.4) | PASS | The word `capture` always means a record of site state. No packet sense appears. |
-| 26 | The reserved word stays reserved (section 11.5) | PASS | The word `snapshot` appears as an identifier only at `src/firmware/upgrade_service.py:66`, where it is the field name the cloud upgrade body demands for a Junos file action. Other uses are prose about statistics readings. The feature never names its own record with the reserved word. |
+| 26 | The reserved word stays reserved (section 11.5) | PASS | The word `snapshot` appears as an identifier only at `src/operations/execution/firmware/upgrade_service.py:66`, where it is the field name the cloud upgrade body demands for a Junos file action. Other uses are prose about statistics readings. The feature never names its own record with the reserved word. |
 
 **Totals**: 26 scenarios. 13 PASS. 0 FAIL. 13 BLOCKED.
 
@@ -183,7 +183,7 @@ the two that name live hardware.
 The launcher at `python MistHelper.py --capture-portal` stops before it binds a
 port. The reason is the credential preflight.
 
-`src/refactors/main_entrypoint.py:56` establishes the Mist session. Line 58 then
+`src/foundation/support/refactors/main_entrypoint.py:56` establishes the Mist session. Line 58 then
 dispatches the mode. `MistHelper.py:5315` runs the token preflight inside the
 session step, so the preflight always runs first.
 
@@ -206,13 +206,13 @@ portal.
 ## 4. Findings for the lead
 
 1. **`pydoclint` is absent.** Section 9 of `quickstart.md` lists
-   `pydoclint --style=google src/upgrade_portal` as an automated check. The tool
+   `pydoclint --style=google src/interfaces/portals/upgrade_portal` as an automated check. The tool
    is in neither the virtual environment nor `pyproject.toml`. The docstring gate
    that this project actually runs is `pydocstyle`. Either add the dependency or
    correct the quickstart command. This is a tooling gap, not a code defect.
 2. **File contents flapped during the test run.** This working directory sits on
    a synchronized OneDrive path. Two early test runs reported different failures
-   in `src/upgrade_portal/runtime/identity.py`. A read from disk showed the file
+   in `src/interfaces/portals/upgrade_portal/runtime/identity.py`. A read from disk showed the file
    held correct content, and the reported line differed from the stored line. A
    later run of the same tests passed. Treat any lone test failure in this
    directory as suspect and repeat the run before you record it.

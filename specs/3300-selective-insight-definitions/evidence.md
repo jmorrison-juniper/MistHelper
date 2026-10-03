@@ -22,9 +22,9 @@ The open pull requests were 3670, 3633, 3632, 3630, 3629, 3628, 3627, 3626, 3625
 
 The permitted source files are:
 
-- `src/export/const_definitions_exporter.py`.
-- `src/analytics/insight_metrics_utils.py`.
-- `src/refactors/serial_cc/site_client_insights.py`.
+- `src/operations/exporting/export/const_definitions_exporter.py`.
+- `src/mist/intelligence/analytics/insight_metrics_utils.py`.
+- `src/foundation/support/refactors/serial_cc/site_client_insights.py`.
 
 The permitted test files are:
 
@@ -164,7 +164,7 @@ The denominator was 1,084 statements and 284 branches in the three changed sourc
 The configured 90% floor remained unchanged.
 
 ```text
-rtk proxy env COVERAGE_FILE=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/coverage-3300 .venv/bin/python -m pytest tests/unit/export/test_selective_insight_definitions.py tests/unit/export/test_const_definitions_exporter.py tests/unit/analytics/test_insight_metrics_utils.py tests/unit/serial_cc/test_site_client_insights.py tests/unit/export/test_org_export_utils.py tests/unit/export/test_site_insights_exporter.py tests/unit/export/site_insights/test_site_insight_path.py tests/unit/serial_cc/test_site_client_insight_path.py tests/integration/serial_cc/test_site_client_insights_integration.py -q -rs --cov=src.export.const_definitions_exporter --cov=src.analytics.insight_metrics_utils --cov=src.refactors.serial_cc.site_client_insights --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/coverage-3300.json --cov-fail-under=90 --timeout=120 --tb=short
+rtk proxy env COVERAGE_FILE=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/coverage-3300 .venv/bin/python -m pytest tests/unit/export/test_selective_insight_definitions.py tests/unit/export/test_const_definitions_exporter.py tests/unit/analytics/test_insight_metrics_utils.py tests/unit/serial_cc/test_site_client_insights.py tests/unit/export/test_org_export_utils.py tests/unit/export/test_site_insights_exporter.py tests/unit/export/site_insights/test_site_insight_path.py tests/unit/serial_cc/test_site_client_insight_path.py tests/integration/serial_cc/test_site_client_insights_integration.py -q -rs --cov=src.operations.exporting.export.const_definitions_exporter --cov=src.mist.intelligence.analytics.insight_metrics_utils --cov=src.foundation.support.refactors.serial_cc.site_client_insights --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/coverage-3300.json --cov-fail-under=90 --timeout=120 --tb=short
 ```
 
 This command passed in 9.89 seconds.
@@ -226,7 +226,7 @@ These values do not claim complete coverage of unchanged client-service methods.
 
 | Check | Exact command | Result |
 | --- | --- | --- |
-| Syntax | `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/export/const_definitions_exporter.py src/analytics/insight_metrics_utils.py src/refactors/serial_cc/site_client_insights.py tests/unit/export/test_selective_insight_definitions.py tests/unit/analytics/test_insight_metrics_utils.py` | Passed for six files. |
+| Syntax | `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/operations/exporting/export/const_definitions_exporter.py src/mist/intelligence/analytics/insight_metrics_utils.py src/foundation/support/refactors/serial_cc/site_client_insights.py tests/unit/export/test_selective_insight_definitions.py tests/unit/analytics/test_insight_metrics_utils.py` | Passed for six files. |
 | Full Ruff | `rtk proxy .venv/bin/python -m ruff check --no-cache .` | Passed with zero findings. |
 | Full Black | `rtk proxy .venv/bin/python -m black --check --diff --no-cache .` | Passed. All 2,001 files remained unchanged. |
 | Exact CI mypy | `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml --cache-dir /Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/mypy-3300` | Passed for 663 source files. Existing untyped-body notes remain. |
@@ -234,7 +234,7 @@ These values do not claim complete coverage of unchanged client-service methods.
 | Bandit excludes | `rtk proxy .venv/bin/bandit-exclude-check` | Passed without exclusion changes. |
 | Exact CI complexity | `rtk proxy .venv/bin/python -m radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j \| rtk proxy .venv/bin/complexity-gate --max 10` | Passed. Every measured function remained at or below 10. |
 | New-test complexity | `rtk proxy .venv/bin/python -m radon cc tests/unit/export/test_selective_insight_definitions.py -j \| rtk proxy .venv/bin/complexity-gate --max 10` | Passed without suppressions. |
-| Changed-owner Pylint | `rtk proxy .venv/bin/python -m pylint src/export/const_definitions_exporter.py src/analytics/insight_metrics_utils.py src/refactors/serial_cc/site_client_insights.py --fail-under=9.5 --score=y` | Passed at 9.79/10. Reported style warnings remain visible. |
+| Changed-owner Pylint | `rtk proxy .venv/bin/python -m pylint src/operations/exporting/export/const_definitions_exporter.py src/mist/intelligence/analytics/insight_metrics_utils.py src/foundation/support/refactors/serial_cc/site_client_insights.py --fail-under=9.5 --score=y` | Passed at 9.79/10. Reported style warnings remain visible. |
 | Citations | `rtk proxy .venv/bin/check-citations src tests` | Passed. It checked 251 citations and found zero unresolved references. |
 | Whitespace | `rtk proxy git diff --check` | Passed with zero findings. |
 
@@ -414,9 +414,9 @@ specs/3300-selective-insight-definitions/quickstart.md
 specs/3300-selective-insight-definitions/research.md
 specs/3300-selective-insight-definitions/spec.md
 specs/3300-selective-insight-definitions/tasks.md
-src/analytics/insight_metrics_utils.py
-src/export/const_definitions_exporter.py
-src/refactors/serial_cc/site_client_insights.py
+src/mist/intelligence/analytics/insight_metrics_utils.py
+src/operations/exporting/export/const_definitions_exporter.py
+src/foundation/support/refactors/serial_cc/site_client_insights.py
 tests/unit/analytics/test_insight_metrics_utils.py
 tests/unit/export/test_selective_insight_definitions.py
 ```

@@ -7,7 +7,7 @@ from copy import deepcopy  # Stop a caller from changing a stored action.
 from threading import RLock
 from typing import Any  # Action records contain different JSON-compatible fields.
 
-from src.upgrade_portal.persistence.actions import (
+from src.interfaces.portals.upgrade_portal.persistence.actions import (
     ActionInitialization,
     ActionLease,
     ActionRequestConflict,

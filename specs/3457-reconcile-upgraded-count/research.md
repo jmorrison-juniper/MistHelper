@@ -8,7 +8,7 @@
 
 **Evidence**:
 
-- The function `aggregate_summary` in `src/upgrade_portal/app/routes/org_upgrade.py`
+- The function `aggregate_summary` in `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`
   builds each child row and the operation counts.
 - The progress page, the status answer, and the cancel answer all read
   `aggregate_summary`.
@@ -24,11 +24,11 @@
 
 **Evidence**:
 
-- In `src/firmware/aggregate_upgrade_service.py`, the method `_apply_verdict`
+- In `src/operations/execution/firmware/aggregate_upgrade_service.py`, the method `_apply_verdict`
   stores each verdict under the key `reconciliation` of the child job.
 - A proven verdict sets the status `completed` and clears the error.
 - The method changes no count and no cloud answer.
-- In `src/upgrade_portal/upgrade/org_reconcile.py`, the method `_verdict`
+- In `src/interfaces/portals/upgrade_portal/upgrade/org_reconcile.py`, the method `_verdict`
   proves a child job only when each target device runs the target version. No
   device can run that version before the upgrade.
 
@@ -57,7 +57,7 @@
 
 **Evidence**:
 
-- `src/upgrade_portal/upgrade/org_history.py` and `review/history.html` show
+- `src/interfaces/portals/upgrade_portal/upgrade/org_history.py` and `review/history.html` show
   each operation with its state, its sites, and its time.
 - Neither file shows a count of the devices.
 
@@ -65,7 +65,7 @@
 
 **Evidence**:
 
-- In `src/upgrade_portal/api/run_controls/services/reconciliation.py`, the
+- In `src/interfaces/portals/upgrade_portal/api/run_controls/services/reconciliation.py`, the
   method `_repair_target` sets each proven device to the state `settled`.
 - The single-site counts then include each proven device.
 - Option B gives the same counts in the multi-site mode.

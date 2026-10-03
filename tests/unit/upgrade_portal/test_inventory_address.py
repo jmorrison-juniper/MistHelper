@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.app.routes import select
 
 # `data-model.md` fixes the device index key as a MAC address in lower case with
 # no separator. Both cloud answers spell it that way, so the join needs no

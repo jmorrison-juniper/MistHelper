@@ -21,7 +21,7 @@ for troubleshooting. Do performance testing too."
 ## Background
 
 The upgrade capture portal listens on port 8056. Its code is in
-`src/upgrade_portal/`. The portal has two modes. The single-site mode upgrades
+`src/interfaces/portals/upgrade_portal/`. The portal has two modes. The single-site mode upgrades
 one site in one run. The multi-site mode upgrades many sites of one
 organization in one multi-site operation.
 
@@ -669,11 +669,11 @@ passes. Each page passes the navigation checks and the accessibility checks.
 
 - **FR-003**: The journey server MUST run the shipped `RunDriver`, settle gate,
   stop path, capture collector, and reconciliation service of
-  `src/upgrade_portal/`.
+  `src/interfaces/portals/upgrade_portal/`.
 
 - **FR-004**: The journey server MUST run the shipped services of
-  `src/firmware/aggregate_upgrade_service.py`,
-  `src/firmware/org_upgrade_service.py`, and `src/firmware/upgrade_service.py`.
+  `src/operations/execution/firmware/aggregate_upgrade_service.py`,
+  `src/operations/execution/firmware/org_upgrade_service.py`, and `src/operations/execution/firmware/upgrade_service.py`.
   It MUST NOT replace these services with a stand-in. The report MUST show the
   SDK call name of each write, so a reader can see which shipped service made
   it.
@@ -708,7 +708,7 @@ passes. Each page passes the navigation checks and the accessibility checks.
 
 - **FR-012**: The simulated cloud MUST answer each call that the shipped code
   makes at the cloud boundary. Each answer MUST have the shape of the live
-  cloud answer, as the rules of `src/upgrade_portal/app/seam_shapes.py` state.
+  cloud answer, as the rules of `src/interfaces/portals/upgrade_portal/app/seam_shapes.py` state.
 
 - **FR-013**: The simulated cloud MUST reuse the attachment points, the fleet
   script, and the stand-in cloud of `tests/support/rehearsal/` where they

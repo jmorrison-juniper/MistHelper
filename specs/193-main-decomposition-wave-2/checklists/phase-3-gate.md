@@ -5,8 +5,8 @@ Scope: T019/T020/T021/T022/T022A/T022B/T023/T024/T025/T026/T027
 
 ## Code Extraction and Delegation
 
-- Extracted WAN2 site-variable migration logic from `MistHelper.py` into `src/gateway/wan2_migration_manager.py`.
-- Extracted WAN probe device override logic from `MistHelper.py` into `src/gateway/wan_probe_device_override_manager.py`.
+- Extracted WAN2 site-variable migration logic from `MistHelper.py` into `src/mist/resources/gateway/wan2_migration_manager.py`.
+- Extracted WAN probe device override logic from `MistHelper.py` into `src/mist/resources/gateway/wan_probe_device_override_manager.py`.
 - Updated menu-facing `MistHelper.py` classes (`WAN2MigrationManager`, `WANProbeDeviceOverrideManager`) to orchestration/delegation wrappers for menu operations `149` and `167`.
 - No changes were made to `GlobalImportManager`.
 
@@ -31,7 +31,7 @@ Scope: T019/T020/T021/T022/T022A/T022B/T023/T024/T025/T026/T027
 ## Constitution Compliance (T022A)
 
 - `MistHelper.py` retains orchestration/delegation behavior for menu operations `149` and `167`.
-- Runtime dependency wiring is explicit from `MistHelper.py` into extracted `src/gateway` modules.
+- Runtime dependency wiring is explicit from `MistHelper.py` into extracted `src/mist/resources/gateway` modules.
 - Scope guard respected: `GlobalImportManager` unchanged.
 
 ## Full Deployment Pipeline Attempt (T022B)

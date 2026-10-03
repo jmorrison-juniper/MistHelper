@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from src.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
-from src.metrics_gateway.snmp import DEFAULT_BASE_OID
-from src.mib_generator.assignment import (
+from src.interfaces.monitoring.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
+from src.interfaces.monitoring.metrics_gateway.snmp import DEFAULT_BASE_OID
+from src.operations.hardware.mib_generator.assignment import (
     AllowList,
     AllowListError,
     DescriptorMaker,
@@ -23,10 +23,10 @@ from src.mib_generator.assignment import (
     LedgerError,
     OidLedger,
 )
-from src.mib_generator.document import OpenApiDocument, OpenApiVersionError, OperationNotFoundError
-from src.mib_generator.mib import MibObject, MibWriter, SnmpTypeMapper
-from src.mib_generator.runner import MibGeneratorRunner
-from src.mib_generator.schema import SchemaFlattener
+from src.operations.hardware.mib_generator.document import OpenApiDocument, OpenApiVersionError, OperationNotFoundError
+from src.operations.hardware.mib_generator.mib import MibObject, MibWriter, SnmpTypeMapper
+from src.operations.hardware.mib_generator.runner import MibGeneratorRunner
+from src.operations.hardware.mib_generator.schema import SchemaFlattener
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # A pytest fixture moves the working folder, so every path is absolute.
 FIXTURE = Path(__file__).parent / "fixtures" / "mini_openapi.json"  # The small OpenAPI file the unit tests read.

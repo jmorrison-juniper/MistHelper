@@ -5,7 +5,7 @@ Why:
     size a person can read, and a paging control that never lies. Each of those
     three is a rule, and a rule that lives in a template cannot be tested
     without a browser. These tests prove that the rules live in
-    ``src.upgrade_portal.compare.render`` instead, and that the page only
+    ``src.interfaces.portals.upgrade_portal.compare.render`` instead, and that the page only
     prints what that module decided.
 
     The last group renders the real template with Jinja. A page that needs a
@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.compare import render
+from src.interfaces.portals.upgrade_portal.compare import render
 
 # The repository root. This file sits at tests/unit/upgrade_portal/.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -68,7 +68,7 @@ class _StorePage:
     """A stand-in for the page record of the capture store.
 
     Why:
-        The real record lives in ``src.upgrade_portal.capture.store``, and that
+        The real record lives in ``src.interfaces.portals.upgrade_portal.capture.store``, and that
         module imports the database driver. A stand-in with the same four field
         names proves the view builder reads the record without pulling a driver
         into a unit test.

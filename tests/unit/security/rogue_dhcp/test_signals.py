@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.security.rogue_dhcp.signals import (
+from src.operations.protection.security.rogue_dhcp.signals import (
     MARVIS_CONFIG_EVENT_TYPE,
     MARVIS_REMEDIATION_FAMILY,
     MARVIS_ROGUE_REASON,

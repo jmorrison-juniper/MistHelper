@@ -1,4 +1,4 @@
-"""Unit tests for ``src.export.org_device_stats_exporter``.
+"""Unit tests for ``src.operations.exporting.export.org_device_stats_exporter``.
 
 Why:
     #878 tranche 20 -- un-omit ``org_device_stats_exporter.py`` from the
@@ -19,8 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.config import runtime_settings
-from src.refactors import fast_mode_constants
+from src.foundation.runtime.config import runtime_settings
+from src.foundation.support.refactors import fast_mode_constants
 from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 
@@ -71,25 +71,25 @@ class TestDeviceStatsCacheHit:
 
     def test_not_fast_returns_false(self, fake_mh):
         """Non-fast mode should bypass all cache logic."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         assert OrgDeviceStatsExporter._device_stats_cache_hit("x.csv", False) is False
 
     def test_no_file_returns_false(self, fake_mh):
         """Fast mode without an existing cache file should return False."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch("os.path.exists", return_value=False):
             assert OrgDeviceStatsExporter._device_stats_cache_hit("x.csv", True) is False
 
     def test_fresh_cache_returns_true(self, fake_mh, caplog):
         """Fresh cache should return True and emit user-visible cache-hit notice."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=1000.0),
-            patch("src.export.org_device_stats_exporter.time.time", return_value=1000.0),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.time", return_value=1000.0),
             caplog.at_level(logging.INFO, logger="root"),
         ):
             assert OrgDeviceStatsExporter._device_stats_cache_hit("x.csv", True) is True
@@ -97,18 +97,18 @@ class TestDeviceStatsCacheHit:
 
     def test_stale_cache_returns_false(self, fake_mh):
         """Stale cache should return False without printing."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=0.0),
-            patch("src.export.org_device_stats_exporter.time.time", return_value=1e9),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.time", return_value=1e9),
         ):
             assert OrgDeviceStatsExporter._device_stats_cache_hit("x.csv", True) is False
 
     def test_exception_returns_false(self, fake_mh):
         """Freshness-check exceptions should not propagate."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
@@ -122,25 +122,25 @@ class TestPortStatsCacheHit:
 
     def test_not_fast(self, fake_mh):
         """Non-fast mode should bypass port-stats cache logic."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         assert OrgDeviceStatsExporter._port_stats_cache_hit("x.csv", False) is False
 
     def test_no_file(self, fake_mh):
         """Missing cache file returns False."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch("os.path.exists", return_value=False):
             assert OrgDeviceStatsExporter._port_stats_cache_hit("x.csv", True) is False
 
     def test_fresh(self, fake_mh, caplog):
         """Fresh cache returns True and prints operator-facing notice."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=100.0),
-            patch("src.export.org_device_stats_exporter.time.time", return_value=100.0),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.time", return_value=100.0),
             caplog.at_level(logging.INFO, logger="root"),
         ):
             assert OrgDeviceStatsExporter._port_stats_cache_hit("x.csv", True) is True
@@ -148,18 +148,18 @@ class TestPortStatsCacheHit:
 
     def test_stale(self, fake_mh):
         """Stale cache returns False."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=0.0),
-            patch("src.export.org_device_stats_exporter.time.time", return_value=1e9),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.time", return_value=1e9),
         ):
             assert OrgDeviceStatsExporter._port_stats_cache_hit("x.csv", True) is False
 
     def test_exception(self, fake_mh):
         """Freshness-check exceptions swallowed."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
@@ -173,25 +173,25 @@ class TestVpnPeerStatsCacheHit:
 
     def test_not_fast(self, fake_mh):
         """Non-fast mode returns False."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         assert OrgDeviceStatsExporter._vpn_peer_stats_cache_hit("x.csv", False) is False
 
     def test_no_file(self, fake_mh):
         """No file yet returns False."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch("os.path.exists", return_value=False):
             assert OrgDeviceStatsExporter._vpn_peer_stats_cache_hit("x.csv", True) is False
 
     def test_fresh(self, fake_mh, caplog):
         """Fresh cache returns True."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=500.0),
-            patch("src.export.org_device_stats_exporter.time.time", return_value=500.0),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.time", return_value=500.0),
             caplog.at_level(logging.INFO, logger="root"),
         ):
             assert OrgDeviceStatsExporter._vpn_peer_stats_cache_hit("x.csv", True) is True
@@ -199,18 +199,18 @@ class TestVpnPeerStatsCacheHit:
 
     def test_stale(self, fake_mh):
         """Stale cache returns False."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=0.0),
-            patch("src.export.org_device_stats_exporter.time.time", return_value=1e9),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.time", return_value=1e9),
         ):
             assert OrgDeviceStatsExporter._vpn_peer_stats_cache_hit("x.csv", True) is False
 
     def test_exception(self, fake_mh):
         """Exception path swallowed."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch("os.path.exists", return_value=True),
@@ -229,7 +229,7 @@ class TestDeviceStats:
 
     def test_cache_hit_returns_early(self, fake_mh):
         """Fresh cache should skip API fetch and emitter side effects."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch.object(OrgDeviceStatsExporter, "_device_stats_cache_hit", return_value=True):
             OrgDeviceStatsExporter.device_stats(fast=True)
@@ -237,7 +237,7 @@ class TestDeviceStats:
 
     def test_full_path_with_emitter(self, fake_mh):
         """Cache miss should invoke fetcher and both emitter callbacks."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         emitter = fake_mh.PROGRESS_EMITTER
         with patch.object(OrgDeviceStatsExporter, "_device_stats_cache_hit", return_value=False):
@@ -248,7 +248,7 @@ class TestDeviceStats:
 
     def test_full_path_without_emitter(self, fake_mh):
         """Missing emitter should not raise."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.PROGRESS_EMITTER = None
         with patch.object(OrgDeviceStatsExporter, "_device_stats_cache_hit", return_value=False):
@@ -261,7 +261,7 @@ class TestVpnPeerStats:
 
     def test_cache_hit(self, fake_mh):
         """Fresh cache short-circuits VPN peer stats fetch."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch.object(OrgDeviceStatsExporter, "_vpn_peer_stats_cache_hit", return_value=True):
             OrgDeviceStatsExporter.vpn_peer_stats(fast=True)
@@ -269,7 +269,7 @@ class TestVpnPeerStats:
 
     def test_full_path_with_emitter(self, fake_mh):
         """Cache miss with emitter invokes both progress callbacks."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         emitter = fake_mh.PROGRESS_EMITTER
         with patch.object(OrgDeviceStatsExporter, "_vpn_peer_stats_cache_hit", return_value=False):
@@ -280,7 +280,7 @@ class TestVpnPeerStats:
 
     def test_full_path_without_emitter(self, fake_mh):
         """Missing emitter should not raise on VPN peer stats path."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.PROGRESS_EMITTER = None
         with patch.object(OrgDeviceStatsExporter, "_vpn_peer_stats_cache_hit", return_value=False):
@@ -299,7 +299,7 @@ class TestDevicePortStats:
 
     def test_cache_hit(self, fake_mh):
         """Fresh cache should skip fetcher and fast-mode path."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch.object(OrgDeviceStatsExporter, "_port_stats_cache_hit", return_value=True):
             OrgDeviceStatsExporter.device_port_stats(fast=True)
@@ -307,7 +307,7 @@ class TestDevicePortStats:
 
     def test_fast_mode_delegates(self, fake_mh):
         """Fast mode should delegate to ``_run_fast_device_port_stats``."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch.object(OrgDeviceStatsExporter, "_port_stats_cache_hit", return_value=False),
@@ -319,7 +319,7 @@ class TestDevicePortStats:
 
     def test_normal_mode_uses_api_fetcher(self, fake_mh):
         """Non-fast path issues single org-level paginated fetch."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch.object(OrgDeviceStatsExporter, "_port_stats_cache_hit", return_value=False):
             OrgDeviceStatsExporter.device_port_stats(fast=False)
@@ -336,9 +336,9 @@ class TestSwitchVcStats:
 
     def test_delegates_to_service(self, fake_mh):
         """``switch_vc_stats`` should call the extracted service exactly once."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
-        with patch("src.refactors.serial_cc.switch_vc_stats.SwitchVcStatsService") as svc:
+        with patch("src.foundation.support.refactors.serial_cc.switch_vc_stats.SwitchVcStatsService") as svc:
             OrgDeviceStatsExporter.switch_vc_stats()
         svc.execute.assert_called_once_with()
 
@@ -353,7 +353,7 @@ class TestLoadPortStatsSitesFromApi:
 
     def test_normalizes_and_skips_missing_id(self, fake_mh):
         """Sites lacking id should be filtered; others normalized to tuples."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.mistapi.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
         fake_mh.mistapi.get_all.return_value = [
@@ -366,7 +366,7 @@ class TestLoadPortStatsSitesFromApi:
 
     def test_empty_sites(self, fake_mh):
         """Empty API response should return empty list without raising."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.mistapi.get_all.return_value = []
         assert OrgDeviceStatsExporter._load_port_stats_sites_from_api("org-1") == []
@@ -377,13 +377,13 @@ class TestLogFirstSiteSample:
 
     def test_populated(self, fake_mh):
         """Populated list logs first entry without raising."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         OrgDeviceStatsExporter._log_first_site_sample([("s1", "n1"), ("s2", "n2")])
 
     def test_empty(self, fake_mh):
         """Empty list still logs a placeholder without raising."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         OrgDeviceStatsExporter._log_first_site_sample([])
 
@@ -393,7 +393,7 @@ class TestLoadSitesFromCachedCsv:
 
     def test_success(self, fake_mh, tmp_path):
         """Cached CSV should be parsed into tuple list."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         csv_path = tmp_path / "SiteList.csv"
         csv_path.write_text("id,name\ns1,Site1\ns2,Site2\n,SkipMe\n", encoding="utf-8")
@@ -403,7 +403,7 @@ class TestLoadSitesFromCachedCsv:
 
     def test_exception_returns_none(self, fake_mh):
         """Cache read failure should return None to trigger API fallback."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.CacheUtils.check_and_generate_csv.side_effect = RuntimeError("cache oops")
         assert OrgDeviceStatsExporter._load_sites_from_cached_csv() is None
@@ -414,7 +414,7 @@ class TestLoadPortStatsSites:
 
     def test_cache_hit(self, fake_mh):
         """Cache returns list -> use it directly."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with patch.object(
             OrgDeviceStatsExporter,
@@ -425,7 +425,7 @@ class TestLoadPortStatsSites:
 
     def test_api_fallback(self, fake_mh):
         """Cache returns None -> fall back to API loader."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
             patch.object(OrgDeviceStatsExporter, "_load_sites_from_cached_csv", return_value=None),
@@ -448,7 +448,7 @@ class TestAttemptSitePortStatsFetch:
 
     def test_list_annotates_rows(self, fake_mh):
         """List result should be annotated with site_id/site_name."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts.return_value = MagicMock()
         fake_mh.mistapi.get_all.return_value = [{"port": "ge-0/0/0"}, {"port": "ge-0/0/1"}]
@@ -463,7 +463,7 @@ class TestAttemptSitePortStatsFetch:
 
     def test_non_list_returns_empty(self, fake_mh):
         """Non-list defensive path returns empty and logs error."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.mistapi.get_all.return_value = {"unexpected": "dict"}
         sem = MagicMock()
@@ -477,19 +477,19 @@ class TestHandleSitePortStatsRetry:
 
     def test_retries_remain(self, fake_mh):
         """Attempt < max should return True after sleeping."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         sleep_mock = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
-        with patch("src.export.org_device_stats_exporter.time.sleep", new=sleep_mock):
+        with patch("src.operations.exporting.export.org_device_stats_exporter.time.sleep", new=sleep_mock):
             assert OrgDeviceStatsExporter._handle_site_port_stats_retry(0, "Site1", RuntimeError("x")) is True
         sleep_mock.assert_called_once()
 
     def test_no_more_retries(self, fake_mh):
         """Attempt at max returns False without sleeping."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         sleep_mock = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot fail the no-call check.
-        with patch("src.export.org_device_stats_exporter.time.sleep", new=sleep_mock):
+        with patch("src.operations.exporting.export.org_device_stats_exporter.time.sleep", new=sleep_mock):
             assert OrgDeviceStatsExporter._handle_site_port_stats_retry(2, "Site1", RuntimeError("x")) is False
         sleep_mock.assert_not_called()
 
@@ -499,7 +499,7 @@ class TestFetchSitePortStats:
 
     def test_first_try_success(self, fake_mh):
         """First-try success should return rows without any retry logging path."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         sem = MagicMock()
         with patch.object(
@@ -512,7 +512,7 @@ class TestFetchSitePortStats:
 
     def test_retry_then_success(self, fake_mh):
         """Retry that eventually succeeds should return rows and log info."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         sem = MagicMock()
         attempts = [RuntimeError("try1"), [{"port": "y"}]]
@@ -525,14 +525,14 @@ class TestFetchSitePortStats:
 
         with (
             patch.object(OrgDeviceStatsExporter, "_attempt_site_port_stats_fetch", side_effect=side_effect),
-            patch("src.export.org_device_stats_exporter.time.sleep"),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.sleep"),
         ):
             result = OrgDeviceStatsExporter._fetch_site_port_stats(("s1", "Site1"), sem)
         assert result == [{"port": "y"}]
 
     def test_final_failure_returns_empty(self, fake_mh):
         """All retries failing should return empty list."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         sem = MagicMock()
         with (
@@ -541,7 +541,7 @@ class TestFetchSitePortStats:
                 "_attempt_site_port_stats_fetch",
                 side_effect=RuntimeError("perma"),
             ),
-            patch("src.export.org_device_stats_exporter.time.sleep"),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.sleep"),
         ):
             result = OrgDeviceStatsExporter._fetch_site_port_stats(("s1", "Site1"), sem)
         assert result == []
@@ -552,7 +552,7 @@ class TestProcessRetryFuture:
 
     def test_success(self, fake_mh):
         """Non-empty future.result should extend retry_results."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fut = MagicMock()
         fut.result.return_value = [{"row": 1}]
@@ -565,7 +565,7 @@ class TestProcessRetryFuture:
 
     def test_empty(self, fake_mh):
         """Empty result appends site to still_failed."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fut = MagicMock()
         fut.result.return_value = []
@@ -578,7 +578,7 @@ class TestProcessRetryFuture:
 
     def test_exception(self, fake_mh):
         """Future.result raising appends site to still_failed."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fut = MagicMock()
         fut.result.side_effect = RuntimeError("boom")
@@ -595,7 +595,7 @@ class TestDispatchSitePortRetries:
 
     def test_dispatch(self, fake_mh):
         """All failed sites should be dispatched and processed."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         failed_sites = [("s1", "Site1"), ("s2", "Site2")]
         with (
@@ -615,20 +615,20 @@ class TestRetryFailedSitePortStats:
 
     def test_no_threads_available(self, fake_mh):
         """When computed retry_threads <= 0 the retry pool is skipped."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fast_mode_constants.FAST_MODE_RETRY_THREADS = 0
-        with patch("src.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 1):
+        with patch("src.foundation.support.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 1):
             recovered, still = OrgDeviceStatsExporter._retry_failed_site_port_stats([("s1", "Site1")], MagicMock())
         assert recovered == []
         assert still == [("s1", "Site1")]
 
     def test_normal_dispatch(self, fake_mh):
         """Positive retry_threads should dispatch via helper."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with (
-            patch("src.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 8),
+            patch("src.foundation.support.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 8),
             patch.object(OrgDeviceStatsExporter, "_dispatch_site_port_retries") as dispatch,
         ):
             recovered, still = OrgDeviceStatsExporter._retry_failed_site_port_stats(
@@ -649,7 +649,7 @@ class TestFlattenSitePortResults:
 
     def test_list_extends(self, fake_mh):
         """List payloads should be extended into combined output."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         assert OrgDeviceStatsExporter._flatten_site_port_results([[{"r": 1}], [{"r": 2}, {"r": 3}]]) == [
             {"r": 1},
@@ -659,7 +659,7 @@ class TestFlattenSitePortResults:
 
     def test_non_list_ignored(self, fake_mh):
         """Non-list payloads should be logged and skipped."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         assert OrgDeviceStatsExporter._flatten_site_port_results([[{"r": 1}], "unexpected"]) == [{"r": 1}]
 
@@ -669,7 +669,7 @@ class TestSaveDevicePortStatsOutput:
 
     def test_empty_rows(self, fake_mh, caplog):
         """Empty rows should skip export and print a warning."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with caplog.at_level(logging.WARNING, logger="root"):
             OrgDeviceStatsExporter._save_device_port_stats_output([], "out.csv")
@@ -678,16 +678,16 @@ class TestSaveDevicePortStatsOutput:
 
     def test_normal_export(self, fake_mh, caplog):
         """Rows should be sorted, flattened, escaped, and written."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         rows = [{"mac": "bb"}, {"mac": "aa"}]
         with (
             patch(
-                "src.export.org_device_stats_exporter.DataProcessingUtils.flatten_nested_fields",
+                "src.operations.exporting.export.org_device_stats_exporter.DataProcessingUtils.flatten_nested_fields",
                 return_value=rows,
             ),
             patch(
-                "src.export.org_device_stats_exporter.DataProcessingUtils.escape_multiline",
+                "src.operations.exporting.export.org_device_stats_exporter.DataProcessingUtils.escape_multiline",
                 return_value=rows,
             ),
             caplog.at_level(logging.INFO, logger="root"),
@@ -698,7 +698,7 @@ class TestSaveDevicePortStatsOutput:
 
     def test_sort_failure_still_exports(self, fake_mh):
         """Sort failure should log and continue with unsorted rows."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         # Rows containing a value whose ``get`` blows up should trigger the except path.
         class BadRow:
@@ -708,11 +708,11 @@ class TestSaveDevicePortStatsOutput:
         rows = [BadRow()]
         with (
             patch(
-                "src.export.org_device_stats_exporter.DataProcessingUtils.flatten_nested_fields",
+                "src.operations.exporting.export.org_device_stats_exporter.DataProcessingUtils.flatten_nested_fields",
                 return_value=rows,
             ),
             patch(
-                "src.export.org_device_stats_exporter.DataProcessingUtils.escape_multiline",
+                "src.operations.exporting.export.org_device_stats_exporter.DataProcessingUtils.escape_multiline",
                 return_value=rows,
             ),
         ):
@@ -725,14 +725,14 @@ class TestValidateFastPortStatsStartTime:
 
     def test_numeric_ok(self, fake_mh):
         """Numeric start_time should return without raising."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         OrgDeviceStatsExporter._validate_fast_port_stats_start_time(1234.5)
         OrgDeviceStatsExporter._validate_fast_port_stats_start_time(1234)
 
     def test_non_numeric_raises(self, fake_mh):
         """Non-numeric value raises TypeError with descriptive message."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with pytest.raises(TypeError, match="start_time must be a number"):
             OrgDeviceStatsExporter._validate_fast_port_stats_start_time("not a number")
@@ -743,7 +743,7 @@ class TestLogFastPortStatsSummary:
 
     def test_summary_runs(self, fake_mh, caplog):
         """Summary should print an operator-facing line."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         with caplog.at_level(logging.INFO, logger="root"):
             OrgDeviceStatsExporter._log_fast_port_stats_summary(
@@ -757,7 +757,7 @@ class TestRunFastDevicePortStats:
 
     def test_orchestrates(self, fake_mh):
         """Fast-mode orchestrator should call save with flattened results."""
-        from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
         fake_mh.ConnectionPoolExecutor.execute.return_value = ([[{"row": 1}]], [])
@@ -783,6 +783,6 @@ class TestRunFastDevicePortStats:
 
 def test_module_importable():
     """Baseline sanity: module imports cleanly."""
-    from src.export import org_device_stats_exporter
+    from src.operations.exporting.export import org_device_stats_exporter
 
     assert hasattr(org_device_stats_exporter, "OrgDeviceStatsExporter")

@@ -1,6 +1,6 @@
 # Contract: WebSockets tab HTTP interface
 
-**Feature**: [../spec.md](../spec.md) | **Blueprint**: `websockets_bp` in `src/websocket_streams/web/blueprint.py`
+**Feature**: [../spec.md](../spec.md) | **Blueprint**: `websockets_bp` in `src/mist/realtime/websocket_streams/web/blueprint.py`
 
 Every route answers with JSON, except the page route and the download route. Every POST route and every DELETE route needs the `X-CSRFToken` header. No answer holds the API token, a channel path, or a Mist WebSocket address.
 

@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 285 | Validate a NAC identity provider credential | src.troubleshooting.nac_idp_credential_test.operation | NacIdpCredentialTest.run | interactive |  | False | False |
+| 285 | Validate a NAC identity provider credential | src.mist.intelligence.troubleshooting.nac_idp_credential_test.operation | NacIdpCredentialTest.run | interactive |  | False | False |
 
 ## OperationRegistry comment
 
@@ -27,4 +27,4 @@ Add menu `285` to the `interactive` category row. The count increases by one.
 
 ## Import line for MistHelper.py
 
-`from src.troubleshooting.nac_idp_credential_test.operation import NacIdpCredentialTest  # Menu 285 (issue #3565) -- validate one NAC identity provider credential without exporting the password.`
+`from src.mist.intelligence.troubleshooting.nac_idp_credential_test.operation import NacIdpCredentialTest  # Menu 285 (issue #3565) -- validate one NAC identity provider credential without exporting the password.`

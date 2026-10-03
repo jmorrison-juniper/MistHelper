@@ -22,8 +22,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.firmware.bulk_ap_upgrader import UNKNOWN_VERSION, BulkAPFirmwareUpgrader, BulkAPUpgraderConfig
-from src.firmware.running_version import RunningFirmwareVersionResolver
+from src.operations.execution.firmware.bulk_ap_upgrader import (
+    UNKNOWN_VERSION,
+    BulkAPFirmwareUpgrader,
+    BulkAPUpgraderConfig,
+)
+from src.operations.execution.firmware.running_version import RunningFirmwareVersionResolver
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 

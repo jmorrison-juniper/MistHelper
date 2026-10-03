@@ -25,8 +25,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import export
-from src.upgrade_portal.compare import download as compare_download
+from src.interfaces.portals.upgrade_portal.capture import export
+from src.interfaces.portals.upgrade_portal.compare import download as compare_download
 
 MASTER_MAC = "0011220000aa"  # The master member of the one virtual chassis below.
 MEMBER_MAC = "0011220000bb"  # The second member of the same virtual chassis.

@@ -33,7 +33,7 @@ This plan orders the work in three steps. Measure first. Repair second. Close th
 **Constraints**:
 
 - The root ruff line length is 120 characters. The removal shortens lines, so no line grows.
-- `ruff check .` reads the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`.
+- `ruff check .` reads the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`.
 - `black` formats the whole repository. A removed trailing comment can change the line width that `black` prefers, so `black` must run after the repair.
 - The repair touches one test file. The unit suite must run.
 
@@ -155,7 +155,7 @@ Run one command. Read the whole difference.
 
 Read the difference with `git diff`. Search for any changed line that does not start with a comment marker. The expected count of such lines is zero.
 
-The single file `src/device/ap_profile_migration_manager.py` holds 67 directives. Read that file difference on its own.
+The single file `src/mist/resources/device/ap_profile_migration_manager.py` holds 67 directives. Read that file difference on its own.
 
 **Exit measurement**: `ruff check . --extend-select RUF100` reports zero. The count of changed lines that are not comments reads zero.
 

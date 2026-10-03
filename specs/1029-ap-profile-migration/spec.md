@@ -6,7 +6,7 @@
 
 **Status**: Implemented and merged in pull request #1691. Menus 207 and 208 ship. Four manual live run tasks stay open, because they need a Mist test organization. Issue #1700 reports that a menu 207 PUT returns 200 without a persisted profile change, so keep that issue open.
 
-**Input**: User description: "Add two new MistHelper menu operations. (1) Migrate all Access Points from a source device profile to a target device profile within one Mist organization, with a full pre-change backup written to `data/`. (2) Revert a prior migration by reading its backup file and reassigning each listed AP back to its original device profile. Both operations mutate Mist cloud configuration and MUST be classified as destructive in `src/utils/operation_registry.py`."
+**Input**: User description: "Add two new MistHelper menu operations. (1) Migrate all Access Points from a source device profile to a target device profile within one Mist organization, with a full pre-change backup written to `data/`. (2) Revert a prior migration by reading its backup file and reassigning each listed AP back to its original device profile. Both operations mutate Mist cloud configuration and MUST be classified as destructive in `src/foundation/support/utils/operation_registry.py`."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -78,7 +78,7 @@ Before performing a destructive migration in production, the engineer wants to s
 
 #### Common to both operations
 
-- **FR-001**: Both new operations MUST be added as menu entries in MistHelper and MUST be registered in `src/utils/operation_registry.py` with `category = "destructive"` and a `skip_reason` that names the operation. The CI guardrail MUST accept the new entries.
+- **FR-001**: Both new operations MUST be added as menu entries in MistHelper and MUST be registered in `src/foundation/support/utils/operation_registry.py` with `category = "destructive"` and a `skip_reason` that names the operation. The CI guardrail MUST accept the new entries.
 - **FR-002**: All operator-visible strings (menu labels, prompts, log lines, summary text, error text) MUST follow the Simplified Technical English writing guide at `documentation/ASD-STE100_writing-guide.md`.
 - **FR-003**: The feature MUST use only the Python 3.13+ standard library and the already-installed `mistapi>=0.63.1`. No new third-party dependencies are permitted.
 - **FR-004**: Every function, method, class, and module added or modified by the feature MUST carry a docstring that follows the DOCS.md rules (one-line summary + Why + Args/Returns/Raises where applicable). Docstring coverage for changed files MUST stay at or above 90 percent.
@@ -126,7 +126,7 @@ Before performing a destructive migration in production, the engineer wants to s
 - **SC-003**: A backup file written by the migration operation is sufficient input for the revert operation, with no other data source required. Running the revert against a backup returns every listed AP to its original device profile ID, or reports precisely which AP could not be reverted and why.
 - **SC-004**: The migration operation shows progress at least every 10 APs so that an operator running a 500-AP migration always sees the tool is still working (no perceived freeze longer than a few seconds under normal API latency).
 - **SC-005**: A dry-run of the migration operation completes with zero writes to `data/` and zero PUT calls to Mist, and its printed AP list exactly matches what a live run would report against the same org state.
-- **SC-006**: Both new menu options are registered in `src/utils/operation_registry.py` as destructive, and the existing CI guardrail passes without modification (no new destructive-registry lint failures, no new coverage regressions).
+- **SC-006**: Both new menu options are registered in `src/foundation/support/utils/operation_registry.py` as destructive, and the existing CI guardrail passes without modification (no new destructive-registry lint failures, no new coverage regressions).
 - **SC-007**: 100 percent of new operator-visible strings pass the existing ASD-STE100 lint check (introduced in feature 1026) without STE violations.
 
 ## Assumptions

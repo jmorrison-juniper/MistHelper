@@ -25,9 +25,9 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.app.routes import capture, org_upgrade, select
-from src.upgrade_portal.capture.devices import DeviceRead
-from src.upgrade_portal.runtime import identity, lock
+from src.interfaces.portals.upgrade_portal.app.routes import capture, org_upgrade, select
+from src.interfaces.portals.upgrade_portal.capture.devices import DeviceRead
+from src.interfaces.portals.upgrade_portal.runtime import identity, lock
 from tests.contract.upgrade_portal.test_org_child_controls_routes import (
     AP_ONE,
     AP_TWO,

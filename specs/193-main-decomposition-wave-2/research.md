@@ -8,7 +8,7 @@
   - Two-phase batching: rejected because it weakens rollback granularity.
 
 ## Decision 2: Use class-preserving extraction to semantically aligned `src/` modules
-- **Decision**: Keep class names stable while moving implementations to `src/analytics`, `src/export`, `src/gateway`, `src/site`, `src/troubleshooting`, `src/websocket`, `src/capture`, and `src/inventory`.
+- **Decision**: Keep class names stable while moving implementations to `src/mist/intelligence/analytics`, `src/operations/exporting/export`, `src/mist/resources/gateway`, `src/mist/resources/site`, `src/mist/intelligence/troubleshooting`, `src/mist/realtime/websocket`, `src/operations/execution/capture`, and `src/mist/resources/inventory`.
 - **Rationale**: Preserves behavior and reduces call-site churn; supports incremental gate validation.
 - **Alternatives considered**:
   - Full redesign to function-based services: rejected (too risky, violates no-wrapper/no-scope-expansion intent).
@@ -35,4 +35,4 @@
 ## Clarifications resolved
 - No unresolved technical clarifications remain.
 - `GlobalImportManager` remains explicitly out of scope.
-- Existing partial extraction (`src/capture/packet_capture.py`) will be completed in Phase 9 with single-source ownership.
+- Existing partial extraction (`src/operations/execution/capture/packet_capture.py`) will be completed in Phase 9 with single-source ownership.

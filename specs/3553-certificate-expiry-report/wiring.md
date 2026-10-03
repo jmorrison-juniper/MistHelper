@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 272 | Export the certificate expiry report | src.reports.certificate_expiry.operation | CertificateExpiryReport.run | safe |  | False | False |
+| 272 | Export the certificate expiry report | src.mist.intelligence.reports.certificate_expiry.operation | CertificateExpiryReport.run | safe |  | False | False |
 
 ## OperationRegistry comment
 
@@ -40,11 +40,11 @@ Add menu `272` to the `safe` category row. The safe count increases by one.
 
 ## Import line for MistHelper.py
 
-`from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- export certificate expiry risk.`
+`from src.mist.intelligence.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- export certificate expiry risk.`
 
 ## Deferred integration notes
 
 - Do not edit `MistHelper.py` on this feature branch.
-- Do not edit `src/utils/operation_registry.py` on this feature branch.
-- Do not edit `src/refactors/endpoint_primary_key_strategies.py` on this feature branch.
+- Do not edit `src/foundation/support/utils/operation_registry.py` on this feature branch.
+- Do not edit `src/foundation/support/refactors/endpoint_primary_key_strategies.py` on this feature branch.
 - Do not edit `README.md` or generated menu references on this feature branch.

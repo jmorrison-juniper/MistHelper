@@ -21,8 +21,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime import pools as pools_module
-from src.upgrade_portal.runtime.pools import (
+from src.interfaces.portals.upgrade_portal.runtime import pools as pools_module
+from src.interfaces.portals.upgrade_portal.runtime.pools import (
     CAPTURE_WORKER_TARGET,
     SHUTDOWN_TIMEOUT_SECONDS,
     BoundedFanOut,
@@ -38,8 +38,8 @@ GUNICORN_GRACEFUL_TIMEOUT_SECONDS = 30.0
 
 # WHY: The sizing code reads both settings late, inside the function body. A
 #      patch on the module attribute reaches the code at call time.
-CONNECTION_CAP_PATH = "src.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS"
-FALLBACK_THREADS_PATH = "src.refactors.fast_mode_constants.FAST_MODE_FALLBACK_THREADS"
+CONNECTION_CAP_PATH = "src.foundation.support.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS"
+FALLBACK_THREADS_PATH = "src.foundation.support.refactors.fast_mode_constants.FAST_MODE_FALLBACK_THREADS"
 
 # WHY: The shipped default of the connection cap. A test that names it reads
 #      better than a bare 8, and it shows which value the target of 4 answers.

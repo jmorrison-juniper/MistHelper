@@ -26,23 +26,23 @@ gh api "repos/:owner/:repo/code-scanning/alerts?state=open&per_page=100" \
 
 | Alert | File | Line | Tracking issue |
 | - | - | - | - |
-| 173 | `src/device/_utility_commands_action.py` | 283 | #1735 |
-| 174 | `src/site/address_audit/address_resolver.py` | 64 | #1733 |
-| 175 | `src/site/address_audit/address_resolver.py` | 71 | #1733 |
-| 176 | `src/site/address_audit/address_resolver.py` | 85 | #1733 |
-| 177 | `src/site/address_audit/address_resolver.py` | 152 | #1733 |
-| 178 | `src/site/address_audit/address_resolver.py` | 193 | #1733 |
-| 179 | `src/site/address_audit/address_resolver.py` | 202 | #1733 |
-| 180 | `src/site/address_audit/address_resolver.py` | 221 | #1733 |
-| 181 | `src/site/address_audit/address_resolver.py` | 275 | #1733 |
-| 182 | `src/site/address_audit/address_resolver.py` | 368 | #1733 |
-| 183 | `src/site/address_audit/address_resolver.py` | 478 | #1733 |
-| 184 | `src/capture/packet_capture.py` | 548 | #1734 |
-| 185 | `src/capture/packet_capture.py` | 637 | #1734 |
-| 186 | `src/capture/packet_capture.py` | 846 | #1734 |
-| 187 | `src/capture/packet_capture.py` | 890 | #1734 |
-| 188 | `src/ssh/ssh_runner_manager.py` | 110 | #1736 |
-| 189 | `src/ssh/ssh_runner_manager.py` | 111 | #1736 |
+| 173 | `src/mist/resources/device/_utility_commands_action.py` | 283 | #1735 |
+| 174 | `src/mist/resources/site/address_audit/address_resolver.py` | 64 | #1733 |
+| 175 | `src/mist/resources/site/address_audit/address_resolver.py` | 71 | #1733 |
+| 176 | `src/mist/resources/site/address_audit/address_resolver.py` | 85 | #1733 |
+| 177 | `src/mist/resources/site/address_audit/address_resolver.py` | 152 | #1733 |
+| 178 | `src/mist/resources/site/address_audit/address_resolver.py` | 193 | #1733 |
+| 179 | `src/mist/resources/site/address_audit/address_resolver.py` | 202 | #1733 |
+| 180 | `src/mist/resources/site/address_audit/address_resolver.py` | 221 | #1733 |
+| 181 | `src/mist/resources/site/address_audit/address_resolver.py` | 275 | #1733 |
+| 182 | `src/mist/resources/site/address_audit/address_resolver.py` | 368 | #1733 |
+| 183 | `src/mist/resources/site/address_audit/address_resolver.py` | 478 | #1733 |
+| 184 | `src/operations/execution/capture/packet_capture.py` | 548 | #1734 |
+| 185 | `src/operations/execution/capture/packet_capture.py` | 637 | #1734 |
+| 186 | `src/operations/execution/capture/packet_capture.py` | 846 | #1734 |
+| 187 | `src/operations/execution/capture/packet_capture.py` | 890 | #1734 |
+| 188 | `src/operations/execution/ssh/ssh_runner_manager.py` | 110 | #1736 |
+| 189 | `src/operations/execution/ssh/ssh_runner_manager.py` | 111 | #1736 |
 | 190 | `starlink_dashboard.py` | 1343 | #1737 |
 | 191 | `starlink_dashboard.py` | 1344 | #1737 |
 
@@ -90,7 +90,7 @@ stream. The test above disproves that assumption.
 ## R-003: The mechanism that protects the ZTP credential
 
 **Decision**: Combine a terminal check with an operator warning. Write the credential with
-`sys.stdout.write()` from a new `CredentialConsole` class in `src/utils/console.py`. Do not
+`sys.stdout.write()` from a new `CredentialConsole` class in `src/foundation/support/utils/console.py`. Do not
 write the credential to a file.
 
 **Reason**: The three candidates score as follows.
@@ -255,27 +255,27 @@ when either line becomes a logging call.
 
 **Reason**: The method `SSHRunnerManager._echo_plan` calls `logging.warning` three times.
 Each call carries the `!?` prefix. That prefix marks a legacy console echo. Spec 1031 added
-`echo()` in `src/utils/console.py`. The helper prints the message and logs it at the
+`echo()` in `src/foundation/support/utils/console.py`. The helper prints the message and logs it at the
 information level. The two flagged lines are exactly the shape that spec 1031 replaced.
 
 The third line in the same method reports a command count. That line carries no personal
 data, so CodeQL did not flag it. The conversion covers all three lines, because a mixed
 method would confuse the next reader.
 
-**Sweep result**: A search of `src/ssh/` found 18 occurrences of the `!?` prefix across 6
+**Sweep result**: A search of `src/operations/execution/ssh/` found 18 occurrences of the `!?` prefix across 6
 files. The table below records the disposition of each group. FR-017 requires this record.
 
 | File | Lines | Disposition |
 | - | - | - |
-| `src/ssh/ssh_runner_manager.py` | 110, 111, 112 | Convert under this feature |
-| `src/ssh/ssh_runner_manager.py` | 307, 323 | Convert under this feature |
-| `src/ssh/batch/batch_executor.py` | 307 | Keep. The call already uses the information level |
-| `src/ssh/command/command_runner.py` | 282 | Keep. The call writes through an injected writer |
-| `src/ssh/runtime/app_runner.py` | 180, 268 | Keep. The prefix belongs to an input prompt |
-| `src/ssh/runtime/app_runner.py` | 219, 221, 224, 260 | Keep. The calls already use the information level |
-| `src/ssh/runtime/app_runner.py` | 301, 341 | Convert under this feature |
-| `src/ssh/runtime/interactive_mode.py` | 70, 151 | Keep. The prefix belongs to an input prompt |
-| `src/ssh/shell_execution/shell_executor.py` | 399 | Keep. The line reports a real truncation warning |
+| `src/operations/execution/ssh/ssh_runner_manager.py` | 110, 111, 112 | Convert under this feature |
+| `src/operations/execution/ssh/ssh_runner_manager.py` | 307, 323 | Convert under this feature |
+| `src/operations/execution/ssh/batch/batch_executor.py` | 307 | Keep. The call already uses the information level |
+| `src/operations/execution/ssh/command/command_runner.py` | 282 | Keep. The call writes through an injected writer |
+| `src/operations/execution/ssh/runtime/app_runner.py` | 180, 268 | Keep. The prefix belongs to an input prompt |
+| `src/operations/execution/ssh/runtime/app_runner.py` | 219, 221, 224, 260 | Keep. The calls already use the information level |
+| `src/operations/execution/ssh/runtime/app_runner.py` | 301, 341 | Convert under this feature |
+| `src/operations/execution/ssh/runtime/interactive_mode.py` | 70, 151 | Keep. The prefix belongs to an input prompt |
+| `src/operations/execution/ssh/shell_execution/shell_executor.py` | 399 | Keep. The line reports a real truncation warning |
 
 **Alternatives rejected**: A change of the log level with no move to `echo()`. That change
 would drop the message from the screen, because the console handler runs at the warning
@@ -351,9 +351,9 @@ entry. That path loses the anchor and the author, and FR-002 requires both.
 
 | Order | Pull request | Stories | Files |
 | - | - | - | - |
-| 1 | ZTP credential guard | US1 | `src/utils/console.py`, `src/device/_utility_commands_action.py`, tests |
-| 2 | SSH echo conversion | US6 | `src/ssh/ssh_runner_manager.py`, `src/ssh/runtime/app_runner.py`, tests |
-| 3 | Address and capture stance | US3, US5 | `src/site/address_audit/`, register rows |
+| 1 | ZTP credential guard | US1 | `src/foundation/support/utils/console.py`, `src/mist/resources/device/_utility_commands_action.py`, tests |
+| 2 | SSH echo conversion | US6 | `src/operations/execution/ssh/ssh_runner_manager.py`, `src/operations/execution/ssh/runtime/app_runner.py`, tests |
+| 3 | Address and capture stance | US3, US5 | `src/mist/resources/site/address_audit/`, register rows |
 | 4 | GPS stance and register close-out | US4, US2 | `starlink_dashboard.py`, register, issue closure |
 
 The register file receives rows in every pull request. The final pull request checks the

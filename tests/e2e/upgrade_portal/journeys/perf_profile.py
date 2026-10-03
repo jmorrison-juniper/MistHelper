@@ -82,8 +82,8 @@ def _signed_client(app: Any, conftest: Any) -> Any:
 
 def _prepare_single_site(client: Any) -> None:
     """Store single-site context through the signed session."""
-    from src.upgrade_portal.app.routes import select  # Read the session key constants.
-    from src.upgrade_portal.runtime import identity  # Update the process-local operator record.
+    from src.interfaces.portals.upgrade_portal.app.routes import select  # Read the session key constants.
+    from src.interfaces.portals.upgrade_portal.runtime import identity  # Update the process-local operator record.
     from tests.e2e.upgrade_portal import conftest  # Read the firmware operator identity.
 
     owner = identity.build_owner(conftest.FIRMWARE_EMAIL, conftest.FIRMWARE_BROWSER_ID)  # Match the signed cookies.
@@ -98,8 +98,8 @@ def _prepare_single_site(client: Any) -> None:
 
 def _prepare_multi_site(client: Any, site_ids: list[str]) -> None:
     """Store multi-site context through the signed session and operator record."""
-    from src.upgrade_portal.app.routes import select  # Read the session key constants.
-    from src.upgrade_portal.runtime import identity  # Update the process-local operator record.
+    from src.interfaces.portals.upgrade_portal.app.routes import select  # Read the session key constants.
+    from src.interfaces.portals.upgrade_portal.runtime import identity  # Update the process-local operator record.
     from tests.e2e.upgrade_portal import conftest  # Read the firmware operator identity.
 
     owner = identity.build_owner(conftest.FIRMWARE_EMAIL, conftest.FIRMWARE_BROWSER_ID)  # Match the signed cookies.
@@ -202,7 +202,7 @@ def _large_version_map() -> dict[str, tuple[str, str]]:
 
 def _large_options_view(_session: Any, _org_id: str, site_id: str) -> dict[str, Any]:
     """Build the route's options view from synthetic devices."""
-    from src.upgrade_portal.upgrade import options  # Import the shipped option builder.
+    from src.interfaces.portals.upgrade_portal.upgrade import options  # Import the shipped option builder.
 
     by_model = _large_version_map()  # Build the version map once per site.
     devices = _large_device_reader(site_id=site_id)  # Build devices for this site.
@@ -213,7 +213,7 @@ def _large_options_builder(_record: dict[str, Any], body: dict[str, Any]) -> dic
     """Build saved options from synthetic devices."""
     from dataclasses import asdict  # Convert the shipped options dataclass.
 
-    from src.upgrade_portal.upgrade import options  # Import the shipped target builder.
+    from src.interfaces.portals.upgrade_portal.upgrade import options  # Import the shipped target builder.
 
     choices = body.get("targets")  # Read explicit targets when the browser sends them.
     rows = [one for one in choices if isinstance(one, dict)] if isinstance(choices, list) else []  # Keep rows only.
@@ -227,7 +227,11 @@ def _large_options_builder(_record: dict[str, Any], body: dict[str, Any]) -> dic
 
 def _install_counted_seams(app: Any, conftest: Any, counter: SeamCounter) -> None:
     """Install counting wrappers around the stand-in seams."""
-    from src.upgrade_portal.app.routes import org_upgrade, select, upgrade  # Import configuration keys.
+    from src.interfaces.portals.upgrade_portal.app.routes import (
+        org_upgrade,
+        select,
+        upgrade,
+    )  # Import configuration keys.
 
     app.config[select.MIST_READER_KEY] = counter.wrap("cloud_reader", conftest.stand_in_cloud_read)  # Count site reads.
     app.config[select.DEVICE_READER_KEY] = counter.wrap(
@@ -252,7 +256,11 @@ def _install_counted_seams(app: Any, conftest: Any, counter: SeamCounter) -> Non
 
 def _install_large_seams(app: Any, counter: SeamCounter) -> None:
     """Replace cloud and device seams with large synthetic data."""
-    from src.upgrade_portal.app.routes import org_upgrade, select, upgrade  # Import configuration keys.
+    from src.interfaces.portals.upgrade_portal.app.routes import (
+        org_upgrade,
+        select,
+        upgrade,
+    )  # Import configuration keys.
 
     app.config[select.MIST_READER_KEY] = counter.wrap("cloud_reader", _large_cloud_reader)  # Count large site reads.
     app.config[select.DEVICE_READER_KEY] = counter.wrap(

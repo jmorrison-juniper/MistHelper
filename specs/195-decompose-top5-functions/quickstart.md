@@ -7,11 +7,11 @@
 
 ## 2) Implement in this order
 
-1. Extract bootstrap dependency check logic into `src/bootstrap/` and keep `_early_dependency_check` facade.
-2. Extract org packet capture workflow into `src/capture/org_capture_workflow.py`.
-3. Extract loop orchestration into `src/capture/site_capture_loop.py`.
-4. Extract 52-week events export into `src/export/device_events_52w_exporter.py`.
-5. Extract WAN override analyzer into `src/gateway/gateway_override_analysis.py`.
+1. Extract bootstrap dependency check logic into `src/foundation/runtime/bootstrap/` and keep `_early_dependency_check` facade.
+2. Extract org packet capture workflow into `src/operations/execution/capture/org_capture_workflow.py`.
+3. Extract loop orchestration into `src/operations/execution/capture/site_capture_loop.py`.
+4. Extract 52-week events export into `src/operations/exporting/export/device_events_52w_exporter.py`.
+5. Extract WAN override analyzer into `src/mist/resources/gateway/gateway_override_analysis.py`.
 6. Remove legacy duplicate `with_wan_overrides` heavy body after parity passes.
 
 ## 3) Add/adjust tests
@@ -45,7 +45,7 @@
 
 ## 6) Final execution sequence (implemented)
 
-1. Implement extracted modules under `src/bootstrap/`, `src/capture/`, `src/export/`, and gateway analyzer alias path.
+1. Implement extracted modules under `src/foundation/runtime/bootstrap/`, `src/operations/execution/capture/`, `src/operations/exporting/export/`, and gateway analyzer alias path.
 2. Rewire `MistHelper.py` top-5 target facades to delegate to extracted classes.
 3. Run complexity gate:
    - `python scripts/check_top5_complexity.py`

@@ -33,7 +33,7 @@ Drive `ARCH-DELEGATE` and `ARCH-NAMING` to **0** in `MistHelper.py` by **genuine
 - **No `src/` behavior changes.** `src/` import-site updates are limited to the two `export_legacy` -> `export_const_insight_metrics` call references and nothing else.
 - **No new wrappers, facades, aliases, or `# noqa`/analyzer suppressions** to "ease" migration. The migration terminates here.
 - **No STRUCT-*, CONV-*, or other category work.** Inline-comment coverage improves implicitly on touched lines (NON-NEGOTIABLE rule) but is not a dedicated objective.
-- **Do not** rename the separate `src/export/site_insights_exporter.py::_metric_compatible_with_platform` (L64) -- it is a distinct, correctly-named `src` symbol.
+- **Do not** rename the separate `src/operations/exporting/export/site_insights_exporter.py::_metric_compatible_with_platform` (L64) -- it is a distinct, correctly-named `src` symbol.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -52,7 +52,7 @@ As a maintainer enforcing the "no wrappers" NON-NEGOTIABLE, I need every `ARCH-D
 ### Edge Cases
 
 - **`device_events_52w_legacy` name collision**: the intended non-indirection name `device_events_52w` already exists (the live delegator at L9600). The legacy method + its `_52w_*` helper cluster are **dead, superseded** code (only their own test references them) -> **DELETE** the cluster and its test rather than rename.
-- **`export_legacy` is dependency-injected**: `src/export/site_insights_exporter.py` binds the injected dep to module name `InsightMetricsUtils`, so `src` callers reach the renamed method via `_parent.InsightMetricsUtils.export_const_insight_metrics()`. Two `src` operation modules + two test `SimpleNamespace` DI attrs must rename in lock-step, and the `export_legacy` guardrail allowlist tightens to empty.
+- **`export_legacy` is dependency-injected**: `src/operations/exporting/export/site_insights_exporter.py` binds the injected dep to module name `InsightMetricsUtils`, so `src` callers reach the renamed method via `_parent.InsightMetricsUtils.export_const_insight_metrics()`. Two `src` operation modules + two test `SimpleNamespace` DI attrs must rename in lock-step, and the `export_legacy` guardrail allowlist tightens to empty.
 - **Stateful facade `FirmwareManager`**: unlike the stateless delegators, it is instantiated (`FirmwareManager(apisession, org_id)`) at 5 call sites. Inlining is not viable; convert to a `@staticmethod create(...)` factory returning the fully-wired `src` implementation, and repoint the 5 call sites.
 
 ## Disposition Table *(authoritative -- fresh line numbers)*

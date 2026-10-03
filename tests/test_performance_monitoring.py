@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from src.utils.performance.event import (
+from src.foundation.support.utils.performance.event import (
     MAX_DIMENSIONS,
     MAX_MEASUREMENTS,
     SCHEMA_VERSION,
@@ -23,8 +23,8 @@ from src.utils.performance.event import (
     EventSource,
     PerformanceEvent,
 )
-from src.utils.performance.privacy import REDACTED, PerformancePrivacyPolicy
-from src.utils.performance.recorder import NULL_SPAN, Recorder, RecorderSettings, Stopwatch
+from src.foundation.support.utils.performance.privacy import REDACTED, PerformancePrivacyPolicy
+from src.foundation.support.utils.performance.recorder import NULL_SPAN, Recorder, RecorderSettings, Stopwatch
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parents[1]
@@ -34,7 +34,7 @@ SCHEMA_PATH = (
     / "performance-event.schema.json"
 )
 
-SOURCE = EventSource(file="src/api/api_data_fetcher.py", symbol="execute", class_name="ApiFetcher")
+SOURCE = EventSource(file="src/mist/access/api/api_data_fetcher.py", symbol="execute", class_name="ApiFetcher")
 
 
 def _event(**overrides: object) -> PerformanceEvent:
@@ -70,7 +70,7 @@ class TestEventContract:
 
     def test_a_function_outside_a_class_reports_a_null_class(self) -> None:
         """The schema allows a null class for a module level function."""
-        plain = EventSource(file="src/utils/console.py", symbol="render")
+        plain = EventSource(file="src/foundation/support/utils/console.py", symbol="render")
         assert _event(source=plain).to_dict()["source"]["class"] is None
 
     def test_the_timestamp_is_utc_and_parses(self) -> None:

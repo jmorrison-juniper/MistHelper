@@ -15,12 +15,14 @@ from unittest.mock import MagicMock  # WHY: collaborator doubles and call assert
 
 import pytest  # WHY: monkeypatch and caplog fixtures.
 
-from src.export import org_site_exporter as org_site_mod  # WHY: patch the product guest exporter module.
-from src.export.org_site_exporter import OrgSiteExporter  # WHY: drive the real guest exporter.
-from src.export.org_site_exporter import OrgSiteExporter as FailureModeOrgSiteExporter
-from src.export.site_application_list_exporter import SiteApplicationListExporter
-from src.export.site_asset_exporter import SiteAssetExporter
-from src.export.site_system_events_exporter import SiteSystemEventsExporter
+from src.operations.exporting.export import (
+    org_site_exporter as org_site_mod,
+)  # WHY: patch the product guest exporter module.
+from src.operations.exporting.export.org_site_exporter import OrgSiteExporter  # WHY: drive the real guest exporter.
+from src.operations.exporting.export.org_site_exporter import OrgSiteExporter as FailureModeOrgSiteExporter
+from src.operations.exporting.export.site_application_list_exporter import SiteApplicationListExporter
+from src.operations.exporting.export.site_asset_exporter import SiteAssetExporter
+from src.operations.exporting.export.site_system_events_exporter import SiteSystemEventsExporter
 
 
 @pytest.fixture
@@ -34,9 +36,9 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     mocks: dict[str, Any] = {}
 
     for module_path in (
-        "src.export.site_asset_exporter",
-        "src.export.site_application_list_exporter",
-        "src.export.site_system_events_exporter",
+        "src.operations.exporting.export.site_asset_exporter",
+        "src.operations.exporting.export.site_application_list_exporter",
+        "src.operations.exporting.export.site_system_events_exporter",
     ):
         data_processing = MagicMock(name=f"DataProcessingUtils[{module_path}]")  # Flatten and escape collaborator.
         data_processing.flatten_nested_fields.side_effect = lambda rows: rows  # Identity keeps the payload checkable.
@@ -100,7 +102,7 @@ class TestAssetsOfInterest:
 
     def test_happy_path_fetches_pages_and_persists(self, wired: dict[str, Any]) -> None:
         """The exporter must call the SDK, page the rows, and write them once."""
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         api.api.v1.sites.stats.getSiteAssetsOfInterest.return_value = [{"mac": "aa:bb"}]
 
         SiteAssetExporter.assets_of_interest()
@@ -118,13 +120,13 @@ class TestAssetsOfInterest:
 
         SiteAssetExporter.assets_of_interest()
 
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         api.api.v1.sites.stats.getSiteAssetsOfInterest.assert_not_called()
         wired["DataExporter"].write_with_format_selection.assert_not_called()
 
     def test_empty_result_writes_nothing(self, wired: dict[str, Any]) -> None:
         """An empty page must report the fact and skip the export."""
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         api.api.v1.sites.stats.getSiteAssetsOfInterest.return_value = []
 
         SiteAssetExporter.assets_of_interest()
@@ -135,7 +137,7 @@ class TestAssetsOfInterest:
         self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
     ) -> None:
         """An SDK failure must surface in the log rather than crash the menu."""
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         api.api.v1.sites.stats.getSiteAssetsOfInterest.side_effect = RuntimeError("boom")
 
         with caplog.at_level(logging.ERROR):
@@ -200,7 +202,7 @@ class TestAssetFilterAndAsset:
 
     def test_asset_filter_happy_path(self, wired: dict[str, Any]) -> None:
         """The filter detail must be fetched by identifier and written once."""
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         api.api.v1.sites.assetfilters.getSiteAssetFilter.return_value = {"id": "af-1"}
 
         SiteAssetExporter.asset_filter()
@@ -216,7 +218,7 @@ class TestAssetFilterAndAsset:
 
     def test_asset_happy_path(self, wired: dict[str, Any]) -> None:
         """The asset detail must be fetched by identifier and written once."""
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         api.api.v1.sites.assets.getSiteAsset.return_value = {"id": "as-1"}
 
         SiteAssetExporter.asset()
@@ -234,13 +236,13 @@ class TestAssetFilterAndAsset:
 
         SiteAssetExporter.asset()
 
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         api.api.v1.sites.assets.getSiteAsset.assert_not_called()
         wired["DataExporter"].write_with_format_selection.assert_not_called()
 
     def test_response_data_attribute_is_preferred(self, wired: dict[str, Any]) -> None:
         """A response object carrying .data must be unwrapped before normalizing."""
-        api = wired["api:src.export.site_asset_exporter"]
+        api = wired["api:src.operations.exporting.export.site_asset_exporter"]
         response = MagicMock()
         response.data = {"id": "as-9"}
         api.api.v1.sites.assets.getSiteAsset.return_value = response
@@ -256,7 +258,7 @@ class TestApplicationList:
 
     def test_happy_path_persists_rows(self, wired: dict[str, Any]) -> None:
         """The application list must be fetched and written once."""
-        api = wired["api:src.export.site_application_list_exporter"]
+        api = wired["api:src.operations.exporting.export.site_application_list_exporter"]
         api.api.v1.sites.wxtags.getSiteApplicationList.return_value = [{"app_id": "ssh"}]
 
         SiteApplicationListExporter.application_list()
@@ -272,7 +274,7 @@ class TestApplicationList:
         self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
     ) -> None:
         """An SDK failure must surface in the log rather than crash the menu."""
-        api = wired["api:src.export.site_application_list_exporter"]
+        api = wired["api:src.operations.exporting.export.site_application_list_exporter"]
         api.api.v1.sites.wxtags.getSiteApplicationList.side_effect = RuntimeError("boom")
 
         with caplog.at_level(logging.ERROR):
@@ -286,7 +288,7 @@ class TestSystemEvents:
 
     def test_happy_path_persists_rows(self, wired: dict[str, Any]) -> None:
         """The event search must be fetched, paged, and written once."""
-        api = wired["api:src.export.site_system_events_exporter"]
+        api = wired["api:src.operations.exporting.export.site_system_events_exporter"]
         api.api.v1.sites.events.searchSiteSystemEvents.return_value = [{"type": "AP_CONFIG_CHANGED"}]
 
         SiteSystemEventsExporter.system_events()
@@ -300,7 +302,7 @@ class TestSystemEvents:
 
     def test_empty_result_writes_nothing(self, wired: dict[str, Any]) -> None:
         """An empty search must report the fact and skip the export."""
-        api = wired["api:src.export.site_system_events_exporter"]
+        api = wired["api:src.operations.exporting.export.site_system_events_exporter"]
         api.api.v1.sites.events.searchSiteSystemEvents.return_value = []
 
         SiteSystemEventsExporter.system_events()
@@ -313,5 +315,5 @@ class TestSystemEvents:
 
         SiteSystemEventsExporter.system_events()
 
-        api = wired["api:src.export.site_system_events_exporter"]
+        api = wired["api:src.operations.exporting.export.site_system_events_exporter"]
         api.api.v1.sites.events.searchSiteSystemEvents.assert_not_called()

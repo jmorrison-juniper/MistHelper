@@ -38,12 +38,12 @@ Narrow 17 broad handlers in firmware upgrade, device reboot, service-ping, and M
 
 ## Changed Files
 
-- `src\firmware\bulk_switch_upgrader.py`
-- `src\firmware\site_auto_upgrade.py`
-- `src\device\device_reboot_manager.py`
-- `src\websocket\service_ping_manager.py`
-- `src\export\site_config_exporter.py`
-- `src\export\site_client_exporter.py`
+- `src\operations\execution\firmware\bulk_switch_upgrader.py`
+- `src\operations\execution\firmware\site_auto_upgrade.py`
+- `src\mist\resources\device\device_reboot_manager.py`
+- `src\mist\realtime\websocket\service_ping_manager.py`
+- `src\operations\exporting\export\site_config_exporter.py`
+- `src\operations\exporting\export\site_client_exporter.py`
 - `tests\unit\test_bulk_switch_upgrader.py`
 - `tests\unit\test_site_auto_upgrade.py`
 - `tests\unit\device\test_device_reboot_manager.py`

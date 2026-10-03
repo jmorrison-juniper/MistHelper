@@ -1,4 +1,4 @@
-"""Unit tests for ``src.cache.cache_utils.CacheUtils``.
+"""Unit tests for ``src.foundation.persistence.cache.cache_utils.CacheUtils``.
 
 Why:
     Un-omitted for #878 tranche 10. ``CacheUtils`` is a static utility class
@@ -29,7 +29,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.cache.cache_utils import CacheUtils
+from src.foundation.persistence.cache.cache_utils import CacheUtils
 
 
 class _FakeFilePathUtils:
@@ -76,7 +76,7 @@ def fake_mh(monkeypatch, tmp_path):
             return fake
         return real_import(name, *args, **kwargs)
 
-    monkeypatch.setattr("src.cache.cache_utils.SourceDependencyResolver", fake)
+    monkeypatch.setattr("src.foundation.persistence.cache.cache_utils.SourceDependencyResolver", fake)
     return fake
 
 
@@ -114,7 +114,7 @@ class TestIsCsvFresh:
         def _raise(_):
             raise OSError("boom")
 
-        monkeypatch.setattr("src.cache.cache_utils.os.path.getmtime", _raise)
+        monkeypatch.setattr("src.foundation.persistence.cache.cache_utils.os.path.getmtime", _raise)
         assert CacheUtils._is_csv_fresh(str(path), "err.csv", freshness_minutes=60) is False
 
 
@@ -293,7 +293,7 @@ class TestScanCacheCandidates:
         def _raise(_):
             raise OSError("no such dir")
 
-        monkeypatch.setattr("src.cache.cache_utils.os.listdir", _raise)
+        monkeypatch.setattr("src.foundation.persistence.cache.cache_utils.os.listdir", _raise)
         assert CacheUtils._scan_cache_candidates("/nope") is None
 
 
@@ -315,7 +315,7 @@ class TestDeleteCacheFiles:
         def _raise(_):
             raise OSError("locked")
 
-        monkeypatch.setattr("src.cache.cache_utils.os.remove", _raise)
+        monkeypatch.setattr("src.foundation.persistence.cache.cache_utils.os.remove", _raise)
         deleted, errors = CacheUtils._delete_cache_files(str(tmp_path), ["a.csv"])
         assert deleted == 0
         assert errors == 1
@@ -398,7 +398,7 @@ class TestCreateAddressParseFailuresCsv:
         def _bad_open(*_a, **_kw):
             raise OSError("disk full")
 
-        monkeypatch.setattr("src.cache.cache_utils.open", _bad_open, raising=False)
+        monkeypatch.setattr("src.foundation.persistence.cache.cache_utils.open", _bad_open, raising=False)
         # WHY (#886 Phase 2): failure notice migrated from print() to logging.error; capture via caplog.
         with caplog.at_level(logging.ERROR):
             CacheUtils.create_address_parse_failures_csv([{"site_id": "x"}])
@@ -441,5 +441,5 @@ class TestFastCacheHit:
         def _raise(_):
             raise OSError("stat fail")
 
-        monkeypatch.setattr("src.cache.cache_utils.os.path.getmtime", _raise)
+        monkeypatch.setattr("src.foundation.persistence.cache.cache_utils.os.path.getmtime", _raise)
         assert CacheUtils.fast_cache_hit("err.csv") is False

@@ -1,6 +1,6 @@
 """Unit tests for the WebSocket manager module.
 
-Covers src/websocket/manager.py: the module-level helper functions
+Covers src/mist/realtime/websocket/manager.py: the module-level helper functions
 (_is_debug_mode, _is_debug_env_flag_set, log_ws_error, cleanup_ws_connection,
 get_mist_credentials, dump_ws_debug_state, select_ws_site,
 _log_credential_debug, check_mist_credentials) and the WebSocketManager class
@@ -30,10 +30,10 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from src.websocket import manager as manager_mod
-from src.websocket.manager import WebSocketManager
+from src.mist.realtime.websocket import manager as manager_mod
+from src.mist.realtime.websocket.manager import WebSocketManager
 
-_MANAGER_LOGGER = "src.websocket.manager"  # WHY: 886 capsys→caplog migration target logger name.
+_MANAGER_LOGGER = "src.mist.realtime.websocket.manager"  # WHY: 886 capsys→caplog migration target logger name.
 
 # ---------- Module import guard: raise ImportError when websocket-client missing ----------
 
@@ -53,18 +53,18 @@ def test_module_import_error_when_websocket_client_missing() -> None:
         return real_import(name, *args, **kwargs)
 
     saved_ws = sys.modules.pop("websocket", None)
-    saved_mgr = sys.modules.pop("src.websocket.manager", None)
+    saved_mgr = sys.modules.pop("src.mist.realtime.websocket.manager", None)
     try:
         with patch.object(builtins, "__import__", side_effect=fake_import):
             with pytest.raises(ImportError, match="websocket-client is required"):
-                importlib.import_module("src.websocket.manager")
+                importlib.import_module("src.mist.realtime.websocket.manager")
     finally:
         if saved_ws is not None:
             sys.modules["websocket"] = saved_ws
         if saved_mgr is not None:
-            sys.modules["src.websocket.manager"] = saved_mgr
+            sys.modules["src.mist.realtime.websocket.manager"] = saved_mgr
         else:
-            importlib.import_module("src.websocket.manager")
+            importlib.import_module("src.mist.realtime.websocket.manager")
 
 
 # ---------- Module-level helper: _is_debug_mode ----------

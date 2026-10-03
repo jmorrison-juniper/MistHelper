@@ -5,9 +5,9 @@
 
 ## Summary
 
-Systematically analyze every org-level API endpoint's response schema from the OpenAPI spec, then implement complete vertex collections, edge definitions, and `COLLECTION_VERTEX_MAP` entries in `src/db/arango_writer.py` so that ArangoDB graph traversals can navigate the full Mist network topology (org → sites → devices → clients → wlans → templates → networks → alarms → events).
+Systematically analyze every org-level API endpoint's response schema from the OpenAPI spec, then implement complete vertex collections, edge definitions, and `COLLECTION_VERTEX_MAP` entries in `src/foundation/persistence/db/arango_writer.py` so that ArangoDB graph traversals can navigate the full Mist network topology (org → sites → devices → clients → wlans → templates → networks → alarms → events).
 
-The change is confined to a single file (`src/db/arango_writer.py`) with no changes to the data collection pipeline, routing logic, or MistHelper.py entrypoint.
+The change is confined to a single file (`src/foundation/persistence/db/arango_writer.py`) with no changes to the data collection pipeline, routing logic, or MistHelper.py entrypoint.
 
 ## Technical Context
 
@@ -53,7 +53,7 @@ specs/188-graph-edge-definitions/
 ### Source Code (single file change)
 
 ```text
-src/db/
+src/foundation/persistence/db/
 └── arango_writer.py     # EDGE_DEFINITIONS, COLLECTION_VERTEX_MAP, ENTITY_TYPE_TO_VERTEX, _resolve_nested_field()
 ```
 
@@ -117,7 +117,7 @@ src/db/
 | 19 | `TemplateAppliedToSite` | `templates` | `sites` |
 | 20 | `TemplateAppliedToSiteGroup` | `templates` | `sitegroups` |
 
-**Validation**: `python -m py_compile src/db/arango_writer.py` after each sub-phase.
+**Validation**: `python -m py_compile src/foundation/persistence/db/arango_writer.py` after each sub-phase.
 
 **Risk**: The `_ensure_graph()` method deletes and recreates the graph when edge definitions change. This preserves data in vertex/edge collections (via `drop_collections=False`) but the graph metadata is rebuilt. This is the existing pattern and is safe.
 
@@ -237,7 +237,7 @@ def _resolve_nested_field(record: dict, field_path: str) -> Any:
 **Goal**: Validate the complete graph with a full menu 165 run.
 
 **Steps**:
-1. `python -m py_compile src/db/arango_writer.py`
+1. `python -m py_compile src/foundation/persistence/db/arango_writer.py`
 2. `python MistHelper.py --menu 165` — full org data collection
 3. Verify vertex collection counts in ArangoDB web UI (http://localhost:8529)
 4. Verify edge collection counts (non-zero for collections with FK data)

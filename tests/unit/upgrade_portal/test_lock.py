@@ -28,9 +28,9 @@ from typing import Any
 import pytest
 import redis
 
-from src.upgrade_portal.runtime import lock as lock_module
-from src.upgrade_portal.runtime.identity import SessionOwner
-from src.upgrade_portal.runtime.lock import (
+from src.interfaces.portals.upgrade_portal.runtime import lock as lock_module
+from src.interfaces.portals.upgrade_portal.runtime.identity import SessionOwner
+from src.interfaces.portals.upgrade_portal.runtime.lock import (
     _REFRESH_SCRIPT,
     _RELEASE_SCRIPT,
     _TAKEOVER_SCRIPT,

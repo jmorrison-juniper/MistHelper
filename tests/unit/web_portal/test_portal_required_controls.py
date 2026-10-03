@@ -193,9 +193,9 @@ def test_a_row_that_prompts_first_offers_real_choices():
     # A chooser prints a numbered table and reads one digit. An option list that
     # is short, empty, or numbered from zero sends the operator to the wrong
     # operation, and the export then names a different endpoint than the label.
-    from src.export.count_exporter import _SITE_OPS as site_count_ops
-    from src.export.simple_endpoint_exporter import _SITE_OPS as site_endpoint_ops
-    from src.export.site_search_exporter import _VALID_ZONE_TYPES
+    from src.operations.exporting.export.count_exporter import _SITE_OPS as site_count_ops
+    from src.operations.exporting.export.simple_endpoint_exporter import _SITE_OPS as site_endpoint_ops
+    from src.operations.exporting.export.site_search_exporter import _VALID_ZONE_TYPES
 
     # Compare each control against the table its own prompt prints. A count
     # comparison catches a truncated list, which a truthiness check cannot.

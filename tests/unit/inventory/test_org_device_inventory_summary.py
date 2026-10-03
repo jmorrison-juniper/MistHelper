@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest  # WHY: parameterize request-failure coverage.
 import requests  # WHY: model expected Mist transport failures.
 
-from src.inventory.org_device_inventory_summary import (
+from src.mist.resources.inventory.org_device_inventory_summary import (
     OrgDeviceInventorySummaryCore,
     configure_org_device_inventory_summary_dependencies,
 )
@@ -84,7 +84,7 @@ def test_aggregate_gateway_counts_counts_physical_records() -> None:
 def test_fetch_unassigned_inventory_filters_assigned_devices() -> None:
     """Only inventory records without a site_id should be treated as unassigned."""
     _configure_dependencies()
-    from src.inventory import org_device_inventory_summary as _mod
+    from src.mist.resources.inventory import org_device_inventory_summary as _mod
 
     # get_all returns a mix of assigned (site_id present) and unassigned (site_id missing/empty) records.
     _mod.mistapi.get_all = MagicMock(
@@ -193,7 +193,7 @@ def test_aggregate_ap_counts_model_counts_all() -> None:
 def test_fetch_ap_inventory_returns_all_claimed() -> None:
     """AP inventory fetch returns every claimed AP (assigned and unassigned)."""
     _configure_dependencies()
-    from src.inventory import org_device_inventory_summary as _mod
+    from src.mist.resources.inventory import org_device_inventory_summary as _mod
 
     _mod.mistapi.get_all = MagicMock(
         return_value=[
@@ -222,8 +222,8 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
             ]
         ),
     )
-    from src.inventory.inventory_summary import pivot_renderer as _pivot_mod
-    from src.inventory.inventory_summary import version_per_model_fetcher as _vpm_mod
+    from src.mist.resources.inventory.inventory_summary import pivot_renderer as _pivot_mod
+    from src.mist.resources.inventory.inventory_summary import version_per_model_fetcher as _vpm_mod
 
     monkeypatch.setattr(
         _vpm_mod.VersionPerModelFetcher,
@@ -259,7 +259,7 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
 def test_gateway_inventory_connection_failures_return_empty(exception: requests.RequestException) -> None:
     """Connection errors and timeouts must keep the inventory summary alive."""
     _configure_dependencies()
-    from src.inventory import org_device_inventory_summary as summary_module
+    from src.mist.resources.inventory import org_device_inventory_summary as summary_module
 
     summary_module.mistapi.api.v1.orgs.inventory.getOrgInventory.side_effect = exception
     result = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1")

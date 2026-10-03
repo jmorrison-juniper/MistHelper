@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add package `src/org/mxedge_lifecycle/` for menu `293`. The operation presents one destructive sub-menu with claim, assign, unassign, bounce data ports, and upgrade. Each step builds an OpenAPI-shaped request body, asks for the exact typed confirmation word, supports dry-run, calls the matching `mistapi.api.v1.orgs.mxedges` SDK function, and writes `data/MxEdgeLifecycleLog.csv`. The upgrade step polls `getOrgMxEdgeUpgrade` until a terminal status or `UPGRADE_POLL_TIMEOUT_SECONDS`.
+Add package `src/mist/resources/org/mxedge_lifecycle/` for menu `293`. The operation presents one destructive sub-menu with claim, assign, unassign, bounce data ports, and upgrade. Each step builds an OpenAPI-shaped request body, asks for the exact typed confirmation word, supports dry-run, calls the matching `mistapi.api.v1.orgs.mxedges` SDK function, and writes `data/MxEdgeLifecycleLog.csv`. The upgrade step polls `getOrgMxEdgeUpgrade` until a terminal status or `UPGRADE_POLL_TIMEOUT_SECONDS`.
 
 ## Technical Context
 
@@ -62,7 +62,7 @@ specs/3573-mxedge-lifecycle/
 ### Source Code
 
 ```text
-src/org/mxedge_lifecycle/
+src/mist/resources/org/mxedge_lifecycle/
 ├── __init__.py
 ├── client.py
 ├── models.py

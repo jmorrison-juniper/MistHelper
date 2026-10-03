@@ -21,7 +21,7 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 try:
-    from src.inventory.csv_comparator import (
+    from src.mist.resources.inventory.csv_comparator import (
         AddressComparisonCounters,
         ComparatorDependencies,
         ComparatorFlags,
@@ -170,7 +170,7 @@ class TestAddressComparisonCounters:
         counters.total_devices = 10
         counters.start_timing()
         counters.end_timing()
-        with caplog.at_level("INFO", logger="src.inventory.csv_comparator"):
+        with caplog.at_level("INFO", logger="src.mist.resources.inventory.csv_comparator"):
             counters.log_summary()
         assert "Total devices processed: 10" in caplog.text
 
@@ -892,7 +892,7 @@ class TestDataLoading:
                 with open(os.path.join(tmpdir, name), "w", encoding="utf-8") as fh:
                     fh.write("header\n")
             comp = _make_comparator()
-            with patch("src.inventory.csv_comparator.glob.glob") as mock_glob:
+            with patch("src.mist.resources.inventory.csv_comparator.glob.glob") as mock_glob:
                 mock_glob.return_value = [
                     os.path.join(tmpdir, "test1.csv"),
                     os.path.join(tmpdir, "test2.csv"),

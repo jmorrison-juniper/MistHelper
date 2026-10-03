@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.app.routes import review
 
 # One stored run of each state that the issue names. The record shape copies a
 # real document of the ArangoDB collection, offset and all.

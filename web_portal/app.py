@@ -125,7 +125,9 @@ class WebPortalApp:
         """
         from web_portal.routes.webhooks import WEBHOOK_ENABLED_CONFIG_KEY, WEBHOOK_SECRET_CONFIG_KEY
 
-        raw_enabled = os.environ.get(WEBHOOK_ENABLED_CONFIG_KEY, "true")  # WHY: match the src/db default.
+        raw_enabled = os.environ.get(
+            WEBHOOK_ENABLED_CONFIG_KEY, "true"
+        )  # WHY: match the src/foundation/persistence/db default.
         enabled = raw_enabled.strip().lower() == "true"  # WHY: only the exact word "true" turns the route on.
         app.config[WEBHOOK_ENABLED_CONFIG_KEY] = enabled
         app.config[WEBHOOK_SECRET_CONFIG_KEY] = os.environ.get(WEBHOOK_SECRET_CONFIG_KEY, "").strip()
@@ -179,7 +181,9 @@ class WebPortalApp:
     @staticmethod
     def _register_blueprints(app: Flask) -> None:
         """Register all route blueprints with the app."""
-        from src.websocket_streams.web.blueprint.registry import WebSocketBlueprint  # Build the WebSocket routes.
+        from src.mist.realtime.websocket_streams.web.blueprint.registry import (
+            WebSocketBlueprint,
+        )  # Build the WebSocket routes.
         from web_portal.routes.dashboard import dashboard_bp
         from web_portal.routes.data import data_bp
         from web_portal.routes.maps import maps_bp
@@ -297,7 +301,9 @@ class WebPortalApp:
     @staticmethod
     def _stop_websocket_sessions(app: Flask) -> None:
         """Stop the WebSocket session manager if the app built one."""
-        from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Import the app registry.
+        from src.mist.realtime.websocket_streams.web.services.registry import (
+            WebSocketServiceRegistry,
+        )  # Import the app registry.
 
         logger.info("Stopping WebSocket sessions for the web portal")  # Log before the WebSocket shutdown.
         WebSocketServiceRegistry.stop_for_app(app)  # Stop each live WebSocket session and its reaper.

@@ -52,7 +52,7 @@ A screen command checks one rule before these rules. If its time limit closed th
 connection and no stop is in progress, the state is `finished`. The reason is
 `The screen command reached its time limit of N seconds.` N is the total time limit of the
 command in the trigger table, in whole seconds. The screen runner in
-`src/websocket_streams/live/runners/utility/screen.py` applies this rule.
+`src/mist/realtime/websocket_streams/live/runners/utility/screen.py` applies this rule.
 
 The page shows a notice when a shell sends no output for 20 seconds. The notice is a page
 value only. It does not change the session state.

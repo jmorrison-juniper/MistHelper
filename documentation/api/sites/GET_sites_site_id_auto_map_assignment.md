@@ -113,4 +113,4 @@ Common use cases:
 
 Menu Operation **72** exports auto-map assignment status for a selected site.
 Verification source: `git grep -n "getSiteAutoMapAssignmentStatus" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.
+`src/operations/exporting/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

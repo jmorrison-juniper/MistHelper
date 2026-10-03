@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_reconcile import OrgReconcileCheck
+from src.interfaces.portals.upgrade_portal.upgrade.org_reconcile import OrgReconcileCheck
 from tests.unit.upgrade_portal.test_org_child_controls import (
     JUNOS_OLD,
     JUNOS_TARGET,

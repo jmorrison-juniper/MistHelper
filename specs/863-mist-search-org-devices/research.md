@@ -8,7 +8,7 @@ and the organization ID, then returns a paginated response.
 
 ## Existing implementation pattern
 
-`src/export/org_search_exporter.py` already owns organization search endpoints.
+`src/operations/exporting/export/org_search_exporter.py` already owns organization search endpoints.
 Its `_run_org_search` helper resolves the organization, calls the SDK, uses
 `mistapi.get_all`, and persists flattened rows through `DataExporter`.
 

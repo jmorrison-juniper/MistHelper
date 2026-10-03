@@ -38,11 +38,11 @@ template prints the three texts, and each note gets a test identifier.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/compare/render.py` | The new mixin `HistoryNoteText`. `HistoryView` inherits it, and `__all__` names it. |
-| `src/upgrade_portal/app/routes/review.py` | `HistoryPageView` inherits the mixin. |
-| `src/upgrade_portal/app/routes/select.py` | `OrgPickerView` gets the three properties and a static rule. |
-| `src/upgrade_portal/app/assets/templates/select/orgs.html` | The note prints the three texts and gets its test identifier. |
-| `src/upgrade_portal/app/assets/templates/review/history.html` | The note prints the three texts and gets its test identifier. |
+| `src/interfaces/portals/upgrade_portal/compare/render.py` | The new mixin `HistoryNoteText`. `HistoryView` inherits it, and `__all__` names it. |
+| `src/interfaces/portals/upgrade_portal/app/routes/review.py` | `HistoryPageView` inherits the mixin. |
+| `src/interfaces/portals/upgrade_portal/app/routes/select.py` | `OrgPickerView` gets the three properties and a static rule. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/select/orgs.html` | The note prints the three texts and gets its test identifier. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/review/history.html` | The note prints the three texts and gets its test identifier. |
 | `specs/1823-upgrade-capture-portal/contracts/ui-testids.md` | The two new identifiers. |
 | `tests/unit/upgrade_portal/test_issue_3449_count_nouns.py` | New. The texts of each view, and the render of each note. |
 | `tests/contract/upgrade_portal/test_select.py` | The picker note for 0, 1, and 2 matches, and for an offset of 1. |

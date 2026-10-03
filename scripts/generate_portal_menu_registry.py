@@ -44,7 +44,7 @@ The map holds every operation that ``OperationRegistry`` calls ``safe`` or
 ``interactive_safe``, because those are the two classes the portal may run.
 """
 
-from src.utils.menu_entry import MenuEntry  # WHY: static rows must match the real menu row shape.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: static rows must match the real menu row shape.
 
 MENU_DESCRIPTIONS = {
 '''

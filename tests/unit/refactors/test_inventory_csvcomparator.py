@@ -1,10 +1,10 @@
-"""Wave 6 P2 coverage for ``src.refactors.inventory_csvcomparator``.
+"""Wave 6 P2 coverage for ``src.foundation.support.refactors.inventory_csvcomparator``.
 
 Covers ``_MistHelperProxy.__getattr__``, ``_build_flags``, ``_build_deps``,
 ``__init__``, and ``execute`` of the thin adapter. All MistHelper globals
 are published via ``monkeypatch.setattr("MistHelper.<attr>", ...)`` so the
 ``_MH`` proxy resolves them at call time. The heavy impl
-``src.inventory.csv_comparator`` classes (``ComparatorFlags``,
+``src.mist.resources.inventory.csv_comparator`` classes (``ComparatorFlags``,
 ``ComparatorDependencies``, ``InventoryCSVComparator``) are patched to
 ``MagicMock(spec=...)`` doubles so no live network / I/O happens.
 """
@@ -15,8 +15,10 @@ from unittest.mock import MagicMock, patch  # WHY: FR-008 mandates MagicMock dou
 
 import pytest  # WHY: monkeypatch fixture.
 
-from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
-from src.refactors.inventory_csvcomparator import (  # WHY: SUT direct imports.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver,
+)  # WHY: assert the source dependency seam.
+from src.foundation.support.refactors.inventory_csvcomparator import (  # WHY: SUT direct imports.
     _MH,
     InventoryCSVComparator,
 )
@@ -48,7 +50,7 @@ class TestBuildFlags:
         """All four flag values are forwarded verbatim into the ComparatorFlags dataclass."""
         # WHY: exercises the flag dispatch and dataclass instantiation branch.
         fake_flags_cls = MagicMock(name="ComparatorFlags")  # Spec-free MagicMock (callable + attribute).
-        with patch("src.inventory.csv_comparator.ComparatorFlags", fake_flags_cls):
+        with patch("src.mist.resources.inventory.csv_comparator.ComparatorFlags", fake_flags_cls):
             InventoryCSVComparator._build_flags(True, False, True, False)  # Call SUT.
         fake_flags_cls.assert_called_once_with(  # Assert exact kwargs forwarded.
             fast=True,
@@ -85,7 +87,7 @@ class TestBuildDeps:
         monkeypatch.setattr("MistHelper.AddressValidationConfig", fake_address_validation_config, raising=False)
         # Stub the ComparatorDependencies constructor to capture kwargs.
         fake_deps_cls = MagicMock(name="ComparatorDependencies")  # Capture-all MagicMock.
-        with patch("src.inventory.csv_comparator.ComparatorDependencies", fake_deps_cls):
+        with patch("src.mist.resources.inventory.csv_comparator.ComparatorDependencies", fake_deps_cls):
             InventoryCSVComparator._build_deps()  # Trigger dependency composition.
         # Verify each DI slot was passed through by identity match.
         assert fake_deps_cls.call_count == 1  # Single invocation.
@@ -133,9 +135,9 @@ class TestInitAndExecute:
         fake_impl_instance = MagicMock(name="impl_instance")  # The impl the adapter delegates to.
         fake_impl_cls = MagicMock(return_value=fake_impl_instance)  # Constructor stub.
         with (
-            patch("src.inventory.csv_comparator.InventoryCSVComparator", fake_impl_cls),
-            patch("src.inventory.csv_comparator.ComparatorFlags", MagicMock(name="Flags")),
-            patch("src.inventory.csv_comparator.ComparatorDependencies", MagicMock(name="Deps")),
+            patch("src.mist.resources.inventory.csv_comparator.InventoryCSVComparator", fake_impl_cls),
+            patch("src.mist.resources.inventory.csv_comparator.ComparatorFlags", MagicMock(name="Flags")),
+            patch("src.mist.resources.inventory.csv_comparator.ComparatorDependencies", MagicMock(name="Deps")),
         ):
             adapter = InventoryCSVComparator(  # Trigger __init__ path.
                 fast=True, address_check=True, debug=False, skip_ssl_verify=False
@@ -163,9 +165,9 @@ class TestInitAndExecute:
             monkeypatch.setattr(f"MistHelper.{name}", val, raising=False)
         fake_flags_cls = MagicMock(name="Flags")  # Capture the flag kwargs.
         with (
-            patch("src.inventory.csv_comparator.InventoryCSVComparator", MagicMock()),
-            patch("src.inventory.csv_comparator.ComparatorFlags", fake_flags_cls),
-            patch("src.inventory.csv_comparator.ComparatorDependencies", MagicMock(name="Deps")),
+            patch("src.mist.resources.inventory.csv_comparator.InventoryCSVComparator", MagicMock()),
+            patch("src.mist.resources.inventory.csv_comparator.ComparatorFlags", fake_flags_cls),
+            patch("src.mist.resources.inventory.csv_comparator.ComparatorDependencies", MagicMock(name="Deps")),
         ):
             InventoryCSVComparator()  # Rely entirely on defaults.
         fake_flags_cls.assert_called_once_with(  # Assert defaults propagated. Verification stays on (#1914).

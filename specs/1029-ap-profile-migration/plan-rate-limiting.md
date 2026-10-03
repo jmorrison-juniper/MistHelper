@@ -10,7 +10,7 @@
 
 Wire the migration operation (menu 207) and the revert operation
 (menu 208) into the existing PID-based API rate limiter at
-`src/utils/rate_limiting.py` so bulk runs of 10,000 APs stay under
+`src/foundation/support/utils/rate_limiting.py` so bulk runs of 10,000 APs stay under
 Mist's 5000-request-per-clock-hour ceiling. Preserve every parent-
 spec guarantee: stop-on-failure semantics for non-429 errors, per-AP
 retry bounds, backup-before-first-PUT, dry-run silence. Feed 429
@@ -20,7 +20,7 @@ Mist on the next iteration and grows the returned delay.
 
 The addendum adds **no new module**, **no new third-party
 dependency**, **no new limiter API**, and **no new menu entry**. It
-modifies only `src/device/ap_profile_migration_manager.py` and the
+modifies only `src/mist/resources/device/ap_profile_migration_manager.py` and the
 matching unit-test module.
 
 ## Technical Context
@@ -28,7 +28,7 @@ matching unit-test module.
 **Language / Version**: Python 3.13+ (unchanged from parent).
 
 **Primary Dependencies**: `mistapi >= 0.63.1` (installed surface
-`0.63.3`) and existing `src/utils/rate_limiting.py`. No new
+`0.63.3`) and existing `src/foundation/support/utils/rate_limiting.py`. No new
 third-party dependency (FR-A10, SC-A08).
 
 **Storage**: No new file schema. The backup JSON file schema from
@@ -40,7 +40,7 @@ summary text and in the existing JSONL audit line (see
 tests co-locate under the existing
 `tests/unit/device/test_ap_profile_migration_manager.py`. Every
 pacing test patches `time.sleep` at
-`src.device.ap_profile_migration_manager.time.sleep` per Q4 of
+`src.mist.resources.device.ap_profile_migration_manager.time.sleep` per Q4 of
 `research-rate-limiting.md`; a 10,000-AP synthetic run completes in
 under two wall-clock seconds.
 
@@ -68,7 +68,7 @@ progress prints (parent SC-004) fire on the same cadence.
 - FR-A06: Limiter fault MUST NOT halt the migration. Fall back to a
   fixed conservative `time.sleep(0.75)` and continue.
 - FR-A07: Pacing MUST call `time.sleep(...)` by module-level
-  reference so `unittest.mock.patch("src.device.ap_profile_migration_manager.time.sleep", ...)`
+  reference so `unittest.mock.patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", ...)`
   intercepts it. This matches the existing pattern documented at
   line 742 of the manager.
 - FR-A08: Dry-run mode issues no PUT and MUST NOT consult the
@@ -99,7 +99,7 @@ here so `/speckit.tasks` and implementation cannot re-open them:
 | 2 | Pre-PUT call shape | `smoothed, delay = mh.RateLimitingUtils.get_rate_limited_delay(smoothed, mh.apisession, mh._api_usage_cache); time.sleep(delay)`. Verbatim match to `api_data_fetcher.py._apply_rate_limiting`. |
 | 2 | 429 feedback surface | Set `mh._api_usage_cache["initialized"] = False`. Forces `_needs_refresh` -> `True` on the next call, which triggers `_refresh_api_usage` and drives the PID error term up. No new limiter method. |
 | 3 | Shared limiter across menus | No shared instance. Each loop owns a per-invocation `smoothed: float \| None = None` local. Shared state is the module global `mh._api_usage_cache` only. Acquire via `importlib.import_module("MistHelper")`. |
-| 4 | Hermetic-test patch site | `src.device.ap_profile_migration_manager.time.sleep`. Optional pure-unit stub of `RateLimitingUtils.get_rate_limited_delay` returning `(None, 0.0)`. One integration test leaves the real limiter engaged with a pre-seeded `_api_usage_cache`. |
+| 4 | Hermetic-test patch site | `src.mist.resources.device.ap_profile_migration_manager.time.sleep`. Optional pure-unit stub of `RateLimitingUtils.get_rate_limited_delay` returning `(None, 0.0)`. One integration test leaves the real limiter engaged with a pre-seeded `_api_usage_cache`. |
 | 5 | Manager seams | `_reassign_one_ap` and `_revert_one_ap` gain **no** kwarg. Outer loops call `_apply_pacing(smoothed)` once per iteration and `_signal_rate_limit_hit()` on any observed 429. Per-AP retry backoff `time.sleep(_RETRY_BACKOFF_SECONDS[attempt])` is **unchanged**. |
 
 ## Constitution Check
@@ -218,11 +218,11 @@ no new module, no new gate, no schema break.
   SC-A01..SC-A08.
 - Parent plan: `plan.md` (unchanged; addendum inherits every
   constitutional gate).
-- Reference caller: `src/api/api_data_fetcher.py._apply_rate_limiting`
+- Reference caller: `src/mist/access/api/api_data_fetcher.py._apply_rate_limiting`
   and `_is_rate_limit_error`.
-- Limiter: `src/utils/rate_limiting.py` (`RateLimitingUtils`,
+- Limiter: `src/foundation/support/utils/rate_limiting.py` (`RateLimitingUtils`,
   `_needs_refresh`, `_refresh_api_usage`).
-- Manager sites of change: `src/device/ap_profile_migration_manager.py`
+- Manager sites of change: `src/mist/resources/device/ap_profile_migration_manager.py`
   (`_RETRY_BACKOFF_SECONDS` line ~51, `_reassign_one_ap` line ~732,
   `_run_reassignment_loop` line ~777, revert loop line ~360,
   `_revert_one_ap` line ~1158).

@@ -1,4 +1,4 @@
-"""Unit tests for ``src/upgrade_portal/upgrade/options.py``.
+"""Unit tests for ``src/interfaces/portals/upgrade_portal/upgrade/options.py``.
 
 Why:
     Three rules of this module are silent when they break, so each one needs a
@@ -29,9 +29,13 @@ import mistapi
 import pytest
 from mistapi.__api_response import APIResponse
 
-from src.firmware.upgrade_service import SCOPE_ORG, SCOPE_SITE, STRATEGY_DEFAULT, UpgradeOptions
-from src.upgrade_portal.capture.devices import REASON_READ_FAILED, REASON_SHORT_READ, REASON_UNKNOWN_SHAPE
-from src.upgrade_portal.upgrade import options as module
+from src.interfaces.portals.upgrade_portal.capture.devices import (
+    REASON_READ_FAILED,
+    REASON_SHORT_READ,
+    REASON_UNKNOWN_SHAPE,
+)
+from src.interfaces.portals.upgrade_portal.upgrade import options as module
+from src.operations.execution.firmware.upgrade_service import SCOPE_ORG, SCOPE_SITE, STRATEGY_DEFAULT, UpgradeOptions
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 PAGE_LIMIT = 100

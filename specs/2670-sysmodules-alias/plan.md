@@ -63,11 +63,11 @@ changelog.d/issue-2670-sysmodules-alias.md
 ## Files Changed
 
 - `MistHelper.py`: Remove the `sys.modules["MistHelper"]` assignment and the comments that justified it.
-- `src/firmware/firmware_manager.py`: Replace root-module proxy reads with `SourceDependencyResolver`.
-- `src/refactors/serial_cc/site_client_insights.py`: Replace a constant-based root import with `SourceDependencyResolver`.
-- `src/refactors/serial_cc/start_site_client_capture_wireless.py`: Replace a constant-based root import with `SourceDependencyResolver`.
-- `src/refactors/serial_cc/start_site_scan_capture.py`: Replace a constant-based root import with `SourceDependencyResolver`.
-- `src/export/org_inventory_exporter.py`: Remove stale prose that described the deleted root import path.
+- `src/operations/execution/firmware/firmware_manager.py`: Replace root-module proxy reads with `SourceDependencyResolver`.
+- `src/foundation/support/refactors/serial_cc/site_client_insights.py`: Replace a constant-based root import with `SourceDependencyResolver`.
+- `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py`: Replace a constant-based root import with `SourceDependencyResolver`.
+- `src/foundation/support/refactors/serial_cc/start_site_scan_capture.py`: Replace a constant-based root import with `SourceDependencyResolver`.
+- `src/operations/exporting/export/org_inventory_exporter.py`: Remove stale prose that described the deleted root import path.
 - `tests/guardrails/test_source_misthelper_backrefs.py`: Teach the guard to catch constant-based root imports and `sys.modules` reads.
 - `tests/unit/firmware/test_firmware_manager_config.py`: Update module-global tests for the source resolver host.
 - `tests/unit/firmware/test_firmware_manager_monitoring.py`: Update progress-bar tests for the source resolver host.

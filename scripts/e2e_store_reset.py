@@ -15,8 +15,8 @@ from __future__ import annotations  # Keep the annotation style of the code base
 
 import logging  # The action log names each store step.
 
-from src.upgrade_portal.capture import store  # The Arango accessor uses the portal config.
-from src.upgrade_portal.runtime import lock  # The Redis accessor uses the portal config.
+from src.interfaces.portals.upgrade_portal.capture import store  # The Arango accessor uses the portal config.
+from src.interfaces.portals.upgrade_portal.runtime import lock  # The Redis accessor uses the portal config.
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")  # One line for each step.
 logger = logging.getLogger("e2e_store_reset")  # A named log, so the output reads clearly.

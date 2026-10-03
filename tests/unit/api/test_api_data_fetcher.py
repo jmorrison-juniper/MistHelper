@@ -1,7 +1,7 @@
-"""Unit tests for :mod:`src.api.api_data_fetcher`.
+"""Unit tests for :mod:`src.mist.access.api.api_data_fetcher`.
 
 Why:
-    #878 tranche 9 un-omits ``src/api/api_data_fetcher.py`` from the coverage
+    #878 tranche 9 un-omits ``src/mist/access/api/api_data_fetcher.py`` from the coverage
     exclude list. This suite exercises every branch of the ``APIDataFetcher``
     class (fetch/export pipeline, retry/backoff, malformed-response recovery,
     rate-limit handling, emergency saves) so the module can enter the
@@ -21,9 +21,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.api import api_usage_cache
-from src.api.api_data_fetcher import APIDataFetcher
-from src.config import runtime_settings
+from src.foundation.runtime.config import runtime_settings
+from src.mist.access.api import api_usage_cache
+from src.mist.access.api.api_data_fetcher import APIDataFetcher
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -69,8 +69,8 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> _FakeMH:
             return fake
         return real_import(name, *args, **kwargs)
 
-    monkeypatch.setattr("src.api.api_data_fetcher.SourceDependencyResolver", fake)
-    monkeypatch.setattr("src.api.api_data_fetcher.time.sleep", lambda _: None)
+    monkeypatch.setattr("src.mist.access.api.api_data_fetcher.SourceDependencyResolver", fake)
+    monkeypatch.setattr("src.mist.access.api.api_data_fetcher.time.sleep", lambda _: None)
     monkeypatch.setattr(runtime_settings, "API_REQUEST_MAX_RETRIES", 2)
     monkeypatch.setattr(runtime_settings, "API_REQUEST_RETRY_DELAY", 0.0)
     monkeypatch.setattr(api_usage_cache, "api_usage_cache", {})
@@ -718,7 +718,7 @@ class TestFetchAPIData:
         """Happy path must populate rawdata from ``mistapi.get_all``."""
         api_call.return_value = MagicMock(status_code=200)
         fetcher = _make_fetcher(api_call)
-        with patch("src.api.api_data_fetcher.mistapi.get_all", return_value=[{"a": 1}]) as mg:
+        with patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", return_value=[{"a": 1}]) as mg:
             fetcher._fetch_api_data()
         mg.assert_called_once()
         assert fetcher.rawdata == [{"a": 1}]
@@ -729,7 +729,7 @@ class TestFetchAPIData:
         response.data = [{"id": 42}]
         api_call.return_value = response
         fetcher = _make_fetcher(api_call)
-        with patch("src.api.api_data_fetcher.mistapi.get_all", side_effect=KeyError("results")):
+        with patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", side_effect=KeyError("results")):
             fetcher._fetch_api_data()
         assert fetcher.rawdata == [{"id": 42}]
 
@@ -738,7 +738,7 @@ class TestFetchAPIData:
         api_call.return_value = MagicMock(status_code=200)
         fetcher = _make_fetcher(api_call)
         with (
-            patch("src.api.api_data_fetcher.mistapi.get_all", side_effect=RuntimeError("boom")),
+            patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", side_effect=RuntimeError("boom")),
             pytest.raises(RuntimeError, match="boom"),
         ):
             fetcher._fetch_api_data()
@@ -749,7 +749,7 @@ class TestFetchAPIData:
         fetcher = _make_fetcher(api_call)
         err = RuntimeError("rl")
         err.response = MagicMock(status_code=429)  # type: ignore[attr-defined]
-        with patch("src.api.api_data_fetcher.mistapi.get_all", side_effect=err):
+        with patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", side_effect=err):
             fetcher._fetch_api_data()
 
     def test_an_unparsed_body_stops_the_fetch_before_pagination(
@@ -768,7 +768,7 @@ class TestFetchAPIData:
         fetcher = _make_fetcher(api_call)
         with (
             caplog.at_level(logging.ERROR),
-            patch("src.api.api_data_fetcher.mistapi.get_all") as paginate,
+            patch("src.mist.access.api.api_data_fetcher.mistapi.get_all") as paginate,
         ):
             proceeded = fetcher._fetch_api_data()
         assert proceeded is False  # The caller must not log a success count.
@@ -786,7 +786,7 @@ class TestFetchAPIData:
         response = SimpleNamespace(status_code=200, raw_data="[]", data=[])
         api_call.return_value = response
         fetcher = _make_fetcher(api_call)
-        with patch("src.api.api_data_fetcher.mistapi.get_all", return_value=[]) as paginate:
+        with patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", return_value=[]) as paginate:
             proceeded = fetcher._fetch_api_data()
         assert proceeded is True  # The empty answer is the true answer.
         paginate.assert_called_once()  # The existing path still runs.
@@ -812,11 +812,11 @@ class TestDisplayPipeline:
         fetcher.rawdata = [{"id": 1}, "junk", 42, {"id": 2}]
         with (
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
                 side_effect=lambda d: d,
             ),
         ):
@@ -834,11 +834,11 @@ class TestDisplayPipeline:
         fetcher.rawdata = [{"name": "b"}, {"name": "a"}]
         with (
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
                 side_effect=lambda d: d,
             ),
         ):
@@ -860,15 +860,15 @@ class TestDisplayPipeline:
         fetcher.rawdata = [{"a": 1}]
         with (
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
                 return_value=["a"],
             ),
             caplog.at_level(logging.DEBUG),
@@ -898,15 +898,15 @@ class TestExportAndDisplayData:
         fetcher.rawdata = [{"id": 1}]
         with (
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
                 return_value=["id"],
             ),
             caplog.at_level(logging.WARNING),
@@ -937,17 +937,17 @@ class TestExecute:
         api_call.return_value = MagicMock(status_code=200)
         fetcher = _make_fetcher(api_call)
         with (
-            patch("src.api.api_data_fetcher.mistapi.get_all", return_value=[{"id": 1}]),
+            patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", return_value=[{"id": 1}]),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.flatten_nested_fields",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.escape_multiline",
                 side_effect=lambda d: d,
             ),
             patch(
-                "src.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
+                "src.mist.access.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
                 return_value=["id"],
             ),
             caplog.at_level(logging.WARNING),
@@ -965,7 +965,7 @@ class TestExecute:
         api_call.return_value = MagicMock(status_code=200)
         fetcher = _make_fetcher(api_call)
         with (
-            patch("src.api.api_data_fetcher.mistapi.get_all", return_value=[]),
+            patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", return_value=[]),
             caplog.at_level(logging.WARNING),
         ):
             fetcher.execute()
@@ -979,7 +979,7 @@ class TestExecute:
         api_call.return_value = MagicMock(status_code=200)
         fetcher = _make_fetcher(api_call)
         with (
-            patch("src.api.api_data_fetcher.mistapi.get_all", return_value=None),
+            patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", return_value=None),
             caplog.at_level(logging.WARNING),
         ):
             fetcher.execute()
@@ -1000,7 +1000,7 @@ class TestExecute:
         fetcher.rawdata = [{"id": 99}]  # simulate partial fetch before failure
         with (
             patch(
-                "src.api.api_data_fetcher.mistapi.get_all",
+                "src.mist.access.api.api_data_fetcher.mistapi.get_all",
                 side_effect=RuntimeError("boom"),
             ),
             caplog.at_level(logging.WARNING),

@@ -27,8 +27,10 @@ from flask import Flask  # The application type of the portal.
 from flask.testing import FlaskClient  # The client type that drives every request.
 from werkzeug.test import TestResponse  # The answer type that every assertion reads.
 
-from src.upgrade_portal.runtime import identity  # The real session guard, so the tests sign in for real.
-from src.upgrade_portal.runtime.runs import (  # The record layer owns every field and final-state authority.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The real session guard, so the tests sign in for real.
+from src.interfaces.portals.upgrade_portal.runtime.runs import (  # Import the moved dependency.
     RunRecordBuilder,
     RunSpec,
     RunStateMachine,
@@ -168,7 +170,7 @@ class RecordingVersionReader:
 
     Why:
         The real reader calls the Mist cloud. `list_available_versions` of
-        `src/firmware/upgrade_service.py` is scoped to one site, and two
+        `src/operations/execution/firmware/upgrade_service.py` is scoped to one site, and two
         neighbouring cloud calls are scoped to one organization instead. This
         stand-in records the identifier it received, so a test proves which of
         the two scopes the route passes on.
@@ -985,7 +987,7 @@ def test_the_version_read_is_scoped_to_the_site_of_the_run(
     """The route passes the site of the run, and never the organization.
 
     Why:
-        `list_available_versions` of `src/firmware/upgrade_service.py` reads one
+        `list_available_versions` of `src/operations/execution/firmware/upgrade_service.py` reads one
         site. Two neighbouring cloud calls read one organization instead. An
         organization identifier in this call would name firmware for hardware
         that the run never touches.

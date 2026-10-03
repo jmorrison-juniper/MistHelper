@@ -10,7 +10,7 @@ Retire the 15 remaining `MistHelper.py` extraction candidates surfaced by `tools
 ## Technical Context
 
 **Language/Version**: Python 3.13+ (constitution technology-constraint)
-**Primary Dependencies**: `mistapi 0.59+`, `tqdm`, `PrettyTable`, project-internal `src/*` packages (`src.api.apisession`, `src.time.time_utils`, `src.refactors.is_debug_mode`, etc.)
+**Primary Dependencies**: `mistapi 0.59+`, `tqdm`, `PrettyTable`, project-internal `src/*` packages (`src.mist.access.api.apisession`, `src.foundation.runtime.time.time_utils`, `src.foundation.support.refactors.is_debug_mode`, etc.)
 **Storage**: N/A (refactor initiative — data flow unchanged)
 **Testing**: `python MistHelper.py --test` (functional smoke suite; 15 CI jobs); pre-push `black --check` + `ruff check` gate per `feedback_prepush_black_ruff.md`
 **Target Platform**: Windows 11 local dev + Linux container (podman `ghcr.io/jmorrison-juniper/misthelper:latest`)
@@ -65,30 +65,30 @@ src/
 ├── data/                                  # NEW landing dir for T-10 (DataProcessingUtils)
 │   └── data_processing_utils.py           # T-10 lands here
 ├── device/
-│   ├── prompt_utils.py                    # existing (52 KB) -- E-1 review: fold T-07 in OR override to src/ui/prompt_utils.py
+│   ├── prompt_utils.py                    # existing (52 KB) -- E-1 review: fold T-07 in OR override to src/interfaces/visualization/ui/prompt_utils.py
 │   └── virtual_chassis.py                 # T-11 folds into existing class body
 ├── export/
 │   ├── data_exporter.py                   # T-08 lands here
 │   └── org_inventory_exporter.py          # T-06 lands here
 ├── refactors/                             # fallback landing when no closer semantic fit exists
 │   ├── device_data_fetcher.py             # T-01 folds into DeviceDataFetcherManager or dataclass (per E-1)
-│   ├── endpoint__primary__key__strategies.py     # T-04 (2327 LoC) lands here (or src/api/*.py per E-1)
+│   ├── endpoint__primary__key__strategies.py     # T-04 (2327 LoC) lands here (or src/mist/access/api/*.py per E-1)
 │   ├── fast__mode__max__concurrent__connections.py       # T-02
 │   ├── fast__mode__use__connection__aware__threading.py  # T-03
 │   ├── mist_site_exclude_prefix.py        # T-15
 │   ├── detect_msp_privileges.py           # T-05 (or src/msp/*.py per E-1)
 │   └── ... (existing modules unchanged)
 ├── ui/
-│   ├── input_utils.py                     # T-09 lands here (existing src/utils/input_utils.py, E-1 review at dispatch)
-│   └── prompt_utils.py                    # T-07 candidate landing (existing src/device/prompt_utils.py, E-1 review)
+│   ├── input_utils.py                     # T-09 lands here (existing src/foundation/support/utils/input_utils.py, E-1 review at dispatch)
+│   └── prompt_utils.py                    # T-07 candidate landing (existing src/mist/resources/device/prompt_utils.py, E-1 review)
 ├── utils/
 │   ├── file_path_utils.py                 # T-13 lands here
-│   └── tqdm_wrapper.py                    # T-14 lands here (or src/ui/*.py per E-1)
+│   └── tqdm_wrapper.py                    # T-14 lands here (or src/interfaces/visualization/ui/*.py per E-1)
 tests/
 └── (test files converted per FR-030 in same commit as each extraction PR)
 ```
 
-**Structure Decision**: Single-project layout (constitution technology). New landings prefer domain-fitting semantic packages (`src/export/`, `src/ui/`, `src/device/`, `src/data/`, `src/config/`, `src/utils/`) over the `src/refactors/` fallback. Two directories (`src/config/`, `src/data/`) do not yet exist and will be created at dispatch time if T-10 / T-12 land there rather than folding into another module (E-1 dispatch-time choice). Every landing decision is recorded in the PR description per E-1 / FR-029.
+**Structure Decision**: Single-project layout (constitution technology). New landings prefer domain-fitting semantic packages (`src/operations/exporting/export/`, `src/interfaces/visualization/ui/`, `src/mist/resources/device/`, `src/foundation/models/data/`, `src/foundation/runtime/config/`, `src/foundation/support/utils/`) over the `src/foundation/support/refactors/` fallback. Two directories (`src/foundation/runtime/config/`, `src/foundation/models/data/`) do not yet exist and will be created at dispatch time if T-10 / T-12 land there rather than folding into another module (E-1 dispatch-time choice). Every landing decision is recorded in the PR description per E-1 / FR-029.
 
 ## Architecture Strategy
 
@@ -96,7 +96,7 @@ tests/
 
 1. **Pattern 1 constructor injection is the ONLY landing pattern for hot classes with runtime deps.** Every extracted hot class exposes `def __init__(self, **deps)` where every dependency is a **required kwarg**. The 14 typical DI kwargs (subset per class) are: `apisession`, `PromptUtils`, `ConfigUtils`, `DataProcessingUtils`, `DataExporter`, `TimeUtils`, `EnhancedSSHRunner`, `InsightMetricsUtils`, `PacketCaptureManager`, `APICoreFetchUtils`, `check_fn=IsDebugMode.check`, `PrettyTable`, `tqdm`, `mistapi`. Every callsite constructs the instance inline with the full kwargs list spelled out. **NO factory helpers. NO cached module-level instance. NO `sys.modules` self-resolution. NO delegators/shims/pointers. NO backwards-compat facades.**
 2. **Cat A facade removal** — delete the class entirely, rewrite every callsite. Applies only if a candidate reclassifies to Cat A mid-initiative (0 Cat A at initiative start per spec).
-3. **Cat E pure module extraction** — for module-level constants and pure single-use symbols with no runtime deps, land as bare module-level assignments or plain `@staticmethod` collections in `src/refactors/<name>.py` (or a semantically appropriate submodule) and rewrite import paths.
+3. **Cat E pure module extraction** — for module-level constants and pure single-use symbols with no runtime deps, land as bare module-level assignments or plain `@staticmethod` collections in `src/foundation/support/refactors/<name>.py` (or a semantically appropriate submodule) and rewrite import paths.
 4. **No wrapper shim, forwarding function, re-export module, delegator, pointer, helper, or backward-compat alias may survive in `MistHelper.py`** (SC-007). Only a single-line NOTE breadcrumb is left at the deletion site (FR-007 / SC-012).
 5. **Every `mh = importlib.import_module("MistHelper")` + `mh.<Name>` lazy-import pattern is eliminated** for the extracted symbol in the same commit (SC-009). This pattern was tolerated during 1014's transition and is now retired.
 
@@ -106,16 +106,16 @@ tests/
 
 Purpose: warm up the workflow at the minimum blast radius before touching Low-use and Hot candidates.
 
-- **T-01 (`DeviceFetchConfig`, class, 9 LoC, 1 ref)**: Fold as top-level `@dataclass` into `src/refactors/device_data_fetcher.py` (E-1 override: fold into `DeviceDataFetcherManager` class body ONLY if the class's public surface would benefit from a nested config; default is top-level dataclass). Sole callsite at `src/refactors/device_data_fetcher.py:49` rewritten in same commit. Remediate `missing_action_logging` in-flight.
-- **T-02 (`FAST_MODE_MAX_CONCURRENT_CONNECTIONS`, assignment, 3 LoC, 1 ref)**: Module-level constant at `src/refactors/fast__mode__max__concurrent__connections.py` (E-14: bare module-level constant, ignore analyzer's `Suggested class` `FastModeMaxConcurrentConnectionsManager` naming hint). Prefer fold into an existing fast-mode constants module in the destination package if one exists. Remediate `missing_inline_comments` + `missing_action_logging` in-flight (constant carries no methods — flag remediation is exercised on the read-side documentation).
+- **T-01 (`DeviceFetchConfig`, class, 9 LoC, 1 ref)**: Fold as top-level `@dataclass` into `src/foundation/support/refactors/device_data_fetcher.py` (E-1 override: fold into `DeviceDataFetcherManager` class body ONLY if the class's public surface would benefit from a nested config; default is top-level dataclass). Sole callsite at `src/foundation/support/refactors/device_data_fetcher.py:49` rewritten in same commit. Remediate `missing_action_logging` in-flight.
+- **T-02 (`FAST_MODE_MAX_CONCURRENT_CONNECTIONS`, assignment, 3 LoC, 1 ref)**: Module-level constant at `src/foundation/support/refactors/fast__mode__max__concurrent__connections.py` (E-14: bare module-level constant, ignore analyzer's `Suggested class` `FastModeMaxConcurrentConnectionsManager` naming hint). Prefer fold into an existing fast-mode constants module in the destination package if one exists. Remediate `missing_inline_comments` + `missing_action_logging` in-flight (constant carries no methods — flag remediation is exercised on the read-side documentation).
 - **T-03 (`FAST_MODE_USE_CONNECTION_AWARE_THREADING`, assignment, 3 LoC, 1 ref)**: Same landing pattern as T-02. Consider co-locating with T-02 in the same destination file if the fold-in target exists.
 
 **Bucket B — Low-use (T-04, T-05) — 2 callers each**
 
 Purpose: prove the 2-callsite atomic-rewire pattern; T-04 is the largest LOC win in the whole initiative and reclaims 2,327 lines from `MistHelper.py` early.
 
-- **T-04 (`ENDPOINT_PRIMARY_KEY_STRATEGIES`, assignment, 2327 LoC, 2 refs)**: Land at `src/refactors/endpoint__primary__key__strategies.py` OR domain-fit under `src/api/*.py` (per E-1; the dict is intimately tied to the primary-key strategy layer that the constitution's "Adding New Menu Operations" section already codifies). PR description records E-1 rationale. **Substantial internal decomposition required per E-10**: 2,327 lines of dict entries stay as data but any embedded lambdas / callables must be split into `@staticmethod` methods <= 25 lines. Remediate `oversize_25_lines`, `missing_inline_comments`, `missing_action_logging`, and `non_ascii_logs` flags in-flight. **Dispatch this task early (position 4 in the queue) to reclaim the LoC.**
-- **T-05 (`detect_msp_privileges`, function, 25 LoC, 2 refs)**: Land at `src/refactors/detect_msp_privileges.py` OR `src/msp/*.py` (new package, per E-1). Remediate `missing_action_logging` in-flight.
+- **T-04 (`ENDPOINT_PRIMARY_KEY_STRATEGIES`, assignment, 2327 LoC, 2 refs)**: Land at `src/foundation/support/refactors/endpoint__primary__key__strategies.py` OR domain-fit under `src/mist/access/api/*.py` (per E-1; the dict is intimately tied to the primary-key strategy layer that the constitution's "Adding New Menu Operations" section already codifies). PR description records E-1 rationale. **Substantial internal decomposition required per E-10**: 2,327 lines of dict entries stay as data but any embedded lambdas / callables must be split into `@staticmethod` methods <= 25 lines. Remediate `oversize_25_lines`, `missing_inline_comments`, `missing_action_logging`, and `non_ascii_logs` flags in-flight. **Dispatch this task early (position 4 in the queue) to reclaim the LoC.**
+- **T-05 (`detect_msp_privileges`, function, 25 LoC, 2 refs)**: Land at `src/foundation/support/refactors/detect_msp_privileges.py` OR `src/msp/*.py` (new package, per E-1). Remediate `missing_action_logging` in-flight.
 
 **Bucket C — Hot (T-06 through T-15) — >= 4 refs, >= 1 `src/` caller each**
 
@@ -123,16 +123,16 @@ Purpose: complete the initiative. Ordered descending by LOC (per FR-026): T-06 -
 
 Every candidate here follows **Pattern 1 constructor injection** if it has runtime deps (`apisession`, `logger`, config accessors, etc.). Applies to: T-06, T-07, T-08, T-09, T-10, T-11, T-12, T-13. Applies partially to T-14 (`tqdm` wrapper — trivial deps, likely stays a bare function). T-15 is a pure module-level constant (E-14).
 
-- **T-06 (`OrgInventoryExporter`, class, 686 LoC, 102 refs)**: Land at `src/export/org_inventory_exporter.py`. Pattern 1 constructor. Method decomposition mandatory (`oversize_25_lines`) — 686 -> N methods each <= 25 lines. Remediate `missing_inline_comments` in-flight. 102 callsites rewritten to `from src.export.org_inventory_exporter import OrgInventoryExporter` + inline instantiation with kwargs.
-- **T-07 (`PromptUtils`, class, 441 LoC, 96 refs)**: Land at `src/ui/prompt_utils.py`. **E-1 collision check at dispatch**: `src/device/prompt_utils.py` already exists at ~52 KB — verify whether that file is a related-but-distinct symbol or a stale forward. If collision, either co-locate in `src/device/prompt_utils.py` (fold-in) or leave `src/device/` untouched and land at `src/ui/prompt_utils.py`. Decision recorded in PR description. Pattern 1 constructor. Decompose per `oversize_25_lines`.
-- **T-08 (`DataExporter`, class, 345 LoC, 118 refs)**: Land at `src/export/data_exporter.py`. Pattern 1 constructor. Remediate `oversize_25_lines` + `non_ascii_logs` in-flight (constitution V). 118 callsites — the second-highest refs count.
-- **T-10 (`DataProcessingUtils`, class, 158 LoC, 69 refs)**: Land at `src/data/data_processing_utils.py` (create `src/data/` if not present). Pattern 1 constructor. Remediate `oversize_25_lines`, `missing_inline_comments`, `hardcoded_separator` (use `os.sep` / `pathlib.Path` per constitution technology-constraint).
-- **T-11 (`VirtualChassisManager`, class, 78 LoC, 104 refs)**: Fold into existing `src/device/virtual_chassis.py` (E-1: existing 53 KB module is the natural home). Pattern 1 constructor. Remediate `oversize_25_lines`, `missing_inline_comments`, `missing_action_logging` in-flight. Fold must not regress `src/device/virtual_chassis.py` below A+/100 (FR-022).
-- **T-09 (`InputUtils`, class, 74 LoC, 195 refs)**: Land at `src/ui/input_utils.py`. **E-1 collision check at dispatch**: `src/utils/input_utils.py` already exists at ~4.6 KB — determine whether to fold, replace, or override the landing to `src/ui/input_utils.py`. **195 refs across 17 files — the highest-refs candidate in the initiative.** Pre-dispatch `grep -rn "InputUtils" src/ tests/` recorded in PR description (FR-013 / FR-027). Pattern 1 constructor. Remediate `oversize_25_lines` + `raw_input_call` (in-flight rewrite to `safe_input()` per constitution III).
-- **T-12 (`ConfigUtils`, class, 70 LoC, 102 refs)**: Land at `src/config/config_utils.py` (create `src/config/` if not present). Pattern 1 constructor. Remediate `oversize_25_lines`.
-- **T-13 (`FilePathUtils`, class, 46 LoC, 50 refs)**: Land at `src/utils/file_path_utils.py`. Pattern 1 constructor (or `@staticmethod` collection if no runtime deps — verify at dispatch). Remediate `oversize_25_lines` + `missing_inline_comments`.
-- **T-14 (`tqdm`, function, 3 LoC, 51 refs)**: Land at `src/utils/tqdm_wrapper.py` OR domain-fit under `src/ui/*.py` (E-1). E-12 clarification: NOT `SKIP_ALWAYS` here; the 1012 skip-pin was per-initiative. Remediate `missing_action_logging` in-flight. This is a 3-line wrapper — expect a Pattern-1-style constructor is NOT required (trivial deps).
-- **T-15 (`MIST_SITE_EXCLUDE_PREFIX`, assignment, 3 LoC, 11 refs)**: Bare module-level constant at `src/refactors/mist_site_exclude_prefix.py` OR fold into an existing constants module in `src/gateway/*.py` (E-1 / E-14). Remediate `missing_inline_comments` + `missing_action_logging` in-flight.
+- **T-06 (`OrgInventoryExporter`, class, 686 LoC, 102 refs)**: Land at `src/operations/exporting/export/org_inventory_exporter.py`. Pattern 1 constructor. Method decomposition mandatory (`oversize_25_lines`) — 686 -> N methods each <= 25 lines. Remediate `missing_inline_comments` in-flight. 102 callsites rewritten to `from src.operations.exporting.export.org_inventory_exporter import OrgInventoryExporter` + inline instantiation with kwargs.
+- **T-07 (`PromptUtils`, class, 441 LoC, 96 refs)**: Land at `src/interfaces/visualization/ui/prompt_utils.py`. **E-1 collision check at dispatch**: `src/mist/resources/device/prompt_utils.py` already exists at ~52 KB — verify whether that file is a related-but-distinct symbol or a stale forward. If collision, either co-locate in `src/mist/resources/device/prompt_utils.py` (fold-in) or leave `src/mist/resources/device/` untouched and land at `src/interfaces/visualization/ui/prompt_utils.py`. Decision recorded in PR description. Pattern 1 constructor. Decompose per `oversize_25_lines`.
+- **T-08 (`DataExporter`, class, 345 LoC, 118 refs)**: Land at `src/operations/exporting/export/data_exporter.py`. Pattern 1 constructor. Remediate `oversize_25_lines` + `non_ascii_logs` in-flight (constitution V). 118 callsites — the second-highest refs count.
+- **T-10 (`DataProcessingUtils`, class, 158 LoC, 69 refs)**: Land at `src/foundation/models/data/data_processing_utils.py` (create `src/foundation/models/data/` if not present). Pattern 1 constructor. Remediate `oversize_25_lines`, `missing_inline_comments`, `hardcoded_separator` (use `os.sep` / `pathlib.Path` per constitution technology-constraint).
+- **T-11 (`VirtualChassisManager`, class, 78 LoC, 104 refs)**: Fold into existing `src/mist/resources/device/virtual_chassis.py` (E-1: existing 53 KB module is the natural home). Pattern 1 constructor. Remediate `oversize_25_lines`, `missing_inline_comments`, `missing_action_logging` in-flight. Fold must not regress `src/mist/resources/device/virtual_chassis.py` below A+/100 (FR-022).
+- **T-09 (`InputUtils`, class, 74 LoC, 195 refs)**: Land at `src/interfaces/visualization/ui/input_utils.py`. **E-1 collision check at dispatch**: `src/foundation/support/utils/input_utils.py` already exists at ~4.6 KB — determine whether to fold, replace, or override the landing to `src/interfaces/visualization/ui/input_utils.py`. **195 refs across 17 files — the highest-refs candidate in the initiative.** Pre-dispatch `grep -rn "InputUtils" src/ tests/` recorded in PR description (FR-013 / FR-027). Pattern 1 constructor. Remediate `oversize_25_lines` + `raw_input_call` (in-flight rewrite to `safe_input()` per constitution III).
+- **T-12 (`ConfigUtils`, class, 70 LoC, 102 refs)**: Land at `src/foundation/runtime/config/config_utils.py` (create `src/foundation/runtime/config/` if not present). Pattern 1 constructor. Remediate `oversize_25_lines`.
+- **T-13 (`FilePathUtils`, class, 46 LoC, 50 refs)**: Land at `src/foundation/support/utils/file_path_utils.py`. Pattern 1 constructor (or `@staticmethod` collection if no runtime deps — verify at dispatch). Remediate `oversize_25_lines` + `missing_inline_comments`.
+- **T-14 (`tqdm`, function, 3 LoC, 51 refs)**: Land at `src/foundation/support/utils/tqdm_wrapper.py` OR domain-fit under `src/interfaces/visualization/ui/*.py` (E-1). E-12 clarification: NOT `SKIP_ALWAYS` here; the 1012 skip-pin was per-initiative. Remediate `missing_action_logging` in-flight. This is a 3-line wrapper — expect a Pattern-1-style constructor is NOT required (trivial deps).
+- **T-15 (`MIST_SITE_EXCLUDE_PREFIX`, assignment, 3 LoC, 11 refs)**: Bare module-level constant at `src/foundation/support/refactors/mist_site_exclude_prefix.py` OR fold into an existing constants module in `src/mist/resources/gateway/*.py` (E-1 / E-14). Remediate `missing_inline_comments` + `missing_action_logging` in-flight.
 
 ## Dependency Graph Between Tasks
 
@@ -140,11 +140,11 @@ Most of the 15 tasks are **independent** — different symbols in different regi
 
 **Overlap risks noted (not blockers — mitigated by FR-023 and dispatch-time grep audit)**:
 
-- **T-07 (PromptUtils) <-> T-11 (VirtualChassisManager)**: `src/device/virtual_chassis.py` (T-11 landing) and `src/device/prompt_utils.py` (T-07 potential collision landing) are in the same directory. If T-07 folds into `src/device/prompt_utils.py`, both PRs touch `src/device/`. Serial merges (per FR-023) plus fresh grep at each dispatch avoid conflict.
-- **T-09 (InputUtils, 195 refs, 17 files) <-> every other Hot task**: `InputUtils.safe_input()` is called from many Hot-bucket classes' method bodies. If T-09 lands BEFORE another Hot class, that class's extraction PR must use the new `from src.ui.input_utils import InputUtils` path. If T-09 lands AFTER, the callsite table for T-09 must include the freshly-landed Hot class's file. Either order works; the dispatch-time grep audit ensures both directions are covered. **Recommendation**: dispatch T-09 late in the Hot bucket (position 11 of 15) — as spec's Dispatch Queue already sequences — so Hot classes T-06/T-07/T-08/T-10/T-11 that precede it can bundle their `InputUtils` uses into their own atomic rewires.
+- **T-07 (PromptUtils) <-> T-11 (VirtualChassisManager)**: `src/mist/resources/device/virtual_chassis.py` (T-11 landing) and `src/mist/resources/device/prompt_utils.py` (T-07 potential collision landing) are in the same directory. If T-07 folds into `src/mist/resources/device/prompt_utils.py`, both PRs touch `src/mist/resources/device/`. Serial merges (per FR-023) plus fresh grep at each dispatch avoid conflict.
+- **T-09 (InputUtils, 195 refs, 17 files) <-> every other Hot task**: `InputUtils.safe_input()` is called from many Hot-bucket classes' method bodies. If T-09 lands BEFORE another Hot class, that class's extraction PR must use the new `from src.interfaces.visualization.ui.input_utils import InputUtils` path. If T-09 lands AFTER, the callsite table for T-09 must include the freshly-landed Hot class's file. Either order works; the dispatch-time grep audit ensures both directions are covered. **Recommendation**: dispatch T-09 late in the Hot bucket (position 11 of 15) — as spec's Dispatch Queue already sequences — so Hot classes T-06/T-07/T-08/T-10/T-11 that precede it can bundle their `InputUtils` uses into their own atomic rewires.
 - **T-08 (DataExporter, 118 refs) <-> T-06 (OrgInventoryExporter, 102 refs)**: `OrgInventoryExporter` likely calls `DataExporter.write_with_format_selection()` (constitution's canonical export pattern). Whichever lands first passes the freshly-landed class to the second via Pattern 1 kwargs (`DataExporter` kwarg to `OrgInventoryExporter.__init__`, per the 14 typical DI kwargs).
 - **T-04 (ENDPOINT_PRIMARY_KEY_STRATEGIES) <-> T-08 (DataExporter)**: Constitution's "Adding New Menu Operations" flow makes T-04 an input to `DataExporter`. If T-08 lands first, T-08's `__init__` needs an import of the still-in-MistHelper.py `ENDPOINT_PRIMARY_KEY_STRATEGIES` — routed via constructor injection (`primary_key_strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES` kwarg). If T-04 lands first, T-08 imports from the new landing module directly. Dispatch T-04 EARLY (position 4) — the spec already sequences it there — to eliminate this coupling before Hot bucket starts.
-- **T-15 (MIST_SITE_EXCLUDE_PREFIX)**: Referenced from `src/gateway/*.py` and MistHelper.py. Independent of every other task.
+- **T-15 (MIST_SITE_EXCLUDE_PREFIX)**: Referenced from `src/mist/resources/gateway/*.py` and MistHelper.py. Independent of every other task.
 
 **Fully independent** (no shared callsite files at spec time): T-01, T-02, T-03, T-05, T-13, T-14.
 

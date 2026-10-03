@@ -7,12 +7,12 @@ from unittest.mock import MagicMock, patch  # WHY: isolate SDK and writer calls.
 
 import pytest  # WHY: provide fixtures and parameterized cases.
 
-from src.export.org_webhook_deliveries_exporter import OrgWebhookDeliveriesExporter
-from src.export.org_webhook_deliveries_exporter import (
+from src.operations.exporting.export.org_webhook_deliveries_exporter import OrgWebhookDeliveriesExporter
+from src.operations.exporting.export.org_webhook_deliveries_exporter import (
     OrgWebhookDeliveriesExporter as FailureModeOrgWebhookDeliveriesExporter,
 )
 
-_MODULE = "src.export.org_webhook_deliveries_exporter"  # WHY: keep patch targets consistent.
+_MODULE = "src.operations.exporting.export.org_webhook_deliveries_exporter"  # WHY: keep patch targets consistent.
 _WEBHOOKS = [{"id": "wh-1", "name": "Alarms"}, {"id": "wh-2", "name": "Audits"}]  # WHY: test two valid choices.
 
 
@@ -123,7 +123,7 @@ class TestWebhookExport:
 
 def test_existing_composite_strategy_matches_delivery_identity() -> None:
     """Keep the existing stable delivery key registration visible to this feature."""
-    from src.refactors.endpoint_primary_key_strategies import (
+    from src.foundation.support.refactors.endpoint_primary_key_strategies import (
         ENDPOINT_PRIMARY_KEY_STRATEGIES,
     )  # WHY: inspect the central catalog.
 

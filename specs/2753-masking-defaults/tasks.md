@@ -26,8 +26,8 @@
 
 ### Implementation
 
-- [x] T007 [US1] Add `UpgradeStartInputValidator`. (delivered: `src\upgrade_portal\app\routes\upgrade.py`)
-- [x] T008 [US1] Replace unsafe route defaults with validator output. (delivered: `src\upgrade_portal\app\routes\upgrade.py`)
+- [x] T007 [US1] Add `UpgradeStartInputValidator`. (delivered: `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py`)
+- [x] T008 [US1] Replace unsafe route defaults with validator output. (delivered: `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py`)
 
 ## Phase 3: Follow-up tracking
 

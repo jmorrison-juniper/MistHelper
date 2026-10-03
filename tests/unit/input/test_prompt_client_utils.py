@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.input import prompt_client_utils as mod
-from src.input.prompt_client_utils import PromptClientUtils
+from src.foundation.runtime.input import prompt_client_utils as mod
+from src.foundation.runtime.input.prompt_client_utils import PromptClientUtils
 
 
 @pytest.fixture

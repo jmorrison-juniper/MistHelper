@@ -17,21 +17,21 @@
 - [x] T003 Add the real reader failure corpus. (delivered: tests/contract/upgrade_portal/test_bounded_numeric_routes.py)
 - [x] T004 Add the page limit failure corpus. (delivered: tests/unit/upgrade_portal/test_bounded_numeric_inputs.py)
 - [x] T005 Record the original failures for all three readers. (delivered: specs/3395-bounded-numeric-inputs/analysis.md)
-- [x] T006 Add the semantic reader. (delivered: src/upgrade_portal/api/numeric_input.py)
+- [x] T006 Add the semantic reader. (delivered: src/interfaces/portals/upgrade_portal/api/numeric_input.py)
 
 ## Phase 3: User Story 1 - Open a damaged picker link
 
-- [x] T007 [US1] Repair the offset reader. (delivered: src/upgrade_portal/app/routes/select.py)
+- [x] T007 [US1] Repair the offset reader. (delivered: src/interfaces/portals/upgrade_portal/app/routes/select.py)
 - [x] T008 [US1] Prove the first page and valid page rules. (delivered: tests/contract/upgrade_portal/test_bounded_numeric_routes.py)
 
 ## Phase 4: User Story 2 - Refuse a damaged capture tier
 
-- [x] T009 [US2] Repair the tier reader. (delivered: src/upgrade_portal/app/routes/capture.py)
+- [x] T009 [US2] Repair the tier reader. (delivered: src/interfaces/portals/upgrade_portal/app/routes/capture.py)
 - [x] T010 [US2] Prove exact refusals with no launch. (delivered: tests/contract/upgrade_portal/test_bounded_numeric_routes.py)
 
 ## Phase 5: User Story 3 - Use the page limit fallback
 
-- [x] T011 [US3] Repair the setting reader. (delivered: src/upgrade_portal/capture/clients.py)
+- [x] T011 [US3] Repair the setting reader. (delivered: src/interfaces/portals/upgrade_portal/capture/clients.py)
 - [x] T012 [US3] Prove the fallback, clamps, and properties. (delivered: tests/unit/upgrade_portal/test_bounded_numeric_inputs.py)
 
 ## Phase 6: Cross-Cutting Proof

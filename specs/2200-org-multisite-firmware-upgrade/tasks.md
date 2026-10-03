@@ -11,7 +11,7 @@
 - [ ] T003 Add a contract test for the conflicting `firmware_type` values.
 - [ ] T004 Record the conflicting saved organization guide example.
 - [ ] T005 Verify the existing site and SSR routes in
-  `src/firmware/upgrade_service.py`.
+  `src/operations/execution/firmware/upgrade_service.py`.
 
 ## Phase 2: Model the Aggregate
 

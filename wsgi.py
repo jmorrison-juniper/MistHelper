@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)  # The module logger keeps web startup reco
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 ApplicationBootstrap: Any = importlib.import_module(  # Load after sys.path update without a late import.
-    "src.refactors.main_entrypoint"
+    "src.foundation.support.refactors.main_entrypoint"
 ).ApplicationBootstrap
 WebPortalApp: Any = importlib.import_module(
     "web_portal.app"

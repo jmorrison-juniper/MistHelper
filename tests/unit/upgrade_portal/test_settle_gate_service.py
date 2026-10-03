@@ -7,7 +7,10 @@ WHY: Ensures settle gate correctly validates devices after firmware upgrade.
 import time  # WHY: time-based test helpers
 from unittest.mock import Mock  # WHY: mocking utilities
 
-from src.upgrade_portal.settle.service import SettleGateService, SettleResult  # WHY: service under test
+from src.interfaces.portals.upgrade_portal.settle.service import (
+    SettleGateService,
+    SettleResult,
+)  # WHY: service under test
 
 
 class TestSettleResult:

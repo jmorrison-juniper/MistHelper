@@ -123,13 +123,13 @@ A maintainer can review tests and the wiring manifest before integration. The ev
 - **FR-014**: Unit tests MUST assert the shape of each request body used by spectrum analysis, recording start, and recording stop.
 - **FR-015**: A wiring manifest MUST exist at `specs/3570-spectrum-rfdiag/wiring.md` and MUST list deferred menu, registry, endpoint catalog, and completed changelog work.
 - **FR-016**: A changelog fragment MUST exist before implementation is complete.
-- **FR-017**: The feature scope MUST stay bounded to package `src/troubleshooting/rf_diagnostics`, tests under `tests/unit/troubleshooting/rf_diagnostics`, `specs/3570-spectrum-rfdiag`, and `changelog.d/issue-3570-spectrum-rfdiag.md`, except for deferred integration files listed in `wiring.md`.
+- **FR-017**: The feature scope MUST stay bounded to package `src/mist/intelligence/troubleshooting/rf_diagnostics`, tests under `tests/unit/troubleshooting/rf_diagnostics`, `specs/3570-spectrum-rfdiag`, and `changelog.d/issue-3570-spectrum-rfdiag.md`, except for deferred integration files listed in `wiring.md`.
 - **FR-018**: The operation MUST use safe prompts with clear cancellation behavior for all operator input.
 - **FR-019**: The operation MUST never print secrets, tokens, or raw credentials in run output, audit rows, or failure messages.
 
 ### Scope Boundaries
 
-- In scope: RF diagnostic flow design for `src/troubleshooting/rf_diagnostics`.
+- In scope: RF diagnostic flow design for `src/mist/intelligence/troubleshooting/rf_diagnostics`.
 - In scope: Unit test design for `tests/unit/troubleshooting/rf_diagnostics`.
 - In scope: The `data/RfDiagnostics.csv` audit output and `data/rfdiags/` recording output behavior.
 - In scope by fleet contract exception: the release-note fragment at `changelog.d/issue-3570-spectrum-rfdiag.md`.

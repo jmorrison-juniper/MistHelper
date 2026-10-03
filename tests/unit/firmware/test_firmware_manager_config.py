@@ -1,4 +1,4 @@
-"""Unit tests for ``src.firmware.firmware_manager`` config surface.
+"""Unit tests for ``src.operations.execution.firmware.firmware_manager`` config surface.
 
 Why:
     ``FirmwareManagerConfig`` is the frozen value object every downstream
@@ -17,8 +17,8 @@ from typing import Any
 
 import pytest
 
-import src.firmware.firmware_manager as fm_mod
-from src.firmware.firmware_manager import (
+import src.operations.execution.firmware.firmware_manager as fm_mod
+from src.operations.execution.firmware.firmware_manager import (
     FirmwareManager,
     FirmwareManagerConfig,
     _bind_module_globals,

@@ -8,10 +8,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.export.org_inventory_search_exporter import OrgInventorySearchExporter
-from src.export.org_inventory_search_exporter import OrgInventorySearchExporter as FailureModeOrgInventorySearchExporter
+from src.operations.exporting.export.org_inventory_search_exporter import OrgInventorySearchExporter
+from src.operations.exporting.export.org_inventory_search_exporter import (
+    OrgInventorySearchExporter as FailureModeOrgInventorySearchExporter,
+)
 
-MODULE = "src.export.org_inventory_search_exporter"
+MODULE = "src.operations.exporting.export.org_inventory_search_exporter"
 
 
 @pytest.fixture

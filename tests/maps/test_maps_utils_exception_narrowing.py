@@ -6,7 +6,7 @@ import csv  # Use csv.Error as the expected writer failure type.
 
 import pytest  # Use monkeypatch for isolated collaborator replacement.
 
-from src.maps import _maps_utils as maps_utils  # Import the module under test.
+from src.interfaces.visualization.maps import _maps_utils as maps_utils  # Import the module under test.
 
 
 def test_write_data_returns_false_on_csv_error(monkeypatch: pytest.MonkeyPatch) -> None:

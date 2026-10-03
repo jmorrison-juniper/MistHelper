@@ -18,12 +18,12 @@
 
 **Question**: How should the external module integrate with MistHelper.py?
 
-**Decision**: Create `src/wan_hub_group_manager.py` with a `WanHubGroupNumberManager` class. Import in MistHelper.py alongside existing `src.db` imports. Register in `menu_actions` dict with a lambda that instantiates and calls `execute()`.
+**Decision**: Create `src/operations/wan/wan_hub_group_manager.py` with a `WanHubGroupNumberManager` class. Import in MistHelper.py alongside existing `src.foundation.persistence.db` imports. Register in `menu_actions` dict with a lambda that instantiates and calls `execute()`.
 
 **Rationale**: MistHelper.py already imports from `src/`:
 ```python
-from src.db import DatabaseConfig, configure_db_logging
-from src.db.router import DatabaseRouter
+from src.foundation.persistence.db import DatabaseConfig, configure_db_logging
+from src.foundation.persistence.db.router import DatabaseRouter
 ```
 The pattern is established. The new module follows the same convention. The class uses a static `execute()` entry point matching `SSIDTemplateConsolidationManager.execute`, `E911BSSIDReportGenerator.execute`, etc.
 

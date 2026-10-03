@@ -27,7 +27,7 @@ from typing import Any  # A stored capture document is a free-form mapping.
 
 import pytest  # The test framework.
 
-from src.upgrade_portal.app.routes import capture  # The module under test.
+from src.interfaces.portals.upgrade_portal.app.routes import capture  # The module under test.
 
 CAPTURE_ID = "cap-3378aaaabbbbccccddddeeeeffff0000-01"  # A capture key in the shipped form.
 VERIFIED_WORD = "verified"  # The live path sends this word after a matching read-back.
@@ -35,7 +35,9 @@ FAILED_WORD = "failed"  # The live path sends this word in every other case.
 CONTENT_WORDS = ("complete", "partial", "failed")  # `resolve_status` writes one of these into `capture_status`.
 LOST_SECTION = "clients_guest"  # A section that a partial capture did not read.
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]  # The test sits three folders below the root.
-SCRIPT_PATH = REPOSITORY_ROOT.joinpath("src", "upgrade_portal", "app", "assets", "static", "js", "portal.js")
+SCRIPT_PATH = REPOSITORY_ROOT.joinpath(
+    "src", "interfaces", "portals", "upgrade_portal", "app", "assets", "static", "js", "portal.js"
+)  # Read the portal script from its canonical domain package.
 FINISHED_PATTERN = re.compile(r"var FINISHED_STATES = \[([^\]]*)\];")  # The one list that ends both capture polls.
 
 

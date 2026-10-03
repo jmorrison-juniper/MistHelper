@@ -468,7 +468,7 @@ Do not claim that this command types the new tests.
 Record any non-applicability reason or missing tool explicitly.
 
 Run the Bandit separator check with the two CI samples:
-`./src/utils/zen_city_metadata.py` and `.\src\utils\zen_city_metadata.py`.
+`./src/foundation/support/utils/zen_city_metadata.py` and `.\src\foundation\support\utils\zen_city_metadata.py`.
 Do not add severity filters or suppressions.
 
 For the ratchet, first use full local scope while the new tests are untracked.

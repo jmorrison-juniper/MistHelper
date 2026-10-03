@@ -10,7 +10,7 @@
 
 An observed `MistHelper.py --test` run exited 1 after 48.5s having executed
 nothing (no `.env` present), while separately revealing that
-`OperationRegistry.get()` (`src/utils/operation_registry.py:310-317`)
+`OperationRegistry.get()` (`src/foundation/support/utils/operation_registry.py:310-317`)
 defaults **any** unregistered `menu_actions` key to category `safe` — a
 fail-**open** default that, with real credentials, would let a credentialed
 `--test`/`--testinteractive` run silently invoke any of the 60 currently
@@ -29,7 +29,7 @@ in `research.md`) is:
    `registered_options()`-based coverage guardrail that fails the instant
    `menu_actions` and `OperationRegistry` diverge in either direction.
 3. Add an isolated-venv precondition to `DependencyCheckOrchestrator`
-   (`src/bootstrap/dependency_check.py`) that blocks automatic
+   (`src/foundation/runtime/bootstrap/dependency_check.py`) that blocks automatic
    install/upgrade into system Python by default, distinguishing (in
    message text) "no `.venv`" from "broken `.venv` launcher," while
    preserving the existing `DISABLE_AUTO_INSTALL` opt-out untouched.
@@ -205,7 +205,7 @@ scripts/wave1/
 `frontend` split applies — the web surfaces under `ops-portal`/
 `web_portal`/`mist-ops-platform` are unrelated to this feature and are not
 touched). All changes are additive/corrective within the existing
-`src/utils`, `src/bootstrap`, `src/config` packages and `tests/guardrails`,
+`src/foundation/support/utils`, `src/foundation/runtime/bootstrap`, `src/foundation/runtime/config` packages and `tests/guardrails`,
 `tests/bootstrap` test packages, following the existing package boundaries
 exactly (no new top-level package is introduced).
 

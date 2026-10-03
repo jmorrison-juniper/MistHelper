@@ -12,10 +12,12 @@ import json
 import re
 from pathlib import Path
 
-from src.firmware.aggregate_upgrade_service import FINAL_OPERATION_STATES
+from src.operations.execution.firmware.aggregate_upgrade_service import FINAL_OPERATION_STATES
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # The root of the repository.
-SCRIPT_PATH = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "static" / "js" / "portal.js"
+SCRIPT_PATH = (
+    REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets" / "static" / "js" / "portal.js"
+)
 LIST_PATTERN = re.compile(r"var ORG_UPGRADE_FINISHED_STATES = (\[[^\]]*\]);")  # The list of the poll rule.
 
 

@@ -30,7 +30,7 @@ It does not authorize another agent or concurrent edits to shared evidence.
 
 | Purpose | Allowed paths |
 | --- | --- |
-| Source | `src/export/const_definitions_exporter.py`, `src/analytics/insight_metrics_utils.py`, `src/refactors/serial_cc/site_client_insights.py` |
+| Source | `src/operations/exporting/export/const_definitions_exporter.py`, `src/mist/intelligence/analytics/insight_metrics_utils.py`, `src/foundation/support/refactors/serial_cc/site_client_insights.py` |
 | Tests | `tests/unit/export/test_selective_insight_definitions.py`, `tests/unit/analytics/test_insight_metrics_utils.py` |
 | Release note | `changelog.d/issue-3300-selective-insight-definitions.md` |
 | Feature evidence and task status | `specs/3300-selective-insight-definitions/evidence.md`, `specs/3300-selective-insight-definitions/tasks.md` |
@@ -193,7 +193,7 @@ Compare the resulting CSV and ordered scope lists with the captured baseline.
 
 ### Shared implementation
 
-- [x] T007 [US1] Implement the named entry and attempt result in `src/export/const_definitions_exporter.py`. (delivered: src/export/const_definitions_exporter.py)
+- [x] T007 [US1] Implement the named entry and attempt result in `src/operations/exporting/export/const_definitions_exporter.py`. (delivered: src/operations/exporting/export/const_definitions_exporter.py)
   - **Dependencies**: T005, T006.
   - Add `DefinitionRefreshResult` in this module without changing `EndpointConfig`.
   - Include `endpoint_name`, `outcome`, `counts`, `http_status`, and `first_error`.
@@ -210,7 +210,7 @@ Compare the resulting CSV and ordered scope lists with the captured baseline.
   - Record the preceding red contract evidence in the feature evidence.
   - **Completion**: Selection, discovery-failure, and independent count-snapshot assertions pass.
 
-- [x] T008 [US1] Repair shared fetch and write checks in `src/export/const_definitions_exporter.py`. (delivered: src/export/const_definitions_exporter.py)
+- [x] T008 [US1] Repair shared fetch and write checks in `src/operations/exporting/export/const_definitions_exporter.py`. (delivered: src/operations/exporting/export/const_definitions_exporter.py)
   - **Dependencies**: T007.
   - Check SDK HTTP status in `_fetch_standard_endpoint` before normalization or `.data` unwrapping.
   - Preserve HTTP `4xx` and `5xx` responses in `requests.HTTPError`.
@@ -229,7 +229,7 @@ Compare the resulting CSV and ordered scope lists with the captured baseline.
   - Use the existing safe logging boundary for visible errors and traceback context.
   - **Completion**: Core HTTP, writer, first-error, fallback, and counter tests pass without false updates.
 
-- [x] T009 [P] [US1] Use the selected result in `src/analytics/insight_metrics_utils.py`. (delivered: src/analytics/insight_metrics_utils.py)
+- [x] T009 [P] [US1] Use the selected result in `src/mist/intelligence/analytics/insight_metrics_utils.py`. (delivered: src/mist/intelligence/analytics/insight_metrics_utils.py)
   - **Dependencies**: T008.
   - Construct the existing exporter with the active session.
   - Select `insight_metrics` through `export_endpoint`.
@@ -242,7 +242,7 @@ Compare the resulting CSV and ordered scope lists with the captured baseline.
   - Leave `get_by_scope` unchanged.
   - **Completion**: The focused assertions from T006 pass for every helper result case.
 
-- [x] T010 [P] [US1] Change only client refresh wiring in `src/refactors/serial_cc/site_client_insights.py`. (delivered: src/refactors/serial_cc/site_client_insights.py)
+- [x] T010 [P] [US1] Change only client refresh wiring in `src/foundation/support/refactors/serial_cc/site_client_insights.py`. (delivered: src/foundation/support/refactors/serial_cc/site_client_insights.py)
   - **Dependencies**: T008.
   - Call `deps.InsightMetricsUtils.export_const_insight_metrics` from `_print_intro_and_refresh`.
   - Remove `ConstDefinitionsExporter` from `_resolve_runtime_dependencies`.
@@ -514,9 +514,9 @@ For T017, run all nine paths:
 Repeat that scope with these options instead of `--no-cov`:
 
 ```text
---cov=src.export.const_definitions_exporter
---cov=src.analytics.insight_metrics_utils
---cov=src.refactors.serial_cc.site_client_insights
+--cov=src.operations.exporting.export.const_definitions_exporter
+--cov=src.mist.intelligence.analytics.insight_metrics_utils
+--cov=src.foundation.support.refactors.serial_cc.site_client_insights
 --cov-branch
 --cov-report=term-missing
 --cov-report=json:"$test_output_root/coverage.json"

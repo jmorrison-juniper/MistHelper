@@ -12,7 +12,7 @@
 
 ## Changes
 
-1. `src/firmware/aggregate_upgrade_service.py`
+1. `src/operations/execution/firmware/aggregate_upgrade_service.py`
    - Add the static helper `_final_word`. It returns `cancelled` if the set
      holds `cancelled`, and `completed` if it does not.
    - `_settled_state` and `_combined_site_status` call the helper.

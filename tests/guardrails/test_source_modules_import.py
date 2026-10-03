@@ -45,7 +45,7 @@ class SourceModuleImporter:
         """Return every module name under the source root."""
         _LOGGER.info("Scanning source modules under %s", _SRC_ROOT)  # Log the scan start.
         names = [  # Collect one dotted name for each module in the tree.
-            module.name  # Keep the full dotted name, such as `src.api.api_fetch_utils`.
+            module.name  # Keep the full dotted name, such as `src.mist.access.api.api_fetch_utils`.
             for module in pkgutil.walk_packages([str(_SRC_ROOT)], prefix="src.")  # Walk every subpackage.
         ]
         _LOGGER.debug("Found %s source modules", len(names))  # Log the discovered module count.

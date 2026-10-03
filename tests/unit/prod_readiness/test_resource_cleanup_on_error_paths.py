@@ -13,10 +13,16 @@ from typing import Any  # WHY: the fakes stand in for loosely typed SDK objects.
 
 import pytest  # WHY: fixtures plus the monkeypatch helper.
 
-from src.capture import _packet_capture_exec as capture_exec  # WHY: unit under test for the stream cap.
-from src.capture import client_pcap_downloader as pcap_dl  # WHY: unit under test for the streamed body.
-from src.ssh import cli_shell_manager as shell_mod  # WHY: unit under test for the receive thread.
-from src.ssh.connection import connector as connector_mod  # WHY: unit under test for the paramiko client.
+from src.operations.execution.capture import (
+    _packet_capture_exec as capture_exec,
+)  # WHY: unit under test for the stream cap.
+from src.operations.execution.capture import (
+    client_pcap_downloader as pcap_dl,
+)  # WHY: unit under test for the streamed body.
+from src.operations.execution.ssh import cli_shell_manager as shell_mod  # WHY: unit under test for the receive thread.
+from src.operations.execution.ssh.connection import (
+    connector as connector_mod,
+)  # WHY: unit under test for the paramiko client.
 
 
 class _FakeSshClient:

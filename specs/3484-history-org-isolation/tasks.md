@@ -54,8 +54,8 @@ Do not install dependencies or run bootstrap scripts.
 
 | File | Purpose |
 | --- | --- |
-| `src/upgrade_portal/app/routes/review.py` | Refusals, scoped real adapters, validated section scope, and run-control context. |
-| `src/upgrade_portal/compare/lock_audit.py` | Required organization, matching before inference, and existing limit semantics. |
+| `src/interfaces/portals/upgrade_portal/app/routes/review.py` | Refusals, scoped real adapters, validated section scope, and run-control context. |
+| `src/interfaces/portals/upgrade_portal/compare/lock_audit.py` | Required organization, matching before inference, and existing limit semantics. |
 | `tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py` | New direct contracts for all request forms and real query paths. |
 | `tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py` | New audit contracts with independent expected events. |
 | `changelog.d/issue-3484-history-org-isolation.md` | One Security release-note fragment. |
@@ -86,7 +86,7 @@ Do not edit git-flow instructions, Dependabot configuration, or title guards.
 - Story phases require `[US1]`, `[US2]`, `[US3]`, or `[US4]`.
 - Setup, foundational, and polish tasks have no story label.
 - `[P]` identifies independent work. It does not authorize delegation or another worktree.
-- Check a task only after verification. Append an evidence note, such as `(delivered: src/upgrade_portal/app/routes/review.py)`.
+- Check a task only after verification. Append an evidence note, such as `(delivered: src/interfaces/portals/upgrade_portal/app/routes/review.py)`.
 
 For a read-only check, record the command, exit status, checked count, and result.
 Store validation reports outside the repository.
@@ -334,8 +334,8 @@ The complete accepted-response matrix also runs in T028 and T031.
 
 **Implementation after the red gate**:
 
-- [X] T014 [US2] Add early selection refusals to all three history handlers in `src/upgrade_portal/app/routes/review.py`. (The existing sign-in guard remains first. Normalized signed selection and existing refusals precede all sources.)
-- [X] T015 [P] [US2] Independently authorize and scope both real adapters in `src/upgrade_portal/app/routes/review.py`. (Both queries receive validated org_id, site_id, limit, and offset. Refusals use the authoritative Flask response.)
+- [X] T014 [US2] Add early selection refusals to all three history handlers in `src/interfaces/portals/upgrade_portal/app/routes/review.py`. (The existing sign-in guard remains first. Normalized signed selection and existing refusals precede all sources.)
+- [X] T015 [P] [US2] Independently authorize and scope both real adapters in `src/interfaces/portals/upgrade_portal/app/routes/review.py`. (Both queries receive validated org_id, site_id, limit, and offset. Refusals use the authoritative Flask response.)
 - [X] T016 [P] [US2] Migrate the missing-selection contract to refusal and zero reads in `tests/contract/upgrade_portal/test_history_operations.py`. (400 org_not_chosen and four zero-read checks passed.)
 - [X] T017 [US2] Verify refusal, privilege, and direct-adapter contracts in `tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py`. (Final R1: 276 passed, 0 failed, 0 skipped. Evidence: session `issue-3484-green.xml`.)
 
@@ -378,11 +378,11 @@ Require exact ordered events, bounded/full equivalence, legacy slices, and corre
 
 **Implementation after the red gate**:
 
-- [X] T018 [US4] Require keyword-only `org_id` and early scope validation in `src/upgrade_portal/compare/lock_audit.py`. (Invalid organizations log and raise before any trail open or read.)
-- [X] T019 [US4] Filter before bounded inference and deque updates in `src/upgrade_portal/compare/lock_audit.py`. (Foreign events affect no matching hold or visible position. Older matching context remains available.)
-- [X] T020 [US4] Preserve scoped legacy slices and organization/site holder keys in `src/upgrade_portal/compare/lock_audit.py`. (Zero, negative, and None slices passed. Direct inference also isolates incorrectly typed attribution.)
-- [X] T021 [US4] Remove obsolete `_keep_in_scope` and correct touched comments and logs in `src/upgrade_portal/compare/lock_audit.py`. (No alias, new production wrapper, suppression, raw-address log, or schema change.)
-- [X] T022 [P] [US4] Pass the validated organization through the audit helper and route call in `src/upgrade_portal/app/routes/review.py`. (Audit receives chosen and optional site, but not the capture page limit.)
+- [X] T018 [US4] Require keyword-only `org_id` and early scope validation in `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`. (Invalid organizations log and raise before any trail open or read.)
+- [X] T019 [US4] Filter before bounded inference and deque updates in `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`. (Foreign events affect no matching hold or visible position. Older matching context remains available.)
+- [X] T020 [US4] Preserve scoped legacy slices and organization/site holder keys in `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`. (Zero, negative, and None slices passed. Direct inference also isolates incorrectly typed attribution.)
+- [X] T021 [US4] Remove obsolete `_keep_in_scope` and correct touched comments and logs in `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`. (No alias, new production wrapper, suppression, raw-address log, or schema change.)
+- [X] T022 [P] [US4] Pass the validated organization through the audit helper and route call in `src/interfaces/portals/upgrade_portal/app/routes/review.py`. (Audit receives chosen and optional site, but not the capture page limit.)
 - [X] T023 [P] [US4] Supply `org_id=ORG_ID` at all 14 existing reader calls in `tests/contract/upgrade_portal/test_lock_audit_log.py`. (AST verified 14 calls and 14 explicit organization keywords. Existing matching assertions passed.)
 - [X] T024 [US4] Verify audit contracts in `tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py` and `tests/contract/upgrade_portal/test_lock_audit_log.py`. (All cases passed in the final 754-test scoped regression.)
 
@@ -444,7 +444,7 @@ T018 through T022 supply shared audit scope.
 
 **Implementation after US2 and US4**:
 
-- [X] T025 [US1] Pass validated `chosen` into operation history and run-control context in `src/upgrade_portal/app/routes/review.py`. (Both use the same normalized validated organization. Owner keys remain server-only.)
+- [X] T025 [US1] Pass validated `chosen` into operation history and run-control context in `src/interfaces/portals/upgrade_portal/app/routes/review.py`. (Both use the same normalized validated organization. Owner keys remain server-only.)
 - [X] T026 [P] [US1] Add explicit selection and synthetic unused operation reads in `tests/contract/upgrade_portal/test_history_routes.py`. (All existing formatting and window assertions passed with no real operation read.)
 - [X] T027 [P] [US1] Add selected request contexts and `FakeQuery.org_id` assertions in `tests/unit/upgrade_portal/test_review_store_seams.py`. (Known permitted local scope and all four exact query fields passed.)
 - [X] T028 [US1] Verify all cards, totals, pages, and accepted policy cases in `tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py`. (Final R1 passed, including padded selection, query conflicts, and unavailable environment-token privileges.)
@@ -522,13 +522,13 @@ Keep firmware and bulk-control regressions unchanged.
 **Goal**: Complete local evidence without entering queued delivery.
 
 - [X] T033 [P] Write the Security release note in `changelog.d/issue-3484-history-org-isolation.md`. (One Security fragment ends with Issue #3484. No version or CHANGELOG.md edit.)
-- [X] T034 Review structural limits, comments, safe logging, and suppressions in `src/upgrade_portal/app/routes/review.py` and `src/upgrade_portal/compare/lock_audit.py`. (Direct source review passed. No new production child or wrapper. AST checked 66 new methods and 16 classes within limits, with no executable-statement comment gap. New suppressions: 0.)
+- [X] T034 Review structural limits, comments, safe logging, and suppressions in `src/interfaces/portals/upgrade_portal/app/routes/review.py` and `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`. (Direct source review passed. No new production child or wrapper. AST checked 66 new methods and 16 classes within limits, with no executable-statement comment gap. New suppressions: 0.)
 - [X] T035 Compile every changed Python file and `MistHelper.py` with command Q1. (Exit 0, 11 files compiled. Cache output stayed in the session artifact directory.)
 - [X] T036 [P] Run Ruff on all changed Python files and `MistHelper.py` using unchanged `pyproject.toml` with command Q2. (Parent verification: all 11 files pass. No configuration change.)
 - [X] T037 [P] Run Black on all changed Python files and `MistHelper.py` using unchanged `pyproject.toml` with command Q3. (Parent verification: all 11 files remain unchanged.)
 - [X] T038 [P] Run strict mypy on both changed source files with command Q4. Preserve the full CI `MYPY_PATHS` scope. (Parent verification: no issues in 2 source files. The full CI scope remains unchanged.)
 - [X] T039 [P] Run local Bandit on both changed source files and check repository exclusions with command Q5. (Parent verification: 0 findings across 1,797 lines. No skipped files or new suppressions. Exclusion separator check passes.)
-- [X] T040 Require at least 80% scoped coverage for each changed production module, including `src/upgrade_portal/app/routes/review.py`. (Final parent verification: review.py covers 635/665 statements, 95.49%. lock_audit.py covers 95/95, 100%. Combined coverage is 96.05%. All 787 focused cases pass. Both full-module percentages exceed 80% without configuration or exclusion changes.)
+- [X] T040 Require at least 80% scoped coverage for each changed production module, including `src/interfaces/portals/upgrade_portal/app/routes/review.py`. (Final parent verification: review.py covers 635/665 statements, 95.49%. lock_audit.py covers 95/95, 100%. Combined coverage is 96.05%. All 787 focused cases pass. Both full-module percentages exceed 80% without configuration or exclusion changes.)
 - [X] T041 [P] Run the test-quality ratchet against unchanged `.github/test-quality-config.toml` and `.github/test-quality-baseline.json` with command Q7. (Final parent verification checks all 8 changed test files. Exit 0, 0 findings, 0 new findings, 0 parse errors. Two broader-root notices do not exclude a changed test. No suppression or baseline change.)
 - [X] T042 [P] Verify focused unit, audit, store, and history regressions in the combined scoped run. (All 787 cases pass with 0 failures, errors, skips, or deselections. The audit guard checks one checkout trail, 0 lines before and after.)
 - [X] T043 [P] Verify focused route, authorization, comparison, firmware, and bulk-control regressions against the genuine coupled baseline. (The original 118-case baseline and its repeat both pass. The final focused run adds 309 isolation cases and retains 478 coupled cases. No whole-repository baseline result is claimed.)
@@ -698,8 +698,8 @@ rtk proxy .venv/bin/python -m pytest --timeout=120 \
 ```bash
 rtk proxy .venv/bin/python -m py_compile \
   MistHelper.py \
-  src/upgrade_portal/app/routes/review.py \
-  src/upgrade_portal/compare/lock_audit.py \
+  src/interfaces/portals/upgrade_portal/app/routes/review.py \
+  src/interfaces/portals/upgrade_portal/compare/lock_audit.py \
   tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py \
   tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py \
   tests/contract/upgrade_portal/test_history_routes.py \
@@ -716,7 +716,7 @@ rtk proxy .venv/bin/python -m py_compile \
 
 ```bash
 rtk proxy .venv/bin/python -m ruff check MistHelper.py \
-  src/upgrade_portal/app/routes/review.py src/upgrade_portal/compare/lock_audit.py \
+  src/interfaces/portals/upgrade_portal/app/routes/review.py src/interfaces/portals/upgrade_portal/compare/lock_audit.py \
   tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py \
   tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py \
   tests/contract/upgrade_portal/test_history_routes.py \
@@ -726,7 +726,7 @@ rtk proxy .venv/bin/python -m ruff check MistHelper.py \
   tests/contract/upgrade_portal/test_upgrade_routes/test_stale_views.py \
   tests/unit/upgrade_portal/test_review_store_seams.py
 rtk proxy .venv/bin/python -m black --check --diff MistHelper.py \
-  src/upgrade_portal/app/routes/review.py src/upgrade_portal/compare/lock_audit.py \
+  src/interfaces/portals/upgrade_portal/app/routes/review.py src/interfaces/portals/upgrade_portal/compare/lock_audit.py \
   tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py \
   tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py \
   tests/contract/upgrade_portal/test_history_routes.py \
@@ -743,8 +743,8 @@ The full CI scope remains authoritative and unchanged.
 Local strict typing covers both changed source files.
 
 ```bash
-rtk proxy .venv/bin/python -m mypy src/upgrade_portal/app/routes/review.py \
-  src/upgrade_portal/compare/lock_audit.py --config-file pyproject.toml
+rtk proxy .venv/bin/python -m mypy src/interfaces/portals/upgrade_portal/app/routes/review.py \
+  src/interfaces/portals/upgrade_portal/compare/lock_audit.py --config-file pyproject.toml
 ```
 
 ### Q5: Local Security
@@ -752,7 +752,7 @@ rtk proxy .venv/bin/python -m mypy src/upgrade_portal/app/routes/review.py \
 ```bash
 rtk proxy .venv/bin/bandit-exclude-check
 rtk proxy .venv/bin/python -m bandit -c pyproject.toml \
-  src/upgrade_portal/app/routes/review.py src/upgrade_portal/compare/lock_audit.py
+  src/interfaces/portals/upgrade_portal/app/routes/review.py src/interfaces/portals/upgrade_portal/compare/lock_audit.py
 ```
 
 Do not add online dependency audits or cloud security checks to this local-only workflow.
@@ -779,12 +779,12 @@ rtk proxy .venv/bin/python -m pytest --timeout=120 \
   tests/contract/upgrade_portal/test_comparison_errors.py \
   tests/contract/upgrade_portal/test_comparison_export.py \
   tests/contract/upgrade_portal/test_compare_picker_moment.py \
-  --cov=src.upgrade_portal.app.routes.review \
-  --cov=src.upgrade_portal.compare.lock_audit \
+  --cov=src.interfaces.portals.upgrade_portal.app.routes.review \
+  --cov=src.interfaces.portals.upgrade_portal.compare.lock_audit \
   --cov-report=term-missing --cov-fail-under=80
 rtk proxy .venv/bin/python -m coverage json \
   --fail-under=80 -o "$VALIDATION_DIR/coverage.json"
-rtk proxy .venv/bin/python -c 'import json, os; from pathlib import Path; report=json.loads((Path(os.environ["VALIDATION_DIR"])/"coverage.json").read_text()); paths=("src/upgrade_portal/app/routes/review.py", "src/upgrade_portal/compare/lock_audit.py"); scores={path: report["files"][path]["summary"]["percent_covered"] for path in paths}; print("Checked", len(scores), "modules:", scores); assert all(score >= 80 for score in scores.values()), "Each changed module must reach 80%"'
+rtk proxy .venv/bin/python -c 'import json, os; from pathlib import Path; report=json.loads((Path(os.environ["VALIDATION_DIR"])/"coverage.json").read_text()); paths=("src/interfaces/portals/upgrade_portal/app/routes/review.py", "src/interfaces/portals/upgrade_portal/compare/lock_audit.py"); scores={path: report["files"][path]["summary"]["percent_covered"] for path in paths}; print("Checked", len(scores), "modules:", scores); assert all(score >= 80 for score in scores.values()), "Each changed module must reach 80%"'
 ```
 
 The command-line floor applies to this approved two-module scope.

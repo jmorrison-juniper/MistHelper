@@ -19,11 +19,11 @@ Expected result: all tests pass, and no test calls the Mist cloud.
 
 ```powershell
 Set-Location -LiteralPath 'C:\Users\jmorrison\mh-fleet\3562-rogue-pci-evidence'
-.\.venv\Scripts\python.exe -m py_compile src\reports\rogue_pci_evidence\__init__.py src\reports\rogue_pci_evidence\client.py src\reports\rogue_pci_evidence\model.py src\reports\rogue_pci_evidence\operation.py
-.\.venv\Scripts\python.exe -m ruff check src\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence
-.\.venv\Scripts\python.exe -m black --check src\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence
-.\.venv\Scripts\python.exe -m mypy src\reports\rogue_pci_evidence --config-file pyproject.toml
-.\.venv\Scripts\python.exe -m pydocstyle src\reports\rogue_pci_evidence
+.\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\rogue_pci_evidence\__init__.py src\mist\intelligence\reports\rogue_pci_evidence\client.py src\mist\intelligence\reports\rogue_pci_evidence\model.py src\mist\intelligence\reports\rogue_pci_evidence\operation.py
+.\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence
+.\.venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\rogue_pci_evidence tests\unit\reports\rogue_pci_evidence
+.\.venv\Scripts\python.exe -m mypy src\mist\intelligence\reports\rogue_pci_evidence --config-file pyproject.toml
+.\.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\reports\rogue_pci_evidence
 ```
 
 Expected result: each command exits with code 0.

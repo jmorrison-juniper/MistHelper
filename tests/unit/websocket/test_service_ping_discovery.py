@@ -1,6 +1,6 @@
 """Unit tests for extracted service ping discovery and payload helpers.
 
-Covers src/websocket/service_ping_discovery.py: ``ServicePingDiscoveryMixin`` and
+Covers src/mist/realtime/websocket/service_ping_discovery.py: ``ServicePingDiscoveryMixin`` and
 the ``configure_service_ping_discovery_dependencies`` DI entrypoint. The mixin
 is the sole discovery/prompt/payload surface used by ServicePingManager, so
 these tests pin the branching of every helper — including empty discovery,
@@ -17,8 +17,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.websocket import service_ping_discovery as spd
-from src.websocket.service_ping_discovery import (
+from src.mist.realtime.websocket import service_ping_discovery as spd
+from src.mist.realtime.websocket.service_ping_discovery import (
     ServicePingDiscoveryDependencies,
     ServicePingDiscoveryMixin,
     _SelectionOutcome,

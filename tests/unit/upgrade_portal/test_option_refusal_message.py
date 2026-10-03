@@ -22,12 +22,14 @@ import re
 
 import pytest
 
-from src.upgrade_portal.upgrade import options
+from src.interfaces.portals.upgrade_portal.upgrade import options
 
 # The page that paints every control named in the message map.
 OPTIONS_TEMPLATE = (
     pathlib.Path(__file__).resolve().parents[3]
     / "src"
+    / "interfaces"
+    / "portals"
     / "upgrade_portal"
     / "app"
     / "assets"

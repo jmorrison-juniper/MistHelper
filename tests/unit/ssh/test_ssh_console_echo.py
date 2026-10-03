@@ -1,8 +1,8 @@
-"""Unit tests for the spec 1031 console echo sweep across ``src/ssh`` (issue #1736).
+"""Unit tests for the spec 1031 console echo sweep across ``src/operations/execution/ssh`` (issue #1736).
 
 Why:
     Spec 1031 moved every legacy console echo from the WARNING channel to the
-    ``echo()`` helper. The sweep missed eight lines under ``src/ssh``. These
+    ``echo()`` helper. The sweep missed eight lines under ``src/operations/execution/ssh``. These
     tests lock the two properties that the sweep must hold. The stdout text
     stays the same, and the record never lands on the WARNING channel.
 """
@@ -14,9 +14,9 @@ from unittest.mock import patch
 
 import pytest
 
-from src.ssh.runtime.app_runner import AppRunner
-from src.ssh.shell_execution.shell_executor import ShellExecutor, _CollectState
-from src.ssh.ssh_runner_manager import SSHRunnerManager
+from src.operations.execution.ssh.runtime.app_runner import AppRunner
+from src.operations.execution.ssh.shell_execution.shell_executor import ShellExecutor, _CollectState
+from src.operations.execution.ssh.ssh_runner_manager import SSHRunnerManager
 
 _ECHO_PREFIX = "!?"  # WHY: the marker that identifies a legacy console echo line.
 
@@ -76,7 +76,7 @@ def test_execute_multi_host_echoes_start_and_summary(
     caplog.set_level(logging.DEBUG)  # WHY: capture every level so the INFO record is visible.
     fake_summary = {"10.0.0.1": {"success": True}, "10.0.0.2": {"success": False}}  # WHY: one pass, one fail.
 
-    with patch("src.ssh.ssh_runner_manager.MultiHostRunner.run", return_value=fake_summary):
+    with patch("src.operations.execution.ssh.ssh_runner_manager.MultiHostRunner.run", return_value=fake_summary):
         result = SSHRunnerManager._execute_multi_host(["10.0.0.1", "10.0.0.2"], "netops", "secret", ["show version"])
 
     assert result is True  # WHY: one successful host makes the run succeed.

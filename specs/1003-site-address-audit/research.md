@@ -30,7 +30,7 @@ Assume the endpoint exists -- rejected: returns 404, was the original draft's bu
   on most rows (`Unit 200`, `Suite 1019A`), so suite truth is mostly internal. This
   catches the common "Mist missing the suite" case with zero external calls.
 - **Tier 2 (Nominatim, free, keyless, <=1 req/sec)**: Reuse `NominatimValidator`
-  from `src/utils/address_utils.py`. Validates the base street; drives `WRONG_STREET`.
+  from `src/foundation/support/utils/address_utils.py`. Validates the base street; drives `WRONG_STREET`.
   OSM does not reliably carry US retail suite numbers, so it validates street not unit.
 - **Tier 3 (optional, OFF by default, `--ui-geocode`)**: `MistUIGeocoder` drives the
   live Mist dashboard site-edit autocomplete via Playwright, types
@@ -205,7 +205,7 @@ method-level Five-Item Rule).
 ## R-012: Menu registration + read-only guardrails
 
 **Decision**: Two additive lines in `MistHelper.py`: an import of `AddressAuditEngine`
-(in the existing `src.site.*` import block) and one menu dict entry in the
+(in the existing `src.mist.resources.site.*` import block) and one menu dict entry in the
 safe-export range 1-59 mapping to `AddressAuditEngine.run`. `AddressCorrector` is a
 stub (all methods `raise NotImplementedError`) and is **not** registered. Zero Mist
 writes anywhere.

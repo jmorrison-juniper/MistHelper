@@ -1,4 +1,4 @@
-"""Unit tests for EnhancedSSHRunner in src/ssh/ssh_runner.py."""
+"""Unit tests for EnhancedSSHRunner in src/operations/execution/ssh/ssh_runner.py."""
 
 import logging
 import os
@@ -8,26 +8,32 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.ssh.batch.batch_executor import BatchExecutor, BatchRunRequest  # T013c: extracted multi-command executor
-from src.ssh.batch.host_runner import HostRunner, HostRunRequest  # T013c: extracted per-host worker + request bundle
-from src.ssh.batch.interactive_batch_executor import (  # T013c: extracted interactive executor
+from src.operations.execution.ssh.batch.batch_executor import (
+    BatchExecutor,
+    BatchRunRequest,
+)  # T013c: extracted multi-command executor
+from src.operations.execution.ssh.batch.host_runner import (
+    HostRunner,
+    HostRunRequest,
+)  # T013c: extracted per-host worker + request bundle
+from src.operations.execution.ssh.batch.interactive_batch_executor import (  # T013c: extracted interactive executor
     InteractiveBatchExecutor,
     InteractiveSessionRequest,
 )
-from src.ssh.batch.multi_host_runner import (  # T013c/T039: extracted multi-host orchestrator + request bundle
+from src.operations.execution.ssh.batch.multi_host_runner import (  # Import the moved dependency.
     MultiHostRunner,
     MultiHostRunRequest,
 )
-from src.ssh.config.command_parser import CommandListParser
-from src.ssh.config.csv_loader import CommandCsvLoader
-from src.ssh.config.env_loader import EnvSshConfigLoader
-from src.ssh.config.host_parser import HostListParser
-from src.ssh.config.validators import validate_command, validate_hostname, validate_username
-from src.ssh.connection.connector import SshConnector  # T013b  # noqa: F401
-from src.ssh.runtime.app_runner import AppRunner  # T013d: concrete CLI orchestrator
-from src.ssh.runtime.interactive_mode import InteractiveMode  # T013d: concrete REPL implementation
-from src.ssh.shell_execution.shell_executor import ShellExecutor  # T013b  # noqa: F401
-from src.ssh.ssh_runner import EnhancedSSHRunner, SSHConnectionConfig, SSHExecutionConfig
+from src.operations.execution.ssh.config.command_parser import CommandListParser
+from src.operations.execution.ssh.config.csv_loader import CommandCsvLoader
+from src.operations.execution.ssh.config.env_loader import EnvSshConfigLoader
+from src.operations.execution.ssh.config.host_parser import HostListParser
+from src.operations.execution.ssh.config.validators import validate_command, validate_hostname, validate_username
+from src.operations.execution.ssh.connection.connector import SshConnector  # T013b  # noqa: F401
+from src.operations.execution.ssh.runtime.app_runner import AppRunner  # T013d: concrete CLI orchestrator
+from src.operations.execution.ssh.runtime.interactive_mode import InteractiveMode  # T013d: concrete REPL implementation
+from src.operations.execution.ssh.shell_execution.shell_executor import ShellExecutor  # T013b  # noqa: F401
+from src.operations.execution.ssh.ssh_runner import EnhancedSSHRunner, SSHConnectionConfig, SSHExecutionConfig
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +611,7 @@ class TestExecuteDirect:
 class TestCreateSecureLogFile:
     """Tests for _create_secure_log_file method."""
 
-    @patch("src.ssh.ssh_runner.datetime")
+    @patch("src.operations.execution.ssh.ssh_runner.datetime")
     def test_creates_log_directory(self, mock_dt, runner, tmp_path, monkeypatch):
         """Creates per-host-logs directory."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -615,7 +621,7 @@ class TestCreateSecureLogFile:
         assert os.path.isdir(os.path.join("data", "per-host-logs"))
         assert "switch1" in log_path
 
-    @patch("src.ssh.ssh_runner.datetime")
+    @patch("src.operations.execution.ssh.ssh_runner.datetime")
     def test_write_function_works(self, mock_dt, runner, tmp_path, monkeypatch):
         """Write function writes to log file."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -628,7 +634,7 @@ class TestCreateSecureLogFile:
             content = f.read()
         assert "test log message" in content
 
-    @patch("src.ssh.ssh_runner.datetime")
+    @patch("src.operations.execution.ssh.ssh_runner.datetime")
     def test_write_function_handles_empty(self, mock_dt, runner, tmp_path, monkeypatch):
         """Write function handles empty message gracefully."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -638,7 +644,7 @@ class TestCreateSecureLogFile:
         write_fn("")  # Should not raise
         assert not os.path.exists(log_path)  # WHY: the early return writes no file, so none is created.
 
-    @patch("src.ssh.ssh_runner.datetime")
+    @patch("src.operations.execution.ssh.ssh_runner.datetime")
     def test_sanitizes_hostname(self, mock_dt, runner, tmp_path, monkeypatch):
         """Hostname is sanitized for safe file creation."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -765,10 +771,10 @@ class TestSetupLogging:
 class TestRunMultipleSSHCommands:
     """Tests for BatchExecutor.run (extracted in T013c)."""
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_successful_multi_command(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """Successful multi-command execution returns True."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -788,10 +794,10 @@ class TestRunMultipleSSHCommands:
         assert result is True
         assert mock_exec.call_count == 2
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_connection_failure(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """Connection failure returns False."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -810,10 +816,10 @@ class TestRunMultipleSSHCommands:
         assert result is False
         mock_exec.assert_not_called()
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_connection_failure_logs_end_not_completed(self, mock_connect, mock_exec, mock_disc, mock_dt, caplog):
         """Connection failure must not claim that the SSH batch session completed."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"  # WHY: keep log paths deterministic.
@@ -835,10 +841,10 @@ class TestRunMultipleSSHCommands:
         mock_exec.assert_not_called()  # WHY: a failed connection must not run the command.
         mock_disc.assert_called_once_with()  # WHY: cleanup must still run after the failed connection.
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_command_failure_marks_overall_false(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """Failed command sets overall result to False."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -862,10 +868,10 @@ class TestRunMultipleSSHCommands:
         with pytest.raises(ValueError):
             BatchRunRequest(hostname="", username="admin", password="pass")
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_config_object_support(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """SSHConnectionConfig object is accepted."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -884,7 +890,7 @@ class TestRunMultipleSSHCommands:
 class TestRunSSHCommandOnHost:
     """Tests for HostRunner.run (extracted in T013c)."""
 
-    @patch("src.ssh.batch.host_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.batch.host_runner.SingleCommandRunner.run")
     def test_single_command_delegates(self, mock_run_single):
         """Single command delegates to SingleCommandRunner."""
         mock_run_single.return_value = True
@@ -902,7 +908,7 @@ class TestRunSSHCommandOnHost:
         assert success is True
         mock_run_single.assert_called_once()
 
-    @patch("src.ssh.batch.host_runner.BatchExecutor.run")
+    @patch("src.operations.execution.ssh.batch.host_runner.BatchExecutor.run")
     def test_multiple_commands_delegates(self, mock_run_multi):
         """Multiple non-interactive commands delegate to BatchExecutor."""
         mock_run_multi.return_value = True
@@ -920,7 +926,7 @@ class TestRunSSHCommandOnHost:
         assert success is True
         mock_run_multi.assert_called_once()
 
-    @patch("src.ssh.batch.host_runner.InteractiveBatchExecutor.run")
+    @patch("src.operations.execution.ssh.batch.host_runner.InteractiveBatchExecutor.run")
     def test_interactive_commands_detected(self, mock_run_interactive):
         """Interactive commands (su) detected and routed correctly."""
         mock_run_interactive.return_value = True
@@ -943,7 +949,7 @@ class TestRunSSHCommandOnHost:
         with pytest.raises(ValueError):
             HostRunRequest(hostname="", username="admin", password="pass")
 
-    @patch("src.ssh.batch.host_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.batch.host_runner.SingleCommandRunner.run")
     def test_exception_returns_failure(self, mock_run_single):
         """Exception during execution returns failure tuple."""
         mock_run_single.side_effect = RuntimeError("connection lost")
@@ -961,7 +967,7 @@ class TestRunSSHCommandOnHost:
         assert success is False
         assert "Error" in summary
 
-    @patch("src.ssh.batch.host_runner.BatchExecutor.run")
+    @patch("src.operations.execution.ssh.batch.host_runner.BatchExecutor.run")
     def test_config_object_support(self, mock_run_multi):
         """SSHConnectionConfig object is accepted."""
         mock_run_multi.return_value = True
@@ -980,7 +986,7 @@ class TestRunSSHCommandOnHost:
 class TestRunSSHCommandsMultiHost:
     """Tests for MultiHostRunner.run (extracted in T013c)."""
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_successful_multi_host(self, mock_on_host):
         """Successful multi-host returns correct summary."""
         mock_on_host.side_effect = [
@@ -1003,7 +1009,7 @@ class TestRunSSHCommandsMultiHost:
         assert result["successful"] == 2
         assert result["failed"] == 0
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_partial_failure(self, mock_on_host):
         """Partial failure is reported correctly."""
         mock_on_host.side_effect = [
@@ -1031,7 +1037,7 @@ class TestRunSSHCommandsMultiHost:
         with pytest.raises(ValueError):
             MultiHostRunRequest(hosts=("10.0.0.1",), username="", password="pass", commands=("show version",))
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_empty_host_list(self, mock_on_host):
         """Empty host list returns zero results."""
         result = MultiHostRunner.run(
@@ -1041,7 +1047,7 @@ class TestRunSSHCommandsMultiHost:
         assert result["successful"] == 0
         mock_on_host.assert_not_called()
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_config_object_support(self, mock_on_host):
         """Config objects are accepted for multi-host."""
         mock_on_host.return_value = ("10.0.0.1", True, "ok")
@@ -1061,9 +1067,9 @@ class TestRunSSHCommandsMultiHost:
 class TestRunMultipleSSHCommandsInteractive:
     """Tests for InteractiveBatchExecutor.run (extracted in T013c)."""
 
-    @patch("src.ssh.batch.interactive_batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
-    @patch("src.ssh.batch.interactive_batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.SshConnector")
     def test_connection_failure(self, mock_connect, mock_disc, mock_dt):
         """Connection failure returns False."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1081,9 +1087,9 @@ class TestRunMultipleSSHCommandsInteractive:
         )
         assert result is False
 
-    @patch("src.ssh.batch.interactive_batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
-    @patch("src.ssh.batch.interactive_batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.SshConnector")
     def test_connection_failure_logs_end_not_completed(self, mock_connect, mock_disc, mock_dt, caplog):
         """Connection failure must not claim that the SSH interactive session completed."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"  # WHY: keep log paths deterministic.
@@ -1109,9 +1115,9 @@ class TestRunMultipleSSHCommandsInteractive:
         with pytest.raises(ValueError):
             InteractiveSessionRequest(hostname=None, username="admin", password="pass")
 
-    @patch("src.ssh.batch.interactive_batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
-    @patch("src.ssh.batch.interactive_batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.SshConnector")
     def test_config_object_support(self, mock_connect, mock_disc, mock_dt):
         """SSHConnectionConfig object is accepted."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1135,7 +1141,7 @@ class TestExecuteDirectStartTime:
         with pytest.raises(ValueError, match="No active SSH connection"):
             runner._execute_direct("show version", start_time=time.time())
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_successful_direct_execution(self, mock_ssh_class):
         """Successful direct command returns output."""
         mock_client = MagicMock()
@@ -1156,7 +1162,7 @@ class TestExecuteDirectStartTime:
         assert success is True
         assert "Junos" in stdout
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_nonzero_exit_returns_failure(self, mock_ssh_class):
         """Non-zero exit status returns success=False."""
         mock_client = MagicMock()
@@ -1177,7 +1183,7 @@ class TestExecuteDirectStartTime:
         assert success is False
         assert "command not found" in stderr
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_timeout_exception_returns_failure(self, mock_ssh_class):
         """Socket timeout during exec raises (handled by _execute_command)."""
         mock_client = MagicMock()
@@ -1270,8 +1276,8 @@ class TestRunApplication:
             setattr(args, key, value)
         return args
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_successful_single_host_execution(self, mock_run_single, mock_getpass):
         """Successful single-host single-command execution."""
         mock_getpass.getpass.return_value = "password123"
@@ -1281,7 +1287,7 @@ class TestRunApplication:
         # Should not return False (success)
         assert result is not False
 
-    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
     def test_missing_hostname_returns_false(self, mock_getpass):
         """Missing hostname returns False."""
         mock_getpass.getpass.return_value = "password123"
@@ -1289,7 +1295,7 @@ class TestRunApplication:
         result = AppRunner.run(args)
         assert result is False
 
-    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
     def test_missing_username_returns_false(self, mock_getpass):
         """Missing username returns False."""
         mock_getpass.getpass.return_value = "password123"
@@ -1297,8 +1303,8 @@ class TestRunApplication:
         result = AppRunner.run(args)
         assert result is False
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_invalid_hostname_rejected(self, mock_run, mock_getpass):
         """Invalid hostname is rejected."""
         mock_getpass.getpass.return_value = "password123"
@@ -1307,7 +1313,7 @@ class TestRunApplication:
         result = AppRunner.run(args)
         assert result is False
 
-    @patch("src.ssh.runtime.app_runner.InteractiveMode.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.InteractiveMode.run")
     def test_interactive_mode_dispatches(self, mock_interactive):
         """Interactive flag dispatches to _interactive_mode."""
         mock_interactive.return_value = True
@@ -1316,8 +1322,8 @@ class TestRunApplication:
         mock_interactive.assert_called_once()
         assert mock_interactive.call_count == 1  # WHY: interactive mode must delegate exactly once.
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_invalid_command_rejected(self, mock_run, mock_getpass):
         """Commands with dangerous characters are rejected."""
         mock_getpass.getpass.return_value = "password123"
@@ -1329,9 +1335,9 @@ class TestRunApplication:
         # At minimum, it should not crash
         assert isinstance(result, bool)  # WHY: command validation must return a CLI success flag.
 
-    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
     @patch.object(EnvSshConfigLoader, "load")
-    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_env_config_loading(self, mock_run, mock_env, mock_getpass):
         """Env config is loaded when no_env is False."""
         mock_getpass.getpass.return_value = "password123"
@@ -1349,8 +1355,8 @@ class TestRunApplication:
         mock_env.assert_called_once()
         assert mock_env.call_count == 1  # WHY: environment loading must delegate exactly once.
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.BatchExecutor.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.BatchExecutor.run")
     def test_multiple_commands_single_host(self, mock_multi_cmd, mock_getpass):
         """Multiple commands on single host uses BatchExecutor.run."""
         mock_getpass.getpass.return_value = "password123"
@@ -1362,8 +1368,8 @@ class TestRunApplication:
         assert result is True
         mock_multi_cmd.assert_called_once()
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.MultiHostRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.MultiHostRunner.run")
     @patch.object(EnvSshConfigLoader, "load")
     def test_multiple_hosts_execution(self, mock_env, mock_multi_host, mock_getpass):
         """Multiple hosts uses MultiHostRunner.run."""
@@ -1389,8 +1395,8 @@ class TestRunApplication:
         assert result is True
         mock_multi_host.assert_called_once()
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_no_command_and_no_csv_returns_false(self, mock_run, mock_getpass):
         """No command provided and no CSV file returns False or prompts."""
         mock_getpass.getpass.return_value = "password123"
@@ -1400,8 +1406,8 @@ class TestRunApplication:
         # Should return False since no commands available
         assert result is False
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_debug_mode_enables_tracing(self, mock_run, mock_getpass):
         """Debug mode enables line tracer."""
         mock_getpass.getpass.return_value = "password123"
@@ -1411,8 +1417,8 @@ class TestRunApplication:
         # Should not crash even with debug tracing
         assert isinstance(result, bool)  # WHY: debug tracing must still return a CLI success flag.
 
-    @patch("src.ssh.runtime.app_runner.getpass")
-    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.app_runner.getpass")
+    @patch("src.operations.execution.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_secure_password_prompt(self, mock_run, mock_getpass):
         """Secure flag triggers password prompt."""
         mock_getpass.getpass.return_value = "secure_password"
@@ -1428,10 +1434,10 @@ class TestRunApplication:
 class TestRunMultipleSSHCommandsInteractiveDeep:
     """Deeper tests for InteractiveBatchExecutor.run."""
 
-    @patch("src.ssh.batch.interactive_batch_executor.time")
-    @patch("src.ssh.batch.interactive_batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.time")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
-    @patch("src.ssh.batch.interactive_batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.SshConnector")
     def test_successful_interactive_session(self, mock_connect, mock_disc, mock_dt, mock_time):
         """Successful interactive session with shell commands."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1462,9 +1468,9 @@ class TestRunMultipleSSHCommandsInteractiveDeep:
         )
         assert isinstance(result, bool)
 
-    @patch("src.ssh.batch.interactive_batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
-    @patch("src.ssh.batch.interactive_batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.interactive_batch_executor.SshConnector")
     def test_empty_commands_list(self, mock_connect, mock_disc, mock_dt):
         """Empty commands list still connects and succeeds."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1489,10 +1495,10 @@ class TestRunMultipleSSHCommandsInteractiveDeep:
 class TestRunMultipleSSHCommandsDeep:
     """Deeper tests for BatchExecutor.run."""
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_exception_during_execution(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """Exception during command execution is handled."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1512,10 +1518,10 @@ class TestRunMultipleSSHCommandsDeep:
         assert result is False
         mock_disc.assert_called_once_with()  # Prove cleanup runs after the execution exception.
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_many_commands_all_succeed(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """Multiple commands all succeeding returns True."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1536,10 +1542,10 @@ class TestRunMultipleSSHCommandsDeep:
         assert result is True
         assert mock_exec.call_count == 10
 
-    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch("src.operations.execution.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
-    @patch("src.ssh.batch.batch_executor.SshConnector")
+    @patch("src.operations.execution.ssh.batch.batch_executor.SshConnector")
     def test_empty_output_still_succeeds(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """Commands with empty output still count as successful."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1565,7 +1571,7 @@ class TestRunMultipleSSHCommandsDeep:
 class TestRunSSHCommandsMultiHostDeep:
     """Deeper tests for MultiHostRunner.run."""
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_many_hosts_concurrent(self, mock_on_host):
         """Many hosts execute concurrently with thread pool."""
         hosts = [f"10.0.0.{i}" for i in range(1, 11)]
@@ -1587,7 +1593,7 @@ class TestRunSSHCommandsMultiHostDeep:
         assert result["failed"] == 0
         assert len(result["successful_hosts"]) == 10
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_thread_exception_handled(self, mock_on_host):
         """Exception in thread is caught and reported as failure."""
         mock_on_host.side_effect = RuntimeError("thread crash")
@@ -1606,7 +1612,7 @@ class TestRunSSHCommandsMultiHostDeep:
         assert result["failed"] == 1
         assert "10.0.0.1" in result["failed_hosts"]
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_results_dict_structure(self, mock_on_host):
         """Results dict has expected structure with per-host info."""
         mock_on_host.side_effect = [
@@ -1629,7 +1635,7 @@ class TestRunSSHCommandsMultiHostDeep:
         assert result["results"]["10.0.0.1"]["success"] is True
         assert result["results"]["10.0.0.2"]["success"] is False
 
-    @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
+    @patch("src.operations.execution.ssh.batch.multi_host_runner.HostRunner.run")
     def test_none_hosts_treated_as_empty(self, mock_on_host):
         """None hosts list is treated as empty."""
         result = MultiHostRunner.run(
@@ -1645,7 +1651,7 @@ class TestRunSSHCommandsMultiHostDeep:
 class TestExecuteDirectFallback:
     """Tests for _execute_direct PTY fallback behavior."""
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_pty_failure_falls_back_to_no_pty(self, mock_ssh_class):
         """When PTY exec fails, falls back to non-PTY exec."""
         mock_client = MagicMock()
@@ -1684,9 +1690,9 @@ class TestExecuteDirectFallback:
 class TestInteractiveMode:
     """Tests for _interactive_mode static method."""
 
-    @patch("src.ssh.runtime.interactive_mode.getpass")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_successful_interactive_session(self, mock_run, mock_input, mock_getpass):
         """Successful interactive session with valid inputs."""
         mock_input.side_effect = [
@@ -1704,7 +1710,7 @@ class TestInteractiveMode:
         assert result is True
         mock_run.assert_called_once()
 
-    @patch("src.ssh.runtime.interactive_mode.getpass")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
     def test_empty_password_returns_false(self, mock_input, mock_getpass):
         """Empty password returns False."""
@@ -1717,9 +1723,9 @@ class TestInteractiveMode:
         result = InteractiveMode.run()
         assert result is False
 
-    @patch("src.ssh.runtime.interactive_mode.getpass")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_default_port_and_timeout(self, mock_run, mock_input, mock_getpass):
         """Empty port/timeout uses defaults (22/30)."""
         mock_input.side_effect = [
@@ -1736,9 +1742,9 @@ class TestInteractiveMode:
         result = InteractiveMode.run()
         assert result is True
 
-    @patch("src.ssh.runtime.interactive_mode.getpass")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_invalid_hostname_reprompts(self, mock_run, mock_input, mock_getpass):
         """Invalid hostname re-prompts until valid."""
         mock_input.side_effect = [
@@ -1757,9 +1763,9 @@ class TestInteractiveMode:
         result = InteractiveMode.run()
         assert result is True
 
-    @patch("src.ssh.runtime.interactive_mode.getpass")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
+    @patch("src.operations.execution.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_invalid_username_reprompts(self, mock_run, mock_input, mock_getpass):
         """Invalid username re-prompts until valid."""
         mock_input.side_effect = [

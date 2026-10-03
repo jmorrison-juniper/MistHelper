@@ -6,7 +6,9 @@ import mistapi.device_utils.mxedge as sdk_mxedge  # Import Mist Edge SDK facade.
 import mistapi.device_utils.srx as sdk_srx  # Import SRX SDK facade.
 import mistapi.device_utils.ssr as sdk_ssr  # Import SSR SDK facade.
 
-from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Import the catalog leaf class.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
+    UtilityCatalog,
+)  # Import the catalog leaf class.
 
 
 def test_utility_catalog_covers_sdk_facades_after_exclusions() -> None:

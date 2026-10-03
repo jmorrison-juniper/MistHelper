@@ -10,7 +10,7 @@ Date: 2026-05-26
 
 ## Delegation Integrity
 
-- `MistHelper.py` now binds runtime `PacketCaptureManager` ownership to the extracted canonical implementation from `src/capture/packet_capture.py`.
+- `MistHelper.py` now binds runtime `PacketCaptureManager` ownership to the extracted canonical implementation from `src/operations/execution/capture/packet_capture.py`.
 - `menu_actions` for `134` and `135` still invoke `PacketCaptureManager(...).start_site_packet_capture()` and `PacketCaptureManager(...).start_org_packet_capture()`.
 - This keeps menu orchestration entrypoints stable while removing active duplicate packet-capture logic from the runtime path.
 

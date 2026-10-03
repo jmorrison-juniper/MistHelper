@@ -4,7 +4,7 @@
 
 ## Measured facts of the picker read
 
-- `default_cloud_read` (`src/upgrade_portal/app/routes/select.py`) asks for the
+- `default_cloud_read` (`src/interfaces/portals/upgrade_portal/app/routes/select.py`) asks for the
   first page with a limit of 1,000 records. It then passes that page to
   `collect_pages` for the later pages.
 - `collect_pages` calls the helper `mistapi.get_all` for the later pages. That
@@ -34,7 +34,7 @@
 ## Measured facts of the reconciliation read
 
 - `SiteStatsFirmwareEvidenceReader.read`
-  (`src/upgrade_portal/api/run_controls/routes.py`) passes the first page to
+  (`src/interfaces/portals/upgrade_portal/api/run_controls/routes.py`) passes the first page to
   `mistapi.get_all`. A lost later page leaves some targets with no fresh row.
 - `_target_evidence_row` then fills the running version with the stored
   `version_after`. It sets the task state and the write state to `unknown`.

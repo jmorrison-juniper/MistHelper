@@ -16,7 +16,7 @@ Plan at the end to drive fixes.
 
 | File | Score | Grade | Critical | High | Medium | Low | Total |
 | - | - | - | - | - | - | - | - |
-| src\firmware\firmware_manager.py | 51.0 | F | 0 | 6 | 34 | 42 | 82 |
+| src\operations\execution\firmware\firmware_manager.py | 51.0 | F | 0 | 6 | 34 | 42 | 82 |
 
 ## Machine-Readable Summary
 
@@ -50,7 +50,7 @@ Plan at the end to drive fixes.
 }
 ```
 
-## File: src\firmware\firmware_manager.py
+## File: src\operations\execution\firmware\firmware_manager.py
 
 - **Score**: 51.0 / 100
 - **Grade**: F
@@ -185,420 +185,420 @@ Plan at the end to drive fixes.
 
 ### Phase: High (6 task(s))
 
-- [ ] **CMP-001** `src\firmware\firmware_manager.py:9` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-001** `src\operations\execution\firmware\firmware_manager.py:9` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 6.3%; uncommented lines: 9, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
-  - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-002** `src\firmware\firmware_manager.py:59` - STRUCT-PARAMS (Structure)
+  - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-002** `src\operations\execution\firmware\firmware_manager.py:59` - STRUCT-PARAMS (Structure)
   - Symbol: `__init__`
   - Problem: Function takes 8 parameters (limit 5).
   - Fix: Group related parameters into a dataclass/config object or split the function.
-  - Done when: analyzer reports no STRUCT-PARAMS for `__init__` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-003** `src\firmware\firmware_manager.py:182` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-PARAMS for `__init__` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-003** `src\operations\execution\firmware\firmware_manager.py:182` - STRUCT-LENGTH (Structure)
   - Symbol: `check_firmware_upgrade_status`
   - Problem: Function spans 61 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `check_firmware_upgrade_status` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-004** `src\firmware\firmware_manager.py:244` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `check_firmware_upgrade_status` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-004** `src\operations\execution\firmware\firmware_manager.py:244` - STRUCT-LENGTH (Structure)
   - Symbol: `_continuous_monitoring_mode`
   - Problem: Function spans 74 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_continuous_monitoring_mode` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-005** `src\firmware\firmware_manager.py:522` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_continuous_monitoring_mode` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-005** `src\operations\execution\firmware\firmware_manager.py:522` - STRUCT-LENGTH (Structure)
   - Symbol: `_upgrade_ap_firmware_by_gateway_template`
   - Problem: Function spans 69 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_ap_firmware_by_gateway_template` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-006** `src\firmware\firmware_manager.py:1252` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_ap_firmware_by_gateway_template` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-006** `src\operations\execution\firmware\firmware_manager.py:1252` - STRUCT-LENGTH (Structure)
   - Symbol: `_execute_msp_upgrade_plan`
   - Problem: Function spans 97 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_msp_upgrade_plan` in `src\firmware\firmware_manager.py`.
+  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_msp_upgrade_plan` in `src\operations\execution\firmware\firmware_manager.py`.
 
 ### Phase: Medium (34 task(s))
 
-- [ ] **CMP-007** `src\firmware\firmware_manager.py:59` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-007** `src\operations\execution\firmware\firmware_manager.py:59` - STRUCT-LENGTH (Structure)
   - Symbol: `__init__`
   - Problem: Function spans 44 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `__init__` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-008** `src\firmware\firmware_manager.py:120` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `__init__` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-008** `src\operations\execution\firmware\firmware_manager.py:120` - STRUCT-LENGTH (Structure)
   - Symbol: `_is_firmware_downgrade`
   - Problem: Function spans 36 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_is_firmware_downgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-009** `src\firmware\firmware_manager.py:383` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_is_firmware_downgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-009** `src\operations\execution\firmware\firmware_manager.py:383` - STRUCT-LENGTH (Structure)
   - Symbol: `_show_org_level_upgrade_jobs`
   - Problem: Function spans 49 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_show_org_level_upgrade_jobs` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-010** `src\firmware\firmware_manager.py:631` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_show_org_level_upgrade_jobs` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-010** `src\operations\execution\firmware\firmware_manager.py:631` - STRUCT-LENGTH (Structure)
   - Symbol: `_load_template_sites_mapping`
   - Problem: Function spans 30 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_load_template_sites_mapping` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-011** `src\firmware\firmware_manager.py:662` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_load_template_sites_mapping` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-011** `src\operations\execution\firmware\firmware_manager.py:662` - STRUCT-LENGTH (Structure)
   - Symbol: `_prompt_template_selection`
   - Problem: Function spans 56 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_prompt_template_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-012** `src\firmware\firmware_manager.py:719` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_prompt_template_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-012** `src\operations\execution\firmware\firmware_manager.py:719` - STRUCT-LENGTH (Structure)
   - Symbol: `_execute_template_based_upgrade`
   - Problem: Function spans 30 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_template_based_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-013** `src\firmware\firmware_manager.py:750` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_template_based_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-013** `src\operations\execution\firmware\firmware_manager.py:750` - STRUCT-LENGTH (Structure)
   - Symbol: `execute_firmware_upgrade_with_mode_selection`
   - Problem: Function spans 60 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `execute_firmware_upgrade_with_mode_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-014** `src\firmware\firmware_manager.py:750` - STRUCT-NESTING (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `execute_firmware_upgrade_with_mode_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-014** `src\operations\execution\firmware\firmware_manager.py:750` - STRUCT-NESTING (Structure)
   - Symbol: `execute_firmware_upgrade_with_mode_selection`
   - Problem: Maximum nesting depth is 5 (limit 4).
   - Fix: Flatten nesting with early returns, guard clauses, or extracted helper methods.
-  - Done when: analyzer reports no STRUCT-NESTING for `execute_firmware_upgrade_with_mode_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-015** `src\firmware\firmware_manager.py:874` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-NESTING for `execute_firmware_upgrade_with_mode_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-015** `src\operations\execution\firmware\firmware_manager.py:874` - STRUCT-LENGTH (Structure)
   - Symbol: `_execute_msp_multi_org_upgrade`
   - Problem: Function spans 45 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_msp_multi_org_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-016** `src\firmware\firmware_manager.py:920` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_msp_multi_org_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-016** `src\operations\execution\firmware\firmware_manager.py:920` - STRUCT-LENGTH (Structure)
   - Symbol: `_select_msps_for_upgrade`
   - Problem: Function spans 55 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_select_msps_for_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-017** `src\firmware\firmware_manager.py:992` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_select_msps_for_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-017** `src\operations\execution\firmware\firmware_manager.py:992` - STRUCT-LENGTH (Structure)
   - Symbol: `_select_orgs_for_upgrade`
   - Problem: Function spans 59 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_select_orgs_for_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-018** `src\firmware\firmware_manager.py:1100` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_select_orgs_for_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-018** `src\operations\execution\firmware\firmware_manager.py:1100` - STRUCT-LENGTH (Structure)
   - Symbol: `_run_site_selection_loop`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_run_site_selection_loop` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-019** `src\firmware\firmware_manager.py:1127` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_run_site_selection_loop` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-019** `src\operations\execution\firmware\firmware_manager.py:1127` - STRUCT-LENGTH (Structure)
   - Symbol: `_select_sites_for_org_upgrade`
   - Problem: Function spans 33 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_select_sites_for_org_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-020** `src\firmware\firmware_manager.py:1190` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_select_sites_for_org_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-020** `src\operations\execution\firmware\firmware_manager.py:1190` - STRUCT-LENGTH (Structure)
   - Symbol: `_parse_selection_input`
   - Problem: Function spans 27 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_parse_selection_input` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-021** `src\firmware\firmware_manager.py:1218` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_parse_selection_input` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-021** `src\operations\execution\firmware\firmware_manager.py:1218` - STRUCT-LENGTH (Structure)
   - Symbol: `_display_upgrade_plan_summary`
   - Problem: Function spans 33 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_display_upgrade_plan_summary` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-022** `src\firmware\firmware_manager.py:1415` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_display_upgrade_plan_summary` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-022** `src\operations\execution\firmware\firmware_manager.py:1415` - STRUCT-LENGTH (Structure)
   - Symbol: `_bulk_upgrade_ap_firmware_by_site`
   - Problem: Function spans 37 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_bulk_upgrade_ap_firmware_by_site` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-023** `src\firmware\firmware_manager.py:1488` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_bulk_upgrade_ap_firmware_by_site` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-023** `src\operations\execution\firmware\firmware_manager.py:1488` - STRUCT-LENGTH (Structure)
   - Symbol: `execute_switch_firmware_upgrade_with_mode_selection`
   - Problem: Function spans 48 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `execute_switch_firmware_upgrade_with_mode_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-024** `src\firmware\firmware_manager.py:1537` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `execute_switch_firmware_upgrade_with_mode_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-024** `src\operations\execution\firmware\firmware_manager.py:1537` - STRUCT-LENGTH (Structure)
   - Symbol: `_bulk_upgrade_switch_firmware_by_site`
   - Problem: Function spans 29 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_bulk_upgrade_switch_firmware_by_site` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-025** `src\firmware\firmware_manager.py:1567` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_bulk_upgrade_switch_firmware_by_site` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-025** `src\operations\execution\firmware\firmware_manager.py:1567` - STRUCT-LENGTH (Structure)
   - Symbol: `_upgrade_switch_firmware_by_gateway_template`
   - Problem: Function spans 53 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_switch_firmware_by_gateway_template` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-026** `src\firmware\firmware_manager.py:1633` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_switch_firmware_by_gateway_template` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-026** `src\operations\execution\firmware\firmware_manager.py:1633` - STRUCT-LENGTH (Structure)
   - Symbol: `execute_ssr_firmware_upgrade_with_mode_selection`
   - Problem: Function spans 59 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `execute_ssr_firmware_upgrade_with_mode_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-027** `src\firmware\firmware_manager.py:1740` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `execute_ssr_firmware_upgrade_with_mode_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-027** `src\operations\execution\firmware\firmware_manager.py:1740` - STRUCT-LENGTH (Structure)
   - Symbol: `_parse_ssr_site_selection`
   - Problem: Function spans 28 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_parse_ssr_site_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-028** `src\firmware\firmware_manager.py:1740` - STRUCT-NESTING (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_parse_ssr_site_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-028** `src\operations\execution\firmware\firmware_manager.py:1740` - STRUCT-NESTING (Structure)
   - Symbol: `_parse_ssr_site_selection`
   - Problem: Maximum nesting depth is 5 (limit 4).
   - Fix: Flatten nesting with early returns, guard clauses, or extracted helper methods.
-  - Done when: analyzer reports no STRUCT-NESTING for `_parse_ssr_site_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-029** `src\firmware\firmware_manager.py:1871` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-NESTING for `_parse_ssr_site_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-029** `src\operations\execution\firmware\firmware_manager.py:1871` - STRUCT-LENGTH (Structure)
   - Symbol: `_get_ssr_available_versions`
   - Problem: Function spans 33 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_get_ssr_available_versions` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-030** `src\firmware\firmware_manager.py:1947` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_get_ssr_available_versions` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-030** `src\operations\execution\firmware\firmware_manager.py:1947` - STRUCT-LENGTH (Structure)
   - Symbol: `_select_ssr_version_from_list`
   - Problem: Function spans 27 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_select_ssr_version_from_list` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-031** `src\firmware\firmware_manager.py:1993` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_select_ssr_version_from_list` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-031** `src\operations\execution\firmware\firmware_manager.py:1993` - STRUCT-LENGTH (Structure)
   - Symbol: `_confirm_ssr_upgrade`
   - Problem: Function spans 39 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_confirm_ssr_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-032** `src\firmware\firmware_manager.py:2055` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_confirm_ssr_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-032** `src\operations\execution\firmware\firmware_manager.py:2055` - STRUCT-LENGTH (Structure)
   - Symbol: `_load_org_ssr_inventory`
   - Problem: Function spans 31 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_load_org_ssr_inventory` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-033** `src\firmware\firmware_manager.py:2087` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_load_org_ssr_inventory` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-033** `src\operations\execution\firmware\firmware_manager.py:2087` - STRUCT-LENGTH (Structure)
   - Symbol: `_discover_site_ssr_devices`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_discover_site_ssr_devices` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-034** `src\firmware\firmware_manager.py:2114` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_discover_site_ssr_devices` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-034** `src\operations\execution\firmware\firmware_manager.py:2114` - STRUCT-LENGTH (Structure)
   - Symbol: `_validate_ssr_devices_for_version`
   - Problem: Function spans 35 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_validate_ssr_devices_for_version` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-035** `src\firmware\firmware_manager.py:2150` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_validate_ssr_devices_for_version` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-035** `src\operations\execution\firmware\firmware_manager.py:2150` - STRUCT-LENGTH (Structure)
   - Symbol: `_handle_ssr_upgrade_error_response`
   - Problem: Function spans 40 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_handle_ssr_upgrade_error_response` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-036** `src\firmware\firmware_manager.py:2191` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_handle_ssr_upgrade_error_response` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-036** `src\operations\execution\firmware\firmware_manager.py:2191` - STRUCT-LENGTH (Structure)
   - Symbol: `_call_ssr_upgrade_api`
   - Problem: Function spans 34 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_call_ssr_upgrade_api` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-037** `src\firmware\firmware_manager.py:2226` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_call_ssr_upgrade_api` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-037** `src\operations\execution\firmware\firmware_manager.py:2226` - STRUCT-LENGTH (Structure)
   - Symbol: `_process_ssr_site_upgrade`
   - Problem: Function spans 50 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_process_ssr_site_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-038** `src\firmware\firmware_manager.py:2296` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_process_ssr_site_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-038** `src\operations\execution\firmware\firmware_manager.py:2296` - STRUCT-LENGTH (Structure)
   - Symbol: `_run_ssr_site_upgrades`
   - Problem: Function spans 29 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_run_ssr_site_upgrades` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-039** `src\firmware\firmware_manager.py:2326` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_run_ssr_site_upgrades` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-039** `src\operations\execution\firmware\firmware_manager.py:2326` - STRUCT-LENGTH (Structure)
   - Symbol: `_bulk_upgrade_ssr_firmware_by_site`
   - Problem: Function spans 56 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_bulk_upgrade_ssr_firmware_by_site` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-040** `src\firmware\firmware_manager.py:2383` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_bulk_upgrade_ssr_firmware_by_site` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-040** `src\operations\execution\firmware\firmware_manager.py:2383` - STRUCT-LENGTH (Structure)
   - Symbol: `_upgrade_ssr_firmware_by_gateway_template`
   - Problem: Function spans 57 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_ssr_firmware_by_gateway_template` in `src\firmware\firmware_manager.py`.
+  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_ssr_firmware_by_gateway_template` in `src\operations\execution\firmware\firmware_manager.py`.
 
 ### Phase: Low (42 task(s))
 
-- [ ] **CMP-041** `src\firmware\firmware_manager.py:104` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-041** `src\operations\execution\firmware\firmware_manager.py:104` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_compare_version_parts`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_compare_version_parts` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-042** `src\firmware\firmware_manager.py:104` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_compare_version_parts` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-042** `src\operations\execution\firmware\firmware_manager.py:104` - STRUCT-BLOCKS (Structure)
   - Symbol: `_compare_version_parts`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_compare_version_parts` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-043** `src\firmware\firmware_manager.py:120` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_compare_version_parts` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-043** `src\operations\execution\firmware\firmware_manager.py:120` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_is_firmware_downgrade`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_is_firmware_downgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-044** `src\firmware\firmware_manager.py:182` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_is_firmware_downgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-044** `src\operations\execution\firmware\firmware_manager.py:182` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `check_firmware_upgrade_status`
   - Problem: Cyclomatic complexity is 9 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `check_firmware_upgrade_status` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-045** `src\firmware\firmware_manager.py:182` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `check_firmware_upgrade_status` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-045** `src\operations\execution\firmware\firmware_manager.py:182` - STRUCT-BLOCKS (Structure)
   - Symbol: `check_firmware_upgrade_status`
   - Problem: Function has 7 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `check_firmware_upgrade_status` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-046** `src\firmware\firmware_manager.py:244` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `check_firmware_upgrade_status` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-046** `src\operations\execution\firmware\firmware_manager.py:244` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_continuous_monitoring_mode`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_continuous_monitoring_mode` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-047** `src\firmware\firmware_manager.py:383` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_continuous_monitoring_mode` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-047** `src\operations\execution\firmware\firmware_manager.py:383` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_show_org_level_upgrade_jobs`
   - Problem: Cyclomatic complexity is 9 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_show_org_level_upgrade_jobs` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-048** `src\firmware\firmware_manager.py:522` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_show_org_level_upgrade_jobs` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-048** `src\operations\execution\firmware\firmware_manager.py:522` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_upgrade_ap_firmware_by_gateway_template`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_upgrade_ap_firmware_by_gateway_template` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-049** `src\firmware\firmware_manager.py:631` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_upgrade_ap_firmware_by_gateway_template` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-049** `src\operations\execution\firmware\firmware_manager.py:631` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_load_template_sites_mapping`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_load_template_sites_mapping` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-050** `src\firmware\firmware_manager.py:662` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_load_template_sites_mapping` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-050** `src\operations\execution\firmware\firmware_manager.py:662` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_prompt_template_selection`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_prompt_template_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-051** `src\firmware\firmware_manager.py:662` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_prompt_template_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-051** `src\operations\execution\firmware\firmware_manager.py:662` - STRUCT-BLOCKS (Structure)
   - Symbol: `_prompt_template_selection`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_prompt_template_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-052** `src\firmware\firmware_manager.py:750` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_prompt_template_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-052** `src\operations\execution\firmware\firmware_manager.py:750` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `execute_firmware_upgrade_with_mode_selection`
   - Problem: Cyclomatic complexity is 9 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `execute_firmware_upgrade_with_mode_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-053** `src\firmware\firmware_manager.py:750` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `execute_firmware_upgrade_with_mode_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-053** `src\operations\execution\firmware\firmware_manager.py:750` - STRUCT-BLOCKS (Structure)
   - Symbol: `execute_firmware_upgrade_with_mode_selection`
   - Problem: Function has 7 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `execute_firmware_upgrade_with_mode_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-054** `src\firmware\firmware_manager.py:874` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `execute_firmware_upgrade_with_mode_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-054** `src\operations\execution\firmware\firmware_manager.py:874` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_execute_msp_multi_org_upgrade`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_execute_msp_multi_org_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-055** `src\firmware\firmware_manager.py:920` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_execute_msp_multi_org_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-055** `src\operations\execution\firmware\firmware_manager.py:920` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_select_msps_for_upgrade`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_msps_for_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-056** `src\firmware\firmware_manager.py:920` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_msps_for_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-056** `src\operations\execution\firmware\firmware_manager.py:920` - STRUCT-BLOCKS (Structure)
   - Symbol: `_select_msps_for_upgrade`
   - Problem: Function has 7 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_select_msps_for_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-057** `src\firmware\firmware_manager.py:976` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_select_msps_for_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-057** `src\operations\execution\firmware\firmware_manager.py:976` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_fetch_msp_org_list`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_msp_org_list` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-058** `src\firmware\firmware_manager.py:992` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_msp_org_list` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-058** `src\operations\execution\firmware\firmware_manager.py:992` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_select_orgs_for_upgrade`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_orgs_for_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-059** `src\firmware\firmware_manager.py:992` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_orgs_for_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-059** `src\operations\execution\firmware\firmware_manager.py:992` - STRUCT-BLOCKS (Structure)
   - Symbol: `_select_orgs_for_upgrade`
   - Problem: Function has 8 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_select_orgs_for_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-060** `src\firmware\firmware_manager.py:1052` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_select_orgs_for_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-060** `src\operations\execution\firmware\firmware_manager.py:1052` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_fetch_and_validate_org_sites`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_and_validate_org_sites` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-061** `src\firmware\firmware_manager.py:1084` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_and_validate_org_sites` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-061** `src\operations\execution\firmware\firmware_manager.py:1084` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_handle_site_page_input`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_handle_site_page_input` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-062** `src\firmware\firmware_manager.py:1100` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_handle_site_page_input` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-062** `src\operations\execution\firmware\firmware_manager.py:1100` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_run_site_selection_loop`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_run_site_selection_loop` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-063** `src\firmware\firmware_manager.py:1100` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_run_site_selection_loop` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-063** `src\operations\execution\firmware\firmware_manager.py:1100` - STRUCT-BLOCKS (Structure)
   - Symbol: `_run_site_selection_loop`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_run_site_selection_loop` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-064** `src\firmware\firmware_manager.py:1161` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_run_site_selection_loop` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-064** `src\operations\execution\firmware\firmware_manager.py:1161` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_range_token`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_range_token` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-065** `src\firmware\firmware_manager.py:1161` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_range_token` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-065** `src\operations\execution\firmware\firmware_manager.py:1161` - STRUCT-BLOCKS (Structure)
   - Symbol: `_parse_range_token`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_range_token` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-066** `src\firmware\firmware_manager.py:1252` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_range_token` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-066** `src\operations\execution\firmware\firmware_manager.py:1252` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_execute_msp_upgrade_plan`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_execute_msp_upgrade_plan` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-067** `src\firmware\firmware_manager.py:1350` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_execute_msp_upgrade_plan` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-067** `src\operations\execution\firmware\firmware_manager.py:1350` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_split_results_by_status`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_split_results_by_status` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-068** `src\firmware\firmware_manager.py:1364` - CONV-NAME (Conventions)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_split_results_by_status` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-068** `src\operations\execution\firmware\firmware_manager.py:1364` - CONV-NAME (Conventions)
   - Symbol: `r`
   - Problem: Loop variable 'r' is a single letter.
   - Fix: Use a full descriptive name, e.g. 'for device in devices' not 'for d in devices'.
-  - Done when: analyzer reports no CONV-NAME for `r` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-069** `src\firmware\firmware_manager.py:1373` - CONV-NAME (Conventions)
+  - Done when: analyzer reports no CONV-NAME for `r` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-069** `src\operations\execution\firmware\firmware_manager.py:1373` - CONV-NAME (Conventions)
   - Symbol: `r`
   - Problem: Loop variable 'r' is a single letter.
   - Fix: Use a full descriptive name, e.g. 'for device in devices' not 'for d in devices'.
-  - Done when: analyzer reports no CONV-NAME for `r` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-070** `src\firmware\firmware_manager.py:1381` - CONV-NAME (Conventions)
+  - Done when: analyzer reports no CONV-NAME for `r` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-070** `src\operations\execution\firmware\firmware_manager.py:1381` - CONV-NAME (Conventions)
   - Symbol: `r`
   - Problem: Loop variable 'r' is a single letter.
   - Fix: Use a full descriptive name, e.g. 'for device in devices' not 'for d in devices'.
-  - Done when: analyzer reports no CONV-NAME for `r` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-071** `src\firmware\firmware_manager.py:1740` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no CONV-NAME for `r` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-071** `src\operations\execution\firmware\firmware_manager.py:1740` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_ssr_site_selection`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_ssr_site_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-072** `src\firmware\firmware_manager.py:1740` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_ssr_site_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-072** `src\operations\execution\firmware\firmware_manager.py:1740` - STRUCT-BLOCKS (Structure)
   - Symbol: `_parse_ssr_site_selection`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_ssr_site_selection` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-073** `src\firmware\firmware_manager.py:1871` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_ssr_site_selection` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-073** `src\operations\execution\firmware\firmware_manager.py:1871` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_get_ssr_available_versions`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_ssr_available_versions` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-074** `src\firmware\firmware_manager.py:1905` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_ssr_available_versions` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-074** `src\operations\execution\firmware\firmware_manager.py:1905` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_collect_ssr_inventory_data`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_collect_ssr_inventory_data` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-075** `src\firmware\firmware_manager.py:1947` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_collect_ssr_inventory_data` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-075** `src\operations\execution\firmware\firmware_manager.py:1947` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_select_ssr_version_from_list`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_ssr_version_from_list` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-076** `src\firmware\firmware_manager.py:2055` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_ssr_version_from_list` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-076** `src\operations\execution\firmware\firmware_manager.py:2055` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_load_org_ssr_inventory`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_load_org_ssr_inventory` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-077** `src\firmware\firmware_manager.py:2087` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_load_org_ssr_inventory` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-077** `src\operations\execution\firmware\firmware_manager.py:2087` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_discover_site_ssr_devices`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_discover_site_ssr_devices` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-078** `src\firmware\firmware_manager.py:2150` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_discover_site_ssr_devices` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-078** `src\operations\execution\firmware\firmware_manager.py:2150` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_handle_ssr_upgrade_error_response`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_handle_ssr_upgrade_error_response` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-079** `src\firmware\firmware_manager.py:2150` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_handle_ssr_upgrade_error_response` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-079** `src\operations\execution\firmware\firmware_manager.py:2150` - STRUCT-BLOCKS (Structure)
   - Symbol: `_handle_ssr_upgrade_error_response`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_handle_ssr_upgrade_error_response` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-080** `src\firmware\firmware_manager.py:2226` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_handle_ssr_upgrade_error_response` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-080** `src\operations\execution\firmware\firmware_manager.py:2226` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_process_ssr_site_upgrade`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_process_ssr_site_upgrade` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-081** `src\firmware\firmware_manager.py:2326` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_process_ssr_site_upgrade` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-081** `src\operations\execution\firmware\firmware_manager.py:2326` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_bulk_upgrade_ssr_firmware_by_site`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_bulk_upgrade_ssr_firmware_by_site` in `src\firmware\firmware_manager.py`.
-- [ ] **CMP-082** `src\firmware\firmware_manager.py:2326` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_bulk_upgrade_ssr_firmware_by_site` in `src\operations\execution\firmware\firmware_manager.py`.
+- [ ] **CMP-082** `src\operations\execution\firmware\firmware_manager.py:2326` - STRUCT-BLOCKS (Structure)
   - Symbol: `_bulk_upgrade_ssr_firmware_by_site`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_bulk_upgrade_ssr_firmware_by_site` in `src\firmware\firmware_manager.py`.
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_bulk_upgrade_ssr_firmware_by_site` in `src\operations\execution\firmware\firmware_manager.py`.
 

@@ -22,10 +22,10 @@
 ```powershell
 # Quality gates (must all pass)
 python -m py_compile MistHelper.py
-python -m py_compile src/db/router.py
-python -m py_compile src/db/redis_writer.py
-python -m ruff check MistHelper.py src/db/
-python -m black --check MistHelper.py src/db/
+python -m py_compile src/foundation/persistence/db/router.py
+python -m py_compile src/foundation/persistence/db/redis_writer.py
+python -m ruff check MistHelper.py src/foundation/persistence/db/
+python -m black --check MistHelper.py src/foundation/persistence/db/
 
 # Smoke test (menu 11 = Org Sites → natural_pk → ArangoDB raw)
 python MistHelper.py --menu 11
@@ -46,9 +46,9 @@ redis-cli -h localhost -p 6379 -a changeme JSON.GET "searchOrgDeviceEvents:examp
 | File | Changes | Task |
 |---|---|---|
 | `MistHelper.py` | Add `raw_data` param to `write_with_format_selection`, update callers, reclassify strategies | T1, T4 |
-| `src/db/router.py` | Update routing constants, add dual-write dispatch, add `timeseries_pk` routing | T2, T3 |
-| `src/db/redis_writer.py` | Add `RedisJSONWriter` class, keep `RedisTimeSeriesWriter` unchanged | T2 |
-| `src/db/__init__.py` | Export `RedisJSONWriter` | T2 |
+| `src/foundation/persistence/db/router.py` | Update routing constants, add dual-write dispatch, add `timeseries_pk` routing | T2, T3 |
+| `src/foundation/persistence/db/redis_writer.py` | Add `RedisJSONWriter` class, keep `RedisTimeSeriesWriter` unchanged | T2 |
+| `src/foundation/persistence/db/__init__.py` | Export `RedisJSONWriter` | T2 |
 
 ## Task Execution Order
 

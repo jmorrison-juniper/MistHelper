@@ -57,7 +57,7 @@ new class. Research R8 states the reason.
 
 ## Module Design
 
-### `src/marvis/actions/selection.py`
+### `src/mist/intelligence/marvis/actions/selection.py`
 
 | Item | Change |
 | - | - |
@@ -72,7 +72,7 @@ new class. Research R8 states the reason.
 | `MarvisFilterPrompts.ask_mode` | Log the mode 4 line. Change the prompt text to name four modes. |
 | `MarvisFilterPrompts._log_table` | Add the Closed column. Fit each column to its widest cell, and move the Name column to the end. See research R9. |
 
-### `src/marvis/actions/operation.py`
+### `src/mist/intelligence/marvis/actions/operation.py`
 
 | Item | Change |
 | - | - |

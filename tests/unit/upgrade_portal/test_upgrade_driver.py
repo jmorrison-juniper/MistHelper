@@ -21,11 +21,11 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app import config
-from src.upgrade_portal.runtime.identity import SessionOwner
-from src.upgrade_portal.runtime.lock import LockRecord, ReleaseOutcome
-from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
-from src.upgrade_portal.upgrade import driver, phase_gate
+from src.interfaces.portals.upgrade_portal.app import config
+from src.interfaces.portals.upgrade_portal.runtime.identity import SessionOwner
+from src.interfaces.portals.upgrade_portal.runtime.lock import LockRecord, ReleaseOutcome
+from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
+from src.interfaces.portals.upgrade_portal.upgrade import driver, phase_gate
 
 RUN_ID = "run-" + "a" * 32
 LOCK_KEY = "misthelper:lock:site:org-1:site-1"
@@ -681,7 +681,7 @@ class TestTrackerPath:
         root = driver.data_root()
         assert root.is_absolute()
         assert root.name == "data"
-        assert (root.parent / "src" / "upgrade_portal").is_dir()
+        assert (root.parent / "src" / "interfaces" / "portals" / "upgrade_portal").is_dir()
 
     def test_a_directory_in_the_name_cannot_escape(self, tmp_path: Path) -> None:
         """A name that holds a directory part still lands in the data directory.
@@ -963,7 +963,7 @@ class TestDiscardedWrites:
         """
         parts["store"].fail_writes = True
         record = make_record()
-        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.ERROR, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             parts["driver"]._save(record)
         assert record["state"] == RunState.FAILED.value
         assert "did not reach the store" in record["error"]["message"]
@@ -986,7 +986,7 @@ class TestDiscardedWrites:
         parts["store"].fail_writes = True
         record = make_record()
         parts["driver"]._save(record)
-        with caplog.at_level(logging.WARNING, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.WARNING, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             parts["driver"]._save(record)  # Must return quietly, not raise.
         assert record["state"] == RunState.FAILED.value
         assert "already holds a final state" in caplog.text
@@ -1001,7 +1001,7 @@ class TestDiscardedWrites:
             caplog: The pytest log recorder.
         """
         record = make_record()
-        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.ERROR, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             parts["driver"]._save(record)
         assert record["state"] == RunState.AWAITING_CONFIRMATION.value
         assert caplog.text == ""
@@ -1025,7 +1025,7 @@ class TestDiscardedWrites:
             raise OSError("No space left on device")
 
         monkeypatch.setattr(driver, "_replace_tracker", raise_disk_fault)
-        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.ERROR, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             result = driver.write_tracker(make_record(), "t1", root=tmp_path)
         assert result is None
         assert "could not write the upgrade tracker" in caplog.text
@@ -1044,7 +1044,7 @@ class TestDiscardedWrites:
             caplog: The pytest log recorder.
         """
         monkeypatch.setattr(driver, "write_tracker", lambda *args, **kwargs: None)
-        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.ERROR, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             final = parts["driver"].run(make_record())
         assert final["state"] == RunState.COMPLETE.value
         assert "reached the cloud, but the upgrade tracker did not record it" in caplog.text
@@ -1656,7 +1656,7 @@ class TestSiteLockRelease:
         fault = ConnectionError("redis://portal:hunter2@lock-store.internal:6379/0")
         release = RecordingReleaser(fault=fault)
 
-        with caplog.at_level(logging.WARNING, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.WARNING, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             final = with_lock(parts, release).run(make_record())
 
         assert final["state"] == RunState.COMPLETE.value
@@ -1684,7 +1684,7 @@ class TestSiteLockRelease:
         record = make_record()
         record["state"] = RunState.COMPLETE.value
 
-        with caplog.at_level(logging.WARNING, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.WARNING, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             parts["driver"]._free_lock(record)
 
         assert RUN_ID in caplog.text
@@ -1709,7 +1709,7 @@ class TestSiteLockRelease:
         record = make_record()
         record["state"] = RunState.UPGRADE_SUBMITTING.value
 
-        with caplog.at_level(logging.WARNING, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.WARNING, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             parts["driver"]._free_lock(record)
 
         assert caplog.text == ""
@@ -1883,7 +1883,7 @@ class TestPostCheckModeSeam:
             parts: The doubles and the driver.
             caplog: The pytest log recorder.
         """
-        with caplog.at_level(logging.INFO, logger="src.upgrade_portal.upgrade.driver"):
+        with caplog.at_level(logging.INFO, logger="src.interfaces.portals.upgrade_portal.upgrade.driver"):
             with_mode(parts, driver.POST_CHECK_MANUAL).run(make_record())
         held = [line for line in caplog.text.splitlines() if "holds the post-check capture" in line]
         assert len(held) == 1

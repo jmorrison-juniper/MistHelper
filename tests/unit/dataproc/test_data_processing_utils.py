@@ -1,6 +1,6 @@
-"""Wave 6 P2 coverage for src.data.data_processing_utils.DataProcessingUtils.
+"""Wave 6 P2 coverage for src.foundation.models.data.data_processing_utils.DataProcessingUtils.
 
-Imports the real class from src.data.data_processing_utils (pure module, no side
+Imports the real class from src.foundation.models.data.data_processing_utils (pure module, no side
 effects) to exercise the branches missed by the existing ``tests/unit/test_data_processing.py``
 (which duplicates the functions inline per R1). All tests are pure Python -- no
 mocks are required because DataProcessingUtils has zero runtime dependencies.
@@ -17,8 +17,10 @@ from typing import Any  # WHY: Any typing for the intentionally mixed test input
 
 import pytest  # WHY: assert the narrowed parse handlers let programmer errors propagate.
 
-from src.data import data_processing_utils as data_processing_utils_module  # WHY: patch parser collaborators.
-from src.data.data_processing_utils import DataProcessingUtils  # Real class under test.
+from src.foundation.models.data import (
+    data_processing_utils as data_processing_utils_module,
+)  # WHY: patch parser collaborators.
+from src.foundation.models.data.data_processing_utils import DataProcessingUtils  # Real class under test.
 
 
 class TestFlattenDict:

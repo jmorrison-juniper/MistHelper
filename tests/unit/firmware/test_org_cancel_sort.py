@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from src.firmware.org_cancel_sort import UNCONFIRMED_TEXT, OrgCancelSort, OrgRebootLists
-from src.firmware.org_upgrade_service import OrgUpgradeResult
+from src.operations.execution.firmware.org_cancel_sort import UNCONFIRMED_TEXT, OrgCancelSort, OrgRebootLists
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
 
 ORG_ID = "11111111-1111-1111-1111-111111111111"  # The organization of each child job.
 SITE_ONE = "22222222-2222-2222-2222-222222222222"  # The first site of the child job.

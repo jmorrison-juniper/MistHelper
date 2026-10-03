@@ -40,8 +40,8 @@ SDK pagination, flattening, and multi-backend export flow.
 ## Project Structure
 
 ```text
-src/export/org_search_exporter.py
-src/utils/operation_registry.py
+src/operations/exporting/export/org_search_exporter.py
+src/foundation/support/utils/operation_registry.py
 MistHelper.py
 tests/unit/export/test_org_search_exporter.py
 README.md

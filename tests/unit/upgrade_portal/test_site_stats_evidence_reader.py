@@ -8,9 +8,15 @@ from typing import Any  # WHY: the SDK test seam accepts a token-bearing session
 import pytest  # WHY: patch the SDK boundary without network access.
 from mistapi.__api_response import APIResponse  # WHY: the reader receives the real SDK answer type.
 
-from src.firmware.running_version import DEFAULT_STATS_PAGE_LIMIT  # WHY: verify the bounded page size.
-from src.upgrade_portal.api.run_controls import routes  # WHY: patch the exact module used by production.
-from src.upgrade_portal.api.run_controls.routes import SiteStatsFirmwareEvidenceReader  # WHY: exercise the reader.
+from src.interfaces.portals.upgrade_portal.api.run_controls import (
+    routes,
+)  # WHY: patch the exact module used by production.
+from src.interfaces.portals.upgrade_portal.api.run_controls.routes import (
+    SiteStatsFirmwareEvidenceReader,
+)  # WHY: exercise the reader.
+from src.operations.execution.firmware.running_version import (
+    DEFAULT_STATS_PAGE_LIMIT,
+)  # WHY: verify the bounded page size.
 from tests.support.sdk_pages import JSON_TYPE, build_sdk_answer  # WHY: build the real SDK answer (issue #3438).
 
 STATS_URL = "https://api.mist.com/api/v1/sites/site-one/stats/devices?type=all"  # WHY: the SDK keeps the address.

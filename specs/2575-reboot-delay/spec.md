@@ -4,7 +4,7 @@
 **Feature Branch**: `fix/2575-reboot-delay`
 **Created**: 2026-09-16
 **Status**: Specified
-**Application**: `src/upgrade_portal`
+**Application**: `src/interfaces/portals/upgrade_portal`
 
 ## Purpose
 

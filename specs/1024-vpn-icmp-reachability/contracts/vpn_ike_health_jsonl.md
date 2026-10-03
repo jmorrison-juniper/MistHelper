@@ -1,7 +1,7 @@
 # Contract: VPN IKE Health JSONL Telemetry (US3, optional in-scope)
 
 **Feature**: 1024-vpn-icmp-reachability
-**Module**: `src/utils/zscaler_probe.py`
+**Module**: `src/foundation/support/utils/zscaler_probe.py`
 **Kind**: Append-only file schema + write-side contract
 **Applicability**: US3 only. If US3 is deferred, this contract does not
 apply and no file is created.
@@ -10,7 +10,7 @@ apply and no file is created.
 
 Documents the append-only JSONL file
 `data/vpn_ike_health.jsonl` written by
-`src/utils/zscaler_probe.py::run_full_validation()` — one line per VPN
+`src/foundation/support/utils/zscaler_probe.py::run_full_validation()` — one line per VPN
 host per invocation.
 
 ## File Path

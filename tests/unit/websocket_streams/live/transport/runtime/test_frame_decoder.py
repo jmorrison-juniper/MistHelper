@@ -6,7 +6,7 @@ import json  # One test proves that a cut frame is malformed JSON.
 
 import pytest  # The malformed JSON proof uses the standard exception helper.
 
-from src.websocket_streams.live.transport.runtime.frame_decoder import FrameDecoder, SubscribeError
+from src.mist.realtime.websocket_streams.live.transport.runtime.frame_decoder import FrameDecoder, SubscribeError
 
 
 class TestFrameDecoder:

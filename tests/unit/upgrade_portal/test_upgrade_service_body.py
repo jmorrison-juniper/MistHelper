@@ -1,4 +1,4 @@
-"""Unit tests for ``build_body`` in ``src/firmware/upgrade_service.py``.
+"""Unit tests for ``build_body`` in ``src/operations/execution/firmware/upgrade_service.py``.
 
 Why:
     The body is the exact JSON that the portal posts to the Mist cloud. The
@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.firmware import upgrade_service
-from src.firmware.upgrade_service import DeviceTarget, GatewayFamily, UpgradeOptions
+from src.operations.execution.firmware import upgrade_service
+from src.operations.execution.firmware.upgrade_service import DeviceTarget, GatewayFamily, UpgradeOptions
 
 MAC_SWITCH = "5c5b350e0001"
 MAC_GATEWAY = "5c5b350e0002"

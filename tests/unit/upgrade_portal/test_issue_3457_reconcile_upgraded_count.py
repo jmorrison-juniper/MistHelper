@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes.org_upgrade import aggregate_summary
-from src.upgrade_portal.upgrade.org_devices import OrgChildDevices
+from src.interfaces.portals.upgrade_portal.app.routes.org_upgrade import aggregate_summary
+from src.interfaces.portals.upgrade_portal.upgrade.org_devices import OrgChildDevices
 from tests.unit.upgrade_portal.test_org_child_controls import (
     AP,
     AP_TARGET,

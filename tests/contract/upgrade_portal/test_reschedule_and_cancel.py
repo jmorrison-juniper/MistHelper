@@ -24,8 +24,8 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.runtime import identity
-from src.upgrade_portal.runtime.runs import RunState, RunStateMachine
+from src.interfaces.portals.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunState, RunStateMachine
 
 # --------------------------------------------------------------------------
 # The contract values.

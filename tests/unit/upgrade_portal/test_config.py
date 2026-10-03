@@ -4,7 +4,7 @@ Why:
     The portal factory takes no argument, so the process environment is the only
     source of a setting. A wrong default or a silent override changes the listen
     port, the browser poll rate, or the network guard. These tests hold every
-    default to the literal value in ``src/upgrade_portal/app/config.py`` and
+    default to the literal value in ``src/interfaces/portals/upgrade_portal/app/config.py`` and
     prove that a bad override falls back instead of reaching the running portal.
 
     These tests also prove the credential rule of FR-009. The settings records
@@ -22,8 +22,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.upgrade_portal.app import config
-from src.upgrade_portal.app.config import (
+from src.interfaces.portals.upgrade_portal.app import config
+from src.interfaces.portals.upgrade_portal.app.config import (
     ArangoSettings,
     PortalSettings,
     ProxySettings,
@@ -48,7 +48,7 @@ from src.upgrade_portal.app.config import (
     read_secret_key,
     read_themes,
 )
-from src.upgrade_portal.app.factory import build_application
+from src.interfaces.portals.upgrade_portal.app.factory import build_application
 
 # WHY: Every variable the module reads. The clearing fixture walks this list, so
 # a leftover shell variable cannot turn a default test into a false pass.

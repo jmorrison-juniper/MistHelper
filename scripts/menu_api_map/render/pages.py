@@ -46,7 +46,9 @@ class PageInput:
 
     menus: list[MenuResult]  # One result for each menu option, sorted by menu number.
     helpers: list[HelperResult]  # One result for each shared helper, sorted by name.
-    holder_files: dict[str, str]  # Holder key to its repository file, such as src/export/site_exporter.py.
+    holder_files: dict[
+        str, str
+    ]  # Holder key to its repository file, such as src/operations/exporting/export/site_exporter.py.
     sdk_version: str  # The mistapi version of the vendored SDK index.
 
 

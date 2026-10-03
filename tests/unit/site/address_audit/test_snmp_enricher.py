@@ -1,6 +1,6 @@
 """Unit tests for SNMPLocationEnricher (1003-site-address-audit)."""
 
-from src.site.address_audit.snmp_enricher import SNMPLocationEnricher
+from src.mist.resources.site.address_audit.snmp_enricher import SNMPLocationEnricher
 
 
 class TestEnrich:

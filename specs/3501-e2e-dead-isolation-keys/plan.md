@@ -42,8 +42,8 @@ exact set of kept configuration keys.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/api/run_controls/models.py` | Remove seven fields, eight keys, and `trap_call_counts`. |
-| `src/upgrade_portal/app/factory.py` | Write the run owner header only. |
+| `src/interfaces/portals/upgrade_portal/api/run_controls/models.py` | Remove seven fields, eight keys, and `trap_call_counts`. |
+| `src/interfaces/portals/upgrade_portal/app/factory.py` | Write the run owner header only. |
 | `tests/support/upgrade_portal_e2e/owner.py` | New. The class `RunOwnerHeaderCheck`. |
 | `tests/support/upgrade_portal_e2e/__init__.py` | Build the smaller groups. Export the owner check. Stop the export of the traps and of the audit record store. |
 | `tests/support/upgrade_portal_e2e/traps/` | Delete the package and its five files. |

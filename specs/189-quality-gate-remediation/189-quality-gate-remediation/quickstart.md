@@ -122,10 +122,10 @@ python MistHelper.py --test
 ### After task 2.1 (magic constant)
 
 ```powershell
-python -m ruff check src\network\routing_utils.py
+python -m ruff check src\mist\networking\network\routing_utils.py
 # Expected: no PLR2004 on line 1062
 
-Select-String -Path src\network\routing_utils.py -Pattern "!= 200|requests.codes.ok" | Select-Object LineNumber, Line
+Select-String -Path src\mist\networking\network\routing_utils.py -Pattern "!= 200|requests.codes.ok" | Select-Object LineNumber, Line
 # Expected: requests.codes.ok present, raw 200 gone
 ```
 
@@ -134,8 +134,8 @@ Select-String -Path src\network\routing_utils.py -Pattern "!= 200|requests.codes
 ```powershell
 python -m py_compile MistHelper.py
 python -m ruff check MistHelper.py
-python -m ruff check src\inventory\csv_comparator.py
-python -m ruff check src\network\routing_utils.py
+python -m ruff check src\mist\resources\inventory\csv_comparator.py
+python -m ruff check src\mist\networking\network\routing_utils.py
 bandit -r MistHelper.py
 python MistHelper.py --test
 ```

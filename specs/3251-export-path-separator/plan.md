@@ -3,8 +3,8 @@
 ## Technical context
 
 - Python 3.13, standard library only.
-- Files to change: `src/export/site_config_exporter.py` and
-  `src/export/site_export_utils.py`.
+- Files to change: `src/operations/exporting/export/site_config_exporter.py` and
+  `src/operations/exporting/export/site_export_utils.py`.
 - New test module: `tests/unit/export/test_export_notice_separator.py`.
 - No new dependency, no menu change, no container, and no workflow change.
 

@@ -36,13 +36,13 @@ Closes #3690
 
 ## Gate evidence
 
-- `python -m py_compile src\reports\alert_digest\model.py tests\unit\reports\alert_digest\test_alert_digest_model.py`
-- `python -m ruff check src\reports\alert_digest tests\unit\reports\alert_digest`
-- `python -m black --check src\reports\alert_digest tests\unit\reports\alert_digest`
-- `python -m mypy src\reports\alert_digest --config-file pyproject.toml`
-- `python -m pydocstyle src\reports\alert_digest`
+- `python -m py_compile src\mist\intelligence\reports\alert_digest\model.py tests\unit\reports\alert_digest\test_alert_digest_model.py`
+- `python -m ruff check src\mist\intelligence\reports\alert_digest tests\unit\reports\alert_digest`
+- `python -m black --check src\mist\intelligence\reports\alert_digest tests\unit\reports\alert_digest`
+- `python -m mypy src\mist\intelligence\reports\alert_digest --config-file pyproject.toml`
+- `python -m pydocstyle src\mist\intelligence\reports\alert_digest`
 - `python -m pytest tests\unit\reports\alert_digest -q --timeout=120`
-- `python -m radon cc src\reports\alert_digest -j | complexity-gate --max 10`
+- `python -m radon cc src\mist\intelligence\reports\alert_digest -j | complexity-gate --max 10`
 - `test-quality-analyzer --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main`
-- `python -m bandit -c pyproject.toml -r src\reports\alert_digest -q`
+- `python -m bandit -c pyproject.toml -r src\mist\intelligence\reports\alert_digest -q`
 - `python -m pytest tests\integration\test_mistapi_sdk_compatibility.py tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120`

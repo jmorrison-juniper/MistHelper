@@ -92,7 +92,7 @@ A static route wins over a route with a variable. For example,
 ## The answer rules
 
 - Each answer follows the answer schema of the local OpenAPI 3.1 file and the
-  rules of `src/upgrade_portal/app/seam_shapes.py` (FR-012).
+  rules of `src/interfaces/portals/upgrade_portal/app/seam_shapes.py` (FR-012).
 - The capture reads and the upgrade reads use the same device state (FR-017).
 - The event search filters by `device_type`, `type`, `start`, and `end`. It
   answers in pages (FR-018). The event type names come from the answer of

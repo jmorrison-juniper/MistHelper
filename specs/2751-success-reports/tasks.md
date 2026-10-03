@@ -15,13 +15,13 @@
 ## Phase 2: Bounded Triage
 
 - [x] T004 Classify each candidate read as a correct announcement, a premature success claim, or a correct completion report. (delivered: `specs\2751-success-reports\triage.md`)
-- [x] T005 Select destructive write paths for WAN probes for repair. (delivered: `src\gateway\wan_probe_device_override_manager.py`, `src\refactors\wanprobe_config_manager.py`)
+- [x] T005 Select destructive write paths for WAN probes for repair. (delivered: `src\mist\resources\gateway\wan_probe_device_override_manager.py`, `src\foundation\support\refactors\wanprobe_config_manager.py`)
 - [x] T006 File follow-up issues for deferred candidate areas. (delivered: issues #2865, #2866, and #2867)
 
 ## Phase 3: User Story 1 - Trust destructive write logs
 
-- [x] T007 Reword the local message about the template probe payload from `Updated` to `Prepared`. (delivered: `src\refactors\wanprobe_config_manager.py`)
-- [x] T008 Reword the local message about the device probe payload from `Updated` to `Prepared`. (delivered: `src\gateway\wan_probe_device_override_manager.py`)
+- [x] T007 Reword the local message about the template probe payload from `Updated` to `Prepared`. (delivered: `src\foundation\support\refactors\wanprobe_config_manager.py`)
+- [x] T008 Reword the local message about the device probe payload from `Updated` to `Prepared`. (delivered: `src\mist\resources\gateway\wan_probe_device_override_manager.py`)
 - [x] T009 Add a template failure test that asserts the old success line is absent. (delivered: `tests\unit\refactors\test_wanprobe_config_manager.py`)
 - [x] T010 Add a device failure test that asserts the old success line is absent. (delivered: `tests\unit\gateway\test_wan_probe_override_pipeline.py`)
 

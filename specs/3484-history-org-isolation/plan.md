@@ -131,7 +131,7 @@ This step does not create `tasks.md`.
 ### Existing source boundaries
 
 ```text
-src/upgrade_portal/
+src/interfaces/portals/upgrade_portal/
   app/routes/review.py
   compare/lock_audit.py
   capture/store.py                  # Read-only dependency.
@@ -293,8 +293,8 @@ Do not install PowerShell, create another worktree, or update shared state.
 
 | File | Required implementation work |
 | --- | --- |
-| `src/upgrade_portal/app/routes/review.py` | Early refusals, scoped real queries, validated section scope, and unchanged lister signatures. |
-| `src/upgrade_portal/compare/lock_audit.py` | Required organization, early filtering, independent inference, and both limit paths. |
+| `src/interfaces/portals/upgrade_portal/app/routes/review.py` | Early refusals, scoped real queries, validated section scope, and unchanged lister signatures. |
+| `src/interfaces/portals/upgrade_portal/compare/lock_audit.py` | Required organization, early filtering, independent inference, and both limit paths. |
 | `tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py` | Four request forms, four cards, real adapters, exact totals, and zero-read refusals. |
 | `tests/unit/upgrade_portal/test_issue_3484_audit_org_isolation.py` | Two-organization audit results, limits, inference, attribution, and digest safety. |
 | `changelog.d/issue-3484-history-org-isolation.md` | One Security fragment for the exact repair. |

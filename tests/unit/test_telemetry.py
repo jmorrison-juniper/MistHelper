@@ -9,7 +9,10 @@ import json
 import os
 from datetime import UTC, datetime
 
-from src.dataclasses.progress_event import ProgressContext, TestSummary  # Issue #470: bundled event-field dataclasses.
+from src.foundation.models.dataclasses.progress_event import (
+    ProgressContext,
+    TestSummary,
+)  # Issue #470: bundled event-field dataclasses.
 
 
 # ---------------------------------------------------------------------------

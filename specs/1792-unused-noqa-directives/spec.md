@@ -49,14 +49,14 @@ The eight files below hold 127 of the directives.
 
 | File | Count |
 | - | - |
-| src/device/ap_profile_migration_manager.py | 67 |
-| src/site/address_audit/ui_geocoder.py | 10 |
-| src/export/site_export_utils.py | 9 |
-| src/firmware/firmware_manager.py | 9 |
-| src/ssid_consolidation/_ssid_template_phase45.py | 9 |
-| src/reports/e911_bssid.py | 8 |
+| src/mist/resources/device/ap_profile_migration_manager.py | 67 |
+| src/mist/resources/site/address_audit/ui_geocoder.py | 10 |
+| src/operations/exporting/export/site_export_utils.py | 9 |
+| src/operations/execution/firmware/firmware_manager.py | 9 |
+| src/operations/execution/ssid_consolidation/_ssid_template_phase45.py | 9 |
+| src/mist/intelligence/reports/e911_bssid.py | 8 |
 | tests/unit/refactors/test_fast_mode_small_seams.py | 8 |
-| src/ssh/batch/interactive_batch_executor.py | 7 |
+| src/operations/execution/ssh/batch/interactive_batch_executor.py | 7 |
 
 The directives name 12 rule codes. The six codes below cover 259 of the named codes. One directive can name more than one code, so the code total is larger than the directive total.
 
@@ -84,8 +84,8 @@ A maintainer compared the two result sets on 2026-08-06. The 34 extra results al
 
 | Site | Named code |
 | - | - |
-| src/export/org_inventory_exporter.py line 246 | E501 |
-| src/export/site_anomaly_exporter.py line 182 | E731 |
+| src/operations/exporting/export/org_inventory_exporter.py line 246 | E501 |
+| src/operations/exporting/export/site_anomaly_exporter.py line 182 | E731 |
 | tests/maps/test_viewer_callbacks_wave_a.py line 46 | E402 |
 | starlink_dashboard.py line 98 | F401 |
 
@@ -162,10 +162,10 @@ A maintainer reads the pull request. The maintainer learns that 88 lines carried
 
 - Ruff removes the whole comment when the directive is the only text in it. Ruff keeps the rest of the comment when other text follows the directive. A reviewer must confirm that no useful comment text disappears.
 - A directive names two codes. One code matches a real result and the other does not. Ruff removes the unused code and keeps the rest of the directive. The line stays.
-- The ruff `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`. A directive inside one of those paths stays in place. The count of 286 does not cover them.
+- The ruff `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`. A directive inside one of those paths stays in place. The count of 286 does not cover them.
 - The repair touches `tests/unit/refactors/test_fast_mode_small_seams.py`. A test file change needs the same review care as a source file change.
 - A concurrent pull request adds a new directive while this work is open. The count then changes. The implementer must measure the count again before the final push.
-- `src/device/ap_profile_migration_manager.py` holds 67 of the 286 directives. That single file needs its own read, because it holds 23 percent of the work.
+- `src/mist/resources/device/ap_profile_migration_manager.py` holds 67 of the 286 directives. That single file needs its own read, because it holds 23 percent of the work.
 
 ---
 
@@ -216,7 +216,7 @@ A maintainer reads the pull request. The maintainer learns that 88 lines carried
 - **SC-005**: `ruff check . --select BLE001 --statistics` and the same command with `--ignore-noqa` both report 500.
 - **SC-006**: Every quality gate stays green. The unit test suite keeps its pass count and adds no new failure.
 - **SC-007**: The pull request text states the 88-line latent suppression and names issue #1794.
-- **SC-008**: The work touches zero files under `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`.
+- **SC-008**: The work touches zero files under `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`.
 
 ---
 

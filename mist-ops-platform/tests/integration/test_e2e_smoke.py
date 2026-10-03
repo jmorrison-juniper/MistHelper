@@ -20,7 +20,7 @@ class TestE2ESmokeComponents:
     """Verify critical components are importable and wired correctly."""
 
     def test_fastapi_app_factory_importable(self) -> None:
-        from src.api.main import create_app
+        from src.mist.access.api.main import create_app
 
         app = create_app()
         assert app is not None
@@ -32,7 +32,7 @@ class TestE2ESmokeComponents:
         assert app is not None
 
     def test_all_routes_registered(self) -> None:
-        from src.api.main import create_app
+        from src.mist.access.api.main import create_app
 
         app = create_app()
         # FastAPI 0.141 defers an included router into an _IncludedRouter marker,

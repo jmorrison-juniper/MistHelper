@@ -36,7 +36,7 @@ The scan reads the `[tool.bandit]` table in `pyproject.toml`.
 
 - The root `ruff` line length is 120 characters. The `mist-ops-platform` subtree holds its own `pyproject.toml` with a line length of 99 characters. Three findings sit in that subtree.
 - `black` formats the whole repository. `ruff check .` lints the whole repository.
-- `mypy`, `pylint`, `radon`, `vulture`, and the coverage gate read `src/` only. `pylint` also skips `src/maps`, `src/ssh`, and `src/ui`.
+- `mypy`, `pylint`, `radon`, `vulture`, and the coverage gate read `src/` only. `pylint` also skips `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui`.
 - 24 of the 54 findings sit outside `src/`. Those findings face only `ruff`, `black`, and `bandit`.
 
 **Scale/Scope**: 54 findings, 8 rules, 21 source files, and 1 workflow line.
@@ -89,7 +89,7 @@ The workflow runs `pip install 'bandit[toml]'` with no version constraint. A fut
 | IV. Full Deployment Pipeline | ADAPTED | Principle IV describes a direct push to `main`. This work follows the multi-agent branch workflow instead. The branch runs the full gate suite through CI and merges through a pull request. The container image needs no rebuild, because no runtime behavior changes. |
 | V. Observability and Logging | PASS with a constraint | Every added comment and every added log message uses ASCII only. Six existing suppression comments use an em dash. Every comment that this work adds uses the ASCII hyphen. |
 | VI. Inline Comments (NON-NEGOTIABLE) | PASS | Each `# nosec RULE - reason` comment states the reason on the changed line. Each converted guard carries a `# WHY:` comment. |
-| VII. Action Logging (NON-NEGOTIABLE) | PASS with one deviation | The `shutil.which` resolution and the narrowed `except` blocks log before and after. `src/utils/logger_utils.py` is the single deviation. See Complexity Tracking. |
+| VII. Action Logging (NON-NEGOTIABLE) | PASS with one deviation | The `shutil.which` resolution and the narrowed `except` blocks log before and after. `src/foundation/support/utils/logger_utils.py` is the single deviation. See Complexity Tracking. |
 | Security Findings: Fix Over Suppress (NON-NEGOTIABLE) | PASS with a gate | The constitution permits `# nosec` for a **verified** false positive with a justification. This plan forbids a blanket suppression. Each suppressed finding needs one evidence line in the triage ledger. The review step rejects any suppression without evidence. |
 
 ### The suppression question
@@ -178,7 +178,7 @@ Rules B404, B603, B606, and B607. This group is the most mechanical, so it comes
 Rules B105 and B107. The group is mechanical, but it carries a mandatory security check.
 
 - Every one of the 11 B105 findings is a module-level constant whose name holds `TOKEN` or `SECRET`. The implementer must read each value and must record what it is. The categories are a prompt sentinel, a field name, a CSS alpha value, a Vault path, and a delimiter.
-- The single B107 finding is the `password: str = ""` default in `EmailAdapter.__init__`. The empty string is a "not provided" sentinel. The precedent sits at `src/ssh/config/env_loader.py` line 67.
+- The single B107 finding is the `password: str = ""` default in `EmailAdapter.__init__`. The empty string is a "not provided" sentinel. The precedent sits at `src/operations/execution/ssh/config/env_loader.py` line 67.
 - **Stop condition**: If any value turns out to be a real credential, the implementer stops. The implementer then moves the value to the environment and raises a rotation request. No suppression covers a real secret.
 - Three findings sit in `mist-ops-platform`. Those comments must fit inside 99 characters.
 
@@ -189,7 +189,7 @@ Rules B105 and B107. The group is mechanical, but it carries a mandatory securit
 Rule B110. This group changes behavior, so it needs the most care of the three suppression groups.
 
 - The default decision narrows the exception type and adds a debug log.
-- Two findings escalate to a suppression. `src/utils/logger_utils.py` line 113 sits inside the logging path, so a log call there risks recursion. `src/utils/zscaler_probe.py` line 371 is a best-effort socket close, which the specification names as a valid escalation.
+- Two findings escalate to a suppression. `src/foundation/support/utils/logger_utils.py` line 113 sits inside the logging path, so a log call there risks recursion. `src/foundation/support/utils/zscaler_probe.py` line 371 is a best-effort socket close, which the specification names as a valid escalation.
 - **Coordination with issue [#1709](https://github.com/jmorrison-juniper/MistHelper/issues/1709)**: The research confirms that none of the 7 findings sit in `MistHelper.py`. Issue #1709 targets the broad `except` blocks in `MistHelper.py`. The overlap that the specification feared does not exist at these line numbers. The implementer still checks the current scope of #1709 before the first edit, because that scope may grow.
 - A narrowed exception type adds no branch, so the `radon` complexity score stays flat.
 
@@ -201,14 +201,14 @@ Rule B101. The group splits into two halves with different decisions.
 
 **D1 - Type narrowing, 11 findings.** The statement exists for `mypy`. It carries no runtime duty, because an earlier guard already proved the value. Requirement FR-010 permits a suppression. The comment must name the guard that proves the value.
 
-Files: `src/export/data_exporter.py` (5), `src/firmware/firmware_manager.py` (4), `src/firmware/site_auto_upgrade.py` line 88 (1), and `src/gateway/_wan2_variable_device.py` line 371 (1).
+Files: `src/operations/exporting/export/data_exporter.py` (5), `src/operations/execution/firmware/firmware_manager.py` (4), `src/operations/execution/firmware/site_auto_upgrade.py` line 88 (1), and `src/mist/resources/gateway/_wan2_variable_device.py` line 371 (1).
 
 **D2 - Runtime guards, 7 findings.** The statement protects the user. Python removes it under the `-O` flag. Requirement FR-009 demands an explicit check that raises.
 
-- `src/maps/plotly_map_templates.py` holds 5 asserts inside four `_rule_*` validators. `validate_template` calls them through a rule table and catches nothing. Under `-O` the whole validator becomes a no-op. Each assert becomes a `raise ValueError`. The `validate_template` docstring names `AssertionError` in its `Raises` section, so the docstring changes with the code. The `pydocstyle` gate and the `interrogate` gate read that docstring.
-- `src/firmware/site_auto_upgrade.py` lines 54 and 55 sit in the `__post_init__` of the frozen `SiteAutoUpgradeConfig` dataclass. Each `isinstance` check becomes a `raise TypeError`.
+- `src/interfaces/visualization/maps/plotly_map_templates.py` holds 5 asserts inside four `_rule_*` validators. `validate_template` calls them through a rule table and catches nothing. Under `-O` the whole validator becomes a no-op. Each assert becomes a `raise ValueError`. The `validate_template` docstring names `AssertionError` in its `Raises` section, so the docstring changes with the code. The `pydocstyle` gate and the `interrogate` gate read that docstring.
+- `src/operations/execution/firmware/site_auto_upgrade.py` lines 54 and 55 sit in the `__post_init__` of the frozen `SiteAutoUpgradeConfig` dataclass. Each `isinstance` check becomes a `raise TypeError`.
 - **Verified**: No test asserts `AssertionError` against any of these five files. The existing `validate_template` tests cover the success path only. The exception-type change is therefore safe. The implementer re-runs the affected test files to confirm.
-- `pylint` skips `src/maps`, so the D2 work in that directory faces `mypy`, `radon`, `vulture`, and coverage only.
+- `pylint` skips `src/interfaces/visualization/maps`, so the D2 work in that directory faces `mypy`, `radon`, `vulture`, and coverage only.
 
 **Exit measurement**: B101 reports 0. The full in-scope count reports 0.
 
@@ -226,6 +226,6 @@ Files: `src/export/data_exporter.py` (5), `src/firmware/firmware_manager.py` (4)
 
 | Violation | Why needed | Simpler alternative rejected because |
 | - | - | - |
-| Principle VII: `src/utils/logger_utils.py` line 113 gets a suppression and no log call | The block sits inside a logging filter. A log call from inside the logging path can re-enter the same filter and can recurse without end. The existing comment already states that the block must never crash the logger. | A debug log is the default decision for B110, and it is unsafe here. A narrowed exception type without a log is the next option. The block must swallow every failure to protect the logger, so narrowing would let an unexpected error escape into the logging path. |
+| Principle VII: `src/foundation/support/utils/logger_utils.py` line 113 gets a suppression and no log call | The block sits inside a logging filter. A log call from inside the logging path can re-enter the same filter and can recurse without end. The existing comment already states that the block must never crash the logger. | A debug log is the default decision for B110, and it is unsafe here. A narrowed exception type without a log is the next option. The block must swallow every failure to protect the logger, so narrowing would let an unexpected error escape into the logging path. |
 | About 39 of the 54 findings receive a suppression instead of a code change | Rules B101, B105, B107, B404, B603, and B606 report a pattern, not a defect. A prompt sentinel named `CANCEL_TOKEN` holds no credential. No fix exists where no defect exists. | A rename that avoids the rule keyword would remove the finding without a suppression. It would also spread churn across call sites and would make names such as `_TOKEN_ATTR` less accurate. Research decision R2 records the trade. |
 | Principle IV runs as a branch and a pull request, not as a direct push to `main` | The multi-agent git workflow governs a change of this size. The change touches 22 files. | A direct push to `main` would skip the review that the "fix over suppress" gate depends on. |

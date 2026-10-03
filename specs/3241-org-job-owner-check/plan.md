@@ -5,7 +5,7 @@
 ## Design
 
 1. Add `_unowned_job_refusal(upgrade_id, org_id)` to
-   `src/upgrade_portal/app/routes/org_upgrade.py`. It returns None when
+   `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`. It returns None when
    `_owns_org_job` accepts the job, and the cancel-route envelope otherwise.
 2. Call it in `job_page` and in `upgrade_status`, after the owned aggregate
    lookup and before the AP-only cloud read.

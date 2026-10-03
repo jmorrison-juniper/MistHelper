@@ -33,7 +33,7 @@ The plan orders the work so that each gate risk closes before the files enter gi
 **Constraints**:
 
 - The root `[tool.black]` table sets a line length of 120. The `mist-ops-platform/pyproject.toml` file sets 99. Black reads the root table for a whole repository run, so the new module needs the 120 character form.
-- The root ruff `extend-exclude` list holds `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`. Ruff therefore stays quiet on the new Python files.
+- The root ruff `extend-exclude` list holds `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`. Ruff therefore stays quiet on the new Python files.
 - The bandit `targets` list holds `mist-ops-platform`, so bandit reads the new Python files.
 - Mypy reads `src/` only, so the new files face no type check.
 - Git cannot re-include a file below an excluded directory. A negation needs two lines.
@@ -107,7 +107,7 @@ The module sets `api_host` to `0.0.0.0`, which binds the service to every interf
 
 1. **Read the host from the environment.** The class already extends `BaseSettings`, so the field already reads an environment variable. Change the default to `127.0.0.1`. A container deployment then sets `API_HOST=0.0.0.0` on purpose. This answer removes the result and keeps the container working.
 2. **Bind to a named interface.** This answer breaks a container deployment, because the container needs a bind to every interface to accept outside traffic.
-3. **Keep the bind and add `# nosec B104` with a reason.** The repository already holds this pattern at `src/network/_routing_utils_display.py` line 454.
+3. **Keep the bind and add `# nosec B104` with a reason.** The repository already holds this pattern at `src/mist/networking/network/_routing_utils_display.py` line 454.
 
 The plan prefers answer 1. It removes the result at the root instead of hiding it. The implementer must confirm that no deployment file relies on the current default before the change.
 

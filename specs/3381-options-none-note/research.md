@@ -6,13 +6,13 @@
 
 **Evidence**:
 
-- `TypedVersionSelector.select` in `src/upgrade_portal/upgrade/options.py`
+- `TypedVersionSelector.select` in `src/interfaces/portals/upgrade_portal/upgrade/options.py`
   writes `"warning": _type_warning(...)`. `_type_warning` returns `None` when a
   type has no warning.
 
 - `build_options_view` puts the selections into the view under
   `type_selections`. The route `options_page` in
-  `src/upgrade_portal/app/routes/upgrade.py` passes them to the template.
+  `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py` passes them to the template.
 
 - `options.html` line 60 sets `typed_selections`, and line 195 prints
   `selection.get('warning', <default>)`.
@@ -39,11 +39,11 @@ answer of the selector. The template is the one place that turns it into text.
 ## Decision 2: The same defect exists nowhere else
 
 **Evidence**: a search of every template under
-`src/upgrade_portal/app/assets/templates` found one printed `.get(key,
+`src/interfaces/portals/upgrade_portal/app/assets/templates` found one printed `.get(key,
 '<text>')` call, which is line 195. A second search found one printed
 `default(...)` call without `true`: `org_options.html` line 233, the failure
 limit field. The multi-site `options_view` in
-`src/upgrade_portal/app/routes/org_upgrade.py` answers
+`src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` answers
 `options.get("max_failure_percentage", 5)`. The stored options come from
 `read_options`, which omits the key for a big-bang plan and stores a number for
 the other plans. So that field never receives `None`.

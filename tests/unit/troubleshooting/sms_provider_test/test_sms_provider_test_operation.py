@@ -6,11 +6,15 @@ from types import SimpleNamespace  # WHY: fake exporter object needs one method.
 
 import pytest  # WHY: monkeypatch and caplog fixtures validate side effects.
 
-from src.troubleshooting.sms_provider_test import inputs as input_module
-from src.troubleshooting.sms_provider_test import operation as operation_module
-from src.troubleshooting.sms_provider_test.inputs import SmsProviderPrompts, SmsProviderSecretPrompt
-from src.troubleshooting.sms_provider_test.model import SMSGLOBAL_PROVIDER, TWILIO_PROVIDER, SmsProviderApiResult
-from src.troubleshooting.sms_provider_test.operation import SmsProviderTest
+from src.mist.intelligence.troubleshooting.sms_provider_test import inputs as input_module
+from src.mist.intelligence.troubleshooting.sms_provider_test import operation as operation_module
+from src.mist.intelligence.troubleshooting.sms_provider_test.inputs import SmsProviderPrompts, SmsProviderSecretPrompt
+from src.mist.intelligence.troubleshooting.sms_provider_test.model import (
+    SMSGLOBAL_PROVIDER,
+    TWILIO_PROVIDER,
+    SmsProviderApiResult,
+)
+from src.mist.intelligence.troubleshooting.sms_provider_test.operation import SmsProviderTest
 
 
 @pytest.fixture(autouse=True)

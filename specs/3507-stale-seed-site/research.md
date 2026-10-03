@@ -76,7 +76,7 @@ The only check in `persistence/runs.py` refuses an empty value or a value that i
 1. It calls the seed writer `_write_fixture_runs` of the browser conftest.
    A recording store keeps each record that the writer saves, and a stand-in application gives an empty context.
 2. It reads the listed sites through `stand_in_cloud_read("listOrgSites")`.
-3. It decides with the shipped helper `run_is_live` of `src/upgrade_portal/app/routes/upgrade.py`.
+3. It decides with the shipped helper `run_is_live` of `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`.
 
 **Rationale**: Each input comes from the source that the browser server uses, so the guard cannot drift from the seed.
 

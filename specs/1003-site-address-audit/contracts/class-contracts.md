@@ -1,4 +1,4 @@
-# Contract: Class Interfaces (`src/site/address_audit/`)
+# Contract: Class Interfaces (`src/mist/resources/site/address_audit/`)
 
 Internal contracts for the 10 classes. Each method lists signature, behavior, and
 the mandated logging/error envelope. Every method MUST obey the Five-Item Rule

@@ -52,12 +52,12 @@ Only the canonical module-level slot declaration in each DI cluster carries a Te
 
 | Cluster | File | Site | Rendered NOTE |
 |---------|------|------|---------------|
-| R-A | `src/export/site_export_utils.py` | L32 (module-level slot) | `# NOTE: renamed from is_debug_mode; wiring source IsDebugMode.check at MistHelper.py:13372.` |
-| R-B | `src/gateway/overrides/_deps.py` | L18 (module-level slot) | `# NOTE: renamed from execute_with_connection_pool_management; wiring source ConnectionPoolExecutor.execute at MistHelper.py:15564.` |
+| R-A | `src/operations/exporting/export/site_export_utils.py` | L32 (module-level slot) | `# NOTE: renamed from is_debug_mode; wiring source IsDebugMode.check at MistHelper.py:13372.` |
+| R-B | `src/mist/resources/gateway/overrides/_deps.py` | L18 (module-level slot) | `# NOTE: renamed from execute_with_connection_pool_management; wiring source ConnectionPoolExecutor.execute at MistHelper.py:15564.` |
 
 Total rendered R lines: **2**.
 
-Sites explicitly WITHOUT breadcrumbs (renamed in place only): `site_export_utils.py:L52/L64/L76/L337`, `_deps.py:L33/L41/L49`, `src/gateway/overrides/device_data_fetcher.py:L40`, `MistHelper.py:L13372`, `MistHelper.py:L15564`.
+Sites explicitly WITHOUT breadcrumbs (renamed in place only): `site_export_utils.py:L52/L64/L76/L337`, `_deps.py:L33/L41/L49`, `src/mist/resources/gateway/overrides/device_data_fetcher.py:L40`, `MistHelper.py:L13372`, `MistHelper.py:L15564`.
 
 ## Verification Grep Commands
 
@@ -79,10 +79,10 @@ grep -R "renamed from is_debug_mode" src/ MistHelper.py                         
 grep -R "renamed from execute_with_connection_pool_management" src/ MistHelper.py  # Expected: 1
 
 # Per-file rename NOTE counts (only canonical module-level slot sites carry NOTEs)
-grep -c "renamed from is_debug_mode" src/export/site_export_utils.py             # Expected: 1  (L32 slot)
+grep -c "renamed from is_debug_mode" src/operations/exporting/export/site_export_utils.py             # Expected: 1  (L32 slot)
 grep -c "renamed from is_debug_mode" MistHelper.py                                # Expected: 0
-grep -c "renamed from execute_with_connection_pool_management" src/gateway/overrides/_deps.py  # Expected: 1  (L18 slot)
-grep -c "renamed from execute_with_connection_pool_management" src/gateway/overrides/device_data_fetcher.py  # Expected: 0
+grep -c "renamed from execute_with_connection_pool_management" src/mist/resources/gateway/overrides/_deps.py  # Expected: 1  (L18 slot)
+grep -c "renamed from execute_with_connection_pool_management" src/mist/resources/gateway/overrides/device_data_fetcher.py  # Expected: 0
 grep -c "renamed from execute_with_connection_pool_management" MistHelper.py     # Expected: 0
 
 # Zero-survivor greps for the renamed identifiers (5-layer identifier rename is total)

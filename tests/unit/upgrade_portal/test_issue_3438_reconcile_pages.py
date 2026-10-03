@@ -23,10 +23,14 @@ from typing import Any
 import pytest
 from mistapi.__api_response import APIResponse
 
-from src.upgrade_portal.api.run_controls import routes
-from src.upgrade_portal.api.run_controls.routes import SiteStatsFirmwareEvidenceReader
-from src.upgrade_portal.api.run_controls.services.reconciliation import StoppingRunReconciler
-from src.upgrade_portal.persistence.actions import RUN_COLLECTION, ActionRepository, DurableActorScope
+from src.interfaces.portals.upgrade_portal.api.run_controls import routes
+from src.interfaces.portals.upgrade_portal.api.run_controls.routes import SiteStatsFirmwareEvidenceReader
+from src.interfaces.portals.upgrade_portal.api.run_controls.services.reconciliation import StoppingRunReconciler
+from src.interfaces.portals.upgrade_portal.persistence.actions import (
+    RUN_COLLECTION,
+    ActionRepository,
+    DurableActorScope,
+)
 from tests.integration.upgrade_portal.run_controls import FakeDatabase
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 

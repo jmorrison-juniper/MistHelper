@@ -17,8 +17,8 @@ from unittest.mock import MagicMock  # WHY: stub callables that record invocatio
 import mistapi.api.v1.orgs.gatewaytemplates as gwt_api  # WHY: patch API endpoint directly (mypy strict re-export).
 import pytest  # WHY: fixtures, monkeypatch, capsys, caplog.
 
-from src.refactors import wanprobe_config_manager as module  # WHY: SUT module handle.
-from src.refactors.wanprobe_config_manager import WANProbeConfigManager  # WHY: class under test.
+from src.foundation.support.refactors import wanprobe_config_manager as module  # WHY: SUT module handle.
+from src.foundation.support.refactors.wanprobe_config_manager import WANProbeConfigManager  # WHY: class under test.
 
 
 def _install_fake_mh(
@@ -89,7 +89,7 @@ def test_build_template_site_counts_tallies_and_skips_prefix(monkeypatch: pytest
     """Site tally skips names starting with MIST_SITE_EXCLUDE_PREFIX and skips blank template ids."""
     # WHY: patch the imported symbol on the module the SUT reads it from.
     monkeypatch.setattr(
-        "src.refactors.mist_site_exclude_prefix.MIST_SITE_EXCLUDE_PREFIX",
+        "src.foundation.support.refactors.mist_site_exclude_prefix.MIST_SITE_EXCLUDE_PREFIX",
         "SKIP-",
     )
     manager = WANProbeConfigManager()
@@ -509,7 +509,9 @@ def test_show_preview_prints_totals_and_ports(capsys: pytest.CaptureFixture[str]
 def test_display_header_dry_run(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """Dry-run header prints DRY-RUN MODE banner and logs start progress."""
     manager = WANProbeConfigManager()
-    with caplog.at_level(logging.INFO, logger="src.refactors.wanprobe_config_manager"):  # WHY: capture INFO progress.
+    with caplog.at_level(
+        logging.INFO, logger="src.foundation.support.refactors.wanprobe_config_manager"
+    ):  # WHY: capture INFO progress.
         manager._display_header(dry_run=True)  # WHY: exercise the header log record.
     output = capsys.readouterr().out  # WHY: collect the operator banner.
     assert "DRY-RUN MODE" in output  # WHY: the visible operator banner remains unchanged.
@@ -592,7 +594,9 @@ def test_log_destructive_completion(caplog: pytest.LogCaptureFixture) -> None:
     """Completion logger emits an info-level record counting successes."""
     manager = WANProbeConfigManager()
     results = [{"status": "SUCCESS"}, {"status": "SUCCESS"}, {"status": "FAILED"}]
-    with caplog.at_level(logging.INFO, logger="src.refactors.wanprobe_config_manager"):  # WHY: capture INFO completion.
+    with caplog.at_level(
+        logging.INFO, logger="src.foundation.support.refactors.wanprobe_config_manager"
+    ):  # WHY: capture INFO completion.
         manager._log_destructive_completion(results)  # WHY: exercise the completion record.
     matching_records = [  # WHY: collect only the completion record from this behavior slice.
         record for record in caplog.records if "operation complete" in record.getMessage()

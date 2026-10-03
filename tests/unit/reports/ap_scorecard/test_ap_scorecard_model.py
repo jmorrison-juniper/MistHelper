@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.reports.ap_scorecard.model import (
+from src.mist.intelligence.reports.ap_scorecard.model import (
     AP_SCORECARD_COLUMNS,
     SITE_SCORECARD_COLUMNS,
     build_ap_rows,

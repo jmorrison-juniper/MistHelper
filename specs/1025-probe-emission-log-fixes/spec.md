@@ -96,7 +96,7 @@ A future contributor modifies emission logic without realising the log-noise pat
 
 - **CENR observation cache**: Existing in-memory data structure holding host → observed URL mappings loaded from `zscaler_cenr_hostnames.json`. Consumed by menu 206 emission logic. Not modified by this feature — only its read-time warning behavior changes.
 - **Zscaler catalogue**: Existing declaration of the set of hosts that menu 206 emits probes for. Determines the "expected" host set that CENR gaps are computed against.
-- **Region map (`_COUNTRY_CODE_TO_REGION`)**: Static dict in `src/org/org_synthetic_probes_manager.py` mapping ISO alpha-2 country codes to Zscaler region strings (`"americas"`, `"emea"`, `"apac"` — canonical literals per `research.md` R1). Extended by this feature.
+- **Region map (`_COUNTRY_CODE_TO_REGION`)**: Static dict in `src/mist/resources/org/org_synthetic_probes_manager.py` mapping ISO alpha-2 country codes to Zscaler region strings (`"americas"`, `"emea"`, `"apac"` — canonical literals per `research.md` R1). Extended by this feature.
 - **Intentional-gap set**: New static set (or equivalent explicit marker) in the same module enumerating ISO alpha-2 codes deliberately excluded from region mapping, with inline rationale per entry. Introduced by this feature.
 - **Menu 206 run dedup state**: Ephemeral per-run set(s) tracking which missing CENR hosts and which unmapped country codes have already been warned about in the current invocation. Discarded at run end.
 - **Fixture org**: Test fixture representing a large multi-region org (targeting ~315 sites, ≥8 LATAM/Caribbean countries, ≥7 unobserved CENR hosts) used by regression tests to assert log-record counts and probe-payload byte-stability.

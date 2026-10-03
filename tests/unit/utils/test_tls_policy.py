@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from src.inventory.csv_comparator import ComparatorFlags
-from src.site.address_audit.audit_engine import AddressAuditEngine
-from src.utils.tls_policy import SKIP_VERIFY_ENV_VAR, TLSVerificationPolicy
+from src.foundation.support.utils.tls_policy import SKIP_VERIFY_ENV_VAR, TLSVerificationPolicy
+from src.mist.resources.inventory.csv_comparator import ComparatorFlags
+from src.mist.resources.site.address_audit.audit_engine import AddressAuditEngine
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # Repository root, for the source sweep test.
 

@@ -23,11 +23,11 @@ Per FR-017 of 1010 and Assumption 6, the 20 Low-Use candidates were **explicitly
 
 ### User Story 1 - Extract Low-Use candidates whose sole caller cluster is inside MistHelper.py (Priority: P1)
 
-The core value-delivery workflow for the second pass. For each Low-Use candidate whose 2-3 callsites all resolve to a single file (typically `MistHelper.py` itself), a refactor engineer opens a PR that (a) moves the class/function/assignment into a new cohesive module under `src/refactors/` (or, when a `Suggested class` names an existing shared destination like `FirmwareManager`, folds into that class body), (b) rewrites every callsite in the same commit, (c) deletes the original symbol from `MistHelper.py`, (d) resolves any analyzer `guideline_flags` in-flight, and (e) lands with all 15 functional CI jobs green and A+/100 compliance on affected files. No wrapper shims. Module-level functions land as class-body methods per FR-005 of 1010 (carried forward as FR-005 here).
+The core value-delivery workflow for the second pass. For each Low-Use candidate whose 2-3 callsites all resolve to a single file (typically `MistHelper.py` itself), a refactor engineer opens a PR that (a) moves the class/function/assignment into a new cohesive module under `src/foundation/support/refactors/` (or, when a `Suggested class` names an existing shared destination like `FirmwareManager`, folds into that class body), (b) rewrites every callsite in the same commit, (c) deletes the original symbol from `MistHelper.py`, (d) resolves any analyzer `guideline_flags` in-flight, and (e) lands with all 15 functional CI jobs green and A+/100 compliance on affected files. No wrapper shims. Module-level functions land as class-body methods per FR-005 of 1010 (carried forward as FR-005 here).
 
 **Why this priority**: Delivers the bulk of the second-pass LoC drop. The three largest candidates (`FirmwareUpgradeStatusChecker` at 958 LoC, `WLANRadiusTimerManager` at 787 LoC, `WANProbeConfigManager` at 473 LoC) alone total 2,218 LoC — nearly 4x the total 1010 first-pass reduction. Serial per-PR execution with catalog regeneration between merges is retained.
 
-**Independent Test**: Any single Low-Use extraction (e.g. `AnomalyMetricsDiscovery` at MistHelper.py:19779-19869, refs at 12994, 12994 → `src/refactors/anomaly_metrics_discovery.py` with both callsite occurrences rewritten in the same commit) can be merged in isolation with the full CI matrix green.
+**Independent Test**: Any single Low-Use extraction (e.g. `AnomalyMetricsDiscovery` at MistHelper.py:19779-19869, refs at 12994, 12994 → `src/foundation/support/refactors/anomaly_metrics_discovery.py` with both callsite occurrences rewritten in the same commit) can be merged in isolation with the full CI matrix green.
 
 **Acceptance Scenarios**:
 
@@ -43,21 +43,21 @@ The core value-delivery workflow for the second pass. For each Low-Use candidate
 
 Three candidates in the fresh Low-Use bucket have callers outside `MistHelper.py`:
 
-- `main` (function, 12 LoC) — caller in `src/maps/maps_manager.py:2794`
-- `marvis_data_utils` (assignment, 4 LoC) — caller in `src/troubleshooting/marvis_troubleshoot_utils.py:21`
-- `MIST_WAN_TARGET_PORTS` (assignment, 3 LoC) — caller in `src/gateway/gateway_export_utils.py:51`
+- `main` (function, 12 LoC) — caller in `src/interfaces/visualization/maps/maps_manager.py:2794`
+- `marvis_data_utils` (assignment, 4 LoC) — caller in `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py:21`
+- `MIST_WAN_TARGET_PORTS` (assignment, 3 LoC) — caller in `src/mist/resources/gateway/gateway_export_utils.py:51`
 
 These require multi-file rewrites in the same PR (move symbol + rewrite `MistHelper.py` internal callsites + rewrite external module's import) to maintain the FR-003 atomicity contract (no intermediate revision references a deleted symbol).
 
 **Why this priority**: Same value proposition as P1 but higher blast radius (multi-file diff) so distinct from P1 dispatch ordering. Bundled as P2 to ensure P1's simpler single-file rewrites validate the second-pass workflow before multi-file diffs are attempted.
 
-**Independent Test**: `MIST_WAN_TARGET_PORTS` extraction (~3 LoC constant, 3 callsites across 2 files) can be merged as a standalone PR that (a) creates `src/refactors/mist_wan_target_ports.py`, (b) rewrites `MistHelper.py:1992` (def-site removal) and `MistHelper.py:15638` (callsite) and `src/gateway/gateway_export_utils.py:51` (callsite), all in one commit with 15/15 CI green.
+**Independent Test**: `MIST_WAN_TARGET_PORTS` extraction (~3 LoC constant, 3 callsites across 2 files) can be merged as a standalone PR that (a) creates `src/foundation/support/refactors/mist_wan_target_ports.py`, (b) rewrites `MistHelper.py:1992` (def-site removal) and `MistHelper.py:15638` (callsite) and `src/mist/resources/gateway/gateway_export_utils.py:51` (callsite), all in one commit with 15/15 CI green.
 
 **Acceptance Scenarios**:
 
 1. **Given** a Low-Use candidate with a caller outside `MistHelper.py`, **When** the extraction PR is opened, **Then** the diff touches (a) the new module file, (b) `MistHelper.py` (def-site deletion + internal callsite rewrite), AND (c) every external caller file — all in the same commit.
 2. **Given** the multi-file rewrite, **When** CI runs, **Then** no intermediate revision references a deleted symbol (git bisectability across the merge commit only; the merge commit itself is the atomic unit).
-3. **Given** the extraction affects a shared destination class (e.g. `FirmwareUpgradeStatusChecker` → `FirmwareManager` in `src/firmware/firmware_manager.py`), **When** the PR lands, **Then** `firmware_manager.py` continues to score A+/100 (no regression on the already-A+ shared destination).
+3. **Given** the extraction affects a shared destination class (e.g. `FirmwareUpgradeStatusChecker` → `FirmwareManager` in `src/operations/execution/firmware/firmware_manager.py`), **When** the PR lands, **Then** `firmware_manager.py` continues to score A+/100 (no regression on the already-A+ shared destination).
 
 ---
 
@@ -82,7 +82,7 @@ Carry-forward of User Story 3 from 1010. Reference counts shift as extractions l
 - What happens when a Low-Use candidate's reference count fluctuates between catalog regenerations because of transient parse ambiguity? Manual grep wins for that PR; the discrepancy is filed as an analyzer bug in `tools/refactor_analyzer/` but does not block the extraction.
 - How does the workflow handle a Low-Use candidate whose destination class (e.g. `FirmwareManager`) is currently in the Hot bucket? Extraction may still land in that class — Hot-bucket restrictions apply to the *source* symbol under extraction, not to the *destination* class receiving the extracted method. Confirm the destination file remains A+/100 after the move.
 - What happens if two of the three `FirmwareManager` candidates are already merged and the third's reference count has changed? Regenerate the catalog before the third PR; if it dropped to Single-Use (or Unused), reroute per FR-016 carry-forward.
-- How does the workflow handle multi-file callsite rewrites when one of the external callers is in a package that has its own compliance requirements (e.g. `src/gateway/gateway_export_utils.py`)? The external file's post-PR compliance MUST remain at its pre-PR grade or better. Analyzer flags on the external file are NOT in scope for this initiative unless the extraction directly introduces them.
+- How does the workflow handle multi-file callsite rewrites when one of the external callers is in a package that has its own compliance requirements (e.g. `src/mist/resources/gateway/gateway_export_utils.py`)? The external file's post-PR compliance MUST remain at its pre-PR grade or better. Analyzer flags on the external file are NOT in scope for this initiative unless the extraction directly introduces them.
 - What happens when a candidate's `Suggested module` path uses double-underscore separators (e.g. `fast__mode__backoff__multiplier.py`)? Rename during landing to conventional single-underscore (`fast_mode_backoff_multiplier.py`) and record the rationale in the PR description.
 - How does the workflow handle a `guideline_flags` list that includes `raw_input_call` (present on `WLANRadiusTimerManager`)? Rewrite raw `input()` to `safe_input()` per project non-negotiables (FR-007 of 1010, carried forward). Do NOT merge with `raw_input_call` unresolved.
 - What happens if a large candidate (e.g. `FirmwareUpgradeStatusChecker` at 958 LoC) requires internal decomposition beyond the ≤25-line-per-method rule to satisfy A+/100? Split into ≤25-line methods with ≤5 params during the move — FR-006 carry-forward (decompose while moving).
@@ -103,10 +103,10 @@ Carry-forward of User Story 3 from 1010. Reference counts shift as extractions l
 - **FR-009**: The initiative MUST NEVER touch symbols in the Hot bucket (4+ callers) — the destination class receiving an extracted method may itself be a Hot class, but the *source* symbol under extraction must be strictly Low-Use at dispatch time.
 - **FR-010**: After every merged extraction PR, the workflow MUST regenerate `refactor_candidates.md` by running the analyzer against the current `main` head before the next PR is dispatched (carry-forward from 1010 FR-010).
 - **FR-011**: An extraction PR MUST NOT merge until all 15 functional CI jobs report green. When `mergeStateStatus` reports BLOCKED, DIRTY, or BEHIND, the PR MUST be updated and re-run rather than force-merged. `--admin` merge bypass MUST NOT be used as a routine unblock. Reference `feedback_no_admin_bypass.md` (carry-forward from 1010 FR-011).
-- **FR-012**: Every new module under `src/refactors/` (and any existing module receiving an extracted symbol, notably `src/firmware/firmware_manager.py` for the three `FirmwareManager` candidates) MUST land at A+/100 compliance score, and no file that was previously A+ may regress below A+ as a result of the extraction (carry-forward from 1010 FR-012).
+- **FR-012**: Every new module under `src/foundation/support/refactors/` (and any existing module receiving an extracted symbol, notably `src/operations/execution/firmware/firmware_manager.py` for the three `FirmwareManager` candidates) MUST land at A+/100 compliance score, and no file that was previously A+ may regress below A+ as a result of the extraction (carry-forward from 1010 FR-012).
 - **FR-013**: The repository-wide compliance baseline MUST remain at or above 99.6/A+ after each merged extraction PR (carry-forward from 1010 FR-013).
 - **FR-014**: The second-pass extraction budget covers exactly 20 candidates as enumerated in the "PR Dispatch Queue" section of `plan.md`. Additions to second-pass scope require explicit re-scoping in a new SpecKit revision.
-- **FR-015**: Three candidates (`FirmwareUpgradeStatusChecker`, `BulkAPFirmwareUpgrader`, `BulkSwitchFirmwareUpgrader`) MUST be relocated into the existing `src/firmware/firmware_manager.py::FirmwareManager` class rather than into new `src/refactors/` modules, because their `Suggested class` explicitly targets that shared destination.
+- **FR-015**: Three candidates (`FirmwareUpgradeStatusChecker`, `BulkAPFirmwareUpgrader`, `BulkSwitchFirmwareUpgrader`) MUST be relocated into the existing `src/operations/execution/firmware/firmware_manager.py::FirmwareManager` class rather than into new `src/foundation/support/refactors/` modules, because their `Suggested class` explicitly targets that shared destination.
 - **FR-016**: When the freshly regenerated `refactor_candidates.md` shows that a candidate has been reclassified out of the Low-Use bucket (e.g. Low-Use → Unused after a prior merge, or Low-Use → Hot after a caller-adding refactor elsewhere), the workflow MUST reroute or defer that candidate rather than force-extract it under the original classification (carry-forward from 1010 FR-016).
 - **FR-017**: The initiative MUST NOT introduce new features, new commands, or scope beyond the extraction itself (carry-forward from 1010 FR-017).
 - **FR-018**: The initiative MUST NOT modify `tools/refactor_analyzer/` itself; the analyzer is consumed as-is (carry-forward from 1010 FR-018).
@@ -120,7 +120,7 @@ Same as 1010:
 - **Extraction Candidate**: A class, function, or assignment in `MistHelper.py` catalogued by `tools/refactor_analyzer/` — for this initiative, restricted to Low-Use bucket entries (2-3 references) as of the freshest catalog at dispatch time.
 - **Refactor Candidates Catalog** (`refactor_candidates.md`): Regenerated after every merged extraction PR (FR-010).
 - **Extraction PR**: A single pull request delivering one candidate's move-or-delete plus its callsite rewrites plus any in-place `guideline_flags` remediation.
-- **Target Module**: The new file under `src/refactors/` (or existing sibling module for `FirmwareManager` candidates) that receives an extracted symbol.
+- **Target Module**: The new file under `src/foundation/support/refactors/` (or existing sibling module for `FirmwareManager` candidates) that receives an extracted symbol.
 - **Callsite**: The exact location where a candidate is invoked — for Low-Use, may be 2-3 distinct locations, all of which must be rewritten atomically with the extraction.
 - **Shared Destination Class**: A pre-existing class (e.g. `FirmwareManager`) that receives one or more extracted symbols as new methods, per the analyzer's `Suggested class` field.
 - **Compliance Baseline**: The repo-wide compliance score maintained at ≥99.6/A+ with zero sub-A files.
@@ -134,14 +134,14 @@ Same as 1010:
 - **SC-003**: Repository-wide compliance score is ≥99.6/A+ at every intermediate main-branch state throughout the initiative and at final completion.
 - **SC-004**: Zero files that were A+/100 pre-initiative regress below A+ by the end of the initiative.
 - **SC-005**: All second-pass PRs merge with 15/15 functional CI jobs green. Zero PRs merged via `--admin` bypass except where `mergeStateStatus` was genuinely BLOCKED/DIRTY/BEHIND with root cause documented in the PR.
-- **SC-006**: Every new file created under `src/refactors/` during the initiative scores A+/100 on compliance.
+- **SC-006**: Every new file created under `src/foundation/support/refactors/` during the initiative scores A+/100 on compliance.
 - **SC-007**: Zero wrapper shims, forwarding functions, or backward-compatibility aliases remain in `MistHelper.py` after the initiative.
 - **SC-008**: Zero symbols from the analyzer's `SKIP_ALWAYS` bucket are modified by any PR in this initiative.
 - **SC-009**: Zero symbols from the Hot bucket (4+ callers) are extracted as *source* symbols during this second pass. (Destination classes may be Hot; that is allowed per FR-009.)
 - **SC-010**: After every merged extraction PR, the analyzer is re-run and `refactor_candidates.md` is regenerated before the next PR is dispatched — verifiable by walking the merged-PR sequence.
 - **SC-011**: Every analyzer-flagged `guideline_flag` on the extracted code is resolved within the extraction PR — zero forward-carried guideline violations attributable to this initiative.
 - **SC-012**: The three cross-file candidates (`main`, `marvis_data_utils`, `MIST_WAN_TARGET_PORTS`) each have their external-file callsite rewrites verified by post-merge grep audit (FR-019).
-- **SC-013**: The three `FirmwareManager` shared-destination candidates (`FirmwareUpgradeStatusChecker`, `BulkAPFirmwareUpgrader`, `BulkSwitchFirmwareUpgrader`) each land in `src/firmware/firmware_manager.py::FirmwareManager` without regressing that file's compliance grade below A+/100 (FR-015).
+- **SC-013**: The three `FirmwareManager` shared-destination candidates (`FirmwareUpgradeStatusChecker`, `BulkAPFirmwareUpgrader`, `BulkSwitchFirmwareUpgrader`) each land in `src/operations/execution/firmware/firmware_manager.py::FirmwareManager` without regressing that file's compliance grade below A+/100 (FR-015).
 
 ## Assumptions
 

@@ -63,11 +63,11 @@
 
 **Warning**: A file that MistHelper writes on Windows under `cp1252` does not read back the same on Linux under `utf-8`. Any character above code point 127 changes or raises a decode error.
 
-- [ ] T008 [US1] Read each of the 5 sites and confirm the file mode. The sites are `MistHelper.py` line 777, `MistHelper.py` line 1154, `src/config/config_utils.py` line 84, `src/utils/rate_limiting.py` line 134, and `src/utils/rate_limiting.py` line 163. A binary mode takes no encoding argument, so record any binary site and remove it from the scope.
+- [ ] T008 [US1] Read each of the 5 sites and confirm the file mode. The sites are `MistHelper.py` line 777, `MistHelper.py` line 1154, `src/foundation/runtime/config/config_utils.py` line 84, `src/foundation/support/utils/rate_limiting.py` line 134, and `src/foundation/support/utils/rate_limiting.py` line 163. A binary mode takes no encoding argument, so record any binary site and remove it from the scope.
 - [ ] T009 [US1] Read the pylint job scope in `.github/workflows/ci.yml`. Confirm that the job reads every file that holds a site. Pull request #1788 changed that scope. Record the result in [plan.md](plan.md). Requirement FR-016 demands this check.
 - [ ] T010 [US1] Add `encoding="utf-8"` to each text-mode site. Requirement FR-002 forbids the platform default and forbids another encoding. Add an inline comment on each changed line that states the cross-platform reason.
 - [ ] T011 [US1] Search the whole tree for a remaining `open()` call in text mode with no encoding argument. Requirement FR-001 and success criterion SC-003 demand zero matches. Include the paths that ruff excludes, because a defect there still reaches an operator.
-- [ ] T012 [US1] Prove SC-009. Write a file that holds a character above code point 127 through `src/utils/rate_limiting.py` on Windows. Read that file inside a Linux container. Confirm that the two contents match.
+- [ ] T012 [US1] Prove SC-009. Write a file that holds a character above code point 127 through `src/foundation/support/utils/rate_limiting.py` on Windows. Read that file inside a Linux container. Confirm that the two contents match.
 - [ ] T013 [US1] Verify family 1. Run `.venv\Scripts\python.exe -m pylint MistHelper.py src --disable=all --enable=W1514 --score=n` and confirm zero results. Run `.venv\Scripts\python.exe -m ruff check .`, `.venv\Scripts\python.exe -m black --check --diff .`, and `.venv\Scripts\python.exe -m pytest tests/unit --no-cov -q`. Confirm that the pass count matches T003.
 - [ ] T014 [US1] Open the family 1 pull request. Write `Refs #1795` and not `Closes #1795`, because five families remain. Record the T009 result and the T012 proof in the body.
 
@@ -82,9 +82,9 @@
 **Independent Test**: `C408`, `SIM103`, and `ISC004` each report zero results.
 
 - [ ] T015 [P] [US3] Clear family 2, which is `C408`. Replace each `dict()` call with a `{}` literal. The 3 sites sit at 2 lines in `MistHelper.py` and 1 line in `tests/unit/troubleshooting/test_marvis_troubleshoot_utils_extended.py`. Verify with `.venv\Scripts\python.exe -m ruff check . --select C408` and open the pull request.
-- [ ] T016 [P] [US3] Clear family 3, which is `SIM103`. Replace each `if` and `else` pair with a direct return of the condition. The 9 sites sit in `src/api/api_data_fetcher.py`, `src/audit/filter.py`, `src/cache/cache_utils.py`, `src/websocket/service_ping_manager.py`, `tests/unit/org/test_org_synthetic_probes_manager.py`, `tools/codemod_logging_lazy.py`, `tools/compliance_analyzer/analyzers.py`, `tools/ste_linter/parsing/markdown.py`, and `tools/test_quality_analyzer/discovery.py`.
+- [ ] T016 [P] [US3] Clear family 3, which is `SIM103`. Replace each `if` and `else` pair with a direct return of the condition. The 9 sites sit in `src/mist/access/api/api_data_fetcher.py`, `src/mist/access/audit/filter.py`, `src/foundation/persistence/cache/cache_utils.py`, `src/mist/realtime/websocket/service_ping_manager.py`, `tests/unit/org/test_org_synthetic_probes_manager.py`, `tools/codemod_logging_lazy.py`, `tools/compliance_analyzer/analyzers.py`, `tools/ste_linter/parsing/markdown.py`, and `tools/test_quality_analyzer/discovery.py`.
 - [ ] T017 [US3] Confirm the return type at each `SIM103` site. Requirement FR-005 demands a boolean return. Wrap the condition in `bool(...)` where the condition returns a truthy value instead of a boolean. Depends on T016, because both tasks read the same sites.
-- [ ] T018 [US3] Read each `ISC004` site before any edit. The 13 sites sit in `tools/refactor_analyzer/reporting.py` with 8, in `MistHelper.py` with 4, and in `src/websocket/diagnostics/arp_executor.py` with 1. Confirm at each site that the author joined two string parts on purpose and did not drop a comma. Requirement FR-004 demands this read.
+- [ ] T018 [US3] Read each `ISC004` site before any edit. The 13 sites sit in `tools/refactor_analyzer/reporting.py` with 8, in `MistHelper.py` with 4, and in `src/mist/realtime/websocket/diagnostics/arp_executor.py` with 1. Confirm at each site that the author joined two string parts on purpose and did not drop a comma. Requirement FR-004 demands this read.
 - [ ] T019 [US3] Clear family 4, which is `ISC004`. Join each deliberate concatenation into one string. Add the missing comma at any site that the T018 read found. Record the count of missing commas, because SC-005 reads that count.
 - [ ] T020 [US3] Verify families 2 to 4. Run `.venv\Scripts\python.exe -m ruff check . --select C408,SIM103,ISC004 --statistics` and confirm zero results. Run the full gate set and confirm that the unit suite keeps the T003 pass count.
 
@@ -100,10 +100,10 @@
 
 **Warning**: A wrong annotation changes the inferred type for every reader of that attribute. The mypy gate then fails in a file that this work never touched.
 
-- [ ] T021 [US3] Split the 60 sites into two or three groups of at most 25 sites. Record the group boundary in [plan.md](plan.md). The largest file is `src/analytics/site_analytics_configurator.py` with 6 sites.
+- [ ] T021 [US3] Split the 60 sites into two or three groups of at most 25 sites. Record the group boundary in [plan.md](plan.md). The largest file is `src/mist/intelligence/analytics/site_analytics_configurator.py` with 6 sites.
 - [ ] T022 [US3] Confirm that each site holds a class constant and not instance state. Read each attribute and each writer of that attribute. A site that the code writes at run time needs a different repair and moves out of scope.
 - [ ] T023 [US3] Add the `ClassVar` annotation to each site in the first group. Add the `from typing import ClassVar` import where the module does not hold it. Run `.venv\Scripts\python.exe -m mypy src/ --config-file pyproject.toml` after each file, per FR-006.
-- [ ] T024 [US3] Repeat T023 for each remaining group. Open one pull request for each group. Skip `src/firmware/firmware_manager.py`, `src/reports/e911_bssid.py`, and `src/site/bulk_radius_wlan_config_manager.py` in a group that runs at the same time as the `DTZ005` family, per FR-013.
+- [ ] T024 [US3] Repeat T023 for each remaining group. Open one pull request for each group. Skip `src/operations/execution/firmware/firmware_manager.py`, `src/mist/intelligence/reports/e911_bssid.py`, and `src/mist/resources/site/bulk_radius_wlan_config_manager.py` in a group that runs at the same time as the `DTZ005` family, per FR-013.
 - [ ] T025 [US3] Verify family 5. Run `.venv\Scripts\python.exe -m ruff check . --select RUF012 --statistics` and confirm zero results. Run `.venv\Scripts\python.exe -m mypy src/ --config-file pyproject.toml` and confirm zero errors. Run the full gate set.
 
 **Checkpoint**: The `RUF012` count reads zero. Family 6 can start.
@@ -120,7 +120,7 @@
 
 - [ ] T026 [US2] Confirm that issue #1792 landed. Run `.venv\Scripts\python.exe -m ruff check . --select DTZ005 --statistics` and the same command with `--ignore-noqa`. Both values must read 57. Stop if the default value reads 56, because the directive still hides one site. Requirement FR-012 states this stop condition.
 - [ ] T027 [US2] Read pull request #1791 and record the proof method that its author used for 4 sites. This family repeats that method 57 times.
-- [ ] T028 [US2] Split the 57 sites into two groups of at most 30 sites. Record the group boundary in [plan.md](plan.md). The largest files are `src/firmware/bulk_switch_upgrader.py` and `src/firmware/firmware_manager.py` with 5 sites each.
+- [ ] T028 [US2] Split the 57 sites into two groups of at most 30 sites. Record the group boundary in [plan.md](plan.md). The largest files are `src/operations/execution/firmware/bulk_switch_upgrader.py` and `src/operations/execution/firmware/firmware_manager.py` with 5 sites each.
 - [ ] T029 [US2] Capture the printed output for each site before the change. Run the operation that reaches the site and save the output. This capture is the reference for the proof.
 - [ ] T030 [US2] Convert each site in the first group. Pass the time zone to the `datetime.now()` call. Add an inline comment on each changed line that states why the value needs a time zone.
 - [ ] T031 [US2] Read every comparison that reads a converted value. Requirement FR-008 forbids a comparison between a naive value and an aware value. Convert both sides or neither. Depends on T030, because the comparison sites read the changed values.
@@ -187,10 +187,10 @@ Family 6 changes behavior at every site. It lands last, because a mistake there 
 | File | Earlier family | Later family |
 | - | - | - |
 | MistHelper.py | 1 (`W1514`) | 2 (`C408`) and 4 (`ISC004`) |
-| src/cache/cache_utils.py | 3 (`SIM103`) | 5 (`RUF012`) |
-| src/firmware/firmware_manager.py | 5 (`RUF012`) | 6 (`DTZ005`) |
-| src/reports/e911_bssid.py | 5 (`RUF012`) | 6 (`DTZ005`) |
-| src/site/bulk_radius_wlan_config_manager.py | 5 (`RUF012`) | 6 (`DTZ005`) |
+| src/foundation/persistence/cache/cache_utils.py | 3 (`SIM103`) | 5 (`RUF012`) |
+| src/operations/execution/firmware/firmware_manager.py | 5 (`RUF012`) | 6 (`DTZ005`) |
+| src/mist/intelligence/reports/e911_bssid.py | 5 (`RUF012`) | 6 (`DTZ005`) |
+| src/mist/resources/site/bulk_radius_wlan_config_manager.py | 5 (`RUF012`) | 6 (`DTZ005`) |
 
 ---
 

@@ -15,8 +15,8 @@ from typing import Any, ClassVar, NoReturn
 
 import pytest
 
-from src.upgrade_portal.capture import assembly, devices
-from src.upgrade_portal.compare import diff
+from src.interfaces.portals.upgrade_portal.capture import assembly, devices
+from src.interfaces.portals.upgrade_portal.compare import diff
 from tests.e2e.upgrade_portal.empty_site_seeds import EMPTY_SITE_ID
 
 logger = logging.getLogger(__name__)

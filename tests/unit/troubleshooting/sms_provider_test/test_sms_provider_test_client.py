@@ -5,8 +5,12 @@ from __future__ import annotations  # WHY: keep annotations consistent with sour
 from dataclasses import dataclass  # WHY: fake mistapi responses need a tiny typed object.
 from typing import Any  # WHY: fake SDK call signatures accept the session object.
 
-from src.troubleshooting.sms_provider_test.client import SmsProviderTestClient
-from src.troubleshooting.sms_provider_test.model import SMSGLOBAL_PROVIDER, TELSTRA_PROVIDER, TWILIO_PROVIDER
+from src.mist.intelligence.troubleshooting.sms_provider_test.client import SmsProviderTestClient
+from src.mist.intelligence.troubleshooting.sms_provider_test.model import (
+    SMSGLOBAL_PROVIDER,
+    TELSTRA_PROVIDER,
+    TWILIO_PROVIDER,
+)
 
 
 @dataclass(slots=True)

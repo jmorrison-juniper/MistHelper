@@ -28,7 +28,7 @@ The session files hold a copy of this trail for the red proof.
 **Decision**: The test of the lost action answer clears the cookies while it holds the lock.
 
 **Evidence**: The release route reads the lock record from the signed session of the browser.
-The function `held_record` in `src/upgrade_portal/app/routes/select.py` compares the token of the body with that record.
+The function `held_record` in `src/interfaces/portals/upgrade_portal/app/routes/select.py` compares the token of the body with that record.
 The test calls `clear_cookies`, and it then adds the cookies of a renewed session.
 The page keeps the cross-site request token of the first session, and the renewed session holds another secret.
 The token check refuses the call before the lock check, so the release of the fixture answers 400 `csrf_missing`.
@@ -114,8 +114,8 @@ It then counts each hold that is open at the end of the trail.
 **Rationale**: The audit log of the portal infers an expiry with the same rule, so the two readers agree.
 The shipped function `read_trail_lines` skips a damaged line, and that rule suits a page.
 A guard must fail when it cannot read its input, so the check reads each line itself.
-The check reads the action names from `src/upgrade_portal/runtime/lock.py`.
-It reads `OPENING_ACTIONS` and `LEGACY_ACTION` from `src/upgrade_portal/compare/lock_audit.py`.
+The check reads the action names from `src/interfaces/portals/upgrade_portal/runtime/lock.py`.
+It reads `OPENING_ACTIONS` and `LEGACY_ACTION` from `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`.
 
 **Note**: The run trail holds the stand-in addresses of the browser fixtures only.
 The message names the operator, because the address names the fixture that took the lock.

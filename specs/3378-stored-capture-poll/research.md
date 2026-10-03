@@ -5,7 +5,7 @@
 ## R1: Which words does the live path send at the end?
 
 The collector writes the last progress change in `progress_change`
-(`src/upgrade_portal/capture/collector.py`). It sends `verified` when the
+(`src/interfaces/portals/upgrade_portal/capture/collector.py`). It sends `verified` when the
 read-back matched, and `failed` in every other case. It sets `verified` to the
 same result. A write failure also sends `failed`, because the collector names
 `WRITE_FAILED_MESSAGE` with the state `failed`.
@@ -24,7 +24,7 @@ there too.
 
 ## R2: Which field holds the read-back result of a stored capture?
 
-`load_capture` in `src/upgrade_portal/capture/store.py` answers a
+`load_capture` in `src/interfaces/portals/upgrade_portal/capture/store.py` answers a
 `CaptureLoad`. Its `comparable` flag holds true only when three checks pass.
 The document exists, this release can read its schema version, and the
 lifecycle field `state` holds `verified`. The route already passes that flag to
@@ -66,7 +66,7 @@ pre-check only when `state` holds `verified`.
 ## R5: Why did no test find the defect?
 
 Two seeds hold `capture_status` `verified`, which the shipped store never
-writes (`resolve_status` in `src/upgrade_portal/capture/assembly.py` writes
+writes (`resolve_status` in `src/interfaces/portals/upgrade_portal/capture/assembly.py` writes
 `complete`, `partial`, or `failed`).
 
 - The contract test `test_a_stored_capture_reads_as_verified` seeds

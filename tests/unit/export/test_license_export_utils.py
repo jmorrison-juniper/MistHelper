@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from src.export.license_export_utils import LicenseExportUtils
+from src.operations.exporting.export.license_export_utils import LicenseExportUtils
 
 # ---------- _handle_async_claim_status status-code routing ----------
 

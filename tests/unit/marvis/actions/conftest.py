@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.config import runtime_settings
-from src.marvis.actions.client import LIST_PATH, RESOLVE_PATH, SCHEMA_PATH
+from src.foundation.runtime.config import runtime_settings
+from src.mist.intelligence.marvis.actions.client import LIST_PATH, RESOLVE_PATH, SCHEMA_PATH
 
 ORG_ID = "00000000-0000-4000-8000-00000000a001"  # Synthetic organization.
 SITE_ID = "00000000-0000-4000-8000-00000000b001"  # Synthetic site.
@@ -231,7 +231,7 @@ def scripted_input(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 @pytest.fixture
 def site_api() -> Iterator[MagicMock]:
     """Replace the mistapi module of the client, so the site read and the alarm search need no network."""
-    with patch("src.marvis.actions.client.mistapi") as mistapi_module:
+    with patch("src.mist.intelligence.marvis.actions.client.mistapi") as mistapi_module:
         mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = FakeResponse(200, [])
         mistapi_module.get_all.return_value = [{"id": SITE_ID, "name": SITE_NAME}]
         mistapi_module.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([])  # No alarm by default.
@@ -260,11 +260,11 @@ def harness(monkeypatch: pytest.MonkeyPatch, site_api: MagicMock, scripted_input
     shared dependency resolver, the pacer, the verify wait, and the page size.
     """
     monkeypatch.setattr(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 1000)
-    monkeypatch.setattr("src.marvis.actions.operation.VERIFY_DELAY_SECONDS", 0)
+    monkeypatch.setattr("src.mist.intelligence.marvis.actions.operation.VERIFY_DELAY_SECONDS", 0)
     monkeypatch.delenv("MARVIS_RESOLVE_MAX_ACTIONS", raising=False)
     with (
-        patch("src.marvis.actions.operation.SourceDependencyResolver") as resolver,
-        patch("src.marvis.actions.operation.AdaptivePacer") as pacer_class,
+        patch("src.mist.intelligence.marvis.actions.operation.SourceDependencyResolver") as resolver,
+        patch("src.mist.intelligence.marvis.actions.operation.AdaptivePacer") as pacer_class,
     ):
 
         def build(rows: list[dict[str, Any]], *answers: str | BaseException) -> OperationHarness:

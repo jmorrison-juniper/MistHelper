@@ -35,7 +35,7 @@ that the assertion actually fails (not skips) when a section is missing.
 **Target Platform**: Same Podman container / Flask app used today; no
 infrastructure change.
 
-**Project Type**: Existing web application, `src/upgrade_portal/`.
+**Project Type**: Existing web application, `src/interfaces/portals/upgrade_portal/`.
 
 ## Approach by file
 

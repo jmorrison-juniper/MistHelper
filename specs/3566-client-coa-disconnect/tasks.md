@@ -10,7 +10,7 @@
 
 ## Phase 1: Research Verification
 
-- [X] T001 Read `src/device/` helper files before code work starts.
+- [X] T001 Read `src/mist/resources/device/` helper files before code work starts.
 - [X] T002 Record the existing MAC normalization and client lookup findings in `research.md`.
 - [X] T003 Verify these operation IDs in `documentation/mist-api-openapi3json.json`: `reauthSiteDot1xWirelessClient`, `reauthSiteDot1xWiredClient`, `reauthOrgDot1xWirelessClient`, `reauthOrgDot1xWiredClient`, `disconnectSiteWirelessClient`, `unauthorizeSiteWirelessClient`, and `deauthSiteWirelessClientsConnectedToARogue`.
 - [X] T004 Verify the same seven operation IDs in installed `mistapi` with `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe`.
@@ -36,11 +36,11 @@
 
 ## Phase 4: Package Implementation
 
-- [X] T018 Create `src/device/client_session_control/__init__.py`.
-- [X] T019 Create `src/device/client_session_control/models.py` with dataclasses and pure functions for target normalization, confirmation, request records, and log rows.
-- [X] T020 Create `src/device/client_session_control/actions.py` with the action catalog and Mist API client class.
-- [X] T021 Create `src/device/client_session_control/audit.py` with the CSV audit writer.
-- [X] T022 Create `src/device/client_session_control/handler.py` with class `ClientSessionControl` and static `run()`.
+- [X] T018 Create `src/mist/resources/device/client_session_control/__init__.py`.
+- [X] T019 Create `src/mist/resources/device/client_session_control/models.py` with dataclasses and pure functions for target normalization, confirmation, request records, and log rows.
+- [X] T020 Create `src/mist/resources/device/client_session_control/actions.py` with the action catalog and Mist API client class.
+- [X] T021 Create `src/mist/resources/device/client_session_control/audit.py` with the CSV audit writer.
+- [X] T022 Create `src/mist/resources/device/client_session_control/handler.py` with class `ClientSessionControl` and static `run()`.
 - [X] T023 Ensure each executable line of new code has an inline comment.
 - [X] T024 Ensure the package logs before and after prompts, validation, API calls, dry runs, and CSV writes.
 - [X] T025 Commit the package implementation after the focused tests pass.
@@ -52,14 +52,14 @@
 
 ## Phase 6: Quality Gates
 
-- [X] T028 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m py_compile src\device\client_session_control\__init__.py src\device\client_session_control\models.py src\device\client_session_control\actions.py src\device\client_session_control\audit.py src\device\client_session_control\handler.py`.
-- [X] T029 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m ruff check src\device\client_session_control tests\unit\device\client_session_control`.
-- [X] T030 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m black --check src\device\client_session_control tests\unit\device\client_session_control`.
-- [X] T031 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m mypy src\device\client_session_control --config-file pyproject.toml`.
-- [X] T032 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m pydocstyle src\device\client_session_control`.
+- [X] T028 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m py_compile src\mist\resources\device\client_session_control\__init__.py src\mist\resources\device\client_session_control\models.py src\mist\resources\device\client_session_control\actions.py src\mist\resources\device\client_session_control\audit.py src\mist\resources\device\client_session_control\handler.py`.
+- [X] T029 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m ruff check src\mist\resources\device\client_session_control tests\unit\device\client_session_control`.
+- [X] T030 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m black --check src\mist\resources\device\client_session_control tests\unit\device\client_session_control`.
+- [X] T031 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m mypy src\mist\resources\device\client_session_control --config-file pyproject.toml`.
+- [X] T032 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m pydocstyle src\mist\resources\device\client_session_control`.
 - [X] T033 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m pytest tests\unit\device\client_session_control -q --timeout=120`.
-- [X] T034 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m vulture src\device\client_session_control --min-confidence 70`.
-- [X] T035 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m interrogate -v src\device\client_session_control`.
+- [X] T034 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m vulture src\mist\resources\device\client_session_control --min-confidence 70`.
+- [X] T035 Run `C:\Users\jmorrison\mh-fleet\3566-client-coa-disconnect\.venv\Scripts\python.exe -m interrogate -v src\mist\resources\device\client_session_control`.
 - [X] T036 Commit any repairs from the quality gates.
 
 ## Phase 7: Analyze, Push, and Pull Request

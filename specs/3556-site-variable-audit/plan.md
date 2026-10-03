@@ -10,7 +10,7 @@ Add Menu 275 as a read-only site variable coverage audit. The operation reads
 sites, assigned templates, WLANs, and site variables through `mistapi`, scans
 assigned template bodies for `{{name}}` tokens, and writes two CSV reports with
 `DataExporter`. The design uses a new package at
-`src/reports/site_variable_audit/` with a client module, a model module, and an
+`src/mist/intelligence/reports/site_variable_audit/` with a client module, a model module, and an
 operation module.
 
 ## Technical Context
@@ -45,7 +45,7 @@ gateway templates, network templates, WLANs, and device profiles.
 ### Principle I. Five-Item Rule
 
 Pass. The feature adds one compliant nested package:
-`src/reports/site_variable_audit/`. The planned package has three modules:
+`src/mist/intelligence/reports/site_variable_audit/`. The planned package has three modules:
 `client.py`, `model.py`, and `operation.py`. The tests use one matching nested
 directory.
 
@@ -102,7 +102,7 @@ pull request.
 ### Source code
 
 ```text
-src/reports/site_variable_audit/
+src/mist/intelligence/reports/site_variable_audit/
 ├── __init__.py
 ├── client.py
 ├── model.py

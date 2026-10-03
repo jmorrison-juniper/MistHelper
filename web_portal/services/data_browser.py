@@ -13,7 +13,9 @@ from collections import deque
 from contextlib import closing
 from itertools import islice
 
-from src.security import CredentialRedactor  # Reuse the shared credential classifier and redactor.
+from src.operations.protection.security import (
+    CredentialRedactor,
+)  # Reuse the shared credential classifier and redactor.
 from web_portal.services.column_order import ColumnOrder  # Issue #3125: lead with the column that names the row.
 from web_portal.services.row_sorter import RowSorter, SortSpec  # Issue #3047: order rows on the server.
 

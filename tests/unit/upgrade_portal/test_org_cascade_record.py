@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime.runs import PHASE_ORDER
-from src.upgrade_portal.upgrade.driver import CLIENT_GATE_SHUT_REASON, PhaseOutcome
-from src.upgrade_portal.upgrade.org_cascade.record import (
+from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER
+from src.interfaces.portals.upgrade_portal.upgrade.driver import CLIENT_GATE_SHUT_REASON, PhaseOutcome
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import (
     ANCHORS_KEY,
     NOT_STARTED_NOTE,
     PHASES_KEY,

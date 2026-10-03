@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.export.site_export_utils import SiteExportUtils
+from src.operations.exporting.export.site_export_utils import SiteExportUtils
 
 
 class _ApiCallWithLimit:

@@ -1,6 +1,6 @@
 """Unit tests for the PingDeviceExecutor.
 
-Covers src/websocket/diagnostics/ping_executor.py. The executor orchestrates the
+Covers src/mist/realtime/websocket/diagnostics/ping_executor.py. The executor orchestrates the
 interactive ping-over-WebSocket workflow: site + device prompts, target/count
 validation, WebSocket connect + subscribe, HTTP POST of the ping command,
 session-id demux, WS wait for the result, and result rendering (raw block,
@@ -20,8 +20,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.websocket.diagnostics import ping_executor as ping_mod
-from src.websocket.diagnostics.ping_executor import PingDeviceExecutor
+from src.mist.realtime.websocket.diagnostics import ping_executor as ping_mod
+from src.mist.realtime.websocket.diagnostics.ping_executor import PingDeviceExecutor
 
 
 def _make_deps(
@@ -268,7 +268,7 @@ def test_render_ping_result_full(capsys, caplog: pytest.LogCaptureFixture) -> No
     module-scoped logger (post slice #886/74), so 'extra1' is captured via
     caplog rather than capsys.
     """
-    caplog.set_level(logging.INFO, logger="src.websocket.diagnostics.common")
+    caplog.set_level(logging.INFO, logger="src.mist.realtime.websocket.diagnostics.common")
     payload = {"raw": "r", "Output": "o", "extra1": "v"}
     PingDeviceExecutor()._render_ping_result(payload, "1.1.1.1")
     out = capsys.readouterr().out

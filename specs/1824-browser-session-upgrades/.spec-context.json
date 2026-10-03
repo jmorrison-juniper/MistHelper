@@ -503,37 +503,37 @@
       "status": "DONE",
       "did": "Captured environment-token presence at startup and exposed the browser-token gate.",
       "files": [
-        "src/upgrade_portal/app/config.py",
-        "src/upgrade_portal/app/factory.py"
+        "src/interfaces/portals/upgrade_portal/app/config.py",
+        "src/interfaces/portals/upgrade_portal/app/factory.py"
       ]
     },
     "T008": {
       "status": "DONE",
       "did": "Added browser-token sessions and safe token-name identities with lock compatibility.",
       "files": [
-        "src/upgrade_portal/runtime/identity.py",
-        "src/upgrade_portal/runtime/lock.py"
+        "src/interfaces/portals/upgrade_portal/runtime/identity.py",
+        "src/interfaces/portals/upgrade_portal/runtime/lock.py"
       ]
     },
     "T009": {
       "status": "DONE",
       "did": "Added selected-type validation, selected target filtering, and safe model fallback selection.",
       "files": [
-        "src/upgrade_portal/upgrade/options.py"
+        "src/interfaces/portals/upgrade_portal/upgrade/options.py"
       ]
     },
     "T010": {
       "status": "DONE",
       "did": "Built browser-token sessions, GetSelf token-name lookup, and safe sign-in refusal paths.",
       "files": [
-        "src/upgrade_portal/app/routes/auth.py"
+        "src/interfaces/portals/upgrade_portal/app/routes/auth.py"
       ]
     },
     "T011": {
       "status": "DONE",
       "did": "Stored and returned selected device types with the saved upgrade targets.",
       "files": [
-        "src/upgrade_portal/app/routes/upgrade.py"
+        "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py"
       ]
     },
     "T012": {
@@ -548,24 +548,24 @@
       "status": "DONE",
       "did": "Added the startup-gated browser-token control with token-safe guidance.",
       "files": [
-        "src/upgrade_portal/app/assets/templates/auth/signin.html"
+        "src/interfaces/portals/upgrade_portal/app/assets/templates/auth/signin.html"
       ]
     },
     "T014": {
       "status": "DONE",
       "did": "Added browser-token client submission to the sign-in endpoint and cleared the input.",
       "files": [
-        "src/upgrade_portal/app/assets/static/js/portal.js"
+        "src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js"
       ]
     },
     "T015": {
       "status": "DONE",
       "did": "Verified the guarded selection, capture, upgrade, and driver paths read the active registry session.",
       "files": [
-        "src/upgrade_portal/app/wiring.py",
-        "src/upgrade_portal/app/routes/select.py",
-        "src/upgrade_portal/app/routes/capture.py",
-        "src/upgrade_portal/app/routes/upgrade.py"
+        "src/interfaces/portals/upgrade_portal/app/wiring.py",
+        "src/interfaces/portals/upgrade_portal/app/routes/select.py",
+        "src/interfaces/portals/upgrade_portal/app/routes/capture.py",
+        "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py"
       ]
     },
     "T016": {
@@ -579,21 +579,21 @@
       "status": "DONE",
       "did": "Added all and per-type upgrade selection checkboxes and row type attributes.",
       "files": [
-        "src/upgrade_portal/app/assets/templates/upgrade/options.html"
+        "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html"
       ]
     },
     "T018": {
       "status": "DONE",
       "did": "Added selected-type payloads, target filtering, and all-type checkbox behavior.",
       "files": [
-        "src/upgrade_portal/app/assets/static/js/portal.js"
+        "src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js"
       ]
     },
     "T019": {
       "status": "DONE",
       "did": "Verified that capture assembly reads every inventory section independently of selected upgrade types.",
       "files": [
-        "src/upgrade_portal/capture/assembly.py"
+        "src/interfaces/portals/upgrade_portal/capture/assembly.py"
       ]
     },
     "T020": {
@@ -607,21 +607,21 @@
       "status": "DONE",
       "did": "Added safe target sources, compatible fallbacks, and known-version mismatch fields.",
       "files": [
-        "src/upgrade_portal/upgrade/options.py"
+        "src/interfaces/portals/upgrade_portal/upgrade/options.py"
       ]
     },
     "T022": {
       "status": "DONE",
       "did": "Added visible safe-target mismatch markers for known firmware differences.",
       "files": [
-        "src/upgrade_portal/app/assets/templates/upgrade/options.html"
+        "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html"
       ]
     },
     "T023": {
       "status": "DONE",
       "did": "Verified capture device indexing keeps an unknown firmware version empty for safe mismatch handling.",
       "files": [
-        "src/upgrade_portal/capture/devices.py"
+        "src/interfaces/portals/upgrade_portal/capture/devices.py"
       ]
     },
     "T024": {

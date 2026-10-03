@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.device._utility_commands_action import _UtilityCommandsAction
-from src.device._utility_commands_selection import _UtilityCommandsSelection
-from src.device.arp_command_manager import ARPCommandManager
-from src.device.prompt_utils import PromptNetworkDeviceUtils
+from src.mist.resources.device._utility_commands_action import _UtilityCommandsAction
+from src.mist.resources.device._utility_commands_selection import _UtilityCommandsSelection
+from src.mist.resources.device.arp_command_manager import ARPCommandManager
+from src.mist.resources.device.prompt_utils import PromptNetworkDeviceUtils
 
 
 class TestNarrowedDeviceHandlerExceptions:
@@ -22,7 +22,7 @@ class TestNarrowedDeviceHandlerExceptions:
         """A coding fault in locate must not look like a transport failure."""
         parent = SimpleNamespace(_apisession=MagicMock(), _print_api_result=MagicMock(return_value=True))
         action = _UtilityCommandsAction(parent)
-        with patch("src.device._utility_commands_action.mistapi") as mistapi_mock:
+        with patch("src.mist.resources.device._utility_commands_action.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.devices.startSiteLocateDevice.side_effect = TypeError("bad locate wiring")
             with pytest.raises(TypeError, match="bad locate wiring"):
                 action._invoke_locate("site-1", "dev-1", 5)
@@ -30,7 +30,7 @@ class TestNarrowedDeviceHandlerExceptions:
     def test_fetch_and_sort_unexpected_error_propagates(self) -> None:
         """A coding fault in device listing must not look like an empty device list."""
         utils = PromptNetworkDeviceUtils(MagicMock(), MagicMock(), MagicMock())
-        with patch("src.device.prompt_utils.mistapi") as mistapi_mock:
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.devices.listSiteDevices.side_effect = TypeError("bad device list")
             with pytest.raises(TypeError, match="bad device list"):
                 utils._fetch_and_sort_devices("site-1", "ap", "APs")
@@ -39,7 +39,7 @@ class TestNarrowedDeviceHandlerExceptions:
         """A coding fault in device stats must not look like missing stats."""
         parent = SimpleNamespace(_apisession=MagicMock())
         selection = _UtilityCommandsSelection(parent)
-        with patch("src.device._utility_commands_selection.mistapi") as mistapi_mock:
+        with patch("src.mist.resources.device._utility_commands_selection.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.stats.getSiteDeviceStats.side_effect = TypeError("bad stats")
             with pytest.raises(TypeError, match="bad stats"):
                 selection._get_device_info("site-1", "dev-1")
@@ -67,7 +67,7 @@ class TestNarrowedDeviceHandlerExceptions:
         """Connection errors and timeouts must stay operator-visible for locate."""
         parent = SimpleNamespace(_apisession=MagicMock(), _print_api_result=MagicMock(return_value=True))
         action = _UtilityCommandsAction(parent)
-        with patch("src.device._utility_commands_action.mistapi") as mistapi_mock:
+        with patch("src.mist.resources.device._utility_commands_action.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.devices.startSiteLocateDevice.side_effect = exception
             action._invoke_locate("site-1", "dev-1", 5)
         assert "Locate failed" in capsys.readouterr().out
@@ -81,7 +81,7 @@ class TestNarrowedDeviceHandlerExceptions:
         )
         action = _UtilityCommandsAction(parent)
         response = MagicMock(status_code=status_code, data={"detail": "bad"})
-        with patch("src.device._utility_commands_action.mistapi") as mistapi_mock:
+        with patch("src.mist.resources.device._utility_commands_action.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.devices.startSiteLocateDevice.return_value = response
             action._invoke_locate("site-1", "dev-1", 5)
         assert f"HTTP {status_code}" in capsys.readouterr().out
@@ -97,6 +97,6 @@ class TestNarrowedDeviceHandlerExceptions:
         """Malformed WebSocket JSON must not produce a parsed ARP payload."""
         malformed_json = "{not-json"
         parse_error = json.JSONDecodeError("bad json", malformed_json, 1)
-        with patch("src.device.arp_command_manager.json.loads", side_effect=parse_error):
+        with patch("src.mist.resources.device.arp_command_manager.json.loads", side_effect=parse_error):
             result = ARPCommandManager._safe_parse_ws_arp_payload(malformed_json)
         assert result is None

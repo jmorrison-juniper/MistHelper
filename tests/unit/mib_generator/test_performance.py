@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from src.mib_generator.runner import MibGeneratorRunner
+from src.operations.hardware.mib_generator.runner import MibGeneratorRunner
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # A pytest fixture moves the working folder, so paths are absolute.
 OPENAPI = REPO_ROOT / "documentation" / "mist-api-openapi31json.json"  # The 16 MB file that Mist ships.
@@ -28,7 +28,7 @@ def writable_ledger_copy(tmp_path: Path) -> Path:
 
     Why:
         ``MibGeneratorRunner.generate`` calls ``OidLedger.save`` at
-        ``src/mib_generator/runner.py:180``, because a real run must keep the
+        ``src/operations/hardware/mib_generator/runner.py:180``, because a real run must keep the
         number of every new field. A test that points the runner at the
         checked-in ledger therefore writes into the repository, and the working
         tree stays dirty after the run. Issue #3021 records that defect.

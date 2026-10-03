@@ -11,7 +11,9 @@ from typing import Any  # WHY: Type the mixed parser arguments in the test doubl
 
 import pytest  # WHY: Use pytest fixtures and SystemExit assertions.
 
-from src.refactors.main_entrypoint import ApplicationBootstrap  # WHY: Exercise the new bootstrap seam directly.
+from src.foundation.support.refactors.main_entrypoint import (
+    ApplicationBootstrap,
+)  # WHY: Exercise the new bootstrap seam directly.
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]  # WHY: Locate the worktree root from this nested test file.
 

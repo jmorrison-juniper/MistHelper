@@ -159,6 +159,6 @@ prober risks regressing a working component.
 - Precursor: `specs/1023-probe-tailored-synthetic-tests/plan.md`,
   `specs/1023-probe-tailored-synthetic-tests/contracts/probe_target_url_builder.md`
 - Constitution: `.specify/memory/constitution.md` (v1.4.0)
-- Code: `src/org/org_synthetic_probes_manager.py::_probe_target`,
+- Code: `src/mist/resources/org/org_synthetic_probes_manager.py::_probe_target`,
   `::_probe_type_for_target`, `::_is_vpn_host`;
-  `src/utils/zscaler_probe.py::run_full_validation`, `::_udp_check`
+  `src/foundation/support/utils/zscaler_probe.py::run_full_validation`, `::_udp_check`

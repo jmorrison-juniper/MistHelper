@@ -33,7 +33,7 @@ The gate change lands last, in its own pull request, after the last slice report
 **Constraints**:
 
 - The root ruff line length is 120 characters. A rewrite from `logging.` to `logger.` shortens each line by two characters, so no line grows.
-- `ruff check .` and `black` read the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`.
+- `ruff check .` and `black` read the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`.
 - `mypy` now reads `MistHelper.py` as well as `src/`. Issue #888 widened that scope.
 - The action logging rule in `.github/copilot-instructions.md` is NON-NEGOTIABLE. The rewrite must keep every message and every level.
 
@@ -62,18 +62,18 @@ If the count differs from 4478, stop. Record the new count in this plan and cont
 A maintainer probed the counts on 2026-08-06 at commit `08a75d2`. Three results shape the tasks.
 
 1. The area counts in the specification match the measured values exactly. No drift exists between the issue and the tree.
-2. Four files hold 779 of the 4478 calls. `MistHelper.py` holds 303, `src/firmware/firmware_manager.py` holds 228, `src/firmware/org_ap_upgrader.py` holds 143, and `src/firmware/bulk_ap_upgrader.py` holds 105.
+2. Four files hold 779 of the 4478 calls. `MistHelper.py` holds 303, `src/operations/execution/firmware/firmware_manager.py` holds 228, `src/operations/execution/firmware/org_ap_upgrader.py` holds 143, and `src/operations/execution/firmware/bulk_ap_upgrader.py` holds 105.
 3. The `tests` area holds 134 calls, and 53 of them sit in one file. That file is `tests/unit/refactors/test_fast_mode_small_seams.py`.
 
 ### Discovered risk: three files break the 500-line slice limit on their own
 
-`MistHelper.py`, `src/firmware/firmware_manager.py`, and `src/firmware/org_ap_upgrader.py` each hold more than 100 calls. A single file cannot split across two pull requests without a broken intermediate state, because the module logger definition must land with the first converted call.
+`MistHelper.py`, `src/operations/execution/firmware/firmware_manager.py`, and `src/operations/execution/firmware/org_ap_upgrader.py` each hold more than 100 calls. A single file cannot split across two pull requests without a broken intermediate state, because the module logger definition must land with the first converted call.
 
 The control is a per-file slice. Each of those three files becomes its own pull request. The line count then reaches about 300 for the largest file, which stays inside the limit.
 
 ### Discovered risk: the logging configuration module can recurse
 
-`src/utils/logger_utils.py` configures the logging system. A record that the configuration path emits can re-enter the same path. Specification `1032-bandit-severity-gate` already records one suppression in that module for the same reason.
+`src/foundation/support/utils/logger_utils.py` configures the logging system. A record that the configuration path emits can re-enter the same path. Specification `1032-bandit-severity-gate` already records one suppression in that module for the same reason.
 
 The control is a separate read. The implementer reads that module in full before any edit and confirms that the module logger does not sit inside a filter or a handler.
 
@@ -177,18 +177,18 @@ select = ["E", "F", "W", "I", "UP", "B", "G", "LOG015"]
 | Slice | Scope | Calls | Files |
 | - | - | - | - |
 | 1 | tests | 134 | about 20 |
-| 2 | src/auth, src/inventory, src/ui | 393 | about 25 |
-| 3 | src/device, src/site, src/troubleshooting | 488 | about 30 |
-| 4 | src/org | 191 | about 10 |
-| 5 | src/capture | 220 | about 10 |
-| 6 | src/gateway | 261 | about 12 |
-| 7 | src/refactors | 423 | about 25 |
-| 8 | src/firmware/org_ap_upgrader.py | 143 | 1 |
-| 9 | src/firmware/firmware_manager.py | 228 | 1 |
-| 10 | src/firmware, the rest | 130 | about 10 |
+| 2 | src/mist/access/auth, src/mist/resources/inventory, src/interfaces/visualization/ui | 393 | about 25 |
+| 3 | src/mist/resources/device, src/mist/resources/site, src/mist/intelligence/troubleshooting | 488 | about 30 |
+| 4 | src/mist/resources/org | 191 | about 10 |
+| 5 | src/operations/execution/capture | 220 | about 10 |
+| 6 | src/mist/resources/gateway | 261 | about 12 |
+| 7 | src/foundation/support/refactors | 423 | about 25 |
+| 8 | src/operations/execution/firmware/org_ap_upgrader.py | 143 | 1 |
+| 9 | src/operations/execution/firmware/firmware_manager.py | 228 | 1 |
+| 10 | src/operations/execution/firmware, the rest | 130 | about 10 |
 | 11 | MistHelper.py | 303 | 1 |
-| 12 | src/export, part one | about 340 | about 15 |
-| 13 | src/export, part two, and every remaining area | about 1624 | about 60 |
+| 12 | src/operations/exporting/export, part one | about 340 | about 15 |
+| 13 | src/operations/exporting/export, part two, and every remaining area | about 1624 | about 60 |
 | 14 | pyproject.toml | 0 | 1 |
 
 **Caution**: Slice 13 holds every area that the table above does not name. The implementer must split that slice further once the earlier slices land and the exact remainder is clear. No pull request may exceed 500 changed lines.
@@ -200,7 +200,7 @@ select = ["E", "F", "W", "I", "UP", "B", "G", "LOG015"]
 | A slice changes a message text | Medium | An operator playbook breaks | The slice review reads every changed line. Task T012 states the check. |
 | A module already binds the name `logger` | Low | A name collision hides the real object | Each slice starts with a search. Task T008 states the search. |
 | A test asserts on the root logger | Medium | A test fails after the slice | Each slice runs the whole unit suite, not the area tests alone |
-| The logging configuration module recurses | Low | The process hangs or overflows the stack | Task T034 reads `src/utils/logger_utils.py` before any edit |
+| The logging configuration module recurses | Low | The process hangs or overflows the stack | Task T034 reads `src/foundation/support/utils/logger_utils.py` before any edit |
 | A slice exceeds 500 changed lines | Medium | A reviewer cannot read the difference | The slice ledger caps each slice. Task T009 counts the lines before the push. |
 | Issue #886 edits the same lines | Medium | A merge conflict | Task T005 checks the open pull requests for each area before the slice starts |
 

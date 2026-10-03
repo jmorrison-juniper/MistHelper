@@ -38,7 +38,7 @@ policy change is not necessary, and it would widen the policy for every page.
 ### D2. The download sends no API token
 
 The `jwt` query parameter authenticates the download, and the probe proves that
-no token is necessary. The standalone viewer in `src/maps/_flask_viewer.py`
+no token is necessary. The standalone viewer in `src/interfaces/visualization/maps/_flask_viewer.py`
 sends `Authorization: Token`. That header does not reach the storage host,
 because `requests` removes it at a redirect to a new host. The portal still
 sends no token, because a token must not go to a host that does not need it.

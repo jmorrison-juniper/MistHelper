@@ -1,4 +1,4 @@
-"""Shared fixtures for src/ui collaborator unit tests."""
+"""Shared fixtures for src/interfaces/visualization/ui collaborator unit tests."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """Unit tests for APIFetchUtils (issue #878 tranche 6 -- un-omit).
 
-Covers every static method on ``src.api.api_fetch_utils``:
+Covers every static method on ``src.mist.access.api.api_fetch_utils``:
 ``organization_services`` (happy/empty/exception paths),
 ``_normalize_org_services`` (dict + non-dict entries with defaults),
 ``_fetch_single_site_setting`` (happy tags + exception -> None),
@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 import pytest  # WHY: assert that non-transport faults propagate after handler narrowing.
 import requests  # WHY: create concrete transport exceptions for narrowed handler tests.
 
-from src.api.api_fetch_utils import APIFetchUtils
+from src.mist.access.api.api_fetch_utils import APIFetchUtils
 from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 
@@ -52,8 +52,11 @@ def test_organization_services_happy_path_returns_normalized_rows() -> None:
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_response = SimpleNamespace(data=[{"name": "svc-a", "type": "custom", "description": "d1"}])
     with (
-        patch("src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices", return_value=fake_response),
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch(
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
+            return_value=fake_response,
+        ),
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
     ):
         result = APIFetchUtils.organization_services()
     assert result == [
@@ -71,8 +74,11 @@ def test_organization_services_empty_data_returns_empty_list() -> None:
     fake_mh = _make_mh()
     fake_response = SimpleNamespace(data=[])
     with (
-        patch("src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices", return_value=fake_response),
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch(
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
+            return_value=fake_response,
+        ),
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
     ):
         assert APIFetchUtils.organization_services() == []
 
@@ -82,8 +88,11 @@ def test_organization_services_missing_data_attribute_returns_empty_list() -> No
     fake_mh = _make_mh()
     fake_response = SimpleNamespace()
     with (
-        patch("src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices", return_value=fake_response),
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch(
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
+            return_value=fake_response,
+        ),
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
     ):
         assert APIFetchUtils.organization_services() == []
 
@@ -94,10 +103,10 @@ def test_organization_services_transport_exception_returns_empty_list() -> None:
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: reach the SDK call.
     with (  # WHY: patch only the dependencies for this visible behavior.
         patch(  # WHY: simulate the request-layer failure this handler owns.
-            "src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
             side_effect=requests.ConnectionError("boom"),
         ),
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: keep the org id stable.
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: keep the org id stable.
     ):
         assert APIFetchUtils.organization_services() == []  # WHY: transport failures still degrade to an empty list.
 
@@ -108,10 +117,10 @@ def test_organization_services_non_transport_exception_propagates() -> None:
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: reach the SDK call.
     with (  # WHY: prove the narrowed handler no longer swallows programming faults.
         patch(  # WHY: AttributeError matches the hidden SDK defect class from issue #2717.
-            "src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
             side_effect=AttributeError("missing sdk method"),
         ),
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: keep the org id stable.
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: keep the org id stable.
         pytest.raises(AttributeError),  # WHY: the defect must be visible to the caller.
     ):
         APIFetchUtils.organization_services()  # WHY: execute the branch under test.
@@ -153,7 +162,7 @@ def test_fetch_single_site_setting_tags_config_with_ids() -> None:
     fake_response = SimpleNamespace(data={"foo": "bar"})
     apisession = MagicMock()
     with patch(
-        "src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting", return_value=fake_response
+        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting", return_value=fake_response
     ) as api:
         config = APIFetchUtils._fetch_single_site_setting(apisession, {"id": "s1", "name": "SiteOne"})
     api.assert_called_once_with(apisession, "s1")
@@ -164,7 +173,7 @@ def test_fetch_single_site_setting_returns_none_on_exception() -> None:
     """API failure -> return None and log a warning (no raise)."""
     apisession = MagicMock()
     with patch(
-        "src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
+        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
         side_effect=requests.Timeout("bad"),
     ):
         assert APIFetchUtils._fetch_single_site_setting(apisession, {"id": "s1"}) is None
@@ -175,7 +184,7 @@ def test_fetch_single_site_setting_non_transport_exception_propagates() -> None:
     apisession = MagicMock()  # WHY: avoid a live Mist API session.
     with (  # WHY: prove the narrowed handler only owns transport failures.
         patch(  # WHY: simulate a programming fault that the handler must not hide.
-            "src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
             side_effect=AttributeError("bad sdk path"),
         ),
         pytest.raises(AttributeError),  # WHY: callers must see a bad SDK path.
@@ -197,7 +206,7 @@ def test_all_site_settings_iterates_all_sites_and_skips_failures() -> None:
         return None if site["id"] == "s2" else {"site_id": site["id"], "site_name": site["name"]}
 
     with (
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(APIFetchUtils, "_fetch_single_site_setting", side_effect=fetcher),
     ):
         result = APIFetchUtils.all_site_settings(MagicMock(), "org-1")
@@ -213,7 +222,7 @@ def test_all_site_settings_stops_when_signal_set() -> None:
     fake_mh.ConfigUtils.check_stop_signal.return_value = True
 
     with (
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(APIFetchUtils, "_fetch_single_site_setting") as fetcher,
     ):
         result = APIFetchUtils.all_site_settings(MagicMock(), "org-1")
@@ -232,9 +241,10 @@ def test_gw_load_inventory_happy_path_returns_paginated_devices() -> None:
     devices = [{"id": "d1"}, {"id": "d2"}]
     with (
         patch(
-            "src.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory", return_value=fake_response
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory",
+            return_value=fake_response,
         ) as inv_call,
-        patch("src.api.api_fetch_utils.mistapi.get_all", return_value=devices) as get_all,
+        patch("src.mist.access.api.api_fetch_utils.mistapi.get_all", return_value=devices) as get_all,
     ):
         result = APIFetchUtils._gw_load_inventory(apisession, "org-1")
     inv_call.assert_called_once_with(apisession, "org-1", limit=1000)
@@ -245,7 +255,7 @@ def test_gw_load_inventory_happy_path_returns_paginated_devices() -> None:
 def test_gw_load_inventory_returns_none_on_exception() -> None:
     """Inventory fetch failure -> return None."""
     with patch(
-        "src.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory",
+        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory",
         side_effect=requests.ConnectionError("nope"),
     ):
         assert APIFetchUtils._gw_load_inventory(MagicMock(), "org-1") is None
@@ -255,7 +265,7 @@ def test_gw_load_inventory_non_transport_exception_propagates() -> None:
     """Non-transport inventory faults must propagate."""
     with (  # WHY: prove the narrowed handler does not hide programming faults.
         patch(  # WHY: simulate an invalid SDK call surface.
-            "src.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory",
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory",
             side_effect=AttributeError("bad sdk path"),
         ),
         pytest.raises(AttributeError),  # WHY: callers must see SDK compatibility defects.
@@ -272,7 +282,7 @@ def test_gw_load_site_names_parses_csv_into_id_name_map(tmp_path) -> None:
     csv_path = tmp_path / "SiteList.csv"
     csv_path.write_text("id,name\ns1,SiteOne\ns2,SiteTwo\n", encoding="utf-8")
     fake_mh.FilePathUtils.get_csv_path.return_value = str(csv_path)
-    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         result = APIFetchUtils._gw_load_site_names()
     assert result == {"s1": "SiteOne", "s2": "SiteTwo"}
 
@@ -283,7 +293,7 @@ def test_gw_load_site_names_defaults_missing_name_column(tmp_path) -> None:
     csv_path = tmp_path / "SiteList.csv"
     csv_path.write_text("id\ns1\n", encoding="utf-8")
     fake_mh.FilePathUtils.get_csv_path.return_value = str(csv_path)
-    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         result = APIFetchUtils._gw_load_site_names()
     assert result == {"s1": "Unnamed Site"}
 
@@ -292,7 +302,7 @@ def test_gw_load_site_names_returns_empty_on_missing_file() -> None:
     """Missing CSV -> return {} without raising."""
     fake_mh = _make_mh()
     fake_mh.FilePathUtils.get_csv_path.return_value = "/nonexistent/SiteList.csv"
-    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         assert APIFetchUtils._gw_load_site_names() == {}
 
 
@@ -301,7 +311,9 @@ def test_gw_load_site_names_non_io_exception_propagates() -> None:
     fake_mh = _make_mh()  # WHY: isolate path resolution from the real application.
     fake_mh.FilePathUtils.get_csv_path.side_effect = RuntimeError("bad path helper")  # WHY: simulate a code fault.
     with (  # WHY: patch the dependency and assert the new visible behavior.
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: route through the fake helper.
+        patch(
+            "src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh
+        ),  # WHY: route through the fake helper.
         pytest.raises(RuntimeError),  # WHY: the handler must not hide non-I/O defects.
     ):
         APIFetchUtils._gw_load_site_names()  # WHY: run the changed handler.
@@ -335,7 +347,9 @@ def test_gw_fetch_one_config_happy_path_tags_config() -> None:
     apisession = MagicMock()
     fake_response = SimpleNamespace(data={"foo": "bar"})
     sem = threading.Semaphore(1)
-    with patch("src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice", return_value=fake_response) as api:
+    with patch(
+        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice", return_value=fake_response
+    ) as api:
         config = APIFetchUtils._gw_fetch_one_config(apisession, ("s1", "d1", "SiteOne"), sem)
     api.assert_called_once_with(apisession, "s1", "d1")
     assert config == {"foo": "bar", "site_name": "SiteOne", "site_id": "s1"}
@@ -345,7 +359,9 @@ def test_gw_fetch_one_config_empty_config_returns_none() -> None:
     """Empty response data -> return None."""
     fake_response = SimpleNamespace(data={})
     sem = threading.Semaphore(1)
-    with patch("src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice", return_value=fake_response):
+    with patch(
+        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice", return_value=fake_response
+    ):
         assert APIFetchUtils._gw_fetch_one_config(MagicMock(), ("s1", "d1", "SiteOne"), sem) is None
 
 
@@ -353,7 +369,9 @@ def test_gw_fetch_one_config_missing_data_attr_returns_none() -> None:
     """Response with no ``data`` attribute -> return None (getattr default is {})."""
     fake_response = SimpleNamespace()
     sem = threading.Semaphore(1)
-    with patch("src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice", return_value=fake_response):
+    with patch(
+        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice", return_value=fake_response
+    ):
         assert APIFetchUtils._gw_fetch_one_config(MagicMock(), ("s1", "d1", "SiteOne"), sem) is None
 
 
@@ -361,7 +379,7 @@ def test_gw_fetch_one_config_exception_returns_none() -> None:
     """Exception in API call -> return None (logged, not raised)."""
     sem = threading.Semaphore(1)
     with patch(
-        "src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
+        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
         side_effect=requests.HTTPError("bad"),
     ):
         assert APIFetchUtils._gw_fetch_one_config(MagicMock(), ("s1", "d1", "SiteOne"), sem) is None
@@ -372,7 +390,7 @@ def test_gw_fetch_one_config_non_transport_exception_propagates() -> None:
     sem = threading.Semaphore(1)  # WHY: satisfy the method signature without concurrency.
     with (  # WHY: prove only request-layer failures are converted to None.
         patch(  # WHY: simulate a programming fault in the SDK call path.
-            "src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
             side_effect=AttributeError("bad sdk path"),
         ),
         pytest.raises(AttributeError),  # WHY: callers must see bad SDK paths.
@@ -390,7 +408,7 @@ def test_gw_retry_one_item_succeeds_on_second_attempt() -> None:
     sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
     with (
         patch.object(APIFetchUtils, "_gw_fetch_one_config", side_effect=results) as fetch,
-        patch("src.api.api_fetch_utils.time.sleep", new=sleep),
+        patch("src.mist.access.api.api_fetch_utils.time.sleep", new=sleep),
     ):
         out = APIFetchUtils._gw_retry_one_item(MagicMock(), ("s1", "d1", "SiteOne"), sem, max_retries=2)
     assert out == {"foo": "bar", "site_id": "s1"}
@@ -404,7 +422,7 @@ def test_gw_retry_one_item_returns_none_after_exhausting_attempts() -> None:
     sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
     with (
         patch.object(APIFetchUtils, "_gw_fetch_one_config", return_value=None) as fetch,
-        patch("src.api.api_fetch_utils.time.sleep", new=sleep),
+        patch("src.mist.access.api.api_fetch_utils.time.sleep", new=sleep),
     ):
         out = APIFetchUtils._gw_retry_one_item(MagicMock(), ("s1", "d1", "SiteOne"), sem, max_retries=2)
     assert out is None
@@ -422,7 +440,7 @@ def test_gw_retry_configs_keeps_only_successful_retries() -> None:
     failed_items = [("s1", "d1", "A"), ("s2", "d2", "B"), ("s3", "d3", "C")]
     recovered = [{"id": "d1"}, None, {"id": "d3"}]
     with (
-        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(APIFetchUtils, "_gw_retry_one_item", side_effect=recovered),
     ):
         out = APIFetchUtils._gw_retry_configs(MagicMock(), failed_items, sem)
@@ -438,7 +456,7 @@ def test_gw_collect_fast_delegates_to_pool_executor() -> None:
     successes = [{"id": "d1"}, {"id": "d2"}]
     fake_mh.ConnectionPoolExecutor.execute.return_value = (successes, [])
     work_items = [("s1", "d1", "A"), ("s2", "d2", "B")]
-    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.access.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         out = APIFetchUtils._gw_collect_fast(MagicMock(), work_items)
     assert out == successes
     call = fake_mh.ConnectionPoolExecutor.execute.call_args

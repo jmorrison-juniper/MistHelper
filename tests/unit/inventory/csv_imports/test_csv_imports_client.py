@@ -7,11 +7,11 @@ from typing import Any  # WHY: response and session doubles are dynamic.
 
 import pytest  # WHY: parameterize one contract test per supported import type.
 
-from src.inventory.csv_imports.client import (  # WHY: test the request dispatch layer and status summaries.
+from src.mist.resources.inventory.csv_imports.client import (  # Import the moved dependency.
     CsvImportClient,
     CsvImportResponseSummary,
 )
-from src.inventory.csv_imports.model import CsvImportCatalog  # WHY: use production import definitions.
+from src.mist.resources.inventory.csv_imports.model import CsvImportCatalog  # WHY: use production import definitions.
 
 
 class ResponseDouble:

@@ -27,16 +27,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.marvis.actions.model import (
+from src.foundation.support.utils.menu_entry import MenuEntry
+from src.mist.intelligence.marvis.actions.model import (
     CATEGORY_NAMES,
     RESOLUTION_CODES,
     TOPIC_NAMES,
     MarvisActionRecordBuilder,
     MarvisCatalog,
 )
-from src.marvis.actions.operation import MarvisActionsOperation
-from src.marvis.actions.selection import MODE_EXPORT_ALL, MODES, MarvisResolvePrompts, MarvisTopicSelector
-from src.utils.menu_entry import MenuEntry
+from src.mist.intelligence.marvis.actions.operation import MarvisActionsOperation
+from src.mist.intelligence.marvis.actions.selection import (
+    MODE_EXPORT_ALL,
+    MODES,
+    MarvisResolvePrompts,
+    MarvisTopicSelector,
+)
 from tests.unit.marvis.actions.conftest import FakeResponse, OperationHarness, make_alarm, make_alarm_page, make_raw
 from web_portal.services.input_hook import InputInterceptor, web_input_context
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor, _RunLogHandler

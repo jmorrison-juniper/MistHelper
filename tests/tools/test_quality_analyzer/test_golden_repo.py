@@ -8,9 +8,9 @@ asserts the SC-002 golden anchors are present in the generated report:
       real corpus). The canonical anchor is
       ``tests/integration/test_wan_vpn_builder_live.py`` -- it imports
       Mist-API-adjacent modules and MUST be skipped. SC-002 originally named
-      ``src/api/api_data_fetcher.py``; per the discovery semantics
+      ``src/mist/access/api/api_data_fetcher.py``; per the discovery semantics
       (analyzer walks TEST files only, not source), the anchor was adjusted
-      to a test file that imports src/api/* -- exercising the same predicate.
+      to a test file that imports src/mist/access/api/* -- exercising the same predicate.
     * A ``weak_assertion`` finding exists at
       ``tests/unit/ssh/test_shell_executor.py:110`` -- a
       ``mock.assert_called()`` with no argument verification.
@@ -52,7 +52,7 @@ _GOLDEN_WEAK_ANCHORS = (  # Tuple of anchor triples (file_path, preferred_line).
 )
 
 # Test file that MUST appear in `skipped_files` with the mist_api_excluded reason.
-# Substitutes SC-002's `src/api/api_data_fetcher.py` (source file, not a test).
+# Substitutes SC-002's `src/mist/access/api/api_data_fetcher.py` (source file, not a test).
 _GOLDEN_SKIPPED_FILE = "tests/integration/test_wan_vpn_builder_live.py"
 
 
@@ -100,7 +100,7 @@ def test_golden_skipped_files_include_api_data_fetcher(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """`src/api/api_data_fetcher.py` must be present in skipped_files w/ mist_api_excluded."""
+    """`src/mist/access/api/api_data_fetcher.py` must be present in skipped_files w/ mist_api_excluded."""
     # Run the CLI once against the full repo tree.
     report = _run_cli_over_repo(repo_root, tmp_path, monkeypatch)  # Report envelope.
     # Build a lookup from file_path -> reason for the skipped_files block.

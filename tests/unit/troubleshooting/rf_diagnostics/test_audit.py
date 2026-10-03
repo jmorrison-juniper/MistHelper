@@ -4,8 +4,8 @@ from __future__ import annotations  # WHY: keep annotations import-safe.
 
 import csv  # WHY: read back written audit rows.
 
-from src.troubleshooting.rf_diagnostics.audit import RfDiagnosticsAuditWriter  # WHY: test target.
-from src.troubleshooting.rf_diagnostics.models import RfDiagnosticRun  # WHY: build audit rows.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.audit import RfDiagnosticsAuditWriter  # WHY: test target.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.models import RfDiagnosticRun  # WHY: build audit rows.
 
 
 def test_audit_writer_appends_one_row_per_run(tmp_path) -> None:

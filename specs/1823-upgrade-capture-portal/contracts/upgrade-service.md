@@ -1,6 +1,6 @@
 # Upgrade Service Contract
 
-**Module**: `src/firmware/upgrade_service.py`
+**Module**: `src/operations/execution/firmware/upgrade_service.py`
 **Feature**: 1823-upgrade-capture-portal
 
 ## Why this module exists
@@ -9,7 +9,7 @@ The four existing upgrade classes hold about 12000 lines, 1271 `print` calls, an
 80 `input` calls. A web request cannot drive that code, because the code writes to
 a terminal and waits for a person at a keyboard.
 
-`src/firmware/firmware_manager.py` also holds four module globals at lines 34 to
+`src/operations/execution/firmware/firmware_manager.py` also holds four module globals at lines 34 to
 37, and the save-and-restore blocks at lines 1736 and 1797 are not thread safe.
 Two concurrent web requests for two organizations would corrupt each other.
 
@@ -103,7 +103,7 @@ Reads one device record and returns the family.
   string holds `SSR` or `128T`.
 - Returns `GatewayFamily.JUNOS` for every other gateway.
 
-The existing discriminator at `src/firmware/firmware_manager.py:2291` uses the
+The existing discriminator at `src/operations/execution/firmware/firmware_manager.py:2291` uses the
 same test. This function repeats the test without the module state.
 
 **Why the split matters.** A Junos gateway rides the same site device upgrade call
@@ -218,7 +218,7 @@ writes firmware. Never read `None` as an empty set.
 
 Issue #3246 made this function public. The access point child job of a
 multi-site operation reads each site job of the organization answer with this
-rule. `OrgRebootLists` in `src/firmware/org_cancel_sort.py` joins the site
+rule. `OrgRebootLists` in `src/operations/execution/firmware/org_cancel_sort.py` joins the site
 lists.
 
 ### `sort_cancel(macs, writing, status) -> CancelOutcome`

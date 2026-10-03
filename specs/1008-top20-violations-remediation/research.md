@@ -19,7 +19,7 @@
   - *Easy-first (rank 20 -> rank 1)*: Rejected. Delivers small early wins but leaves
     the worst files exposed longest, contrary to SC-002 impact target.
   - *Alphabetical*: Rejected. No relationship to score impact; arbitrary.
-  - *Cluster by directory*: Rejected. Would batch `src/maps/*` together but skew the
+  - *Cluster by directory*: Rejected. Would batch `src/interfaces/visualization/maps/*` together but skew the
     initiative's cadence and delay the P2/P3 wins that clear D and C grades.
 
 ### D-002: A+/>=95.0 is a hard gate, not "best effort"
@@ -128,25 +128,25 @@ fix template.
 
 | Rank | File | Grade | Violations | Predicted primary fix classes |
 |------|------|-------|------------|------------------------------|
-| 1  | `src/maps/maps_manager.py`                        | F  | 149 | Module split (7243 LOC), function decomposition, class extraction, inline-comment sweep, `LOG-LAZY` conversion |
-| 2  | `src/maps/launcher/viewer_callbacks.py`           | F  | 96  | Callback decomposition (Plotly event handlers), state extraction, complexity reduction |
-| 3  | `src/capture/packet_capture.py`                   | F  | 68  | Threading lifecycle refactor, resource-management extraction, safe-input hardening |
-| 4  | `src/network/routing_utils.py`                    | F  | 67  | Long-function decomposition, portable-path adoption where hard-coded seps exist |
-| 5  | `src/device/utility_commands.py`                  | F  | 65  | Destructive-op confirmation review (menu 90-100 territory), function split |
-| 6  | `src/ssid_consolidation/ssid_template_consolidation.py` | F  | 53 | Iteration/aggregation function decomposition, inline comments |
+| 1  | `src/interfaces/visualization/maps/maps_manager.py`                        | F  | 149 | Module split (7243 LOC), function decomposition, class extraction, inline-comment sweep, `LOG-LAZY` conversion |
+| 2  | `src/interfaces/visualization/maps/launcher/viewer_callbacks.py`           | F  | 96  | Callback decomposition (Plotly event handlers), state extraction, complexity reduction |
+| 3  | `src/operations/execution/capture/packet_capture.py`                   | F  | 68  | Threading lifecycle refactor, resource-management extraction, safe-input hardening |
+| 4  | `src/mist/networking/network/routing_utils.py`                    | F  | 67  | Long-function decomposition, portable-path adoption where hard-coded seps exist |
+| 5  | `src/mist/resources/device/utility_commands.py`                  | F  | 65  | Destructive-op confirmation review (menu 90-100 territory), function split |
+| 6  | `src/operations/execution/ssid_consolidation/ssid_template_consolidation.py` | F  | 53 | Iteration/aggregation function decomposition, inline comments |
 | 7  | `scripts/mist_ideas_analyzer.py`                  | F  | 46  | Script-to-class extraction; extract business logic into `src/` if reused |
 | 8  | `tests/unit/test_arango_writer.py`                | D- | 39  | Fixture extraction, parametrize split; preserve test IDs |
 | 9  | `scripts/mist_ideas_distiller_v2.py`              | F  | 34  | Same pattern as rank 7 |
-| 10 | `src/gateway/wan2_variable.py`                    | D- | 32  | Variable-substitution logic decomposition, `LOG-LAZY` |
-| 11 | `src/audit/renderer.py`                           | D- | 29  | Template-render function split, inline comments |
-| 12 | `src/site/site_config_manager.py`                 | D  | 29  | Config-mutation function split, safety guards preserved |
+| 10 | `src/mist/resources/gateway/wan2_variable.py`                    | D- | 32  | Variable-substitution logic decomposition, `LOG-LAZY` |
+| 11 | `src/mist/access/audit/renderer.py`                           | D- | 29  | Template-render function split, inline comments |
+| 12 | `src/mist/resources/site/site_config_manager.py`                 | D  | 29  | Config-mutation function split, safety guards preserved |
 | 13 | `starlink_dashboard.py`                           | D  | 28  | Root-level script -> extract to `src/`, minimal `__main__` if externally referenced |
-| 14 | `src/analytics/zone_analyzer.py`                  | D  | 26  | Aggregation/statistics function decomposition |
-| 15 | `src/inventory/csv_comparator.py`                 | D  | 26  | Diff-comparison function decomposition; portable paths |
-| 16 | `src/device/prompt_utils.py`                      | D  | 25  | Prompt-parsing decomposition; `safe_input` review |
-| 17 | `src/gateway/template_config.py`                  | D  | 25  | Config-template function split |
+| 14 | `src/mist/intelligence/analytics/zone_analyzer.py`                  | D  | 26  | Aggregation/statistics function decomposition |
+| 15 | `src/mist/resources/inventory/csv_comparator.py`                 | D  | 26  | Diff-comparison function decomposition; portable paths |
+| 16 | `src/mist/resources/device/prompt_utils.py`                      | D  | 25  | Prompt-parsing decomposition; `safe_input` review |
+| 17 | `src/mist/resources/gateway/template_config.py`                  | D  | 25  | Config-template function split |
 | 18 | `tools/codemod_logging_lazy.py`                   | D- | 23  | Codemod visitor decomposition; round-trip regression test |
-| 19 | `src/reports/e911_bssid.py`                       | D  | 23  | Report-generation function split, `LOG-LAZY` |
+| 19 | `src/mist/intelligence/reports/e911_bssid.py`                       | D  | 23  | Report-generation function split, `LOG-LAZY` |
 | 20 | `scripts/menu_regroup.py`                         | C  | 22  | Script-to-class extraction; extract to `src/` if reused |
 
 ## Known-tricky patterns (recurring lessons from PRs #578-#583)
@@ -178,10 +178,10 @@ fix template.
 Preliminary analysis of the import graph (to be verified by `grep -R "from src\.maps"`
 style checks during Phase 2 task generation):
 
-- `src/maps/launcher/viewer_callbacks.py` (rank 2) imports from
-  `src/maps/maps_manager.py` (rank 1). Rank 1 merges first; rank 2 rebases.
-- `src/gateway/wan2_variable.py` (rank 10) and `src/gateway/template_config.py`
-  (rank 17) likely share helpers in `src/gateway/`. Sequential merge (10 first)
+- `src/interfaces/visualization/maps/launcher/viewer_callbacks.py` (rank 2) imports from
+  `src/interfaces/visualization/maps/maps_manager.py` (rank 1). Rank 1 merges first; rank 2 rebases.
+- `src/mist/resources/gateway/wan2_variable.py` (rank 10) and `src/mist/resources/gateway/template_config.py`
+  (rank 17) likely share helpers in `src/mist/resources/gateway/`. Sequential merge (10 first)
   should avoid conflict.
 - `scripts/mist_ideas_analyzer.py` (rank 7) and `scripts/mist_ideas_distiller_v2.py`
   (rank 9) may share helper functions. Rank 7 merges first; if helpers are extracted

@@ -1,4 +1,4 @@
-"""Unit tests for address utilities in src/utils/address_utils.py."""
+"""Unit tests for address utilities in src/foundation/support/utils/address_utils.py."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.utils import address_utils as address_mod
-from src.utils.address_utils import (
+from src.foundation.support.utils import address_utils as address_mod
+from src.foundation.support.utils.address_utils import (
     AddressUtils,
     AddressValidationConfig,
     NameNormalizationUtils,
@@ -192,7 +192,7 @@ class TestEnhancedParse:
     """Tests for AddressUtils.enhanced_parse."""
 
     def test_fallback_when_no_scourgify(self):
-        with patch("src.utils.address_utils.normalize_address_record", None):
+        with patch("src.foundation.support.utils.address_utils.normalize_address_record", None):
             result = AddressUtils.enhanced_parse("123 Main St, Springfield, IL")
             assert result["is_parseable"] is True
 
@@ -203,7 +203,7 @@ class TestEnhancedParse:
             "state": "IL",
             "postal_code": "62701",
         }
-        with patch("src.utils.address_utils.normalize_address_record", return_value=mock_result):
+        with patch("src.foundation.support.utils.address_utils.normalize_address_record", return_value=mock_result):
             result = AddressUtils.enhanced_parse("123 Main St, Springfield, IL 62701")
             assert result["is_parseable"] is True
             assert result["parse_reason"] == "usaddress_success"
@@ -217,20 +217,20 @@ class TestEnhancedParse:
             "state": "IL",
             "postal_code": "62701",
         }
-        with patch("src.utils.address_utils.normalize_address_record", return_value=mock_result):
+        with patch("src.foundation.support.utils.address_utils.normalize_address_record", return_value=mock_result):
             result = AddressUtils.enhanced_parse("123 Main St Suite 200, Springfield, IL")
             assert "Suite 200" in result["address"]
 
     def test_scourgify_exception_falls_back(self):
         with patch(
-            "src.utils.address_utils.normalize_address_record",
+            "src.foundation.support.utils.address_utils.normalize_address_record",
             side_effect=Exception("parse error"),
         ):
             result = AddressUtils.enhanced_parse("123 Main St, Springfield, IL")
             assert result["is_parseable"] is True
 
     def test_debug_mode(self):
-        with patch("src.utils.address_utils.normalize_address_record", None):
+        with patch("src.foundation.support.utils.address_utils.normalize_address_record", None):
             result = AddressUtils.enhanced_parse("123 Main St, City, ST", debug=True)
             assert result["is_parseable"] is True
             assert result["original"] == "123 Main St, City, ST"
@@ -260,13 +260,13 @@ class TestCalculateSimilarity:
         assert sim < 50.0
 
     def test_with_fuzz(self):
-        with patch("src.utils.address_utils.fuzz") as mock_fuzz:
+        with patch("src.foundation.support.utils.address_utils.fuzz") as mock_fuzz:
             mock_fuzz.token_sort_ratio.return_value = 85.0
             sim = AddressUtils._calculate_similarity("test", "test2")
             assert sim == 85.0
 
     def test_fuzz_exception_fallback(self):
-        with patch("src.utils.address_utils.fuzz") as mock_fuzz:
+        with patch("src.foundation.support.utils.address_utils.fuzz") as mock_fuzz:
             mock_fuzz.token_sort_ratio.side_effect = Exception("fuzz error")
             sim = AddressUtils._calculate_similarity("hello", "hello")
             assert sim > 0
@@ -692,8 +692,8 @@ class TestNominatimValidatorInit:
 
     def test_ssl_warnings_suppressed(self):
         config = AddressValidationConfig(skip_ssl_verify=True)
-        with patch("src.utils.address_utils._has_urllib3", True):
-            with patch("src.utils.address_utils.urllib3") as mock_u3:
+        with patch("src.foundation.support.utils.address_utils._has_urllib3", True):
+            with patch("src.foundation.support.utils.address_utils.urllib3") as mock_u3:
                 mock_u3.exceptions.InsecureRequestWarning = Exception
                 NominatimValidator(config)
                 mock_u3.disable_warnings.assert_called_once_with(Exception)
@@ -789,28 +789,28 @@ class TestNominatimValidatorAPI:
         self.validator = NominatimValidator()
 
     def test_make_api_request_no_requests(self):
-        with patch("src.utils.address_utils.requests", None):
+        with patch("src.foundation.support.utils.address_utils.requests", None):
             result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
             assert result is None
 
     def test_make_api_request_success(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        with patch("src.utils.address_utils.requests") as mock_req:
+        with patch("src.foundation.support.utils.address_utils.requests") as mock_req:
             mock_req.get.return_value = mock_resp
             result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
             assert result is mock_resp
 
     def test_make_api_request_retry_then_success(self):
         mock_resp = MagicMock()
-        with patch("src.utils.address_utils.requests") as mock_req:
+        with patch("src.foundation.support.utils.address_utils.requests") as mock_req:
             mock_req.get.side_effect = [Exception("timeout"), mock_resp]
             with patch("time.sleep"):
                 result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
                 assert result is mock_resp
 
     def test_make_api_request_all_retries_fail(self):
-        with patch("src.utils.address_utils.requests") as mock_req:
+        with patch("src.foundation.support.utils.address_utils.requests") as mock_req:
             mock_req.get.side_effect = Exception("timeout")
             with patch("time.sleep"):
                 result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
@@ -820,7 +820,7 @@ class TestNominatimValidatorAPI:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """All failed Nominatim attempts must log the first failure, not only the final one."""
-        with patch("src.utils.address_utils.requests") as mock_req:
+        with patch("src.foundation.support.utils.address_utils.requests") as mock_req:
             mock_req.get.side_effect = [
                 Exception("auth failed"),
                 Exception("connection closed"),
@@ -828,7 +828,7 @@ class TestNominatimValidatorAPI:
             with (
                 patch("time.sleep"),
                 patch.object(self.validator, "MAX_RETRIES", 1),
-                caplog.at_level(logging.WARNING, logger="src.utils.address_utils"),
+                caplog.at_level(logging.WARNING, logger="src.foundation.support.utils.address_utils"),
             ):
                 result = self.validator._make_api_request("123 Main")  # WHY: drive two failed attempts.
 
@@ -842,7 +842,9 @@ class TestNominatimValidatorAPI:
     def test_try_request_attempt_returns_none_on_timeout(self):
         """A Nominatim timeout must return no response for the retry loop."""
         timeout = address_mod.requests.exceptions.Timeout("synthetic timeout")  # Use the transport timeout type.
-        with patch("src.utils.address_utils.requests") as mock_requests:  # Replace the HTTP client only.
+        with patch(
+            "src.foundation.support.utils.address_utils.requests"
+        ) as mock_requests:  # Replace the HTTP client only.
             mock_requests.get.side_effect = timeout  # Force the product HTTP call to time out.
             result = self.validator._try_request_attempt(  # Drive the real per-attempt request method.
                 {"format": "json", "q": "123 Main", "limit": 1},  # Supply the expected query fields.
@@ -862,7 +864,9 @@ class TestNominatimValidatorAPI:
     def test_try_request_attempt_returns_none_on_connection_error(self):
         """A Nominatim connection error must return no response for the retry loop."""
         error = address_mod.requests.exceptions.ConnectionError("synthetic connection error")  # Transport error.
-        with patch("src.utils.address_utils.requests") as mock_requests:  # Replace the HTTP client only.
+        with patch(
+            "src.foundation.support.utils.address_utils.requests"
+        ) as mock_requests:  # Replace the HTTP client only.
             mock_requests.get.side_effect = error  # Force the product HTTP call to fail before response.
             result = self.validator._try_request_attempt(  # Drive the real per-attempt request method.
                 {"format": "json", "q": "123 Main", "limit": 1},  # Supply the expected query fields.
@@ -1170,13 +1174,13 @@ class TestNominatimLogEntry:
     def test_log_entry_debug(self, caplog: pytest.LogCaptureFixture):
         config = AddressValidationConfig(debug=True)
         validator = NominatimValidator(config)
-        with caplog.at_level(logging.DEBUG, logger="src.utils.address_utils"):
+        with caplog.at_level(logging.DEBUG, logger="src.foundation.support.utils.address_utils"):
             validator._log_entry({"address": "a"}, {"address": "b"})
         assert any("ENTRY: NominatimValidator.validate()" in record.message for record in caplog.records)
 
     def test_log_entry_no_debug(self, caplog: pytest.LogCaptureFixture):
         validator = NominatimValidator()
-        with caplog.at_level(logging.DEBUG, logger="src.utils.address_utils"):
+        with caplog.at_level(logging.DEBUG, logger="src.foundation.support.utils.address_utils"):
             validator._log_entry({}, {})
         assert not caplog.records
 

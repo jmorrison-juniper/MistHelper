@@ -30,7 +30,7 @@ def mock_mistapi_session():
 
 **Location**: `tests/conftest.py` — introduced PR-3.
 **Scope**: `function`.
-**Returns**: `dict[str, Any]` mirroring the `.env` config schema loaded by `src/utils/environment_utils.py`.
+**Returns**: `dict[str, Any]` mirroring the `.env` config schema loaded by `src/foundation/support/utils/environment_utils.py`.
 
 **Contract**:
 - Populated with placeholder credentials (`MIST_ORG_ID="00000000-0000-0000-0000-000000000000"`, `MIST_HOST="api.mist.com"`, `MIST_TOKEN="fake-token"`).

@@ -1,4 +1,4 @@
-"""Wave 9 P2 coverage tests for src.utils.input_utils.
+"""Wave 9 P2 coverage tests for src.foundation.support.utils.input_utils.
 
 Targets ``InputUtils`` end-to-end: the ``ensure_tqdm_available`` probe
 (real-tqdm branch + fallback branch) and every branch of ``safe_input``:
@@ -14,8 +14,8 @@ from unittest.mock import MagicMock  # WHY: build a stand-in for the _tqdm impor
 
 import pytest  # WHY: monkeypatch fixture
 
-from src.utils import input_utils as input_utils_module  # WHY: patch _tqdm attribute
-from src.utils.input_utils import InputUtils  # WHY: SUT under test
+from src.foundation.support.utils import input_utils as input_utils_module  # WHY: patch _tqdm attribute
+from src.foundation.support.utils.input_utils import InputUtils  # WHY: SUT under test
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 
@@ -39,7 +39,7 @@ class TestEnsureTqdmAvailable:
         # WHY: when _tqdm.__module__ does NOT start with "tqdm", the fallback branch fires
         logger.info("Building fake fallback tqdm stub")  # WHY: pre-action trace
         fake_tqdm = MagicMock()  # WHY: mock with a non-tqdm __module__
-        fake_tqdm.__module__ = "src.utils.tqdm_wrapper"  # WHY: wrapper path -> fallback
+        fake_tqdm.__module__ = "src.foundation.support.utils.tqdm_wrapper"  # WHY: wrapper path -> fallback
         monkeypatch.setattr(input_utils_module, "_tqdm", fake_tqdm)  # WHY: replace module-level handle
         with caplog.at_level(logging.WARNING):  # WHY: capture the WARNING log
             result = InputUtils.ensure_tqdm_available()  # WHY: exercise fallback branch

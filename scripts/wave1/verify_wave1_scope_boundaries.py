@@ -2,7 +2,7 @@
 """Verify Wave 1 bounded-decomposition scope boundary constraints.
 
 Checks that Wave 1 changes respected all explicit exclusion boundaries:
-1. No new packet-capture decomposition files added to src/capture/.
+1. No new packet-capture decomposition files added to src/operations/execution/capture/.
 2. Menu action key set has not been reduced from Wave 1 baseline.
 3. Wave-1-touched classes remain accessible in MistHelper module.
 4. The bounded-decomposition-checklist.md evidence document is present.
@@ -34,7 +34,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]  # Two levels up from scripts/w
 # Any count below this value means menu keys were silently removed
 _MENU_ACTIONS_BASELINE = 178  # Documented baseline for scope boundary enforcement
 
-# Expected src/capture/ filenames at Wave 1 baseline — no new additions allowed
+# Expected src/operations/execution/capture/ filenames at Wave 1 baseline — no new additions allowed
 # Wave 1 exclusion: no packet-capture architecture decomposition
 _CAPTURE_BASELINE_FILES = {
     "packet_capture.py",  # Pre-existing packet capture module
@@ -53,19 +53,23 @@ _WAVE1_CLASSES = [
 
 
 def _check_packet_capture_not_decomposed() -> tuple[bool, str]:
-    """Check that no new packet-capture files were added to src/capture/."""
-    logger.info("Checking src/capture/ for new packet-capture decomposition files")  # Log before scan
-    capture_path = _REPO_ROOT / "src" / "capture"  # Path to the capture module directory
+    """Check that no new packet-capture files were added to src/operations/execution/capture/."""
+    logger.info(
+        "Checking src/operations/execution/capture/ for new packet-capture decomposition files"
+    )  # Log before scan
+    capture_path = _REPO_ROOT / "src" / "operations" / "execution" / "capture"  # Path to the capture module directory
     if not capture_path.exists():  # Missing directory means no decomposition possible
-        logger.debug("src/capture/ not found -- skipping packet capture decomposition check")  # Debug note
-        return True, "src/capture/ not found -- no decomposition possible"  # Not a failure
+        logger.debug(
+            "src/operations/execution/capture/ not found -- skipping packet capture decomposition check"
+        )  # Debug note
+        return True, "src/operations/execution/capture/ not found -- no decomposition possible"  # Not a failure
     actual_files = {  # Collect all filenames, excluding compiled bytecode subdirectories
         f.name for f in capture_path.iterdir() if not f.name.startswith("__pycache__")
     }
     new_files = actual_files - _CAPTURE_BASELINE_FILES  # Anything beyond baseline is a violation
-    logger.debug("src/capture/ files: %s", actual_files)  # Log all found files for traceability
+    logger.debug("src/operations/execution/capture/ files: %s", actual_files)  # Log all found files for traceability
     if new_files:  # Any new files indicate unauthorized packet-capture decomposition in Wave 1
-        return False, f"New packet-capture files in src/capture/: {new_files}"
+        return False, f"New packet-capture files in src/operations/execution/capture/: {new_files}"
     return True, "No new packet-capture decomposition files -- OK"  # Clean result
 
 

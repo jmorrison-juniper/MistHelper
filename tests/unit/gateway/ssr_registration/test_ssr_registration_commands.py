@@ -8,9 +8,13 @@ from typing import Any  # WHY: fake response data has dynamic JSON shape.
 
 import pytest  # WHY: pytest supplies fixtures and assertions for this package.
 
-from src.gateway.ssr_registration.client import SsrRegistrationClient  # WHY: test the raw API path seam.
-from src.gateway.ssr_registration.model import RegistrationCommandSet  # WHY: test pure response formatting.
-from src.gateway.ssr_registration.operation import SsrRegistrationCommands  # WHY: test the menu operation.
+from src.mist.resources.gateway.ssr_registration.client import SsrRegistrationClient  # WHY: test the raw API path seam.
+from src.mist.resources.gateway.ssr_registration.model import (
+    RegistrationCommandSet,
+)  # WHY: test pure response formatting.
+from src.mist.resources.gateway.ssr_registration.operation import (
+    SsrRegistrationCommands,
+)  # WHY: test the menu operation.
 
 SECRET_CODE = "SECRET-REG-CODE"  # WHY: a stable sentinel proves logs do not leak the code.
 
@@ -87,7 +91,7 @@ def restore_operation_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(SsrRegistrationCommands, "client_class", FakeClient)  # WHY: avoid network access.
     monkeypatch.setattr(SsrRegistrationCommands, "output_path", output_path)  # WHY: write under owned tests path.
     monkeypatch.setattr(
-        "src.gateway.ssr_registration.operation.SourceDependencyResolver", FakeResolver
+        "src.mist.resources.gateway.ssr_registration.operation.SourceDependencyResolver", FakeResolver
     )  # WHY: avoid real resolver prompts and sessions.
     yield  # WHY: let the test run with the fakes installed.
     if output_path.exists():  # WHY: remove project-local test artifacts after each run.
@@ -140,7 +144,7 @@ def test_operation_prints_and_writes_only_after_yes(monkeypatch: pytest.MonkeyPa
     prompts: list[str] = []  # WHY: record prompt order without using stdin.
     FakeClient.response = FakeResponse(200, sample_payload())  # WHY: provide successful command text.
     monkeypatch.setattr(
-        "src.gateway.ssr_registration.operation.InputUtils.safe_input",
+        "src.mist.resources.gateway.ssr_registration.operation.InputUtils.safe_input",
         lambda prompt, **_: prompts.append(prompt) or "y",
     )
     SsrRegistrationCommands.run()  # WHY: execute the full menu handler.
@@ -160,7 +164,7 @@ def test_operation_prints_without_writing_when_only_show_is_approved(
     answers = iter(["y", "N"])  # WHY: approve the console print, decline the file write.
     FakeClient.response = FakeResponse(200, sample_payload())  # WHY: provide successful command text.
     monkeypatch.setattr(
-        "src.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: next(answers)
+        "src.mist.resources.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: next(answers)
     )
     SsrRegistrationCommands.run()  # WHY: execute the show-only path.
     output = capsys.readouterr().out  # WHY: capture the console copy.
@@ -171,7 +175,9 @@ def test_operation_prints_without_writing_when_only_show_is_approved(
 def test_operation_skips_write_when_answer_is_no(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
     """The operation leaves the file absent when the answer is not yes."""
     FakeClient.response = FakeResponse(200, sample_payload())  # WHY: provide successful command text.
-    monkeypatch.setattr("src.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: "N")
+    monkeypatch.setattr(
+        "src.mist.resources.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: "N"
+    )
     SsrRegistrationCommands.run()  # WHY: execute the declined write path.
     output = capsys.readouterr().out  # WHY: prove the console did not expose the commands.
     assert SECRET_CODE not in output  # WHY: a declined answer must not expose the registration code.
@@ -191,7 +197,9 @@ def test_operation_handles_non_2xx_without_traceback(capsys: Any) -> None:
 def test_operation_logs_no_registration_code(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     """The operation logs no registration code while writing the sensitive file."""
     FakeClient.response = FakeResponse(200, sample_payload())  # WHY: provide command text that holds the code.
-    monkeypatch.setattr("src.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: "y")
+    monkeypatch.setattr(
+        "src.mist.resources.gateway.ssr_registration.operation.InputUtils.safe_input", lambda prompt, **_: "y"
+    )
     caplog.set_level(logging.DEBUG)  # WHY: capture the most verbose logs for leak detection.
     SsrRegistrationCommands.run()  # WHY: execute the write path.
     assert SECRET_CODE not in caplog.text  # WHY: logs must never hold the registration code.

@@ -13,14 +13,24 @@ from types import SimpleNamespace  # Return a checked request with a key attribu
 import pytest  # Assert contract errors from service calls.
 from flask import Flask  # Build small app instances for the service tests.
 
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Not-ready errors use this type.
-from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake manager returns a read answer.
-from src.websocket_streams.web.services.assembly.bundle import WebSocketServiceBundle  # Type the built service set.
-from src.websocket_streams.web.services.assembly.collaborators import (
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Not-ready errors use this type.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.page import (
+    MessagePage,
+)  # The fake manager returns a read answer.
+from src.mist.realtime.websocket_streams.web.services.assembly.bundle import (
+    WebSocketServiceBundle,
+)  # Type the built service set.
+from src.mist.realtime.websocket_streams.web.services.assembly.collaborators import (
     WebSocketCollaborators,
 )  # Supply explicit test collaborators.
-from src.websocket_streams.web.services.assembly.factory import WebSocketServiceFactory  # Build test bundles.
-from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Store and stop app bundles.
+from src.mist.realtime.websocket_streams.web.services.assembly.factory import (
+    WebSocketServiceFactory,
+)  # Build test bundles.
+from src.mist.realtime.websocket_streams.web.services.registry import (
+    WebSocketServiceRegistry,
+)  # Store and stop app bundles.
 
 
 class FakeCatalog:

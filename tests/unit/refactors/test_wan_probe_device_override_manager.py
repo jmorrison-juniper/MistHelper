@@ -1,8 +1,8 @@
-"""Unit tests for src.refactors.wan_probe_device_override_manager.
+"""Unit tests for src.foundation.support.refactors.wan_probe_device_override_manager.
 
 Wave 13 P2 coverage lift — WANProbeDeviceOverrideManager.configure()
 wires 10 MistHelper dependencies (plus the imported prefix constant)
-into src.gateway.wan_probe_device_override_manager. Cover the full
+into src.mist.resources.gateway.wan_probe_device_override_manager. Cover the full
 dispatch path (deps assembly + delegate call) to close the 73% gap.
 """
 
@@ -29,12 +29,14 @@ def _install_fake_misthelper() -> MagicMock:
 
 def test_configure_wires_deps_and_delegates(monkeypatch) -> None:
     """configure() builds the dependency bundle and dispatches to the gateway impl."""
-    from src.gateway import (
-        wan_probe_device_override_manager as _wan_probe_module,  # WHY: patch attrs on the real impl module
-    )
-    from src.refactors import wan_probe_device_override_manager as adapter_mod  # WHY: subject under test
-    from src.refactors.mist_site_exclude_prefix import (
+    from src.foundation.support.refactors import (
+        wan_probe_device_override_manager as adapter_mod,
+    )  # WHY: subject under test
+    from src.foundation.support.refactors.mist_site_exclude_prefix import (
         MIST_SITE_EXCLUDE_PREFIX,  # WHY: canonical constant import
+    )
+    from src.mist.resources.gateway import (
+        wan_probe_device_override_manager as _wan_probe_module,  # WHY: patch attrs on the real impl module
     )
 
     fake_mh = _install_fake_misthelper()
@@ -76,10 +78,10 @@ def test_configure_wires_deps_and_delegates(monkeypatch) -> None:
 
 def test_configure_defaults_dry_run_false(monkeypatch) -> None:
     """configure() defaults dry_run=False when the caller omits the flag."""
-    from src.gateway import (
+    from src.foundation.support.refactors import wan_probe_device_override_manager as adapter_mod
+    from src.mist.resources.gateway import (
         wan_probe_device_override_manager as _wan_probe_module,  # WHY: patch attrs on the real impl module
     )
-    from src.refactors import wan_probe_device_override_manager as adapter_mod
 
     fake_mh = _install_fake_misthelper()
     monkeypatch.setattr(_wan_probe_module, "WANProbeDeviceOverrideDependencies", MagicMock())

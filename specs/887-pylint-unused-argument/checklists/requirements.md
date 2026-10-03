@@ -39,7 +39,7 @@
 - [x] The spec requires the removal of `W0613` from the `disable` list as the final step
 - [x] The spec requires a Linux continuous integration run to confirm the score
 - [x] The spec states that a local Windows pylint run is not a safe proxy
-- [x] The spec excludes `W0718` and the mypy `src.db` override
+- [x] The spec excludes `W0718` and the mypy `src.foundation.persistence.db` override
 - [x] The spec records the maps clone confirmation-text observation without expanding scope
 - [x] The spec records the inline-comment, Simplified Technical English, no-wrapper, and no-shim conventions
 

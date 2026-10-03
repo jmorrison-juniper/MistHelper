@@ -6,9 +6,13 @@ import logging  # WHY: failure-mode tests verify safe client warnings.
 from dataclasses import dataclass  # WHY: fake responses need a tiny response object.
 from typing import Any  # WHY: fake SDK functions accept dynamic session objects.
 
-from src.troubleshooting.nac_idp_credential_test import client as client_module  # WHY: monkeypatch SDK seams.
-from src.troubleshooting.nac_idp_credential_test.client import NacIdpCredentialClient  # WHY: class under test.
-from src.troubleshooting.nac_idp_credential_test.model import (  # WHY: build request objects for validation tests.
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test import (
+    client as client_module,
+)  # WHY: monkeypatch SDK seams.
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test.client import (
+    NacIdpCredentialClient,
+)  # WHY: class under test.
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test.model import (  # Import the moved dependency.
     CredentialTestRequest,
     IdentityProviderChoice,
 )

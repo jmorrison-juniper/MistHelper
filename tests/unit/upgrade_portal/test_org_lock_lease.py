@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime import lock
-from src.upgrade_portal.upgrade.org_cascade.locks import OrgOperationLockLease
+from src.interfaces.portals.upgrade_portal.runtime import lock
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.locks import OrgOperationLockLease
 from tests.support.org_cascade import VersionedStore
 
 OPERATION_ID = "00000000-0000-0000-0000-000000003333"  # One fake multi-site operation.

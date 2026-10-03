@@ -23,7 +23,7 @@
 
 **Purpose**: Move import-time work behind an explicit class.
 
-- [X] T004 Add `ApplicationBootstrap` to `src/refactors/main_entrypoint.py`.
+- [X] T004 Add `ApplicationBootstrap` to `src/foundation/support/refactors/main_entrypoint.py`.
 - [X] T005 Move logging setup, data directory check, `.env` loading, dependency check, and import manager creation into `ApplicationBootstrap`.
 - [X] T006 Change `MistHelper.py` to keep passive defaults at import.
 - [X] T007 Change `wsgi.py` to call the web bootstrap without command-line parsing.

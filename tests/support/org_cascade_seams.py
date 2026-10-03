@@ -23,12 +23,15 @@ from collections.abc import Mapping, MutableMapping
 from datetime import UTC, datetime
 from typing import Any
 
-from src.upgrade_portal.app.routes.org_upgrade import ANCHOR_READER_CONFIG_KEY, CASCADE_STARTER_CONFIG_KEY
-from src.upgrade_portal.runtime.runs import PhaseState
-from src.upgrade_portal.upgrade.driver import CLIENT_PHASE, PhaseOutcome
-from src.upgrade_portal.upgrade.org_cascade.close import OrgCascadeClose
-from src.upgrade_portal.upgrade.org_cascade.readers import AnchorRead
-from src.upgrade_portal.upgrade.org_cascade.record import (
+from src.interfaces.portals.upgrade_portal.app.routes.org_upgrade import (
+    ANCHOR_READER_CONFIG_KEY,
+    CASCADE_STARTER_CONFIG_KEY,
+)
+from src.interfaces.portals.upgrade_portal.runtime.runs import PhaseState
+from src.interfaces.portals.upgrade_portal.upgrade.driver import CLIENT_PHASE, PhaseOutcome
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.close import OrgCascadeClose
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.readers import AnchorRead
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import (
     FINAL_WATCH_STATES,
     RUNNING_NOTE,
     OrgPhaseEntries,
@@ -37,7 +40,7 @@ from src.upgrade_portal.upgrade.org_cascade.record import (
     OrgPhaseWatch,
     WatchState,
 )
-from src.upgrade_portal.upgrade.org_cascade.walk import OrgCascadeRegistry
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.walk import OrgCascadeRegistry
 
 logger = logging.getLogger(__name__)  # The seam logs under this module.
 OPEN_PHASE_STATES = frozenset({PhaseState.WAITING.value, PhaseState.PENDING.value})  # A phase that still has work.

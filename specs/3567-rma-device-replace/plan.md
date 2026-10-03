@@ -56,7 +56,7 @@ specs/3567-rma-device-replace/
 ### Source Code
 
 ```text
-src/inventory/device_replace/
+src/mist/resources/inventory/device_replace/
 ├── __init__.py
 ├── client.py
 ├── models.py

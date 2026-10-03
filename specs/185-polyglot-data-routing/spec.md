@@ -120,7 +120,7 @@ As a maintainer of MistHelper, I want each API endpoint classified into the corr
 
 - Redis Stack container is already running with RedisJSON, RediSearch, and RedisTimeSeries modules loaded.
 - ArangoDB 3.12 is running at `localhost:8529` with the `misthelper` database created.
-- The existing `src/db/router.py`, `src/db/redis_writer.py`, and `src/db/arango_writer.py` modules provide the integration points for routing changes.
+- The existing `src/foundation/persistence/db/router.py`, `src/foundation/persistence/db/redis_writer.py`, and `src/foundation/persistence/db/arango_writer.py` modules provide the integration points for routing changes.
 - The `_route_to_polyglot()` method signature can accept a `raw_data` parameter without breaking existing callers.
 - Redis JSON key naming will follow the pattern `{endpoint_name}:{primary_key_value}` for document lookup.
 - RediSearch index creation is deferred to a future feature (not part of this refactor).
@@ -131,7 +131,7 @@ As a maintainer of MistHelper, I want each API endpoint classified into the corr
 
 - Moving the polyglot routing call to occur before CSV flattening in `MistHelper.py`
 - Adding `timeseries_pk` strategy type to the router and strategies dictionary
-- Adding a Redis JSON writer class to `src/db/redis_writer.py`
+- Adding a Redis JSON writer class to `src/foundation/persistence/db/redis_writer.py`
 - Reclassifying ~40 endpoint strategies in `ENDPOINT_PRIMARY_KEY_STRATEGIES`
 - Dual-write for `composite_pk` endpoints (Redis JSON + ArangoDB)
 - Passing raw data to ArangoDB for `natural_pk` endpoints
@@ -150,5 +150,5 @@ As a maintainer of MistHelper, I want each API endpoint classified into the corr
 
 - `redis-stack` container with RedisJSON module (`JSON.SET`, `JSON.GET`, `JSON.MGET` commands)
 - `redis-py` library with JSON command support (`redis.commands.json`)
-- Existing `src/db/` module structure (router, writers, `__init__.py`)
+- Existing `src/foundation/persistence/db/` module structure (router, writers, `__init__.py`)
 - Existing `ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary in `MistHelper.py`

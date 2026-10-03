@@ -28,7 +28,7 @@ each visible note.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/assets/templates/upgrade/options.html` | Line 195 uses `default(<text>, true)`. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html` | Line 195 uses `default(<text>, true)`. |
 | `tests/contract/upgrade_portal/test_upgrade_options.py` | Add a stand-in with the shipped selections, and two tests. |
 | `tests/e2e/upgrade_portal/test_upgrade.py` | Read each visible type note in the type control test. |
 | `changelog.d/issue-3381-options-none-note.md` | Add the release note. |

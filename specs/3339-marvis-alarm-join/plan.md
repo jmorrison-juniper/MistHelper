@@ -60,7 +60,7 @@ the larger class.
 
 ## Module Design
 
-### `src/marvis/actions/client.py`
+### `src/mist/intelligence/marvis/actions/client.py`
 
 | Item | Change |
 | - | - |
@@ -76,7 +76,7 @@ the larger class.
 | `_marvis_alarms` | New private helper. It keeps the rows that are objects and that hold the group `marvis`. |
 | `_alarm_guard_result` | New private helper. It logs the guard warning and returns the rows with `complete` False. |
 
-### `src/marvis/actions/model.py`
+### `src/mist/intelligence/marvis/actions/model.py`
 
 | Item | Change |
 | - | - |
@@ -84,7 +84,7 @@ the larger class.
 | `MarvisActionRecord` | Eight new fields after `exported_at`, each with an empty default. The record then holds 51 columns. |
 | `MarvisActionRecordBuilder.build` | The comment states that the alarm columns keep their defaults until the join. |
 
-### `src/marvis/actions/alarms.py` (new)
+### `src/mist/intelligence/marvis/actions/alarms.py` (new)
 
 | Item | Purpose |
 | - | - |
@@ -94,7 +94,7 @@ the larger class.
 | `MarvisAlarmIndex` | Two maps of the alarm rows. `columns(uuid)` returns the eight values of one action, or an empty map. `unmatched_alarm_count(uuids)` counts the alarms without an action. |
 | `MarvisAlarmJoin` | `window(documents, now)` returns the search window. `apply(selected, documents)` searches, joins, logs the counts, and returns the new records and documents. |
 
-### `src/marvis/actions/operation.py`
+### `src/mist/intelligence/marvis/actions/operation.py`
 
 | Item | Change |
 | - | - |
@@ -102,7 +102,7 @@ the larger class.
 | Module docstring | The export rows hold the alarm columns. |
 | `_export` | Call `MarvisAlarmJoin(loaded.client).apply(selected, loaded.documents)` after the status mix. Build the rows from the joined records. |
 
-### `src/marvis/actions/__init__.py`
+### `src/mist/intelligence/marvis/actions/__init__.py`
 
 The docstring names five modules and states the purpose of `alarms`.
 

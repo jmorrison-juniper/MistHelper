@@ -8,13 +8,15 @@ from typing import Any  # WHY: fake classes accept dynamic runtime values.
 
 import pytest  # WHY: autouse fixtures keep operation tests off the real stdin state.
 
-from src.troubleshooting.nac_idp_credential_test import operation as operation_module  # WHY: patch operation seams.
-from src.troubleshooting.nac_idp_credential_test.model import (
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test import (
+    operation as operation_module,
+)  # WHY: patch operation seams.
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test.model import (
     CredentialTestRequest,
     CredentialTestResult,
     IdentityProviderChoice,
 )
-from src.troubleshooting.nac_idp_credential_test.prompts import NacIdpCredentialPrompts
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test.prompts import NacIdpCredentialPrompts
 
 
 @pytest.fixture(autouse=True)

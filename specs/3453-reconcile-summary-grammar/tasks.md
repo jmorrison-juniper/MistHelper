@@ -43,7 +43,7 @@ test task therefore comes before its code task.
 
 ## Phase 4: The code change
 
-- [x] T010 Change `_summary` in `src/upgrade_portal/upgrade/org_reconcile.py`,
+- [x] T010 Change `_summary` in `src/interfaces/portals/upgrade_portal/upgrade/org_reconcile.py`,
   and add the static noun method.
 - [x] T011 Run T003 through T008 green. Read each screenshot of the browser
   journey. Result: 90 tests passed in the unit, contract, and stand-in files.

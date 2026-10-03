@@ -3,7 +3,7 @@
 ## Menu entries
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 274 | Export the PSK hygiene report | src.reports.psk_hygiene.operation | PskHygieneReport.run | safe |  | False | False |
+| 274 | Export the PSK hygiene report | src.mist.intelligence.reports.psk_hygiene.operation | PskHygieneReport.run | safe |  | False | False |
 
 ## OperationRegistry comment
 One `# WHY:` paragraph for the registry entry:
@@ -24,27 +24,27 @@ One `# WHY:` paragraph for the registry entry:
 Add menu `274` to the `safe` row. The operation is read-only and not destructive.
 
 ## Import line for MistHelper.py
-`from src.reports.psk_hygiene.operation import PskHygieneReport  # Menu 274 (issue #3555) -- PSK hygiene report.`
+`from src.mist.intelligence.reports.psk_hygiene.operation import PskHygieneReport  # Menu 274 (issue #3555) -- PSK hygiene report.`
 
 ## Deferred integration pull request edits
 - `MistHelper.py` menu 274 registration is deferred to the integration pull request.
-- `src/utils/operation_registry.py` menu 274 entry is deferred to the integration pull request.
+- `src/foundation/support/utils/operation_registry.py` menu 274 entry is deferred to the integration pull request.
 - `README.md` menu table and operation count edits are deferred to the integration pull request.
 - Generated menu reference edits are deferred to the integration pull request.
-- `src/refactors/endpoint_primary_key_strategies.py` edits are deferred to the integration pull request.
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` edits are deferred to the integration pull request.
 
 ## Local validation evidence
 - `python -m py_compile` passed for all new PSK hygiene source and test Python files.
-- `python -m ruff check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
-- `python -m black --check src\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
-- `python -m mypy src\reports\psk_hygiene --config-file pyproject.toml` passed.
-- `python -m pydocstyle src\reports\psk_hygiene` passed.
+- `python -m ruff check src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
+- `python -m black --check src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene` passed.
+- `python -m mypy src\mist\intelligence\reports\psk_hygiene --config-file pyproject.toml` passed.
+- `python -m pydocstyle src\mist\intelligence\reports\psk_hygiene` passed.
 - `python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120` passed with 28 tests.
-- `python -m vulture src\reports\psk_hygiene --min-confidence 70` passed.
-- `python -m interrogate -v src\reports\psk_hygiene` passed.
-- `python -m radon cc src\reports\psk_hygiene -j | complexity-gate --max 10` passed.
+- `python -m vulture src\mist\intelligence\reports\psk_hygiene --min-confidence 70` passed.
+- `python -m interrogate -v src\mist\intelligence\reports\psk_hygiene` passed.
+- `python -m radon cc src\mist\intelligence\reports\psk_hygiene -j | complexity-gate --max 10` passed.
 - `test-quality-analyzer --gate --changed-from origin/main` passed.
 - `python -m pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120` passed.
 - `python -m pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120` passed.
-- `python -m bandit -c pyproject.toml -r src\reports\psk_hygiene -q` passed.
+- `python -m bandit -c pyproject.toml -r src\mist\intelligence\reports\psk_hygiene -q` passed.
 - Menu wiring stays deferred to the integration pull request.

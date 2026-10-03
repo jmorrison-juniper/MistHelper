@@ -60,7 +60,7 @@ If the writer returns false, return an error and do not log export success. If i
 
 Add `storage_key_fields` to each selected strategy. Its value is `["site_id", *primary_key]`, without duplicate fields. Keep the existing `type`, `primary_key`, indexes, and routing unchanged.
 
-Add `src/db/storage_keys.py:StorageKeyEncoder`. It owns the deterministic encoding of the ordered business-key values. Use compact UTF-8 JSON of the value list, URL-safe Base64 without padding, and the prefix `v1_`. Reject missing components and an encoded Arango key over 254 characters. Do not truncate. This is an encoding of natural business identity, not a new API identifier.
+Add `src/foundation/persistence/db/storage_keys.py:StorageKeyEncoder`. It owns the deterministic encoding of the ordered business-key values. Use compact UTF-8 JSON of the value list, URL-safe Base64 without padding, and the prefix `v1_`. Reject missing components and an encoded Arango key over 254 characters. Do not truncate. This is an encoding of natural business identity, not a new API identifier.
 
 In `ArangoDBWriter._prepare_document`, use the encoder only when `storage_key_fields` exists. Otherwise preserve the current `_compute_key` path unchanged. Do not globally repair every old composite strategy in this feature.
 

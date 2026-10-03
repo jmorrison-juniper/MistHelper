@@ -1,4 +1,4 @@
-"""Wave 9 P2 coverage tests for src.export.site_insights.site_metric_operation.
+"""Wave 9 P2 coverage tests for src.operations.exporting.export.site_insights.site_metric_operation.
 
 Targets the menu-74 orchestrator ``SiteMetricOperation``. Exercises every
 branch of ``execute``: cancel, empty metrics, non-empty export, per-metric
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock  # WHY: build interchangeable injected colla
 
 import pytest  # WHY: caplog fixture typing for logger capture assertions
 
-from src.export.site_insights.site_metric_operation import (  # WHY: SUTs under test
+from src.operations.exporting.export.site_insights.site_metric_operation import (  # WHY: SUTs under test
     SiteMetricOperation,
     SiteRunContext,
 )

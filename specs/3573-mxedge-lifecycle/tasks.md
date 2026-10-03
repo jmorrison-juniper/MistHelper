@@ -15,7 +15,7 @@
 
 ## Phase 2: Foundation
 
-- [X] T003 Create package skeleton under `src/org/mxedge_lifecycle/` with `__init__.py`, `models.py`, `client.py`, and `operation.py`.
+- [X] T003 Create package skeleton under `src/mist/resources/org/mxedge_lifecycle/` with `__init__.py`, `models.py`, `client.py`, and `operation.py`.
 - [X] T004 Create test skeleton under `tests/unit/org/mxedge_lifecycle/` with `__init__.py`.
 - [X] T005 Create `specs/3573-mxedge-lifecycle/wiring.md` with every fleet-contract section. Mark `MistHelper.py`, `OperationRegistry`, primary key strategy, README, and generated reference edits as deferred to the integration pull request.
 - [X] T006 Create `changelog.d/issue-3573-mxedge-lifecycle.md` with one `### Added` section and a bullet that names issue #3573.
@@ -63,7 +63,7 @@
 ## Deferred integration tasks
 
 - [ ] D001 Add `MxEdgeLifecycleOperation.run` import and dispatch in `MistHelper.py`. Deferred to the integration pull request because this branch must not edit `MistHelper.py`.
-- [ ] D002 Add menu `293` to `src/utils/operation_registry.py` as `destructive`. Deferred to the integration pull request because this branch must not edit `OperationRegistry`.
+- [ ] D002 Add menu `293` to `src/foundation/support/utils/operation_registry.py` as `destructive`. Deferred to the integration pull request because this branch must not edit `OperationRegistry`.
 - [ ] D003 Add primary key strategy records for `mxedge_lifecycle_log`. Deferred to the integration pull request because this branch must not edit `endpoint_primary_key_strategies.py`.
 - [ ] D004 Regenerate menu references. Deferred to the integration pull request because this branch must not edit generated menu files.
 

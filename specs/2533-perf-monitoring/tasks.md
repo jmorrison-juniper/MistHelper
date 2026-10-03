@@ -22,9 +22,9 @@
 
 **Purpose**: Keep the package small and align it with the 5-Item Rule.
 
-- [x] T004 Move clock records into `src/utils/performance/recorder.py`. (delivered: src/utils/performance/recorder.py)
-- [x] T005 Remove `src/utils/performance/clock.py` so the package has five modules. (delivered: src/utils/performance/clock.py removed)
-- [x] T006 Update public imports in `src/utils/performance/__init__.py`. (delivered: src/utils/performance/__init__.py)
+- [x] T004 Move clock records into `src/foundation/support/utils/performance/recorder.py`. (delivered: src/foundation/support/utils/performance/recorder.py)
+- [x] T005 Remove `src/foundation/support/utils/performance/clock.py` so the package has five modules. (delivered: src/foundation/support/utils/performance/clock.py removed)
+- [x] T006 Update public imports in `src/foundation/support/utils/performance/__init__.py`. (delivered: src/foundation/support/utils/performance/__init__.py)
 
 ---
 
@@ -34,7 +34,7 @@
 
 **Independent Test**: Run the default recorder test in `tests/test_performance_monitoring.py`.
 
-- [x] T007 Verify `RecorderSettings(level="off")` remains the default. (delivered: src/utils/performance/recorder.py)
+- [x] T007 Verify `RecorderSettings(level="off")` remains the default. (delivered: src/foundation/support/utils/performance/recorder.py)
 - [x] T008 Verify the null span reads no clock and emits no event. (delivered: tests/test_performance_monitoring.py)
 
 ---
@@ -45,9 +45,9 @@
 
 **Independent Test**: Run the enabled span test in `tests/test_performance_monitoring.py`.
 
-- [x] T009 Keep wall timing on `time.perf_counter_ns()`. (delivered: src/utils/performance/recorder.py)
-- [x] T010 Keep CPU timing on `time.process_time_ns()`. (delivered: src/utils/performance/recorder.py)
-- [x] T011 Keep the level gate for event families. (delivered: src/utils/performance/recorder.py)
+- [x] T009 Keep wall timing on `time.perf_counter_ns()`. (delivered: src/foundation/support/utils/performance/recorder.py)
+- [x] T010 Keep CPU timing on `time.process_time_ns()`. (delivered: src/foundation/support/utils/performance/recorder.py)
+- [x] T011 Keep the level gate for event families. (delivered: src/foundation/support/utils/performance/recorder.py)
 
 ---
 
@@ -57,9 +57,9 @@
 
 **Independent Test**: Run `tests/unit/utils/performance/test_privacy_filter_storage.py`.
 
-- [x] T012 Add deny patterns for secrets, personal data, raw paths, URLs, SQL text, IP addresses, MAC addresses, UUIDs, and tokens. (delivered: src/utils/performance/privacy.py)
-- [x] T013 Add fixed allowlists for dimension keys and values. (delivered: src/utils/performance/privacy.py)
-- [x] T014 Scrub raw source paths before JSON storage. (delivered: src/utils/performance/event.py)
+- [x] T012 Add deny patterns for secrets, personal data, raw paths, URLs, SQL text, IP addresses, MAC addresses, UUIDs, and tokens. (delivered: src/foundation/support/utils/performance/privacy.py)
+- [x] T013 Add fixed allowlists for dimension keys and values. (delivered: src/foundation/support/utils/performance/privacy.py)
+- [x] T014 Scrub raw source paths before JSON storage. (delivered: src/foundation/support/utils/performance/event.py)
 - [x] T015 Add one storage test for each forbidden data category. (delivered: tests/unit/utils/performance/test_privacy_filter_storage.py)
 
 ---

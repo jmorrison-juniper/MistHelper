@@ -5,13 +5,13 @@
 Run these commands from the worktree root. Use the worktree virtual environment.
 
 ```powershell
-C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m py_compile src\inventory\device_replace\__init__.py src\inventory\device_replace\client.py src\inventory\device_replace\models.py src\inventory\device_replace\operation.py src\inventory\device_replace\persistence.py
-C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m ruff check src\inventory\device_replace tests\unit\inventory\device_replace
-C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m black --check src\inventory\device_replace tests\unit\inventory\device_replace
-C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m mypy src\inventory\device_replace --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m pydocstyle src\inventory\device_replace
+C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m py_compile src\mist\resources\inventory\device_replace\__init__.py src\mist\resources\inventory\device_replace\client.py src\mist\resources\inventory\device_replace\models.py src\mist\resources\inventory\device_replace\operation.py src\mist\resources\inventory\device_replace\persistence.py
+C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m ruff check src\mist\resources\inventory\device_replace tests\unit\inventory\device_replace
+C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m black --check src\mist\resources\inventory\device_replace tests\unit\inventory\device_replace
+C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m mypy src\mist\resources\inventory\device_replace --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m pydocstyle src\mist\resources\inventory\device_replace
 C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m pytest tests\unit\inventory\device_replace -q --timeout=120
-C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m radon cc src\inventory\device_replace -j | C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\complexity-gate.exe --max 10
+C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\python.exe -m radon cc src\mist\resources\inventory\device_replace -j | C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\complexity-gate.exe --max 10
 C:\Users\jmorrison\mh-fleet\3567-rma-device-replace\.venv\Scripts\test-quality-analyzer.exe --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main
 ```
 

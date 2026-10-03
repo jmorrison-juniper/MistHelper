@@ -15,8 +15,8 @@
 |--------|-----------|-------------|
 | Aggregate repo compliance | `>=99.6/A+` | `tools/compliance_analyzer` sweep against post-PR head |
 | Pylint aggregate score | `>=8.74/10` | `pylint src/ MistHelper.py` |
-| `src/refactors/is_debug_mode.py` grade | `A+/100` | Per-file `tools/compliance_analyzer` invocation |
-| `src/refactors/connection_pool_executor.py` grade | `A+/100` | Per-file `tools/compliance_analyzer` invocation |
+| `src/foundation/support/refactors/is_debug_mode.py` grade | `A+/100` | Per-file `tools/compliance_analyzer` invocation |
+| `src/foundation/support/refactors/connection_pool_executor.py` grade | `A+/100` | Per-file `tools/compliance_analyzer` invocation |
 | `MistHelper.py` grade | Non-regressing (>= pre-PR grade) | Pre/post comparison |
 | Every touched file grade | Non-regressing (>= pre-PR grade) | Pre/post comparison |
 
@@ -33,14 +33,14 @@ The PR body MUST include this table (produced by comparing analyzer output on `m
 ```
 | File                                            | Pre-Grade | Post-Grade | Delta |
 |-------------------------------------------------|-----------|------------|-------|
-| src/refactors/is_debug_mode.py                  | (new)     | A+/100     | +new  |
-| src/refactors/connection_pool_executor.py       | (new)     | A+/100     | +new  |
+| src/foundation/support/refactors/is_debug_mode.py                  | (new)     | A+/100     | +new  |
+| src/foundation/support/refactors/connection_pool_executor.py       | (new)     | A+/100     | +new  |
 | MistHelper.py                                   | <X>       | <Y>        | >=0   |
-| src/export/site_export_utils.py                 | <X>       | <Y>        | >=0   |
-| src/gateway/gateway_export_utils.py             | <X>       | <Y>        | >=0   |
-| src/gateway/gateway_stats_exporter.py           | <X>       | <Y>        | >=0   |
-| src/gateway/overrides/_deps.py                  | <X>       | <Y>        | >=0   |
-| src/gateway/overrides/device_data_fetcher.py    | <X>       | <Y>        | >=0   |
+| src/operations/exporting/export/site_export_utils.py                 | <X>       | <Y>        | >=0   |
+| src/mist/resources/gateway/gateway_export_utils.py             | <X>       | <Y>        | >=0   |
+| src/mist/resources/gateway/gateway_stats_exporter.py           | <X>       | <Y>        | >=0   |
+| src/mist/resources/gateway/overrides/_deps.py                  | <X>       | <Y>        | >=0   |
+| src/mist/resources/gateway/overrides/device_data_fetcher.py    | <X>       | <Y>        | >=0   |
 ```
 
 ## Guideline Flag Resolution (FR-006 carry-forward)

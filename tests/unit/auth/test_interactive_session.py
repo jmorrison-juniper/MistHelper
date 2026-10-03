@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.auth.interactive import LoginOrchestrator, MspOrgSelector
+from src.mist.access.auth.interactive import LoginOrchestrator, MspOrgSelector
 
 
 def _build_state() -> dict:
@@ -36,7 +36,7 @@ def test_login_orchestrator_requires_email() -> None:
     assert state["apisession"] is None  # State must not be mutated on failure
 
 
-@patch("src.auth.interactive.credential_prompter.getpass.getpass", return_value="password123")
+@patch("src.mist.access.auth.interactive.credential_prompter.getpass.getpass", return_value="password123")
 def test_login_orchestrator_success_sets_state(_mock_getpass: MagicMock) -> None:
     """Successful LoginOrchestrator.execute() should persist session in shared state."""
     state = _build_state()  # Fresh state bag for this test

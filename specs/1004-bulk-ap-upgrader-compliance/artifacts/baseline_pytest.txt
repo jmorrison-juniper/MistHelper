@@ -183,7 +183,7 @@ tests/unit/test_bulk_ap_upgrader.py::TestStep11WriteResultsExtended::test_write_
 _______ TestStep8ExecuteExtended.test_upgrade_version_group_non_dry_run _______
 C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_bulk_ap_upgrader.py:1723: in test_upgrade_version_group_non_dry_run
     upgrader._upgrade_version_group("site-001", "HQ", "0.14.123", version_info, _mock_mistapi)
-C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\firmware\bulk_ap_upgrader.py:1471: in _upgrade_version_group
+C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\operations\execution\firmware\bulk_ap_upgrader.py:1471: in _upgrade_version_group
     self._invoke_upgrade_api(site_id, version, models_str, devices, body, mistapi)
 E   TypeError: BulkAPFirmwareUpgrader._invoke_upgrade_api() takes 6 positional arguments but 7 were given
 =========================== short test summary info ===========================

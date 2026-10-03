@@ -40,10 +40,10 @@ description: "Task list for feature 1023-probe-tailored-synthetic-tests"
 
 **CRITICAL**: No user story implementation task in Phases 3-5 may start until this phase completes.
 
-- [X] T004 Add module-level constant `IKE_UDP_PORTS: tuple[int, int] = (500, 4500)` to `src/utils/zscaler_probe.py` per `contracts/probe_result.md`. Include the Google-style docstring block (`Why:` section) explaining that these are the two well-known IKE ports Zscaler VPN initiators answer on.
-- [X] T005 Extend the `ProbeResult` dataclass in `src/utils/zscaler_probe.py` with `udp: dict[int, str] = field(default_factory=dict)`. Update the class docstring `Why:` section to document the new field. Do NOT implement `_udp_check` yet - that is a US2 task.
-- [X] T006 [P] Add a private v2->v3 promotion helper `_promote_host_entry(entry: str | dict) -> dict` in `src/utils/zscaler_catalogue.py` per `contracts/cenr_cache_schema_v3.md` (Adaptation section). Include Google-style docstring with `Why:` documenting backward-compat requirement (FR-006).
-- [X] T007 Wire the loader in `src/utils/zscaler_catalogue.py` to detect `schema_version < 3` (or missing) and apply `_promote_host_entry` across all four host bags (`proxy_hostnames`, `vpn_hostnames`, `by_city[*].proxy_hostnames`, `by_city[*].vpn_hostnames`) plus `roles[*].fqdns` in the ZCC probes file. Emit exactly one `logger.info("zscaler_catalogue: loaded v%d cache (%d entries); observations absent", detected_version, count)` per load. (Depends on T006.)
+- [X] T004 Add module-level constant `IKE_UDP_PORTS: tuple[int, int] = (500, 4500)` to `src/foundation/support/utils/zscaler_probe.py` per `contracts/probe_result.md`. Include the Google-style docstring block (`Why:` section) explaining that these are the two well-known IKE ports Zscaler VPN initiators answer on.
+- [X] T005 Extend the `ProbeResult` dataclass in `src/foundation/support/utils/zscaler_probe.py` with `udp: dict[int, str] = field(default_factory=dict)`. Update the class docstring `Why:` section to document the new field. Do NOT implement `_udp_check` yet - that is a US2 task.
+- [X] T006 [P] Add a private v2->v3 promotion helper `_promote_host_entry(entry: str | dict) -> dict` in `src/foundation/support/utils/zscaler_catalogue.py` per `contracts/cenr_cache_schema_v3.md` (Adaptation section). Include Google-style docstring with `Why:` documenting backward-compat requirement (FR-006).
+- [X] T007 Wire the loader in `src/foundation/support/utils/zscaler_catalogue.py` to detect `schema_version < 3` (or missing) and apply `_promote_host_entry` across all four host bags (`proxy_hostnames`, `vpn_hostnames`, `by_city[*].proxy_hostnames`, `by_city[*].vpn_hostnames`) plus `roles[*].fqdns` in the ZCC probes file. Emit exactly one `logger.info("zscaler_catalogue: loaded v%d cache (%d entries); observations absent", detected_version, count)` per load. (Depends on T006.)
 - [X] T008 [P] Add unit test `tests/unit/utils/test_zscaler_catalogue.py::test_v2_cache_promotes_to_v3_shape_in_memory` that loads the v2 fixture from T003 and asserts every hostname bag now contains dicts of the shape `{"host": <fqdn>}` with `observed_protocol`, `observed_port`, `last_probed` absent (or `None`). Assert the single `logger.info` line via `caplog`. (Depends on T007.)
 
 **Checkpoint**: Foundational data-structure changes land; `pytest -q` still green; loader emits one INFO per v2 load; downstream stories can now proceed in parallel.
@@ -70,8 +70,8 @@ description: "Task list for feature 1023-probe-tailored-synthetic-tests"
 
 ### Implementation for User Story 2
 
-- [X] T018 [US2] Implement `_udp_check(host: str, port: int, timeout: float) -> str` in `src/utils/zscaler_probe.py`. Assemble IKE_SA_INIT header (~28 bytes) via `struct.pack(">8s8sBBBBII", ...)` plus a minimal Notify payload per research R-001. Prepend `b"\x00\x00\x00\x00"` when `port == 4500`. Use `SOCK_DGRAM`, call `.settimeout(timeout)`, `.sendto`, `.recvfrom`, close in `finally`. Return `"open"` on any datagram, `"no_reply"` on timeout, `f"error:{type(exc).__name__}"` on OSError family. `logger.info(...)` before send; `logger.debug(...)` after with the result string. Add inline `#` comments explaining the 5-Ws per Principle VI. (Depends on T004, T005.)
-- [X] T019 [US2] Extend `_probe_fqdn` in `src/utils/zscaler_probe.py` with the trigger predicate: fire UDP probes when `"-vpn." in fqdn.lower()` OR every TCP port in `ports_to_scan` returned a non-`"open"` status. For each port in `IKE_UDP_PORTS`, call `_udp_check`, store into `result.udp[port]`, and append `f"UDP/{port}"` to `result.responding_protocols` (dedup) when result is `"open"`. Wrap the block with `logger.info` before and `logger.debug` after per Principle VII. (Depends on T018.)
+- [X] T018 [US2] Implement `_udp_check(host: str, port: int, timeout: float) -> str` in `src/foundation/support/utils/zscaler_probe.py`. Assemble IKE_SA_INIT header (~28 bytes) via `struct.pack(">8s8sBBBBII", ...)` plus a minimal Notify payload per research R-001. Prepend `b"\x00\x00\x00\x00"` when `port == 4500`. Use `SOCK_DGRAM`, call `.settimeout(timeout)`, `.sendto`, `.recvfrom`, close in `finally`. Return `"open"` on any datagram, `"no_reply"` on timeout, `f"error:{type(exc).__name__}"` on OSError family. `logger.info(...)` before send; `logger.debug(...)` after with the result string. Add inline `#` comments explaining the 5-Ws per Principle VI. (Depends on T004, T005.)
+- [X] T019 [US2] Extend `_probe_fqdn` in `src/foundation/support/utils/zscaler_probe.py` with the trigger predicate: fire UDP probes when `"-vpn." in fqdn.lower()` OR every TCP port in `ports_to_scan` returned a non-`"open"` status. For each port in `IKE_UDP_PORTS`, call `_udp_check`, store into `result.udp[port]`, and append `f"UDP/{port}"` to `result.responding_protocols` (dedup) when result is `"open"`. Wrap the block with `logger.info` before and `logger.debug` after per Principle VII. (Depends on T018.)
 - [X] T020 [US2] Run `pytest tests/unit/utils/test_zscaler_probe.py -v` and confirm every US2 test from T009-T017 is now green. Delete any stale test-file scaffolding.
 
 **Checkpoint**: `ProbeResult.udp` is populated for VPN and TCP-dead hosts; US2 delivers the observation surface that US1 and US3 will consume. Full-suite `cd src; pytest -q` MUST stay green (>= baseline + new US2 tests).
@@ -95,9 +95,9 @@ description: "Task list for feature 1023-probe-tailored-synthetic-tests"
 
 ### Implementation for User Story 3
 
-- [X] T027 [US3] Add a private helper `_pick_observation_from_probe_result(pr: ProbeResult) -> tuple[str | None, int | None]` in `src/utils/zscaler_catalogue.py` implementing the write-path priority order (HTTPS -> UDP/500 -> UDP/4500 -> other TCP `open` -> null). Google-style docstring; `Why:` section names R-003. (Depends on T005, T018.)
-- [X] T028 [US3] Extend `ensure_fresh()` in `src/utils/zscaler_catalogue.py` to, after `run_full_validation` returns, walk the `list[ProbeResult]`, build an FQDN -> `(protocol, port, iso8601_utc)` index, and mutate the in-memory `fresh` dict so every host entry across the four CENR bags AND `roles[*].fqdns` in the ZCC file carries the observation fields. Emit `schema_version: 3`. `logger.info` before the observation-merge step; `logger.debug` after with a count of hosts updated. (Depends on T027, T007.)
-- [X] T029 [US3] Extend the atomic writer path in `src/utils/zscaler_catalogue.py` to write both files with `schema_version: 3` and the v3 per-host object shape. Do NOT change `_atomic_write_json` internals - only the payload handed to it. (Depends on T028.)
+- [X] T027 [US3] Add a private helper `_pick_observation_from_probe_result(pr: ProbeResult) -> tuple[str | None, int | None]` in `src/foundation/support/utils/zscaler_catalogue.py` implementing the write-path priority order (HTTPS -> UDP/500 -> UDP/4500 -> other TCP `open` -> null). Google-style docstring; `Why:` section names R-003. (Depends on T005, T018.)
+- [X] T028 [US3] Extend `ensure_fresh()` in `src/foundation/support/utils/zscaler_catalogue.py` to, after `run_full_validation` returns, walk the `list[ProbeResult]`, build an FQDN -> `(protocol, port, iso8601_utc)` index, and mutate the in-memory `fresh` dict so every host entry across the four CENR bags AND `roles[*].fqdns` in the ZCC file carries the observation fields. Emit `schema_version: 3`. `logger.info` before the observation-merge step; `logger.debug` after with a count of hosts updated. (Depends on T027, T007.)
+- [X] T029 [US3] Extend the atomic writer path in `src/foundation/support/utils/zscaler_catalogue.py` to write both files with `schema_version: 3` and the v3 per-host object shape. Do NOT change `_atomic_write_json` internals - only the payload handed to it. (Depends on T028.)
 - [X] T030 [US3] Run `pytest tests/unit/utils/test_zscaler_catalogue.py -v` and confirm every US3 test from T021-T026 is green. Delete any orphan v2 assumptions from adjacent tests.
 
 **Checkpoint**: Observations round-trip through disk. Old v2 caches still load. Full-suite `pytest -q` MUST remain green (>= previous checkpoint + new US3 tests).
@@ -125,8 +125,8 @@ description: "Task list for feature 1023-probe-tailored-synthetic-tests"
 
 ### Implementation for User Story 1
 
-- [X] T041 [US1] Rewrite the body of `_probe_target(fqdn, role, cenr_source)` in `src/org/org_synthetic_probes_manager.py` per `contracts/probe_target_url_builder.md` Decision Tree: look up the v3 host entry in the appropriate bag; dispatch on `observed_protocol` prefix (`UDP*` or `TCP/<n!=443>` -> Branch 1; `HTTPS` or `TCP/443` -> Branch 2; else Branch 3 with `logger.warning`). Emit `logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)` on every branch. Add inline `#` comments 5-W-compliant on every changed line. Google-style docstring with `Why:` naming SC-001 / FR-009. Do NOT mutate `cenr_source` (contract Non-Goals). (Depends on T007, T028 to guarantee observation fields exist in memory.)
-- [X] T042 [US1] Verify no other call site inside `src/org/org_synthetic_probes_manager.py` builds a `custom_probes[i].target` string outside `_probe_target` (grep for `https://` and `":443"` in that file). If any duplicate builder exists, route it through `_probe_target` or delete it. (Depends on T041.)
+- [X] T041 [US1] Rewrite the body of `_probe_target(fqdn, role, cenr_source)` in `src/mist/resources/org/org_synthetic_probes_manager.py` per `contracts/probe_target_url_builder.md` Decision Tree: look up the v3 host entry in the appropriate bag; dispatch on `observed_protocol` prefix (`UDP*` or `TCP/<n!=443>` -> Branch 1; `HTTPS` or `TCP/443` -> Branch 2; else Branch 3 with `logger.warning`). Emit `logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)` on every branch. Add inline `#` comments 5-W-compliant on every changed line. Google-style docstring with `Why:` naming SC-001 / FR-009. Do NOT mutate `cenr_source` (contract Non-Goals). (Depends on T007, T028 to guarantee observation fields exist in memory.)
+- [X] T042 [US1] Verify no other call site inside `src/mist/resources/org/org_synthetic_probes_manager.py` builds a `custom_probes[i].target` string outside `_probe_target` (grep for `https://` and `":443"` in that file). If any duplicate builder exists, route it through `_probe_target` or delete it. (Depends on T041.)
 - [X] T043 [US1] Run `pytest tests/unit/org/test_org_synthetic_probes_manager.py -v` and confirm every US1 test from T031-T040 is green.
 
 **Checkpoint**: MVP is complete. `custom_probes` payload for any VPN host is `host:500` (or `:4500`), every HTTPS host stays `https://host`, every unobserved host gets the fallback + WARN. Full-suite `cd src; pytest -q` MUST remain green.
@@ -141,14 +141,14 @@ description: "Task list for feature 1023-probe-tailored-synthetic-tests"
 
 **Scope**: Every `#` comment (and docstring `Why:` section) in the files listed below MUST answer Who / What / When / Where / Why. Historical or backstory comments MUST be removed per FR-013. New/adjacent comments added by this feature MUST be re-audited too. Each task below is [P] because each targets a distinct file - they can be split across reviewers.
 
-- [X] T044 [P] 5-W scrub `src/org/org_synthetic_probes_manager.py`: audit every `#` comment and docstring in the file; delete any comment that references historical PRs / callers / prior implementations; rewrite ambiguous comments to satisfy 5-W's; ensure every `_probe_target` branch and every logger call has a why-comment adjacent.
-- [X] T045 [P] 5-W scrub `src/utils/zscaler_probe.py`: same audit; special attention on `_udp_check`, `IKE_UDP_PORTS`, the IKE_SA_INIT struct assembly, and the trigger predicate inside `_probe_fqdn`.
-- [X] T046 [P] 5-W scrub `src/utils/zscaler_catalogue.py`: same audit; special attention on `_promote_host_entry`, `_pick_observation_from_probe_result`, `ensure_fresh` observation-merge block, and the atomic writer payload.
+- [X] T044 [P] 5-W scrub `src/mist/resources/org/org_synthetic_probes_manager.py`: audit every `#` comment and docstring in the file; delete any comment that references historical PRs / callers / prior implementations; rewrite ambiguous comments to satisfy 5-W's; ensure every `_probe_target` branch and every logger call has a why-comment adjacent.
+- [X] T045 [P] 5-W scrub `src/foundation/support/utils/zscaler_probe.py`: same audit; special attention on `_udp_check`, `IKE_UDP_PORTS`, the IKE_SA_INIT struct assembly, and the trigger predicate inside `_probe_fqdn`.
+- [X] T046 [P] 5-W scrub `src/foundation/support/utils/zscaler_catalogue.py`: same audit; special attention on `_promote_host_entry`, `_pick_observation_from_probe_result`, `ensure_fresh` observation-merge block, and the atomic writer payload.
 - [X] T047 [P] 5-W scrub `tests/unit/utils/test_zscaler_probe.py`: same audit; ensure every mock setup and every assertion carries a why-comment.
 - [X] T048 [P] 5-W scrub `tests/unit/utils/test_zscaler_catalogue.py`: same audit.
 - [X] T049 [P] 5-W scrub `tests/unit/org/test_org_synthetic_probes_manager.py`: same audit.
 - [X] T050 [P] 5-W scrub `scripts/probe_zscaler_endpoints.py`: same audit; this ad-hoc probe script is part of the Menu 206 developer loop and MUST also satisfy FR-013.
-- [X] T051 [P] 5-W scrub `src/utils/operation_registry.py` for the Menu 206 registry entry: audit the `"206": {...}` classification block and any accompanying comment.
+- [X] T051 [P] 5-W scrub `src/foundation/support/utils/operation_registry.py` for the Menu 206 registry entry: audit the `"206": {...}` classification block and any accompanying comment.
 - [X] T052 [P] 5-W scrub `MistHelper.py` for the Menu 206 dispatch entry: audit the menu-entry comment and any inline note referencing option 206.
 
 ### Final Validation Gates
@@ -156,8 +156,8 @@ description: "Task list for feature 1023-probe-tailored-synthetic-tests"
 - [X] T053 Run `cd src; pytest -q` and confirm the passing count >= baseline (T002) + count of new tests added in Phases 3-5. Zero failures. Zero xpassed converts. (SC-003.)
 - [X] T054 [P] Run `ruff check .` from repo root; confirm zero new violations in files touched by this feature.
 - [X] T055 [P] Run `black --check .` from repo root; confirm zero formatting drift.
-- [X] T056 [P] Run `mypy src/utils/zscaler_probe.py src/utils/zscaler_catalogue.py src/org/org_synthetic_probes_manager.py`; confirm no new type errors introduced by the feature.
-- [X] T057 [P] Run branch-coverage check on the new decision points (`_udp_check` three returns, `_probe_fqdn` trigger predicate branches a/b/neither, `_probe_target` three branches, CENR loader v2/v3 branches): `pytest --cov=src.utils.zscaler_probe --cov=src.utils.zscaler_catalogue --cov=src.org.org_synthetic_probes_manager --cov-branch --cov-report=term-missing tests/unit/utils/test_zscaler_probe.py tests/unit/utils/test_zscaler_catalogue.py tests/unit/org/test_org_synthetic_probes_manager.py`. Confirm 100% branch coverage on the new code paths per SC-004.
+- [X] T056 [P] Run `mypy src/foundation/support/utils/zscaler_probe.py src/foundation/support/utils/zscaler_catalogue.py src/mist/resources/org/org_synthetic_probes_manager.py`; confirm no new type errors introduced by the feature.
+- [X] T057 [P] Run branch-coverage check on the new decision points (`_udp_check` three returns, `_probe_fqdn` trigger predicate branches a/b/neither, `_probe_target` three branches, CENR loader v2/v3 branches): `pytest --cov=src.foundation.support.utils.zscaler_probe --cov=src.foundation.support.utils.zscaler_catalogue --cov=src.mist.resources.org.org_synthetic_probes_manager --cov-branch --cov-report=term-missing tests/unit/utils/test_zscaler_probe.py tests/unit/utils/test_zscaler_catalogue.py tests/unit/org/test_org_synthetic_probes_manager.py`. Confirm 100% branch coverage on the new code paths per SC-004.
 - [X] T058 Manual quickstart Scenario 4 (US3 round-trip) in `specs/1023-probe-tailored-synthetic-tests/quickstart.md`: delete/timestamp-invalidate `data/zscaler_cenr_hostnames.json`, trigger refresh, confirm `schema_version: 3` and observation fields populated. Record the outcome in the working notes. Automated portion executed: `pytest tests/unit/utils/test_zscaler_catalogue.py -k "schema_v3 or v2_compat"` — **2 passed**. Live-network refresh of the on-disk `data/zscaler_cenr_hostnames.json` requires an operator with Zscaler CENR endpoint reachability; the schema-round-trip contract is proven equivalent by the fixture-driven pytest.
 - [X] T059 Manual quickstart Scenario 7 (SC-001 + SC-008 gates) in the same file: run Menu 206 dry-run against a small test org; inspect generated payload; confirm zero `^https://.*-vpn\.` targets and at least one `.*-vpn\..*:500` target. Record the outcome in the working notes. Automated substitute executed: `pytest tests/unit/org/test_org_synthetic_probes_manager.py -k "probe_target"` — **14 passed** covering all three `_probe_target` branches (UDP/TCP-non-443 → `host:port`, HTTPS/TCP-443 → `https://host`, missing observation → catalogue default + exactly one WARNING). Live Menu 206 dry-run against a real Mist org requires operator credentials and is deferred to the acceptance owner; the SC-001 invariant (no `https://*-vpn.*` targets) is proven by the branch tests, and SC-008 (single URL-builder path) is proven by the `_probe_target`-only unit tests.
 
@@ -226,14 +226,14 @@ pytest tests/unit/utils/test_zscaler_probe.py -v -k "udp or vpn or dgram"
 
 ```bash
 # All nine scrub tasks are file-disjoint; assign to reviewers in parallel:
-Task: "5-W scrub src/org/org_synthetic_probes_manager.py"
-Task: "5-W scrub src/utils/zscaler_probe.py"
-Task: "5-W scrub src/utils/zscaler_catalogue.py"
+Task: "5-W scrub src/mist/resources/org/org_synthetic_probes_manager.py"
+Task: "5-W scrub src/foundation/support/utils/zscaler_probe.py"
+Task: "5-W scrub src/foundation/support/utils/zscaler_catalogue.py"
 Task: "5-W scrub tests/unit/utils/test_zscaler_probe.py"
 Task: "5-W scrub tests/unit/utils/test_zscaler_catalogue.py"
 Task: "5-W scrub tests/unit/org/test_org_synthetic_probes_manager.py"
 Task: "5-W scrub scripts/probe_zscaler_endpoints.py"
-Task: "5-W scrub src/utils/operation_registry.py (Menu 206 entry only)"
+Task: "5-W scrub src/foundation/support/utils/operation_registry.py (Menu 206 entry only)"
 Task: "5-W scrub MistHelper.py (Menu 206 dispatch entry only)"
 ```
 

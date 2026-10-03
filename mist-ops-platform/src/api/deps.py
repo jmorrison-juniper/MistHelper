@@ -13,12 +13,12 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.api.middleware.auth import (
+from src.mist.access.api.middleware.auth import (
     CurrentUser,
     get_current_user,
     require_org_access,
 )
-from src.api.middleware.rate_limit import get_org_rate_limiter
+from src.mist.access.api.middleware.rate_limit import get_org_rate_limiter
 
 logger = logging.getLogger(__name__)
 

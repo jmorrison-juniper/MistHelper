@@ -1,7 +1,7 @@
 """Unit tests for OrgClientSecurityExporter — covers every static-method branch.
 
 Why:
-    The tranche-18 push of issue #878 removes ``src/export/org_client_security_exporter.py``
+    The tranche-18 push of issue #878 removes ``src/operations/exporting/export/org_client_security_exporter.py``
     from the coverage ``omit`` list. This suite drives every public entry
     (wireless_clients, wired_clients, security_events, rogue_clients, rogue_aps)
     plus every private helper (_check_csv_cache_fresh, _load_site_list,
@@ -18,9 +18,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.export import org_client_security_exporter as ocse
-from src.export.org_client_security_exporter import OrgClientSecurityExporter
-from src.export.org_client_security_exporter import OrgClientSecurityExporter as FailureModeOrgClientSecurityExporter
+from src.operations.exporting.export import org_client_security_exporter as ocse
+from src.operations.exporting.export.org_client_security_exporter import OrgClientSecurityExporter
+from src.operations.exporting.export.org_client_security_exporter import (
+    OrgClientSecurityExporter as FailureModeOrgClientSecurityExporter,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -78,12 +80,12 @@ class TestClientDelegation:
 
 class TestSecurityEvents:
     def test_delegates_to_service(self, fake_mh: ModuleType) -> None:
-        with patch("src.refactors.serial_cc.security_events.SecurityEventsService") as svc:
+        with patch("src.foundation.support.refactors.serial_cc.security_events.SecurityEventsService") as svc:
             OrgClientSecurityExporter.security_events(fast=True)
         svc.execute.assert_called_once_with(True)
 
     def test_default_fast_false(self, fake_mh: ModuleType) -> None:
-        with patch("src.refactors.serial_cc.security_events.SecurityEventsService") as svc:
+        with patch("src.foundation.support.refactors.serial_cc.security_events.SecurityEventsService") as svc:
             OrgClientSecurityExporter.security_events()
         svc.execute.assert_called_once_with(False)
 

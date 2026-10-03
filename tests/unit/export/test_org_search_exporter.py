@@ -17,9 +17,9 @@ from unittest.mock import MagicMock  # WHY: collaborator doubles and call assert
 
 import pytest  # WHY: monkeypatch and caplog fixtures.
 
-from src.export.org_search_exporter import OrgSearchExporter
-from src.export.org_search_exporter import OrgSearchExporter as FailureModeOrgSearchExporter
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.operations.exporting.export.org_search_exporter import OrgSearchExporter
+from src.operations.exporting.export.org_search_exporter import OrgSearchExporter as FailureModeOrgSearchExporter
 
 # Each row maps a menu entry to the operationId, the filename prefix, and the
 # SDK attribute chain that the entry must call.
@@ -63,11 +63,13 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     data_processing = MagicMock(name="DataProcessingUtils")  # Flatten and escape collaborator.
     data_processing.flatten_nested_fields.side_effect = lambda rows: rows  # Identity keeps the payload checkable.
     data_processing.escape_multiline.side_effect = lambda rows: rows  # Identity keeps the payload checkable.
-    monkeypatch.setattr("src.export.org_search_exporter.DataProcessingUtils", data_processing, raising=True)
+    monkeypatch.setattr(
+        "src.operations.exporting.export.org_search_exporter.DataProcessingUtils", data_processing, raising=True
+    )
 
     mistapi_mod = MagicMock(name="mistapi")  # SDK double for every endpoint call.
     mistapi_mod.get_all.side_effect = lambda response, mist_session: response  # Pass the fake rows straight back.
-    monkeypatch.setattr("src.export.org_search_exporter.mistapi", mistapi_mod, raising=True)
+    monkeypatch.setattr("src.operations.exporting.export.org_search_exporter.mistapi", mistapi_mod, raising=True)
 
     data_exporter = MagicMock(name="DataExporter")  # write_with_format_selection is observed.
     apisession = MagicMock(name="apisession")  # Forwarded into every SDK call.
@@ -198,7 +200,7 @@ class TestSharedBehavior:
     def test_org_vars_menu_is_registered_as_safe(self) -> None:
         """Menu 250 must route to organization variable export as a safe operation."""
         import MistHelper  # Import the runtime menu registry under test.
-        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+        from src.foundation.support.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
         action = MistHelper.menu_actions["250"].handler
         description = MistHelper.menu_actions["250"].title  # Read the menu row.
@@ -216,7 +218,7 @@ class TestSharedBehavior:
     def test_user_macs_menu_is_registered_as_safe(self) -> None:
         """Menu 251 must route to the user MAC export as a safe operation."""
         import MistHelper  # Import the runtime menu registry under test.
-        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+        from src.foundation.support.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
         action = MistHelper.menu_actions["251"].handler
         description = MistHelper.menu_actions["251"].title  # Read the menu row for issue #1380.
@@ -302,7 +304,7 @@ class TestMxEdgeSearch:
     def test_mx_edges_menu_is_registered_as_safe(self) -> None:
         """Menu 253 must route to the MxEdge export as a safe operation."""
         import MistHelper  # Import the runtime menu registry under test.
-        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+        from src.foundation.support.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
         action = MistHelper.menu_actions["253"].handler
         description = MistHelper.menu_actions["253"].title  # Read the menu row.

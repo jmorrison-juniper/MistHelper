@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/runtime/tui_runner.py."""
+"""Unit tests for src/interfaces/visualization/ui/runtime/tui_runner.py."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.ui.runtime.tui_runner import TuiRunner
+from src.interfaces.visualization.ui.runtime.tui_runner import TuiRunner
 
 
 class _FakeLive:

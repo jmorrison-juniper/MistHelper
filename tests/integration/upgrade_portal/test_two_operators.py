@@ -42,8 +42,11 @@ from flask import Flask  # The application type of the portal.
 from flask.testing import FlaskClient  # The client type that drives every request.
 from werkzeug.test import TestResponse  # The answer type that every assertion reads.
 
-from src.upgrade_portal.app.routes import auth  # The auth route owns the dependency row seam key.
-from src.upgrade_portal.runtime import identity, lock  # The real session guard and the real lock rules.
+from src.interfaces.portals.upgrade_portal.app.routes import auth  # The auth route owns the dependency row seam key.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+    lock,
+)  # The real session guard and the real lock rules.
 
 LOCK_CLIENT_KEY = "LOCK_STORE_CLIENT"  # The lock store seam, named by `app/routes/select.py`.
 LOCK_READER_KEY = "SITE_LOCK_READER"  # The holder reader seam of the same module.
@@ -80,7 +83,7 @@ EXPECTED_LOCK_COUNT = 1  # One held site, used where a read must add no second l
 # `app/factory.py` arms this one logger and then stops its propagation, so a plain
 # `caplog` on the root logger captures no portal record at all. The name is read
 # back from the lock module, so a move of the package keeps this value correct.
-PACKAGE_LOGGER_NAME = lock.__name__.rsplit(".", maxsplit=2)[0]  # Reads `src.upgrade_portal`.
+PACKAGE_LOGGER_NAME = lock.__name__.rsplit(".", maxsplit=2)[0]  # Reads `src.interfaces.portals.upgrade_portal`.
 
 
 class FakeLockStore:
@@ -298,7 +301,7 @@ def portal_app(monkeypatch: pytest.MonkeyPatch) -> Flask:
         The Flask application with the test settings applied.
     """
     factory = pytest.importorskip(  # The factory arrives at task T027.
-        "src.upgrade_portal.app.factory",
+        "src.interfaces.portals.upgrade_portal.app.factory",
         reason="The capture portal application factory is not built yet.",
     )
     monkeypatch.setenv("MISTHELPER_STANDALONE", "true")  # Skip DNS probes before test seams are installed.

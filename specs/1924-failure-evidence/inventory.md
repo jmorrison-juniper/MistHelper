@@ -32,115 +32,115 @@ Issue #1924 inventory generated from the current branch.
 - Line 573: `except Exception:`
 - Line 275: `except Exception:`
 
-### src\bootstrap\package_installer.py
+### src\foundation\runtime\bootstrap\package_installer.py
 - Line 55: `except Exception as error:  # WHY: broad catch protects import-time bootstrap from any failure mode`
 - Line 154: `except Exception as error:  # WHY: broad catch protects import-time bootstrap from any failure mode`
 
-### src\db\arango_writer.py
+### src\foundation\persistence\db\arango_writer.py
 - Line 4166: `except Exception:  # WHY: preserve original 'swallow all errors' contract for compat`
 
-### src\export\org_admin_exporter.py
+### src\operations\exporting\export\org_admin_exporter.py
 - Line 110: `except Exception:  # nosec B110`
 
-### src\export\org_template_exporter.py
+### src\operations\exporting\export\org_template_exporter.py
 - Line 141: `except Exception:  # nosec B110`
 - Line 183: `except Exception:  # nosec B110`
 
-### src\firmware\aggregate_upgrade_service.py
+### src\operations\execution\firmware\aggregate_upgrade_service.py
 - Line 435: `except Exception as fault:  # Preserve a truthful stop reason without a cloud call.`
 
-### src\firmware\bulk_ap_upgrader.py
+### src\operations\execution\firmware\bulk_ap_upgrader.py
 - Line 688: `except Exception as error:  # WHY: recover from failure`
 - Line 2020: `except Exception:  # WHY: recover from failure`
 
-### src\firmware\bulk_switch_upgrader.py
+### src\operations\execution\firmware\bulk_switch_upgrader.py
 - Line 243: `except Exception as exc:  # pylint: disable=broad-exception-caught`
 - Line 664: `except Exception:  # pylint: disable=broad-exception-caught`
 
-### src\firmware\firmware_manager.py
+### src\operations\execution\firmware\firmware_manager.py
 - Line 4036: `except Exception as exception:  # WHY: any error yields graceful notice`
 
-### src\firmware\site_auto_upgrade.py
+### src\operations\execution\firmware\site_auto_upgrade.py
 - Line 1593: `except Exception as error:  # WHY: fetch may raise mistapi errors - treat as failure.`
 
-### src\gateway\overrides\device_data_fetcher.py
+### src\mist\resources\gateway\overrides\device_data_fetcher.py
 - Line 128: `except Exception as exception:  # Legacy contract: do not crash compliance report`
 
-### src\gateway\template_config.py
+### src\mist\resources\gateway\template_config.py
 - Line 230: `except Exception as error:  # pylint: disable=broad-exception-caught # WHY: mistapi raises many types`
 - Line 301: `except Exception as error:  # pylint: disable=broad-exception-caught # WHY: filesystem errors vary`
 - Line 337: `except Exception as error:  # pylint: disable=broad-exception-caught # WHY: file/JSON errors vary`
 - Line 506: `except Exception as error:  # pylint: disable=broad-exception-caught # WHY: file/CSV errors vary`
 
-### src\inventory\csv_comparator.py
+### src\mist\resources\inventory\csv_comparator.py
 - Line 1151: `except Exception as error:  # pylint: disable=broad-exception-caught  # WHY: tolerate Nominatim failure.`
 
-### src\maps\_maps_matplotlib.py
+### src\interfaces\visualization\maps\_maps_matplotlib.py
 - Line 384: `except Exception:`
 
-### src\maps\_maps_wizard.py
+### src\interfaces\visualization\maps\_maps_wizard.py
 - Line 211: `except Exception as img_err:`
 - Line 802: `except Exception as map_err:`
 - Line 819: `except Exception as img_err:`
 
-### src\maps\launcher\_viewer_clone.py
+### src\interfaces\visualization\maps\launcher\_viewer_clone.py
 - Line 352: `except Exception:  # noqa: BLE001 - preserve original broad-except behavior`
 
-### src\maps\launcher\_viewer_site_switch.py
+### src\interfaces\visualization\maps\launcher\_viewer_site_switch.py
 - Line 549: `except Exception:  # WHY: mirror original bare-except behavior`
 
-### src\network\routing_utils.py
+### src\mist\networking\network\routing_utils.py
 - Line 185: `except Exception as error:  # WHY: log-and-continue on any mistapi error`
 
-### src\refactors\maps_manager_launcher.py
+### src\foundation\support\refactors\maps_manager_launcher.py
 - Line 102: `except Exception as error:  # prompt errors must never crash the menu`
 
-### src\refactors\serial_cc\security_events.py
+### src\foundation\support\refactors\serial_cc\security_events.py
 - Line 135: `except Exception:  # Any filesystem error means we cannot prove freshness. Fall through to refetch.`
 
-### src\refactors\sqlite_database_writer.py
+### src\foundation\support\refactors\sqlite_database_writer.py
 - Line 235: `except Exception as error:  # Handle unexpected errors.`
 - Line 338: `except Exception as error:  # Per-row failure.`
 
-### src\site\address_audit\ui_geocoder.py
+### src\mist\resources\site\address_audit\ui_geocoder.py
 - Line 498: `except Exception:  # a stale DOM node yields no text.`
 
-### src\ssh\batch\batch_executor.py
+### src\operations\execution\ssh\batch\batch_executor.py
 - Line 144: `except Exception as run_error:  # top-level fallback mirrors original behavior`
 
-### src\ssh\batch\interactive_batch_executor.py
+### src\operations\execution\ssh\batch\interactive_batch_executor.py
 - Line 287: `except Exception as session_error:  # top-level fallback (verbatim)`
 - Line 531: `except Exception as step_error:  # per-step fallback (verbatim)`
 
-### src\ssh\command\command_runner.py
+### src\operations\execution\ssh\command\command_runner.py
 - Line 147: `except Exception as run_error:  # top-level fallback mirrors original behavior`
 
-### src\ssh\runtime\app_runner.py
+### src\operations\execution\ssh\runtime\app_runner.py
 - Line 85: `except Exception:  # nosec B110 - tracer must never break user flow`
 
-### src\ssh\shell_execution\shell_executor.py
+### src\operations\execution\ssh\shell_execution\shell_executor.py
 - Line 506: `except Exception:  # nosec B112 - cleanup is best-effort  # WHY: Any error during cleanup ends the drain`
 
-### src\troubleshooting\marvis_troubleshoot_utils.py
+### src\mist\intelligence\troubleshooting\marvis_troubleshoot_utils.py
 - Line 885: `except Exception as endpoint_error:  # logged via helper.`
 
-### src\ui\execution\debug_saver.py
+### src\interfaces\visualization\ui\execution\debug_saver.py
 - Line 104: `except Exception:  # nosec B112 — defensive guard against descriptor errors`
 
-### src\upgrade_portal\runtime\pools.py
+### src\interfaces\portals\upgrade_portal\runtime\pools.py
 - Line 378: `except Exception as error:  # WHY: one failed call must not lose the answer of the other calls`
 
-### src\utils\address_utils.py
+### src\foundation\support\utils\address_utils.py
 - Line 946: `except Exception:  # WHY: catch-all so a bad response does not kill validation`
 - Line 421: `except Exception:  # nosec B110  # WHY: on any fuzz failure, fall through to SequenceMatcher`
 
-### src\utils\environment_utils.py
+### src\foundation\support\utils\environment_utils.py
 - Line 123: `except Exception:  # nosec B110`
 
-### src\utils\logger_utils.py
+### src\foundation\support\utils\logger_utils.py
 - Line 148: `except Exception:  # never crash a logging filter`
 
-### src\utils\zscaler_probe.py
+### src\foundation\support\utils\zscaler_probe.py
 - Line 332: `except Exception:  # pragma: no cover - best-effort cleanup`
 - Line 393: `except Exception as exc:  # pragma: no cover - defensive`
 
@@ -281,7 +281,7 @@ Issue #1924 inventory generated from the current branch.
 - Line 2532: `Successfully switched to interactive login session with %s MSP(s)`
 - Additional records: 19
 
-### mist-ops-platform\src\api\routes\sync.py
+### mist-ops-platform\src\mist\access\api\routes\sync.py
 - Line 495: `create_policy: policy_id=%s created for org_id=%s`
 
 ### mist-ops-platform\src\shared\mist\endpoints.py
@@ -331,98 +331,98 @@ Issue #1924 inventory generated from the current branch.
 ### scripts\run_repository_analyzers.py
 - Line 25: `Repository analyzer run completed with exit code %d`
 
-### src\analytics\data_collection_manager.py
+### src\mist\intelligence\analytics\data_collection_manager.py
 - Line 99: `  Loop %d completed successfully`
 - Line 196: `Support package written for site %s`
 
-### src\analytics\insight_metrics_utils.py
+### src\mist\intelligence\analytics\insight_metrics_utils.py
 - Line 58: `! Warning: ConstInsightMetrics.csv was not created during dynamic export`
 
-### src\analytics\site_analytics_configurator.py
+### src\mist\intelligence\analytics\site_analytics_configurator.py
 - Line 569: `Site analytics configuration complete. %d sites updated.`
 - Line 504: `Updated %s: %s`
 
-### src\analytics\site_inventory_health_analyzer.py
+### src\mist\intelligence\analytics\site_inventory_health_analyzer.py
 - Line 72: `Site inventory health analysis complete.`
 
-### src\analytics\zone_analyzer.py
+### src\mist\intelligence\analytics\zone_analyzer.py
 - Line 82: `analyze completed successfully`
 - Line 307: `Site configuration analysis complete. Exported CSV files with timestamp %s`
 
-### src\api\api_data_fetcher.py
+### src\mist\access\api\api_data_fetcher.py
 - Line 76: `EXIT: APIDataFetcher.execute - success`
 - Line 118: `API call successful, retrieved %s raw records`
 - Line 281: `Partial data saved: %s records written to %s`
 - Line 325: `Despite the error, %s records were successfully saved to %s`
 - Line 294: `Emergency save: %s partial records written to %s`
 
-### src\api\api_fetch_utils.py
+### src\mist\access\api\api_fetch_utils.py
 - Line 267: `! Completed fetching %s gateway device configs.`
 - Line 58: `Successfully retrieved %s organization services`
 
-### src\auth\interactive\login_orchestrator.py
+### src\mist\access\auth\interactive\login_orchestrator.py
 - Line 148: `APISession created successfully`
 - Line 220: `  + Login successful!`
 - Line 221: `Interactive login successful for %s to %s`
 
-### src\cache\cache_utils.py
+### src\foundation\persistence\cache\cache_utils.py
 - Line 164: `Support package written to %s`
 - Line 225: `Cache cleared: %d file(s) deleted, %d error(s).`
 - Line 251: `Deleted: %s`
 
-### src\capture\_packet_capture_exec.py
+### src\operations\execution\capture\_packet_capture_exec.py
 - Line 90: `Site capture started: capture_id=%s, format=%s`
 - Line 187: `Loop iteration %s: Capture started - ID=%s`
 - Line 516: `PCAP save callback completed for %s`
 - Line 272: `Capture %s completed (enabled=False)`
 - Line 275: `Capture %s completed (duration reached)`
 
-### src\capture\_packet_capture_org.py
+### src\operations\execution\capture\_packet_capture_org.py
 - Line 488: `Org capture started: capture_id=%s`
 
-### src\capture\_packet_capture_prompts.py
+### src\operations\execution\capture\_packet_capture_prompts.py
 - Line 285: `Multi-AP capture started: id=%s, aps=%s`
 
-### src\capture\client_pcap_downloader.py
+### src\operations\execution\capture\client_pcap_downloader.py
 - Line 119: `Menu 197 client PCAP downloader: flow complete`
 - Line 311: `
   Complete: %d/%d files written to %s`
 - Line 262: `  No completed PCAPs available (all still in progress).`
 
-### src\capture\multi_ap_scan_workflow.py
+### src\operations\execution\capture\multi_ap_scan_workflow.py
 - Line 294: `Multi-AP capture started: capture_id=%s ap_count=%s`
 - Line 296: `Capture metadata export completed for capture_id=%s`
 - Line 380: `Multi-AP scan capture function completed`
 - Line 244: `%d capture(s) already in progress or recently completed`
 - Line 280: `Site capture stream subscription completed for capture_id=%s`
 
-### src\capture\org_pcap_wait_download_workflow.py
+### src\operations\execution\capture\org_pcap_wait_download_workflow.py
 - Line 31: `Packet-capture download manager initialized successfully`
 - Line 58: `Completed poll_and_download_pcap for org capture_id=%s`
 - Line 68: `Completed org PCAP wait/download compatibility alias`
 
-### src\capture\packet_capture.py
+### src\operations\execution\capture\packet_capture.py
 - Line 1077: `Multi-AP scan capture function completed`
 
-### src\capture\packet_capture_download.py
+### src\operations\execution\capture\packet_capture_download.py
 - Line 104: `Loop iteration %s: Filtered %s completed PCAP entries`
 - Line 127: `Checking %s completed PCAP(s) for pending downloads`
 - Line 134: `Pending download scan completed with %s new file(s)`
 - Line 301: `PCAP save callback completed for %s`
 - Line 124: `No completed PCAPs were available for download`
 
-### src\capture\site_capture_loop.py
+### src\operations\execution\capture\site_capture_loop.py
 - Line 69: `
 %s
 Loop iteration #%s complete`
 - Line 85: `  Completed %s loop iteration(s)`
 
-### src\capture\site_pcap_wait_download_workflow.py
+### src\operations\execution\capture\site_pcap_wait_download_workflow.py
 - Line 31: `Packet-capture download manager initialized successfully`
 - Line 58: `Completed poll_and_download_pcap for site capture_id=%s`
 - Line 70: `Completed site PCAP wait/download compatibility alias`
 
-### src\db\arango_writer.py
+### src\foundation\persistence\db\arango_writer.py
 - Line 3930: `database_created`
 - Line 3956: `graph_updated`
 - Line 3990: `import_complete`
@@ -430,53 +430,53 @@ Loop iteration #%s complete`
 - Line 3943: `graph_created`
 - Line 3963: `collection_created`
 
-### src\device\_utility_commands_websocket.py
+### src\mist\resources\device\_utility_commands_websocket.py
 - Line 214: `-> Streaming started (session: %s...)`
 
-### src\device\ap_profile_migration_manager.py
+### src\mist\resources\device\ap_profile_migration_manager.py
 - Line 190: `Menu #207 DESTRUCTIVE: migrate APs started`
 - Line 255: `Backup file written: %s`
 - Line 360: `Menu #208 DESTRUCTIVE: revert AP profile migration started`
 - Line 1078: `Discovery complete: %d APs bound to source profile`
 
-### src\device\virtual_chassis.py
+### src\mist\resources\device\virtual_chassis.py
 - Line 1017: `Bulk VC conversion completed: %d successful, %d failed`
 
-### src\export\const_definitions_exporter.py
+### src\operations\exporting\export\const_definitions_exporter.py
 - Line 92: `Dynamic discovery completed: %s endpoints found`
 - Line 771: `Dynamic const export completed: %s discovered, %s processed, %s skipped (fresh), %s updated, %s failed`
 
-### src\export\data_exporter.py
+### src\operations\exporting\export\data_exporter.py
 - Line 398: `File I/O: Successfully wrote %s rows to %s`
 - Line 399: `EXIT: DataExporter.write_to_csv - success`
 - Line 294: `Polyglot write: backend=%s, written=%s, failed=%s`
 - Line 442: `File I/O: Successfully wrote CSV header to %s`
 - Line 429: `Row %s written: %s`
 
-### src\export\gateway_test_exporter.py
+### src\operations\exporting\export\gateway_test_exporter.py
 - Line 170: `! Retry %s successful for device %s at site %s`
 - Line 302: ` No synthetic test results found. CSV not created.`
 - Line 303: `! No synthetic test results found. CSV not created.`
 
-### src\export\license_export_utils.py
+### src\operations\exporting\export\license_export_utils.py
 - Line 146: `Completed summary write for org %s`
 - Line 166: `Completed detail write for org %s`
 
-### src\export\msp_inventory_exporter.py
+### src\operations\exporting\export\msp_inventory_exporter.py
 - Line 69: `Menu #144 complete: %s devices exported from %s orgs across %s MSPs`
 
-### src\export\org_alarm_event_exporter.py
+### src\operations\exporting\export\org_alarm_event_exporter.py
 - Line 129: `Device events written to OrgDeviceEvents.csv (%s rows).`
 - Line 132: `Menu #21: Device events export completed - %s events`
 - Line 80: `Completed org alarms export and wrote results to OrgAlarms.csv.`
 - Line 81: `EXIT: OrgAlarmEventExporter.alarms - success`
 
-### src\export\org_device_stats_exporter.py
+### src\operations\exporting\export\org_device_stats_exporter.py
 - Line 317: ` No port statistics collected. CSV not created.`
 - Line 319: `! No port statistics collected. CSV not created.`
 - Line 228: `! Retry %s successful for site %s (%s records)`
 
-### src\export\org_export_utils.py
+### src\operations\exporting\export\org_export_utils.py
 - Line 426: `
 ! Successfully exported %d organization insight metrics to 4 normalized CSV files`
 - Line 487: `! Metric retrieval completed: %d successful, %d failed`
@@ -487,52 +487,52 @@ Loop iteration #%s complete`
 - Line 749: `EXIT: OrgExportUtils.audit_logs - success`
 - Line 359: `Successfully retrieved org sites SLE data for %s sites`
 
-### src\export\org_inventory_exporter.py
+### src\operations\exporting\export\org_inventory_exporter.py
 - Line 92: `Completed organization inventory export and wrote results to OrgInventory.csv.`
 - Line 114: `Completed organization devices export and wrote results to OrgDevices.csv.`
 - Line 486: `! %s weekly CSV files created in data/CombinedInventory_ByWeek/ folder (%s total devices processed)`
 - Line 626: `All device data written to AllDevicesWithSiteInfo.csv (%s records).`
 - Line 708: `Gateway data written to GatewaysWithSiteInfo.csv`
 
-### src\export\org_search_exporter.py
+### src\operations\exporting\export\org_search_exporter.py
 - Line 153: `Completed the %s prompts with %d filters`
 - Line 139: `Completed the %s prompts with 0 filters`
 
-### src\export\org_site_exporter.py
+### src\operations\exporting\export\org_site_exporter.py
 - Line 60: `Completed site list export and wrote results to %s.`
 - Line 112: ` Full site data written to SitesWithLocations.csv`
 
-### src\export\org_template_exporter.py
+### src\operations\exporting\export\org_template_exporter.py
 - Line 37: ` Organization templates export completed`
 
-### src\export\self_account_exporter.py
+### src\operations\exporting\export\self_account_exporter.py
 - Line 152: `! Email address updated - the token was valid`
 
-### src\export\site_anomaly_exporter.py
+### src\operations\exporting\export\site_anomaly_exporter.py
 - Line 345: `Successfully retrieved %s client anomaly data for %s`
 - Line 140: `Successfully retrieved %s %s for %s`
 
-### src\export\site_asset_exporter.py
+### src\operations\exporting\export\site_asset_exporter.py
 - Line 127: `Completed the %s prompt with value_present=%s`
 
-### src\export\site_client_exporter.py
+### src\operations\exporting\export\site_client_exporter.py
 - Line 121: `Completed delegated wifi_clients export workflow`
 - Line 156: `Completed delegated wan_client_events export workflow`
 - Line 193: `Completed site_id prompt for getSiteBeacon with value_present=%s`
 - Line 207: `Completed beacon_id prompt for getSiteBeacon with value_present=%s`
 - Line 275: `getSiteBeacon call succeeded with %d normalized rows`
 
-### src\export\site_device_exporter.py
+### src\operations\exporting\export\site_device_exporter.py
 - Line 69: `Device inventory written to %s (%s rows)`
 
-### src\export\site_export_utils.py
+### src\operations\exporting\export\site_export_utils.py
 - Line 289: `Site %s export completed - %s records saved to %s.`
 - Line 315: `Site %s data written to %s (%s rows).`
 
-### src\export\site_search_exporter.py
+### src\operations\exporting\export\site_search_exporter.py
 - Line 301: `Completed the %s prompt with value_present=%s`
 
-### src\export\wan_client_events_exporter.py
+### src\operations\exporting\export\wan_client_events_exporter.py
 - Line 180: `SiteList.csv cache check/generation completed`
 - Line 185: `Site selection prompt completed with site_id=%s`
 - Line 282: `No-data placeholder CSV written to %s`
@@ -540,14 +540,14 @@ Loop iteration #%s complete`
 - Line 345: `Multiline escaping completed for %d rows`
 - Line 364: `%s write completed successfully`
 
-### src\export\wifi_clients_exporter.py
+### src\operations\exporting\export\wifi_clients_exporter.py
 - Line 102: `SiteList.csv cache check/generation completed`
 - Line 107: `Site selection prompt completed with site_id=%s`
 - Line 173: `No-data placeholder CSV written to %s`
 - Line 300: `Multiline escaping completed for %d rows`
 - Line 309: `%s write completed successfully`
 
-### src\firmware\bulk_ap_upgrader.py
+### src\operations\execution\firmware\bulk_ap_upgrader.py
 - Line 103: `Init complete; sites_override=%s`
 - Line 244: `Execution done: success=%d failed=%d`
 - Line 1949: `apply_family_version_choice complete family=%s`
@@ -555,10 +555,10 @@ Loop iteration #%s complete`
 - Line 2219: `write_tracking_file complete file=%s`
 - Line 2298: `Upgrade results written to %s`
 
-### src\firmware\bulk_switch_upgrader.py
+### src\operations\execution\firmware\bulk_switch_upgrader.py
 - Line 1106: `Switch firmware upgrade operation completed: %s`
 
-### src\firmware\firmware_manager.py
+### src\operations\execution\firmware\firmware_manager.py
 - Line 272: `FirmwareManager init complete for org %s`
 - Line 376: `Status check completed scope=%s`
 - Line 899: `Template mapping load complete count=%d`
@@ -574,7 +574,7 @@ Loop iteration #%s complete`
 - Line 556: `Monitoring mode exiting - all upgrades complete`
 - Line 3018: `Successfully initiated SSR firmware upgrade at %s`
 
-### src\firmware\org_ap_upgrader.py
+### src\operations\execution\firmware\org_ap_upgrader.py
 - Line 127: `OrgLevelAPFirmwareUpgrader init complete for org %s`
 - Line 208: `OrgLevelAPFirmwareUpgrader workflow started, dry_run=%s`
 - Line 212: `OrgLevelAPFirmwareUpgrader.run completed`
@@ -587,108 +587,108 @@ Loop iteration #%s complete`
 - Line 2652: `Org-level upgrade execution complete: successful=%s, failed=%s, total_devices=%s`
 - Line 2799: `Upgrade results written to: %s`
 
-### src\firmware\site_auto_upgrade.py
+### src\operations\execution\firmware\site_auto_upgrade.py
 - Line 878: `Completed MSP apply across %d org(s)`
 - Line 1391: `Updated auto-upgrade settings for site %s`
 - Line 215: `MSP mode complete for %s: success=%s, sites=%s`
 
-### src\gateway\_wan2_variable_device.py
+### src\mist\resources\gateway\_wan2_variable_device.py
 - Line 358: `
   Device Override Migration Complete!`
 - Line 362: `  Successfully Migrated: %s`
 - Line 367: `Device override migration: %s successful, %s failed`
 - Line 290: `Successfully migrated port overrides for device %s`
 
-### src\gateway\_wan2_variable_reporting.py
+### src\mist\resources\gateway\_wan2_variable_reporting.py
 - Line 167: `Menu #104 DESTRUCTIVE operation complete (%s mode): %s templates updated, %s failed`
 - Line 177: `Device override migration (%s mode): %s successful, %s failed`
 
-### src\gateway\_wan2_variable_template.py
+### src\mist\resources\gateway\_wan2_variable_template.py
 - Line 246: `Successfully updated template %s`
 
-### src\gateway\device_template_cloner.py
+### src\mist\resources\gateway\device_template_cloner.py
 - Line 425: `Created gateway template with ID %s`
 - Line 452: `CSV export complete for template_id %s`
 - Line 454: `
 Success: Created gateway template '%s' (ID: %s)`
 
-### src\gateway\gateway_export_utils.py
+### src\mist\resources\gateway\gateway_export_utils.py
 - Line 395: `! Gateway management IP export completed:`
 - Line 404: `Gateway management IP export completed. %d gateways processed, %d with management IPs.`
 
-### src\gateway\gateway_stats_exporter.py
+### src\mist\resources\gateway\gateway_stats_exporter.py
 - Line 156: `! Retry %s successful for device %s at site %s`
 - Line 296: `! All %s requests completed successfully`
 - Line 306: ` No gateway device statistics found. CSV not created.`
 
-### src\gateway\overrides\device_data_fetcher.py
+### src\mist\resources\gateway\overrides\device_data_fetcher.py
 - Line 60: `Merging %d successes + %d failures into cache`
 
-### src\gateway\overrides\override_report_writer.py
+### src\mist\resources\gateway\overrides\override_report_writer.py
 - Line 47: `Header-only CSV written to %s`
 - Line 49: `! Gateway override report written to %s`
 - Line 87: `! Gateway override report written to %s with %d overridden ports from %d gateway devices.`
 - Line 128: `! Gateway override report written to %s`
 
-### src\gateway\template_config.py
+### src\mist\resources\gateway\template_config.py
 - Line 85: `Menu #106 DESTRUCTIVE: Apply Gateway Template Configuration started`
 - Line 104: `Menu #111 DESTRUCTIVE: Clone Gateway Templates by State/Country operation started`
 - Line 475: `Menu #106 complete: %s templates updated, %s failed`
 - Line 693: `Menu #111 complete: %s sites assigned, %s failed`
 - Line 628: `Created template %s (ID: %s)`
 
-### src\gateway\wan2_migration_manager.py
+### src\mist\resources\gateway\wan2_migration_manager.py
 - Line 83: `WAN2 migration dependencies wired successfully`
 - Line 185: `Menu #149: Set WAN2 Interface Site Variable operation started`
 - Line 733: `Menu #149 complete: %s/%s sites configured`
 - Line 628: `Successfully set wan2_interface variable for site %s`
 
-### src\gateway\wan2_variable.py
+### src\mist\resources\gateway\wan2_variable.py
 - Line 134: `Menu #104 DESTRUCTIVE: Update Gateway Templates WAN2 Variable operation started`
 
-### src\gateway\wan_probe_device_override_manager.py
+### src\mist\resources\gateway\wan_probe_device_override_manager.py
 - Line 163: `Menu #167 DESTRUCTIVE: Configure WAN Probe on Device Port Overrides started`
 - Line 600: `Menu #167 DESTRUCTIVE operation complete: %s devices updated`
 - Line 561: `Device %s: Updated %s probe config`
 - Line 584: `Successfully updated device %s`
 
-### src\inventory\csv_comparator.py
+### src\mist\resources\inventory\csv_comparator.py
 - Line 73: `Address comparison operation completed successfully`
 
-### src\inventory\inventory_summary\pivot_renderer.py
+### src\mist\resources\inventory\inventory_summary\pivot_renderer.py
 - Line 156: `Pivot export complete: %s`
 
-### src\inventory\org_device_inventory_msp.py
+### src\mist\resources\inventory\org_device_inventory_msp.py
 - Line 386: `Combined MSP pivot export complete (%d rows)`
 - Line 513: `MSP inventory complete for %d orgs`
 - Line 519: `Skipping combined reports: fewer than 2 orgs processed successfully`
 
-### src\inventory\org_device_inventory_summary.py
+### src\mist\resources\inventory\org_device_inventory_summary.py
 - Line 84: `Switch physical inventory complete: %d logical devices org=%s`
 - Line 119: `Gateway physical inventory complete: %d physical devices org=%s`
 - Line 437: `Org device inventory summary for %s completed in %.1f seconds`
 - Line 441: `
 Summary for %s completed in %.1f seconds`
 
-### src\maps\_maps_clone.py
+### src\interfaces\visualization\maps\_maps_clone.py
 - Line 388: `Successfully cloned map %s to %s at site %s (zones: %s)`
 
-### src\maps\_maps_wizard.py
+### src\interfaces\visualization\maps\_maps_wizard.py
 - Line 598: `wizard completed for %s: mode=%s errors=%d`
 
-### src\maps\_plotly_viewer.py
+### src\interfaces\visualization\maps\_plotly_viewer.py
 - Line 995: `Static HTML map created: %s`
 
-### src\maps\launcher\_viewer_clone.py
+### src\interfaces\visualization\maps\launcher\_viewer_clone.py
 - Line 126: `Clone operation started - source: %s, new name: %s`
 - Line 286: `Cloned map created: %s`
 - Line 384: `Clone complete: %s (ID: %s), image=%s, zones=%s`
 
-### src\maps\launcher\_viewer_drawing.py
+### src\interfaces\visualization\maps\launcher\_viewer_drawing.py
 - Line 485: `Drawing tool: All walls deleted from map %s`
 - Line 567: `Drawing tool: Deleted zone '%s'`
 
-### src\maps\launcher\_viewer_refresh.py
+### src\interfaces\visualization\maps\launcher\_viewer_refresh.py
 - Line 246: `Live data refresh: Client positions updated at %s - WiFi: %s, Wired: %s`
 - Line 277: `Live data refresh: client fetch complete count=%d`
 - Line 381: `Live data refresh: Updated WiFi clients trace with %s clients, coords sample: %s`
@@ -697,19 +697,19 @@ Summary for %s completed in %.1f seconds`
 - Line 586: `Live data refresh: RF coverage updated at %s - %s points`
 - Line 758: `Live data refresh: Updated RF coverage heatmap with %s cells`
 
-### src\maps\launcher\_viewer_site_switch.py
+### src\interfaces\visualization\maps\launcher\_viewer_site_switch.py
 - Line 85: `Map scale updated: PPM %s -> %.2f (user calibration: %sm)`
 - Line 477: `[SITE-SWITCH] Successfully loaded map %s`
 
-### src\maps\launcher\_viewer_ui.py
+### src\interfaces\visualization\maps\launcher\_viewer_ui.py
 - Line 487: `Map origin updated to (%.1f, %.1f)`
 - Line 570: `Map '%s' (ID: %s) deleted successfully`
 - Line 669: `Zone %s deleted successfully`
 
-### src\maps\launcher\_viewer_url_switch.py
+### src\interfaces\visualization\maps\launcher\_viewer_url_switch.py
 - Line 409: `URL map switch: Successfully switched to map '%s'`
 
-### src\maps\maps_manager.py
+### src\interfaces\visualization\maps\maps_manager.py
 - Line 867: `Batch download finished with %d successes`
 - Line 1043: `Created map %s for site %s`
 - Line 1264: `Updated map %s for site %s`
@@ -718,25 +718,25 @@ Summary for %s completed in %.1f seconds`
 - Line 1850: `Successfully imported matplotlib for fallback mode`
 - Line 1869: `Successfully imported plotly modules`
 
-### src\marvis\marvis_utils.py
+### src\mist\intelligence\marvis\marvis_utils.py
 - Line 106: `Marvis data formatting complete: %d rows for analysis_type='%s'`
 - Line 312: `Legacy Marvis fallback complete: %d rows`
 
-### src\network\routing_utils.py
+### src\mist\networking\network\routing_utils.py
 - Line 323: `WebSocket %s completed successfully for %s`
 - Line 352: `[DEBUG] WebSocket cleanup completed`
 
-### src\org\org_config_migration_manager.py
+### src\mist\resources\org\org_config_migration_manager.py
 - Line 112: `Menu 176: Export complete, saved to %s`
 - Line 142: `Menu 177: Import complete, %s objects processed`
 - Line 642: `Created %s '%s' with ID %s`
 
-### src\org\org_synthetic_probes_manager.py
+### src\mist\resources\org\org_synthetic_probes_manager.py
 - Line 849: `load-time CENR check complete; warned_cenr_hosts=%s`
 - Line 911: `EXIT: manage_org_synthetic_probes - success`
 - Line 2723: `load-time country_code check complete; warned_unmapped_codes=%s`
 
-### src\org\org_ticket_manager.py
+### src\mist\resources\org\org_ticket_manager.py
 - Line 183: `Ticket created: id=%s, status=%s`
 - Line 184: `
   Ticket created successfully!
@@ -754,7 +754,7 @@ Summary for %s completed in %.1f seconds`
 - Line 247: `Menu 191: Ticket update complete for %s`
 - Line 357: `Menu 193: Full ticket detail export complete`
 
-### src\org_data_collector.py
+### src\operations\wan\org_data_collector.py
 - Line 600: `Org Data Collector: complete -- %s/%s succeeded, %s failed, %sm %ss elapsed`
 - Line 619: `
 %s
@@ -767,52 +767,52 @@ Summary for %s completed in %.1f seconds`
   Duration:  %sm %ss
 %s`
 
-### src\refactors\connection_pool_executor.py
+### src\foundation\support\refactors\connection_pool_executor.py
 - Line 291: `! Processed %s %s successfully, %s failed`
 - Line 297: `[POOL-EXECUTE] Pool execution finished: %s successful, %s failed`
 
-### src\refactors\data_directory_checker.py
+### src\foundation\support\refactors\data_directory_checker.py
 - Line 47: `DataDirectoryChecker init complete: test_file=%s`
 
-### src\refactors\device_data_fetcher.py
+### src\foundation\support\refactors\device_data_fetcher.py
 - Line 82: `Completed device data fetch: %s`
 
-### src\refactors\main_entrypoint.py
+### src\foundation\support\refactors\main_entrypoint.py
 - Line 383: `Created the CLI application context: %s`
 
-### src\refactors\maps_manager_launcher.py
+### src\foundation\support\refactors\maps_manager_launcher.py
 - Line 29: `MapsManagerLauncher runtime dependencies resolved successfully`
 - Line 54: `MapsManagerLauncher init complete`
 - Line 72: `Menu #142: Maps Manager session completed`
 - Line 81: `MapsManagerLauncher: MapsManager import succeeded`
 
-### src\refactors\run_interactive_test.py
+### src\foundation\support\refactors\run_interactive_test.py
 - Line 33: `RunInteractiveTestManager runtime dependencies resolved successfully`
 - Line 63: `RunInteractiveTestManager init complete`
 - Line 89: `Completed run_interactive_test with result=%s`
 
-### src\refactors\run_systematic_test.py
+### src\foundation\support\refactors\run_systematic_test.py
 - Line 46: `RunSystematicTestManager runtime dependencies resolved successfully`
 - Line 71: `RunSystematicTestManager init complete`
 - Line 137: `RunSystematicTestManager: sweep executed success=%d error=%d`
 
-### src\refactors\serial_cc\import_initialization_service.py
+### src\foundation\support\refactors\serial_cc\import_initialization_service.py
 - Line 60: `Import initialization completed in %.2f seconds`
 - Line 61: `Required dependencies: %s/%s successful`
 - Line 74: `Import initialization already completed, returning cached results`
 
-### src\refactors\serial_cc\security_events.py
+### src\foundation\support\refactors\serial_cc\security_events.py
 - Line 114: `Security data export completed (3 files generated)`
 - Line 115: `Completed security policies, intelligence profiles, and rogue data export aggregate.`
 - Line 275: `No rogue devices found across all sites (OrgRogueData.csv written empty).`
 
-### src\refactors\serial_cc\sle_metrics.py
+### src\foundation\support\refactors\serial_cc\sle_metrics.py
 - Line 151: `Successfully retrieved specialized SLE data for metric: %s`
 - Line 211: `Successfully aggregated SLE data for %s sites in category: %s`
 - Line 291: `! SLE data retrieval completed: %s successful, %s failed`
 - Line 294: `Org SLE data: %s retrieved successfully, %s failed`
 
-### src\refactors\serial_cc\test_results_by_site.py
+### src\foundation\support\refactors\serial_cc\test_results_by_site.py
 - Line 17: `Runtime dependencies resolved successfully`
 - Line 117: `Fast-mode complete: ok_sites=%d fail_sites=%d total=%d records=%d elapsed=%.2fs`
 - Line 143: `Sequential fetch complete: %d results across %d sites`
@@ -820,13 +820,13 @@ Summary for %s completed in %.1f seconds`
 - Line 150: `No test results found; CSV not created`
 - Line 152: `! No gateway test results found. CSV not created.`
 
-### src\refactors\service_ping_launcher.py
+### src\foundation\support\refactors\service_ping_launcher.py
 - Line 37: `ServicePingLauncher runtime dependencies resolved successfully`
 - Line 62: `ServicePingLauncher init complete`
 - Line 98: `ServicePingLauncher: runtime dependencies wired successfully`
 - Line 108: `ServicePingLauncher: ServicePingManager instantiated successfully`
 
-### src\refactors\sqlite_database_writer.py
+### src\foundation\support\refactors\sqlite_database_writer.py
 - Line 33: `SQLiteDatabaseWriter runtime dependencies resolved successfully`
 - Line 76: `SQLiteDatabaseWriter init complete for table %s`
 - Line 247: `Successfully connected to database: %s at %s`
@@ -837,12 +837,12 @@ Summary for %s completed in %.1f seconds`
 - Line 230: `EXIT: SQLiteDatabaseWriter.write - success`
 - Line 279: `Created %s performance indexes for table %s with %s strategy`
 
-### src\refactors\switch_to_interactive_login.py
+### src\foundation\support\refactors\switch_to_interactive_login.py
 - Line 34: `SwitchToInteractiveLoginManager runtime dependencies resolved successfully`
 - Line 65: `SwitchToInteractiveLoginManager init complete`
 - Line 101: `SwitchToInteractiveLoginManager: interactive login succeeded; session updated`
 
-### src\refactors\tui_launcher.py
+### src\foundation\support\refactors\tui_launcher.py
 - Line 28: `TUILauncher runtime dependencies resolved successfully`
 - Line 52: `TUILauncher init complete`
 - Line 106: `>> API session initialized successfully`
@@ -850,60 +850,60 @@ Summary for %s completed in %.1f seconds`
 - Line 173: `TUI_MODE: TUI mode completed successfully`
 - Line 171: `TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller`
 
-### src\refactors\wan2_migration_launcher.py
+### src\foundation\support\refactors\wan2_migration_launcher.py
 - Line 43: `WAN2MigrationLauncher runtime dependencies resolved successfully`
 - Line 69: `WAN2MigrationLauncher init complete`
 - Line 108: `WAN2MigrationLauncher: runtime dependencies wired successfully`
 - Line 118: `WAN2MigrationLauncher: WAN2MigrationManager instantiated successfully`
 
-### src\refactors\wanprobe_config_manager.py
+### src\foundation\support\refactors\wanprobe_config_manager.py
 - Line 134: `Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started`
 - Line 524: `Menu #166 DESTRUCTIVE operation complete: %s templates updated`
 - Line 446: `Successfully updated template %s`
 - Line 426: `Template %s: Updated %s probe config`
 
-### src\refactors\wlanradius_timer_manager.py
+### src\foundation\support\refactors\wlanradius_timer_manager.py
 - Line 857: `WLAN authentication timer management completed`
 - Line 745: `Successfully updated site WLAN %s`
 - Line 791: `Successfully updated site template WLAN %s in template %s`
 - Line 845: `Successfully updated org WLAN %s`
 
-### src\reports\e911_bssid.py
+### src\mist\intelligence\reports\e911_bssid.py
 - Line 1047: `E911 BSSID report completed in %.1f seconds`
 - Line 331: `Checkpoint saved: %d sites completed`
 
-### src\reports\global_wired_client_report_generator.py
+### src\mist\intelligence\reports\global_wired_client_report_generator.py
 - Line 290: `Local report artifact written to %s`
 
-### src\reports\offline_device_reporter.py
+### src\mist\intelligence\reports\offline_device_reporter.py
 - Line 283: `Offline device report completed in %.1f seconds`
 
-### src\reports\sfp_transceiver_data_processor.py
+### src\mist\intelligence\reports\sfp_transceiver_data_processor.py
 - Line 171: `EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success`
 
-### src\security\credential_redaction.py
+### src\operations\protection\security\credential_redaction.py
 - Line 140: `Redaction complete for %s record(s)`
 
-### src\site\address_audit\address_corrector.py
+### src\mist\resources\site\address_audit\address_corrector.py
 - Line 145: `
 Write-back complete: %d pushed, %d skipped, %d failed.`
 
-### src\site\address_audit\audit_reporter.py
+### src\mist\resources\site\address_audit\audit_reporter.py
 - Line 51: `Address-audit report written to %s`
 - Line 80: `Address-correction report written to %s`
 
-### src\site\address_audit\ui_geocoder.py
+### src\mist\resources\site\address_audit\ui_geocoder.py
 - Line 207: `CDP attach succeeded; %d context(s) present`
 - Line 306: `UI autocomplete returned %d fresh suggestion(s)`
 - Line 685: `Debuggable Edge started (pid=%s)`
 - Line 266: `geocode_via_ui called before a successful connect(); returning None`
 
-### src\site\bulk_radius_wlan_config_manager.py
+### src\mist\resources\site\bulk_radius_wlan_config_manager.py
 - Line 384: `%s: %s success, %s failed`
 - Line 635: `Bulk RADIUS WLAN Configuration completed successfully`
 - Line 489: `Scan snapshot written to data/%s (%s rows)`
 
-### src\site\site_config_manager.py
+### src\mist\resources\site\site_config_manager.py
 - Line 74: `Menu #171 DESTRUCTIVE: Create test sites from CSV operation started`
 - Line 88: `Menu #171 complete: %s sites created, %s failed`
 - Line 250: `Menu #172 DESTRUCTIVE: Create country RF templates operation started`
@@ -913,62 +913,62 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 880: `Menu #174 DESTRUCTIVE: Assign APs to device profiles operation started`
 - Line 904: `Menu #174 complete: %s APs assigned, %s failed`
 
-### src\ssh\batch\batch_executor.py
+### src\operations\execution\ssh\batch\batch_executor.py
 - Line 150: `[%s] SSH multi-command session completed`
 - Line 332: `[%s] Command %d/%d completed: %s`
 - Line 372: `[%s] All %d commands completed successfully`
 
-### src\ssh\batch\interactive_batch_executor.py
+### src\operations\execution\ssh\batch\interactive_batch_executor.py
 - Line 295: `[%s] SSH interactive session completed`
 - Line 587: `[%s] Step %d completed successfully`
 - Line 731: `[%s] All %d interactive steps completed successfully`
 
-### src\ssh\batch\multi_host_runner.py
+### src\operations\execution\ssh\batch\multi_host_runner.py
 - Line 330: `Successful: %d [OK]`
 - Line 341: `Multi-host execution completed: %d/%d successful`
 - Line 276: `[%s] Completed successfully: %s`
 - Line 337: `
 [OK] Successful hosts: %s`
 
-### src\ssh\cli_shell_manager.py
+### src\operations\execution\ssh\cli_shell_manager.py
 - Line 187: `CLI shell receive thread started (alive=%s)`
 
-### src\ssh\command\command_runner.py
+### src\operations\execution\ssh\command\command_runner.py
 - Line 254: `SingleCommandRunner: _execute_command returned success=%s stdout_len=%d stderr_len=%d`
 - Line 152: `[%s] SSH single command session completed`
 - Line 302: `[%s] Command completed successfully`
 
-### src\ssh\connection\connector.py
+### src\operations\execution\ssh\connection\connector.py
 - Line 108: `SshConnector.connect succeeded for %s:%s`
 - Line 175: `SSH client created with TOFU enrollment and strict host key verification`
 - Line 343: `Successfully connected to %s in %.2f seconds`
 - Line 345: `[OK] Successfully connected to %s`
 
-### src\ssh\shell_execution\shell_executor.py
+### src\operations\execution\ssh\shell_execution\shell_executor.py
 - Line 195: `[STATUS] [%s] Command completed in %.2f seconds`
 - Line 196: `ShellExecutor: command completed on %s in %.2fs`
 - Line 439: `[OK] [%s] Data drain completed in %.1fs (%d chunks discarded)`
 - Line 589: `Shell command completed in %.2f seconds`
 
-### src\ssh\ssh_runner.py
+### src\operations\execution\ssh\ssh_runner.py
 - Line 415: `- [%s] Command completed with exit status: %s`
 - Line 430: `Command completed%s in %.2f seconds with exit status: %s`
 
-### src\ssh\ssh_runner_manager.py
+### src\operations\execution\ssh\ssh_runner_manager.py
 - Line 569: `
 ! SSH execution completed:`
 - Line 571: `  - Successful: %s`
 - Line 573: `SSH by template: %s, %s/%s successful`
 - Line 64: `Interactive SSH runner finished (success=%s)`
 
-### src\ssid_consolidation\_ssid_template_cache.py
+### src\operations\execution\ssid_consolidation\_ssid_template_cache.py
 - Line 64: `Phase %d already completed (%d/%d). Re-running will overwrite.`
 - Line 84: `Phase %d partially completed (%d/%d).`
 
-### src\ssid_consolidation\_ssid_template_phase1.py
+### src\operations\execution\ssid_consolidation\_ssid_template_phase1.py
 - Line 585: `Phase 1 complete: %d sites, %d eligible, %d deviations`
 
-### src\ssid_consolidation\ssid_template_consolidation.py
+### src\operations\execution\ssid_consolidation\ssid_template_consolidation.py
 - Line 649: `Updated group '%s' with %d new sites`
 - Line 782: `Created template '%s' (id=%s)`
 - Line 435: `All 5 phases completed successfully.`
@@ -976,7 +976,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 570: `Created group '%s' (id=%s)`
 - Line 575: `Created group: %s`
 
-### src\troubleshooting\interactive_test_runner.py
+### src\mist\intelligence\troubleshooting\interactive_test_runner.py
 - Line 245: ` Starting interactive test of MistHelper menu options...
   Note: This tests read-only operations requiring site/device/client selection
 ! Te`
@@ -995,63 +995,63 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 580: `   All tested interactive operations completed successfully!`
 - Line 581: `INTERACTIVE_TEST: All %s tested operations completed successfully in %.2fs`
 
-### src\troubleshooting\marvis_troubleshoot_utils.py
+### src\mist\intelligence\troubleshooting\marvis_troubleshoot_utils.py
 - Line 278: ` Marvis AI analysis completed!
 ! Analysis results available.`
 - Line 313: ` Marvis AI device analysis completed!`
 - Line 341: ` Marvis AI network analysis completed!`
 
-### src\ui\execution\function_executor.py
+### src\interfaces\visualization\ui\execution\function_executor.py
 - Line 146: `TUI: %s completed`
 - Line 145: `TUI: Execution complete - no grid display (data type: %s)`
 
-### src\ui\execution\output_formatter.py
+### src\interfaces\visualization\ui\execution\output_formatter.py
 - Line 40: `TUI: result formatting complete for %s`
 
-### src\ui\interactive_display_utils.py
+### src\interfaces\visualization\ui\interactive_display_utils.py
 - Line 64: `Completed device_stats execution.`
 - Line 79: `Completed device_tests execution.`
 - Line 93: `Completed device_config execution.`
 
-### src\ui\layout\layout_builder.py
+### src\interfaces\visualization\ui\layout\layout_builder.py
 - Line 46: `TUI: layout build complete`
 
-### src\ui\prompt_utils.py
+### src\interfaces\visualization\ui\prompt_utils.py
 - Line 96: `Device inventory for site_id written to %s`
 
-### src\ui\runtime\level_discoverer.py
+### src\interfaces\visualization\ui\runtime\level_discoverer.py
 - Line 37: `TUI: discovery complete - %d items at %s`
 
-### src\upgrade_portal\api\mist_client.py
+### src\interfaces\portals\upgrade_portal\api\mist_client.py
 - Line 86: `mist_list_sites_success`
 - Line 147: `mist_list_devices_success`
 
-### src\upgrade_portal\app\routes\audit.py
+### src\interfaces\portals\upgrade_portal\app\routes\audit.py
 - Line 78: `audit_query_success`
 - Line 135: `audit_operations_success`
 
-### src\upgrade_portal\app\routes\capture.py
+### src\interfaces\portals\upgrade_portal\app\routes\capture.py
 - Line 1189: `capture: started the capture %s of the site %s at tier %s`
 - Line 1150: `capture: pre-upgrade capture for run %s completed with result`
 
-### src\upgrade_portal\app\routes\comparison.py
+### src\interfaces\portals\upgrade_portal\app\routes\comparison.py
 - Line 125: `get_comparison_results_success`
 - Line 314: `approve_comparison_success`
 
-### src\upgrade_portal\app\routes\jwt_auth.py
+### src\interfaces\portals\upgrade_portal\app\routes\jwt_auth.py
 - Line 108: `auth_login_success`
 - Line 213: `auth_continue_success`
 
-### src\upgrade_portal\app\routes\mist.py
+### src\interfaces\portals\upgrade_portal\app\routes\mist.py
 - Line 64: `get_sites_success`
 - Line 122: `get_site_devices_success`
 
-### src\upgrade_portal\app\routes\runs.py
+### src\interfaces\portals\upgrade_portal\app\routes\runs.py
 - Line 64: `get_run_success`
 - Line 135: `update_run_success`
 - Line 270: `create_run_success`
 
-### src\upgrade_portal\app\routes\upgrade.py
+### src\interfaces\portals\upgrade_portal\app\routes\upgrade.py
 - Line 1921: `upgrade: the run page render is complete`
 - Line 2487: `upgrade: build a retry of the unsuccessful run %s`
 - Line 2492: `upgrade: the retry %s came from the unsuccessful run %s`
@@ -1059,18 +1059,18 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 2161: `upgrade: cancel completed for run %s with result`
 - Line 1706: `upgrade: the run %s already started, so this call sent nothing`
 
-### src\upgrade_portal\app\wiring.py
+### src\interfaces\portals\upgrade_portal\app\wiring.py
 - Line 296: `wiring: the compare and replace of run %s succeeded`
 - Line 1505: `wiring: install the complete E2E dependency set`
 - Line 1590: `wiring: the capture store is absent, so the portal created no collection`
 
-### src\upgrade_portal\audit\logger.py
+### src\interfaces\portals\upgrade_portal\audit\logger.py
 - Line 276: `audit_query_complete`
 
-### src\upgrade_portal\auth\session.py
+### src\interfaces\portals\upgrade_portal\auth\session.py
 - Line 95: `jwt_token_created`
 
-### src\upgrade_portal\capture\service.py
+### src\interfaces\portals\upgrade_portal\capture\service.py
 - Line 490: `device_capture_fetch_complete`
 - Line 119: `capture_fetch_complete`
 - Line 147: `capture_pre_upgrade_success`
@@ -1078,10 +1078,10 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 377: `capture_post_upgrade_success`
 - Line 462: `device_capture_fetch_success`
 
-### src\upgrade_portal\capture\store.py
+### src\interfaces\portals\upgrade_portal\capture\store.py
 - Line 625: `Upgrade portal created collection %s, edge=%s`
 
-### src\upgrade_portal\compare\service.py
+### src\interfaces\portals\upgrade_portal\compare\service.py
 - Line 892: `inventory_delta_analysis_complete`
 - Line 1110: `firmware_delta_analysis_complete`
 - Line 1145: `radio_config_delta_analysis_complete`
@@ -1090,98 +1090,98 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 229: `comparison_complete`
 - Line 799: `delta_analysis_complete`
 
-### src\upgrade_portal\persistence\actions\repository.py
+### src\interfaces\portals\upgrade_portal\persistence\actions\repository.py
 - Line 114: `Created the upgrade action collection with three indexes`
 
-### src\upgrade_portal\persistence\runs.py
+### src\interfaces\portals\upgrade_portal\persistence\runs.py
 - Line 129: `create_upgrade_run_success`
 - Line 173: `get_upgrade_run_success`
 - Line 229: `update_upgrade_run_success`
 
-### src\upgrade_portal\runtime\containers.py
+### src\interfaces\portals\upgrade_portal\runtime\containers.py
 - Line 177: `containers: the container %s started`
 
-### src\upgrade_portal\runtime\dependencies.py
+### src\interfaces\portals\upgrade_portal\runtime\dependencies.py
 - Line 270: `preflight: the portal started %s and %s now answers`
 
-### src\upgrade_portal\runtime\lock.py
+### src\interfaces\portals\upgrade_portal\runtime\lock.py
 - Line 1480: `lock: the lock of run %s had already expired, so the release deleted nothing`
 
-### src\upgrade_portal\runtime\pools.py
+### src\interfaces\portals\upgrade_portal\runtime\pools.py
 - Line 255: `[CAPTURE-POOL] Finished: %s successful, %s failed`
 
-### src\upgrade_portal\runtime\runs.py
+### src\interfaces\portals\upgrade_portal\runtime\runs.py
 - Line 791: `run status: the created run holds a pre-check capture`
 
-### src\upgrade_portal\settle\service.py
+### src\interfaces\portals\upgrade_portal\settle\service.py
 - Line 419: `settle_device_checks_complete`
 - Line 194: `settle_gate_complete`
 
-### src\upgrade_portal\upgrade\service.py
+### src\interfaces\portals\upgrade_portal\upgrade\service.py
 - Line 644: `upgrade_cancel_success`
 
-### src\utils\file_path_utils.py
+### src\foundation\support\utils\file_path_utils.py
 - Line 62: `Created template file: %s`
 
-### src\utils\input_utils.py
+### src\foundation\support\utils\input_utils.py
 - Line 94: `Completed the MSP prompt with value_present=%s`
 
-### src\utils\rate_limiting.py
+### src\foundation\support\utils\rate_limiting.py
 - Line 154: `File I/O: Successfully loaded PID tuning data from %s`
 - Line 256: `File I/O: Successfully updated delay metrics in %s`
 - Line 620: `AdaptivePacer created (enabled=%s, cache_present=%s)`
 - Line 165: `File I/O: Successfully wrote PID tuning data to %s`
 
-### src\utils\subprocess_runner.py
+### src\foundation\support\utils\subprocess_runner.py
 - Line 113: `SubprocessRunner completed %s rc=%s`
 
-### src\utils\zscaler_catalogue.py
+### src\foundation\support\utils\zscaler_catalogue.py
 - Line 1328: `zscaler_catalogue: observation merge complete (cenr=%d, zcc=%d stamped)`
 
-### src\wan_hub_group_manager.py
+### src\operations\wan\wan_hub_group_manager.py
 - Line 470: `  Updated %d paths for '%s' to pod %d.`
 - Line 542: `  Warning: Paths for %s have mixed pod values (%s). All will be updated to the new value.`
 - Line 488: `Updated %d paths in VPN '%s' to pod %d`
 
-### src\wan_vpn_builder.py
+### src\operations\wan\wan_vpn_builder.py
 - Line 162: `  VPN '%s' created successfully. ID: %s`
 - Line 165: `VPN '%s' created with ID %s`
 - Line 730: `  Profile updates: %d succeeded, %d failed.`
 - Line 361: `VPN created via API: %s`
 - Line 656: `Updated profile '%s' with vpn_paths for VPN '%s'`
 
-### src\websocket\commands.py
+### src\mist\realtime\websocket\commands.py
 - Line 223: `WebSocket show MAC table completed successfully`
 
-### src\websocket\diagnostics\arp_executor.py
+### src\mist\realtime\websocket\diagnostics\arp_executor.py
 - Line 223: `WebSocket connect+subscribe succeeded for ARP`
 - Line 283: `ARP wait completed; has_result=%s`
 - Line 337: `WebSocket ARP completed successfully for %s`
 
-### src\websocket\diagnostics\common.py
+### src\mist\realtime\websocket\diagnostics\common.py
 - Line 45: `%s POST completed with status=%s`
 
-### src\websocket\diagnostics\ping_executor.py
+### src\mist\realtime\websocket\diagnostics\ping_executor.py
 - Line 181: `WebSocket connect+subscribe succeeded for ping`
 - Line 270: `Ping wait completed; has_result=%s`
 - Line 307: `WebSocket ping completed successfully for %s`
 
-### src\websocket\manager.py
+### src\mist\realtime\websocket\manager.py
 - Line 209: `WebSocket connection established successfully`
 - Line 69: `[DEBUG] WebSocket cleanup completed`
 
-### src\websocket\polling\message_router.py
+### src\mist\realtime\websocket\polling\message_router.py
 - Line 158: `Successfully parsed JSON message: %s`
 - Line 100: `Routing complete`
 
-### src\websocket\polling\result_collector.py
+### src\mist\realtime\websocket\polling\result_collector.py
 - Line 282: `No new data for %ss, assuming command complete`
 
-### src\websocket\polling\result_combiner.py
+### src\mist\realtime\websocket\polling\result_combiner.py
 - Line 42: `Command completed with %s message segments`
 - Line 89: `[DEBUG] Session %s result collection complete`
 
-### src\websocket\service_ping_manager.py
+### src\mist\realtime\websocket\service_ping_manager.py
 - Line 371: `Service ping completed for device %s - Service: %s, Host: %s`
 - Line 157: `Device lookup complete for %s, found=%s`
 - Line 363: `Service ping completed for %s (%s) - Service: %s, Host: %s`
@@ -1277,13 +1277,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 2039: `try:  # The function may be an attribute or require a direct import`
 - Line 2054: `try:  # The submodule may be an attribute or require a direct import`
 
-### mist-ops-platform\src\api\deps.py
+### mist-ops-platform\src\mist\access\api\deps.py
 - Line 35: `try:`
 
-### mist-ops-platform\src\api\middleware\auth.py
+### mist-ops-platform\src\mist\access\api\middleware\auth.py
 - Line 211: `try:`
 
-### mist-ops-platform\src\api\routes\health.py
+### mist-ops-platform\src\mist\access\api\routes\health.py
 - Line 45: `try:`
 - Line 290: `try:`
 
@@ -1371,59 +1371,59 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 254: `try:`
 - Line 568: `try:`
 
-### src\analytics\data_collection_manager.py
+### src\mist\intelligence\analytics\data_collection_manager.py
 - Line 53: `try:`
 - Line 92: `try:`
 
-### src\analytics\insight_metrics_utils.py
+### src\mist\intelligence\analytics\insight_metrics_utils.py
 - Line 88: `try:`
 - Line 130: `try:`
 
-### src\analytics\site_analytics_configurator.py
+### src\mist\intelligence\analytics\site_analytics_configurator.py
 - Line 149: `try:`
 - Line 522: `try:`
 
-### src\analytics\zone_analyzer.py
+### src\mist\intelligence\analytics\zone_analyzer.py
 - Line 456: `try:  # WHY: isolate per-site failures so one bad site does not abort the loop`
 - Line 504: `try:  # WHY: isolate per-site failures so one bad site does not abort the loop`
 
-### src\api\api_data_fetcher.py
+### src\mist\access\api\api_data_fetcher.py
 - Line 67: `try:`
 - Line 115: `try:`
 - Line 318: `try:`
 - Line 289: `try:`
 
-### src\api\api_fetch_utils.py
+### src\mist\access\api\api_fetch_utils.py
 - Line 48: `try:`
 - Line 97: `try:`
 - Line 129: `try:  # The inventory fetch is the one hard dependency. Isolate its failure.`
 - Line 139: `try:  # The site-name CSV is optional enrichment. Missing file is non-fatal.`
 - Line 168: `try:  # Isolate per-device failures so one bad device does not abort the batch.`
 
-### src\api\tenant_fetch.py
+### src\mist\access\api\tenant_fetch.py
 - Line 268: `try:`
 - Line 284: `try:`
 - Line 300: `try:`
 - Line 316: `try:`
 
-### src\audit\audit_analysis_ops.py
+### src\mist\access\audit\audit_analysis_ops.py
 - Line 44: `try:`
 
-### src\auth\interactive\credential_prompter.py
+### src\mist\access\auth\interactive\credential_prompter.py
 - Line 35: `try:`
 
-### src\auth\interactive\login_orchestrator.py
+### src\mist\access\auth\interactive\login_orchestrator.py
 - Line 52: `try:`
 - Line 85: `try:`
 - Line 229: `try:`
 
-### src\auth\interactive\msp_org_selector.py
+### src\mist\access\auth\interactive\msp_org_selector.py
 - Line 107: `try:`
 
-### src\cache\cache_utils.py
+### src\foundation\persistence\cache\cache_utils.py
 - Line 97: `try:  # The generator may raise. Never let that crash the caller`
 
-### src\capture\_packet_capture_exec.py
+### src\operations\execution\capture\_packet_capture_exec.py
 - Line 63: `try:  # WHY: broad guard so unexpected failures do not crash the CLI`
 - Line 158: `try:  # WHY: catch API/network faults so the loop keeps running`
 - Line 195: `try:  # WHY: any loop-level failure should not crash the CLI`
@@ -1431,48 +1431,48 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 352: `try:  # WHY: broad guard so stream errors surface cleanly`
 - Line 490: `try:  # WHY: broad guard so keyboard interrupt shows a friendly message`
 
-### src\capture\_packet_capture_org.py
+### src\operations\execution\capture\_packet_capture_org.py
 - Line 79: `try:  # WHY: swallow SDK errors and surface as None sentinel`
 - Line 100: `try:  # WHY: stats are advisory. Failures must not block capture`
 - Line 305: `try:  # WHY: SDK may raise on transport errors`
 - Line 466: `try:  # WHY: broad guard preserves legacy user-friendly error handling`
 - Line 521: `try:  # WHY: swallow exporter errors so capture path continues`
 
-### src\capture\_packet_capture_prompts.py
+### src\operations\execution\capture\_packet_capture_prompts.py
 - Line 216: `try:  # WHY: wrap network call so upstream flow tolerates SDK errors`
 
-### src\capture\client_pcap_downloader.py
+### src\operations\execution\capture\client_pcap_downloader.py
 - Line 149: `try:  # WHY: network/SDK errors must not crash the menu dispatcher.`
 - Line 227: `try:  # WHY: network/SDK errors must not crash the menu dispatcher.`
 - Line 326: `try:  # WHY: transfer + write must not crash the batch.`
 
-### src\capture\multi_ap_scan_workflow.py
+### src\operations\execution\capture\multi_ap_scan_workflow.py
 - Line 233: `try:`
 - Line 323: `try:`
 
-### src\capture\packet_capture.py
+### src\operations\execution\capture\packet_capture.py
 - Line 1023: `try:  # WHY: mistapi call may raise transient network/auth errors`
 - Line 1305: `try:`
 
-### src\capture\packet_capture_download.py
+### src\operations\execution\capture\packet_capture_download.py
 - Line 77: `try:  # WHY: Catch API/listing failures so loop mode can continue safely.`
 - Line 195: `try:  # WHY: Catch transfer and file-write failures so caller can continue safely.`
 - Line 265: `try:  # WHY: Catch cancellation and other errors without changing user-visible behavior.`
 - Line 350: `try:  # WHY: Catch transient poll failures and continue retrying within same wait budget.`
 
-### src\config\config_utils.py
+### src\foundation\runtime\config\config_utils.py
 - Line 61: `try:  # The module can run in tests before MistHelper finishes importing.`
 
-### src\db\database_schema_utils.py
+### src\foundation\persistence\db\database_schema_utils.py
 - Line 42: `try:`
 
-### src\db\retention.py
+### src\foundation\persistence\db\retention.py
 - Line 215: `try:`
 - Line 108: `try:`
 - Line 136: `try:`
 - Line 174: `try:`
 
-### src\db\router.py
+### src\foundation\persistence\db\router.py
 - Line 135: `try:`
 - Line 147: `try:`
 - Line 159: `try:`
@@ -1480,7 +1480,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 331: `try:`
 - Line 444: `try:`
 
-### src\device\_utility_commands_action.py
+### src\mist\resources\device\_utility_commands_action.py
 - Line 77: `try:`
 - Line 101: `try:`
 - Line 191: `try:`
@@ -1492,7 +1492,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 462: `try:`
 - Line 485: `try:`
 
-### src\device\_utility_commands_clear.py
+### src\mist\resources\device\_utility_commands_clear.py
 - Line 73: `try:`
 - Line 160: `try:`
 - Line 207: `try:  # WHY: guard SDK/transport failures`
@@ -1503,16 +1503,16 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 493: `try:`
 - Line 553: `try:`
 
-### src\device\_utility_commands_selection.py
+### src\mist\resources\device\_utility_commands_selection.py
 - Line 114: `try:  # WHY: mistapi may raise on network/auth failures`
 - Line 147: `try:  # WHY: mistapi may raise on network/auth failures`
 - Line 487: `try:  # WHY: mistapi may raise on network/auth failures`
 
-### src\device\_utility_commands_websocket.py
+### src\mist\resources\device\_utility_commands_websocket.py
 - Line 110: `try:  # WHY: any SDK/WS error must fall through to disconnect`
 - Line 194: `try:`
 
-### src\device\ap_profile_migration_manager.py
+### src\mist\resources\device\ap_profile_migration_manager.py
 - Line 624: `try:`
 - Line 861: `try:`
 - Line 953: `try:`
@@ -1522,11 +1522,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1265: `try:`
 - Line 1880: `try:`
 
-### src\device\arp_command_manager.py
+### src\mist\resources\device\arp_command_manager.py
 - Line 200: `try:`
 - Line 294: `try:`
 
-### src\device\device_reboot_manager.py
+### src\mist\resources\device\device_reboot_manager.py
 - Line 130: `try:`
 - Line 163: `try:`
 - Line 226: `try:`
@@ -1535,20 +1535,20 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 417: `try:`
 - Line 107: `try:`
 
-### src\device\device_utils.py
+### src\mist\resources\device\device_utils.py
 - Line 36: `try:`
 
-### src\device\prompt_utils.py
+### src\mist\resources\device\prompt_utils.py
 - Line 186: `try:`
 - Line 280: `try:`
 - Line 398: `try:`
 - Line 449: `try:`
 - Line 494: `try:`
 
-### src\device\utility_commands.py
+### src\mist\resources\device\utility_commands.py
 - Line 191: `try:`
 
-### src\device\virtual_chassis.py
+### src\mist\resources\device\virtual_chassis.py
 - Line 433: `try:`
 - Line 474: `try:`
 - Line 581: `try:`
@@ -1558,7 +1558,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 729: `try:`
 - Line 749: `try:`
 
-### src\export\const_definitions_exporter.py
+### src\operations\exporting\export\const_definitions_exporter.py
 - Line 61: `try:`
 - Line 102: `try:`
 - Line 265: `try:`
@@ -1572,61 +1572,61 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 458: `try:`
 - Line 591: `try:`
 
-### src\export\count_exporter.py
+### src\operations\exporting\export\count_exporter.py
 - Line 228: `try:`
 
-### src\export\data_exporter.py
+### src\operations\exporting\export\data_exporter.py
 - Line 26: `try:  # pragma: no cover - import guard mirrors MistHelper`
 - Line 134: `try:`
 - Line 452: `try:  # Wrap the write to translate I/O failures into the legacy diagnostic surface`
 
-### src\export\device_events_52w_exporter.py
+### src\operations\exporting\export\device_events_52w_exporter.py
 - Line 141: `try:`
 - Line 301: `try:`
 - Line 309: `try:`
 - Line 228: `try:`
 
-### src\export\endpoint_family_exporter.py
+### src\operations\exporting\export\endpoint_family_exporter.py
 - Line 564: `try:`
 
-### src\export\gateway_test_exporter.py
+### src\operations\exporting\export\gateway_test_exporter.py
 - Line 145: `try:`
 - Line 266: `try:`
 
-### src\export\msp_inventory_exporter.py
+### src\operations\exporting\export\msp_inventory_exporter.py
 - Line 232: `try:`
 - Line 314: `try:`
 - Line 332: `try:`
 
-### src\export\msp_license_exporter.py
+### src\operations\exporting\export\msp_license_exporter.py
 - Line 177: `try:`
 
-### src\export\org_admin_exporter.py
+### src\operations\exporting\export\org_admin_exporter.py
 - Line 94: `try:`
 - Line 106: `try:`
 
-### src\export\org_alarm_event_exporter.py
+### src\operations\exporting\export\org_alarm_event_exporter.py
 - Line 71: `try:`
 
-### src\export\org_client_security_exporter.py
+### src\operations\exporting\export\org_client_security_exporter.py
 - Line 123: `try:`
 - Line 146: `try:`
 - Line 161: `try:`
 
-### src\export\org_config_exporter.py
+### src\operations\exporting\export\org_config_exporter.py
 - Line 144: `try:`
 
-### src\export\org_cradlepoint_connection_exporter.py
+### src\operations\exporting\export\org_cradlepoint_connection_exporter.py
 - Line 132: `try:`
 
-### src\export\org_device_stats_exporter.py
+### src\operations\exporting\export\org_device_stats_exporter.py
 - Line 56: `try:`
 - Line 106: `try:  # Filesystem metadata lookup should never crash export path`
 - Line 155: `try:  # Prefer cached site CSV to avoid extra API call`
 - Line 246: `try:`
 - Line 431: `try:`
 
-### src\export\org_export_utils.py
+### src\operations\exporting\export\org_export_utils.py
 - Line 74: `try:`
 - Line 193: `try:  # The constants call may fail offline -> degrade to no expansion`
 - Line 218: `try:  # Per-choice failures must not abort the whole export`
@@ -1635,41 +1635,41 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 509: `try:  # Guard the whole fetch-and-export so a failure still leaves consistent empty outputs.`
 - Line 732: `try:`
 
-### src\export\org_inventory_exporter.py
+### src\operations\exporting\export\org_inventory_exporter.py
 - Line 311: `try:  # One bad device row must not derail the full export`
 - Line 515: `try:  # Cached CSV is preferred. Fall back to the API if it is missing or unreadable.`
 - Line 531: `try:  # Cached CSV is preferred. Fall back to the API if it is missing or unreadable.`
 - Line 714: `try:`
 
-### src\export\org_inventory_search_exporter.py
+### src\operations\exporting\export\org_inventory_search_exporter.py
 - Line 77: `try:`
 
-### src\export\org_search_exporter.py
+### src\operations\exporting\export\org_search_exporter.py
 - Line 215: `try:`
 
-### src\export\org_sec_intel_profile_exporter.py
+### src\operations\exporting\export\org_sec_intel_profile_exporter.py
 - Line 198: `try:`
 
-### src\export\org_template_exporter.py
+### src\operations\exporting\export\org_template_exporter.py
 - Line 68: `try:`
 - Line 129: `try:`
 - Line 175: `try:`
 - Line 137: `try:`
 - Line 181: `try:`
 
-### src\export\org_webhook_deliveries_exporter.py
+### src\operations\exporting\export\org_webhook_deliveries_exporter.py
 - Line 87: `try:`
 
-### src\export\self_account_exporter.py
+### src\operations\exporting\export\self_account_exporter.py
 - Line 145: `try:`
 
-### src\export\self_export_utils.py
+### src\operations\exporting\export\self_export_utils.py
 - Line 54: `try:`
 
-### src\export\simple_endpoint_exporter.py
+### src\operations\exporting\export\simple_endpoint_exporter.py
 - Line 284: `try:`
 
-### src\export\site_anomaly_exporter.py
+### src\operations\exporting\export\site_anomaly_exporter.py
 - Line 59: `try:`
 - Line 88: `try:`
 - Line 130: `try:`
@@ -1677,30 +1677,30 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 281: `try:  # Hostname enrichment is best-effort. The MAC is an acceptable fallback.`
 - Line 367: `try:  # Isolate per-metric failures so one bad metric does not abort the rest.`
 
-### src\export\site_application_list_exporter.py
+### src\operations\exporting\export\site_application_list_exporter.py
 - Line 83: `try:`
 
-### src\export\site_asset_exporter.py
+### src\operations\exporting\export\site_asset_exporter.py
 - Line 150: `try:`
 - Line 183: `try:`
 - Line 219: `try:`
 
-### src\export\site_client_exporter.py
+### src\operations\exporting\export\site_client_exporter.py
 - Line 73: `try:`
 - Line 320: `try:  # WHY: top-level guard keeps menu operation from crashing on API/runtime failures.`
 - Line 267: `try:  # WHY: isolate request failures so 429 can trigger adaptive retry path.`
 
-### src\export\site_config_exporter.py
+### src\operations\exporting\export\site_config_exporter.py
 - Line 38: `try:`
 - Line 53: `try:`
 
-### src\export\site_device_exporter.py
+### src\operations\exporting\export\site_device_exporter.py
 - Line 147: `try:`
 - Line 221: `try:`
 - Line 290: `try:`
 - Line 92: `try:`
 
-### src\export\site_export_utils.py
+### src\operations\exporting\export\site_export_utils.py
 - Line 254: `try:`
 - Line 262: `try:`
 - Line 302: `try:`
@@ -1711,60 +1711,60 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 456: `try:`
 - Line 484: `try:`
 
-### src\export\site_guest_authorization_exporter.py
+### src\operations\exporting\export\site_guest_authorization_exporter.py
 - Line 95: `try:`
 
-### src\export\site_insights\device_metric_operation.py
+### src\operations\exporting\export\site_insights\device_metric_operation.py
 - Line 129: `try:`
 - Line 164: `try:`
 - Line 249: `try:`
 - Line 287: `try:`
 
-### src\export\site_insights\site_metric_operation.py
+### src\operations\exporting\export\site_insights\site_metric_operation.py
 - Line 103: `try:`
 - Line 160: `try:`
 - Line 194: `try:`
 
-### src\export\site_mist_edge_events_exporter.py
+### src\operations\exporting\export\site_mist_edge_events_exporter.py
 - Line 95: `try:`
 
-### src\export\site_nac_client_events_exporter.py
+### src\operations\exporting\export\site_nac_client_events_exporter.py
 - Line 95: `try:`
 
-### src\export\site_other_device_events_exporter.py
+### src\operations\exporting\export\site_other_device_events_exporter.py
 - Line 65: `try:  # WHY: keep SDK failures inside the menu operation.`
 
-### src\export\site_search_exporter.py
+### src\operations\exporting\export\site_search_exporter.py
 - Line 128: `try:`
 - Line 372: `try:`
 
-### src\export\site_system_events_exporter.py
+### src\operations\exporting\export\site_system_events_exporter.py
 - Line 83: `try:`
 
-### src\export\site_wan_usage_exporter.py
+### src\operations\exporting\export\site_wan_usage_exporter.py
 - Line 95: `try:`
 
-### src\export\site_webhook_deliveries_exporter.py
+### src\operations\exporting\export\site_webhook_deliveries_exporter.py
 - Line 170: `try:`
 
-### src\export\sites_by_ap_model_exporter.py
+### src\operations\exporting\export\sites_by_ap_model_exporter.py
 - Line 76: `try:`
 
-### src\export\wan_client_events_exporter.py
+### src\operations\exporting\export\wan_client_events_exporter.py
 - Line 90: `try:`
 - Line 207: `try:`
 
-### src\export\wifi_clients_exporter.py
+### src\operations\exporting\export\wifi_clients_exporter.py
 - Line 53: `try:`
 - Line 117: `try:`
 
-### src\firmware\aggregate_upgrade_service.py
+### src\operations\execution\firmware\aggregate_upgrade_service.py
 - Line 433: `try:  # A missing or lost lock must stop this child and all later writes.`
 - Line 445: `try:  # A transport failure after a write has an unknown outcome.`
 - Line 572: `try:  # A read failure changes only this child's current reading.`
 - Line 701: `try:  # A transport failure after a cancel stays unknown.`
 
-### src\firmware\bulk_ap_upgrader.py
+### src\operations\execution\firmware\bulk_ap_upgrader.py
 - Line 297: `try:`
 - Line 313: `try:`
 - Line 466: `try:`
@@ -1778,7 +1778,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 2276: `try:`
 - Line 2117: `try:`
 
-### src\firmware\bulk_switch_upgrader.py
+### src\operations\execution\firmware\bulk_switch_upgrader.py
 - Line 174: `try:  # WHY: shield against transient API failures.`
 - Line 241: `try:  # WHY: any parse error must degrade gracefully.`
 - Line 489: `try:  # WHY: any IO error must fall back to API.`
@@ -1788,7 +1788,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 838: `try:  # WHY: catch-all in case an unexpected error escapes site processing.`
 - Line 872: `try:  # WHY: contain per-site errors so other sites still run.`
 
-### src\firmware\firmware_manager.py
+### src\operations\execution\firmware\firmware_manager.py
 - Line 56: `try:`
 - Line 284: `try:`
 - Line 313: `try:`
@@ -1811,7 +1811,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 3233: `try:`
 - Additional records: 11
 
-### src\firmware\org_ap_upgrader.py
+### src\operations\execution\firmware\org_ap_upgrader.py
 - Line 612: `try:  # WHY: guard downstream API + UI code from unexpected exceptions`
 - Line 1012: `try:`
 - Line 1098: `try:  # WHY: broad guard preserves pre-refactor behavior`
@@ -1821,44 +1821,44 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 2676: `try:`
 - Line 2795: `try:`
 
-### src\firmware\running_version.py
+### src\operations\execution\firmware\running_version.py
 - Line 132: `try:  # WHY: a network call can raise, and a firmware flow must not stop here`
 
-### src\firmware\site_auto_upgrade.py
+### src\operations\execution\firmware\site_auto_upgrade.py
 - Line 1365: `try:`
 - Line 1587: `try:`
 - Line 319: `try:`
 - Line 430: `try:`
 - Line 514: `try:`
 
-### src\gateway\_wan2_variable_device.py
+### src\mist\resources\gateway\_wan2_variable_device.py
 - Line 144: `try:  # WHY: mistapi calls raise on transport failure`
 - Line 190: `try:  # WHY: mistapi calls raise on transport failure`
 
-### src\gateway\_wan2_variable_template.py
+### src\mist\resources\gateway\_wan2_variable_template.py
 - Line 31: `try:  # WHY: mistapi calls raise on transport failure`
 - Line 166: `try:  # WHY: mistapi calls raise on transport failure`
 
-### src\gateway\device_template_cloner.py
+### src\mist\resources\gateway\device_template_cloner.py
 - Line 505: `try:`
 
-### src\gateway\gateway_export_utils.py
+### src\mist\resources\gateway\gateway_export_utils.py
 - Line 524: `try:`
 
-### src\gateway\gateway_ha_exporter.py
+### src\mist\resources\gateway\gateway_ha_exporter.py
 - Line 89: `try:`
 - Line 109: `try:`
 
-### src\gateway\gateway_stats_exporter.py
+### src\mist\resources\gateway\gateway_stats_exporter.py
 - Line 363: `try:`
 - Line 180: `try:`
 - Line 224: `try:`
 
-### src\gateway\overrides\device_data_fetcher.py
+### src\mist\resources\gateway\overrides\device_data_fetcher.py
 - Line 105: `try:`
 - Line 122: `try:`
 
-### src\gateway\template_config.py
+### src\mist\resources\gateway\template_config.py
 - Line 171: `try:`
 - Line 228: `try:`
 - Line 271: `try:`
@@ -1870,18 +1870,18 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 618: `try:`
 - Line 671: `try:`
 
-### src\gateway\wan2_migration_manager.py
+### src\mist\resources\gateway\wan2_migration_manager.py
 - Line 520: `try:  # WHY: outer guard around the API mutation.`
 
-### src\gateway\wan_probe_device_override_manager.py
+### src\mist\resources\gateway\wan_probe_device_override_manager.py
 - Line 342: `try:`
 - Line 475: `try:`
 
-### src\input\prompt_client_utils.py
+### src\foundation\runtime\input\prompt_client_utils.py
 - Line 38: `try:`
 - Line 209: `try:`
 
-### src\inventory\csv_comparator.py
+### src\mist\resources\inventory\csv_comparator.py
 - Line 436: `try:`
 - Line 451: `try:`
 - Line 778: `try:`
@@ -1889,15 +1889,15 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1146: `try:`
 - Line 1290: `try:`
 
-### src\inventory\inventory_summary\version_per_model_fetcher.py
+### src\mist\resources\inventory\inventory_summary\version_per_model_fetcher.py
 - Line 154: `try:`
 - Line 174: `try:`
 
-### src\inventory\org_device_inventory_msp.py
+### src\mist\resources\inventory\org_device_inventory_msp.py
 - Line 130: `try:`
 - Line 452: `try:`
 
-### src\inventory\org_device_inventory_summary.py
+### src\mist\resources\inventory\org_device_inventory_summary.py
 - Line 111: `try:  # WHY: inventory fetch errors must not abort the larger summary run`
 - Line 145: `try:  # WHY: inventory fetch errors must not abort the larger summary run`
 - Line 184: `try:  # WHY: supplemental fetch errors must not break the primary report`
@@ -1907,24 +1907,24 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 310: `try:  # WHY: supplemental counting must never break the primary report`
 - Line 349: `try:  # WHY: API failures fall back to env / org id at higher level`
 
-### src\maps\_container_detection.py
+### src\interfaces\visualization\maps\_container_detection.py
 - Line 91: `try:  # pwd is Unix-only. Getuid absent on Windows`
 - Line 106: `try:  # Some importers (frozen apps) may not expose __file__`
 - Line 145: `try:  # Isolate per-probe failures so one broken check cannot mask others`
 
-### src\maps\_flask_viewer.py
+### src\interfaces\visualization\maps\_flask_viewer.py
 - Line 101: `try:`
 - Line 131: `try:`
 - Line 162: `try:`
 - Line 231: `try:`
 
-### src\maps\_maps_backup.py
+### src\interfaces\visualization\maps\_maps_backup.py
 - Line 114: `try:  # WHY: network I/O may raise. Caller wants graceful fallback`
 - Line 154: `try:  # WHY: fetch is best-effort. Caller degrades gracefully`
 - Line 186: `try:  # WHY: network I/O may raise. Caller wants graceful fallback`
 - Line 352: `try:  # WHY: pipeline may raise. Wrapper degrades to warning`
 
-### src\maps\_maps_clone.py
+### src\interfaces\visualization\maps\_maps_clone.py
 - Line 141: `try:`
 - Line 176: `try:`
 - Line 239: `try:`
@@ -1932,25 +1932,25 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 292: `try:`
 - Line 420: `try:`
 
-### src\maps\_maps_coverage.py
+### src\interfaces\visualization\maps\_maps_coverage.py
 - Line 266: `try:  # WHY: result_def may omit expected columns. Fall back on legacy layout.`
 - Line 300: `try:  # WHY: `api_session.mist_get` may raise on network errors.`
 
-### src\maps\_maps_matplotlib.py
+### src\interfaces\visualization\maps\_maps_matplotlib.py
 - Line 382: `try:`
 - Line 173: `try:`
 
-### src\maps\_maps_testing.py
+### src\interfaces\visualization\maps\_maps_testing.py
 - Line 111: `try:`
 - Line 152: `try:`
 - Line 248: `try:`
 - Line 266: `try:`
 - Line 281: `try:`
 
-### src\maps\_maps_utils.py
+### src\interfaces\visualization\maps\_maps_utils.py
 - Line 115: `try:`
 
-### src\maps\_maps_wizard.py
+### src\interfaces\visualization\maps\_maps_wizard.py
 - Line 103: `try:`
 - Line 121: `try:`
 - Line 134: `try:`
@@ -1960,20 +1960,20 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 815: `try:`
 - Line 490: `try:`
 
-### src\maps\_plotly_viewer.py
+### src\interfaces\visualization\maps\_plotly_viewer.py
 - Line 76: `try:`
 
-### src\maps\launcher\_viewer_clone.py
+### src\interfaces\visualization\maps\launcher\_viewer_clone.py
 - Line 253: `try:`
 - Line 300: `try:`
 
-### src\maps\launcher\_viewer_drawing.py
+### src\interfaces\visualization\maps\launcher\_viewer_drawing.py
 - Line 447: `try:`
 - Line 479: `try:`
 - Line 503: `try:`
 - Line 561: `try:`
 
-### src\maps\maps_manager.py
+### src\interfaces\visualization\maps\maps_manager.py
 - Line 90: `try:`
 - Line 95: `try:`
 - Line 118: `try:`
@@ -1996,44 +1996,44 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1434: `try:`
 - Additional records: 10
 
-### src\marvis\marvis_utils.py
+### src\mist\intelligence\marvis\marvis_utils.py
 - Line 76: `try:  # WHY: Bad payloads must never crash the caller`
 
-### src\metrics_gateway\collector.py
+### src\interfaces\monitoring\metrics_gateway\collector.py
 - Line 267: `try:  # A Mist fault must become a failed snapshot and never an exception in the refresh thread.`
 
-### src\network\_routing_utils_display.py
+### src\mist\networking\network\_routing_utils_display.py
 - Line 217: `try:  # WHY: PrettyTable can fail with unusual terminals — fall back gracefully`
 - Line 339: `try:  # WHY: PrettyTable can fail with unusual terminals — text fallback below`
 - Line 459: `try:  # WHY: PrettyTable can fail with unusual terminals — text fallback below`
 
-### src\network\_routing_utils_forwarding.py
+### src\mist\networking\network\_routing_utils_forwarding.py
 - Line 70: `try:  # WHY: outer try wraps the whole flow so exceptions still hit cleanup`
 
-### src\network\_routing_utils_payload.py
+### src\mist\networking\network\_routing_utils_payload.py
 - Line 307: `try:  # WHY: mistapi raises broad exceptions on transport/protocol failures`
 
-### src\network\_routing_utils_routing.py
+### src\mist\networking\network\_routing_utils_routing.py
 - Line 368: `try:  # WHY: outer try wraps the whole flow so KeyboardInterrupt/Exception cleanup runs`
 
-### src\network\_routing_utils_ssr.py
+### src\mist\networking\network\_routing_utils_ssr.py
 - Line 60: `try:  # WHY: outer try wraps happy-path so exceptions still hit cleanup`
 
-### src\network\routing_utils.py
+### src\mist\networking\network\routing_utils.py
 - Line 183: `try:  # WHY: mistapi calls may raise on network/auth failures`
 - Line 345: `try:  # WHY: never let cleanup escalate to caller`
 
-### src\org\org_config_migration_manager.py
+### src\mist\resources\org\org_config_migration_manager.py
 - Line 151: `try:`
 - Line 173: `try:`
 - Line 635: `try:`
 
-### src\org\org_synthetic_probes_manager.py
+### src\mist\resources\org\org_synthetic_probes_manager.py
 - Line 2759: `try:`
 - Line 2972: `try:`
 - Line 3003: `try:`
 
-### src\org\org_ticket_manager.py
+### src\mist\resources\org\org_ticket_manager.py
 - Line 50: `try:`
 - Line 198: `try:`
 - Line 236: `try:`
@@ -2041,119 +2041,119 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 445: `try:`
 - Line 465: `try:`
 
-### src\org_data_collector.py
+### src\operations\wan\org_data_collector.py
 - Line 566: `try:`
 
-### src\refactors\anomaly_metrics_discovery.py
+### src\foundation\support\refactors\anomaly_metrics_discovery.py
 - Line 61: `try:`
 
-### src\refactors\connection_pool_executor.py
+### src\foundation\support\refactors\connection_pool_executor.py
 - Line 95: `try:  # Future.result() can raise if the worker threw an exception`
 - Line 109: `try:  # tqdm.update can fail in some environments. Isolate that error`
 - Line 180: `try:  # Best-effort capture. Serialization failure must not suppress the re-raise`
 - Line 221: `try:  # Isolate each batch so a single failure does not silently skip remaining batches`
 
-### src\refactors\data_directory_checker.py
+### src\foundation\support\refactors\data_directory_checker.py
 - Line 56: `try:  # Attempt to validate write permission`
 
-### src\refactors\device_data_fetcher.py
+### src\foundation\support\refactors\device_data_fetcher.py
 - Line 108: `try:  # Guard against transient API failures so we can log and return None`
 
-### src\refactors\main_entrypoint.py
+### src\foundation\support\refactors\main_entrypoint.py
 - Line 226: `try:  # python-dotenv can be absent before the dependency check repairs the environment.`
 
-### src\refactors\maps_manager_launcher.py
+### src\foundation\support\refactors\maps_manager_launcher.py
 - Line 98: `try:  # Wrap prompt so any exception is funneled through the fatal-error handler`
 
-### src\refactors\msp_privilege_detection.py
+### src\foundation\support\refactors\msp_privilege_detection.py
 - Line 55: `try:  # API call and payload parsing may fail. Degrade to None on any error`
 - Line 157: `try:  # API or parsing failures must degrade to "no MSP access" rather than crash the session.`
 
-### src\refactors\serial_cc\global_assignments_builder.py
+### src\foundation\support\refactors\serial_cc\global_assignments_builder.py
 - Line 33: `try:  # The shim module may not carry the attribute directly on all install paths`
 - Line 47: `try:  # The module may not carry `fuzz` directly depending on import path`
 
-### src\refactors\serial_cc\security_events.py
+### src\foundation\support\refactors\serial_cc\security_events.py
 - Line 301: `try:  # Guard site-list reading + iteration. Failure here aborts this export only.`
 - Line 128: `try:`
 
-### src\refactors\serial_cc\site_client_insights.py
+### src\foundation\support\refactors\serial_cc\site_client_insights.py
 - Line 134: `try:`
 - Line 168: `try:  # WHY: Client listing is best-effort. Failures are warned and yield an empty list`
 - Line 206: `try:  # WHY: Per-metric failures are non-fatal and skip to the next metric`
 - Line 310: `try:  # WHY: Guard the fetch+export so failures still write an empty file`
 
-### src\refactors\serial_cc\sle_metrics.py
+### src\foundation\support\refactors\serial_cc\sle_metrics.py
 - Line 285: `try:  # Guard the whole retrieval+export so progress always completes`
 - Line 126: `try:  # Per-category failures are non-fatal and skip to the next category`
 - Line 179: `try:  # Whole-metric failures are non-fatal`
 - Line 231: `try:  # Per-category failures are non-fatal`
 
-### src\refactors\serial_cc\start_site_scan_capture.py
+### src\foundation\support\refactors\serial_cc\start_site_scan_capture.py
 - Line 330: `try:  # WHY: Pre-check API failures are non-fatal - warn and proceed`
 
-### src\refactors\serial_cc\switch_vc_stats.py
+### src\foundation\support\refactors\serial_cc\switch_vc_stats.py
 - Line 86: `try:  # Non-fatal API failures should not abort whole export`
 
-### src\refactors\serial_cc\test_results_by_site.py
+### src\foundation\support\refactors\serial_cc\test_results_by_site.py
 - Line 44: `try:`
 - Line 197: `try:`
 
-### src\refactors\service_ping_launcher.py
+### src\foundation\support\refactors\service_ping_launcher.py
 - Line 71: `try:  # Wrap the full flow so any runtime error is funneled through the fatal-error handler`
 
-### src\refactors\sqlite_database_writer.py
+### src\foundation\support\refactors\sqlite_database_writer.py
 - Line 174: `try:`
 - Line 187: `try:`
 - Line 223: `try:`
 - Line 432: `try:`
 - Line 442: `try:`
 
-### src\refactors\tui_launcher.py
+### src\foundation\support\refactors\tui_launcher.py
 - Line 69: `try:  # Guarded run to guarantee handler restoration in finally`
 
-### src\refactors\wan2_migration_launcher.py
+### src\foundation\support\refactors\wan2_migration_launcher.py
 - Line 78: `try:  # Wrap the full flow so any runtime error is funneled through the fatal-error handler`
 
-### src\refactors\wanprobe_config_manager.py
+### src\foundation\support\refactors\wanprobe_config_manager.py
 - Line 281: `try:`
 - Line 382: `try:`
 
-### src\refactors\wlanradius_timer_manager.py
+### src\foundation\support\refactors\wlanradius_timer_manager.py
 - Line 139: `try:`
 - Line 173: `try:`
 - Line 208: `try:`
 - Line 219: `try:`
 - Line 720: `try:`
 
-### src\reports\e911_bssid.py
+### src\mist\intelligence\reports\e911_bssid.py
 - Line 270: `try:  # WHY: any single template can fail without aborting the report`
 - Line 897: `try:  # WHY: rate-limit is the only path that halts the batch`
 
-### src\reports\global_wired_client_report_generator.py
+### src\mist\intelligence\reports\global_wired_client_report_generator.py
 - Line 125: `try:`
 
-### src\reports\offline_device_reporter.py
+### src\mist\intelligence\reports\offline_device_reporter.py
 - Line 295: `try:`
 
-### src\reports\sfp_transceiver_data_processor.py
+### src\mist\intelligence\reports\sfp_transceiver_data_processor.py
 - Line 176: `try:`
 
-### src\reports\wired_client_manufacturer_report_generator.py
+### src\mist\intelligence\reports\wired_client_manufacturer_report_generator.py
 - Line 53: `try:`
 
-### src\site\address_audit\address_resolver.py
+### src\mist\resources\site\address_audit\address_resolver.py
 - Line 83: `try:`
 
-### src\site\address_audit\audit_engine.py
+### src\mist\resources\site\address_audit\audit_engine.py
 - Line 347: `try:`
 - Line 380: `try:`
 - Line 411: `try:`
 
-### src\site\address_audit\site_matcher.py
+### src\mist\resources\site\address_audit\site_matcher.py
 - Line 23: `try:  # Optional dependency: rapidfuzz powers the fuzzy fallback.`
 
-### src\site\address_audit\ui_geocoder.py
+### src\mist\resources\site\address_audit\ui_geocoder.py
 - Line 177: `try:`
 - Line 273: `try:`
 - Line 425: `try:`
@@ -2163,69 +2163,69 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 638: `try:`
 - Line 256: `try:`
 
-### src\site\bulk_radius_wlan_config_manager.py
+### src\mist\resources\site\bulk_radius_wlan_config_manager.py
 - Line 138: `try:`
 - Line 430: `try:`
 - Line 538: `try:`
 
-### src\ssh\batch\batch_executor.py
+### src\operations\execution\ssh\batch\batch_executor.py
 - Line 389: `try:`
 - Line 416: `try:`
 
-### src\ssh\batch\interactive_batch_executor.py
+### src\operations\execution\ssh\batch\interactive_batch_executor.py
 - Line 284: `try:`
 - Line 525: `try:`
 - Line 713: `try:`
 - Line 745: `try:`
 - Line 762: `try:`
 
-### src\ssh\cli_shell_manager.py
+### src\operations\execution\ssh\cli_shell_manager.py
 - Line 90: `try:`
 - Line 165: `try:  # The socket may drop mid-send.`
 - Line 199: `try:  # WHY: the socket may already be closed by the exit key handler.`
 - Line 134: `try:  # A read error or close ends the receive loop.`
 
-### src\ssh\command\command_runner.py
+### src\operations\execution\ssh\command\command_runner.py
 - Line 320: `try:`
 - Line 347: `try:`
 
-### src\ssh\config\env_loader.py
+### src\operations\execution\ssh\config\env_loader.py
 - Line 20: `try:`
 
-### src\ssh\connection\connector.py
+### src\operations\execution\ssh\connection\connector.py
 - Line 312: `try:`
 
-### src\ssh\runtime\app_runner.py
+### src\operations\execution\ssh\runtime\app_runner.py
 - Line 126: `try:  # Tracer installation is best-effort and never fatal`
 - Line 141: `try:  # Removal is best-effort and never fatal`
 - Line 453: `try:  # Single try wraps the pipeline so we always restore the tracer`
 - Line 82: `try:  # Defensive: never let tracer crash the run`
 
-### src\ssh\ssh_runner.py
+### src\operations\execution\ssh\ssh_runner.py
 - Line 288: `try:`
 - Line 300: `try:`
 - Line 326: `try:`
 - Line 394: `try:`
 
-### src\ssh\ssh_runner_manager.py
+### src\operations\execution\ssh\ssh_runner_manager.py
 - Line 61: `try:`
 - Line 507: `try:`
 
-### src\ssid_consolidation\ssid_template_consolidation.py
+### src\operations\execution\ssid_consolidation\ssid_template_consolidation.py
 - Line 506: `try:`
 - Line 563: `try:`
 - Line 597: `try:`
 - Line 686: `try:`
 - Line 828: `try:`
 
-### src\time\time_utils.py
+### src\foundation\runtime\time\time_utils.py
 - Line 37: `try:`
 
-### src\troubleshooting\interactive_test_runner.py
+### src\mist\intelligence\troubleshooting\interactive_test_runner.py
 - Line 355: `try:`
 - Line 479: `try:`
 
-### src\troubleshooting\marvis_troubleshoot_utils.py
+### src\mist\intelligence\troubleshooting\marvis_troubleshoot_utils.py
 - Line 176: `try:  # WHY: funnel SDK errors to user guidance.`
 - Line 210: `try:  # WHY: funnel SDK errors to guidance.`
 - Line 238: `try:  # WHY: funnel SDK errors to guidance.`
@@ -2233,61 +2233,61 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 812: `try:  # WHY: bound errors from insight collection so usage guide still renders.`
 - Line 879: `try:  # WHY: individual endpoint errors must not abort the loop.`
 
-### src\ui\execution\debug_saver.py
+### src\interfaces\visualization\ui\execution\debug_saver.py
 - Line 25: `try:`
 - Line 102: `try:`
 
-### src\ui\execution\function_executor.py
+### src\interfaces\visualization\ui\execution\function_executor.py
 - Line 42: `try:`
 - Line 117: `try:`
 - Line 191: `try:`
 
-### src\ui\execution\item_executor.py
+### src\interfaces\visualization\ui\execution\item_executor.py
 - Line 71: `try:`
 
-### src\ui\prompt_utils.py
+### src\interfaces\visualization\ui\prompt_utils.py
 - Line 274: `try:`
 - Line 290: `try:`
 - Line 306: `try:`
 - Line 321: `try:`
 - Line 335: `try:`
 
-### src\ui\runtime\level_discoverer.py
+### src\interfaces\visualization\ui\runtime\level_discoverer.py
 - Line 66: `try:`
 
-### src\ui\runtime\tui_runner.py
+### src\interfaces\visualization\ui\runtime\tui_runner.py
 - Line 30: `try:  # WHY: teardown must always run even on setup/loop errors`
 - Line 74: `try:  # WHY: swallow restore errors to keep exit clean`
 
-### src\ui\tui.py
+### src\interfaces\visualization\ui\tui.py
 - Line 148: `try:`
 
-### src\upgrade_portal\api\mist_client.py
+### src\interfaces\portals\upgrade_portal\api\mist_client.py
 - Line 167: `try:`
 - Line 195: `try:`
 - Line 63: `try:`
 - Line 122: `try:`
 
-### src\upgrade_portal\api\run_controls\services\bulk.py
+### src\interfaces\portals\upgrade_portal\api\run_controls\services\bulk.py
 - Line 258: `try:`
 
-### src\upgrade_portal\api\run_controls\services\reconciliation.py
+### src\interfaces\portals\upgrade_portal\api\run_controls\services\reconciliation.py
 - Line 477: `try:  # Evidence collection can fail through a cloud or store seam.`
 - Line 494: `try:`
 
-### src\upgrade_portal\api\run_controls\services\retry.py
+### src\interfaces\portals\upgrade_portal\api\run_controls\services\retry.py
 - Line 92: `try:`
 
-### src\upgrade_portal\app\factory.py
+### src\interfaces\portals\upgrade_portal\app\factory.py
 - Line 411: `try:  # No fault may leave this function.`
 - Line 436: `try:  # No fault may leave this function.`
 - Line 619: `try:  # The socket may already be broken.`
 
-### src\upgrade_portal\app\routes\audit.py
+### src\interfaces\portals\upgrade_portal\app\routes\audit.py
 - Line 48: `try:`
 - Line 115: `try:`
 
-### src\upgrade_portal\app\routes\auth.py
+### src\interfaces\portals\upgrade_portal\app\routes\auth.py
 - Line 244: `try:  # The catalog lives outside this package, so an import fault must not stop the portal.`
 - Line 703: `try:  # The template may arrive in a later stage of this phase.`
 - Line 725: `try:  # A settings fault or a probe fault must not stop the operator signing in.`
@@ -2295,19 +2295,19 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1069: `try:`
 - Line 1096: `try:  # The library raises for a transport fault and answers a mapping for a refusal.`
 
-### src\upgrade_portal\app\routes\comparison.py
+### src\interfaces\portals\upgrade_portal\app\routes\comparison.py
 - Line 51: `try:`
 - Line 175: `try:`
 
-### src\upgrade_portal\app\routes\jwt_auth.py
+### src\interfaces\portals\upgrade_portal\app\routes\jwt_auth.py
 - Line 61: `try:`
 - Line 174: `try:`
 
-### src\upgrade_portal\app\routes\mist.py
+### src\interfaces\portals\upgrade_portal\app\routes\mist.py
 - Line 40: `try:`
 - Line 90: `try:`
 
-### src\upgrade_portal\app\routes\org_upgrade.py
+### src\interfaces\portals\upgrade_portal\app\routes\org_upgrade.py
 - Line 716: `try:`
 - Line 905: `try:  # The service persists before and after every destructive action.`
 - Line 1123: `try:`
@@ -2317,16 +2317,16 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1282: `try:  # The service persists before and after every destructive action.`
 - Line 800: `try:  # Lock writes fail closed and use no memory fallback.`
 
-### src\upgrade_portal\app\routes\review.py
+### src\interfaces\portals\upgrade_portal\app\routes\review.py
 - Line 798: `try:`
 - Line 1035: `try:`
 
-### src\upgrade_portal\app\routes\runs.py
+### src\interfaces\portals\upgrade_portal\app\routes\runs.py
 - Line 41: `try:`
 - Line 90: `try:`
 - Line 161: `try:`
 
-### src\upgrade_portal\app\routes\select.py
+### src\interfaces\portals\upgrade_portal\app\routes\select.py
 - Line 970: `try:  # A read page must survive a failed second call.`
 - Line 1283: `try:  # The template arrives in a later stage of this phase.`
 - Line 1950: `try:  # The session read needs a request, and a damaged field must not hide a page.`
@@ -2335,7 +2335,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 2057: `try:  # `read_site_locks` absorbs a dead store, and the seam lookup itself may still fail.`
 - Line 2081: `try:  # A banner render must survive a store fault.`
 
-### src\upgrade_portal\app\routes\upgrade.py
+### src\interfaces\portals\upgrade_portal\app\routes\upgrade.py
 - Line 616: `try:  # The cloud or the test seam may return no body, or raise.`
 - Line 906: `try:`
 - Line 1290: `try:  # The reader reaches the cloud, and the cloud refuses and times out.`
@@ -2349,10 +2349,10 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 2351: `try:  # A damaged record names a state outside the model.`
 - Line 2542: `try:  # The reader names the control and states the rule on a refusal.`
 
-### src\upgrade_portal\app\seam_shapes.py
+### src\interfaces\portals\upgrade_portal\app\seam_shapes.py
 - Line 251: `try:  # The module may be absent in a trimmed install.`
 
-### src\upgrade_portal\app\wiring.py
+### src\interfaces\portals\upgrade_portal\app\wiring.py
 - Line 186: `try:  # A broken module may raise anything at all while it loads.`
 - Line 599: `try:  # A stored row may hold a value that no rule maps.`
 - Line 675: `try:  # A read outside a request, or a seam that raises, must not stop the run.`
@@ -2370,11 +2370,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1537: `try:`
 - Line 1543: `try:`
 
-### src\upgrade_portal\audit\logger.py
+### src\interfaces\portals\upgrade_portal\audit\logger.py
 - Line 67: `try:`
 - Line 237: `try:`
 
-### src\upgrade_portal\auth\session.py
+### src\interfaces\portals\upgrade_portal\auth\session.py
 - Line 68: `try:`
 - Line 120: `try:`
 - Line 200: `try:`
@@ -2382,28 +2382,28 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 460: `try:`
 - Line 206: `try:`
 
-### src\upgrade_portal\capture\assembly.py
+### src\interfaces\portals\upgrade_portal\capture\assembly.py
 - Line 718: `try:`
 
-### src\upgrade_portal\capture\collector.py
+### src\interfaces\portals\upgrade_portal\capture\collector.py
 - Line 552: `try:  # The read reaches a network, so it may raise.`
 
-### src\upgrade_portal\capture\devices.py
+### src\interfaces\portals\upgrade_portal\capture\devices.py
 - Line 159: `try:`
 - Line 321: `try:`
 
-### src\upgrade_portal\capture\extras.py
+### src\interfaces\portals\upgrade_portal\capture\extras.py
 - Line 228: `try:`
 - Line 278: `try:`
 - Line 412: `try:`
 
-### src\upgrade_portal\capture\service.py
+### src\interfaces\portals\upgrade_portal\capture\service.py
 - Line 100: `try:`
 - Line 330: `try:`
 - Line 526: `try:`
 - Line 455: `try:`
 
-### src\upgrade_portal\capture\store.py
+### src\interfaces\portals\upgrade_portal\capture\store.py
 - Line 556: `try:`
 - Line 622: `try:`
 - Line 654: `try:`
@@ -2413,35 +2413,35 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1680: `try:`
 - Line 2056: `try:`
 
-### src\upgrade_portal\compare\service.py
+### src\interfaces\portals\upgrade_portal\compare\service.py
 - Line 137: `try:`
 
-### src\upgrade_portal\locking\session_lock.py
+### src\interfaces\portals\upgrade_portal\locking\session_lock.py
 - Line 221: `try:`
 - Line 307: `try:`
 - Line 398: `try:`
 
-### src\upgrade_portal\persistence\actions\replay.py
+### src\interfaces\portals\upgrade_portal\persistence\actions\replay.py
 - Line 184: `try:  # Each refusal below must become a safe final result, never a false success.`
 
-### src\upgrade_portal\persistence\actions\transactions.py
+### src\interfaces\portals\upgrade_portal\persistence\actions\transactions.py
 - Line 121: `try:  # A failure must roll back the action and run together.`
 
-### src\upgrade_portal\persistence\runs.py
+### src\interfaces\portals\upgrade_portal\persistence\runs.py
 - Line 96: `try:`
 - Line 195: `try:`
 
-### src\upgrade_portal\runtime\lock.py
+### src\interfaces\portals\upgrade_portal\runtime\lock.py
 - Line 560: `try:`
 - Line 662: `try:`
 - Line 1037: `try:`
 - Line 1156: `try:`
 
-### src\upgrade_portal\runtime\pools.py
+### src\interfaces\portals\upgrade_portal\runtime\pools.py
 - Line 376: `try:  # The call reaches a network, so it may raise`
 - Line 406: `try:  # The call reaches a network, so it may raise`
 
-### src\upgrade_portal\settle\service.py
+### src\interfaces\portals\upgrade_portal\settle\service.py
 - Line 143: `try:`
 - Line 380: `try:  # WHY: keep one bad check from stopping the others`
 - Line 447: `try:`
@@ -2449,102 +2449,102 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 559: `try:`
 - Line 605: `try:`
 
-### src\upgrade_portal\upgrade\driver.py
+### src\interfaces\portals\upgrade_portal\upgrade\driver.py
 - Line 601: `try:`
 - Line 658: `try:`
 - Line 841: `try:`
 - Line 983: `try:`
 - Line 1385: `try:`
 
-### src\upgrade_portal\upgrade\events.py
+### src\interfaces\portals\upgrade_portal\upgrade\events.py
 - Line 234: `try:`
 - Line 429: `try:`
 
-### src\upgrade_portal\upgrade\gate.py
+### src\interfaces\portals\upgrade_portal\upgrade\gate.py
 - Line 870: `try:`
 
-### src\upgrade_portal\upgrade\options.py
+### src\interfaces\portals\upgrade_portal\upgrade\options.py
 - Line 456: `try:`
 
-### src\upgrade_portal\upgrade\phase_gate.py
+### src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py
 - Line 852: `try:`
 - Line 878: `try:`
 
-### src\upgrade_portal\upgrade\service.py
+### src\interfaces\portals\upgrade_portal\upgrade\service.py
 - Line 136: `try:`
 - Line 502: `try:`
 
-### src\upgrade_portal\upgrade\stop.py
+### src\interfaces\portals\upgrade_portal\upgrade\stop.py
 - Line 177: `try:`
 - Line 229: `try:`
 
-### src\utils\address_utils.py
+### src\foundation\support\utils\address_utils.py
 - Line 332: `try:  # WHY: the heuristic parser can raise on pathological input`
 - Line 378: `try:  # WHY: library parsing can raise on malformed input`
 - Line 937: `try:  # WHY: any transport error retries or gives up`
 - Line 1058: `try:  # WHY: any error yields an empty-result payload`
 - Line 419: `try:  # WHY: fuzz can throw on odd unicode`
 
-### src\utils\environment_utils.py
+### src\foundation\support\utils\environment_utils.py
 - Line 117: `try:`
 
-### src\utils\logger_utils.py
+### src\foundation\support\utils\logger_utils.py
 - Line 139: `try:`
 
-### src\utils\rate_limiting.py
+### src\foundation\support\utils\rate_limiting.py
 - Line 19: `try:  # WHY: numpy is optional. Fall back to pure-Python stdev when absent.`
 - Line 66: `try:  # WHY: creation may fail on read-only filesystems. Fall back cleanly.`
 - Line 132: `try:  # WHY: any decode/read failure falls back to defaults.`
 - Line 190: `try:  # WHY: numpy path may still raise on exotic inputs. Be defensive.`
 - Line 560: `try:  # WHY: any downstream failure must degrade gracefully to fallback.`
 
-### src\utils\tqdm_wrapper.py
+### src\foundation\support\utils\tqdm_wrapper.py
 - Line 22: `try:  # Prefer the real progress-bar package when installed.`
 
-### src\utils\zscaler_catalogue.py
+### src\foundation\support\utils\zscaler_catalogue.py
 - Line 1095: `try:`
 - Line 1225: `try:`
 
-### src\utils\zscaler_probe.py
+### src\foundation\support\utils\zscaler_probe.py
 - Line 345: `try:`
 - Line 385: `try:`
 - Line 732: `try:`
 
-### src\wan_hub_group_manager.py
+### src\operations\wan\wan_hub_group_manager.py
 - Line 142: `try:  # WHY: any mistapi failure must degrade gracefully to empty list.`
 - Line 164: `try:  # WHY: mistapi/network faults must degrade to empty tuple, not raise.`
 - Line 296: `try:  # WHY: non-numeric choices must fall through to retry.`
 - Line 486: `try:  # WHY: isolate per-VPN failure from the loop.`
 
-### src\wan_vpn_builder.py
+### src\operations\wan\wan_vpn_builder.py
 - Line 329: `try:  # WHY: any transport / auth error should degrade gracefully to an empty list.`
 - Line 344: `try:  # WHY: mirror _fetch_profiles' graceful degradation.`
 - Line 358: `try:  # WHY: convert any API error into a None return so run() can bail out cleanly.`
 - Line 650: `try:  # WHY: guard the whole flow so any API/parse error becomes a soft failure.`
 
-### src\websocket\commands.py
+### src\mist\realtime\websocket\commands.py
 - Line 41: `try:`
 
-### src\websocket\diagnostics\arp_executor.py
+### src\mist\realtime\websocket\diagnostics\arp_executor.py
 - Line 62: `try:  # WHY: mirror legacy try/except/finally so cleanup always runs.`
 - Line 114: `try:  # WHY: legacy swallows errors so ARP attempt still proceeds.`
 - Line 415: `try:  # WHY: match legacy fallback phrasing on JSON parse failure.`
 
-### src\websocket\diagnostics\ping_executor.py
+### src\mist\realtime\websocket\diagnostics\ping_executor.py
 - Line 74: `try:  # WHY: mirror legacy try/except/finally so cleanup always runs.`
 - Line 154: `try:  # WHY: parse user input as integer. Revert to default on failure.`
 
-### src\websocket\manager.py
+### src\mist\realtime\websocket\manager.py
 - Line 62: `try:  # WHY: Cleanup must never propagate — it runs from `finally` blocks.`
 - Line 201: `try:  # WHY: Any low-level failure is reported and returned as False.`
 - Line 252: `try:  # WHY: Guard against transient send errors.`
 
-### src\websocket\service_ping_discovery.py
+### src\mist\realtime\websocket\service_ping_discovery.py
 - Line 121: `try:`
 - Line 244: `try:`
 - Line 460: `try:`
 
-### src\websocket\service_ping_manager.py
+### src\mist\realtime\websocket\service_ping_manager.py
 - Line 143: `try:  # WHY: mistapi failures must not crash the workflow.`
 - Line 261: `try:  # WHY: guard the API round-trip so error path is uniform.`
 - Line 405: `try:  # WHY: cleanup must never raise into the menu loop.`
@@ -2658,27 +2658,27 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 43: `vb.get('terms', [])`
 - Line 44: `va.get('terms', [])`
 
-### mist-ops-platform\src\api\middleware\auth.py
+### mist-ops-platform\src\mist\access\api\middleware\auth.py
 - Line 235: `request.cookies.get(SESSION_COOKIE_NAME, '')`
 - Line 158: `row.get('msp_id', '')`
 - Line 252: `privs.raw.get('privileges', [])`
 - Line 156: `row.get('scope', '')`
 - Line 300: `privs.raw.get('privileges', [])`
 
-### mist-ops-platform\src\api\routes\audit.py
+### mist-ops-platform\src\mist\access\api\routes\audit.py
 - Line 224: `included.get('total_records', 0)`
 
-### mist-ops-platform\src\api\routes\deploy.py
+### mist-ops-platform\src\mist\access\api\routes\deploy.py
 - Line 336: `t.get('entity_type', '')`
 
-### mist-ops-platform\src\api\routes\health.py
+### mist-ops-platform\src\mist\access\api\routes\health.py
 - Line 366: `request.cookies.get(SESSION_COOKIE_NAME, '')`
 - Line 386: `request.cookies.get(SESSION_COOKIE_NAME, '')`
 - Line 254: `privs.org_names.get(oid, oid)`
 - Line 255: `db.get(Organization, org_uuid)`
 - Line 316: `privs.org_names.get(oid, oid)`
 
-### mist-ops-platform\src\api\routes\webhooks.py
+### mist-ops-platform\src\mist\access\api\routes\webhooks.py
 - Line 46: `request.headers.get('X-Mist-Signature-v2', '')`
 
 ### mist-ops-platform\src\shared\config\settings.py
@@ -2989,7 +2989,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 84: `cs.get('containing_function', '')`
 - Line 114: `cs.get('containing_function', 'unknown')`
 
-### src\analytics\insight_metrics_utils.py
+### src\mist\intelligence\analytics\insight_metrics_utils.py
 - Line 70: `row.get('scopes', '')`
 - Line 71: `row.get('metric_name', '')`
 - Line 205: `metric_data.get('rt', '')`
@@ -3009,7 +3009,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 188: `metric_data.get('totalTunnelCount', '')`
 - Line 213: `metric_data.get(field_name, '')`
 
-### src\analytics\site_analytics_configurator.py
+### src\mist\intelligence\analytics\site_analytics_configurator.py
 - Line 163: `site.get('name', 'Unnamed Site')`
 - Line 176: `settings.get('rtsa', {})`
 - Line 191: `settings.get('rogue', {})`
@@ -3021,7 +3021,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 316: `current.get('dwell_tag_names', {})`
 - Line 335: `current.get('hours', {})`
 
-### src\analytics\site_inventory_health_analyzer.py
+### src\mist\intelligence\analytics\site_inventory_health_analyzer.py
 - Line 171: `device.get('id', '')`
 - Line 172: `device.get('mac', '')`
 - Line 93: `site.get('name', 'Unnamed Site')`
@@ -3033,7 +3033,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 285: `site_lookup.get(site_id, 'Unknown Site')`
 - Line 159: `device.get('type', '')`
 
-### src\analytics\zone_analyzer.py
+### src\mist\intelligence\analytics\zone_analyzer.py
 - Line 386: `occupancy_analysis.get('total_sites', 0)`
 - Line 387: `occupancy_analysis.get('analytic_enabled_count', 0)`
 - Line 388: `occupancy_analysis.get('analytic_disabled_count', 0)`
@@ -3056,12 +3056,12 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 970: `engagement_analysis.get('sites_with_dwell_deviations', {})`
 - Additional records: 109
 
-### src\api\api_data_fetcher.py
+### src\mist\access\api\api_data_fetcher.py
 - Line 225: `response.data.get('data', [])`
 - Line 385: `item.get(field, '')`
 - Line 372: `x.get(sort_key_str, '')`
 
-### src\api\api_fetch_utils.py
+### src\mist\access\api\api_fetch_utils.py
 - Line 96: `site.get('name', 'Unnamed Site')`
 - Line 159: `site_name_lookup.get(site_id, 'Unknown')`
 - Line 144: `row.get('name', 'Unnamed Site')`
@@ -3069,7 +3069,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 78: `service.get('type', 'custom')`
 - Line 79: `service.get('description', '')`
 
-### src\api\tenant_fetch.py
+### src\mist\access\api\tenant_fetch.py
 - Line 193: `policy.get('tenants', [])`
 - Line 196: `policy.get('services', [])`
 - Line 224: `router.get('tenants', [])`
@@ -3079,15 +3079,15 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 238: `network.get('tenants', {})`
 - Line 262: `tmpl.get('networks', [])`
 
-### src\audit\_renderer_html.py
+### src\mist\access\audit\_renderer_html.py
 - Line 223: `entry.get('timestamp', 0)`
 - Line 225: `entry.get('message', '')`
 
-### src\audit\_renderer_mermaid.py
+### src\mist\access\audit\_renderer_mermaid.py
 - Line 87: `entry.get('timestamp', 0)`
 - Line 88: `entry.get('message', '')`
 
-### src\audit\analyzer.py
+### src\mist\access\audit\analyzer.py
 - Line 131: `entry.get('admin_id', 'unknown')`
 - Line 132: `entry.get('timestamp', 0)`
 - Line 165: `entry.get('message', '')`
@@ -3098,21 +3098,21 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 104: `e.get('timestamp', 0)`
 - Line 136: `entry.get('admin_name', 'Unknown')`
 
-### src\audit\filter.py
+### src\mist\access\audit\filter.py
 - Line 107: `entry.get('before', {})`
 - Line 108: `entry.get('after', {})`
 - Line 45: `entry.get('message', '')`
 
-### src\audit\time_parser.py
+### src\mist\access\audit\time_parser.py
 - Line 65: `UNIT_LABELS.get(unit, unit)`
 
-### src\auth\interactive\login_orchestrator.py
+### src\mist\access\auth\interactive\login_orchestrator.py
 - Line 178: `login_result.get('error', {})`
 - Line 205: `login_result.get('error', 'Unknown error')`
 - Line 209: `error_field.get('detail', str(error_field))`
 - Line 200: `login_result.get('authenticated', False)`
 
-### src\auth\interactive\msp_org_selector.py
+### src\mist\access\auth\interactive\msp_org_selector.py
 - Line 26: `self.state.get('msp_privileges', [])`
 - Line 99: `msp.get('msp_name', 'Unknown')`
 - Line 225: `org.get('name', 'Unknown')`
@@ -3122,13 +3122,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 184: `org.get('id', 'N/A')`
 - Line 136: `org.get('name', '')`
 
-### src\bootstrap\dependency_check.py
+### src\foundation\runtime\bootstrap\dependency_check.py
 - Line 167: `self.package_import_map.get(name.lower(), name)`
 
-### src\bootstrap\uv_runtime.py
+### src\foundation\runtime\bootstrap\uv_runtime.py
 - Line 47: `comparisons.get(operator, True)`
 
-### src\capture\_packet_capture_exec.py
+### src\operations\execution\capture\_packet_capture_exec.py
 - Line 83: `result.get('id', 'unknown')`
 - Line 84: `result.get('format', 'unknown')`
 - Line 182: `result.get('id', 'unknown')`
@@ -3143,7 +3143,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 206: `payload.get('duration', 60)`
 - Line 424: `msg.get('data', {})`
 
-### src\capture\_packet_capture_org.py
+### src\operations\execution\capture\_packet_capture_org.py
 - Line 178: `mxedge.get('name', 'Unnamed MxEdge')`
 - Line 179: `mxedge.get('id', 'No ID')`
 - Line 180: `mxedge.get('model', 'Unknown')`
@@ -3166,7 +3166,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 211: `service_stat.get('mxagent', {})`
 - Additional records: 9
 
-### src\capture\_packet_capture_prompts.py
+### src\operations\execution\capture\_packet_capture_prompts.py
 - Line 177: `_BAND_MAP.get(choice, '5')`
 - Line 181: `_CHANNEL_PROMPT.get(band, _CHANNEL_PROMPT['6'])`
 - Line 207: `_BW_MAP.get(choice, '20')`
@@ -3189,7 +3189,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 391: `payload.get('num_packets', 0)`
 - Additional records: 4
 
-### src\capture\multi_ap_scan_workflow.py
+### src\operations\execution\capture\multi_ap_scan_workflow.py
 - Line 83: `_BAND_CHOICES.get(choice, _BAND_DEFAULT)`
 - Line 89: `_CHANNEL_SPECS.get(band, _CHANNEL_SPECS['6'])`
 - Line 114: `_BW_CHOICES.get(choice, _BW_DEFAULT)`
@@ -3198,23 +3198,23 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 305: `error_details.get('detail', '')`
 - Line 293: `result.get('expiry', 'unknown')`
 
-### src\capture\packet_capture.py
+### src\operations\execution\capture\packet_capture.py
 - Line 1306: `capture_data.get('id', 'unknown')`
 
-### src\capture\packet_capture_download.py
+### src\operations\execution\capture\packet_capture_download.py
 - Line 158: `pcap.get('id', '')`
 - Line 159: `pcap.get('pcap_url', '')`
 
-### src\capture\site_capture_loop.py
+### src\operations\execution\capture\site_capture_loop.py
 - Line 40: `payload.get('duration', _DEFAULT_LOOP_DURATION)`
 
-### src\config\runtime_settings.py
+### src\foundation\runtime\config\runtime_settings.py
 - Line 17: `os.getenv('MISTHELPER_DB_PATH', 'data/mist_data.db')`
 - Line 13: `os.getenv('CSV_FRESHNESS_MINUTES', '15')`
 - Line 15: `os.getenv('API_REQUEST_MAX_RETRIES', '3')`
 - Line 16: `os.getenv('API_REQUEST_RETRY_DELAY', '5.0')`
 
-### src\db\__init__.py
+### src\foundation\persistence\db\__init__.py
 - Line 120: `os.environ.get(name, '')`
 - Line 120: `os.environ.get(name, '')`
 - Line 144: `os.environ.get('ARANGO_HOST', ARANGO_DEFAULT_URL)`
@@ -3237,7 +3237,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 84: `os.environ.get('WEBHOOK_SECRET', '')`
 - Additional records: 4
 
-### src\db\arango_writer.py
+### src\foundation\persistence\db\arango_writer.py
 - Line 4023: `result.get('errors', 0)`
 - Line 4029: `strategy.get('type', 'natural_pk')`
 - Line 4030: `strategy.get('primary_key', ['id'])`
@@ -3252,11 +3252,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 4100: `edge_config.get('to_key_lookup', '')`
 - Line 4124: `to_key_lookup.get(str(v), str(v))`
 
-### src\db\database_schema_utils.py
+### src\foundation\persistence\db\database_schema_utils.py
 - Line 190: `builders.get(strategy['type'], DatabaseSchemaUtils._build_autoincrement_sql)`
 - Line 202: `strategy.get('indexes', [])`
 
-### src\db\redis_writer.py
+### src\foundation\persistence\db\redis_writer.py
 - Line 29: `os.environ.get('REDIS_RAW_RETENTION_DAYS', '7')`
 - Line 29: `os.environ.get('REDIS_RAW_RETENTION_DAYS', '7')`
 - Line 33: `os.environ.get('REDIS_JSON_TTL_DAYS', '7')`
@@ -3267,12 +3267,12 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 80: `m.get('name', b'')`
 - Line 626: `record.get(field, 'unknown')`
 
-### src\db\retention.py
+### src\foundation\persistence\db\retention.py
 - Line 64: `os.environ.get(name, str(default))`
 - Line 64: `os.environ.get(name, str(default))`
 - Line 110: `stats.get('dataSize', 0)`
 
-### src\db\router.py
+### src\foundation\persistence\db\router.py
 - Line 173: `flags.get(backend, False)`
 - Line 229: `strategy.get('type', DEFAULT_STRATEGY_TYPE)`
 - Line 357: `self._strategies.get('default', DEFAULT_STRATEGY)`
@@ -3284,11 +3284,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 381: `payload.get('object_type', UNKNOWN_ENTITY_TYPE)`
 - Line 420: `config_record.get('mac', '')`
 
-### src\device\_utility_commands_action.py
+### src\mist\resources\device\_utility_commands_action.py
 - Line 344: `data.get('password', str(response.data))`
 - Line 230: `vc_data.get('is_virtual_chassis', False)`
 
-### src\device\_utility_commands_selection.py
+### src\mist\resources\device\_utility_commands_selection.py
 - Line 53: `self._uc.DEVICE_TYPE_COMPATIBILITY_MAP.get(command_name, [])`
 - Line 107: `device_info.get('status', 'unknown')`
 - Line 134: `stats.get('ports', [])`
@@ -3311,12 +3311,12 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 366: `p.get('name', '')`
 - Additional records: 2
 
-### src\device\_utility_commands_websocket.py
+### src\mist\resources\device\_utility_commands_websocket.py
 - Line 305: `result.get('raw', '')`
 - Line 319: `result.get('raw', '')`
 - Line 323: `result.get('Output', '')`
 
-### src\device\ap_profile_migration_manager.py
+### src\mist\resources\device\ap_profile_migration_manager.py
 - Line 1471: `payload.get('outcome', 'unknown')`
 - Line 297: `_pacing.get('delay_count', 0)`
 - Line 298: `_pacing.get('delay_sum', 0.0)`
@@ -3339,12 +3339,12 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1057: `site.get('name', '')`
 - Additional records: 17
 
-### src\device\arp_command_manager.py
+### src\mist\resources\device\arp_command_manager.py
 - Line 190: `msg.get('data', '{}')`
 - Line 192: `data_obj.get('data', {})`
 - Line 223: `inner_data.get('raw', '')`
 
-### src\device\device_reboot_manager.py
+### src\mist\resources\device\device_reboot_manager.py
 - Line 407: `response.data.get('status', f'SUCCESS - {response.data}')`
 - Line 211: `row.get('id', '')`
 - Line 212: `row.get('name', '')`
@@ -3358,10 +3358,10 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 276: `row.get('name', '')`
 - Line 231: `row.get('type', '')`
 
-### src\device\device_utils.py
+### src\mist\resources\device\device_utils.py
 - Line 106: `device.get(key, '')`
 
-### src\device\prompt_utils.py
+### src\mist\resources\device\prompt_utils.py
 - Line 255: `device.get('name', 'Unknown')`
 - Line 405: `response.data.get('results', [])`
 - Line 456: `device_config_response.data.get('port_config', {})`
@@ -3384,11 +3384,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 581: `port_info.get('_fallback', False)`
 - Additional records: 6
 
-### src\device\utility_commands.py
+### src\mist\resources\device\utility_commands.py
 - Line 164: `self.__dict__.get('_clusters', ())`
 - Line 70: `data.get('detail', '')`
 
-### src\device\virtual_chassis.py
+### src\mist\resources\device\virtual_chassis.py
 - Line 567: `switch.get('name', '')`
 - Line 568: `switch.get('site_name', '')`
 - Line 577: `switch.get('site_id', '')`
@@ -3411,7 +3411,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 693: `row.get('id', '')`
 - Additional records: 23
 
-### src\export\const_definitions_exporter.py
+### src\operations\exporting\export\const_definitions_exporter.py
 - Line 414: `model_item.get('model', model_item.get('name', ''))`
 - Line 414: `model_item.get('name', '')`
 - Line 712: `metric_details.get('description', '')`
@@ -3428,19 +3428,19 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 402: `model_details.get('type', '')`
 - Line 417: `model_item.get('type', '')`
 
-### src\export\data_exporter.py
+### src\operations\exporting\export\data_exporter.py
 - Line 333: `cls._last_snapshot_times.get(api_function_name, 0.0)`
 - Line 201: `os.getenv('MISTHELPER_STANDALONE', '')`
 - Line 427: `row.get(field_name, '')`
 - Line 507: `entry.get(sort_key, '')`
 
-### src\export\device_events_52w_exporter.py
+### src\operations\exporting\export\device_events_52w_exporter.py
 - Line 339: `row.get(key, '')`
 
-### src\export\endpoint_catalog.py
+### src\operations\exporting\export\endpoint_catalog.py
 - Line 56: `SAFETY_LABELS.get(self.safety, self.safety)`
 
-### src\export\msp_inventory_exporter.py
+### src\operations\exporting\export\msp_inventory_exporter.py
 - Line 178: `msp_info.get('msp_name', 'Unknown MSP')`
 - Line 298: `org.get('name', 'Unknown Org')`
 - Line 273: `site_lookup.get(site_id, 'Unknown Site')`
@@ -3454,19 +3454,19 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 371: `x.get('_site_name', '')`
 - Line 373: `x.get('name', '')`
 
-### src\export\org_client_security_exporter.py
+### src\operations\exporting\export\org_client_security_exporter.py
 - Line 189: `site.get('name', 'Unknown Site')`
 
-### src\export\org_config_exporter.py
+### src\operations\exporting\export\org_config_exporter.py
 - Line 202: `org.get('name', 'Unknown')`
 - Line 203: `org.get('id', 'N/A')`
 
-### src\export\org_device_stats_exporter.py
+### src\operations\exporting\export\org_device_stats_exporter.py
 - Line 130: `site.get('name', 'Unknown')`
 - Line 161: `row.get('name', 'Unknown')`
 - Line 323: `row.get('mac', '')`
 
-### src\export\org_inventory_exporter.py
+### src\operations\exporting\export\org_inventory_exporter.py
 - Line 586: `site_lookup.get(site_id, {'name': 'Unknown', 'address': 'Unknown'})`
 - Line 218: `d.get('vc_mac', '')`
 - Line 288: `device.get('site_name', '')`
@@ -3489,50 +3489,50 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 730: `site_lookup.get(site_id, {'name': 'Unknown', 'address': 'Unknown'})`
 - Additional records: 18
 
-### src\export\org_sec_intel_profile_exporter.py
+### src\operations\exporting\export\org_sec_intel_profile_exporter.py
 - Line 95: `profile.get('id', 'unknown')`
 - Line 206: `chosen.get('id', '')`
 
-### src\export\org_webhook_deliveries_exporter.py
+### src\operations\exporting\export\org_webhook_deliveries_exporter.py
 - Line 33: `webhook.get('id', '')`
 - Line 50: `webhook.get('name', '(unnamed)')`
 - Line 50: `webhook.get('id', '?')`
 
-### src\export\site_anomaly_exporter.py
+### src\operations\exporting\export\site_anomaly_exporter.py
 - Line 260: `site_data.get('name', site_id)`
 - Line 288: `client.get('hostname', client.get('name', 'Unknown'))`
 - Line 288: `client.get('name', 'Unknown')`
 
-### src\export\site_config_exporter.py
+### src\operations\exporting\export\site_config_exporter.py
 - Line 81: `row.get('ssid', '')`
 
-### src\export\site_device_exporter.py
+### src\operations\exporting\export\site_device_exporter.py
 - Line 64: `x.get('model', '')`
 - Line 97: `item.get(field, '')`
 - Line 78: `d.get('type', '')`
 
-### src\export\site_export_utils.py
+### src\operations\exporting\export\site_export_utils.py
 - Line 167: `item.get(field, '')`
 - Line 334: `payload.get('enabled', [])`
 - Line 335: `payload.get('supported', [])`
 - Line 156: `x.get(sort_key, '')`
 
-### src\export\site_insights\device_metric_operation.py
+### src\operations\exporting\export\site_insights\device_metric_operation.py
 - Line 107: `device_info.get('model', '')`
 - Line 145: `site_data.get('name', site_id)`
 - Line 180: `device.get('model', '')`
 
-### src\export\site_insights\site_metric_operation.py
+### src\operations\exporting\export\site_insights\site_metric_operation.py
 - Line 119: `site_data.get('name', site_id)`
 
-### src\export\site_webhook_deliveries_exporter.py
+### src\operations\exporting\export\site_webhook_deliveries_exporter.py
 - Line 107: `chosen.get('id', '')`
 - Line 107: `chosen.get('name', chosen.get('id', 'webhook'))`
 - Line 74: `wh.get('name', '(unnamed)')`
 - Line 74: `wh.get('id', '?')`
 - Line 107: `chosen.get('id', 'webhook')`
 
-### src\export\sites_by_ap_model_exporter.py
+### src\operations\exporting\export\sites_by_ap_model_exporter.py
 - Line 111: `site_map.get(site_id, {})`
 - Line 112: `site.get('address', '')`
 - Line 115: `site.get('name', '')`
@@ -3540,14 +3540,14 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 123: `d.get('mac', '')`
 - Line 97: `site_map.get(x[0], {})`
 
-### src\export\wan_client_events_exporter.py
+### src\operations\exporting\export\wan_client_events_exporter.py
 - Line 236: `row.get('name', _UNKNOWN_SITE)`
 
-### src\export\wifi_clients_exporter.py
+### src\operations\exporting\export\wifi_clients_exporter.py
 - Line 134: `row.get('name', _UNKNOWN_SITE)`
 - Line 262: `row.get('start_time', 0)`
 
-### src\firmware\aggregate_upgrade_service.py
+### src\operations\execution\firmware\aggregate_upgrade_service.py
 - Line 607: `result.data.get('site_upgrades', result.data.get('upgrades', []))`
 - Line 874: `record.get('children', [])`
 - Line 916: `record.get('children', [])`
@@ -3570,7 +3570,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 644: `status.get('status_known', True)`
 - Additional records: 20
 
-### src\firmware\bulk_ap_upgrader.py
+### src\operations\execution\firmware\bulk_ap_upgrader.py
 - Line 703: `version_info.get('version', 'Unknown')`
 - Line 711: `version_info.get('models', [])`
 - Line 837: `entry.get('version', 'Unknown')`
@@ -3593,7 +3593,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 391: `s.get('name', '?')`
 - Additional records: 24
 
-### src\firmware\bulk_switch_upgrader.py
+### src\operations\execution\firmware\bulk_switch_upgrader.py
 - Line 148: `org_info.data.get('name', 'Unknown')`
 - Line 865: `site_info.get('id', '')`
 - Line 866: `site_info.get('name', 'Unknown Site')`
@@ -3610,7 +3610,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 736: `self.compatible_versions.get(version, [])`
 - Line 1119: `result.get('error', 'Unknown error')`
 
-### src\firmware\firmware_manager.py
+### src\operations\execution\firmware\firmware_manager.py
 - Line 583: `details.get('enable_p2p', False)`
 - Line 602: `details.get('targets', {})`
 - Line 612: `details.get('upgrades', [])`
@@ -3633,7 +3633,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 3588: `device_stats.get('fwupdate', {})`
 - Additional records: 111
 
-### src\firmware\org_ap_upgrader.py
+### src\operations\execution\firmware\org_ap_upgrader.py
 - Line 598: `msp.get('msp_name', 'Unknown')`
 - Line 1673: `version_entry.get('models', [])`
 - Line 1819: `strategies.get(choice, 'big_bang')`
@@ -3656,19 +3656,19 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1555: `d.get('name', d.get('mac', 'unnamed')[:8])`
 - Additional records: 18
 
-### src\firmware\org_upgrade_body.py
+### src\operations\execution\firmware\org_upgrade_body.py
 - Line 76: `request.get('strategy', STRATEGY_DEFAULT)`
 - Line 112: `request.get('all_sites', False)`
 - Line 114: `request.get('device_type', DEVICE_TYPE_AP)`
 - Line 116: `request.get('strategy', STRATEGY_DEFAULT)`
 
-### src\firmware\org_upgrade_service.py
+### src\operations\execution\firmware\org_upgrade_service.py
 - Line 174: `headers.get('Content-Type', headers.get('content-type'))`
 
-### src\firmware\running_version.py
+### src\operations\execution\firmware\running_version.py
 - Line 166: `device_row.get('id', 'unknown')`
 
-### src\firmware\site_auto_upgrade.py
+### src\operations\execution\firmware\site_auto_upgrade.py
 - Line 1227: `day_map.get(choice, 'any')`
 - Line 1362: `site.get('name', 'Unknown')`
 - Line 1530: `_MSP_DAY_MAP.get(day_input, 'any')`
@@ -3691,7 +3691,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1191: `entry.get('version', '')`
 - Additional records: 5
 
-### src\firmware\upgrade_service.py
+### src\operations\execution\firmware\upgrade_service.py
 - Line 630: `device.get('type', '')`
 - Line 631: `device.get('model', '')`
 - Line 1611: `payload.get('status', '')`
@@ -3703,7 +3703,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1708: `device.get('device_type', device.get('type', ''))`
 - Line 1708: `device.get('type', '')`
 
-### src\gateway\_wan2_variable_device.py
+### src\mist\resources\gateway\_wan2_variable_device.py
 - Line 167: `config.get('port_config', {})`
 - Line 254: `config.get('port_config', {})`
 - Line 98: `site.get('name', '')`
@@ -3712,21 +3712,21 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 162: `device.get('id', '')`
 - Line 163: `device.get('name', '')`
 
-### src\gateway\_wan2_variable_io.py
+### src\mist\resources\gateway\_wan2_variable_io.py
 - Line 116: `site.get('gatewaytemplate_id', '')`
 - Line 118: `counts.get(tid, 0)`
 - Line 88: `s.get('name', '')`
 
-### src\gateway\_wan2_variable_selection.py
+### src\mist\resources\gateway\_wan2_variable_selection.py
 - Line 42: `tmpl.get('id', '')`
 - Line 43: `tmpl.get('name', 'Unnamed Template')`
 - Line 44: `site_counts.get(tid, 0)`
 - Line 28: `t.get('name', 'Unnamed Template')`
 
-### src\gateway\_wan2_variable_template.py
+### src\mist\resources\gateway\_wan2_variable_template.py
 - Line 60: `config.get('port_config', {})`
 
-### src\gateway\device_template_cloner.py
+### src\mist\resources\gateway\device_template_cloner.py
 - Line 483: `gateway.get('model', 'SRX300')`
 - Line 183: `device.get('model', 'Unknown')`
 - Line 184: `device.get('name', device.get('mac', 'Unknown'))`
@@ -3745,7 +3745,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 186: `device.get('id', '')`
 - Line 442: `device_info.get('mac', '')`
 
-### src\gateway\gateway_export_utils.py
+### src\mist\resources\gateway\gateway_export_utils.py
 - Line 179: `template_lookup.get(template_id, NO_TEMPLATE_LABEL)`
 - Line 184: `device.get('name', UNKNOWN_GATEWAY)`
 - Line 185: `device.get('site_id', '')`
@@ -3768,14 +3768,14 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 261: `device.get('site_id', '')`
 - Additional records: 1
 
-### src\gateway\gateway_ha_exporter.py
+### src\mist\resources\gateway\gateway_ha_exporter.py
 - Line 132: `gateway.get('id', '')`
 - Line 116: `ha_data.get('nodes', [])`
 - Line 163: `row.get('node_name', '')`
 - Line 164: `row.get('status', '')`
 - Line 162: `row.get('name', '')`
 
-### src\gateway\gateway_stats_exporter.py
+### src\mist\resources\gateway\gateway_stats_exporter.py
 - Line 387: `row.get('device_name', row.get('name', f'Device_{index}'))`
 - Line 388: `row.get('site_name', UNKNOWN_SITE_NAME)`
 - Line 387: `row.get('name', f'Device_{index}')`
@@ -3788,11 +3788,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 457: `x.get('device_name', '')`
 - Line 457: `x.get('port_name', '')`
 
-### src\gateway\overrides\device_data_fetcher.py
+### src\mist\resources\gateway\overrides\device_data_fetcher.py
 - Line 108: `device_config_data.get('port_config', {})`
 - Line 127: `stats_data.get('if_stat', {})`
 
-### src\gateway\overrides\override_classifier.py
+### src\mist\resources\gateway\overrides\override_classifier.py
 - Line 59: `port_config.get('ip_config', {})`
 - Line 60: `ip_config.get('type', '')`
 - Line 62: `port_config.get('disabled', False)`
@@ -3804,7 +3804,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 116: `device_info.get('device_id', '')`
 - Line 61: `interface_stat.get('up', False)`
 
-### src\gateway\overrides\wan_override_walker.py
+### src\mist\resources\gateway\overrides\wan_override_walker.py
 - Line 175: `site_to_template.get(site_id, '')`
 - Line 118: `site.get('id', '')`
 - Line 118: `site.get('name', 'Unknown Site')`
@@ -3821,7 +3821,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 243: `port_configs.get(port_name, {})`
 - Line 244: `interface_stats.get(port_name, {})`
 
-### src\gateway\template_config.py
+### src\mist\resources\gateway\template_config.py
 - Line 775: `template_config.get('path_preferences', {})`
 - Line 845: `extraction_data.get('configurations', {})`
 - Line 1052: `template_config.get('service_policies', [])`
@@ -3844,7 +3844,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1282: `site.get('country_code', '')`
 - Additional records: 8
 
-### src\gateway\wan2_migration_manager.py
+### src\mist\resources\gateway\wan2_migration_manager.py
 - Line 412: `context.device_ip.get('ip_type', '')`
 - Line 482: `self.site_to_template_id.get(site_id, '')`
 - Line 483: `self.template_port_configs.get(template_id, {})`
@@ -3867,10 +3867,10 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 422: `context.device_ip.get('gateway', '')`
 - Additional records: 29
 
-### src\gateway\wan2_variable.py
+### src\mist\resources\gateway\wan2_variable.py
 - Line 120: `self.__dict__.get('_clusters', ())`
 
-### src\gateway\wan_probe_device_override_manager.py
+### src\mist\resources\gateway\wan_probe_device_override_manager.py
 - Line 25: `os.getenv('MIST_WAN_PROBE_IPS', '192.151.29.254,18.154.184.32')`
 - Line 27: `os.getenv('MIST_WAN_PROBE_PROFILE', 'lte')`
 - Line 374: `device.get('port_config', {})`
@@ -3892,7 +3892,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 402: `current_probe.get('probe_profile', '')`
 - Line 214: `t.get('name', '')`
 
-### src\input\prompt_client_utils.py
+### src\foundation\runtime\input\prompt_client_utils.py
 - Line 165: `client.get('hostname', client.get('username', 'Unknown'))`
 - Line 166: `client.get('connection_type', 'Unknown')`
 - Line 91: `data.get('results', [])`
@@ -3907,7 +3907,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 45: `x.get('hostname', '')`
 - Line 45: `x.get('username', '')`
 
-### src\inventory\csv_comparator.py
+### src\mist\resources\inventory\csv_comparator.py
 - Line 323: `os.getenv('END_CUSTOMER_NAME', '')`
 - Line 324: `os.getenv('END_CUSTOMER_ACCOUNT_ID', '')`
 - Line 645: `device.get('site_name', '')`
@@ -3930,11 +3930,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 573: `row.get(self.city_field, '')`
 - Additional records: 37
 
-### src\inventory\inventory_summary\pivot_renderer.py
+### src\mist\resources\inventory\inventory_summary\pivot_renderer.py
 - Line 47: `row.get('count', 0)`
 - Line 119: `model_type.get(model, '')`
 
-### src\inventory\inventory_summary\version_per_model_fetcher.py
+### src\mist\resources\inventory\inventory_summary\version_per_model_fetcher.py
 - Line 191: `model_row.get('device_type', '')`
 - Line 192: `model_row.get('model', '')`
 - Line 36: `row.get('device_type', '')`
@@ -3945,7 +3945,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 239: `version_counts.get(version, 0)`
 - Line 38: `row.get('count', 0)`
 
-### src\inventory\org_device_inventory_msp.py
+### src\mist\resources\inventory\org_device_inventory_msp.py
 - Line 271: `chosen.get('id', '')`
 - Line 475: `org_record.get('id', '')`
 - Line 476: `org_record.get('name', child_org_id)`
@@ -3963,7 +3963,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 301: `row.get('device_type', '')`
 - Line 99: `org.get('id', 'Unknown')`
 
-### src\inventory\org_device_inventory_summary.py
+### src\mist\resources\inventory\org_device_inventory_summary.py
 - Line 77: `page_data.get('results', [])`
 - Line 99: `counts.get(value, 0)`
 - Line 133: `counts.get(value, 0)`
@@ -3982,21 +3982,21 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 176: `row.get('count', 0)`
 - Line 296: `row.get('count', 0)`
 
-### src\maps\_container_detection.py
+### src\interfaces\visualization\maps\_container_detection.py
 - Line 51: `os.environ.get(explicit_var, '')`
 - Line 51: `os.environ.get(explicit_var, '')`
 
-### src\maps\_flask_viewer.py
+### src\interfaces\visualization\maps\_flask_viewer.py
 - Line 148: `map_response.data.get('url', '')`
 - Line 169: `image_response.headers.get(_CONTENT_TYPE_HEADER, _DEFAULT_IMAGE_MIMETYPE)`
 - Line 93: `r.get('name', _UNNAMED)`
 - Line 116: `x.get('name', '')`
 
-### src\maps\_maps_backup.py
+### src\interfaces\visualization\maps\_maps_backup.py
 - Line 231: `geometry.get(path_key, {})`
 - Line 237: `backup.get(key, [])`
 
-### src\maps\_maps_clone.py
+### src\interfaces\visualization\maps\_maps_clone.py
 - Line 133: `source_map.get('type', 'image')`
 - Line 120: `source_map.get('name', 'Map')`
 - Line 260: `zone.get('name', 'Unnamed Zone')`
@@ -4010,7 +4010,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 325: `clone_payload.get('height', 'N/A')`
 - Line 326: `clone_payload.get('ppm', 'N/A')`
 
-### src\maps\_maps_coverage.py
+### src\interfaces\visualization\maps\_maps_coverage.py
 - Line 482: `map_data.get('url', '')`
 - Line 82: `device.get('name', device.get('mac', 'Unknown'))`
 - Line 83: `device.get('type', 'ap')`
@@ -4033,7 +4033,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 367: `map_data.get('ppm', _DEFAULT_PPM)`
 - Additional records: 7
 
-### src\maps\_maps_matplotlib.py
+### src\interfaces\visualization\maps\_maps_matplotlib.py
 - Line 302: `device.get('type', _UNKNOWN_TYPE)`
 - Line 370: `site.get('id', '')`
 - Line 371: `site.get('name', _UNKNOWN_NAME)`
@@ -4049,10 +4049,10 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 274: `map_data.get('name', _DEFAULT_MAP_NAME)`
 - Line 365: `s.get('name', '')`
 
-### src\maps\_maps_testing.py
+### src\interfaces\visualization\maps\_maps_testing.py
 - Line 176: `site.get('name', 'Unknown')`
 
-### src\maps\_maps_wizard.py
+### src\interfaces\visualization\maps\_maps_wizard.py
 - Line 433: `record.get('vertices', [])`
 - Line 532: `current_map.get('name', 'Unnamed')`
 - Line 729: `context.current_map.get('width', 0)`
@@ -4075,7 +4075,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 658: `current_map.get('wall_path', {})`
 - Additional records: 9
 
-### src\maps\_plotly_viewer.py
+### src\interfaces\visualization\maps\_plotly_viewer.py
 - Line 116: `device.get('status', 'disconnected')`
 - Line 731: `origin.get('x', 0)`
 - Line 732: `origin.get('y', 0)`
@@ -4098,7 +4098,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 131: `device.get('y', 'N/A')`
 - Additional records: 26
 
-### src\maps\_viewer_launch.py
+### src\interfaces\visualization\maps\_viewer_launch.py
 - Line 1426: `map_data.get('width', 1000)`
 - Line 1427: `map_data.get('height', 1000)`
 - Line 298: `data.map_data.get('width', 1000)`
@@ -4121,14 +4121,14 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1448: `map_data.get('orientation', 0)`
 - Additional records: 6
 
-### src\maps\launcher\_viewer_clone.py
+### src\interfaces\visualization\maps\launcher\_viewer_clone.py
 - Line 186: `config.get('map_name', 'Unknown')`
 - Line 121: `cache_bust_data.get('trigger', 0)`
 - Line 238: `source_map.get('type', 'image')`
 - Line 359: `zone.get('name', 'Unnamed Zone')`
 - Line 361: `zone.get('vertices', [])`
 
-### src\maps\launcher\_viewer_drawing.py
+### src\interfaces\visualization\maps\launcher\_viewer_drawing.py
 - Line 282: `last_shape.get('x0', 0)`
 - Line 283: `last_shape.get('y0', 0)`
 - Line 284: `last_shape.get('x1', 0)`
@@ -4151,7 +4151,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 164: `request.current_fig.get('layout', {})`
 - Additional records: 2
 
-### src\maps\launcher\_viewer_refresh.py
+### src\interfaces\visualization\maps\launcher\_viewer_refresh.py
 - Line 309: `client.get('hostname', '')`
 - Line 310: `client.get('mac', 'Unknown')`
 - Line 489: `payload.get('wall_path', {})`
@@ -4170,7 +4170,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 499: `trace.get('name', '')`
 - Line 741: `trace.get('name', '')`
 
-### src\maps\launcher\_viewer_site_switch.py
+### src\interfaces\visualization\maps\launcher\_viewer_site_switch.py
 - Line 471: `first_map.get('id', '')`
 - Line 472: `first_map.get('name', _DEFAULT_MAP_NAME)`
 - Line 492: `first_map.get('name', _DEFAULT_MAP_NAME)`
@@ -4193,7 +4193,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 151: `shape.get('y0', 0)`
 - Additional records: 7
 
-### src\maps\launcher\_viewer_ui.py
+### src\interfaces\visualization\maps\launcher\_viewer_ui.py
 - Line 257: `point.get('hovertext', '')`
 - Line 160: `trace.get('name', '')`
 - Line 191: `shape.get('x0', 0)`
@@ -4213,7 +4213,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 625: `current_zone.get('zone_name', 'Unknown')`
 - Line 449: `current_fig.get('layout', {})`
 
-### src\maps\launcher\_viewer_url_switch.py
+### src\interfaces\visualization\maps\launcher\_viewer_url_switch.py
 - Line 240: `device.get('status', 'disconnected')`
 - Line 247: `client.get('hostname', '')`
 - Line 248: `client.get('mac', 'unknown')`
@@ -4236,7 +4236,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 231: `device.get('mac', 'N/A')`
 - Additional records: 15
 
-### src\maps\maps_manager.py
+### src\interfaces\visualization\maps\maps_manager.py
 - Line 212: `selected_site.get('name', 'Unknown')`
 - Line 524: `map_item.get('width', 0)`
 - Line 525: `map_item.get('height', 0)`
@@ -4259,19 +4259,19 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 2535: `node.get('edges', {})`
 - Additional records: 76
 
-### src\maps\plotly_heatmap_renderer.py
+### src\interfaces\visualization\maps\plotly_heatmap_renderer.py
 - Line 125: `coverage_data.get('results', [])`
 - Line 139: `coverage_data.get('result_def', [])`
 - Line 140: `coverage_data.get('gridsize', 1)`
 - Line 163: `coverage_data.get('gridsize', 1)`
 
-### src\maps\plotly_map_callback_manager.py
+### src\interfaces\visualization\maps\plotly_map_callback_manager.py
 - Line 143: `fig.get('data', [])`
 - Line 151: `fig.get('layout', {})`
 - Line 144: `trace.get('name', '')`
 - Line 153: `annotation.get('name', '')`
 
-### src\maps\plotly_map_figure_builder.py
+### src\interfaces\visualization\maps\plotly_map_figure_builder.py
 - Line 144: `path.get('nodes', [])`
 - Line 168: `node.get('name', '')`
 - Line 169: `node.get('position', {})`
@@ -4287,12 +4287,12 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 256: `src.get('y', 0)`
 - Line 256: `dst.get('y', 0)`
 
-### src\maps\plotly_map_serializer.py
+### src\interfaces\visualization\maps\plotly_map_serializer.py
 - Line 105: `data.get(_KEY_TRIGGER, _DEFAULT_TRIGGER)`
 - Line 67: `item.get(_KEY_NAME, default_name)`
 - Line 77: `item.get(_KEY_NAME, default_name)`
 
-### src\metrics_gateway\collector.py
+### src\interfaces\monitoring\metrics_gateway\collector.py
 - Line 379: `row.get('name', '')`
 - Line 328: `entry.get('path', '')`
 - Line 363: `row.get('id', '')`
@@ -4313,13 +4313,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 442: `row.get('name', '')`
 - Line 383: `row.get('country_code', '')`
 
-### src\mib_generator\document.py
+### src\operations\hardware\mib_generator\document.py
 - Line 90: `self._document.get('openapi', '')`
 
-### src\mib_generator\mib.py
+### src\operations\hardware\mib_generator\mib.py
 - Line 384: `SCALE_SENTENCE.get(definition.snmp_scale, '')`
 
-### src\network\_routing_utils_display.py
+### src\mist\networking\network\_routing_utils_display.py
 - Line 180: `entry.get('service', '')`
 - Line 401: `entry.get('destination', _MISSING)`
 - Line 402: `entry.get('next_hop', _MISSING)`
@@ -4342,7 +4342,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 517: `entry.get('vrf', 'default')`
 - Additional records: 23
 
-### src\network\_routing_utils_forwarding.py
+### src\mist\networking\network\_routing_utils_forwarding.py
 - Line 168: `device_info.get('type', 'unknown')`
 - Line 169: `device_info.get('model', 'unknown')`
 - Line 356: `result.get('raw', '')`
@@ -4360,7 +4360,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 468: `item.get('dev', '')`
 - Line 469: `item.get('serviceName', '')`
 
-### src\network\_routing_utils_parsing.py
+### src\mist\networking\network\_routing_utils_parsing.py
 - Line 283: `payload.get('rows', [])`
 - Line 286: `payload.get('message', '')`
 - Line 313: `row.get('prefix', '')`
@@ -4383,7 +4383,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 437: `item.get('next_hop', item.get('gateway', ''))`
 - Additional records: 9
 
-### src\network\_routing_utils_routing.py
+### src\mist\networking\network\_routing_utils_routing.py
 - Line 104: `device_info.get('type', 'unknown')`
 - Line 105: `device_info.get('model', 'unknown')`
 - Line 176: `device_info.get('type', 'unknown')`
@@ -4391,17 +4391,17 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 330: `result.get('raw', '')`
 - Line 332: `result.get('Output', '')`
 
-### src\network\_routing_utils_ssr.py
+### src\mist\networking\network\_routing_utils_ssr.py
 - Line 304: `result.get('raw', '')`
 - Line 307: `result.get('Output', '')`
 
-### src\network\routing_utils.py
+### src\mist\networking\network\routing_utils.py
 - Line 305: `result.get('raw', '')`
 - Line 306: `result.get('Output', '')`
 - Line 322: `device_info.get('type', 'unknown')`
 - Line 322: `device_info.get('name', device_id[:8])`
 
-### src\org\org_config_migration_manager.py
+### src\mist\resources\org\org_config_migration_manager.py
 - Line 323: `metadata.get('object_counts', {})`
 - Line 371: `self._existing.get(type_key, [])`
 - Line 451: `new_obj.get('addresses', [])`
@@ -4424,7 +4424,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 544: `self._remap_table.get(old_id, old_id)`
 - Additional records: 1
 
-### src\org\org_synthetic_probes_manager.py
+### src\mist\resources\org\org_synthetic_probes_manager.py
 - Line 1040: `probes_source.get('roles', [])`
 - Line 1645: `probes_source.get('roles', [])`
 - Line 1704: `probes_source.get('roles', [])`
@@ -4433,7 +4433,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1523: `cenr.get('proxy_hostnames', [])`
 - Line 1524: `cenr.get('vpn_hostnames', [])`
 
-### src\org\org_ticket_manager.py
+### src\mist\resources\org\org_ticket_manager.py
 - Line 182: `ticket_data.get('id', 'unknown')`
 - Line 189: `ticket_data.get('status', 'open')`
 - Line 418: `ticket.get('status', 'unknown')`
@@ -4449,19 +4449,19 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 508: `ticket_data.get(key, default)`
 - Line 529: `att.get('content_url', 'file')`
 
-### src\org_data_collector.py
+### src\operations\wan\org_data_collector.py
 - Line 538: `tally.get(result, 0)`
 
-### src\refactors\anomaly_metrics_discovery.py
+### src\foundation\support\refactors\anomaly_metrics_discovery.py
 - Line 101: `row.get('name', '')`
 - Line 100: `row.get('key', '')`
 - Line 102: `row.get('scope', '')`
 - Line 124: `x.get('priority', False)`
 
-### src\refactors\fast_mode_backoff_multiplier.py
+### src\foundation\support\refactors\fast_mode_backoff_multiplier.py
 - Line 27: `os.getenv('FAST_MODE_BACKOFF_MULTIPLIER', '1.5')`
 
-### src\refactors\fast_mode_constants.py
+### src\foundation\support\refactors\fast_mode_constants.py
 - Line 22: `os.getenv('FAST_MODE_MAX_CONCURRENT_CONNECTIONS', '8')`
 - Line 34: `os.getenv('FAST_MODE_MAX_RETRIES', '3')`
 - Line 35: `os.getenv('FAST_MODE_RETRY_DELAY', '0.5')`
@@ -4470,13 +4470,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 38: `os.getenv('FAST_MODE_FALLBACK_THREADS', '8')`
 - Line 31: `os.getenv('FAST_MODE_USE_CONNECTION_AWARE_THREADING', 'true')`
 
-### src\refactors\fast_mode_devices_per_thread.py
+### src\foundation\support\refactors\fast_mode_devices_per_thread.py
 - Line 27: `os.getenv('FAST_MODE_DEVICES_PER_THREAD', '10')`
 
-### src\refactors\fast_mode_sequential_max_retries.py
+### src\foundation\support\refactors\fast_mode_sequential_max_retries.py
 - Line 30: `os.getenv('FAST_MODE_SEQUENTIAL_MAX_RETRIES', '1')`
 
-### src\refactors\main_entrypoint.py
+### src\foundation\support\refactors\main_entrypoint.py
 - Line 82: `state.get('msp_privileges', self.msp_privileges)`
 - Line 83: `state.get('selected_msp', self.selected_msp)`
 - Line 84: `state.get('org_id', self.org_id)`
@@ -4496,33 +4496,33 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 306: `os.environ.get('MIST_PAGE_LIMIT', '1000')`
 - Line 306: `os.environ.get('MIST_PAGE_LIMIT', '1000')`
 
-### src\refactors\mist_wan_target_ports.py
+### src\foundation\support\refactors\mist_wan_target_ports.py
 - Line 37: `os.getenv('MIST_WAN_TARGET_PORTS', '')`
 
-### src\refactors\msp_privilege_detection.py
+### src\foundation\support\refactors\msp_privilege_detection.py
 - Line 113: `user_data.get('privileges', [])`
 - Line 96: `priv.get('role', 'unknown')`
 - Line 97: `priv.get('scope', 'unknown')`
 
-### src\refactors\serial_cc\global_assignments_builder.py
+### src\foundation\support\refactors\serial_cc\global_assignments_builder.py
 - Line 65: `_ATTRIBUTE_EXPORTS.get(module_name, ())`
 
-### src\refactors\serial_cc\security_events.py
+### src\foundation\support\refactors\serial_cc\security_events.py
 - Line 264: `site.get('name', 'Unknown Site')`
 
-### src\refactors\serial_cc\site_client_insights.py
+### src\foundation\support\refactors\serial_cc\site_client_insights.py
 - Line 109: `client.get(_KEY_MAC, _UNKNOWN)`
 - Line 110: `client.get(_KEY_HOSTNAME, _UNKNOWN)`
 - Line 111: `client.get(_KEY_LAST_SEEN, _UNKNOWN)`
 - Line 150: `site_data.get(_KEY_NAME, site_id)`
 
-### src\refactors\serial_cc\start_site_scan_capture.py
+### src\foundation\support\refactors\serial_cc\start_site_scan_capture.py
 - Line 188: `_BAND_MAP.get(band_choice, '5')`
 - Line 217: `_BANDWIDTH_EXTRA_ROWS.get(band, ())`
 - Line 228: `_BANDWIDTH_MAP.get(bw_choice, '20')`
 - Line 346: `cap.get('ap_mac', '')`
 
-### src\refactors\serial_cc\switch_vc_stats.py
+### src\foundation\support\refactors\serial_cc\switch_vc_stats.py
 - Line 64: `switch.get('name', '')`
 - Line 65: `switch.get('mac', '')`
 - Line 72: `switch.get('model', '')`
@@ -4530,13 +4530,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 149: `row.get(field, '')`
 - Line 55: `row.get('vc_mac', '')`
 
-### src\refactors\serial_cc\test_results_by_site.py
+### src\foundation\support\refactors\serial_cc\test_results_by_site.py
 - Line 77: `response.data.get('results', [])`
 
-### src\refactors\sqlite_database_writer.py
+### src\foundation\support\refactors\sqlite_database_writer.py
 - Line 367: `row.get(field_name, '')`
 
-### src\refactors\wanprobe_config_manager.py
+### src\foundation\support\refactors\wanprobe_config_manager.py
 - Line 62: `os.getenv('MIST_WAN_PROBE_PROFILE', 'lte')`
 - Line 310: `port_settings.get('wan_probe_override', {})`
 - Line 183: `template.get('id', '')`
@@ -4551,7 +4551,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 153: `site.get('name', '')`
 - Line 217: `t.get('name', '')`
 
-### src\refactors\wlanradius_timer_manager.py
+### src\foundation\support\refactors\wlanradius_timer_manager.py
 - Line 197: `template_data.get('name', 'Unknown Template')`
 - Line 269: `wlan_template.get('applies', {})`
 - Line 275: `self.site_info.get('sitegroup_ids', [])`
@@ -4574,7 +4574,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 399: `wlan.get('_inheritance_level', 'unknown')`
 - Additional records: 22
 
-### src\reports\e911_bssid.py
+### src\mist\intelligence\reports\e911_bssid.py
 - Line 277: `response.data.get('wlans', {})`
 - Line 509: `template.get('applies', {})`
 - Line 542: `wlan.get('ssid', '')`
@@ -4597,7 +4597,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 216: `site.get('name', '')`
 - Additional records: 3
 
-### src\reports\global_wired_client_report_generator.py
+### src\mist\intelligence\reports\global_wired_client_report_generator.py
 - Line 147: `criteria.get('mac_operator', '')`
 - Line 156: `criteria.get('mfg_operator', '')`
 - Line 151: `criteria.get('mac_value', '')`
@@ -4607,7 +4607,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 245: `criteria.get('mac_value', '')`
 - Line 248: `criteria.get('mfg_value', '')`
 
-### src\reports\offline_device_reporter.py
+### src\mist\intelligence\reports\offline_device_reporter.py
 - Line 130: `device.get('type', 'unknown')`
 - Line 134: `site_lookup.get(device.get('site_id', ''), 'Unknown Site')`
 - Line 134: `device.get('site_id', '')`
@@ -4622,7 +4622,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 240: `record.get(f, '')`
 - Line 259: `record.get(f, '')`
 
-### src\reports\sfp_transceiver_data_processor.py
+### src\mist\intelligence\reports\sfp_transceiver_data_processor.py
 - Line 97: `row.get('port_id', '')`
 - Line 98: `row.get('xcvr_part_number', '')`
 - Line 100: `row.get('xcvr_serial', '')`
@@ -4631,17 +4631,17 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 74: `row.get('site_address', '')`
 - Line 75: `row.get('name', '')`
 
-### src\reports\ssid_broadcast_gap_report.py
+### src\mist\intelligence\reports\ssid_broadcast_gap_report.py
 - Line 43: `site.get('id', '')`
 - Line 67: `wlan.get('enabled', True)`
 - Line 56: `site.get('name', '')`
 
-### src\reports\wired_client_manufacturer_report_generator.py
+### src\mist\intelligence\reports\wired_client_manufacturer_report_generator.py
 - Line 76: `manufacturer_counts.get(manufacturer, 0)`
 - Line 75: `record.get('manufacture', 'Unknown')`
 - Line 134: `record.get('manufacture', '')`
 
-### src\site\address_audit\address_resolver.py
+### src\mist\resources\site\address_audit\address_resolver.py
 - Line 152: `candidates.mist_address.get('address', '')`
 - Line 201: `csv_street.get('address', query)`
 - Line 205: `outcome.get('comparison_validation', {})`
@@ -4663,7 +4663,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 515: `raw.get('_street_validated', False)`
 - Line 438: `rank.get(hint[0], 9)`
 
-### src\site\address_audit\audit_engine.py
+### src\mist\resources\site\address_audit\audit_engine.py
 - Line 701: `mist_addr.get('address', '')`
 - Line 733: `mist_addr.get('address', '')`
 - Line 816: `_DIRECTIONALS.get(tokens[index].lower(), '')`
@@ -4684,13 +4684,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 439: `os.environ.get('ADDRESS_AUDIT_GEOCODE', 'auto')`
 - Line 439: `os.environ.get('ADDRESS_AUDIT_GEOCODE', 'auto')`
 
-### src\site\address_audit\audit_reporter.py
+### src\mist\resources\site\address_audit\audit_reporter.py
 - Line 87: `address.get('address', '')`
 - Line 88: `address.get('city', '')`
 - Line 89: `address.get('state', '')`
 - Line 90: `address.get('zip', '')`
 
-### src\site\address_audit\business_authority_ingester.py
+### src\mist\resources\site\address_audit\business_authority_ingester.py
 - Line 80: `index.get('by_name', {})`
 - Line 81: `index.get('by_full', {})`
 - Line 82: `index.get('by_no_suite', {})`
@@ -4704,17 +4704,17 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 102: `mist.get('address', '')`
 - Line 105: `mist.get('zipcode', '')`
 
-### src\site\address_audit\comparison_display.py
+### src\mist\resources\site\address_audit\comparison_display.py
 - Line 113: `address.get('address', '')`
 - Line 114: `address.get('city', '')`
 - Line 115: `address.get('state', '')`
 - Line 98: `counts.get(result.issue_type, 0)`
 - Line 116: `address.get('zip', '')`
 
-### src\site\address_audit\perf.py
+### src\mist\resources\site\address_audit\perf.py
 - Line 45: `self._phases.get(label, [0.0, 0.0])`
 
-### src\site\address_audit\site_matcher.py
+### src\mist\resources\site\address_audit\site_matcher.py
 - Line 93: `self._sites_by_id.get(site_id, {})`
 - Line 107: `site.get('address', '')`
 - Line 108: `site.get('city', '')`
@@ -4725,16 +4725,16 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 87: `site.get('state', '')`
 - Line 110: `site.get('zip', '')`
 
-### src\site\address_audit\snmp_enricher.py
+### src\mist\resources\site\address_audit\snmp_enricher.py
 - Line 39: `site_record.get('id', 'unknown')`
 
-### src\site\address_audit\ui_geocoder.py
+### src\mist\resources\site\address_audit\ui_geocoder.py
 - Line 704: `os.environ.get('ProgramFiles(x86)', '')`
 - Line 704: `os.environ.get('ProgramFiles(x86)', '')`
 - Line 705: `os.environ.get('ProgramFiles', '')`
 - Line 705: `os.environ.get('ProgramFiles', '')`
 
-### src\site\bulk_radius_wlan_config_manager.py
+### src\mist\resources\site\bulk_radius_wlan_config_manager.py
 - Line 158: `wlan.get('radsec', {})`
 - Line 160: `wlan.get('auth', {})`
 - Line 166: `wlan.get('auth_servers_timeout', 5)`
@@ -4757,7 +4757,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 354: `wlan.get('ssid', 'Unknown')`
 - Additional records: 26
 
-### src\site\site_config_manager.py
+### src\mist\resources\site\site_config_manager.py
 - Line 979: `access_point.get('mac', 'unknown')`
 - Line 980: `access_point.get('name', ap_mac)`
 - Line 148: `site_data.get('lat', '')`
@@ -4769,22 +4769,22 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 727: `device.get('mac', 'unknown')`
 - Line 360: `site.get('country_code', '')`
 
-### src\ssh\batch\multi_host_runner.py
+### src\operations\execution\ssh\batch\multi_host_runner.py
 - Line 308: `future_to_host.get(future, 'unknown')`
 
-### src\ssh\cli_shell_manager.py
+### src\operations\execution\ssh\cli_shell_manager.py
 - Line 160: `CLIShellManager._SHELL_KEYMAP.get(key, key)`
 
-### src\ssh\config\env_loader.py
+### src\operations\execution\ssh\config\env_loader.py
 - Line 80: `config.get('hosts', [])`
 - Line 82: `config.get('commands', [])`
 
-### src\ssh\runtime\app_runner.py
+### src\operations\execution\ssh\runtime\app_runner.py
 - Line 253: `env_config.get('commands', [])`
 - Line 158: `env_config.get('hosts', [])`
 - Line 160: `env_config.get('commands', [])`
 
-### src\ssh\ssh_runner_manager.py
+### src\operations\execution\ssh\ssh_runner_manager.py
 - Line 568: `results.get('successful', 0)`
 - Line 90: `env_config.get('hosts', [])`
 - Line 93: `env_config.get('commands', [])`
@@ -4796,12 +4796,12 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 401: `gateway.get(_TEMPLATE_KEY, _UNKNOWN_TEMPLATE)`
 - Line 331: `result.get('success', False)`
 
-### src\ssid_consolidation\_ssid_template_cache.py
+### src\operations\execution\ssid_consolidation\_ssid_template_cache.py
 - Line 134: `cached.get('collected_at', '')`
 - Line 199: `existing.get('results', [])`
 - Line 201: `existing.get('total', 0)`
 
-### src\ssid_consolidation\_ssid_template_phase1.py
+### src\operations\execution\ssid_consolidation\_ssid_template_phase1.py
 - Line 111: `template.get('applies', {})`
 - Line 169: `matched_wlan.get('mxtunnel_ids', [])`
 - Line 299: `matched_wlan.get('mxtunnel_ids', [])`
@@ -4824,7 +4824,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 273: `inputs.get('anomaly_reason', '')`
 - Additional records: 17
 
-### src\ssid_consolidation\_ssid_template_phase2.py
+### src\operations\execution\ssid_consolidation\_ssid_template_phase2.py
 - Line 50: `cache.get('deviations', [])`
 - Line 51: `cache.get('matrix', [])`
 - Line 69: `row.get('site_id', '')`
@@ -4841,7 +4841,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 85: `row.get('anomaly_reason', '')`
 - Line 103: `site.get('vars', {})`
 
-### src\ssid_consolidation\_ssid_template_phase3.py
+### src\operations\execution\ssid_consolidation\_ssid_template_phase3.py
 - Line 80: `cache.get('matrix', [])`
 - Line 81: `cache.get('data', {})`
 - Line 82: `data.get('mxtunnels', [])`
@@ -4862,7 +4862,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 362: `row.get('site_id', '')`
 - Line 362: `row.get('group_id', '')`
 
-### src\ssid_consolidation\_ssid_template_phase45.py
+### src\operations\execution\ssid_consolidation\_ssid_template_phase45.py
 - Line 137: `cache.get('deviations', [])`
 - Line 152: `deviation.get('cluster_name', '')`
 - Line 153: `deviation.get('parameter', '')`
@@ -4885,7 +4885,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 414: `row.get('template_name', '')`
 - Additional records: 15
 
-### src\ssid_consolidation\ssid_template_consolidation.py
+### src\operations\execution\ssid_consolidation\ssid_template_consolidation.py
 - Line 726: `existing.get('id', '')`
 - Line 771: `params.group_info.get('group_id', '')`
 - Line 781: `created.get('id', '')`
@@ -4900,12 +4900,12 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 847: `template_data.get('wlans', [])`
 - Line 764: `wlan.get('ssid', '')`
 
-### src\troubleshooting\interactive_test_runner.py
+### src\mist\intelligence\troubleshooting\interactive_test_runner.py
 - Line 181: `matching_site.get('name', 'Unknown')`
 - Line 216: `os.getenv('MIST_INTERACTIVE_TEST_SITE', '')`
 - Line 130: `site.get('name', '')`
 
-### src\troubleshooting\marvis_troubleshoot_utils.py
+### src\mist\intelligence\troubleshooting\marvis_troubleshoot_utils.py
 - Line 463: `result.get('description', 'Analysis result')`
 - Line 685: `device_response.data.get('name', _UNKNOWN_DEVICE)`
 - Line 954: `insight.get('description', insight.get('type', insight.get('name', str(insight))))`
@@ -4916,15 +4916,15 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 502: `insight.get('description', insight)`
 - Line 954: `insight.get('name', str(insight))`
 
-### src\ui\display_utils.py
+### src\interfaces\visualization\ui\display_utils.py
 - Line 40: `item.get(field, '')`
 
-### src\ui\execution\function_executor.py
+### src\interfaces\visualization\ui\execution\function_executor.py
 - Line 208: `parsed_data.get('results', [])`
 - Line 163: `parsed_data.get('results', [])`
 - Line 142: `parsed_data.get('results', [])`
 
-### src\ui\layout\layout_builder.py
+### src\interfaces\visualization\ui\layout\layout_builder.py
 - Line 114: `item.get('type', 'unknown')`
 - Line 115: `item.get('name', 'unknown')`
 - Line 177: `selected.get('name', 'unknown')`
@@ -4937,13 +4937,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 260: `tui.current_function.get('name', 'unknown')`
 - Line 167: `selected.get('name', 'unknown')`
 
-### src\ui\layout\results_grid_builder.py
+### src\interfaces\visualization\ui\layout\results_grid_builder.py
 - Line 227: `parsed.get('results', [])`
 - Line 277: `parsed.get('total', total_results)`
 - Line 278: `self._tui.function_params.get('limit', 1000)`
 - Line 279: `parsed.get('distinct', 'N/A')`
 
-### src\ui\prompt_utils.py
+### src\interfaces\visualization\ui\prompt_utils.py
 - Line 418: `client.get('site_id', '')`
 - Line 426: `client.get('connected', True)`
 - Line 442: `client.get('ip', '')`
@@ -4966,7 +4966,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 103: `item.get('model', '')`
 - Additional records: 5
 
-### src\upgrade_portal\api\mist_client.py
+### src\interfaces\portals\upgrade_portal\api\mist_client.py
 - Line 75: `site.get('id', '')`
 - Line 76: `site.get('name', '')`
 - Line 77: `site.get('country_code', '')`
@@ -4978,7 +4978,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 139: `device.get('mac', '')`
 - Line 140: `device.get('status', 'unknown')`
 
-### src\upgrade_portal\api\run_controls\routes.py
+### src\interfaces\portals\upgrade_portal\api\run_controls\routes.py
 - Line 218: `source.get('tier', 2)`
 - Line 293: `request.headers.get(IDEMPOTENCY_HEADER, '')`
 - Line 620: `request.headers.get(IDEMPOTENCY_HEADER, '')`
@@ -4988,13 +4988,13 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 82: `record.get('targets', ())`
 - Line 93: `running.get(reading.mac, reading.version)`
 
-### src\upgrade_portal\api\run_controls\services\bulk.py
+### src\interfaces\portals\upgrade_portal\api\run_controls\services\bulk.py
 - Line 75: `self._expected_tokens.get(site_id, '')`
 
-### src\upgrade_portal\api\run_controls\services\preview.py
+### src\interfaces\portals\upgrade_portal\api\run_controls\services\preview.py
 - Line 87: `site_counts.get(site_id, 0)`
 
-### src\upgrade_portal\api\run_controls\services\reconciliation.py
+### src\interfaces\portals\upgrade_portal\api\run_controls\services\reconciliation.py
 - Line 574: `record.get('targets', ())`
 - Line 598: `record.get('phases', ())`
 - Line 679: `record.get('targets', ())`
@@ -5002,7 +5002,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 124: `value.get('sources', ())`
 - Line 601: `copied.get('total', 0)`
 
-### src\upgrade_portal\app\config.py
+### src\interfaces\portals\upgrade_portal\app\config.py
 - Line 473: `os.environ.get(THEMES_VARIABLE, '')`
 - Line 473: `os.environ.get(THEMES_VARIABLE, '')`
 - Line 504: `os.environ.get(ALLOWED_ADDRESSES_VARIABLE, '')`
@@ -5025,17 +5025,17 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 410: `os.environ.get(POLL_VARIABLE, '')`
 - Additional records: 4
 
-### src\upgrade_portal\app\factory.py
+### src\interfaces\portals\upgrade_portal\app\factory.py
 - Line 836: `request.args.get(THEME_ARGUMENT, '')`
 - Line 256: `ERROR_CODES.get(status, ERROR_CODES[500])`
 - Line 257: `ERROR_MESSAGES.get(status, ERROR_MESSAGES[500])`
 - Line 527: `current_app.config.get('E2E_OVERRIDES_ACTIVE', False)`
 
-### src\upgrade_portal\app\routes\audit.py
+### src\interfaces\portals\upgrade_portal\app\routes\audit.py
 - Line 55: `request.args.get('limit', 100)`
 - Line 56: `request.args.get('offset', 0)`
 
-### src\upgrade_portal\app\routes\auth.py
+### src\interfaces\portals\upgrade_portal\app\routes\auth.py
 - Line 625: `request.headers.get(SCRIPT_HEADER, '')`
 - Line 1061: `current_app.config.get('BROWSER_TOKEN_SIGNIN_ALLOWED', False)`
 - Line 288: `os.environ.get(name, '')`
@@ -5044,7 +5044,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 755: `current_app.config.get('BROWSER_TOKEN_SIGNIN_ALLOWED', False)`
 - Line 422: `error.get(MESSAGE_FIELD, '')`
 
-### src\upgrade_portal\app\routes\capture.py
+### src\interfaces\portals\upgrade_portal\app\routes\capture.py
 - Line 1121: `body.get('device_ids', [])`
 - Line 1122: `body.get('org_id', '')`
 - Line 1123: `body.get('site_id', '')`
@@ -5067,7 +5067,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 915: `entry.get('section', '')`
 - Additional records: 5
 
-### src\upgrade_portal\app\routes\comparison.py
+### src\interfaces\portals\upgrade_portal\app\routes\comparison.py
 - Line 197: `data.get('approved_items', [])`
 - Line 198: `data.get('rejected_items', [])`
 - Line 199: `data.get('engineer_notes', '')`
@@ -5082,16 +5082,16 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 119: `comparison_doc.get('approved_by', '')`
 - Line 121: `comparison_doc.get('approved_at', '')`
 
-### src\upgrade_portal\app\routes\jwt_auth.py
+### src\interfaces\portals\upgrade_portal\app\routes\jwt_auth.py
 - Line 64: `data.get('username', '')`
 - Line 65: `data.get('password', '')`
 - Line 177: `data.get('token', '')`
 - Line 141: `data.get('username', 'unknown')`
 
-### src\upgrade_portal\app\routes\mist.py
+### src\interfaces\portals\upgrade_portal\app\routes\mist.py
 - Line 98: `request.args.get('type', 'all')`
 
-### src\upgrade_portal\app\routes\org_upgrade.py
+### src\interfaces\portals\upgrade_portal\app\routes\org_upgrade.py
 - Line 143: `current_app.config.get(SERVICE_CONFIG_KEY, OrgUpgradeService)`
 - Line 156: `current_app.config.get(OPTIONS_VIEW_CONFIG_KEY, build_options_view)`
 - Line 167: `current_app.config.get(OPTIONS_BUILDER_CONFIG_KEY, build_options_record)`
@@ -5114,7 +5114,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 480: `entry.get('site_id', nested.get('site_id', ''))`
 - Additional records: 74
 
-### src\upgrade_portal\app\routes\review.py
+### src\interfaces\portals\upgrade_portal\app\routes\review.py
 - Line 544: `_REFUSALS.get(reason, _DEFAULT_REFUSAL)`
 - Line 1203: `row.get(DEVICE_COUNT_FIELD, stored.get(DEVICE_TOTAL_KEY))`
 - Line 1805: `request.args.get(FORMAT_FIELD, '')`
@@ -5137,14 +5137,14 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1932: `request.args.get(SITE_ID_FIELD, '')`
 - Additional records: 2
 
-### src\upgrade_portal\app\routes\runs.py
+### src\interfaces\portals\upgrade_portal\app\routes\runs.py
 - Line 204: `data.get('device_ids', [])`
 - Line 165: `data.get('user_id', '')`
 - Line 178: `data.get('org_id', '')`
 - Line 191: `data.get('site_id', '')`
 - Line 234: `data.get('notes', '')`
 
-### src\upgrade_portal\app\routes\select.py
+### src\interfaces\portals\upgrade_portal\app\routes\select.py
 - Line 1848: `LOCK_ERROR_STATUS.get(code, CONFLICT_STATUS)`
 - Line 338: `parameters.get(ORG_FIELD, '')`
 - Line 624: `payload.get(SITE_IDS_FIELD, [])`
@@ -5167,7 +5167,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1244: `site.get('id', '')`
 - Additional records: 7
 
-### src\upgrade_portal\app\routes\upgrade.py
+### src\interfaces\portals\upgrade_portal\app\routes\upgrade.py
 - Line 614: `current_app.config.get(SELF_READER_KEY, default_self_reader)`
 - Line 1163: `built.get(TARGETS_FIELD, [])`
 - Line 1164: `built.get('options', {})`
@@ -5190,7 +5190,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1839: `record.get('org_id', '')`
 - Additional records: 34
 
-### src\upgrade_portal\app\wiring.py
+### src\interfaces\portals\upgrade_portal\app\wiring.py
 - Line 135: `run.get('run_id', '')`
 - Line 598: `record.get('site_id', '')`
 - Line 769: `bindings.get(EMAIL_FIELD, '')`
@@ -5213,7 +5213,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 796: `record.get('run_id', '')`
 - Additional records: 9
 
-### src\upgrade_portal\auth\session.py
+### src\interfaces\portals\upgrade_portal\auth\session.py
 - Line 276: `request.headers.get('Authorization', '')`
 - Line 508: `pause_state_dict.get('next_device_index', 0)`
 - Line 510: `pause_state_dict.get('device_count', 0)`
@@ -5226,7 +5226,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 410: `upgrade_run.get('retry_count', 0)`
 - Line 403: `upgrade_run.get('device_statuses', [])`
 
-### src\upgrade_portal\capture\assembly.py
+### src\interfaces\portals\upgrade_portal\capture\assembly.py
 - Line 959: `names.get(_address(row.get('device_mac')), '')`
 - Line 555: `sections.clients.get('wired', ())`
 - Line 556: `sections.clients.get('wireless', ())`
@@ -5234,11 +5234,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 660: `sections.clients.get(group, ())`
 - Line 1108: `sections.clients.get(name, ())`
 
-### src\upgrade_portal\capture\clients.py
+### src\interfaces\portals\upgrade_portal\capture\clients.py
 - Line 327: `os.environ.get(PAGE_LIMIT_VARIABLE, '')`
 - Line 327: `os.environ.get(PAGE_LIMIT_VARIABLE, '')`
 
-### src\upgrade_portal\capture\collector.py
+### src\interfaces\portals\upgrade_portal\capture\collector.py
 - Line 922: `REASON_ROWS.get(section, (section,))`
 - Line 921: `reason.get('section', '')`
 - Line 969: `job.get('ordinal', assembly.FIRST_ORDINAL)`
@@ -5258,19 +5258,19 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1004: `job.get('site_name', '')`
 - Line 275: `self._groups.get(name, '')`
 
-### src\upgrade_portal\capture\export.py
+### src\interfaces\portals\upgrade_portal\capture\export.py
 - Line 310: `self.values.get(name, '')`
 - Line 392: `heading.get(name, '')`
 - Line 485: `row.get('mac', '')`
 
-### src\upgrade_portal\capture\extras.py
+### src\interfaces\portals\upgrade_portal\capture\extras.py
 - Line 192: `_MESSAGES.get(self.reason, _MESSAGES[REASON_CALL_FAILED])`
 - Line 251: `payload.get('results', [])`
 
-### src\upgrade_portal\capture\service.py
+### src\interfaces\portals\upgrade_portal\capture\service.py
 - Line 285: `capture_doc.get('user_id', '')`
 
-### src\upgrade_portal\capture\store.py
+### src\interfaces\portals\upgrade_portal\capture\store.py
 - Line 1006: `digests.get('whole', '')`
 - Line 1240: `payload.get(target.key_field, '')`
 - Line 1278: `payload.get(_CAPTURE_TARGET.key_field, '')`
@@ -5289,10 +5289,10 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1557: `capture.get('run_id', '')`
 - Line 473: `record.get(CAPTURE_STATE_FIELD, '')`
 
-### src\upgrade_portal\capture\tables.py
+### src\interfaces\portals\upgrade_portal\capture\tables.py
 - Line 363: `_UNAVAILABLE_MESSAGES.get(reason_code, _DEFAULT_UNAVAILABLE_MESSAGE)`
 
-### src\upgrade_portal\compare\download.py
+### src\interfaces\portals\upgrade_portal\compare\download.py
 - Line 550: `capture.get(_CAPTURE_ID_KEY, '')`
 - Line 551: `capture.get(_ROLE_KEY, '')`
 - Line 552: `capture.get(compare_statistics.STARTED_AT_KEY, '')`
@@ -5301,17 +5301,17 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 577: `named.get(_SITE_ID_KEY, '')`
 - Line 578: `named.get(_ORG_NAME_KEY, '')`
 
-### src\upgrade_portal\compare\lock_audit.py
+### src\interfaces\portals\upgrade_portal\compare\lock_audit.py
 - Line 89: `earlier.get('actor_email', '')`
 - Line 92: `earlier.get('org_id', '')`
 - Line 93: `earlier.get('site_id', '')`
 - Line 157: `record.get('inferred', False)`
 
-### src\upgrade_portal\compare\render.py
+### src\interfaces\portals\upgrade_portal\compare\render.py
 - Line 582: `_STATISTIC_LABELS.get(name, name)`
 - Line 583: `flat.get(name, 0)`
 
-### src\upgrade_portal\compare\service.py
+### src\interfaces\portals\upgrade_portal\compare\service.py
 - Line 875: `pre_capture.get('devices', [])`
 - Line 876: `post_capture.get('devices', [])`
 - Line 1058: `pre_capture.get('devices', [])`
@@ -5326,7 +5326,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1077: `self.SEVERITY_LEVELS.get('firmware_upgrade', 'high')`
 - Line 1082: `self.SEVERITY_LEVELS.get('firmware_downgrade', 'critical')`
 
-### src\upgrade_portal\persistence\actions\models.py
+### src\interfaces\portals\upgrade_portal\persistence\actions\models.py
 - Line 151: `summary.get('decision_basis_digest', '')`
 - Line 1099: `document.get('items', ())`
 - Line 1103: `document.get('site_blocks', {})`
@@ -5339,20 +5339,20 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 652: `document.get('result_run_id', '')`
 - Line 654: `document.get('live_run_id', '')`
 
-### src\upgrade_portal\persistence\actions\repository.py
+### src\interfaces\portals\upgrade_portal\persistence\actions\repository.py
 - Line 384: `stored.get('_rev', '')`
 - Line 309: `_ACTION_STRATEGY.get('indexes', ())`
 - Line 311: `_ACTION_STRATEGY.get('unique_constraints', ())`
 - Line 295: `item.get('fields', ())`
 
-### src\upgrade_portal\persistence\actions\transactions.py
+### src\interfaces\portals\upgrade_portal\persistence\actions\transactions.py
 - Line 62: `self.document.get('run_id', self.run_id)`
 
-### src\upgrade_portal\runtime\dependencies.py
+### src\interfaces\portals\upgrade_portal\runtime\dependencies.py
 - Line 150: `os.environ.get(AUTOSTART_VARIABLE, '')`
 - Line 150: `os.environ.get(AUTOSTART_VARIABLE, '')`
 
-### src\upgrade_portal\runtime\identity.py
+### src\interfaces\portals\upgrade_portal\runtime\identity.py
 - Line 285: `os.environ.get(name, '')`
 - Line 285: `os.environ.get(name, '')`
 - Line 250: `os.environ.get(name, '')`
@@ -5360,7 +5360,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 954: `entry.get(ORG_PRIVILEGE_FIELD, '')`
 - Line 974: `entry.get('name', '')`
 
-### src\upgrade_portal\runtime\lock.py
+### src\interfaces\portals\upgrade_portal\runtime\lock.py
 - Line 155: `os.environ.get(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, '')`
 - Line 155: `os.environ.get(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, '')`
 - Line 787: `stored.get('lock_token', '')`
@@ -5371,7 +5371,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 780: `stored.get('browser_id', '')`
 - Line 781: `stored.get('identity_kind', 'email')`
 
-### src\upgrade_portal\runtime\runs.py
+### src\interfaces\portals\upgrade_portal\runtime\runs.py
 - Line 590: `record.get('state', RunState.CREATED.value)`
 - Line 735: `cls.PHASE_NOUNS.get(str(phase.get('name', '')), ('device', 'devices'))`
 - Line 793: `cls.STATE_MESSAGES.get(state, 'The run is in progress.')`
@@ -5391,7 +5391,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 901: `source.get('settled', 0)`
 - Line 902: `source.get('total', 0)`
 
-### src\upgrade_portal\runtime\signals.py
+### src\interfaces\portals\upgrade_portal\runtime\signals.py
 - Line 346: `run.get('run_id', '')`
 - Line 135: `record.get('message', '')`
 - Line 194: `record.get('requested_by', '')`
@@ -5399,7 +5399,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 196: `record.get('confirmation_text', STOP_CONFIRMATION_TEXT)`
 - Line 197: `record.get('scope', STOP_SCOPE_RUN)`
 
-### src\upgrade_portal\upgrade\driver.py
+### src\interfaces\portals\upgrade_portal\upgrade\driver.py
 - Line 900: `record.get('targets', [])`
 - Line 1029: `record.get('targets', [])`
 - Line 1049: `record.get('options', {})`
@@ -5422,11 +5422,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 1534: `record.get('run_id', '')`
 - Additional records: 18
 
-### src\upgrade_portal\upgrade\events.py
+### src\interfaces\portals\upgrade_portal\upgrade\events.py
 - Line 602: `event.get('type', '')`
 - Line 208: `row.get('key', '')`
 
-### src\upgrade_portal\upgrade\options.py
+### src\interfaces\portals\upgrade_portal\upgrade\options.py
 - Line 231: `OPTION_HELP.get(field, ('', UNKNOWN_OPTION_RULE))`
 - Line 317: `versions_by_model.get(str(device['model']).strip(), ())`
 - Line 1291: `os.environ.get(variable, '')`
@@ -5449,17 +5449,17 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 570: `device.get('type', '')`
 - Additional records: 4
 
-### src\upgrade_portal\upgrade\phase_gate.py
+### src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py
 - Line 536: `entry.get('version_before', '')`
 - Line 538: `entry.get('version_target', '')`
 - Line 535: `entry.get('device_type', '')`
 
-### src\upgrade_portal\upgrade\service.py
+### src\interfaces\portals\upgrade_portal\upgrade\service.py
 - Line 409: `upgrade_run.get('device_status', {})`
 - Line 724: `upgrade_run.get('device_status', {})`
 - Line 623: `upgrade_run.get('rollback_enabled', False)`
 
-### src\utils\address_utils.py
+### src\foundation\support\utils\address_utils.py
 - Line 108: `raw.get('Reason', 'Address in skip list')`
 - Line 499: `comparison_result.get('place_type', '')`
 - Line 1003: `result.get('address', {})`
@@ -5482,29 +5482,29 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 991: `result.get('class', '')`
 - Additional records: 20
 
-### src\utils\environment_utils.py
+### src\foundation\support\utils\environment_utils.py
 - Line 39: `os.environ.get(explicit_var, '')`
 - Line 39: `os.environ.get(explicit_var, '')`
 
-### src\utils\performance\recorder.py
+### src\foundation\support\utils\performance\recorder.py
 - Line 162: `source.get('MISTHELPER_PERF_SAMPLE_RATE', '1.0')`
 - Line 172: `source.get('MISTHELPER_PERF_CAPACITY', '2048')`
 - Line 182: `source.get('MISTHELPER_PERF_MAX_BYTES', str(DEFAULT_MAX_BYTES))`
 - Line 137: `source.get('MISTHELPER_PERF_CPU', '1')`
 - Line 152: `source.get('MISTHELPER_PERF_LEVEL', 'off')`
 
-### src\utils\rate_limiting.py
+### src\foundation\support\utils\rate_limiting.py
 - Line 289: `usage.get('requests', 0)`
 - Line 290: `usage.get('request_limit', _DEFAULT_REQUEST_LIMIT)`
 - Line 508: `api_usage_cache.get('previous_elapsed', elapsed)`
 - Line 541: `tuning_data.get('error', [])`
 - Line 467: `tuning_data.get('integral', 0.0)`
 
-### src\utils\tls_policy.py
+### src\foundation\support\utils\tls_policy.py
 - Line 39: `os.environ.get(SKIP_VERIFY_ENV_VAR, '')`
 - Line 39: `os.environ.get(SKIP_VERIFY_ENV_VAR, '')`
 
-### src\utils\zscaler_catalogue.py
+### src\foundation\support\utils\zscaler_catalogue.py
 - Line 908: `slot.get('seen_in_clouds', [])`
 - Line 1191: `merged.get('proxy_hostnames', [])`
 - Line 1192: `merged.get('vpn_hostnames', [])`
@@ -5512,7 +5512,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 843: `slot.get('proxy_hostnames', [])`
 - Line 846: `slot.get('vpn_hostnames', [])`
 
-### src\utils\zscaler_probe.py
+### src\foundation\support\utils\zscaler_probe.py
 - Line 781: `probes.get('roles', [])`
 - Line 425: `cert.get('subject', ())`
 - Line 426: `cert.get('issuer', ())`
@@ -5522,7 +5522,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 679: `role.get('description', '')`
 - Line 681: `role.get('critical', False)`
 
-### src\wan_hub_group_manager.py
+### src\operations\wan\wan_hub_group_manager.py
 - Line 312: `profile.get('name', '')`
 - Line 313: `vpn_data.get(name, [])`
 - Line 409: `profile.get('name', '')`
@@ -5542,7 +5542,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 217: `path_value.get('pod', self.POD_DEFAULT)`
 - Line 149: `profile.get('name', '')`
 
-### src\wan_vpn_builder.py
+### src\operations\wan\wan_vpn_builder.py
 - Line 161: `created_vpn.get('id', '')`
 - Line 315: `profile.get('name', '')`
 - Line 316: `profile.get('port_config', {})`
@@ -5563,11 +5563,11 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 394: `vpn.get('paths', {})`
 - Line 334: `profile.get('name', '')`
 
-### src\websocket\commands.py
+### src\mist\realtime\websocket\commands.py
 - Line 247: `mac_table_result.get('raw', '')`
 - Line 248: `mac_table_result.get('Output', '')`
 
-### src\websocket\diagnostics\arp_executor.py
+### src\mist\realtime\websocket\diagnostics\arp_executor.py
 - Line 133: `device_info.get('type', 'unknown')`
 - Line 134: `device_info.get('model', 'unknown')`
 - Line 135: `device_info.get('name', f'Device {device_id[:8]}')`
@@ -5590,32 +5590,32 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 515: `column.get('id', '')`
 - Additional records: 2
 
-### src\websocket\diagnostics\ping_executor.py
+### src\mist\realtime\websocket\diagnostics\ping_executor.py
 - Line 300: `ping_result.get('raw', '')`
 - Line 301: `ping_result.get('Output', '')`
 
-### src\websocket\manager.py
+### src\mist\realtime\websocket\manager.py
 - Line 148: `os.getenv('MIST_HOST', 'api.mist.com')`
 - Line 46: `os.getenv('DEBUG', '')`
 
-### src\websocket\polling\completion_detector.py
+### src\mist\realtime\websocket\polling\completion_detector.py
 - Line 361: `msg.get('raw', '')`
 
-### src\websocket\polling\message_router.py
+### src\mist\realtime\websocket\polling\message_router.py
 - Line 239: `message_data.get(_CHANNEL_KEY, '')`
 - Line 300: `data_payload.get(_DATA_KEY, {})`
 - Line 240: `message_data.get(_DATA_KEY, {})`
 - Line 204: `message_data.get(_EVENT_KEY, 'unknown')`
 - Line 205: `message_data.get(_CHANNEL_KEY, 'unknown')`
 
-### src\websocket\polling\result_collector.py
+### src\mist\realtime\websocket\polling\result_collector.py
 - Line 276: `self._deps.results.get(ctx.session_id, [])`
 - Line 249: `r.get('raw', '')`
 
-### src\websocket\polling\result_combiner.py
+### src\mist\realtime\websocket\polling\result_combiner.py
 - Line 109: `result.get('raw', '')`
 
-### src\websocket\service_ping_discovery.py
+### src\mist\realtime\websocket\service_ping_discovery.py
 - Line 172: `config.get('service_policies', [])`
 - Line 187: `config.get('routing_instances', [])`
 - Line 199: `policy.get('services', [])`
@@ -5626,7 +5626,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 - Line 226: `router.get('tenants', [])`
 - Line 229: `router.get('services', [])`
 
-### src\websocket\service_ping_manager.py
+### src\mist\realtime\websocket\service_ping_manager.py
 - Line 176: `self.device_info.get('type', 'unknown')`
 - Line 177: `self.device_info.get('model', 'unknown')`
 - Line 183: `_DEVICE_TYPE_LABELS.get(device_type, 'Unknown device type')`
@@ -6103,7 +6103,7 @@ Write-back complete: %d pushed, %d skipped, %d failed.`
 ### tools\test_quality_analyzer\config.py
 - Line 88: `raw.get('exclusions', {})`
 - Line 150: `exclusions.get('banned_imports', ['mistapi'])`
-- Line 151: `exclusions.get('excluded_src_prefixes', ['src/api/'])`
+- Line 151: `exclusions.get('excluded_src_prefixes', ['src/mist/access/api/'])`
 - Line 163: `exclusions.get('path_globs', [])`
 - Line 86: `raw.get('rules', {})`
 - Line 87: `raw.get('severity', {})`

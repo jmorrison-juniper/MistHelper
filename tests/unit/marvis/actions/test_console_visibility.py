@@ -22,8 +22,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.marvis.actions.operation import MarvisActionsOperation, MarvisBulkResolver
-from src.marvis.actions.selection import DISPLAY_LEVEL
+from src.mist.intelligence.marvis.actions.operation import MarvisActionsOperation, MarvisBulkResolver
+from src.mist.intelligence.marvis.actions.selection import DISPLAY_LEVEL
 from tests.unit.marvis.actions.conftest import FakeResponse, make_alarm, make_alarm_page, make_raw
 
 CONSOLE_LEVEL = 30  # The CONSOLE_LOG_LEVEL value of the container .env.

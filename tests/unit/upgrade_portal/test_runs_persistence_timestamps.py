@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from src.upgrade_portal.persistence.runs import UpgradeRunsService
+from src.interfaces.portals.upgrade_portal.persistence.runs import UpgradeRunsService
 
 
 class RunDatabaseDouble:

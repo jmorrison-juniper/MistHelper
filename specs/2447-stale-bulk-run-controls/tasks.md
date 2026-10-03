@@ -277,7 +277,7 @@ The complete browser suite passed on `main`: **209 passed and 4 skipped**. All 1
 |---|---|
 | T001 | The work reached `main` through pull requests #2476, #2539, #2544, #2555, and #2559. Each one started at the head of `main` at that time. |
 | T002 | Issue #2447 carries the assignee `jmorrison-juniper` and the label `in-progress`. The issue is closed now, because the work landed. |
-| T003 | No open pull request touches `src/upgrade_portal/api/run_controls` or `src/upgrade_portal/persistence/actions`. The check found no overlap and no missing handoff. |
+| T003 | No open pull request touches `src/interfaces/portals/upgrade_portal/api/run_controls` or `src/interfaces/portals/upgrade_portal/persistence/actions`. The check found no overlap and no missing handoff. |
 | T005 | Each new package holds five children or fewer. `api/run_controls` holds 4 files and 2 folders. `api/run_controls/services` holds 5 files. `persistence/actions` holds 5 files. `tests/support/upgrade_portal_e2e` holds 3 files and 3 folders. |
 | T098 | The backup restored to an isolated ArangoDB container on port 9531. The restore reported 77 collections from 1 database. |
 | T099 | The isolated target holds `upgrade_runs` 60, `upgrade_captures` 26, and `capture_for_run` 15. Every index survived, including the composite index on `site_id` and `created_at`. A sample read returned a complete run, a complete capture, and a complete edge. The edge check found 0 dangling edges. |

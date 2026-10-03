@@ -16,14 +16,14 @@ from typing import Any  # The run record and the cloud answers are free-form.
 
 import pytest  # The test framework of the project.
 
-from src.firmware.upgrade_service import (  # The upgrade seam that the stop module calls.
+from src.interfaces.portals.upgrade_portal.app import factory, wiring  # The units under test.
+from src.interfaces.portals.upgrade_portal.upgrade import stop  # The module that owns every cancel call.
+from src.operations.execution.firmware.upgrade_service import (  # The upgrade seam that the stop module calls.
     ENDPOINT_ORG_SSRS,  # The organization call of a session smart router.
     ENDPOINT_SITE_DEVICES,  # The site call of every other device.
     CancelOutcome,  # The answer shape of one cancel call.
     GatewayFamily,  # The family that the status read of the stop needs.
 )
-from src.upgrade_portal.app import factory, wiring  # The units under test.
-from src.upgrade_portal.upgrade import stop  # The module that owns every cancel call.
 
 RUN_ID = "run-1"  # One run key for every test of this module.
 ORG_ID = "org-a"  # One organization name for every test of this module.

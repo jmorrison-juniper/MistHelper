@@ -1,7 +1,7 @@
 # Touched-Block Checklist: _wait_and_download_pcap
 
 - [x] Compatibility facade entrypoint preserved in `MistHelper.py`
-- [x] Extracted module exists at `src/capture/site_pcap_wait_download_workflow.py`
+- [x] Extracted module exists at `src/operations/execution/capture/site_pcap_wait_download_workflow.py`
 - [x] Polling and download output parity preserved
 - [x] Key operations include pre-action `logging.info`
 - [x] Key operations include post-action `logging.debug`

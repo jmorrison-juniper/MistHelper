@@ -50,20 +50,20 @@ The count matches the value in issue #1793 exactly.
 
 | Area | Count |
 | - | - |
-| src/export | 678 |
-| src/firmware | 501 |
-| src/refactors | 423 |
+| src/operations/exporting/export | 678 |
+| src/operations/execution/firmware | 501 |
+| src/foundation/support/refactors | 423 |
 | MistHelper.py | 303 |
-| src/gateway | 261 |
-| src/capture | 220 |
-| src/org | 191 |
-| src/device | 182 |
-| src/site | 156 |
-| src/troubleshooting | 150 |
+| src/mist/resources/gateway | 261 |
+| src/operations/execution/capture | 220 |
+| src/mist/resources/org | 191 |
+| src/mist/resources/device | 182 |
+| src/mist/resources/site | 156 |
+| src/mist/intelligence/troubleshooting | 150 |
 | tests | 134 |
-| src/auth | 131 |
-| src/inventory | 131 |
-| src/ui | 131 |
+| src/mist/access/auth | 131 |
+| src/mist/resources/inventory | 131 |
+| src/interfaces/visualization/ui | 131 |
 
 Every other area holds fewer than 131 calls.
 
@@ -72,15 +72,15 @@ Every other area holds fewer than 131 calls.
 | File | Count |
 | - | - |
 | MistHelper.py | 303 |
-| src/firmware/firmware_manager.py | 228 |
-| src/firmware/org_ap_upgrader.py | 143 |
-| src/firmware/bulk_ap_upgrader.py | 105 |
-| src/org/org_ticket_manager.py | 86 |
-| src/troubleshooting/marvis_troubleshoot_utils.py | 76 |
-| src/org/org_config_migration_manager.py | 60 |
-| src/ssh/ssh_runner_manager.py | 57 |
-| src/troubleshooting/interactive_test_runner.py | 57 |
-| src/device/prompt_utils.py | 56 |
+| src/operations/execution/firmware/firmware_manager.py | 228 |
+| src/operations/execution/firmware/org_ap_upgrader.py | 143 |
+| src/operations/execution/firmware/bulk_ap_upgrader.py | 105 |
+| src/mist/resources/org/org_ticket_manager.py | 86 |
+| src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py | 76 |
+| src/mist/resources/org/org_config_migration_manager.py | 60 |
+| src/operations/execution/ssh/ssh_runner_manager.py | 57 |
+| src/mist/intelligence/troubleshooting/interactive_test_runner.py | 57 |
+| src/mist/resources/device/prompt_utils.py | 56 |
 
 ### The project rule that shapes this work
 
@@ -94,11 +94,11 @@ This work must keep every one of those records. It changes the logger object and
 
 ### User Story 1 - Filter the log output by module (Priority: P1)
 
-An operator debugs the firmware upgrade path. The operator raises the level for `src.firmware` alone. Every other module keeps its current level. The operator reads the firmware records without the other 3977 call sites.
+An operator debugs the firmware upgrade path. The operator raises the level for `src.operations.execution.firmware` alone. Every other module keeps its current level. The operator reads the firmware records without the other 3977 call sites.
 
 **Why this priority**: This story delivers the whole operator value. A named logger is the only way to route a record by module.
 
-**Independent Test**: An operator sets the level of the `src.firmware` logger to `DEBUG` and leaves the root logger at `INFO`. The operator then runs a firmware operation and reads debug records from the firmware modules only.
+**Independent Test**: An operator sets the level of the `src.operations.execution.firmware` logger to `DEBUG` and leaves the root logger at `INFO`. The operator then runs a firmware operation and reads debug records from the firmware modules only.
 
 **Acceptance Scenarios**:
 
@@ -147,7 +147,7 @@ A contributor adds a root logger call. The CI lint gate reports the call and sto
 - A module already binds the name `logger` to another object. The new module logger then collides with that name. The implementer must search each module for the name before the edit.
 - A test reads records with the `caplog` fixture. That fixture attaches to the root logger by default and still captures a record that a child logger sends. A test that asserts on `logging.getLogger()` directly can fail. The implementer must run the whole unit suite for each slice.
 - A module calls `logging.basicConfig` or `logging.getLogger()` with no argument. Those calls configure the root logger on purpose. Rule `LOG015` does not report them, and this work does not change them.
-- `src/utils/logger_utils.py` configures the logging system. A module logger inside the configuration path can recurse. The implementer must read that module before any edit.
+- `src/foundation/support/utils/logger_utils.py` configures the logging system. A module logger inside the configuration path can recurse. The implementer must read that module before any edit.
 - `MistHelper.py` holds 303 calls in one file. The mypy gate now covers that file, so a wrong edit fails the type gate as well as the lint gate.
 - The `tests` area holds 134 calls. A test that logs through the root logger carries no operator value, so the same conversion applies with a lower risk.
 - Issue #886 converts `print()` calls into logging calls. Each new call must use a module logger from the start. The two efforts must not edit the same lines at the same time.
@@ -172,7 +172,7 @@ A contributor adds a root logger call. The CI lint gate reports the call and sto
 
 - **FR-010**: Each pull request MUST hold one area from the area table.
 - **FR-011**: Each pull request MUST hold at most 500 changed lines.
-- **FR-012**: An area above 500 calls MUST split into two or more pull requests by file. `src/export` and `src/firmware` need this split.
+- **FR-012**: An area above 500 calls MUST split into two or more pull requests by file. `src/operations/exporting/export` and `src/operations/execution/firmware` need this split.
 - **FR-013**: The slices MUST land from the smallest area to the largest area. A small area proves the pattern at a low cost.
 - **FR-014**: Each slice MUST run the whole unit test suite, not the tests for that area alone.
 
@@ -220,7 +220,7 @@ A contributor adds a root logger call. The CI lint gate reports the call and sto
 - **NG-003**: This work does not change the message text of any call. The action logging rule in `.github/copilot-instructions.md` depends on the current text.
 - **NG-004**: This work does not add a logging call and does not remove one. A missing action log is a separate defect with a separate issue.
 - **NG-005**: This work does not convert a `print()` call into a logging call. Issue #886 owns that scope.
-- **NG-006**: This work does not change the logging configuration in `src/utils/logger_utils.py` beyond the conversion of the calls in that module.
+- **NG-006**: This work does not change the logging configuration in `src/foundation/support/utils/logger_utils.py` beyond the conversion of the calls in that module.
 - **NG-007**: This work does not add a handler, a filter, or a formatter.
 - **NG-008**: This work does not change the `extend-exclude` list. The four excluded paths keep their root logger calls.
 - **NG-009**: This work does not add `LOG` rules other than `LOG015` to the `select` list.

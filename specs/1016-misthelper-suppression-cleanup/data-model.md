@@ -20,10 +20,10 @@ A module-level assignment in `MistHelper.py`:
 
 ```python
 __all__: list[str] = [
-    # -- from src.analytics --
+    # -- from src.mist.intelligence.analytics --
     "AnalyticsSubsystemA",
     "AnalyticsSubsystemB",
-    # -- from src.api --
+    # -- from src.mist.access.api --
     "ApiClient",
     # ... one entry per re-exported name, grouped by source subsystem ...
 ]
@@ -50,10 +50,10 @@ The precise inventory is captured in `contracts/public_api.md`; `__all__` MUST b
 
 ### Concrete shape
 
-For each Any-typed module-level attribute in `MistHelper.py` currently exposed to callers, a Protocol class is defined in `src/utils/misthelper_facade.py`:
+For each Any-typed module-level attribute in `MistHelper.py` currently exposed to callers, a Protocol class is defined in `src/foundation/support/utils/misthelper_facade.py`:
 
 ```python
-# src/utils/misthelper_facade.py
+# src/foundation/support/utils/misthelper_facade.py
 from typing import Protocol
 
 class <FacadeName>Protocol(Protocol):
@@ -124,7 +124,7 @@ The proposed names above are recommendations; final helper names are settled by 
 Introduced only if the Phase 0 threshold is met (≥ 3 remaining subprocess call sites in `MistHelper.py`). If introduced:
 
 ```python
-# src/utils/subprocess_runner.py
+# src/foundation/support/utils/subprocess_runner.py
 import subprocess  # single audited import in the repo for MistHelper.py's sites
 from typing import Sequence
 

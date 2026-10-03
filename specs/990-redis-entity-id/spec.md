@@ -282,7 +282,7 @@ The repository convention places implementation hints in a separate section. See
 the Feature Spec definition in `.github/copilot-instructions.md`. The main body
 above stays behavior-focused.
 
-- **Target file**: `src/db/redis_writer.py`.
+- **Target file**: `src/foundation/persistence/db/redis_writer.py`.
 - **Target line**: The direct lookup at line 190 inside `_extract_chunk`. The
   line reads
   `entity_id = str(record.get(ctx.entity_key_field, "unknown"))`.

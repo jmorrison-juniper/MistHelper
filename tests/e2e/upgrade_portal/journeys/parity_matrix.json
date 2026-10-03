@@ -5,11 +5,11 @@
     "group": "scope selection",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1026"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1026"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:177"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:177"
     },
     "gap": "",
     "severity": "low"
@@ -20,11 +20,11 @@
     "group": "scope selection",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:863"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:863"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:177"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:177"
     },
     "gap": "",
     "severity": "low"
@@ -35,11 +35,11 @@
     "group": "inventory",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/options.py:855"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:855"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:324"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:324"
     },
     "gap": "",
     "severity": "low"
@@ -50,11 +50,11 @@
     "group": "inventory",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:862"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:862"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:180"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:180"
     },
     "gap": "",
     "severity": "low"
@@ -65,11 +65,11 @@
     "group": "device selection",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:145"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:145"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:19"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:19"
     },
     "gap": "",
     "severity": "low"
@@ -80,11 +80,11 @@
     "group": "family options",
     "single_site": {
       "status": "present",
-      "evidence": "src/firmware/upgrade_service.py:65"
+      "evidence": "src/operations/execution/firmware/upgrade_service.py:65"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:118"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:118"
     },
     "gap": "",
     "severity": "low"
@@ -95,11 +95,11 @@
     "group": "family options",
     "single_site": {
       "status": "present",
-      "evidence": "src/firmware/upgrade_service.py:65"
+      "evidence": "src/operations/execution/firmware/upgrade_service.py:65"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:136"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:136"
     },
     "gap": "",
     "severity": "low"
@@ -110,11 +110,11 @@
     "group": "family options",
     "single_site": {
       "status": "present",
-      "evidence": "src/firmware/upgrade_service.py:65"
+      "evidence": "src/operations/execution/firmware/upgrade_service.py:65"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:136"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:136"
     },
     "gap": "",
     "severity": "low"
@@ -125,11 +125,11 @@
     "group": "family options",
     "single_site": {
       "status": "present",
-      "evidence": "src/firmware/upgrade_service.py:916"
+      "evidence": "src/operations/execution/firmware/upgrade_service.py:916"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:113"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:113"
     },
     "gap": "",
     "severity": "low"
@@ -140,11 +140,11 @@
     "group": "per-device versions",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:889"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:889"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
     },
     "gap": "Multi-site offers one text field per family, not one control per device.",
     "severity": "critical"
@@ -155,11 +155,11 @@
     "group": "per-device versions",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/options.py:799"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:799"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:306"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:306"
     },
     "gap": "",
     "severity": "low"
@@ -170,11 +170,11 @@
     "group": "per-device versions",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/options.py:113"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:113"
     },
     "multi_site": {
       "status": "partial",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:331"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:331"
     },
     "gap": "Multi-site filters rows by family version but does not show per-model warning text on the page.",
     "severity": "high"
@@ -185,11 +185,11 @@
     "group": "strategy",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:213"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:213"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
     },
     "gap": "",
     "severity": "low"
@@ -200,11 +200,11 @@
     "group": "strategy",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:226"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:226"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
     },
     "gap": "",
     "severity": "low"
@@ -215,11 +215,11 @@
     "group": "strategy",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:245"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:245"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
     },
     "gap": "",
     "severity": "low"
@@ -230,11 +230,11 @@
     "group": "strategy",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:257"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:257"
     },
     "multi_site": {
       "status": "partial",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
     },
     "gap": "Multi-site shows RRM but the aggregate AP body only sends canary fields.",
     "severity": "high"
@@ -245,11 +245,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/options.py:483"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:483"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:224"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:224"
     },
     "gap": "",
     "severity": "low"
@@ -260,11 +260,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/options.py:493"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:493"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:218"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:218"
     },
     "gap": "",
     "severity": "low"
@@ -275,11 +275,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/options.py:483"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:483"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:148"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:148"
     },
     "gap": "Multi-site has only a failure percentage field.",
     "severity": "high"
@@ -290,11 +290,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:490"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:490"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:145"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:145"
     },
     "gap": "",
     "severity": "low"
@@ -305,11 +305,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:523"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:523"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
     },
     "gap": "Multi-site requires literal family versions and has no stable-build choice.",
     "severity": "high"
@@ -320,11 +320,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:557"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:557"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
     },
     "gap": "Multi-site has no peer-to-peer AP controls.",
     "severity": "high"
@@ -335,11 +335,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:640"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:640"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
     },
     "gap": "Multi-site shows the RRM strategy but no RRM detail controls.",
     "severity": "high"
@@ -350,11 +350,11 @@
     "group": "advanced options",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:765"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:765"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
     },
     "gap": "Multi-site has no SSR channel field.",
     "severity": "high"
@@ -365,11 +365,11 @@
     "group": "schedule",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:450"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:450"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:163"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:163"
     },
     "gap": "",
     "severity": "low"
@@ -380,11 +380,11 @@
     "group": "schedule",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/options.html:455"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:455"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_options.html:104"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:104"
     },
     "gap": "",
     "severity": "low"
@@ -395,11 +395,11 @@
     "group": "pre-check capture",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/confirm.html:194"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:194"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
     },
     "gap": "Multi-site confirm does not show or require a pre-check capture.",
     "severity": "critical"
@@ -410,11 +410,11 @@
     "group": "confirmation content",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/confirm.html:160"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:160"
     },
     "multi_site": {
       "status": "partial",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
     },
     "gap": "Multi-site omits pre-check, warnings, cloud call count, and advanced summary rows.",
     "severity": "critical"
@@ -425,11 +425,11 @@
     "group": "typed confirmation",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:441"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:441"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:680"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:680"
     },
     "gap": "",
     "severity": "low"
@@ -440,11 +440,11 @@
     "group": "CSRF and owner checks",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/confirm.html:341"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:341"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:32"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:32"
     },
     "gap": "",
     "severity": "low"
@@ -455,11 +455,11 @@
     "group": "CSRF and owner checks",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:549"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:549"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:972"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:972"
     },
     "gap": "",
     "severity": "low"
@@ -470,11 +470,11 @@
     "group": "CSRF and owner checks",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1647"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1647"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:428"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:428"
     },
     "gap": "",
     "severity": "low"
@@ -485,11 +485,11 @@
     "group": "site locks and heartbeat",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/driver.py:33"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/driver.py:33"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:788"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:788"
     },
     "gap": "",
     "severity": "low"
@@ -500,11 +500,11 @@
     "group": "site locks and heartbeat",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/driver.py:33"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/driver.py:33"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:857"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:857"
     },
     "gap": "",
     "severity": "low"
@@ -515,11 +515,11 @@
     "group": "submit safety",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1680"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1680"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:91"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:91"
     },
     "gap": "",
     "severity": "low"
@@ -530,11 +530,11 @@
     "group": "submit safety",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1597"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1597"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:687"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:687"
     },
     "gap": "",
     "severity": "low"
@@ -545,11 +545,11 @@
     "group": "submit safety",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:1626"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1626"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:416"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:416"
     },
     "gap": "",
     "severity": "low"
@@ -560,11 +560,11 @@
     "group": "progress detail",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
     },
     "gap": "Multi-site shows current phase text but no gateway, switch, AP, or client phase blocks.",
     "severity": "critical"
@@ -575,11 +575,11 @@
     "group": "progress detail",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:319"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:319"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:59"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:59"
     },
     "gap": "Multi-site shows one row per site child, not one row per device.",
     "severity": "critical"
@@ -590,11 +590,11 @@
     "group": "progress detail",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
     },
     "gap": "Multi-site does not expose the settle gate or clients phase.",
     "severity": "critical"
@@ -605,11 +605,11 @@
     "group": "stop",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/stop.html:83"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/stop.html:83"
     },
     "multi_site": {
       "status": "partial",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
     },
     "gap": "Multi-site has best-effort cancellation only and no single-site stop outcome controls.",
     "severity": "high"
@@ -620,11 +620,11 @@
     "group": "cancel",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:564"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:564"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
     },
     "gap": "Multi-site has no not-yet-started cancel control apart from job cancellation.",
     "severity": "high"
@@ -635,11 +635,11 @@
     "group": "retry",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:503"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:503"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
     },
     "gap": "Multi-site has no retry control.",
     "severity": "high"
@@ -650,11 +650,11 @@
     "group": "reschedule",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:540"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:540"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
     },
     "gap": "Multi-site has no reschedule control.",
     "severity": "high"
@@ -665,11 +665,11 @@
     "group": "reconciliation",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/api/run_controls/routes.py:320"
+      "evidence": "src/interfaces/portals/upgrade_portal/api/run_controls/routes.py:320"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:1193"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1193"
     },
     "gap": "Multi-site has no reconciliation endpoint or UI.",
     "severity": "high"
@@ -680,11 +680,11 @@
     "group": "post-check capture",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/upgrade/driver.py:84"
+      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/driver.py:84"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:1193"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1193"
     },
     "gap": "Multi-site never starts a post-check capture.",
     "severity": "critical"
@@ -695,11 +695,11 @@
     "group": "comparison",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:309"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:309"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
     },
     "gap": "Multi-site has no captures to compare and no comparison link.",
     "severity": "critical"
@@ -710,11 +710,11 @@
     "group": "history and run list",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/review.py:1856"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/review.py:1856"
     },
     "multi_site": {
       "status": "partial",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:1107"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1107"
     },
     "gap": "Multi-site can show a known job but has no organization run list or capture history entry.",
     "severity": "medium"
@@ -725,11 +725,11 @@
     "group": "audit log records",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/runs.py:129"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/runs.py:129"
     },
     "multi_site": {
       "status": "partial",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:936"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:936"
     },
     "gap": "Multi-site logs with module logging but does not use the queryable audit logger path.",
     "severity": "medium"
@@ -740,11 +740,11 @@
     "group": "Mist account label",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/progress.html:210"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:210"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
     },
     "gap": "Multi-site progress does not show the Mist account label.",
     "severity": "medium"
@@ -755,11 +755,11 @@
     "group": "error pages",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:522"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:522"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:549"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:549"
     },
     "gap": "",
     "severity": "low"
@@ -770,11 +770,11 @@
     "group": "deployment write gate",
     "single_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/upgrade.py:549"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:549"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/upgrade_portal/app/routes/org_upgrade.py:172"
+      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:172"
     },
     "gap": "",
     "severity": "low"
@@ -785,11 +785,11 @@
     "group": "SSR and Mist Edge classification",
     "single_site": {
       "status": "present",
-      "evidence": "src/firmware/upgrade_service.py:593"
+      "evidence": "src/operations/execution/firmware/upgrade_service.py:593"
     },
     "multi_site": {
       "status": "present",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:233"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:233"
     },
     "gap": "",
     "severity": "low"
@@ -800,11 +800,11 @@
     "group": "SSR and Mist Edge classification",
     "single_site": {
       "status": "absent",
-      "evidence": "src/firmware/upgrade_service.py:593"
+      "evidence": "src/operations/execution/firmware/upgrade_service.py:593"
     },
     "multi_site": {
       "status": "absent",
-      "evidence": "src/firmware/aggregate_upgrade_service.py:233"
+      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:233"
     },
     "gap": "Neither mode has a Mist Edge family classifier in the audited upgrade path.",
     "severity": "high"

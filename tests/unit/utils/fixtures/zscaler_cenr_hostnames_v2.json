@@ -10,7 +10,7 @@
     "https://config.zscaler.com/api/zscalertwo.net/cenr/json",
     "https://config.zscaler.com/api/zscloud.net/cenr/json"
   ],
-  "description": "Merged Zscaler Cloud Enforcement Node Ranges (CENR) hostnames across all Zscaler public clouds. Auto-refreshed by src/utils/zscaler_catalogue.py every 8 hours.",
+  "description": "Merged Zscaler Cloud Enforcement Node Ranges (CENR) hostnames across all Zscaler public clouds. Auto-refreshed by src/foundation/support/utils/zscaler_catalogue.py every 8 hours.",
   "probe_default": {
     "protocol": "https",
     "port": 443,

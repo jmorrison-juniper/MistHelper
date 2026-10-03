@@ -25,15 +25,15 @@ No live Mist request, full test suite, container build, database migration, or a
 ## Selection decisions
 
 - Exclude active work: #1708, #1771, #1899, #1948, #2049, #2050, #2051, #2088, and the other claimed repairs.
-- Exclude organization list issues that already run through `src/org_data_collector.py`. Its `Operation` rows hold callable references, not direct calls.
-- Exclude #1316. `src/firmware/upgrade_service.py` already resolves `listSiteAvailableDeviceVersions` dynamically. The SDK also does not accept `type="all"` for that function.
+- Exclude organization list issues that already run through `src/operations/wan/org_data_collector.py`. Its `Operation` rows hold callable references, not direct calls.
+- Exclude #1316. `src/operations/execution/firmware/upgrade_service.py` already resolves `listSiteAvailableDeviceVersions` dynamically. The SDK also does not accept `type="all"` for that function.
 - Exclude the map-stack issue because its operationId did not match the audited OpenAPI document.
 - Exclude object-response and multi-identifier endpoints from this batch. They require different contracts.
 - Do not close excluded issues automatically. Some need a focused export UX or evidence reconciliation rather than new SDK calls.
 
 ## R01: Use one bounded family
 
-Decision: Implement one site-read family with twenty explicit metadata rows. Reference `src/export/count_exporter.py` for the choice UX only. Do not copy its `MistHelper` imports, error handling, or unchecked persistence.
+Decision: Implement one site-read family with twenty explicit metadata rows. Reference `src/operations/exporting/export/count_exporter.py` for the choice UX only. Do not copy its `MistHelper` imports, error handling, or unchecked persistence.
 
 Reason: #1807 documents the cost of one menu row per endpoint. A shared fetch and storage contract makes nineteen later rows inexpensive after the foundation passes.
 
@@ -43,9 +43,9 @@ Rejected: Twenty standalone wrappers. They duplicate prompts, retries, paginatio
 
 Decision: Pass the live SDK session, organization selector, site selector, adaptive pacing callable, and page limit from the menu composition point.
 
-Evidence: `src/utils/rate_limiting.py` contains `AdaptivePacer.pace`. `src/utils/input_utils.py` contains the canonical EOF-safe prompt. `DataExporter` owns output format selection.
+Evidence: `src/foundation/support/utils/rate_limiting.py` contains `AdaptivePacer.pace`. `src/foundation/support/utils/input_utils.py` contains the canonical EOF-safe prompt. `DataExporter` owns output format selection.
 
-Do not create an `APISession` inside the exporter. Do not add a new lazy or static import of `MistHelper` under `src/export/site_read/`.
+Do not create an `APISession` inside the exporter. Do not add a new lazy or static import of `MistHelper` under `src/operations/exporting/export/site_read/`.
 
 ## R03: Validate every page
 
@@ -57,7 +57,7 @@ Rejected: `APIDataFetcher.execute`. It resolves organization context, retains le
 
 ## R04: Keep natural identity, scope physical keys
 
-Evidence: `src/db/arango_writer.py:ArangoDBWriter._compute_key` reads only `primary_keys[0]`. `RedisJSONWriter._build_key` reads every configured primary-key field. Per-site SQLite table names already separate sites.
+Evidence: `src/foundation/persistence/db/arango_writer.py:ArangoDBWriter._compute_key` reads only `primary_keys[0]`. `RedisJSONWriter._build_key` reads every configured primary-key field. Per-site SQLite table names already separate sites.
 
 Decision: Add the explicit strategy field `storage_key_fields` to these twenty entries. It contains `site_id` followed by the existing business-key fields. Keep `primary_key` and `type` unchanged. Add an opt-in key encoder to the ArangoDB and Redis JSON paths. Leave unselected strategies byte-compatible.
 
@@ -65,7 +65,7 @@ This prevents the new endpoints from exposing existing composite-key limitations
 
 ## R05: Redact before flattening and mirroring
 
-Evidence: `src/security/credential_redaction.py:CredentialRedactor.redact_records` deep-copies and redacts nested values. `DataExporter._emit_rows` logs sample rows. `ExportBackendOptions.raw_data` bypasses the flattened payload for database mirrors.
+Evidence: `src/operations/protection/security/credential_redaction.py:CredentialRedactor.redact_records` deep-copies and redacts nested values. `DataExporter._emit_rows` logs sample rows. `ExportBackendOptions.raw_data` bypasses the flattened payload for database mirrors.
 
 Decision: Redact the copied raw records first. Then use the safe copy for both flattening and `raw_data`. Extend exact credential-key handling for `keywrap_kek`, `keywrap_mack`, and `magic` when the endpoint schemas contain them. Add tests for those fields.
 

@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 273 | Admin and API Token Hygiene Report | src.reports.admin_token_hygiene.operation | AdminTokenHygieneReport.run | safe |  | False | False |
+| 273 | Admin and API Token Hygiene Report | src.mist.intelligence.reports.admin_token_hygiene.operation | AdminTokenHygieneReport.run | safe |  | False | False |
 
 ## OperationRegistry comment
 
@@ -34,7 +34,7 @@ The `safe` category gains menu number `273`. The safe count increases by one.
 
 ## Import line for MistHelper.py
 
-`from src.reports.admin_token_hygiene.operation import AdminTokenHygieneReport  # Menu 273 (issue #3554) -- Export admin and API token hygiene reports.`
+`from src.mist.intelligence.reports.admin_token_hygiene.operation import AdminTokenHygieneReport  # Menu 273 (issue #3554) -- Export admin and API token hygiene reports.`
 
 ## Deferred integration notes
 

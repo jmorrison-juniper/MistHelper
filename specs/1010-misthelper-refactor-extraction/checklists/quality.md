@@ -86,7 +86,7 @@
 
 ## AddressComparisonCounters Special Case (FR-015)
 
-- [ ] CHK044 - Is the destination `src/inventory/csv_comparator.py` named as the sole landing point, with any `src/refactors/*.py` explicitly prohibited? [Clarity, Spec §FR-015]
+- [ ] CHK044 - Is the destination `src/mist/resources/inventory/csv_comparator.py` named as the sole landing point, with any `src/foundation/support/refactors/*.py` explicitly prohibited? [Clarity, Spec §FR-015]
 - [ ] CHK045 - Is the rationale for the special-case folding documented (why this class differs from the other 12)? [Completeness]
 - [ ] CHK046 - Are other analogous "fold into existing module" candidates identified, or is this special case one-off? [Coverage]
 

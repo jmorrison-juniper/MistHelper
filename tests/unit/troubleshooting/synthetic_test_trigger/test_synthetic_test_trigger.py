@@ -10,9 +10,9 @@ from typing import Any  # WHY: fake responses carry heterogeneous JSON values.
 
 import pytest  # WHY: monkeypatch and tmp_path typing keep operation seams isolated.
 
-from src.troubleshooting.synthetic_test_trigger import client as synthetic_client_module
-from src.troubleshooting.synthetic_test_trigger.client import SyntheticTestClient
-from src.troubleshooting.synthetic_test_trigger.models import (
+from src.mist.intelligence.troubleshooting.synthetic_test_trigger import client as synthetic_client_module
+from src.mist.intelligence.troubleshooting.synthetic_test_trigger.client import SyntheticTestClient
+from src.mist.intelligence.troubleshooting.synthetic_test_trigger.models import (
     EXPORT_ENDPOINT_NAME,
     EXPORT_FILENAME,
     ExportRowBuilder,
@@ -20,7 +20,7 @@ from src.troubleshooting.synthetic_test_trigger.models import (
     SyntheticTestRequest,
     SyntheticTestResult,
 )
-from src.troubleshooting.synthetic_test_trigger.operation import (
+from src.mist.intelligence.troubleshooting.synthetic_test_trigger.operation import (
     RuntimePromptReader,
     SyntheticTestRuntime,
     SyntheticTestTrigger,
@@ -310,9 +310,13 @@ def test_runtime_prompt_reader_and_menu_handler_are_bound(monkeypatch: pytest.Mo
             runs.append(True)  # WHY: the public handler should delegate exactly once.
 
     runtime = build_runtime(FakeClient(FakeResponse({"status": "success"})), PromptAnswers([]), ExportCapture())
-    monkeypatch.setattr("src.troubleshooting.synthetic_test_trigger.operation.InputUtils.safe_input", fake_input)
+    monkeypatch.setattr(
+        "src.mist.intelligence.troubleshooting.synthetic_test_trigger.operation.InputUtils.safe_input", fake_input
+    )
     monkeypatch.setattr(SyntheticTestRuntime, "from_runtime", classmethod(lambda cls: runtime))
-    monkeypatch.setattr("src.troubleshooting.synthetic_test_trigger.operation.SyntheticTestTriggerRunner", FakeRunner)
+    monkeypatch.setattr(
+        "src.mist.intelligence.troubleshooting.synthetic_test_trigger.operation.SyntheticTestTriggerRunner", FakeRunner
+    )
     assert RuntimePromptReader.read("Continue? ", "context_name") == "y"  # WHY: input reader strips whitespace.
     SyntheticTestTrigger.run()  # WHY: public menu handler must remain callable.
     assert prompts == [("Continue? ", "context_name")]  # WHY: reader passed prompt context to InputUtils.

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.capture.packet_capture_download import PacketCaptureDownloadManager
+from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
 
 
 class _FakeResponse:

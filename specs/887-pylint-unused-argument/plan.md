@@ -177,7 +177,7 @@ step ends with a clean finding count.
 | 5 | Apply group 11, the `debug` parameter. | 1 more finding cleared. Total 16 cleared. |
 | 6 | Add the five Outcome B comments. | 5 findings suppressed with a reason. |
 | 7 | File the three companion issues. Add the Outcome C comment with the issue number. | 1 finding suppressed with an issue link. Zero findings remain. |
-| 8 | Run every quality gate. Run the manual scan of `src/maps` and `src/ssh`. | A clean tree. |
+| 8 | Run every quality gate. Run the manual scan of `src/interfaces/visualization/maps` and `src/operations/execution/ssh`. | A clean tree. |
 | 9 | Remove `"W0613"` from `pyproject.toml`. Update the comment block. | The gate is enforced. |
 | 10 | Push the branch. Read the Linux runner result. | Proof of the score. |
 
@@ -251,7 +251,7 @@ and every call site in one edit.
 
 ### Risk 4. Four findings sit in packages that the gate hides
 
-`src/maps` and `src/ssh` hold four findings. The `--ignore` flag hides them, so
+`src/interfaces/visualization/maps` and `src/operations/execution/ssh` hold four findings. The `--ignore` flag hides them, so
 the gate cannot prove them.
 
 **Mitigation**: Step 4 of the quickstart runs a manual scan of those two

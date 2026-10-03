@@ -12,7 +12,7 @@ The integration pull request wires menu 272 and applies `specs/3553-certificate-
 
 ## Files
 
-- `src/reports/certificate_expiry/**`
+- `src/mist/intelligence/reports/certificate_expiry/**`
 - `tests/unit/reports/certificate_expiry/**`
 - `specs/3553-certificate-expiry-report/**`
 - `changelog.d/issue-3553-certificate-expiry-report.md`
@@ -30,12 +30,12 @@ The integration pull request wires menu 272 and applies `specs/3553-certificate-
 - [x] New or changed guards state the measured count and prove one failing path.
 - [x] No new Ruff lint violations.
 - [x] Code formatted with Black.
-- [x] mypy passes for `src/reports/certificate_expiry`.
+- [x] mypy passes for `src/mist/intelligence/reports/certificate_expiry`.
 
 ## Security
 
 - [x] No hardcoded secrets, tokens, or passwords.
-- [x] Bandit passes with no new findings for `src/reports/certificate_expiry`.
+- [x] Bandit passes with no new findings for `src/mist/intelligence/reports/certificate_expiry`.
 - [x] pip-audit is clean for `requirements.txt`.
 - [x] Sensitive certificate bodies and private-key markers stay out of logs and output rows.
 
@@ -60,18 +60,18 @@ The integration pull request wires menu 272 and applies `specs/3553-certificate-
 ## Validation
 
 - `python -m py_compile MistHelper.py` and all new Python files passed.
-- `python -m ruff check src\reports\certificate_expiry tests\unit\reports\certificate_expiry` passed.
-- `python -m black --check src\reports\certificate_expiry tests\unit\reports\certificate_expiry` passed.
-- `python -m mypy src\reports\certificate_expiry --config-file pyproject.toml` passed.
-- `python -m pydocstyle src\reports\certificate_expiry` passed.
+- `python -m ruff check src\mist\intelligence\reports\certificate_expiry tests\unit\reports\certificate_expiry` passed.
+- `python -m black --check src\mist\intelligence\reports\certificate_expiry tests\unit\reports\certificate_expiry` passed.
+- `python -m mypy src\mist\intelligence\reports\certificate_expiry --config-file pyproject.toml` passed.
+- `python -m pydocstyle src\mist\intelligence\reports\certificate_expiry` passed.
 - `python -m pytest tests\unit\reports\certificate_expiry -q --timeout=120` passed, 26 tests.
-- `python -m vulture src\reports\certificate_expiry --min-confidence 70` passed.
-- `python -m interrogate -v src\reports\certificate_expiry` passed.
-- `python -m radon cc src\reports\certificate_expiry -j | complexity-gate --max 10` passed.
+- `python -m vulture src\mist\intelligence\reports\certificate_expiry --min-confidence 70` passed.
+- `python -m interrogate -v src\mist\intelligence\reports\certificate_expiry` passed.
+- `python -m radon cc src\mist\intelligence\reports\certificate_expiry -j | complexity-gate --max 10` passed.
 - `test-quality-analyzer --gate --changed-from origin/main` passed.
 - `python -m pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120` passed, 8 tests.
 - `python -m pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120` passed, 27 tests.
-- `python -m bandit -c pyproject.toml -r src\reports\certificate_expiry -q` passed.
+- `python -m bandit -c pyproject.toml -r src\mist\intelligence\reports\certificate_expiry -q` passed.
 - `python -m pip_audit -r requirements.txt` passed with no known vulnerabilities.
 - `speckit.analyze` passed with no actionable findings.
 

@@ -3,7 +3,7 @@ MISTHELPER-MIB DEFINITIONS ::= BEGIN
 -- =====================================================================
 -- This file is generated. Do not edit it by hand.
 --
--- The generator is src/mib_generator. Run it again after Mist ships a
+-- The generator is src/operations/hardware/mib_generator. Run it again after Mist ships a
 -- new OpenAPI file. The MODULE-IDENTITY description below names the
 -- exact command.
 --
@@ -17,7 +17,7 @@ MISTHELPER-MIB DEFINITIONS ::= BEGIN
 --
 -- The generator reads three inputs:
 --   documentation/mist-api-openapi31json.json  the Mist field types.
---   src/metrics_gateway/catalog.py             the readings the agent
+--   src/interfaces/monitoring/metrics_gateway/catalog.py  the readings the agent
 --                                              answers.
 --   data/mib_generator/oid_assignments.json    the number of each
 --                                              field, so no OID moves.

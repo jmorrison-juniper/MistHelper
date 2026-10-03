@@ -24,9 +24,9 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime.runs import PhaseState
-from src.upgrade_portal.upgrade import gate, phase_gate
-from src.upgrade_portal.upgrade.driver import PhaseOutcome
+from src.interfaces.portals.upgrade_portal.runtime.runs import PhaseState
+from src.interfaces.portals.upgrade_portal.upgrade import gate, phase_gate
+from src.interfaces.portals.upgrade_portal.upgrade.driver import PhaseOutcome
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches
 #      a real organization, a real site, or a real device.

@@ -6,7 +6,7 @@ from dataclasses import dataclass  # WHY: fake SDK responses mimic APIResponse.d
 from pathlib import Path  # WHY: wiring manifest test reads the feature file.
 from typing import Any  # WHY: fake SDK accepts dynamic request bodies.
 
-from src.troubleshooting.rf_diagnostics.client import RfDiagnosticsClient  # WHY: test target.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.client import RfDiagnosticsClient  # WHY: test target.
 
 
 @dataclass
@@ -134,7 +134,7 @@ def test_recording_stop_download_and_list_use_expected_operations() -> None:
 
 def test_confirmation_accepts_only_y() -> None:
     """The operation confirmation starts a run only for y."""
-    from src.troubleshooting.rf_diagnostics.operation import (
+    from src.mist.intelligence.troubleshooting.rf_diagnostics.operation import (
         RfDiagnosticsOperation,
     )  # WHY: import here avoids setup cost.
 
@@ -155,8 +155,8 @@ def test_wiring_manifest_lists_deferred_integration_files() -> None:
     )  # WHY: read manifest.
     required = [  # WHY: every file here is forbidden to this package pull request.
         "MistHelper.py",
-        "src/utils/operation_registry.py",
-        "src/refactors/endpoint_primary_key_strategies.py",
+        "src/foundation/support/utils/operation_registry.py",
+        "src/foundation/support/refactors/endpoint_primary_key_strategies.py",
         "README.md",
         "documentation/menu_reference.md",
         ".github/copilot-instructions.md",
@@ -180,8 +180,10 @@ class FakeAuditFailure:
 
 def test_operation_reports_audit_write_failure(caplog) -> None:
     """Operation audit helper logs when persistence fails."""
-    from src.troubleshooting.rf_diagnostics.models import RfDiagnosticRun  # WHY: build one audit row.
-    from src.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # WHY: test helper method.
+    from src.mist.intelligence.troubleshooting.rf_diagnostics.models import RfDiagnosticRun  # WHY: build one audit row.
+    from src.mist.intelligence.troubleshooting.rf_diagnostics.operation import (
+        RfDiagnosticsOperation,
+    )  # WHY: test helper method.
 
     operation = RfDiagnosticsOperation.__new__(RfDiagnosticsOperation)  # WHY: bypass resolver-backed constructor.
     operation._audit = FakeAuditFailure()  # WHY: inject failing audit writer.

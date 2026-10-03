@@ -24,7 +24,7 @@ Replace menu tuple values with immutable `MenuEntry` rows. Move repeated constru
 
 **Constraints**: The refactor must not change a menu number, a menu name, or a menu category. `MistHelper.py` must keep the same module-level symbol table.
 
-**Scale and Scope**: One runtime menu table with 268 entries. The related call sites are in `MistHelper.py`, `src/troubleshooting/interactive_test_runner.py`, `web_portal/`, and `scripts/generate_menu_wiki.py`.
+**Scale and Scope**: One runtime menu table with 268 entries. The related call sites are in `MistHelper.py`, `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `web_portal/`, and `scripts/generate_menu_wiki.py`.
 
 ## Constitution Check
 
@@ -63,7 +63,7 @@ changelog.d/
   issue-1704-menu-entry.md
 ```
 
-**Structure Decision**: Keep the public MistHelper module symbols unchanged. Put `MenuEntry` in `src/utils/menu_entry.py`. Put the factory classes under existing `GlobalImportManager` to avoid a new module-level symbol in `MistHelper.py`.
+**Structure Decision**: Keep the public MistHelper module symbols unchanged. Put `MenuEntry` in `src/foundation/support/utils/menu_entry.py`. Put the factory classes under existing `GlobalImportManager` to avoid a new module-level symbol in `MistHelper.py`.
 
 ## Technical Approach
 

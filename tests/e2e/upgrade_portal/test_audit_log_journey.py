@@ -28,7 +28,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime.identity import email_digest
+from src.interfaces.portals.upgrade_portal.runtime.identity import email_digest
 from tests.e2e.upgrade_portal.conftest import STAND_IN_EMAIL
 from tests.support.upgrade_portal_e2e.records.audit import AuditTrailIsolation
 

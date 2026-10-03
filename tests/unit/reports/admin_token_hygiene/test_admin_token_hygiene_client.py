@@ -8,7 +8,7 @@ from typing import Any
 import mistapi
 import pytest
 
-from src.reports.admin_token_hygiene.client import AdminTokenHygieneClient
+from src.mist.intelligence.reports.admin_token_hygiene.client import AdminTokenHygieneClient
 
 
 @dataclass

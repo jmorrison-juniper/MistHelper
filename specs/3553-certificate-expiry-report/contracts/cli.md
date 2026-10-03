@@ -5,7 +5,7 @@
 Menu 272 runs:
 
 ```text
-src.reports.certificate_expiry.operation.CertificateExpiryReport.run
+src.mist.intelligence.reports.certificate_expiry.operation.CertificateExpiryReport.run
 ```
 
 The operation is read-only and safe. It must not prompt during `--test`.
@@ -15,7 +15,7 @@ The operation is read-only and safe. It must not prompt during `--test`.
 `operation.py` must resolve shared dependencies through:
 
 ```text
-src.config.source_dependency_resolver.SourceDependencyResolver
+src.foundation.runtime.config.source_dependency_resolver.SourceDependencyResolver
 ```
 
 Required resolver usage:

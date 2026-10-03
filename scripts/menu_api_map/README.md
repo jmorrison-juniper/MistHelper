@@ -38,7 +38,7 @@ Do not edit a page by hand. The next run of the tool replaces the change.
 
 1. The tool reads the menu table in `MistHelper.py`.
 2. The tool reads the category of each menu option from
-   `src/utils/operation_registry.py`.
+   `src/foundation/support/utils/operation_registry.py`.
 3. The tool starts at the handler of each menu option. It follows each call
    that it can resolve.
 4. The tool records each call to a mistapi function and each raw request

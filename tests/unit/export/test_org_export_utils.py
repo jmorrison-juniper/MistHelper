@@ -1,4 +1,4 @@
-"""Unit tests for ``src.export.org_export_utils``.
+"""Unit tests for ``src.operations.exporting.export.org_export_utils``.
 
 Why:
     #878 tranche 21 -- un-omit ``org_export_utils.py`` from the coverage
@@ -20,7 +20,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-LOGGER_NAME = "src.export.org_export_utils"  # WHY: caplog target for #886 slice 92 print->logger migration.
+LOGGER_NAME = (
+    "src.operations.exporting.export.org_export_utils"  # WHY: caplog target for #886 slice 92 print->logger migration.
+)
 
 
 @pytest.fixture
@@ -65,7 +67,7 @@ class TestExportData:
 
     def test_with_limit(self, fake_mh):
         """When limit is set it should be passed as an APIDataFetcher kwarg."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         api_call = MagicMock()
         OrgExportUtils.export_data(api_call, "site stats", sort_key="name", limit=500, extra="x")
@@ -78,7 +80,7 @@ class TestExportData:
 
     def test_without_limit(self, fake_mh):
         """When limit is None the fetcher must not receive a limit kwarg."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         api_call = MagicMock()
         OrgExportUtils.export_data(api_call, "e911 report", limit=None)
@@ -88,8 +90,8 @@ class TestExportData:
 
     def test_other_device_events_uses_the_expected_sdk_operation(self, fake_mh, monkeypatch):
         """The Spec 868 entry must bind the SDK operation and event sort order."""
-        from src.export import org_export_utils as module
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as module
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         endpoint = MagicMock(name="searchOrgOtherDeviceEvents")  # Represent the installed SDK operation.
         monkeypatch.setattr(module.mistapi.api.v1.orgs.otherdevices, "searchOrgOtherDeviceEvents", endpoint)
@@ -104,8 +106,8 @@ class TestExportData:
     def test_other_device_events_menu_is_registered_as_safe(self):
         """Menu 252 must route to the other-device event export as a safe operation."""
         import MistHelper  # Import the runtime menu registry under test.
-        from src.export.org_export_utils import OrgExportUtils  # Read the exporter under test.
-        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+        from src.foundation.support.utils.operation_registry import OperationRegistry  # Read the safety classification.
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils  # Read the exporter under test.
 
         action = MistHelper.menu_actions["252"].handler  # Read the callable from the named row.
         description = MistHelper.menu_actions["252"].title  # Read the menu text from the named row.
@@ -124,8 +126,8 @@ class TestCollectOneSleType:
 
     def test_success_tags_and_appends(self, fake_mh):
         """Successful fetch should tag each row with sle_type and append them."""
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         rows = [{"site": "a"}, {"site": "b"}]
         with (
@@ -138,8 +140,8 @@ class TestCollectOneSleType:
 
     def test_get_all_returns_none(self, fake_mh):
         """When get_all returns None the accumulator stays empty (no crash)."""
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", return_value="resp"),
@@ -151,8 +153,8 @@ class TestCollectOneSleType:
 
     def test_exception_is_swallowed(self, fake_mh, caplog):
         """Exceptions must be logged as a warning and NOT propagated."""
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=requests.RequestException("boom")
@@ -163,8 +165,8 @@ class TestCollectOneSleType:
 
     def test_unexpected_exception_propagates(self, fake_mh):
         """Programming faults must not look like a failed SLE request."""
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=ValueError("bad sle state")),
@@ -178,8 +180,8 @@ class TestPersistSitesSleSummary:
 
     def test_with_data(self, fake_mh, caplog):
         """Data path should flatten, escape, and write."""
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         rows = [{"site": "a", "sle_type": "wifi"}]
         with (
@@ -196,7 +198,7 @@ class TestPersistSitesSleSummary:
 
     def test_empty(self, fake_mh, caplog):
         """Empty path should still write an empty CSV and warn the user."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
             OrgExportUtils._persist_sites_sle_summary([])
@@ -212,7 +214,7 @@ class TestGatherAllSitesSle:
 
     def test_with_emitter_ticks_progress(self, fake_mh):
         """Progress emitter should be ticked once per SLE type."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         emitter = MagicMock()
         with patch.object(OrgExportUtils, "_collect_one_sle_type") as coll:
@@ -223,7 +225,7 @@ class TestGatherAllSitesSle:
 
     def test_without_emitter(self, fake_mh):
         """Without an emitter no ticks are fired but items are still counted."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(OrgExportUtils, "_collect_one_sle_type"):
             rows, done = OrgExportUtils._gather_all_sites_sle("org1", ["wifi"], None)
@@ -235,7 +237,7 @@ class TestSitesSleSummary:
 
     def test_with_emitter(self, fake_mh):
         """Emitter present: start + complete both invoked exactly once."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
         with (
@@ -249,7 +251,7 @@ class TestSitesSleSummary:
 
     def test_without_emitter(self, fake_mh):
         """Emitter is None: neither start nor complete may be dereferenced."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.PROGRESS_EMITTER = None
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
@@ -270,27 +272,27 @@ class TestMetricChoiceList:
     """Cover the three guard branches of ``_metric_choice_list``."""
 
     def test_non_dict_definition(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._metric_choice_list("not-a-dict") == []
 
     def test_non_dict_params(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._metric_choice_list({"params": "bad"}) == []
 
     def test_non_dict_metric_param(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._metric_choice_list({"params": {"metric": "bad"}}) == []
 
     def test_choices_not_list(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._metric_choice_list({"params": {"metric": {"choices": "no"}}}) == []
 
     def test_happy_path(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         result = OrgExportUtils._metric_choice_list({"params": {"metric": {"choices": ["a", "b"]}}})
         assert result == ["a", "b"]
@@ -300,7 +302,7 @@ class TestOrgValidChoices:
     """Cover the org-scope-valid filter."""
 
     def test_filters_out_invalid_choices(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         result = OrgExportUtils._org_valid_choices(["bytes", "total_port_count", "rx_bytes"])
         assert result == ["bytes", "rx_bytes"]
@@ -310,12 +312,12 @@ class TestExtractMetricChoices:
     """Cover ``_extract_metric_choices`` guard and only-if-choices branches."""
 
     def test_non_dict_definitions_returns_empty(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._extract_metric_choices("bad") == {}
 
     def test_only_metrics_with_choices_kept(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         defs = {
             "with_valid": {"params": {"metric": {"choices": ["bytes", "not-valid"]}}},
@@ -330,8 +332,8 @@ class TestLoadParameterizedMetricChoices:
     """Cover the try/except around ``listInsightMetrics``."""
 
     def test_success(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         response = SimpleNamespace(data={"m1": {"params": {"metric": {"choices": ["bytes"]}}}})
         with patch.object(mod.mistapi.api.v1.const.insight_metrics, "listInsightMetrics", return_value=response):
@@ -339,8 +341,8 @@ class TestLoadParameterizedMetricChoices:
         assert result == {"m1": ["bytes"]}
 
     def test_exception_returns_empty(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             mod.mistapi.api.v1.const.insight_metrics,
@@ -350,8 +352,8 @@ class TestLoadParameterizedMetricChoices:
             assert OrgExportUtils._load_parameterized_metric_choices() == {}
 
     def test_unexpected_exception_propagates(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.const.insight_metrics, "listInsightMetrics", side_effect=ValueError("bad")),
@@ -369,14 +371,14 @@ class TestFetchSingleMetricChoice:
     """Cover session-None guard, empty payload, and dict/non-dict normalization."""
 
     def test_no_session_returns_none(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.apisession = None
         result = OrgExportUtils._fetch_single_metric_choice("o", "m", "bytes", "7d")
         assert result is None
 
     def test_success_dict_payload(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         response = SimpleNamespace(data={"foo": "bar"})
         fake_mh.apisession.mist_get = MagicMock(return_value=response)
@@ -389,7 +391,7 @@ class TestFetchSingleMetricChoice:
         }
 
     def test_success_non_dict_payload(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         response = SimpleNamespace(data=[1, 2, 3])
         fake_mh.apisession.mist_get = MagicMock(return_value=response)
@@ -398,20 +400,20 @@ class TestFetchSingleMetricChoice:
         assert result["metric_type"] == "m:bytes"
 
     def test_empty_payload_returns_none(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         response = SimpleNamespace(data=None)
         fake_mh.apisession.mist_get = MagicMock(return_value=response)
         assert OrgExportUtils._fetch_single_metric_choice("o", "m", "bytes", "7d") is None
 
     def test_exception_returns_none(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.apisession.mist_get = MagicMock(side_effect=requests.RequestException("boom"))
         assert OrgExportUtils._fetch_single_metric_choice("o", "m", "bytes", "7d") is None
 
     def test_unexpected_exception_propagates(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.apisession.mist_get = MagicMock(side_effect=ValueError("bad metric request"))
         with pytest.raises(ValueError, match="bad metric request"):
@@ -422,7 +424,7 @@ class TestFetchParameterizedOrgMetric:
     """Cover both success and failure counting branches."""
 
     def test_mixed_results(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             OrgExportUtils,
@@ -444,22 +446,22 @@ class TestInsightIsWorstSitesMetric:
     """Cover the three ways a metric is a worst-sites metric."""
 
     def test_worst_sites_substring(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._insight_is_worst_sites_metric("worst-sites-by-sle")
 
     def test_sites_sle(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._insight_is_worst_sites_metric("sites-sle")
 
     def test_sites_sle_filtered(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._insight_is_worst_sites_metric("sites-sle-filtered")
 
     def test_default_metric(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         assert OrgExportUtils._insight_is_worst_sites_metric("client-metrics") is False
 
@@ -468,7 +470,7 @@ class TestInsightBuildSitesResult:
     """Trivial builder — pin the shape."""
 
     def test_shape(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         result = OrgExportUtils._insight_build_sites_result("o", "m", "wifi", [{"s": 1}])
         assert result["metric_type"] == "m_wifi"
@@ -484,8 +486,8 @@ class TestInsightFetchOneSleCategory:
     """Cover success/empty/exception branches."""
 
     def test_success(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", return_value="resp"),
@@ -495,8 +497,8 @@ class TestInsightFetchOneSleCategory:
         assert result["total_sites"] == 1
 
     def test_empty_returns_none(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", return_value="resp"),
@@ -505,8 +507,8 @@ class TestInsightFetchOneSleCategory:
             assert OrgExportUtils._insight_fetch_one_sle_category("o", "m", "wifi") is None
 
     def test_exception_returns_none(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=requests.RequestException("boom")
@@ -514,8 +516,8 @@ class TestInsightFetchOneSleCategory:
             assert OrgExportUtils._insight_fetch_one_sle_category("o", "m", "wifi") is None
 
     def test_unexpected_exception_propagates(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=ValueError("bad category")),
@@ -528,7 +530,7 @@ class TestInsightFetchWorstSitesSle:
     """Cover mixed hits/misses across three SLE categories."""
 
     def test_mixed_categories(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             OrgExportUtils,
@@ -545,8 +547,8 @@ class TestInsightFetchDefaultMetric:
     """Cover data + empty branches of the default fetcher."""
 
     def test_success(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         response = SimpleNamespace(data={"payload": True})
         with patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSle", return_value=response):
@@ -558,8 +560,8 @@ class TestInsightFetchDefaultMetric:
         assert fail == 0
 
     def test_empty_counts_as_failure(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         response = SimpleNamespace(data=None)
         with patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSle", return_value=response):
@@ -573,7 +575,7 @@ class TestInsightFetchOneMetric:
     """Cover the 3-way dispatch plus the outer exception handler."""
 
     def test_parameterized_branch(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             OrgExportUtils,
@@ -585,21 +587,21 @@ class TestInsightFetchOneMetric:
         assert (ok, fail) == (1, 0)
 
     def test_worst_sites_branch(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(OrgExportUtils, "_insight_fetch_worst_sites_sle", return_value=([{"r": 2}], 3, 0)):
             records, ok, fail = OrgExportUtils._insight_fetch_one_metric("o", "worst-sites-x", {})
         assert (ok, fail) == (3, 0)
 
     def test_default_branch(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(OrgExportUtils, "_insight_fetch_default_metric", return_value=([{"r": 3}], 1, 0)):
             records, ok, fail = OrgExportUtils._insight_fetch_one_metric("o", "client-x", {})
         assert (ok, fail) == (1, 0)
 
     def test_exception_returns_failure(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             OrgExportUtils, "_insight_fetch_default_metric", side_effect=requests.RequestException("boom")
@@ -609,7 +611,7 @@ class TestInsightFetchOneMetric:
         assert (ok, fail) == (0, 1)
 
     def test_unexpected_exception_propagates(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(OrgExportUtils, "_insight_fetch_default_metric", side_effect=ValueError("bad metric")),
@@ -622,8 +624,8 @@ class TestInsightFetchSitesSleSummary:
     """Cover data + empty + exception branches of the summary fetcher."""
 
     def test_success(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", return_value="resp"),
@@ -636,8 +638,8 @@ class TestInsightFetchSitesSleSummary:
         assert fail == 0
 
     def test_empty(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", return_value="resp"),
@@ -648,8 +650,8 @@ class TestInsightFetchSitesSleSummary:
         assert (ok, fail) == (0, 0)
 
     def test_exception(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(
             mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=requests.RequestException("boom")
@@ -659,8 +661,8 @@ class TestInsightFetchSitesSleSummary:
         assert (ok, fail) == (0, 1)
 
     def test_unexpected_exception_propagates(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.mistapi.api.v1.orgs.insights, "getOrgSitesSle", side_effect=ValueError("bad summary")),
@@ -673,7 +675,7 @@ class TestInsightCollectAllMetrics:
     """Aggregate across metrics + summary."""
 
     def test_aggregation(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(
@@ -697,7 +699,7 @@ class TestInsightNormalizeRecords:
     """Fold four buckets."""
 
     def test_bucket_folding(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.InsightMetricsUtils.parse_to_normalized_data.return_value = {
             "summary": [{"s": 1}],
@@ -716,8 +718,8 @@ class TestInsightExportNormalized:
     """Writes 4 CSVs plus the legacy combined file."""
 
     def test_writes_four_plus_legacy(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         buckets = {
             "summary": [{"s": 1}],
@@ -741,8 +743,8 @@ class TestInsightWriteCombined:
     """Legacy combined write."""
 
     def test_writes_legacy(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch.object(mod.DataProcessingUtils, "flatten_nested_fields", side_effect=lambda x: x),
@@ -758,13 +760,13 @@ class TestInsightWriteEmptyOutputs:
     """Both branches: with and without legacy file."""
 
     def test_with_legacy(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         OrgExportUtils._insight_write_empty_outputs(include_legacy=True)
         assert fake_mh.DataExporter.write_with_format_selection.call_count == 5
 
     def test_without_legacy(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         OrgExportUtils._insight_write_empty_outputs(include_legacy=False)
         assert fake_mh.DataExporter.write_with_format_selection.call_count == 4
@@ -774,7 +776,7 @@ class TestInsightSetupOrEmpty:
     """Cover the "no metrics" abort path plus the happy path."""
 
     def test_no_org_metrics_returns_none(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.InsightMetricsUtils.get_by_scope.return_value = []
         with patch.object(OrgExportUtils, "_insight_write_empty_outputs") as empty:
@@ -783,7 +785,7 @@ class TestInsightSetupOrEmpty:
         empty.assert_called_once_with(include_legacy=False)
 
     def test_happy_path(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.InsightMetricsUtils.get_by_scope.return_value = ["m1", "m2"]
         result = OrgExportUtils._insight_setup_or_empty()
@@ -794,7 +796,7 @@ class TestInsightReportTotals:
     """Trivial reporter."""
 
     def test_prints_and_logs(self, fake_mh, caplog):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
             OrgExportUtils._insight_report_totals(3, 1)
@@ -806,7 +808,7 @@ class TestInsightMetrics:
     """Cover the three outcomes of the top-level orchestrator."""
 
     def test_setup_returns_none_aborts(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(OrgExportUtils, "_insight_setup_or_empty", return_value=None):
             OrgExportUtils.insight_metrics()
@@ -814,7 +816,7 @@ class TestInsightMetrics:
         assert fake_mh.ConfigUtils.get_cached_or_prompted_org_id.call_count == 0
 
     def test_success_with_data_writes_normalized(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
         with (
@@ -833,7 +835,7 @@ class TestInsightMetrics:
         assert export.call_count == 1
 
     def test_success_no_data_writes_empties(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
         with (
@@ -847,7 +849,7 @@ class TestInsightMetrics:
         empty.assert_called_once_with(include_legacy=True)
 
     def test_exception_writes_empties(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
         with (
@@ -860,7 +862,7 @@ class TestInsightMetrics:
         empty.assert_called_once_with(include_legacy=True)
 
     def test_unexpected_exception_propagates(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
         with (
@@ -882,7 +884,7 @@ class TestSimpleDelegates:
 
     def _assert_calls(self, fake_mh, method, expected_data_type, expected_sort_key, extra_kwargs=None):
         """Invoke the delegate with export_data patched; assert kwargs match."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(OrgExportUtils, "export_data") as export:
             getattr(OrgExportUtils, method)()
@@ -906,11 +908,13 @@ class TestSimpleDelegates:
         assert self._assert_calls(fake_mh, "_nac_rules", "nac rules", "name")["data_type"] == "nac rules"
 
     def test_nac_events(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
-            patch("src.export.org_export_utils.TimeUtils.get_dynamic_lookback_hours", return_value=12),
-            patch("src.export.org_export_utils.TimeUtils.log_dynamic_lookback"),
+            patch(
+                "src.operations.exporting.export.org_export_utils.TimeUtils.get_dynamic_lookback_hours", return_value=12
+            ),
+            patch("src.operations.exporting.export.org_export_utils.TimeUtils.log_dynamic_lookback"),
             patch.object(OrgExportUtils, "export_data") as export,
         ):
             OrgExportUtils._nac_events()
@@ -934,7 +938,7 @@ class TestSimpleDelegates:
         assert self._assert_calls(fake_mh, "_mxedge_stats", "mx edge stats", "name")["data_type"] == "mx edge stats"
 
     def test_e911_report(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch.object(OrgExportUtils, "export_data") as export:
             OrgExportUtils.e911_report()
@@ -958,7 +962,7 @@ class TestSimpleDelegates:
 
     def test_invites(self, fake_mh):
         """listOrgInvites is not exposed by the current mistapi SDK; patch it in."""
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
             patch(
@@ -982,23 +986,25 @@ class TestBuildAuditLogKwargs:
     """Cover the three branches of ``_build_audit_log_kwargs``."""
 
     def test_duration_branch(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         result = OrgExportUtils._build_audit_log_kwargs(False, "3h")
         assert result == {"limit": 1000, "duration": "3h"}
 
     def test_recent_branch(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with (
-            patch("src.export.org_export_utils.TimeUtils.get_dynamic_lookback_hours", return_value=24),
-            patch("src.export.org_export_utils.TimeUtils.log_dynamic_lookback"),
+            patch(
+                "src.operations.exporting.export.org_export_utils.TimeUtils.get_dynamic_lookback_hours", return_value=24
+            ),
+            patch("src.operations.exporting.export.org_export_utils.TimeUtils.log_dynamic_lookback"),
         ):
             result = OrgExportUtils._build_audit_log_kwargs(False, None)
         assert result == {"limit": 1000, "duration": "24h"}
 
     def test_full_history_branch(self):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         result = OrgExportUtils._build_audit_log_kwargs(True, None)
         assert result == {"limit": 1000, "start": 0}
@@ -1008,8 +1014,8 @@ class TestAuditLogs:
     """Cover audit_logs success, no-data, and exception re-raise."""
 
     def test_success(self, fake_mh, caplog):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
         with (
@@ -1027,8 +1033,8 @@ class TestAuditLogs:
         assert "1 audit logs exported" in caplog.text
 
     def test_no_data_early_return(self, fake_mh):
-        from src.export import org_export_utils as mod
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
         with (
@@ -1040,14 +1046,14 @@ class TestAuditLogs:
         assert fake_mh.DataExporter.write_with_format_selection.call_count == 0
 
     def test_exception_reraises(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.side_effect = requests.RequestException("boom")
         with pytest.raises(requests.RequestException, match="boom"):
             OrgExportUtils.audit_logs()
 
     def test_unexpected_exception_skips_audit_log_error_message(self, fake_mh, caplog):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.side_effect = ValueError("bad audit state")
         with caplog.at_level(logging.ERROR, logger=LOGGER_NAME), pytest.raises(ValueError, match="bad audit state"):
@@ -1070,9 +1076,9 @@ class TestSleMetrics:
     """
 
     def test_delegates_to_service(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
-        with patch("src.refactors.serial_cc.sle_metrics.SLEMetricsService.execute") as execute:
+        with patch("src.foundation.support.refactors.serial_cc.sle_metrics.SLEMetricsService.execute") as execute:
             OrgExportUtils.sle_metrics(fast=True)
         execute.assert_called_once_with(True)
 
@@ -1081,10 +1087,10 @@ class TestSsidTemplateConsolidation:
     """Cover the SSID template consolidation delegate."""
 
     def test_delegates(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         with patch(
-            "src.ssid_consolidation.ssid_template_consolidation.SSIDTemplateConsolidationManager.execute"
+            "src.operations.execution.ssid_consolidation.ssid_template_consolidation.SSIDTemplateConsolidationManager.execute"
         ) as execute:
             OrgExportUtils.ssid_template_consolidation()
         execute.assert_called_once()
@@ -1097,7 +1103,7 @@ class TestE911BssidComplianceReport:
     """Cover the no-org early return and happy path."""
 
     def test_no_org_early_return(self, fake_mh, caplog):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = None
         with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
@@ -1107,7 +1113,7 @@ class TestE911BssidComplianceReport:
         assert "No organization selected" in caplog.text
 
     def test_happy_path(self, fake_mh):
-        from src.export.org_export_utils import OrgExportUtils
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "o"
         OrgExportUtils.e911_bssid_compliance_report()
@@ -1126,6 +1132,6 @@ class TestModuleImport:
 
     def test_module_importable(self):
         """The module must import without side effects."""
-        from src.export import org_export_utils
+        from src.operations.exporting.export import org_export_utils
 
         assert hasattr(org_export_utils, "OrgExportUtils")

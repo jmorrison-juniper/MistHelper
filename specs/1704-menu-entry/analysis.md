@@ -38,7 +38,7 @@
    - Evidence: `MistHelper.py`.
    - Result: `_resolve_systematic_test_invoke_kwargs` reads `entry.supports_fast`.
 7. Tuple row call sites are migrated.
-   - Evidence: `MistHelper.py`, `src/troubleshooting/interactive_test_runner.py`, `web_portal/services/operation.py`, and `web_portal/menu_registry.py`.
+   - Evidence: `MistHelper.py`, `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `web_portal/services/operation.py`, and `web_portal/menu_registry.py`.
    - Result: those call sites read `handler` and `title` by name.
 
 ## Menu Reference Evidence

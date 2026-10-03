@@ -1,4 +1,4 @@
-"""Tests for small fast-mode / bootstrap constant seams under src/refactors/.
+"""Tests for small fast-mode / bootstrap constant seams under src/foundation/support/refactors/.
 
 Covers eight tiny extraction modules that hold a single class-attribute
 constant or a bare module constant. Each test verifies:
@@ -26,15 +26,17 @@ from types import ModuleType  # WHY: precise type for importlib.reload() argumen
 import pytest  # WHY: parametrized fixtures + monkeypatch integration.
 
 # WHY: import the eight small refactor modules under test.
-from src.refactors import fast_mode_backoff_multiplier as fmbm
-from src.refactors import fast_mode_constants as fmc
-from src.refactors import fast_mode_devices_per_thread as fmdpt
-from src.refactors import fast_mode_sequential_max_retries as fmsmr
-from src.refactors import is_debug_mode as idm
-from src.refactors import mist_site_exclude_prefix as msep
-from src.refactors import mist_wan_target_ports as mwtp
-from src.refactors import package_import_map as pim
-from src.refactors.main_entrypoint import ApplicationBootstrap  # WHY: bootstrap now publishes env-only constants.
+from src.foundation.support.refactors import fast_mode_backoff_multiplier as fmbm
+from src.foundation.support.refactors import fast_mode_constants as fmc
+from src.foundation.support.refactors import fast_mode_devices_per_thread as fmdpt
+from src.foundation.support.refactors import fast_mode_sequential_max_retries as fmsmr
+from src.foundation.support.refactors import is_debug_mode as idm
+from src.foundation.support.refactors import mist_site_exclude_prefix as msep
+from src.foundation.support.refactors import mist_wan_target_ports as mwtp
+from src.foundation.support.refactors import package_import_map as pim
+from src.foundation.support.refactors.main_entrypoint import (
+    ApplicationBootstrap,
+)  # WHY: bootstrap now publishes env-only constants.
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 
@@ -81,9 +83,9 @@ def _restore_env_module_state() -> object:
 
 
 _SITE_PREFIX_CONSUMER_NAMES: tuple[str, ...] = (  # WHY: modules that copy the prefix value during import.
-    "src.refactors.wan_probe_device_override_manager",
-    "src.refactors.wan2_migration_launcher",
-    "src.refactors.wanprobe_config_manager",
+    "src.foundation.support.refactors.wan_probe_device_override_manager",
+    "src.foundation.support.refactors.wan2_migration_launcher",
+    "src.foundation.support.refactors.wanprobe_config_manager",
 )
 
 

@@ -13,7 +13,7 @@ def test_misthelper_security_events_delegates_to_serial_cc_service(monkeypatch):
         called["count"] += 1
         called["fast"] = fast
 
-    serial_cc_module = importlib.import_module("src.refactors.serial_cc.security_events")
+    serial_cc_module = importlib.import_module("src.foundation.support.refactors.serial_cc.security_events")
     monkeypatch.setattr(serial_cc_module.SecurityEventsService, "execute", staticmethod(fake_execute))
 
     misthelper_module.OrgClientSecurityExporter.security_events(False)

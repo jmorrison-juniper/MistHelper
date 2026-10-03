@@ -1,6 +1,6 @@
 """Unit tests for PlotlyMapCallbackManager."""
 
-from src.maps.plotly_map_callback_manager import (
+from src.interfaces.visualization.maps.plotly_map_callback_manager import (
     LayerToggleInputs,
     PlotlyMapCallbackManager,
     make_dash_layer_callback,

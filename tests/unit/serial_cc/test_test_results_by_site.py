@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService
+from src.foundation.support.refactors.serial_cc.test_results_by_site import GatewayTestResultsService
 
 
 class DummyDeps:
@@ -27,7 +27,7 @@ class DummyDeps:
         self.tqdm = lambda items=None, **_kwargs: (items or [])  # Identity progress wrapper
 
 
-@patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
 def test_execute_exits_early_when_no_gateway_sites(mock_resolve):
     """Service exits early and does not export when no gateway sites are found."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -40,7 +40,7 @@ def test_execute_exits_early_when_no_gateway_sites(mock_resolve):
     deps.DataExporter.write_with_format_selection.assert_not_called()  # No output written on empty site list
 
 
-@patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
 def test_execute_sequential_exports_records(mock_resolve):
     """Sequential mode fetches site results and exports a CSV."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -63,7 +63,7 @@ def test_execute_sequential_exports_records(mock_resolve):
     assert call_args[0][0]["status"] == "passed"  # Result rows must flow through to the writer
 
 
-@patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
 def test_execute_sequential_no_export_when_empty_results(mock_resolve):
     """Sequential mode does not write CSV when all sites return empty results."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -80,7 +80,7 @@ def test_execute_sequential_no_export_when_empty_results(mock_resolve):
     deps.DataExporter.write_with_format_selection.assert_not_called()  # No CSV on empty results
 
 
-@patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
 def test_execute_fast_uses_pool_management(mock_resolve):
     """Fast mode calls execute_fn (pool executor) and exports results."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -99,8 +99,12 @@ def test_execute_fast_uses_pool_management(mock_resolve):
     deps.GatewayExportUtils._get_site_ids_with_devices.return_value = ["site-1"]  # Fallback API path
     # Patch csv.DictReader to return empty so the cache-CSV fast path returns [] and falls through
     with (
-        patch("src.refactors.serial_cc.test_results_by_site.csv.DictReader", return_value=[]),  # Empty CSV
-        patch("src.refactors.serial_cc.test_results_by_site.open", MagicMock()),  # Avoid real file access
+        patch(
+            "src.foundation.support.refactors.serial_cc.test_results_by_site.csv.DictReader", return_value=[]
+        ),  # Empty CSV
+        patch(
+            "src.foundation.support.refactors.serial_cc.test_results_by_site.open", MagicMock()
+        ),  # Avoid real file access
     ):
         GatewayTestResultsService.execute(fast=True)  # Execute service in fast mode
 
@@ -110,7 +114,7 @@ def test_execute_fast_uses_pool_management(mock_resolve):
     assert call_args[1] == "AllGatewayTestResults.csv"  # Filename contract preserved in fast mode
 
 
-@patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
 def test_fetch_site_tests_returns_empty_on_api_error(mock_resolve):
     """_fetch_site_tests is non-fatal: returns empty list when API raises."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -124,7 +128,7 @@ def test_fetch_site_tests_returns_empty_on_api_error(mock_resolve):
     assert result == []  # Non-fatal API error must yield empty list, not exception
 
 
-@patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
 def test_fetch_site_tests_tags_results_with_site_id(mock_resolve):
     """_fetch_site_tests injects site_id into every returned row."""
     deps = DummyDeps()  # Create synthetic dependency bundle

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.reports.admin_token_hygiene.model import AdminTokenHygieneModel
+from src.mist.intelligence.reports.admin_token_hygiene.model import AdminTokenHygieneModel
 
 NOW = datetime(2026, 9, 29, tzinfo=UTC)
 TEN_DAYS_AGO = int(NOW.timestamp()) - 864000

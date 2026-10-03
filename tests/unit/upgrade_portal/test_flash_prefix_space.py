@@ -24,7 +24,16 @@ logger = logging.getLogger(__name__)  # The log of this test module.
 
 # The stylesheet that holds section 12, the flash region.
 CSS_PATH = (
-    Path(__file__).resolve().parents[3] / "src" / "upgrade_portal" / "app" / "assets" / "static" / "css" / "portal.css"
+    Path(__file__).resolve().parents[3]
+    / "src"
+    / "interfaces"
+    / "portals"
+    / "upgrade_portal"
+    / "app"
+    / "assets"
+    / "static"
+    / "css"
+    / "portal.css"
 )
 
 # The signal word of each alert level. ASD-STE100 fixes "Warning" and "Caution".

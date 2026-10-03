@@ -163,11 +163,11 @@ The permitted diff at MistHelper.py lines 18791-18807 is the sole callsite that 
 ```python
 # Before (current, 18791-18807):
 class FirmwareManager:
-    """Factory for the extracted firmware manager (src.firmware.firmware_manager)."""
+    """Factory for the extracted firmware manager (src.operations.execution.firmware.firmware_manager)."""
 
     @staticmethod
     def create(apisession: Any, org_id: str) -> Any:
-        from src.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
+        from src.operations.execution.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
         logging.debug("Building firmware manager impl for org %s", org_id)
         return _Impl(
             apisession=apisession,
@@ -182,11 +182,11 @@ class FirmwareManager:
 
 # After (post-refactor, same lines):
 class FirmwareManager:
-    """Factory for the extracted firmware manager (src.firmware.firmware_manager)."""
+    """Factory for the extracted firmware manager (src.operations.execution.firmware.firmware_manager)."""
 
     @staticmethod
     def create(apisession: Any, org_id: str) -> Any:
-        from src.firmware.firmware_manager import (                         # noqa: PLC0415
+        from src.operations.execution.firmware.firmware_manager import (                         # noqa: PLC0415
             FirmwareManager as _Impl,
             FirmwareManagerConfig,
         )
@@ -210,7 +210,7 @@ class FirmwareManager:
 
 ## Relationship to Prior Art
 
-`FirmwareManagerConfig` mirrors `BulkAPUpgraderConfig` from `src/firmware/bulk_ap_upgrader.py` (the 1004 refactor):
+`FirmwareManagerConfig` mirrors `BulkAPUpgraderConfig` from `src/operations/execution/firmware/bulk_ap_upgrader.py` (the 1004 refactor):
 
 | Trait | BulkAPUpgraderConfig (1004) | FirmwareManagerConfig (1005) |
 |-------|------------------------------|-------------------------------|

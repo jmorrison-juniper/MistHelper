@@ -17,9 +17,9 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.compare import clients as client_compare
-from src.upgrade_portal.compare import diff as device_compare
-from src.upgrade_portal.compare import statistics
+from src.interfaces.portals.upgrade_portal.compare import clients as client_compare
+from src.interfaces.portals.upgrade_portal.compare import diff as device_compare
+from src.interfaces.portals.upgrade_portal.compare import statistics
 
 MASTER_MAC = "0011220000aa"
 MEMBER_MAC = "0011220000bb"

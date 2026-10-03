@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch  # WHY: standard mocking primitives.
 
 import pytest  # WHY: caplog fixture + parametrize.
 
-from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
+from src.operations.execution.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
 
 
 @pytest.fixture(autouse=True)
@@ -106,7 +106,7 @@ def test_load_env_config_returns_empty_when_no_env_flag_set() -> None:
 
 def test_load_env_config_returns_empty_when_args_none() -> None:
     """Passing None for args yields no-env behaviour indirectly (invokes loader)."""
-    with patch("src.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
+    with patch("src.operations.execution.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
         loader.return_value.load.return_value = {"hosts": ["h1"]}
         result = SSHRunnerManager._load_env_config(None)
     assert result == {"hosts": ["h1"]}
@@ -114,7 +114,7 @@ def test_load_env_config_returns_empty_when_args_none() -> None:
 
 def test_load_env_config_uses_loader_when_no_env_flag_absent() -> None:
     """When --no-env not set, EnvSshConfigLoader().load() is invoked."""
-    with patch("src.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
+    with patch("src.operations.execution.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
         loader.return_value.load.return_value = {"username": "u"}
         result = SSHRunnerManager._load_env_config(_Args(no_env=False))
     assert result == {"username": "u"}
@@ -413,7 +413,7 @@ def test_confirm_execution_rejects_non_yes() -> None:
 
 def test_install_mock_env_loader_replaces_loader_and_returns_selection() -> None:
     """Injected loader returns the interactive selections."""
-    from src.ssh.config.env_loader import EnvSshConfigLoader
+    from src.operations.execution.ssh.config.env_loader import EnvSshConfigLoader
 
     original = EnvSshConfigLoader.load
     try:
@@ -518,7 +518,7 @@ def test_resolve_by_template_config_returns_none_when_creds_missing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Missing username/password → None + notice."""
-    with patch("src.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
+    with patch("src.operations.execution.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
         loader.return_value.load.return_value = {"username": "", "password": ""}
         assert SSHRunnerManager._resolve_by_template_config() is None
     assert "SSH credentials not found" in caplog.text
@@ -529,8 +529,8 @@ def test_resolve_by_template_config_returns_none_when_no_commands(
 ) -> None:
     """Missing commands (env + CSV fallback both empty) → None + notice."""
     with (
-        patch("src.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader,
-        patch("src.ssh.ssh_runner_manager.CommandCsvLoader") as csv_loader,
+        patch("src.operations.execution.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader,
+        patch("src.operations.execution.ssh.ssh_runner_manager.CommandCsvLoader") as csv_loader,
     ):
         loader.return_value.load.return_value = {"username": "u", "password": "p", "commands": []}
         csv_loader.return_value.load.return_value = []
@@ -540,7 +540,7 @@ def test_resolve_by_template_config_returns_none_when_no_commands(
 
 def test_resolve_by_template_config_returns_resolved_trio() -> None:
     """Full config yields (user, password, commands) tuple."""
-    with patch("src.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
+    with patch("src.operations.execution.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
         loader.return_value.load.return_value = {
             "username": "u",
             "password": "p",
@@ -552,8 +552,8 @@ def test_resolve_by_template_config_returns_resolved_trio() -> None:
 def test_resolve_by_template_config_uses_csv_fallback() -> None:
     """Empty env commands trigger CSV loader fallback."""
     with (
-        patch("src.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader,
-        patch("src.ssh.ssh_runner_manager.CommandCsvLoader") as csv_loader,
+        patch("src.operations.execution.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader,
+        patch("src.operations.execution.ssh.ssh_runner_manager.CommandCsvLoader") as csv_loader,
     ):
         loader.return_value.load.return_value = {"username": "u", "password": "p", "commands": []}
         csv_loader.return_value.load.return_value = ["cmd1"]
@@ -577,7 +577,9 @@ def test_report_by_template_results(caplog: pytest.LogCaptureFixture) -> None:
 
 def test_run_by_template_batch_delegates_to_multihostrunner() -> None:
     """Delegates to MultiHostRunner.run with a request bundle."""
-    with patch("src.ssh.ssh_runner_manager.MultiHostRunner.run", return_value={"h1": {"success": True}}) as run:
+    with patch(
+        "src.operations.execution.ssh.ssh_runner_manager.MultiHostRunner.run", return_value={"h1": {"success": True}}
+    ) as run:
         result = SSHRunnerManager._run_by_template_batch(["10.0.0.1"], "u", "p", ["cmd"])
     assert result == {"h1": {"success": True}}
     run.assert_called_once()

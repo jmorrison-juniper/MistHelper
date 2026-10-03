@@ -117,8 +117,8 @@ The requirements checklist resides under `design/checklists/` to preserve both l
 
 ### Approved Final Manifest
 
-1. `src/capture/_packet_capture_prompts.py`.
-2. `src/refactors/serial_cc/start_site_client_capture_wireless.py`.
+1. `src/operations/execution/capture/_packet_capture_prompts.py`.
+2. `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py`.
 3. `tests/unit/capture/test_multi_ap_scan_workflow.py`, limited to two appended parameterized test functions, necessary imports, and the module docstring.
 4. Issue-owned documents under `specs/3337-packet-length-validation/`.
 5. `changelog.d/issue-3337-packet-length-validation.md`.
@@ -266,8 +266,8 @@ Module counts use direct functions, classes, and assignments.
 
 | Existing violation | Count | Bounded decision | Separate incremental repair |
 | --- | --- | --- | --- |
-| `src/capture/` | 13 children | Edit one existing file. Add no child. | Move coherent capture groups into compliant packages in separate work. |
-| `src/refactors/serial_cc/` | 9 children | Edit one existing file. Add no child. | Separate coherent capture groups under compliant packages. |
+| `src/operations/execution/capture/` | 13 children | Edit one existing file. Add no child. | Move coherent capture groups into compliant packages in separate work. |
+| `src/foundation/support/refactors/serial_cc/` | 9 children | Edit one existing file. Add no child. | Separate coherent capture groups under compliant packages. |
 | Shared prompt module and class | 9 module declarations, 38 methods | Change three existing literals. Add no declaration or method. | Split existing prompt groups by responsibility in separate work. |
 | Wireless module and service | 44 module declarations, 18 methods | Change three existing literals. Add no declaration or method. | Move existing specifications and workflow groups in separate work. |
 | `_MAX_PKT_LEN_SPEC` | 7 existing fields | Preserve its shape. Change only the maximum and messages. | Review specification structure during the separate module repair. |
@@ -280,7 +280,7 @@ The feature root and design directory each contain five children.
 These new directories comply with the structural limit.
 
 The source ancestors also exceed five children.
-Their tracked counts are `src/` 42, `src/refactors/` 33, and `tests/` 38.
+Their tracked counts are `src/` 42, `src/foundation/support/refactors/` 33, and `tests/` 38.
 This change adds no child to those ancestors.
 The app already supplied this issue directory under `specs/`.
 Documentation alignment adds no sibling issue directory.

@@ -8,7 +8,7 @@
 | File | Subject |
 | --- | --- |
 | `http-api.md` | Every browser endpoint and every JSON endpoint |
-| `upgrade-service.md` | The Python seam at `src/firmware/upgrade_service.py` |
+| `upgrade-service.md` | The Python seam at `src/operations/execution/firmware/upgrade_service.py` |
 | `site-lock.md` | The Redis lock protocol across worker processes |
 | `ui-testids.md` | The stable test identifier on every control a test drives |
 

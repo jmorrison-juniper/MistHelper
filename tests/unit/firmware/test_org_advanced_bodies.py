@@ -16,10 +16,10 @@ from typing import Any
 
 import pytest
 
-from src.firmware import upgrade_service
-from src.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
-from src.firmware.org_upgrade_body import FAILURE_COUNT_HIGHEST, OrgUpgradeBody
-from src.firmware.upgrade_service import (
+from src.operations.execution.firmware import upgrade_service
+from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
+from src.operations.execution.firmware.org_upgrade_body import FAILURE_COUNT_HIGHEST, OrgUpgradeBody
+from src.operations.execution.firmware.upgrade_service import (
     CanaryOptions,
     DeviceTarget,
     GatewayFamily,

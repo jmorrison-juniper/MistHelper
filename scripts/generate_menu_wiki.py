@@ -135,7 +135,7 @@ class WikiMenuReferenceGenerator:
     def load_registry(self) -> dict[int, str]:
         """Return the menu number to category map from the single source of truth."""
         sys.path.insert(0, str(self.repo_root))
-        from src.utils.operation_registry import OperationRegistry
+        from src.foundation.support.utils.operation_registry import OperationRegistry
 
         return {
             int(option): OperationRegistry.skip_category(option)
@@ -186,14 +186,14 @@ class WikiMenuReferenceGenerator:
                 "# Menu Reference",
                 "",
                 "This page is generated. Run `python scripts/generate_menu_wiki.py` after any",
-                "change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.",
+                "change to `menu_actions` in `MistHelper.py` or to `src/foundation/support/utils/operation_registry.py`.",
                 "",
                 f"MistHelper defines **{len(actionable)} actionable menu entries**, numbered",
                 f"{actionable[0]} to {actionable[-1]}"
                 + (f" with gaps at {self.compact_spans(gaps)}." if gaps else " with no gaps."),
                 f"Menu 0 is Exit, so the registry holds {len(numbers)} entries in total.",
                 "",
-                "The Safety column reads from `src/utils/operation_registry.py`, which is the",
+                "The Safety column reads from `src/foundation/support/utils/operation_registry.py`, which is the",
                 "single source of truth. The classifier fails closed, so an unregistered option",
                 "never runs in an automated test pass.",
                 "",
@@ -247,7 +247,7 @@ class WikiMenuReferenceGenerator:
             The Markdown lines of the section.
         """
         sys.path.insert(0, str(self.repo_root))  # Import the catalog from the repository under test.
-        from src.export.endpoint_catalog import (
+        from src.operations.exporting.export.endpoint_catalog import (
             DESTRUCTIVE,
             ENDPOINT_CATALOG,
             INTERACTIVE_SAFE,
@@ -274,7 +274,7 @@ class WikiMenuReferenceGenerator:
             "  [1] getSiteWlan - Get site WLAN [safe interactive]",
             "```",
             "",
-            "`src/export/endpoint_catalog.py` holds the description and the safety word for",
+            "`src/operations/exporting/export/endpoint_catalog.py` holds the description and the safety word for",
             f"all {len(ENDPOINT_CATALOG)} operations. The description comes from the Mist API documentation",
             "name that the installed `mistapi` docstring carries. The safety word uses the",
             "vocabulary of `OperationRegistry`.",

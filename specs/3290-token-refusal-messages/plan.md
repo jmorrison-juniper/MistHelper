@@ -12,7 +12,7 @@
 
 ## Summary
 
-Change message selection at four existing refusal returns in `src/upgrade_portal/app/routes/auth.py`.
+Change message selection at four existing refusal returns in `src/interfaces/portals/upgrade_portal/app/routes/auth.py`.
 Keep all authentication checks, status codes, error codes, logging, and successful responses unchanged.
 Add no authentication logic, cloud access, wrapper, setting, or stored data.
 
@@ -61,7 +61,7 @@ Keep the common address check, provider messages, and accepted-token session beh
 ## Reserved File Set
 
 ```text
-src/upgrade_portal/app/routes/auth.py
+src/interfaces/portals/upgrade_portal/app/routes/auth.py
 tests/unit/upgrade_portal/test_auth.py
 tests/unit/upgrade_portal/test_token_refusal_messages.py
 tests/contract/upgrade_portal/test_token_refusal_messages.py

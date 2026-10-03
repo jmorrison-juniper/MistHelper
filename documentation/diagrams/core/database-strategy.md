@@ -172,7 +172,7 @@ The repair for issue #3309 performs no production migration.
 
 ## Source of Truth
 
-`src/refactors/endpoint_primary_key_strategies.py` holds the
-`ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary. `src/db/router.py` maps
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py` holds the
+`ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary. `src/foundation/persistence/db/router.py` maps
 `natural_pk` and `auto_increment_with_unique` to ArangoDB, `composite_pk` to
 ArangoDB plus Redis JSON, and `timeseries_pk` to Redis TimeSeries.

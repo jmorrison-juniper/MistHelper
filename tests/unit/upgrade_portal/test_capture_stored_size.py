@@ -26,7 +26,7 @@ from typing import Any  # A stored capture document is a free-form mapping.
 
 import pytest  # The test framework.
 
-from src.upgrade_portal.app.routes import capture  # The module under test.
+from src.interfaces.portals.upgrade_portal.app.routes import capture  # The module under test.
 
 CAPTURE_ID = "cap-434b67ead6e94b33a175a8a86ca16c9f-01"  # The tier 3 capture of the issue report.
 STORED_SIZE = 39472  # The size that the store measured for that capture.

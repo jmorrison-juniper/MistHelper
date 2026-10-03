@@ -177,4 +177,4 @@ Common use cases:
 
 MistHelper does not currently call `getOrgAsyncClaimStatus`.
 Verification source: `git grep -n "getOrgAsyncClaimStatus" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.
+`src/operations/exporting/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

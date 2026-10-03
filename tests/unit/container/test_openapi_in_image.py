@@ -23,8 +23,8 @@ from pathlib import Path
 
 import pytest
 
-from src.mib_generator.document import OpenApiDocument
-from src.mib_generator.runner import DEFAULT_OPENAPI
+from src.operations.hardware.mib_generator.document import OpenApiDocument
+from src.operations.hardware.mib_generator.runner import DEFAULT_OPENAPI
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 DOCKERIGNORE = REPOSITORY_ROOT / ".dockerignore"

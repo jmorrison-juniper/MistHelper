@@ -18,13 +18,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import (
+from src.mist.access.api.deps import (
     get_authenticated_user,
     get_db_session,
     get_scoped_org_id,
 )
-from src.api.middleware.auth import CurrentUser, require_org_access
-from src.api.schemas.audit import (
+from src.mist.access.api.middleware.auth import CurrentUser, require_org_access
+from src.mist.access.api.schemas.audit import (
     AuditRecordResponse,
     CompliancePackRequest,
     CompliancePackResponse,
@@ -32,7 +32,7 @@ from src.api.schemas.audit import (
     ExportRequest,
     ExportStatusResponse,
 )
-from src.api.schemas.common import PaginationMeta, ResponseEnvelope
+from src.mist.access.api.schemas.common import PaginationMeta, ResponseEnvelope
 from src.shared.models.governance import (
     ComplianceAuditPack,
     IncidentChangeCorrelation,

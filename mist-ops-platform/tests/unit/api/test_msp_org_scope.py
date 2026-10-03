@@ -25,7 +25,7 @@ import pytest  # Test framework and skip helper
 PLATFORM_ROOT = Path(__file__).resolve().parents[3]  # Sub-project root that holds "src"
 
 if str(PLATFORM_ROOT) not in sys.path:  # Only extend the path one time
-    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.api" importable
+    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.mist.access.api" importable
 
 MSP_OWNED_ORG = "11111111-1111-1111-1111-111111111111"  # Organization the MSP owns
 FOREIGN_ORG = "22222222-2222-2222-2222-222222222222"  # Organization of a different MSP
@@ -46,7 +46,7 @@ def _build_probe_app(user):
     pytest.importorskip("httpx")  # The test client needs httpx
     pytest.importorskip("sqlalchemy")  # deps.py imports sqlalchemy at module load
 
-    from src.api.deps import get_authenticated_user, get_scoped_org_id
+    from src.mist.access.api.deps import get_authenticated_user, get_scoped_org_id
 
     app = fastapi.FastAPI()  # Minimal app, so the test needs no database
 
@@ -75,7 +75,7 @@ def _msp_user(**overrides):
     """Return an MSP caller whose reachable organizations the test controls."""
     pytest.importorskip("fastapi")  # The dataclass lives beside the FastAPI imports
 
-    from src.api.middleware.auth import CurrentUser
+    from src.mist.access.api.middleware.auth import CurrentUser
 
     fields = {  # Default shape of an MSP operator who holds no direct org grant
         "token": "test-token",  # The value is a placeholder, and it reaches no network
@@ -138,7 +138,7 @@ def test_collect_msp_ids_reads_only_the_msp_scoped_rows() -> None:
     """The collector keeps the MSP identifier of every MSP scoped row."""
     pytest.importorskip("fastapi")  # The helper lives beside the FastAPI imports
 
-    from src.api.middleware.auth import collect_msp_ids
+    from src.mist.access.api.middleware.auth import collect_msp_ids
 
     rows = [  # One Mist answer holds a row for each grant
         {"scope": "msp", "msp_id": MSP_A},  # An MSP grant names the MSP account
@@ -153,7 +153,7 @@ def test_collect_msp_ids_returns_an_empty_list_for_no_msp_row() -> None:
     """The collector returns nothing when no row carries the MSP scope."""
     pytest.importorskip("fastapi")  # The helper lives beside the FastAPI imports
 
-    from src.api.middleware.auth import collect_msp_ids
+    from src.mist.access.api.middleware.auth import collect_msp_ids
 
     rows = [{"scope": "org", "org_id": FOREIGN_ORG}]  # A plain operator holds org rows only
     assert collect_msp_ids(rows) == []  # No MSP row means no MSP scope
@@ -190,7 +190,7 @@ async def test_resolve_msp_org_ids_returns_the_owned_organizations() -> None:
     """The lookup returns the organizations that the named MSP accounts own."""
     pytest.importorskip("sqlalchemy")  # The helper builds a SQLAlchemy select
 
-    from src.api.middleware.auth import resolve_msp_org_ids
+    from src.mist.access.api.middleware.auth import resolve_msp_org_ids
 
     session = _FakeSession([UUID(MSP_OWNED_ORG)])  # The database owns one organization
     result = await resolve_msp_org_ids(session, [MSP_A])  # Ask for the reachable set
@@ -202,7 +202,7 @@ async def test_resolve_msp_org_ids_skips_the_query_for_no_msp() -> None:
     """The lookup makes no query when the caller administers no MSP."""
     pytest.importorskip("sqlalchemy")  # The helper builds a SQLAlchemy select
 
-    from src.api.middleware.auth import resolve_msp_org_ids
+    from src.mist.access.api.middleware.auth import resolve_msp_org_ids
 
     session = _FakeSession([UUID(MSP_OWNED_ORG)])  # The rows must stay unread
     result = await resolve_msp_org_ids(session, [])  # A plain operator holds no MSP account
@@ -214,7 +214,7 @@ async def test_resolve_msp_org_ids_drops_a_malformed_identifier() -> None:
     """The lookup ignores an MSP identifier that is not a UUID."""
     pytest.importorskip("sqlalchemy")  # The helper builds a SQLAlchemy select
 
-    from src.api.middleware.auth import resolve_msp_org_ids
+    from src.mist.access.api.middleware.auth import resolve_msp_org_ids
 
     session = _FakeSession([])  # The database returns no organization
     result = await resolve_msp_org_ids(session, ["not-a-uuid"])  # Mist sent a bad value
@@ -226,7 +226,7 @@ async def test_resolve_msp_org_ids_ignores_an_msp_the_caller_lacks() -> None:
     """The lookup asks only for the MSP accounts that the caller administers."""
     pytest.importorskip("sqlalchemy")  # The helper builds a SQLAlchemy select
 
-    from src.api.middleware.auth import resolve_msp_org_ids
+    from src.mist.access.api.middleware.auth import resolve_msp_org_ids
 
     session = _FakeSession([UUID(MSP_OWNED_ORG)])  # The query answers for MSP_A only
     result = await resolve_msp_org_ids(session, [MSP_A])  # The caller never holds MSP_B

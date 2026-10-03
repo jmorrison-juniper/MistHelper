@@ -20,7 +20,7 @@ ExtractedPacketCaptureManager references: 2 total, both in MistHelper.py
   - MistHelper.py:6277 (alias line)
 ```
 
-`ExtractedPacketCaptureManager` is a private rename used only inside `MistHelper.py`. The canonical class at `src/capture/packet_capture.py:84` is `PacketCaptureManager`. **Strategy**: remove the `as ExtractedPacketCaptureManager` from the import on L110 and delete the alias line on L6277. After the change, every reference inside `MistHelper.py` (L13723, L13725, L14342, L21836, L21842) resolves directly to the canonical `src/` class via the cleaned-up import. Two-line change. Zero call-site rewrites needed.
+`ExtractedPacketCaptureManager` is a private rename used only inside `MistHelper.py`. The canonical class at `src/operations/execution/capture/packet_capture.py:84` is `PacketCaptureManager`. **Strategy**: remove the `as ExtractedPacketCaptureManager` from the import on L110 and delete the alias line on L6277. After the change, every reference inside `MistHelper.py` (L13723, L13725, L14342, L21836, L21842) resolves directly to the canonical `src/` class via the cleaned-up import. Two-line change. Zero call-site rewrites needed.
 
 **Wave 1 guardrail (`tests/guardrails/test_wave1_scope_boundaries.py:72`) still passes** — the test asserts `getattr(MistHelper, "PacketCaptureManager")` exists, which it still does (re-exported via the import statement).
 
@@ -29,7 +29,7 @@ ExtractedPacketCaptureManager references: 2 total, both in MistHelper.py
 Grep evidence:
 
 ```
-src/exporters/: no matches for save_data_to_output or write_with_format_selection
+src/operations/exporting/exporters/: no matches for save_data_to_output or write_with_format_selection
 MistHelper.py:8019: return DataExporter.write_with_format_selection(data, filename, api_function_name=api_function_name)
 MistHelper.py L7720 (approx): DataExporter.write_with_format_selection definition
 MistHelper.py: 82 call sites of save_data_to_output across the file
@@ -152,12 +152,12 @@ Spec assumption #235 says "every facade flagged has a canonical successor in `sr
 
 | Sub-tranche | `src/` module | Facade count | Canonical class |
 |---|---|---:|---|
-| 4a | `src.inventory.org_device_inventory_summary` | 14 | `OrgDeviceInventorySummaryCore` |
-| 4b | `src.inventory.org_device_inventory_msp` | 4 | `OrgDeviceInventoryMSPOrchestrator` |
-| 4c | `src.marvis.troubleshoot` | ~4 | `ExtractedMarvisTroubleshootUtils` |
-| 4d | `src.gateway.device_template_cloner` | ~4 | spec #168 class |
-| 4e | `src.ssh.runner_manager` | ~3 | `ExtractedSSHRunnerManager` |
-| 4f | `src.firmware.manager` | ~3 | `ExtractedFirmwareManager` (via `_create_impl()` pattern) |
+| 4a | `src.mist.resources.inventory.org_device_inventory_summary` | 14 | `OrgDeviceInventorySummaryCore` |
+| 4b | `src.mist.resources.inventory.org_device_inventory_msp` | 4 | `OrgDeviceInventoryMSPOrchestrator` |
+| 4c | `src.mist.intelligence.marvis.troubleshoot` | ~4 | `ExtractedMarvisTroubleshootUtils` |
+| 4d | `src.mist.resources.gateway.device_template_cloner` | ~4 | spec #168 class |
+| 4e | `src.operations.execution.ssh.runner_manager` | ~3 | `ExtractedSSHRunnerManager` |
+| 4f | `src.operations.execution.firmware.manager` | ~3 | `ExtractedFirmwareManager` (via `_create_impl()` pattern) |
 
 Some `src/` modules may already use constructor DI — verify before refactoring. Skip the constructor work if a module already supports it; just rewrite call sites in those cases.
 
@@ -172,7 +172,7 @@ Some `src/` modules may already use constructor DI — verify before refactoring
 
 **Per-sub-tranche commit message**: `version YY.MM.DD.HH.MM - refactor(#431): tranche 4X/5 - inline <module name> facades (constructor DI)`
 
-**5-Item Rule compliance**: each canonical class's constructor takes ≤5 args. If it needs more, group into a `@dataclass(frozen=True, slots=True)` config in `src/dataclasses/`.
+**5-Item Rule compliance**: each canonical class's constructor takes ≤5 args. If it needs more, group into a `@dataclass(frozen=True, slots=True)` config in `src/foundation/models/dataclasses/`.
 
 ---
 
@@ -195,7 +195,7 @@ Some `src/` modules may already use constructor DI — verify before refactoring
 | 22721 | `emit_progress_complete` | 6 |
 | 23277 | `_systematic_test_run_option` | 7 |
 
-**Approach**: for each function, group related params into a `@dataclass(frozen=True, slots=True)` container. Dataclasses live in a NEW `src/dataclasses/` module (one file per logical grouping, e.g. `src/dataclasses/test_emission.py` for the three `emit_*` functions, `src/dataclasses/pool_batch.py` for `_pool_process_batch_wait_loop`). **NOT inside `MistHelper.py`** — that would push host classes over the 5-Item Rule's child limit. Update function signature to take the dataclass plus any remaining ≤5 params. Update all call sites to build the dataclass.
+**Approach**: for each function, group related params into a `@dataclass(frozen=True, slots=True)` container. Dataclasses live in a NEW `src/foundation/models/dataclasses/` module (one file per logical grouping, e.g. `src/foundation/models/dataclasses/test_emission.py` for the three `emit_*` functions, `src/foundation/models/dataclasses/pool_batch.py` for `_pool_process_batch_wait_loop`). **NOT inside `MistHelper.py`** — that would push host classes over the 5-Item Rule's child limit. Update function signature to take the dataclass plus any remaining ≤5 params. Update all call sites to build the dataclass.
 
 **5-Item Rule compliance check** for every Tranche 5 commit:
 - The host class's child count (methods + attributes) MUST NOT increase. We're shrinking parameter lists, not adding methods.
@@ -228,7 +228,7 @@ Every change in every tranche MUST honor these rules from `copilot-instructions.
 | Rule | How this PR honors it |
 |---|---|
 | **No wrappers** | All 38 ARCH-DELEGATE methods deleted. Call sites rewritten to use canonical `src/` class directly. No new wrappers introduced. |
-| **5-Item Rule** (max 5 params, 5 blocks, 25 lines, 5 children per class) | Tranche 5 dataclasses live in `src/dataclasses/` (NOT `MistHelper.py`) so host classes don't gain child slots. Dataclasses ≤5 fields each (split if needed). Inlined code blocks checked against the 25-line limit; if inlining would exceed it, the canonical `src/` method is called instead. |
+| **5-Item Rule** (max 5 params, 5 blocks, 25 lines, 5 children per class) | Tranche 5 dataclasses live in `src/foundation/models/dataclasses/` (NOT `MistHelper.py`) so host classes don't gain child slots. Dataclasses ≤5 fields each (split if needed). Inlined code blocks checked against the 25-line limit; if inlining would exceed it, the canonical `src/` method is called instead. |
 | **Inline comments on EVERY executable line touched** | Every replacement line MUST have a same-line `# comment explaining why`. When editing an existing block, the *entire* block gets comments, not just my new lines. |
 | **Action logging before/after EVERY operation** | `logging.info("...")` before each API/file/state change, `logging.debug("...")` after with result. Apply to entire touched blocks. |
 | **ASCII only in logs** | No emoji, no Unicode punctuation in log strings, commit messages, or PR body. |

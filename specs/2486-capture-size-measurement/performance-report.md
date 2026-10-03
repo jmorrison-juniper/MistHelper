@@ -10,7 +10,7 @@
 
 **Measured**: The benchmark ran on Windows 11 with AMD64 architecture. The observed processor was `13th Gen Intel(R) Core(TM) i9-13950HX`. The machine has 32 logical cores per the task environment.
 
-**Measured**: Python was CPython 3.13.3. The benchmark imported `C:\Users\jmorrison\misthelper-opt2-capture-size\src\upgrade_portal\capture\store.py`. The source revision before edits was `222f74d3940fbd83628e1578db7cdf80d1c6ae8e`.
+**Measured**: Python was CPython 3.13.3. The benchmark imported `C:\Users\jmorrison\misthelper-opt2-capture-size\src\interfaces\portals\upgrade_portal\capture\store.py`. The source revision before edits was `222f74d3940fbd83628e1578db7cdf80d1c6ae8e`.
 
 **Measured**: The benchmark harness path was `C:\Users\jmorrison\.copilot\session-state\76354831-7a9d-41c9-b7dc-933e025bc5a8\files\opt2_capture_size_benchmark.py`. The raw baseline path was `C:\Users\jmorrison\.copilot\session-state\76354831-7a9d-41c9-b7dc-933e025bc5a8\files\opt2_capture_size_baseline.json`. The raw candidate path was `C:\Users\jmorrison\.copilot\session-state\76354831-7a9d-41c9-b7dc-933e025bc5a8\files\opt2_capture_size_candidate.json`.
 
@@ -58,7 +58,7 @@
 
 | Field | Required content |
 | --- | --- |
-| Change ID and location | `capture-size-width`, `src\upgrade_portal\capture\store.py`, `_stamp_size()`, `_stable_capture_size_bytes()`, `_capture_size_bytes()`, and `_edge_size_bytes()`. |
+| Change ID and location | `capture-size-width`, `src\interfaces\portals\upgrade_portal\capture\store.py`, `_stamp_size()`, `_stable_capture_size_bytes()`, `_capture_size_bytes()`, and `_edge_size_bytes()`. |
 | Evidence | Raw results are in `opt2_capture_size_baseline.json` and `opt2_capture_size_candidate.json`. Profile summaries are in `opt2_capture_size_baseline_profile_stamp_large.txt` and `opt2_capture_size_candidate_profile_stamp_large.txt`. |
 | Root cause | `_stamp_size()` serialized the full capture until the size value settled. Large captures paid the whole canonical walk three times. |
 | Change | The code now serializes the stable body once and computes only the changing digit width. |
@@ -101,11 +101,11 @@
 | --- | --- | --- | --- |
 | Baseline stored size tests | `rtk python -m pytest tests\unit\upgrade_portal\test_store.py tests\unit\upgrade_portal\test_capture_assembly.py tests\unit\upgrade_portal\test_capture_stored_size.py tests\contract\upgrade_portal -q` | 1017 passed in 520.65 seconds | Baseline before application code edits |
 | Candidate stored size tests | `rtk python -m pytest tests\unit\upgrade_portal\test_store.py tests\unit\upgrade_portal\test_capture_assembly.py tests\unit\upgrade_portal\test_capture_stored_size.py tests\contract\upgrade_portal -q` | 1022 passed in 634.36 seconds | Includes five new unit cases |
-| Compile | `rtk python -m py_compile src\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | No output from compile |
-| Ruff | `rtk python -m ruff check src\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | `All checks passed!` |
-| Black | `rtk python -m black --check src\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | `2 files would be left unchanged.` |
-| pydocstyle | `rtk python -m pydocstyle src\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | No output |
-| Bandit | `rtk python -m bandit -q src\upgrade_portal\capture\store.py` | Passed | No output |
+| Compile | `rtk python -m py_compile src\interfaces\portals\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | No output from compile |
+| Ruff | `rtk python -m ruff check src\interfaces\portals\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | `All checks passed!` |
+| Black | `rtk python -m black --check src\interfaces\portals\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | `2 files would be left unchanged.` |
+| pydocstyle | `rtk python -m pydocstyle src\interfaces\portals\upgrade_portal\capture\store.py tests\unit\upgrade_portal\test_store.py` | Passed | No output |
+| Bandit | `rtk python -m bandit -q src\interfaces\portals\upgrade_portal\capture\store.py` | Passed | No output |
 | Diff whitespace | `rtk git diff --check` | Passed | No output |
 | STE documents | `rtk python -m tools.ste_linter CHANGELOG.md specs\2486-capture-size-measurement\spec.md specs\2486-capture-size-measurement\plan.md specs\2486-capture-size-measurement\tasks.md specs\2486-capture-size-measurement\performance-report.md --min-score 80 --quiet` | Passed | Scores were 86 through 99 for changed documents. |
 
@@ -123,5 +123,5 @@
 | Opportunity and status | Missing evidence or blocker | Exact next benchmark | Expected value and risk |
 | --- | --- | --- | --- |
 | Share canonical body work between size and digest, Hypothesis | Needs proof that digest bytes stay identical. | Extend the harness to measure `verify_write()` with shared canonical output across medium and large captures. | Medium value for verification. Medium risk to digest behavior. |
-| Optimize assembly `stamp_size()`, Hypothesis | This task targeted the store path. | Run the same write path harness against `src\upgrade_portal\capture\assembly.py`. | Medium value for capture construction. Medium risk to assembly import boundaries. |
+| Optimize assembly `stamp_size()`, Hypothesis | This task targeted the store path. | Run the same write path harness against `src\interfaces\portals\upgrade_portal\capture\assembly.py`. | Medium value for capture construction. Medium risk to assembly import boundaries. |
 | Profile realistic production captures, Blocked | No sanitized production captures were provided. | Run the harness against sanitized capture JSON files with known provenance. | High confidence if fixtures become available. Low code risk. |

@@ -93,7 +93,7 @@ tests/
     └── test_top5_compatibility_paths.py
 ```
 
-**Structure Decision**: single-project Python CLI with incremental extraction. New logic is placed in existing domain directories (`src/capture`, `src/gateway`, `src/export`) and one new bounded `src/bootstrap` package for dependency bootstrap orchestration.
+**Structure Decision**: single-project Python CLI with incremental extraction. New logic is placed in existing domain directories (`src/operations/execution/capture`, `src/mist/resources/gateway`, `src/operations/exporting/export`) and one new bounded `src/foundation/runtime/bootstrap` package for dependency bootstrap orchestration.
 
 ## Architecture & Module Boundaries
 
@@ -101,39 +101,39 @@ tests/
 
 - **Current pain**: one function mixes requirement parsing, uv discovery, installs/upgrades, fallback logic, and retry/error policy.
 - **New boundaries**:
-  - `src/bootstrap/dependency_check.py`: orchestration class `DependencyCheckOrchestrator` (entrypoint used by `MistHelper.py`).
-  - `src/bootstrap/package_installer.py`: install/upgrade strategies (`uv` then `pip`, per-package fallback).
-  - `src/bootstrap/uv_runtime.py`: `uv` detection/install/version check helpers.
+  - `src/foundation/runtime/bootstrap/dependency_check.py`: orchestration class `DependencyCheckOrchestrator` (entrypoint used by `MistHelper.py`).
+  - `src/foundation/runtime/bootstrap/package_installer.py`: install/upgrade strategies (`uv` then `pip`, per-package fallback).
+  - `src/foundation/runtime/bootstrap/uv_runtime.py`: `uv` detection/install/version check helpers.
 - **Entry compatibility**: keep `_early_dependency_check()` in `MistHelper.py` as a compatibility facade that delegates to `DependencyCheckOrchestrator.run()`.
 
 ### Decision 2: Packet capture organization workflow extraction (`start_org_packet_capture`)
 
 - **Current pain**: mixed UI prompts, API fetches, selection logic, payload build, confirmation, and execution.
 - **New boundaries**:
-  - `src/capture/org_capture_workflow.py`: class `OrgCaptureWorkflow` with methods for MxEdge discovery, selection, interface resolution, payload build, and confirmation.
-  - `src/capture/packet_capture.py`: `PacketCaptureManager.start_org_packet_capture()` reduced to orchestration calls only.
+  - `src/operations/execution/capture/org_capture_workflow.py`: class `OrgCaptureWorkflow` with methods for MxEdge discovery, selection, interface resolution, payload build, and confirmation.
+  - `src/operations/execution/capture/packet_capture.py`: `PacketCaptureManager.start_org_packet_capture()` reduced to orchestration calls only.
 - **Entry compatibility**: menu operation remains unchanged; same call path to `PacketCaptureManager.start_org_packet_capture()`.
 
 ### Decision 3: Site capture loop decomposition (`_execute_site_capture_loop`)
 
 - **Current pain**: infinite-loop orchestration contains fetch, download, readiness checks, capture start, sleep policy, and interruption handling.
 - **New boundaries**:
-  - `src/capture/site_capture_loop.py`: class `SiteCaptureLoopRunner` with explicit stages: `fetch_completed`, `download_new`, `maybe_start_capture`, `compute_sleep`, `handle_interrupt`.
-  - `src/capture/packet_capture.py`: retains thin orchestration method that wires dependencies and invokes the runner.
+  - `src/operations/execution/capture/site_capture_loop.py`: class `SiteCaptureLoopRunner` with explicit stages: `fetch_completed`, `download_new`, `maybe_start_capture`, `compute_sleep`, `handle_interrupt`.
+  - `src/operations/execution/capture/packet_capture.py`: retains thin orchestration method that wires dependencies and invokes the runner.
 
 ### Decision 4: Gateway WAN overrides analysis extraction (`with_wan_overrides`)
 
 - **Current pain**: CSV bootstrap/cache generation, lookup materialization, multi-pass API strategy, fast-mode concurrency, and report synthesis in one body.
 - **New boundaries**:
-  - `src/gateway/gateway_override_analysis.py`: class `GatewayOverrideAnalyzer` responsible for end-to-end analysis/report generation.
-  - `src/gateway/gateway_export_utils.py`: keep public method `with_wan_overrides()` delegating to analyzer.
+  - `src/mist/resources/gateway/gateway_override_analysis.py`: class `GatewayOverrideAnalyzer` responsible for end-to-end analysis/report generation.
+  - `src/mist/resources/gateway/gateway_export_utils.py`: keep public method `with_wan_overrides()` delegating to analyzer.
 - **Migration cleanup**: remove legacy duplicate body from `MistHelper.py` once delegation is fully validated.
 
 ### Decision 5: 52-week device events streaming export extraction (`device_events_52w`)
 
 - **Current pain**: checkpointing, pagination, retry/backoff, CSV/SQLite split, and header synthesis are tightly coupled.
 - **New boundaries**:
-  - `src/export/device_events_52w_exporter.py`: class `DeviceEvents52wExporter` encapsulating fetch-page, preload-header, stream-append, checkpoint lifecycle.
+  - `src/operations/exporting/export/device_events_52w_exporter.py`: class `DeviceEvents52wExporter` encapsulating fetch-page, preload-header, stream-append, checkpoint lifecycle.
   - `MistHelper.py` `OrgAlarmEventExporter.device_events_52w()` becomes stable facade.
 
 ## Migration Strategy (Strangler Pattern)
@@ -155,7 +155,7 @@ Rollback strategy:
 ### Phase 0: Research & proof decisions
 
 - Confirm exact behavior invariants per target (prompts, files, side effects, retry semantics).
-- Confirm existing extracted modules to reuse (`src/capture/packet_capture.py`, `src/gateway/gateway_export_utils.py`).
+- Confirm existing extracted modules to reuse (`src/operations/execution/capture/packet_capture.py`, `src/mist/resources/gateway/gateway_export_utils.py`).
 - Produce `research.md` with final architecture decisions and alternatives.
 
 ### Phase 1: Design artifacts & contracts
@@ -166,11 +166,11 @@ Rollback strategy:
 
 ### Phase 2: Autonomous implementation sequence (for `/speckit.implement`)
 
-1. Implement `src/bootstrap/*` and wire `_early_dependency_check` facade.
-2. Implement `src/capture/org_capture_workflow.py`; reduce `start_org_packet_capture` CC to <=10.
-3. Implement `src/capture/site_capture_loop.py`; reduce `_execute_site_capture_loop` CC to <=10.
-4. Implement `src/export/device_events_52w_exporter.py`; reduce `device_events_52w` facade CC to <=10.
-5. Implement `src/gateway/gateway_override_analysis.py`; remove legacy duplicate `with_wan_overrides` body; keep delegated interface.
+1. Implement `src/foundation/runtime/bootstrap/*` and wire `_early_dependency_check` facade.
+2. Implement `src/operations/execution/capture/org_capture_workflow.py`; reduce `start_org_packet_capture` CC to <=10.
+3. Implement `src/operations/execution/capture/site_capture_loop.py`; reduce `_execute_site_capture_loop` CC to <=10.
+4. Implement `src/operations/exporting/export/device_events_52w_exporter.py`; reduce `device_events_52w` facade CC to <=10.
+5. Implement `src/mist/resources/gateway/gateway_override_analysis.py`; remove legacy duplicate `with_wan_overrides` body; keep delegated interface.
 6. Add/adjust unit + integration parity tests.
 7. Run full validation gates and capture evidence artifacts.
 
@@ -238,10 +238,10 @@ No constitution violations requiring exception are planned. Any temporary CC > 1
 
 Completed outcomes:
 
-1. Extracted bootstrap dependency orchestration into `src/bootstrap/` (`dependency_check.py`, `package_installer.py`, `uv_runtime.py`) and reduced `_early_dependency_check` facade complexity.
-2. Extracted packet capture orchestration helpers into `src/capture/org_capture_workflow.py` and `src/capture/site_capture_loop.py`, wired via `src/capture/packet_capture.py` and compatibility facades.
-3. Extracted 52-week device events export into `src/export/device_events_52w_exporter.py` and delegated `device_events_52w` entrypoint.
-4. Kept gateway override analyzer in extracted module, added compatibility alias path `src/gateway/gateway_override_analysis.py`, and replaced legacy heavy MistHelper entry body with delegation.
+1. Extracted bootstrap dependency orchestration into `src/foundation/runtime/bootstrap/` (`dependency_check.py`, `package_installer.py`, `uv_runtime.py`) and reduced `_early_dependency_check` facade complexity.
+2. Extracted packet capture orchestration helpers into `src/operations/execution/capture/org_capture_workflow.py` and `src/operations/execution/capture/site_capture_loop.py`, wired via `src/operations/execution/capture/packet_capture.py` and compatibility facades.
+3. Extracted 52-week device events export into `src/operations/exporting/export/device_events_52w_exporter.py` and delegated `device_events_52w` entrypoint.
+4. Kept gateway override analyzer in extracted module, added compatibility alias path `src/mist/resources/gateway/gateway_override_analysis.py`, and replaced legacy heavy MistHelper entry body with delegation.
 5. Added targeted US1/US2/US3 tests and compatibility matrix assertions.
 
 Post-refactor target CC status:

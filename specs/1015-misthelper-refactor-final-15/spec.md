@@ -53,13 +53,13 @@ The 15 in-scope candidates cover three analyzer categories:
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 — Extract a Single-use or Low-use candidate to `src/refactors/*.py` (or the sole caller's semantic module) and rewrite its callsites atomically (Priority: P1)
+### User Story 1 — Extract a Single-use or Low-use candidate to `src/foundation/support/refactors/*.py` (or the sole caller's semantic module) and rewrite its callsites atomically (Priority: P1)
 
 The queue-head workflow. For each of T-01 through T-05, the refactor engineer opens a PR that (a) creates the landing module (either the analyzer's `Suggested module` path or a semantically closer target per E-1), (b) deletes the symbol body from `MistHelper.py`, (c) rewrites every callsite in the same commit (1-2 sites for Single-use / Low-use), (d) resolves any analyzer `guideline_flags` in-flight, and (e) lands with all 15 functional CI jobs green, aggregate analyzer score ≥ 99.6/A+, `black --check` clean, `ruff check` clean, and `python MistHelper.py --test` passing (0 failed, exit 0).
 
 **Why this priority**: These are the lowest-blast-radius extractions in the initiative — Single-use has one caller, Low-use has two. Front-loading them validates the workflow before the higher-refs Hot-bucket PRs and produces early merges that thin the queue quickly.
 
-**Independent Test**: Any single Single-use candidate (e.g. `DeviceFetchConfig` at 1 ref / 9 LoC, the smallest) can be merged in isolation. The PR (a) moves `DeviceFetchConfig` into `src/refactors/device_data_fetcher.py`'s `DeviceDataFetcherManager` class body (or a top-level dataclass in that module, per E-1), (b) deletes the definition from `MistHelper.py`, (c) rewrites the single callsite at `src/refactors/device_data_fetcher.py:49`, (d) resolves the `missing_action_logging` flag, (e) leaves a NOTE breadcrumb at the extraction site in `MistHelper.py`, (f) lands green.
+**Independent Test**: Any single Single-use candidate (e.g. `DeviceFetchConfig` at 1 ref / 9 LoC, the smallest) can be merged in isolation. The PR (a) moves `DeviceFetchConfig` into `src/foundation/support/refactors/device_data_fetcher.py`'s `DeviceDataFetcherManager` class body (or a top-level dataclass in that module, per E-1), (b) deletes the definition from `MistHelper.py`, (c) rewrites the single callsite at `src/foundation/support/refactors/device_data_fetcher.py:49`, (d) resolves the `missing_action_logging` flag, (e) leaves a NOTE breadcrumb at the extraction site in `MistHelper.py`, (f) lands green.
 
 **Acceptance Scenarios**:
 
@@ -76,7 +76,7 @@ The Cat E dual-side rewire workflow — carried forward from 1014 User Story 2. 
 
 **Why this priority**: Same P1 as User Story 1. Cat E is the higher-risk of the two workflow paths because these are the highest-refs candidates (`InputUtils` at 195, `DataExporter` at 118, `OrgInventoryExporter` at 102, `VirtualChassisManager` at 104, `ConfigUtils` at 102, `PromptUtils` at 96, `DataProcessingUtils` at 69, `tqdm` at 51, `FilePathUtils` at 50, `MIST_SITE_EXCLUDE_PREFIX` at 11). A partial extraction (body moved but callers still doing direct-namespace or `mh.<Name>` resolution) would break `python MistHelper.py --test`. Atomicity is not optional.
 
-**Independent Test**: Any single Hot-bucket candidate can be merged in isolation. Example: T-15 (`MIST_SITE_EXCLUDE_PREFIX`, 3 LoC, 11 refs — the smallest LOC hot candidate) can be extracted as: (a) create `src/refactors/mist_site_exclude_prefix.py` with a module-level constant, (b) delete the definition from `MistHelper.py`, (c) rewrite the MistHelper.py callsites, (d) rewrite the `src/gateway/*.py` callsites, (e) leave a NOTE breadcrumb, (f) land green.
+**Independent Test**: Any single Hot-bucket candidate can be merged in isolation. Example: T-15 (`MIST_SITE_EXCLUDE_PREFIX`, 3 LoC, 11 refs — the smallest LOC hot candidate) can be extracted as: (a) create `src/foundation/support/refactors/mist_site_exclude_prefix.py` with a module-level constant, (b) delete the definition from `MistHelper.py`, (c) rewrite the MistHelper.py callsites, (d) rewrite the `src/mist/resources/gateway/*.py` callsites, (e) leave a NOTE breadcrumb, (f) land green.
 
 **Acceptance Scenarios**:
 
@@ -108,7 +108,7 @@ Carry-forward of 1010/1011/1013/1014 User Story 3. Reference counts and callsite
 
 ### Edge Cases
 
-- **E-1** — Landing target selection. Each candidate has a suggested landing target in the Dispatch Queue (drawn from the analyzer's `Suggested module` field or a curated override). The dispatch PR MAY override the suggestion at PR time if a closer semantic fit exists. Prefer an existing semantic package over creating a new `src/refactors/*.py` module when both are viable. The PR description records the destination-selection rationale in one sentence.
+- **E-1** — Landing target selection. Each candidate has a suggested landing target in the Dispatch Queue (drawn from the analyzer's `Suggested module` field or a curated override). The dispatch PR MAY override the suggestion at PR time if a closer semantic fit exists. Prefer an existing semantic package over creating a new `src/foundation/support/refactors/*.py` module when both are viable. The PR description records the destination-selection rationale in one sentence.
 - **E-2** — Guideline-flag decomposition mid-move. If a candidate carries `oversize_25_lines` (e.g. `OrgInventoryExporter` at 686 LoC, `PromptUtils` at 441 LoC, `DataExporter` at 345 LoC, `ENDPOINT_PRIMARY_KEY_STRATEGIES` at 2327 LoC, `DataProcessingUtils` at 158 LoC, `InsightMetricsUtils` — retired in 1014), the move includes method-level decomposition per FR-006. Deferral of any flag to a follow-up PR is prohibited.
 - **E-3** — Callsite drift between catalog regeneration and PR opening. If the analyzer's recorded line numbers drift, the PR uses fresh grep against the current `main` head at branch time. Line-number drift alone does not block extraction; only a *count* change triggers re-evaluation.
 - **E-4** — NOTE breadcrumb at the extraction site. Every extraction PR MUST leave a single-line NOTE breadcrumb at the deletion site in `MistHelper.py` (per FR-007): `# NOTE: <Name> extracted to <new-module-path>::<Name>. See specs/1015-misthelper-refactor-final-15/spec.md.` Silent (breadcrumbless) deletion is rejected.
@@ -187,35 +187,35 @@ Bucket / category audit performed 2026-07-09 against all 15 candidates confirmed
 
 | # | Task | Kind | Refs | LOC | Symbol | Cat | Landing target | Flags |
 |---:|:---:|---|---:|---:|---|:-:|---|---|
-| 1 | T-01 | class | 1 | 9 | `DeviceFetchConfig` | E | `src/refactors/device_data_fetcher.py` (fold into `DeviceDataFetcherManager` or top-level dataclass per E-1) | missing_action_logging |
-| 2 | T-02 | assignment | 1 | 3 | `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` | E | `src/refactors/fast__mode__max__concurrent__connections.py` (or existing constants module per E-1 / E-14) | missing_inline_comments, missing_action_logging |
-| 3 | T-03 | assignment | 1 | 3 | `FAST_MODE_USE_CONNECTION_AWARE_THREADING` | E | `src/refactors/fast__mode__use__connection__aware__threading.py` (or existing constants module per E-1 / E-14) | missing_action_logging |
+| 1 | T-01 | class | 1 | 9 | `DeviceFetchConfig` | E | `src/foundation/support/refactors/device_data_fetcher.py` (fold into `DeviceDataFetcherManager` or top-level dataclass per E-1) | missing_action_logging |
+| 2 | T-02 | assignment | 1 | 3 | `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` | E | `src/foundation/support/refactors/fast__mode__max__concurrent__connections.py` (or existing constants module per E-1 / E-14) | missing_inline_comments, missing_action_logging |
+| 3 | T-03 | assignment | 1 | 3 | `FAST_MODE_USE_CONNECTION_AWARE_THREADING` | E | `src/foundation/support/refactors/fast__mode__use__connection__aware__threading.py` (or existing constants module per E-1 / E-14) | missing_action_logging |
 
 ### Low-use bucket (2 tasks)
 
 | # | Task | Kind | Refs | LOC | Symbol | Cat | Landing target | Flags |
 |---:|:---:|---|---:|---:|---|:-:|---|---|
-| 4 | T-04 | assignment | 2 | 2327 | `ENDPOINT_PRIMARY_KEY_STRATEGIES` | E | `src/refactors/endpoint__primary__key__strategies.py` (or a domain-fitting `src/api/*.py` per E-1) | oversize_25_lines, missing_inline_comments, missing_action_logging, non_ascii_logs |
-| 5 | T-05 | function | 2 | 25 | `detect_msp_privileges` | E | `src/refactors/detect_msp_privileges.py` (or a domain-fitting `src/msp/*.py` per E-1) | missing_action_logging |
+| 4 | T-04 | assignment | 2 | 2327 | `ENDPOINT_PRIMARY_KEY_STRATEGIES` | E | `src/foundation/support/refactors/endpoint__primary__key__strategies.py` (or a domain-fitting `src/mist/access/api/*.py` per E-1) | oversize_25_lines, missing_inline_comments, missing_action_logging, non_ascii_logs |
+| 5 | T-05 | function | 2 | 25 | `detect_msp_privileges` | E | `src/foundation/support/refactors/detect_msp_privileges.py` (or a domain-fitting `src/msp/*.py` per E-1) | missing_action_logging |
 
 ### Hot bucket (10 tasks, descending by LOC)
 
 | # | Task | Kind | Refs | LOC | Symbol | Cat | Landing target | Flags |
 |---:|:---:|---|---:|---:|---|:-:|---|---|
-| 6 | T-06 | class | 102 | 686 | `OrgInventoryExporter` | E | `src/export/org_inventory_exporter.py` | oversize_25_lines, missing_inline_comments |
-| 7 | T-07 | class | 96 | 441 | `PromptUtils` | E | `src/ui/prompt_utils.py` | oversize_25_lines |
-| 8 | T-08 | class | 118 | 345 | `DataExporter` | E | `src/export/data_exporter.py` | oversize_25_lines, non_ascii_logs |
-| 9 | T-10 | class | 69 | 158 | `DataProcessingUtils` | E | `src/data/data_processing_utils.py` | oversize_25_lines, missing_inline_comments, hardcoded_separator |
-| 10 | T-11 | class | 104 | 78 | `VirtualChassisManager` | E | `src/device/virtual_chassis.py` (fold-in) | oversize_25_lines, missing_inline_comments, missing_action_logging |
-| 11 | T-09 | class | 195 | 74 | `InputUtils` | E | `src/ui/input_utils.py` | oversize_25_lines, raw_input_call |
-| 12 | T-12 | class | 102 | 70 | `ConfigUtils` | E | `src/config/config_utils.py` | oversize_25_lines |
-| 13 | T-13 | class | 50 | 46 | `FilePathUtils` | E | `src/utils/file_path_utils.py` | oversize_25_lines, missing_inline_comments |
-| 14 | T-14 | function | 51 | 3 | `tqdm` | E | `src/utils/tqdm_wrapper.py` (or a domain-fitting `src/ui/*.py` per E-1) | missing_action_logging |
-| 15 | T-15 | assignment | 11 | 3 | `MIST_SITE_EXCLUDE_PREFIX` | E | `src/refactors/mist_site_exclude_prefix.py` (or an existing constants module per E-1 / E-14) | missing_inline_comments, missing_action_logging |
+| 6 | T-06 | class | 102 | 686 | `OrgInventoryExporter` | E | `src/operations/exporting/export/org_inventory_exporter.py` | oversize_25_lines, missing_inline_comments |
+| 7 | T-07 | class | 96 | 441 | `PromptUtils` | E | `src/interfaces/visualization/ui/prompt_utils.py` | oversize_25_lines |
+| 8 | T-08 | class | 118 | 345 | `DataExporter` | E | `src/operations/exporting/export/data_exporter.py` | oversize_25_lines, non_ascii_logs |
+| 9 | T-10 | class | 69 | 158 | `DataProcessingUtils` | E | `src/foundation/models/data/data_processing_utils.py` | oversize_25_lines, missing_inline_comments, hardcoded_separator |
+| 10 | T-11 | class | 104 | 78 | `VirtualChassisManager` | E | `src/mist/resources/device/virtual_chassis.py` (fold-in) | oversize_25_lines, missing_inline_comments, missing_action_logging |
+| 11 | T-09 | class | 195 | 74 | `InputUtils` | E | `src/interfaces/visualization/ui/input_utils.py` | oversize_25_lines, raw_input_call |
+| 12 | T-12 | class | 102 | 70 | `ConfigUtils` | E | `src/foundation/runtime/config/config_utils.py` | oversize_25_lines |
+| 13 | T-13 | class | 50 | 46 | `FilePathUtils` | E | `src/foundation/support/utils/file_path_utils.py` | oversize_25_lines, missing_inline_comments |
+| 14 | T-14 | function | 51 | 3 | `tqdm` | E | `src/foundation/support/utils/tqdm_wrapper.py` (or a domain-fitting `src/interfaces/visualization/ui/*.py` per E-1) | missing_action_logging |
+| 15 | T-15 | assignment | 11 | 3 | `MIST_SITE_EXCLUDE_PREFIX` | E | `src/foundation/support/refactors/mist_site_exclude_prefix.py` (or an existing constants module per E-1 / E-14) | missing_inline_comments, missing_action_logging |
 
 **Category distribution**: 15 Cat E + 0 Cat A + 0 Cat B.
 
-**Landing distribution**: `src/refactors/` = 5 (or fewer if E-1 overrides land elsewhere), `src/ui/` = 2 (`prompt_utils.py`, `input_utils.py`), `src/export/` = 2 (`org_inventory_exporter.py`, `data_exporter.py`), `src/utils/` = 1 (`file_path_utils.py`), `src/data/` = 1 (`data_processing_utils.py`), `src/device/` = 1 (fold-in to `virtual_chassis.py`), `src/config/` = 1 (`config_utils.py`), plus 2 destinations pending E-1 override (`tqdm`, `detect_msp_privileges`). Every row lands in a domain-fitting existing or new package; `src/refactors/` is used as a fallback when no closer semantic fit exists.
+**Landing distribution**: `src/foundation/support/refactors/` = 5 (or fewer if E-1 overrides land elsewhere), `src/interfaces/visualization/ui/` = 2 (`prompt_utils.py`, `input_utils.py`), `src/operations/exporting/export/` = 2 (`org_inventory_exporter.py`, `data_exporter.py`), `src/foundation/support/utils/` = 1 (`file_path_utils.py`), `src/foundation/models/data/` = 1 (`data_processing_utils.py`), `src/mist/resources/device/` = 1 (fold-in to `virtual_chassis.py`), `src/foundation/runtime/config/` = 1 (`config_utils.py`), plus 2 destinations pending E-1 override (`tqdm`, `detect_msp_privileges`). Every row lands in a domain-fitting existing or new package; `src/foundation/support/refactors/` is used as a fallback when no closer semantic fit exists.
 
 **Queue-head validation candidates**: The three Single-use candidates cluster at the queue head — `DeviceFetchConfig` (1r/9L, T-01), `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` (1r/3L, T-02), `FAST_MODE_USE_CONNECTION_AWARE_THREADING` (1r/3L, T-03). These are 1-callsite extractions and validate the Cat E workflow at minimum blast radius before the Low-use and Hot PRs.
 

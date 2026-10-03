@@ -162,7 +162,7 @@ mindmap
 | Path | Purpose |
 |------|---------|
 | `MistHelper.py` | Runtime entrypoint and menu registry. The decomposition moved most logic into `src/`. |
-| `src/` | Extracted modules that mirror the Mist API and mistapi hierarchy |
+| `src/` | Four domain packages: `foundation`, `mist`, `operations`, and `interfaces` |
 | `scripts/` | Maintenance commands and generators. `scripts/menu_api_map/` writes the menu API endpoint map. |
 | `requirements-dev.txt` | Development tools. It pins `misthelper-devtools`, which supplies the STE linter and the repository analyzers. |
 | `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts; polyglot backends run in containers |
@@ -253,22 +253,22 @@ src/
 
 | Module | Status | Description |
 |--------|--------|-------------|
-| `src/db/` | **Done** | ArangoDB writer, Redis writer, retention, routing |
-| `src/export/` | **Done** | Output writer (`DataExporter.write_with_format_selection`) |
-| `src/constants.py` | **Done** | Shared constants |
+| `src/foundation/persistence/db/` | **Done** | ArangoDB writer, Redis writer, retention, routing |
+| `src/operations/exporting/export/` | **Done** | Output writer (`DataExporter.write_with_format_selection`) |
+| `src/foundation/constants.py` | **Done** | Shared constants |
 | `src/wan_*.py` | **Done** | WAN hub group manager, VPN builder |
-| `src/analytics/` | **Done (Wave 2)** | Site inventory health analyzer, site analytics configurator, zone analyzer |
-| `src/capture/` | **Done (Wave 2)** | Canonical packet capture manager + download/poll helper extraction |
-| `src/export/` | **Done (Wave 2)** | Site export utilities and site insights exporter |
-| `src/gateway/` | **Done (Wave 2)** | Gateway exports, stats exporter, override analyzer, WAN2 migration, probe overrides |
-| `src/inventory/` | **Done (Wave 2)** | Org device inventory summary, MSP orchestrator, CSV comparator |
-| `src/site/` | **Done (Wave 2)** | Site config manager (test sites, RF templates, device profiles) |
-| `src/ssh/` | **Done (Wave 2)** | SSH runner + SSH runner manager (orchestration retained in entrypoint) |
-| `src/troubleshooting/` | **Done (Wave 2)** | Marvis troubleshooting helpers split from entrypoint |
-| `src/websocket/` | **Done (Wave 2)** | WebSocket manager, commands, diagnostics, service ping manager + discovery |
-| `src/api/` | In Progress | API operation modules (continuing incremental migration) |
-| `src/auth/` | In Progress | Authentication/session flows |
-| `src/ui/` | In Progress | Web portal extraction |
+| `src/mist/intelligence/analytics/` | **Done (Wave 2)** | Site inventory health analyzer, site analytics configurator, zone analyzer |
+| `src/operations/execution/capture/` | **Done (Wave 2)** | Canonical packet capture manager + download/poll helper extraction |
+| `src/operations/exporting/export/` | **Done (Wave 2)** | Site export utilities and site insights exporter |
+| `src/mist/resources/gateway/` | **Done (Wave 2)** | Gateway exports, stats exporter, override analyzer, WAN2 migration, probe overrides |
+| `src/mist/resources/inventory/` | **Done (Wave 2)** | Org device inventory summary, MSP orchestrator, CSV comparator |
+| `src/mist/resources/site/` | **Done (Wave 2)** | Site config manager (test sites, RF templates, device profiles) |
+| `src/operations/execution/ssh/` | **Done (Wave 2)** | SSH runner + SSH runner manager (orchestration retained in entrypoint) |
+| `src/mist/intelligence/troubleshooting/` | **Done (Wave 2)** | Marvis troubleshooting helpers split from entrypoint |
+| `src/mist/realtime/websocket/` | **Done (Wave 2)** | WebSocket manager, commands, diagnostics, service ping manager + discovery |
+| `src/mist/access/api/` | In Progress | API operation modules (continuing incremental migration) |
+| `src/mist/access/auth/` | In Progress | Authentication/session flows |
+| `src/interfaces/visualization/ui/` | In Progress | Web portal extraction |
 
 ### Wave 2 Module Ownership (Phases 1-9)
 
@@ -276,15 +276,15 @@ All 9 phases completed with hard-gate evidence. Each phase passed: extraction, t
 
 | Phase | Package | Key Classes | Menu Operations |
 |-------|---------|-------------|-----------------|
-| 1 | `src/analytics/` | `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 169 |
-| 2 | `src/troubleshooting/`, `src/ssh/` | `MarvisTroubleshootUtils`, `SSHRunnerManager` | 124-127, 139, 175-176 |
-| 3 | `src/gateway/` | `WAN2MigrationManager`, `WanProbeDeviceOverrideManager` | 149, 167 |
-| 4 | `src/site/` | `SiteConfigManager` | 171-174 |
-| 5 | `src/export/` | `SiteExportUtils`, `SiteInsightsExporter` | 60-96 |
-| 6 | `src/inventory/` | `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator` | 8-9, 13-14 |
-| 7 | `src/gateway/` | `GatewayExportUtils`, `GatewayStatsExporter`, `GatewayOverrideAnalyzer` | 31-50, 99, 163 |
-| 8 | `src/websocket/` | `ServicePingManager`, `ServicePingDiscoveryMixin` | 120-121 |
-| 9 | `src/capture/` | `PacketCaptureManager`, `PacketCaptureDownloadManager` | 134-135 |
+| 1 | `src/mist/intelligence/analytics/` | `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 169 |
+| 2 | `src/mist/intelligence/troubleshooting/`, `src/operations/execution/ssh/` | `MarvisTroubleshootUtils`, `SSHRunnerManager` | 124-127, 139, 175-176 |
+| 3 | `src/mist/resources/gateway/` | `WAN2MigrationManager`, `WanProbeDeviceOverrideManager` | 149, 167 |
+| 4 | `src/mist/resources/site/` | `SiteConfigManager` | 171-174 |
+| 5 | `src/operations/exporting/export/` | `SiteExportUtils`, `SiteInsightsExporter` | 60-96 |
+| 6 | `src/mist/resources/inventory/` | `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator` | 8-9, 13-14 |
+| 7 | `src/mist/resources/gateway/` | `GatewayExportUtils`, `GatewayStatsExporter`, `GatewayOverrideAnalyzer` | 31-50, 99, 163 |
+| 8 | `src/mist/realtime/websocket/` | `ServicePingManager`, `ServicePingDiscoveryMixin` | 120-121 |
+| 9 | `src/operations/execution/capture/` | `PacketCaptureManager`, `PacketCaptureDownloadManager` | 134-135 |
 
 Compatibility surface preserved: `MistHelper.py` remains the runtime entrypoint with delegated ownership in `src/`. Hard-gate validations passed for all phases including menu/API/output parity, import graph cycle detection, runtime coupling isolation, and deployment pipeline.
 

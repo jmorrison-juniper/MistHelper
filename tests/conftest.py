@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)  # A module logger keeps the record source 
 # with the cloud, and the whole suite stayed green. With this variable set, every
 # portal seam compares the injected stand-in against the real callee and raises
 # on a difference. A live portal never sets the variable, so a live portal warns
-# instead of breaking. See `src/upgrade_portal/app/seam_shapes.py`.
+# instead of breaking. See `src/interfaces/portals/upgrade_portal/app/seam_shapes.py`.
 os.environ.setdefault("UPGRADE_PORTAL_SEAM_STRICT", "1")
 
 # Runtime packages that almost every test module imports through `src`. Keep the
@@ -48,7 +48,7 @@ _REQUIRED_RUNTIME_PACKAGES: tuple[str, ...] = ("mistapi", "structlog", "dotenv",
 _BOOTSTRAP_COMMAND = "python scripts/bootstrap_worktree.py"
 
 # The attribute that records why `MistHelper.py` stopped part way through its
-# module body. `src/firmware/firmware_manager.py` reads this name and reports the
+# module body. `src/operations/execution/firmware/firmware_manager.py` reads this name and reports the
 # recorded cause instead of a wrong "no attribute" message. See issue #1923.
 _IMPORT_ERROR_ATTRIBUTE = "__misthelper_import_error__"
 
@@ -206,7 +206,9 @@ def isolate_working_directory(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def isolate_config_utils_state():
     """Ensure tests never inherit an organization cache or Mist API session."""
-    from src.config.config_utils import ConfigUtils  # Import lazily so the environment guard runs first.
+    from src.foundation.runtime.config.config_utils import (
+        ConfigUtils,
+    )  # Import lazily so the environment guard runs first.
 
     # Python creates a new attribute on any assignment, so a rename in
     # `ConfigUtils` would leave this fixture clearing two dead names. The tests
@@ -252,7 +254,9 @@ def checkout_site_lock_trail_guard(request: pytest.FixtureRequest) -> Iterator[C
         The guard of this session, or None when the lock module cannot import.
     """
     try:  # The lock module pulls in the web framework of the portal, and an absent package stops the import.
-        from src.upgrade_portal.runtime import lock  # Import late, so the environment guard runs first.
+        from src.interfaces.portals.upgrade_portal.runtime import (
+            lock,
+        )  # Import late, so the environment guard runs first.
     except ImportError as fault:  # Without the lock module, no test can write a site lock action.
         request.config.stash[_SITE_LOCK_GUARD_KEY] = CheckoutTrailGuard.skip_measure(fault)  # Print the reason.
         logger.warning("The checkout site lock trail guard skipped, because the lock module cannot import: %s", fault)
@@ -290,7 +294,9 @@ def isolate_site_lock_trail(
     """
     if checkout_site_lock_trail_guard is None:  # The lock module cannot import, so no test can write a trail.
         return  # Leave the test unchanged.
-    from src.upgrade_portal.runtime import lock  # The session guard imported it, so this reads the module cache.
+    from src.interfaces.portals.upgrade_portal.runtime import (
+        lock,
+    )  # The session guard imported it, so this reads the module cache.
 
     test_directory = tmp_path / CheckoutTrailGuard.DIRECTORY_NAME  # The trail folder of this test alone.
     logger.info("Move the site lock trail of this test to %s", test_directory)  # Log before the move.

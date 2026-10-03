@@ -22,8 +22,8 @@ from typing import Any  # The context processor answers a free-form mapping.
 import pytest  # The test framework of the project.
 from flask import Flask  # The application type of the portal.
 
-from src.upgrade_portal.app import config, factory  # The units under test.
-from src.upgrade_portal.app.routes import auth  # The sign-in page owns the dependency row seam key.
+from src.interfaces.portals.upgrade_portal.app import config, factory  # The units under test.
+from src.interfaces.portals.upgrade_portal.app.routes import auth  # The sign-in page owns the dependency row seam key.
 
 THEME_LINK_ID = 'id="theme-css"'  # `layout.html` marks the one theme link with this identifier.
 NEUTRAL_FILE = "themes/default.css"  # The file that the neutral name reaches.

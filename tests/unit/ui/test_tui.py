@@ -1,4 +1,4 @@
-"""Unit tests for ``src.ui.tui.MistHelperTUI``.
+"""Unit tests for ``src.interfaces.visualization.ui.tui.MistHelperTUI``.
 
 Why: Un-omitting this thin-orchestrator TUI entrypoint from
 ``[tool.coverage.run].omit`` requires 100% line + branch coverage across the
@@ -6,7 +6,7 @@ construction pipeline (``_init_rich``, ``_init_platform_io``, ``_init_state``,
 ``_init_collaborators``), the Rich-missing ImportError fallback that calls
 ``sys.exit(1)``, the Windows-vs-Unix platform branch, the terminal-height
 fallback path, and every thin delegate method that forwards to a collaborator.
-Collaborators are patched at ``src.ui.tui`` import site so construction is
+Collaborators are patched at ``src.interfaces.visualization.ui.tui`` import site so construction is
 free of real Rich work while still exercising the wiring code paths.
 """
 
@@ -34,7 +34,7 @@ def _patch_collaborators() -> Any:
     implementations or reaching real I/O.
     """
     return patch.multiple(
-        "src.ui.tui",
+        "src.interfaces.visualization.ui.tui",
         DotenvLoader=MagicMock(),
         LevelDiscoverer=MagicMock(),
         KeyPoller=MagicMock(),
@@ -77,7 +77,7 @@ def _construct(debug: bool = False, is_windows: bool = False) -> Any:
     """
     import sys as _sys
 
-    from src.ui import tui as tui_module
+    from src.interfaces.visualization.ui import tui as tui_module
 
     module_patch = (
         {"msvcrt": SimpleNamespace(kbhit=lambda: False, getch=lambda: b"")} if is_windows else _fake_unix_modules()
@@ -111,7 +111,7 @@ class TestInitRich:
         # WHY (#886 Phase 2): tui.py now emits the diagnostic via logging.error, so assert via caplog.
         import sys as _sys
 
-        from src.ui import tui as tui_module
+        from src.interfaces.visualization.ui import tui as tui_module
 
         real_import = builtins.__import__
 

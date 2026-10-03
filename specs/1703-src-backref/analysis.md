@@ -44,5 +44,5 @@ Follow-up issue #2670 tracks the root alias removal.
 ## Evidence
 
 - Focused tests passed: 191 tests.
-- Import checks passed for `src.api.api_data_fetcher`, `MistHelper`, and `wsgi`.
+- Import checks passed for `src.mist.access.api.api_data_fetcher`, `MistHelper`, and `wsgi`.
 - The branch diff does not include `MistHelper.py`.

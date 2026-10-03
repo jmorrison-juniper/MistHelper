@@ -8,9 +8,9 @@ from pathlib import Path  # WHY: cross-platform tmp path helper
 
 import pytest  # WHY: fixtures (tmp_path, caplog, monkeypatch) drive the loader tests
 
-from src.ssh.config.csv_loader import CommandCsvLoader  # WHY: SUT under test
+from src.operations.execution.ssh.config.csv_loader import CommandCsvLoader  # WHY: SUT under test
 
-_LOGGER_NAME = "src.ssh.config.csv_loader"  # WHY: module-scoped logger used by the SUT
+_LOGGER_NAME = "src.operations.execution.ssh.config.csv_loader"  # WHY: module-scoped logger used by the SUT
 
 
 def _write_csv(path: Path, rows: list[str]) -> str:  # WHY: helper packs CSV lines into a temp file

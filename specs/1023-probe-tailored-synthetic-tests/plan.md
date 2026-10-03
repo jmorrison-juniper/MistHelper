@@ -14,16 +14,16 @@ while sibling proxy hosts (`*.sme.zscaler.net`) complete TLS cleanly.
 
 This plan delivers three cooperating changes, all stdlib-only:
 
-1. **`src/utils/zscaler_probe.py`** gains a `_udp_check()` primitive that sends a
+1. **`src/foundation/support/utils/zscaler_probe.py`** gains a `_udp_check()` primitive that sends a
    well-formed IKE_SA_INIT header (stdlib `struct`, no crypto) on UDP/500 and
    UDP/4500. `ProbeResult` grows a `udp: dict[int, str]` field and
    `_probe_fqdn()` triggers UDP probing when the FQDN matches `*-vpn.` **or**
    every TCP port came back non-open.
-2. **`src/utils/zscaler_catalogue.py`** bumps the CENR cache schema to v3 so
+2. **`src/foundation/support/utils/zscaler_catalogue.py`** bumps the CENR cache schema to v3 so
    each hostname persists its last-observed protocol/port. A small adapter
    keeps v2 (flat-string) caches readable; the TTL refresh now calls
    `run_full_validation()` and writes observations back to disk.
-3. **`src/org/org_synthetic_probes_manager.py::_probe_target()`** prefers the
+3. **`src/mist/resources/org/org_synthetic_probes_manager.py::_probe_target()`** prefers the
    persisted observation over the catalogue default. UDP-family observation ->
    bare `host:port`; HTTPS/TCP-443 -> `https://host`; no observation -> current
    catalogue default plus a `logger.warning` naming the host.

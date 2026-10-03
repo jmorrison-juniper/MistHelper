@@ -11,8 +11,8 @@ import requests  # WHY: tests model the transport failures that the client handl
 from flask import Flask  # WHY: Flask app for the route tests
 
 # WHY: import modules under test
-from src.upgrade_portal.api.mist_client import MistAPIClient  # WHY: client module
-from src.upgrade_portal.app.routes.mist import create_mist_routes  # WHY: routes module
+from src.interfaces.portals.upgrade_portal.api.mist_client import MistAPIClient  # WHY: client module
+from src.interfaces.portals.upgrade_portal.app.routes.mist import create_mist_routes  # WHY: routes module
 
 
 class TestMistAPIClient:

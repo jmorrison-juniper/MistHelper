@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.dataclasses.export_backend_options import ExportBackendOptions
-from src.export.device_events_52w_exporter import (
+from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions
+from src.operations.exporting.export.device_events_52w_exporter import (
     DeviceEvents52wExporter,
     _first_present,
     _StreamRequest,

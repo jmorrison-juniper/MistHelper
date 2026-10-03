@@ -6,7 +6,7 @@
 
 ## Summary
 
-Drive the `[tool.coverage.run].omit` array in `pyproject.toml` from its current ~41 entries down to the six legitimately-non-source entries (`tests/*`, `venv/*`, `.venv/*`, `setup.py`, `*/site-packages/*`, `src/maps/*`) across 8 serial User-Story clusters (P1 -> P8), one or more delivery PRs per story. The technical approach is **honest test authoring, not gate manipulation**: for every module removed from the omit list, land a dedicated test file under `tests/` that exercises real code paths against mocked externals (mistapi client, SSH transport, WebSocket transport, DB connections, subprocess), reaching per-file coverage >= 90%. Ordering is smallest-and-safest first (utilities), then data-plumbing, then exporters, then state-changing device managers, then SSH/TUI, then the async WebSocket cluster last (so every mocking pattern the earlier stories build up is available before it's needed). Source modules are **not refactored** as part of this workflow (issue #878 non-goal); the FR-015 escape hatch permits up to 2 modules to retain their omit entry with a `# TODO(1017): refactor pending` comment and a tracking issue if a module is genuinely untestable without refactor. The `fail_under=90` and pylint `fail-under=9.5` gates are never lowered; every merge lands with `mergeStateStatus=CLEAN`, no `--admin` bypass.
+Drive the `[tool.coverage.run].omit` array in `pyproject.toml` from its current ~41 entries down to the six legitimately-non-source entries (`tests/*`, `venv/*`, `.venv/*`, `setup.py`, `*/site-packages/*`, `src/interfaces/visualization/maps/*`) across 8 serial User-Story clusters (P1 -> P8), one or more delivery PRs per story. The technical approach is **honest test authoring, not gate manipulation**: for every module removed from the omit list, land a dedicated test file under `tests/` that exercises real code paths against mocked externals (mistapi client, SSH transport, WebSocket transport, DB connections, subprocess), reaching per-file coverage >= 90%. Ordering is smallest-and-safest first (utilities), then data-plumbing, then exporters, then state-changing device managers, then SSH/TUI, then the async WebSocket cluster last (so every mocking pattern the earlier stories build up is available before it's needed). Source modules are **not refactored** as part of this workflow (issue #878 non-goal); the FR-015 escape hatch permits up to 2 modules to retain their omit entry with a `# TODO(1017): refactor pending` comment and a tracking issue if a module is genuinely untestable without refactor. The `fail_under=90` and pylint `fail-under=9.5` gates are never lowered; every merge lands with `mergeStateStatus=CLEAN`, no `--admin` bypass.
 
 ## Technical Context
 
@@ -14,7 +14,7 @@ Drive the `[tool.coverage.run].omit` array in `pyproject.toml` from its current 
 
 **Primary Dependencies**: `pytest 9.0.3`, `coverage 7.13.5`, `unittest.mock` (stdlib), `pytest`'s built-in `monkeypatch` fixture, `mistapi>=0.63.1` (mocked, never live in default suite). Optional per-module: `responses` / `pytest-httpx` for HTTP mocking IF the mocking surface exceeds ~30 lines of `unittest.mock` boilerplate (see Phase 0 decision matrix). No new runtime deps.
 
-**Storage**: N/A for the workflow itself. `src/db/database_schema_utils.py` is a pure SQL DDL **string builder** (verified: only stdlib imports `inspect`, `logging`, `re`, `datetime`, `typing`); it never opens a database connection. Tests assert on the generated SQL text directly; no `sqlite3` fixture needed.
+**Storage**: N/A for the workflow itself. `src/foundation/persistence/db/database_schema_utils.py` is a pure SQL DDL **string builder** (verified: only stdlib imports `inspect`, `logging`, `re`, `datetime`, `typing`); it never opens a database connection. Tests assert on the generated SQL text directly; no `sqlite3` fixture needed.
 
 **Testing**: `pytest -v --tb=short` with `coverage.fail_under=90`; `pylint --fail-under=9.5`. Per-file coverage assertion via `coverage report --fail-under=90 --skip-covered` after each merge (see verification commands below).
 
@@ -30,14 +30,14 @@ Drive the `[tool.coverage.run].omit` array in `pyproject.toml` from its current 
 - **No live-network calls in the default CI run** (FR-012 / SC-007). Every external touch point (mistapi, paramiko SSH, websocket, subprocess to a device, sqlite file writes) is mocked or gated behind `@pytest.mark.integration`.
 - **Coverage gate frozen at 90** (FR-009); pylint fail-under frozen at 9.5 (SC-010).
 - **No `# pragma: no cover`, `# type: ignore`, or dummy `import <module>` tests** used to game the gate (SC-006).
-- **Retained omit entries frozen at 6**: `tests/*`, `venv/*`, `.venv/*`, `setup.py`, `*/site-packages/*`, `src/maps/*` (FR-011 / SC-001).
+- **Retained omit entries frozen at 6**: `tests/*`, `venv/*`, `.venv/*`, `setup.py`, `*/site-packages/*`, `src/interfaces/visualization/maps/*` (FR-011 / SC-001).
 - **Serial dispatch across stories** (FR-003): PRs for Story N+1 do not open until every PR for Story N has landed cleanly on `main`. Within a single story, sub-PRs MAY open in parallel iff they touch disjoint files.
 - **Every delivery PR branches from current `main`** at PR-open time; `1017-remove-coverage-omits` is coordination-only (FR-004).
 
 **Scale/Scope**:
 - **Working set (2026-07-13 audit)**: 41 total omit entries. 6 are retained non-source (out of scope). 35 are in-scope in-workflow (matches issue #878's "36 excluded modules" less one, adjusted per the current omit list snapshot recorded in `pyproject.toml`).
-- **Wildcard cluster**: `src/websocket/*` (Story 8) recursively covers 15 `.py` files under `src/websocket/`, `src/websocket/diagnostics/`, and `src/websocket/polling/`. Removing the wildcard un-omits every file present at merge time — the PR MUST land tests for all of them.
-- **Delta from issue body**: The 2026-07-13 audit shows 6 entries added between issue creation and today (`src/analytics/insight_metrics_utils.py`, `src/api/api_core_fetch_utils.py`, `src/cache/cache_utils.py`, `src/export/data_exporter.py`, `src/export/org_site_exporter.py`, `src/ui/prompt_utils.py`). Per FR-016, these are in scope and folded into P1/P2/P3/P4/P5/P7 clusters by module theme.
+- **Wildcard cluster**: `src/mist/realtime/websocket/*` (Story 8) recursively covers 15 `.py` files under `src/mist/realtime/websocket/`, `src/mist/realtime/websocket/diagnostics/`, and `src/mist/realtime/websocket/polling/`. Removing the wildcard un-omits every file present at merge time — the PR MUST land tests for all of them.
+- **Delta from issue body**: The 2026-07-13 audit shows 6 entries added between issue creation and today (`src/mist/intelligence/analytics/insight_metrics_utils.py`, `src/mist/access/api/api_core_fetch_utils.py`, `src/foundation/persistence/cache/cache_utils.py`, `src/operations/exporting/export/data_exporter.py`, `src/operations/exporting/export/org_site_exporter.py`, `src/interfaces/visualization/ui/prompt_utils.py`). Per FR-016, these are in scope and folded into P1/P2/P3/P4/P5/P7 clusters by module theme.
 - **Fresh audit refresh**: Between every merged PR in this workflow, the omit list in `pyproject.toml` on `main` is re-read as ground truth. Issue-body counts are stale after 2026-07-13 and MUST NOT be used to size any single PR.
 
 **Repo layout notes**:
@@ -148,7 +148,7 @@ The six planning decisions called out in the `/speckit.plan` invocation are reco
 - **`session`** scope is prohibited for anything touching source modules in this workflow — leaves too much room for cross-test bleed and masks real bugs.
 
 **`monkeypatch` vs. `unittest.mock`** (decision tree):
-- **Use `monkeypatch`** when: (a) replacing an attribute on an imported module (`monkeypatch.setattr("src.api.api_data_fetcher.some_helper", fake)`), (b) setting environment variables (`monkeypatch.setenv`), (c) changing the working directory (already done by the repo-wide `isolate_working_directory` autouse fixture).
+- **Use `monkeypatch`** when: (a) replacing an attribute on an imported module (`monkeypatch.setattr("src.mist.access.api.api_data_fetcher.some_helper", fake)`), (b) setting environment variables (`monkeypatch.setenv`), (c) changing the working directory (already done by the repo-wide `isolate_working_directory` autouse fixture).
 - **Use `unittest.mock`** when: (a) verifying call counts and argument shapes on a returned object (`mock.assert_called_once_with(...)`), (b) stubbing out a class instance passed as a parameter, (c) building a nested mock tree for a mistapi client (attribute access chains), (d) patching decorators via `@patch("module.attribute")`.
 - **Never mix** the two on the same target — pick one per attribute. If a test needs both a state-swap and call-count verification, use `mock.patch` with an inline `MagicMock` and inspect `.call_args_list` afterwards.
 
@@ -224,7 +224,7 @@ The spec fixes ordering (FR-001); this decision carries the rationale forward as
 | P5 | Site-level exporters + report generators + read-only facades (ten modules; split PR-5a exporters / PR-5b reports+inventory-facade) | Parallels P4 in structure at site scope. Reuses P4's fixture patterns. Absorbs two read-only modules originally listed under spec.md P6 (`offline_device_reporter`, `org_device_inventory_summary_facade`) to keep P6 focused on state-changing code per Constitution Principle III — see tasks.md line 259 for the reshuffle rationale. |
 | P6 | State-changing device / firmware / RADIUS / ticket managers (five modules: `arp_command_manager`, `device_reboot_manager`, `firmware_manager`, `bulk_radius_wlan_config_manager`, `org_ticket_manager`) | State-changing operations (reboots, firmware upgrades, RADIUS reconfig, ticket creation). Requires the most careful mocking to prevent accidental live-device calls in CI. Landing after P3 ensures the mock fixtures the managers need are stable. Constitution Principle III (Safety-First) tests for destructive-op confirmation paths live here. |
 | P7 | SSH + TUI (`cli_shell_manager`, `tui`) | Interactive-terminal code paths. Depends on P6 for any shared SSH mock patterns. Small cluster (two modules), single PR unless one module's fixture surface pushes past the FR-013 500-line threshold. |
-| P8 | WebSocket wildcard cluster (`src/websocket/*` — 15 files) | Hardest cluster: async transport, long-lived connections, service-ping discovery, diagnostic subscriptions. Lands last so every mocking pattern (network, subprocess, SSH, TUI) is already in place. Wildcard removal un-omits every current and future file under `src/websocket/`; PR must land tests for all 15 files present at merge time. |
+| P8 | WebSocket wildcard cluster (`src/mist/realtime/websocket/*` — 15 files) | Hardest cluster: async transport, long-lived connections, service-ping discovery, diagnostic subscriptions. Lands last so every mocking pattern (network, subprocess, SSH, TUI) is already in place. Wildcard removal un-omits every current and future file under `src/mist/realtime/websocket/`; PR must land tests for all 15 files present at merge time. |
 
 ### Decision 5 — Risk register
 
@@ -232,22 +232,22 @@ Modules most likely to need heavy mocking or FR-015 escape-hatch treatment. Risk
 
 | Module | Cluster | Risk | Mocking surface | Mitigation |
 |--------|---------|------|-----------------|------------|
-| `src/websocket/service_ping_discovery.py` (~805 LOC) | P8 | High | Injected `utility` deps; no direct websocket library import — orchestrates discovery via injected dependencies | Mock the injected `utility` deps with `MagicMock(spec=...)`; assert loop exits after at most 2 mocked iterations (per Story 8 Acceptance 3). Candidate for sub-PR split. |
-| `src/websocket/service_ping_manager.py` (~1000 LOC) | P8 | High | Async lifecycle + service registry | Same pattern as `service_ping_discovery`; share fixtures in `tests/unit/websocket/conftest.py`. |
-| `src/ssh/cli_shell_manager.py` | P7 | High | Paramiko `SSHClient`, `Channel`, `Transport` object graph + interactive prompts + I/O timeouts | Mock at `paramiko.SSHClient` class boundary; use `MagicMock(spec=paramiko.SSHClient)` for typo-safety. Interactive prompt path uses `monkeypatch` on `safe_input()`. |
-| `src/ui/tui.py` | P7 | High | Terminal rendering + blocking user input | Mock `sshkeyboard.listen_keyboard` (project uses this per requirements.txt); assert `on_press` callback firing with synthetic key events. No real terminal open. |
-| `src/firmware/firmware_manager.py` | P6 | Medium-High | State-changing API calls (upgrade) + confirmation prompts (Principle III) | Mock `mistapi` client; test BOTH accept (`"UPGRADE"`) and reject paths for the safe_input confirmation. |
-| `src/device/device_reboot_manager.py` | P6 | Medium-High | State-changing API + destructive confirmation | Same pattern as firmware_manager. |
-| `src/site/bulk_radius_wlan_config_manager.py` | P6 | Medium | Multi-step config write + rollback | Mock `mistapi`; assert rollback path is exercised via injected exception on step 2 of 3. |
-| `src/api/api_data_fetcher.py` | P3 | Medium | Pagination loop + mistapi client | Mock returns page-token-terminated responses. Assert loop exits after N pages (N=3 fixture default). |
-| `src/api/api_core_fetch_utils.py` | P3 | Medium | Cursor-based iteration | Same pattern as api_data_fetcher. |
-| `src/db/database_schema_utils.py` | P3 | Low | Pure SQL DDL string builder (no DB driver imported) | Assert on the returned DDL text directly with `assert "CREATE TABLE" in sql`, `assert "PRIMARY KEY (foo, bar)" in sql`, etc. No fixture, no mocking, no in-memory DB. |
+| `src/mist/realtime/websocket/service_ping_discovery.py` (~805 LOC) | P8 | High | Injected `utility` deps; no direct websocket library import — orchestrates discovery via injected dependencies | Mock the injected `utility` deps with `MagicMock(spec=...)`; assert loop exits after at most 2 mocked iterations (per Story 8 Acceptance 3). Candidate for sub-PR split. |
+| `src/mist/realtime/websocket/service_ping_manager.py` (~1000 LOC) | P8 | High | Async lifecycle + service registry | Same pattern as `service_ping_discovery`; share fixtures in `tests/unit/websocket/conftest.py`. |
+| `src/operations/execution/ssh/cli_shell_manager.py` | P7 | High | Paramiko `SSHClient`, `Channel`, `Transport` object graph + interactive prompts + I/O timeouts | Mock at `paramiko.SSHClient` class boundary; use `MagicMock(spec=paramiko.SSHClient)` for typo-safety. Interactive prompt path uses `monkeypatch` on `safe_input()`. |
+| `src/interfaces/visualization/ui/tui.py` | P7 | High | Terminal rendering + blocking user input | Mock `sshkeyboard.listen_keyboard` (project uses this per requirements.txt); assert `on_press` callback firing with synthetic key events. No real terminal open. |
+| `src/operations/execution/firmware/firmware_manager.py` | P6 | Medium-High | State-changing API calls (upgrade) + confirmation prompts (Principle III) | Mock `mistapi` client; test BOTH accept (`"UPGRADE"`) and reject paths for the safe_input confirmation. |
+| `src/mist/resources/device/device_reboot_manager.py` | P6 | Medium-High | State-changing API + destructive confirmation | Same pattern as firmware_manager. |
+| `src/mist/resources/site/bulk_radius_wlan_config_manager.py` | P6 | Medium | Multi-step config write + rollback | Mock `mistapi`; assert rollback path is exercised via injected exception on step 2 of 3. |
+| `src/mist/access/api/api_data_fetcher.py` | P3 | Medium | Pagination loop + mistapi client | Mock returns page-token-terminated responses. Assert loop exits after N pages (N=3 fixture default). |
+| `src/mist/access/api/api_core_fetch_utils.py` | P3 | Medium | Cursor-based iteration | Same pattern as api_data_fetcher. |
+| `src/foundation/persistence/db/database_schema_utils.py` | P3 | Low | Pure SQL DDL string builder (no DB driver imported) | Assert on the returned DDL text directly with `assert "CREATE TABLE" in sql`, `assert "PRIMARY KEY (foo, bar)" in sql`, etc. No fixture, no mocking, no in-memory DB. |
 | Six P4 org exporters | P4 | Medium (each) | Large JSON output shapes | Fixture-based golden-file comparison OR in-memory buffer inspection (Story 4 Acceptance 3). Golden fixtures land in `tests/fixtures/`. |
 | Eight P5 site exporters + reporters | P5 | Medium (each) | Tabular output shape + column ordering | At least one test per module MUST validate column order, header text, one row of data (Story 5 Acceptance 3). |
 
 **FR-015 candidates** (advance-flagged as likely escape-hatch users, not commitments):
-- `src/websocket/service_ping_discovery.py` — if async lifecycle proves untestable without splitting the class, retain omit + open refactor issue. Counts against the 2-cap.
-- `src/ui/tui.py` — if the render loop is too coupled to `sshkeyboard` internals to mock cleanly, retain omit + open refactor issue. Counts against the 2-cap.
+- `src/mist/realtime/websocket/service_ping_discovery.py` — if async lifecycle proves untestable without splitting the class, retain omit + open refactor issue. Counts against the 2-cap.
+- `src/interfaces/visualization/ui/tui.py` — if the render loop is too coupled to `sshkeyboard` internals to mock cleanly, retain omit + open refactor issue. Counts against the 2-cap.
 
 If either candidate consumes an escape-hatch slot, the workflow proceeds with 0 or 1 slots remaining. If a third module surfaces mid-workflow requiring escape-hatch, the workflow pauses per SC-008.
 
@@ -263,7 +263,7 @@ with open('pyproject.toml', 'rb') as f:
     omit = sorted(tomllib.load(f)['tool']['coverage']['run']['omit'])
 expected = sorted([
     'tests/*', 'venv/*', '.venv/*', 'setup.py',
-    '*/site-packages/*', 'src/maps/*'
+    '*/site-packages/*', 'src/interfaces/visualization/maps/*'
 ])
 if omit != expected:
     print('FAIL: unexpected omit entries')
@@ -338,7 +338,7 @@ Phase 0 for this workflow is short — the spec fixed ordering and the plan fixe
 
 1. **Refresh the omit-list audit at current `main` HEAD**. Capture the exact set of 35 in-scope entries (per FR-016) and 6 retained non-source entries. Preserve the raw `pyproject.toml` omit-array snapshot as an appendix. Diff the current list against issue #878's original 35 and record the delta (~6 entries added post-issue) with confirmed cluster assignments (which entries go into which of P1–P8).
 
-2. **Enumerate the 15 files under `src/websocket/*`** at current `main` HEAD (per `find src/websocket -name "*.py" -type f`). Record each file's LOC and imports. This bounds Story P8's scope precisely — if a new file appears in `src/websocket/` between now and Story P8 opening, P8's PR MUST cover it.
+2. **Enumerate the 15 files under `src/mist/realtime/websocket/*`** at current `main` HEAD (per `find src/mist/realtime/websocket -name "*.py" -type f`). Record each file's LOC and imports. This bounds Story P8's scope precisely — if a new file appears in `src/mist/realtime/websocket/` between now and Story P8 opening, P8's PR MUST cover it.
 
 3. **Record per-cluster mocking decisions** in Decision / Rationale / Alternatives format:
    - **P3 API pagination mocking pattern**: paginated mistapi calls (`.mist_get` returning `{"next": ...}`-shaped responses). Decision: mock at `mistapi.APISession` boundary via `unittest.mock.MagicMock(spec=mistapi.APISession)`. Rationale: matches existing fixture patterns in `tests/unit/api/`. Alternative rejected: `responses` library — heavier dep, unnecessary for stdlib-mock-adequate shape.
@@ -346,13 +346,13 @@ Phase 0 for this workflow is short — the spec fixed ordering and the plan fixe
    - **P6 destructive-op confirmation coverage**: Decision — parametrize each destructive-op test with `("UPGRADE", expected_action_called), ("cancel", expected_no_action)`. Rationale: exercises the safe_input early-return path (Principle III). Alternative rejected: only-happy-path — misses the safety-critical branch.
    - **P7 SSH mock boundary**: Decision — mock `paramiko.SSHClient` class, not `Channel` or `Transport`. Rationale: `SSHClient` is the entry point every call site touches; mocking it once suffices. Alternative rejected: mock all three — over-mocks, misses call-flow bugs.
    - **P7 TUI mock boundary**: Decision — mock `sshkeyboard.listen_keyboard` at its import location per test file. Rationale: single entry point; predictable synthetic events. Alternative rejected: subprocess-launch TUI in headless PTY — too slow, too fragile for CI.
-   - **P8 WebSocket transport mocking**: Decision — mock `websocket.WebSocketApp` (sync `websocket-client` library, NOT the async `websockets` package) with `MagicMock(spec=websocket.WebSocketApp)`, feeding recorded frames through the reader-thread callback. Rationale: `src/websocket/manager.py` imports `websocket-client` and uses `threading` for the background reader; there is no `asyncio` in the transport path. Alternative rejected: any async-mock helper (`aioresponses`, `websockets-mock`) — the source is not async.
+   - **P8 WebSocket transport mocking**: Decision — mock `websocket.WebSocketApp` (sync `websocket-client` library, NOT the async `websockets` package) with `MagicMock(spec=websocket.WebSocketApp)`, feeding recorded frames through the reader-thread callback. Rationale: `src/mist/realtime/websocket/manager.py` imports `websocket-client` and uses `threading` for the background reader; there is no `asyncio` in the transport path. Alternative rejected: any async-mock helper (`aioresponses`, `websockets-mock`) — the source is not async.
 
 4. **Record the fixture-migration order** for the three shared fixtures introduced by this workflow (per Decision 1): `mock_mistapi_session` (introduced in P2, promoted to `tests/conftest.py` in P3 once used by 3+ files), `mock_config` (introduced in P2), `mock_websocket_transport` (introduced in P8, stays in `tests/unit/websocket/conftest.py`).
 
 **Output**: `research.md` with all clarifications resolved, containing:
 - Fresh 2026-07-13 omit-list snapshot with cluster assignments (P1–P8) for every in-scope entry.
-- `src/websocket/*` file enumeration (bounds P8 scope).
+- `src/mist/realtime/websocket/*` file enumeration (bounds P8 scope).
 - Per-cluster mocking pattern decisions in Decision / Rationale / Alternatives format.
 - Fixture-migration order for the three shared fixtures.
 
@@ -370,7 +370,7 @@ The spec's Key Entities section names five operational entities. `data-model.md`
   - Public-API surface to cover (list of top-level classes and functions with docstring-declared entry points).
   - External touch points requiring mocks (mistapi calls, subprocess, SSH, WebSocket, filesystem, DB).
   - Expected fixture bundle location (`tests/fixtures/<cluster>/<module>_fixtures.json` or in-file dataclass factories).
-- **Retained Non-Source Entry inventory**: Enumerated verbatim from FR-011: `tests/*`, `venv/*`, `.venv/*`, `setup.py`, `*/site-packages/*`, `src/maps/*`. Validation rule: `data-model.md` MUST assert this set is exactly the omit-list terminal state (SC-001).
+- **Retained Non-Source Entry inventory**: Enumerated verbatim from FR-011: `tests/*`, `venv/*`, `.venv/*`, `setup.py`, `*/site-packages/*`, `src/interfaces/visualization/maps/*`. Validation rule: `data-model.md` MUST assert this set is exactly the omit-list terminal state (SC-001).
 - **Integration-Only Path inventory**: Per-module list of code paths that CANNOT be covered without live infrastructure (e.g., a WebSocket handshake in `service_ping_manager.py` that requires a real controller). Each entry cites the decision (mock double OR `@pytest.mark.integration`) and the reason.
 - **Test Fixture Bundle registry**: Per-cluster inventory of new fixture files added to `tests/fixtures/` and per-package `conftest.py` files added to `tests/unit/<pkg>/`. Each entry records first-consumer story (P#) and shared-scope tier (Decision 1 tier 1/2/3).
 
@@ -410,7 +410,7 @@ This workflow doesn't touch public APIs of source modules (FR-010). Contracts he
 - The exact `pytest -v tests/unit/<pkg>/` invocation for the story's new test files.
 - The `black --check` + `ruff check` + `mypy --strict src/<pkg>/` commands for the touched source files.
 - The `gh pr view <N> --json mergeStateStatus` command asserting `CLEAN` before merge.
-- For P8 specifically: the `find src/websocket -name "*.py" | xargs -I{} coverage report --include={} --fail-under=90` recursive per-file assertion covering all 15 files un-omitted by the wildcard removal (Story 8 Acceptance 2).
+- For P8 specifically: the `find src/mist/realtime/websocket -name "*.py" | xargs -I{} coverage report --include={} --fail-under=90` recursive per-file assertion covering all 15 files un-omitted by the wildcard removal (Story 8 Acceptance 2).
 - The network-isolation recipe (Podman with `--network=none`) for verifying SC-007 on each PR.
 
 ### 4. Agent context update
@@ -474,8 +474,8 @@ Each sub-phase corresponds to one User Story cluster (P1–P8). Exit criteria ar
 - Deliverable: 2 modules un-omitted; tests under `tests/unit/ssh/` and `tests/unit/ui/`. Paramiko-mock and sshkeyboard-mock patterns crystallize here. Single PR unless FR-013 threshold breached. Highest FR-015 escape-hatch risk (Decision 5); may consume 1 of 2 slots.
 
 **Sub-phase 8 — Story P8 — WebSocket wildcard cluster**
-- Entry: P7 merged; `main` audit refreshed; `find src/websocket -name "*.py" -type f` re-run to bound scope.
-- Deliverable: `"src/websocket/*"` wildcard removed from omit list; tests for all 15 files under `src/websocket/` (recursively including `diagnostics/` and `polling/`) landed under `tests/unit/websocket/`. `mock_websocket_transport` fixture at `tests/unit/websocket/conftest.py`. Long-running poll loops mocked to exit after ≤2 iterations (Story 8 Acceptance 3). May split into up to 4 sub-PRs. Final PR uses `Closes #878`.
+- Entry: P7 merged; `main` audit refreshed; `find src/mist/realtime/websocket -name "*.py" -type f` re-run to bound scope.
+- Deliverable: `"src/mist/realtime/websocket/*"` wildcard removed from omit list; tests for all 15 files under `src/mist/realtime/websocket/` (recursively including `diagnostics/` and `polling/`) landed under `tests/unit/websocket/`. `mock_websocket_transport` fixture at `tests/unit/websocket/conftest.py`. Long-running poll loops mocked to exit after ≤2 iterations (Story 8 Acceptance 3). May split into up to 4 sub-PRs. Final PR uses `Closes #878`.
 
 ### Per-PR exit criteria template
 
@@ -486,7 +486,7 @@ Every delivery PR MUST satisfy all 12 criteria enumerated in Decision 3 (rows a�
 - **P5**: At least one test per module validates column order, header text, and one row of data (Story 5 Acceptance 3).
 - **P6**: For every module performing state-changing operations, at least one test invokes the destructive path and asserts the safe_input confirmation branch (Principle III).
 - **P7**: PR body confirms no `paramiko.SSHClient()` or `sshkeyboard.listen_keyboard()` invocation runs without a mock (grep test files).
-- **P8**: PR body enumerates the 15 files under `src/websocket/` at merge time and shows per-file coverage >= 90% for every one (Story 8 Acceptance 2). Final P8 PR body uses `Closes #878`.
+- **P8**: PR body enumerates the 15 files under `src/mist/realtime/websocket/` at merge time and shows per-file coverage >= 90% for every one (Story 8 Acceptance 2). Final P8 PR body uses `Closes #878`.
 
 ### Merge invocation pattern
 

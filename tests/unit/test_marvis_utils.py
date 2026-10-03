@@ -1,4 +1,4 @@
-"""Unit tests for MarvisDataUtils (src/marvis/marvis_utils.py).
+"""Unit tests for MarvisDataUtils (src/mist/intelligence/marvis/marvis_utils.py).
 
 All tests are pure logic -- no external dependencies, no API calls.
 The escape_fn and flatten_fn callables are injected via simple lambdas.
@@ -11,7 +11,7 @@ from __future__ import annotations  # Enable PEP 604 union types on Python 3.10+
 
 from typing import Any  # Generic type hint for response data -- used by inject callables
 
-from src.marvis.marvis_utils import MarvisDataUtils  # Module under test
+from src.mist.intelligence.marvis.marvis_utils import MarvisDataUtils  # Module under test
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

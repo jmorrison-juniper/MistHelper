@@ -22,15 +22,15 @@ pytest.importorskip("hypothesis")
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.marvis.actions.alarms import (
+from src.mist.intelligence.marvis.actions.alarms import (
     ALARM_COLUMNS,
     ALARM_MAX_WINDOW_SECONDS,
     ALARM_WINDOW_MARGIN_SECONDS,
     MarvisAlarmIndex,
     MarvisAlarmJoin,
 )
-from src.marvis.actions.client import MarvisActionsClient, MarvisListResult
-from src.marvis.actions.model import (
+from src.mist.intelligence.marvis.actions.client import MarvisActionsClient, MarvisListResult
+from src.mist.intelligence.marvis.actions.model import (
     STATUS_NAMES,
     TOPIC_NAMES,
     MarvisActionRecord,
@@ -38,7 +38,7 @@ from src.marvis.actions.model import (
     MarvisCatalog,
     MarvisFieldReader,
 )
-from src.marvis.actions.selection import (
+from src.mist.intelligence.marvis.actions.selection import (
     MODE_EXPORT_ALL,
     MODE_EXPORT_CLOSED,
     MODE_EXPORT_OPEN,

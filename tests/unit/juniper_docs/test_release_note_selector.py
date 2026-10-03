@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from src.juniper_docs.discovery.release_note_selector import (
+from src.mist.intelligence.juniper_docs.discovery.release_note_selector import (
     CorpusReleaseNoteSelector,
     ReleaseNoteSelector,
 )
-from src.juniper_docs.models import DocumentType, InventoryRecord
+from src.mist.intelligence.juniper_docs.models import DocumentType, InventoryRecord
 
 _TRAIN = "software/junos/release-notes"
 _RNE = "rne/us/en/release-notes"  # A PDF tree whose first path segment is not a locale.

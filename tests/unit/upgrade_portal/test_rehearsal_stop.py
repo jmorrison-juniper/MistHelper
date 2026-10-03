@@ -4,8 +4,8 @@ Why:
     User story 2 asks the suite to prove that a stop cancels the devices that
     have not started, spares the device that writes firmware, and reports a
     plain message. Every rule under test lives in
-    ``src/upgrade_portal/upgrade/stop.py`` and in
-    ``src/firmware/upgrade_service.py``.
+    ``src/interfaces/portals/upgrade_portal/upgrade/stop.py`` and in
+    ``src/operations/execution/firmware/upgrade_service.py``.
 """
 
 from __future__ import annotations
@@ -15,10 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from src.firmware.upgrade_service import DeviceTarget, GatewayFamily, PlanRoute, UpgradePlan
-from src.upgrade_portal.runtime.runs import RunState
-from src.upgrade_portal.runtime.signals import ConfirmationRequiredError, StopOutcome, StopRequestStore
-from src.upgrade_portal.upgrade import options, stop
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunState
+from src.interfaces.portals.upgrade_portal.runtime.signals import (
+    ConfirmationRequiredError,
+    StopOutcome,
+    StopRequestStore,
+)
+from src.interfaces.portals.upgrade_portal.upgrade import options, stop
+from src.operations.execution.firmware.upgrade_service import DeviceTarget, GatewayFamily, PlanRoute, UpgradePlan
 from tests.support.rehearsal import (
     ORG_ID,
     SITE_ID,

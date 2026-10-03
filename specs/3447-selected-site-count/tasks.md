@@ -39,7 +39,7 @@ therefore comes before its code task.
 ## Phase 4: The template change
 
 - [x] T008 Change the note in
-  `src/upgrade_portal/app/assets/templates/upgrade/org_options.html`. Add
+  `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html`. Add
   the two `set` statements, the Jinja comment, and the test identifier.
 - [x] T009 Run T004 through T006 green. Read each screenshot.
   Result: 7 tests passed in 12.5 seconds. The screenshot of one site shows

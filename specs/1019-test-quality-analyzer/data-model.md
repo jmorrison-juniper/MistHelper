@@ -107,7 +107,7 @@ class ConfigSnapshot:
 @dataclass(frozen=True)
 class MistApiPredicate:
     banned_imports: tuple[str, ...]  # Default ("mistapi",).
-    excluded_src_prefixes: tuple[str, ...]  # Default ("src/api/",).
+    excluded_src_prefixes: tuple[str, ...]  # Default ("src/mist/access/api/",).
 ```
 
 ### `SkippedFile`

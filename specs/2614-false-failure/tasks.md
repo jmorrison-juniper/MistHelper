@@ -27,9 +27,9 @@ complete run without invented settle times.
 **Independent Test**: Run the issue #2614 regression test.
 
 - [X] T008 [US1] Add the issue #2614 regression test in `tests/unit/upgrade_portal/test_runs/test_reconciliation.py`. (delivered: tests/unit/upgrade_portal/test_runs/test_reconciliation.py)
-- [X] T009 [US1] Extend target evidence fields in `src/upgrade_portal/persistence/actions/models.py`. (delivered: src/upgrade_portal/persistence/actions/models.py)
-- [X] T010 [US1] Add failed-timeout repair logic in `src/upgrade_portal/api/run_controls/services/reconciliation.py`. (delivered: src/upgrade_portal/api/run_controls/services/reconciliation.py)
-- [X] T011 [US1] Preserve null reboot and settle fields with an explicit note. (delivered: src/upgrade_portal/api/run_controls/services/reconciliation.py)
+- [X] T009 [US1] Extend target evidence fields in `src/interfaces/portals/upgrade_portal/persistence/actions/models.py`. (delivered: src/interfaces/portals/upgrade_portal/persistence/actions/models.py)
+- [X] T010 [US1] Add failed-timeout repair logic in `src/interfaces/portals/upgrade_portal/api/run_controls/services/reconciliation.py`. (delivered: src/interfaces/portals/upgrade_portal/api/run_controls/services/reconciliation.py)
+- [X] T011 [US1] Preserve null reboot and settle fields with an explicit note. (delivered: src/interfaces/portals/upgrade_portal/api/run_controls/services/reconciliation.py)
 
 ## Phase 4: User Story 2 - Keep true failures failed
 
@@ -38,8 +38,8 @@ failed run.
 
 **Independent Test**: Use the same service path with incomplete evidence.
 
-- [X] T012 [US2] Require all failed targets to have positive firmware evidence. (delivered: src/upgrade_portal/api/run_controls/services/reconciliation.py)
-- [X] T013 [US2] Keep unknown or refused outcomes when evidence is incomplete. (delivered: src/upgrade_portal/api/run_controls/services/reconciliation.py)
+- [X] T012 [US2] Require all failed targets to have positive firmware evidence. (delivered: src/interfaces/portals/upgrade_portal/api/run_controls/services/reconciliation.py)
+- [X] T013 [US2] Keep unknown or refused outcomes when evidence is incomplete. (delivered: src/interfaces/portals/upgrade_portal/api/run_controls/services/reconciliation.py)
 
 ## Phase 5: User Story 3 - Use only running-version evidence
 
@@ -48,9 +48,9 @@ the shared running-version rule.
 
 **Independent Test**: Inspect the reader and run local gates.
 
-- [X] T014 [US3] Add `SiteStatsFirmwareEvidenceReader` in `src/upgrade_portal/api/run_controls/routes.py`. (delivered: src/upgrade_portal/api/run_controls/routes.py)
-- [X] T015 [US3] Use `RunningFirmwareVersionResolver.index_stats_rows()` for evidence. (delivered: src/upgrade_portal/api/run_controls/routes.py)
-- [X] T016 [US3] Show the reconciliation control for the narrow failed-timeout shape. (delivered: src/upgrade_portal/app/routes/upgrade.py)
+- [X] T014 [US3] Add `SiteStatsFirmwareEvidenceReader` in `src/interfaces/portals/upgrade_portal/api/run_controls/routes.py`. (delivered: src/interfaces/portals/upgrade_portal/api/run_controls/routes.py)
+- [X] T015 [US3] Use `RunningFirmwareVersionResolver.index_stats_rows()` for evidence. (delivered: src/interfaces/portals/upgrade_portal/api/run_controls/routes.py)
+- [X] T016 [US3] Show the reconciliation control for the narrow failed-timeout shape. (delivered: src/interfaces/portals/upgrade_portal/app/routes/upgrade.py)
 
 ## Phase 6: Release and validation
 

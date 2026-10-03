@@ -20,7 +20,7 @@ call site in the same edit.
 
 ---
 
-## Group 1. `src/capture/packet_capture.py`
+## Group 1. `src/operations/execution/capture/packet_capture.py`
 
 | Item | Value |
 | - | - |
@@ -32,7 +32,7 @@ call site in the same edit.
 
 ---
 
-## Group 2. `src/firmware/bulk_ap_upgrader.py`
+## Group 2. `src/operations/execution/firmware/bulk_ap_upgrader.py`
 
 | Item | Value |
 | - | - |
@@ -55,7 +55,7 @@ also calls `_execute_single_version_upgrade`, which uses `mistapi`.
 
 ---
 
-## Group 3. `src/firmware/org_ap_upgrader.py`
+## Group 3. `src/operations/execution/firmware/org_ap_upgrader.py`
 
 | Item | Value |
 | - | - |
@@ -67,7 +67,7 @@ also calls `_execute_single_version_upgrade`, which uses `mistapi`.
 
 ---
 
-## Group 4. `src/inventory/inventory_summary/version_per_model_fetcher.py`
+## Group 4. `src/mist/resources/inventory/inventory_summary/version_per_model_fetcher.py`
 
 Warning: `target_org_id` is the first positional parameter in both functions.
 Every call site passes it positionally.
@@ -94,7 +94,7 @@ two log calls.
 
 ---
 
-## Group 5. `src/maps/_maps_clone.py`
+## Group 5. `src/interfaces/visualization/maps/_maps_clone.py`
 
 | Item | Value |
 | - | - |
@@ -103,14 +103,14 @@ two log calls.
 | Call site | `_maps_clone.py:352` |
 | Tests to update | None |
 
-Caution: `src/gateway/template_config.py` holds a different method with the same
+Caution: `src/mist/resources/gateway/template_config.py` holds a different method with the same
 name and a different signature. Tests in
 `tests/unit/test_template_config.py` target that other method. Do not change
 them.
 
 ---
 
-## Group 6. `src/maps/maps_manager.py`
+## Group 6. `src/interfaces/visualization/maps/maps_manager.py`
 
 Warning: `site_name` is the first positional parameter.
 
@@ -124,7 +124,7 @@ Warning: `site_name` is the first positional parameter.
 
 ---
 
-## Group 7. `src/site/address_audit/address_resolver.py`
+## Group 7. `src/mist/resources/site/address_audit/address_resolver.py`
 
 Warning: `candidates` is the fourth parameter of five. Removing it shifts
 `query`.
@@ -138,7 +138,7 @@ Warning: `candidates` is the fourth parameter of five. Removing it shifts
 
 ---
 
-## Group 8. `src/ssh/runtime/app_runner.py`
+## Group 8. `src/operations/execution/ssh/runtime/app_runner.py`
 
 | Item | Value |
 | - | - |
@@ -152,7 +152,7 @@ This group resolves two findings, because the site holds two unused parameters.
 
 ---
 
-## Group 9. `src/ssid_consolidation/_ssid_template_cache.py`
+## Group 9. `src/operations/execution/ssid_consolidation/_ssid_template_cache.py`
 
 | Item | Value |
 | - | - |
@@ -174,7 +174,7 @@ Also delete the dead comment `# noqa: ARG002 - signature preserved for tests`.
 
 ---
 
-## Group 10. `src/ssid_consolidation/_ssid_template_phase1.py`
+## Group 10. `src/operations/execution/ssid_consolidation/_ssid_template_phase1.py`
 
 | Item | Value |
 | - | - |
@@ -203,7 +203,7 @@ records that work, because the module re-exports the function for back-compat.
 
 ---
 
-## Group 11. `src/utils/address_utils.py`, the `debug` parameter
+## Group 11. `src/foundation/support/utils/address_utils.py`, the `debug` parameter
 
 | Item | Value |
 | - | - |
@@ -218,7 +218,7 @@ states a claim that no call site supports.
 
 ---
 
-## Group 12. `src/utils/address_utils.py`, the `source` thread
+## Group 12. `src/foundation/support/utils/address_utils.py`, the `source` thread
 
 This is the widest thread. Five methods lose the parameter. Change all five in
 one task.
@@ -250,11 +250,11 @@ These five sites keep the parameter. Add the comment only.
 
 | File | Line | Function |
 | - | - | - |
-| `src/org/org_synthetic_probes_manager.py` | 1619 | `_build_probe_set` |
-| `src/websocket/manager.py` | 318 | `WebSocketManager._on_open` |
-| `src/websocket/manager.py` | 323 | `WebSocketManager._on_message` |
-| `src/websocket/manager.py` | 336 | `WebSocketManager._on_error` |
-| `src/websocket/manager.py` | 343 | `WebSocketManager._on_close` |
+| `src/mist/resources/org/org_synthetic_probes_manager.py` | 1619 | `_build_probe_set` |
+| `src/mist/realtime/websocket/manager.py` | 318 | `WebSocketManager._on_open` |
+| `src/mist/realtime/websocket/manager.py` | 323 | `WebSocketManager._on_message` |
+| `src/mist/realtime/websocket/manager.py` | 336 | `WebSocketManager._on_error` |
+| `src/mist/realtime/websocket/manager.py` | 343 | `WebSocketManager._on_close` |
 
 Section 8 of `research.md` holds the exact comment text for each site.
 
@@ -264,7 +264,7 @@ Section 8 of `research.md` holds the exact comment text for each site.
 
 | File | Line | Function | Parameter |
 | - | - | - | - |
-| `src/ssid_consolidation/_ssid_template_phase45.py` | 267 | `_build_template_config` | `resolutions` |
+| `src/operations/execution/ssid_consolidation/_ssid_template_phase45.py` | 267 | `_build_template_config` | `resolutions` |
 
 Warning: Do not remove this parameter. FR-015 forbids the removal. The
 parameter is the seam that the future fix needs. Add the comment that names the

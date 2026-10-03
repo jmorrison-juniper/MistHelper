@@ -8,24 +8,39 @@ import time  # Reliability tests report measured run time.
 from dataclasses import replace  # Short timing tables replace immutable trigger records.
 
 import pytest  # The tests verify request errors and time bounds.
-
 import websocket  # Tests build the same handshake exceptions as websocket-client.
-from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Tests build utility definitions.
-from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked start requests.
-from src.websocket_streams.live.runners.utility.runner.execution import UtilityStreamOpener  # Subscribe seam.
-from src.websocket_streams.live.runners.utility.runner.utility_runner import UtilityRunner  # Utility runner class.
-from src.websocket_streams.live.runners.utility.triggers.models import (
+
+from src.mist.realtime.websocket_streams.catalog.model import (
+    Safety,
+    UtilityDefinition,
+)  # Tests build utility definitions.
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    StartRequest,
+)  # Tests build checked start requests.
+from src.mist.realtime.websocket_streams.live.runners.utility.runner.execution import (
+    UtilityStreamOpener,
+)  # Subscribe seam.
+from src.mist.realtime.websocket_streams.live.runners.utility.runner.utility_runner import (
+    UtilityRunner,
+)  # Utility runner class.
+from src.mist.realtime.websocket_streams.live.runners.utility.triggers.models import (
     UtilityRequest,
     UtilityTiming,
 )  # Immutable trigger records.
-from src.websocket_streams.live.runners.utility.triggers.table import UtilityTriggerTable  # Trigger table class.
-from src.websocket_streams.live.sessions.record.state import SessionState  # Sink assertions use final states.
-from src.websocket_streams.live.transport.endpoint import (
+from src.mist.realtime.websocket_streams.live.runners.utility.triggers.table import (
+    UtilityTriggerTable,
+)  # Trigger table class.
+from src.mist.realtime.websocket_streams.live.sessions.record.state import (
+    SessionState,
+)  # Sink assertions use final states.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
     TransportProfile,
 )  # Endpoint setup.
-from src.websocket_streams.live.transport.stream_client import StreamClient  # Stop tests override open behavior.
+from src.mist.realtime.websocket_streams.live.transport.stream_client import (
+    StreamClient,
+)  # Stop tests override open behavior.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiCall,
     FakeApiSession,

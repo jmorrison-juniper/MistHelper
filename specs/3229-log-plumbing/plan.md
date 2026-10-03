@@ -6,7 +6,7 @@
 
 ## Design
 
-Add the eight message prefixes to `_INTERNAL_PREFIXES`. The existing design already routes API plumbing this way, so the change follows it. A logger-name rule would be wrong here, because `src.config.config_utils` also logs lines that the operator needs.
+Add the eight message prefixes to `_INTERNAL_PREFIXES`. The existing design already routes API plumbing this way, so the change follows it. A logger-name rule would be wrong here, because `src.foundation.runtime.config.config_utils` also logs lines that the operator needs.
 
 ## Guard
 

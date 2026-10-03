@@ -8,7 +8,7 @@ Why:
 
 from __future__ import annotations
 
-from src.firmware.upgrade_service import CancelOutcome, reboot_macs, sort_cancel
+from src.operations.execution.firmware.upgrade_service import CancelOutcome, reboot_macs, sort_cancel
 
 FIRST = "00:11:22:33:44:55"  # One device, in the colon spelling of an inventory row.
 SECOND = "001122334466"  # A second device, in the bare spelling of the cloud.

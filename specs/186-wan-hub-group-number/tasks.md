@@ -19,7 +19,7 @@
 
 **Purpose**: Create the external module file and class skeleton
 
-- [X] T001 Create module file with class skeleton and imports in src/wan_hub_group_manager.py
+- [X] T001 Create module file with class skeleton and imports in src/operations/wan/wan_hub_group_manager.py
 - [X] T002 Add import and menu_actions entry "163" in MistHelper.py (line ~75 for import, line ~58131 for menu entry, line ~58869 for test classification)
 
 **Checkpoint**: Module imports without error, menu 163 dispatches to `WanHubGroupNumberManager.execute`
@@ -30,9 +30,9 @@
 
 **Purpose**: Core helpers that ALL user stories depend on — API data fetching and path matching
 
-- [X] T003 [P] Implement `_fetch_profiles()` in src/wan_hub_group_manager.py — call `listOrgDeviceProfiles(apisession, org_id, type="gateway")`, handle pagination via `mistapi.get_all()`, sort alphabetically by name, handle empty result (FR-001, FR-010)
-- [X] T004 [P] Implement `_fetch_hub_spoke_vpns()` in src/wan_hub_group_manager.py — call `listOrgVpns(apisession, org_id)`, filter to `type == "hub_spoke"`, handle empty result (FR-001a)
-- [X] T005 Implement `_find_matching_paths(profile_name, vpns)` in src/wan_hub_group_manager.py — prefix match `f"{profile_name}-"` against VPN path keys, return list of `(vpn_id, vpn_name, path_key, current_pod)` tuples, detect inconsistent pod values and log warning (FR-001b)
+- [X] T003 [P] Implement `_fetch_profiles()` in src/operations/wan/wan_hub_group_manager.py — call `listOrgDeviceProfiles(apisession, org_id, type="gateway")`, handle pagination via `mistapi.get_all()`, sort alphabetically by name, handle empty result (FR-001, FR-010)
+- [X] T004 [P] Implement `_fetch_hub_spoke_vpns()` in src/operations/wan/wan_hub_group_manager.py — call `listOrgVpns(apisession, org_id)`, filter to `type == "hub_spoke"`, handle empty result (FR-001a)
+- [X] T005 Implement `_find_matching_paths(profile_name, vpns)` in src/operations/wan/wan_hub_group_manager.py — prefix match `f"{profile_name}-"` against VPN path keys, return list of `(vpn_id, vpn_name, path_key, current_pod)` tuples, detect inconsistent pod values and log warning (FR-001b)
 
 **Checkpoint**: All three helpers return correct data structures from mocked API responses. Prefix matching correctly differentiates `DC1-` from `DC1-BACKUP-`.
 
@@ -50,9 +50,9 @@
 
 ### Implementation for User Story 1
 
-- [X] T007 [US1] Implement `_display_profile_list(profiles, vpn_data)` in src/wan_hub_group_manager.py — format numbered list with profile name and current pod value (or "default (1)"), handle profiles with no matching VPN paths (FR-002)
-- [X] T008 [US1] Implement profile selection input loop in `run()` in src/wan_hub_group_manager.py — use `safe_input()` for index entry, validate range 1-N, support 'q' to cancel, reprompt on invalid input (FR-003)
-- [X] T009 [US1] Implement `execute()` static entry point in src/wan_hub_group_manager.py — resolve org_id via `ConfigUtils.get_cached_or_prompted_org_id()`, instantiate class, call `run()`, wrap in try/except for API errors with user-friendly messages (FR-008, FR-009)
+- [X] T007 [US1] Implement `_display_profile_list(profiles, vpn_data)` in src/operations/wan/wan_hub_group_manager.py — format numbered list with profile name and current pod value (or "default (1)"), handle profiles with no matching VPN paths (FR-002)
+- [X] T008 [US1] Implement profile selection input loop in `run()` in src/operations/wan/wan_hub_group_manager.py — use `safe_input()` for index entry, validate range 1-N, support 'q' to cancel, reprompt on invalid input (FR-003)
+- [X] T009 [US1] Implement `execute()` static entry point in src/operations/wan/wan_hub_group_manager.py — resolve org_id via `ConfigUtils.get_cached_or_prompted_org_id()`, instantiate class, call `run()`, wrap in try/except for API errors with user-friendly messages (FR-008, FR-009)
 
 **Checkpoint**: Menu 163 shows alphabetized profiles with pod values. Selection works with full input validation. No VPN update functionality yet.
 
@@ -70,9 +70,9 @@
 
 ### Implementation for User Story 2
 
-- [X] T011 [US2] Implement `_prompt_action()` in src/wan_hub_group_manager.py — display current pod value + path count, show set/clear/cancel menu, validate selection via `safe_input()` (FR-004)
-- [X] T012 [US2] Implement `set_pod(profile, vpn_data, new_pod)` in src/wan_hub_group_manager.py — validate pod 1-128 (FR-005), deep-copy VPN paths dict, update pod on all matching path keys (FR-005a), call `updateOrgVpn` per VPN object (FR-006), display confirmation with path count and VPN name (FR-007)
-- [X] T013 [US2] Implement pod value input prompt in `run()` in src/wan_hub_group_manager.py — prompt for integer input via `safe_input()`, validate range, confirm before update with y/N prompt (FR-005)
+- [X] T011 [US2] Implement `_prompt_action()` in src/operations/wan/wan_hub_group_manager.py — display current pod value + path count, show set/clear/cancel menu, validate selection via `safe_input()` (FR-004)
+- [X] T012 [US2] Implement `set_pod(profile, vpn_data, new_pod)` in src/operations/wan/wan_hub_group_manager.py — validate pod 1-128 (FR-005), deep-copy VPN paths dict, update pod on all matching path keys (FR-005a), call `updateOrgVpn` per VPN object (FR-006), display confirmation with path count and VPN name (FR-007)
+- [X] T013 [US2] Implement pod value input prompt in `run()` in src/operations/wan/wan_hub_group_manager.py — prompt for integer input via `safe_input()`, validate range, confirm before update with y/N prompt (FR-005)
 
 **Checkpoint**: Full set workflow works end-to-end. Profile selection → set action → pod input → confirmation → API update → success message.
 
@@ -90,7 +90,7 @@
 
 ### Implementation for User Story 3
 
-- [X] T015 [US3] Implement `clear_pod(profile, vpn_data)` in src/wan_hub_group_manager.py — check if pod is already 1 and inform user if so, otherwise confirm reset and delegate to `set_pod(profile, vpn_data, 1)` (FR-005)
+- [X] T015 [US3] Implement `clear_pod(profile, vpn_data)` in src/operations/wan/wan_hub_group_manager.py — check if pod is already 1 and inform user if so, otherwise confirm reset and delegate to `set_pod(profile, vpn_data, 1)` (FR-005)
 
 **Checkpoint**: Full clear workflow works end-to-end. "Already at default" case handled. Delegates correctly to set_pod.
 
@@ -100,7 +100,7 @@
 
 **Goal**: Establish the pattern for external modules so future operations only need a new file + menu registration line.
 
-**Independent Test**: Import `src.wan_hub_group_manager` in a clean Python session. Verify class instantiates. Verify MistHelper.py dispatches to it without code duplication.
+**Independent Test**: Import `src.operations.wan.wan_hub_group_manager` in a clean Python session. Verify class instantiates. Verify MistHelper.py dispatches to it without code duplication.
 
 ### Tests for User Story 4
 
@@ -108,7 +108,7 @@
 
 ### Implementation for User Story 4
 
-- [X] T017 [US4] Verify no circular imports between src/wan_hub_group_manager.py and MistHelper.py — ensure module receives apisession as parameter, does not import MistHelper at module level, uses lazy imports if needed for ConfigUtils/safe_input
+- [X] T017 [US4] Verify no circular imports between src/operations/wan/wan_hub_group_manager.py and MistHelper.py — ensure module receives apisession as parameter, does not import MistHelper at module level, uses lazy imports if needed for ConfigUtils/safe_input
 
 **Checkpoint**: Module architecture clean. No circular imports. Pattern documented and repeatable.
 
@@ -118,10 +118,10 @@
 
 **Purpose**: Documentation, error handling hardening, and deployment readiness
 
-- [X] T018 [P] Add error handling for API failures in src/wan_hub_group_manager.py — wrap API calls in try/except, handle 401 (auth expired), 403 (permissions), network errors, log at Error level with traceback, display user-friendly ASCII-only messages (SC-005)
+- [X] T018 [P] Add error handling for API failures in src/operations/wan/wan_hub_group_manager.py — wrap API calls in try/except, handle 401 (auth expired), 403 (permissions), network errors, log at Error level with traceback, display user-friendly ASCII-only messages (SC-005)
 - [X] T019 [P] Update README.md — bump operation count from 163 to 164, add menu 163 entry to operation table with description "WAN Hub Group Number Manager"
 - [X] T020 [P] Update CHANGELOG.md — add version entry with UTC timestamp format (YY.MM.DD.HH.MM) documenting new menu 163 operation
-- [X] T021 Run quality gates: `python -m py_compile src/wan_hub_group_manager.py && python -m py_compile MistHelper.py && python -m ruff check src/wan_hub_group_manager.py MistHelper.py && python -m black --check src/wan_hub_group_manager.py MistHelper.py`
+- [X] T021 Run quality gates: `python -m py_compile src/operations/wan/wan_hub_group_manager.py && python -m py_compile MistHelper.py && python -m ruff check src/operations/wan/wan_hub_group_manager.py MistHelper.py && python -m black --check src/operations/wan/wan_hub_group_manager.py MistHelper.py`
 
 **Checkpoint**: All quality gates pass. README and CHANGELOG updated. Feature ready for PR.
 

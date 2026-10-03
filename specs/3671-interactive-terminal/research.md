@@ -117,7 +117,7 @@ the shell address in `url`. The EX shell and the SRX shell use the same request.
 ## R6. Terminal emulator in the page
 
 **Decision**: The page uses xterm.js 6.0.0 and the fit addon 0.11.0. The repository holds
-a copy of each UMD build under `src/websocket_streams/web/static/vendor/xterm/`, with the MIT
+a copy of each UMD build under `src/mist/realtime/websocket_streams/web/static/vendor/xterm/`, with the MIT
 license text.
 
 **Reason**:
@@ -392,7 +392,7 @@ method docstrings.
 | Structured logging | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_structured_logging.py -q` | PASS. 15 tests passed. |
 | Secret redaction | `python -m pytest tests\unit\websocket_streams\live\transport\runtime\test_sensitive_redaction.py -q` | PASS. 1 test passed. |
 | SDK exception | `python -m pytest tests\contract\websocket_streams\test_ws_sdk_contract.py -q` | PASS. 8 tests passed. The SDK kept 0 of 1 early events. The owned transport kept 1 of 1. The owned transport preserved 2 split frames. |
-| JavaScript syntax | `node --check` for each file under `src\websocket_streams\web\static\terminal` | PASS. Node checked 16 modules. |
+| JavaScript syntax | `node --check` for each file under `src\mist\realtime\websocket_streams\web\static\terminal` | PASS. Node checked 16 modules. |
 
 The final browser performance results passed all four limits. The echo test measured a
 26.53 ms median and a 37.15 ms 95th percentile. The page rendered 1 MiB in 0.39 seconds.

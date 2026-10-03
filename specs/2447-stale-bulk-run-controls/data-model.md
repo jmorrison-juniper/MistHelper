@@ -130,7 +130,7 @@ key strategy entry names both domain fields.
 3. An index covers `actor_scope` and `created_at`.
 
 The implementation adds the strategy to
-`src/refactors/endpoint_primary_key_strategies.py` before collection code.
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py` before collection code.
 The action repository uses the key definition directly.
 
 It does not call `DatabaseRouter.write`. That path would fan out a composite
@@ -278,7 +278,7 @@ schedule
 ```
 
 The nested allowlists use only fields that
-`src/upgrade_portal/upgrade/options.py::build_options` accepts.
+`src/interfaces/portals/upgrade_portal/upgrade/options.py::build_options` accepts.
 
 | Group | Allowed fields |
 | - | - |

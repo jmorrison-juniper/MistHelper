@@ -6,8 +6,10 @@ from typing import Any  # Type fake dependency seams.
 
 import pytest  # Use pytest monkeypatch and exception assertions.
 
-import src.reports.site_variable_audit.operation as operation_module  # Patch operation seams in one module.
-from src.reports.site_variable_audit.operation import SiteVariableAudit  # Test the public operation class.
+import src.mist.intelligence.reports.site_variable_audit.operation as operation_module  # Import the moved dependency.
+from src.mist.intelligence.reports.site_variable_audit.operation import (
+    SiteVariableAudit,
+)  # Test the public operation class.
 from tests.unit.reports.site_variable_audit.site_variable_audit_fixtures_test import (  # Reuse offline records.
     SiteVariableAuditFixtures,
 )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations  # WHY: keep annotations consistent with the source package.
 
-from src.reports.switch_scorecard.model import (  # WHY: test the pure model without network calls.
+from src.mist.intelligence.reports.switch_scorecard.model import (  # WHY: test the pure model without network calls.
     DEFAULT_AFFINITY_LIMIT,
     SwitchScorecardBuilder,
     SwitchScorecardSettings,

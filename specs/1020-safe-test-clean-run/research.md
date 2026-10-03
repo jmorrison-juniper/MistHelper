@@ -12,7 +12,7 @@ generate tasks without re-discovering the code.
 
 ## R1. Registry fail-open default (User Story 1 / FR-001–FR-007)
 
-- **Decision**: Change `OperationRegistry.get()` (`src/utils/operation_registry.py:310-317`)
+- **Decision**: Change `OperationRegistry.get()` (`src/foundation/support/utils/operation_registry.py:310-317`)
   to default unregistered options to a new `"unregistered"` category instead of
   `{"category": "safe"}`. Add `"unregistered"` to `SKIP_CATEGORIES`
   (`operation_registry.py:306-308`) so it is excluded from *both*
@@ -51,7 +51,7 @@ generate tasks without re-discovering the code.
   | 14 | `resource_intensive` | `_configure_virtual_chassis_manager().launch_check_status()` — matches constitution "Skip list: Operations 14, 18 (heavy)". |
   | 18 | `resource_intensive` | `_dispatch_gateway_stats_device_stats_with_freshness` — gateway device stats "with freshness check"; same constitution skip-list entry. |
   | 188 | `safe` | Read-only export (ticket listing without mutation) — verify no `_select_ticket`/write call during implementation. |
-  | 189 | `destructive` | `OrgTicketManager.create_ticket` (`src/org/org_ticket_manager.py`) — creates a real support ticket, a genuine external side effect. |
+  | 189 | `destructive` | `OrgTicketManager.create_ticket` (`src/mist/resources/org/org_ticket_manager.py`) — creates a real support ticket, a genuine external side effect. |
   | 190 | `destructive` | `OrgTicketManager.add_comment` — writes a comment to a live ticket. |
   | 191 | `destructive` | `OrgTicketManager.update_ticket` — mutates ticket state. |
   | 192 | `interactive` | `OrgTicketManager.view_ticket` calls `OrgTicketManager._select_ticket(org_id)`, which prompts the user to choose from a list — not automatable non-interactively. |
@@ -120,7 +120,7 @@ generate tasks without re-discovering the code.
 ## R3. Isolated venv preflight (User Story 2 / FR-008–FR-012)
 
 - **Decision**: Add a new predicate method `_is_running_in_isolated_venv()`
-  to `DependencyCheckOrchestrator` (`src/bootstrap/dependency_check.py`),
+  to `DependencyCheckOrchestrator` (`src/foundation/runtime/bootstrap/dependency_check.py`),
   using the already-injected `self.sys_module` field (line 51):
   `self.sys_module.prefix != self.sys_module.base_prefix` (with a
   `getattr(self.sys_module, "real_prefix", None)` fallback check for
@@ -189,7 +189,7 @@ generate tasks without re-discovering the code.
      just systematic mode.
   2. **Org-id preflight for non-interactive runs** (FR-016): harden
      `ConfigUtils._resolve_org_id_via_prompt()`
-     (`src/config/config_utils.py:92-111`) with a non-interactive guard: if
+     (`src/foundation/runtime/config/config_utils.py:92-111`) with a non-interactive guard: if
      the process is running in a systematic test mode
      (`"--test" in sys.argv or "--testinteractive" in sys.argv` — computed
      locally with the already-imported `sys` module, preserving
@@ -202,7 +202,7 @@ generate tasks without re-discovering the code.
      constructed with a blank host (the observed 2026-07-16 defect).
      `_resolve_systematic_test_context()` (`MistHelper.py:4801-4806`) is the
      sole call site that reaches this path for `--test`; the interactive-test
-     org resolution path (`src/refactors/run_interactive_test.py`) reuses the
+     org resolution path (`src/foundation/support/refactors/run_interactive_test.py`) reuses the
      same `ConfigUtils.get_cached_or_prompted_org_id()` via getter/setter
      closures, so hardening `ConfigUtils` once covers both systematic modes
      uniformly, matching the fail-closed-in-both-modes requirement already
@@ -217,7 +217,7 @@ generate tasks without re-discovering the code.
   `MistHelper.py:2577`) and `org_id`/`ORG_ID` (lowercase/uppercase, **not**
   `MIST_ORG_ID`) or a `.env` line literally named `org_id=` for the org id
   (`ConfigUtils._resolve_org_id_from_dotenv`,
-  `src/config/config_utils.py:81-90`, and `get_cached_or_prompted_org_id`,
+  `src/foundation/runtime/config/config_utils.py:81-90`, and `get_cached_or_prompted_org_id`,
   lines 113-137). The preflight's remediation message MUST reference the
   variable names the code actually reads, and MUST point the operator at
   `deploy/.env.example` as the file to copy from, while clarifying that the

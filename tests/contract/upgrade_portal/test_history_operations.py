@@ -26,8 +26,8 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.app.routes import review  # Count the real audit section boundary.
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import review  # Count the real audit section boundary.
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 logger = logging.getLogger(__name__)  # Keep synthetic validation records separate from portal records.
 

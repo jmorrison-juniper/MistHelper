@@ -8,7 +8,7 @@
 
 ## Summary
 
-Add a new `src/site/rrm_reset/` package for menu `291`. The operation captures the current RRM plan, writes a before file, optionally sends an optimize or reset request, waits for the configured settle time, captures an after file, and writes a diff file.
+Add a new `src/mist/resources/site/rrm_reset/` package for menu `291`. The operation captures the current RRM plan, writes a before file, optionally sends an optimize or reset request, waits for the configured settle time, captures an after file, and writes a diff file.
 
 ## Technical Context
 
@@ -16,7 +16,7 @@ Add a new `src/site/rrm_reset/` package for menu `291`. The operation captures t
 **Dependencies**: Existing `mistapi>=0.64.0,<0.65` and standard library only  
 **Output**: CSV files through the shared `DataExporter.write_with_format_selection` path  
 **Testing**: `pytest`, `ruff`, `black`, `mypy`, `pydocstyle`, `vulture`, and `interrogate`  
-**Package**: `src/site/rrm_reset/`  
+**Package**: `src/mist/resources/site/rrm_reset/`  
 **Tests**: `tests/unit/site/rrm_reset/`  
 **Destructive Control**: Typed `OPTIMIZE` or `RESET` confirmation and dry-run support  
 **Deferred Wiring**: `specs/3571-rrm-reset-plan/wiring.md`
@@ -33,7 +33,7 @@ Add a new `src/site/rrm_reset/` package for menu `291`. The operation captures t
 ## Project Structure
 
 ```text
-src/site/rrm_reset/
+src/mist/resources/site/rrm_reset/
 ├── __init__.py
 ├── client.py
 ├── model.py
@@ -89,9 +89,9 @@ Run these gates before each implementation commit:
 
 ```powershell
 C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m py_compile <new-py-files>
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m ruff check src/site/rrm_reset tests/unit/site/rrm_reset
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m black --check src/site/rrm_reset tests/unit/site/rrm_reset
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m mypy src/site/rrm_reset --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m pydocstyle src/site/rrm_reset
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m ruff check src/mist/resources/site/rrm_reset tests/unit/site/rrm_reset
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m black --check src/mist/resources/site/rrm_reset tests/unit/site/rrm_reset
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m mypy src/mist/resources/site/rrm_reset --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m pydocstyle src/mist/resources/site/rrm_reset
 C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m pytest tests/unit/site/rrm_reset -q --timeout=120
 ```

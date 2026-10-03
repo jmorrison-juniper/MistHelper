@@ -7,7 +7,7 @@ from types import SimpleNamespace  # Build a minimal fake pwd module.
 
 import pytest  # Use monkeypatch and exception assertions.
 
-from src.maps import _container_detection as detection  # Import the module under test.
+from src.interfaces.visualization.maps import _container_detection as detection  # Import the module under test.
 
 
 def test_runtime_user_returns_false_when_uid_lookup_fails(monkeypatch: pytest.MonkeyPatch) -> None:

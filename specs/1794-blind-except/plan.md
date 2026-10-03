@@ -50,7 +50,7 @@ specs\1794-blind-except\
 ### Source Code
 
 ```text
-src\firmware\running_version.py
+src\operations\execution\firmware\running_version.py
 tests\unit\firmware\test_running_version.py
 changelog.d\issue-1794-blind-except.md
 ```
@@ -63,7 +63,7 @@ No constitution violation is added.
 
 ## Changed Files
 
-- `src\firmware\running_version.py`: Narrow the catch in `fetch_site_running_versions`.
+- `src\operations\execution\firmware\running_version.py`: Narrow the catch in `fetch_site_running_versions`.
 - `tests\unit\firmware\test_running_version.py`: Add the runtime-failure and programming-error proofs.
 - `tests\unit\firmware\test_firmware_manager_ssr.py`: Patch SSR flow tests so they do not call a live stats endpoint.
 - `specs\1794-blind-except\spec.md`: Record requirements and acceptance criteria.

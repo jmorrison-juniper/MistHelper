@@ -1312,13 +1312,13 @@ that step.
 
 | Endpoint | MistHelper method | File |
 | - | - | - |
-| List | `MarvisActionsClient.list_actions` | `src/marvis/actions/client.py` |
-| Schema | `MarvisActionsClient.read_schema` | `src/marvis/actions/client.py` |
-| Sites | `MarvisActionsClient.read_site_names` | `src/marvis/actions/client.py` |
-| Alarm search | `MarvisActionsClient.search_marvis_alarms` | `src/marvis/actions/client.py` |
-| Alarm join | `MarvisAlarmJoin.apply` | `src/marvis/actions/alarms.py` |
-| Resolve | `MarvisActionsClient.resolve_action` | `src/marvis/actions/client.py` |
-| Verify | `MarvisBulkResolver.verify` | `src/marvis/actions/operation.py` |
+| List | `MarvisActionsClient.list_actions` | `src/mist/intelligence/marvis/actions/client.py` |
+| Schema | `MarvisActionsClient.read_schema` | `src/mist/intelligence/marvis/actions/client.py` |
+| Sites | `MarvisActionsClient.read_site_names` | `src/mist/intelligence/marvis/actions/client.py` |
+| Alarm search | `MarvisActionsClient.search_marvis_alarms` | `src/mist/intelligence/marvis/actions/client.py` |
+| Alarm join | `MarvisAlarmJoin.apply` | `src/mist/intelligence/marvis/actions/alarms.py` |
+| Resolve | `MarvisActionsClient.resolve_action` | `src/mist/intelligence/marvis/actions/client.py` |
+| Verify | `MarvisBulkResolver.verify` | `src/mist/intelligence/marvis/actions/operation.py` |
 
 ## Example script that only reads
 

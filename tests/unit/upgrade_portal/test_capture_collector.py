@@ -16,8 +16,14 @@ from typing import Any  # A session, a store result, and a document are all free
 
 import pytest  # The parameter table of the fold test.
 
-from src.upgrade_portal.capture import assembly, clients, collector, devices, extras  # The collector and its parts.
-from src.upgrade_portal.runtime import pools  # The worker target that wave one matches.
+from src.interfaces.portals.upgrade_portal.capture import (
+    assembly,
+    clients,
+    collector,
+    devices,
+    extras,
+)  # The collector and its parts.
+from src.interfaces.portals.upgrade_portal.runtime import pools  # The worker target that wave one matches.
 
 CAPTURE_ID = "cap-0123456789abcdef-01"  # The identifier of the fake capture.
 RUN_ID = "run-0123456789abcdef"  # The owning run of the fake capture.

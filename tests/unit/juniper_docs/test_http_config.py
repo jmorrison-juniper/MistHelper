@@ -13,14 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from src.juniper_docs.acquire.http_config import HttpConfig
+from src.mist.intelligence.juniper_docs.acquire.http_config import HttpConfig
 
 # The repository root sits four levels above this test file.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # The corporate root CA ships in the repository root.
 CA_FILE = REPO_ROOT / HttpConfig.CA_FILE_NAME
 # The module source path is used for the annotation audit.
-HTTP_CONFIG_SOURCE = REPO_ROOT / "src" / "juniper_docs" / "acquire" / "http_config.py"
+HTTP_CONFIG_SOURCE = REPO_ROOT / "src" / "mist" / "intelligence" / "juniper_docs" / "acquire" / "http_config.py"
 
 
 def test_ca_file_is_present() -> None:

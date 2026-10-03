@@ -26,14 +26,14 @@ from uuid import UUID  # Used in route signatures and DB filters
 from fastapi import APIRouter, Depends, HTTPException, Query  # FastAPI route plumbing
 from sqlalchemy import select  # Build typed SQLAlchemy SELECTs
 
-from src.api.deps import (  # DI for auth, DB session, and the org scope check
+from src.mist.access.api.deps import (  # DI for auth, DB session, and the org scope check
     get_authenticated_user,
     get_db_session,
     get_scoped_org_id,
 )
-from src.api.middleware.auth import require_org_access  # Org membership check
-from src.api.schemas.common import ResponseEnvelope  # Uniform response wrapper
-from src.api.schemas.sync import (  # Public response/request models
+from src.mist.access.api.middleware.auth import require_org_access  # Org membership check
+from src.mist.access.api.schemas.common import ResponseEnvelope  # Uniform response wrapper
+from src.mist.access.api.schemas.sync import (  # Public response/request models
     DeviceResponse,
     DriftAcknowledgeRequest,
     DriftAlertDetail,
@@ -58,7 +58,7 @@ from src.shared.models.inventory import (  # ORM inventory models
 
 if TYPE_CHECKING:  # Type-only imports -- runtime cost zero
     from sqlalchemy.ext.asyncio import AsyncSession  # Async DB session type
-    from src.api.middleware.auth import CurrentUser  # Current-user identity object
+    from src.mist.access.api.middleware.auth import CurrentUser  # Current-user identity object
 
 logger = logging.getLogger(__name__)  # Module logger, so the records name this module
 

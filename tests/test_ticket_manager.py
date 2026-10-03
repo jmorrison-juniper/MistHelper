@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import MistHelper
-from src.refactors.endpoint_primary_key_strategies import (
+from src.foundation.support.refactors.endpoint_primary_key_strategies import (
     ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Direct import: no MistHelper re-export shim (initiative 1015 T-04)
 )
 
@@ -524,7 +524,7 @@ class TestPKStrategies:
     )
     def test_pk_strategy_defined(self, endpoint):
         """Each ticket endpoint must have a PK strategy entry."""
-        # Access the PK strategies dict imported directly from src.refactors (no MistHelper re-export per 1015 T-04)
+        # Preserve the existing behavior.
         strategies = ENDPOINT_PRIMARY_KEY_STRATEGIES
         assert endpoint in strategies, f"Missing PK strategy for {endpoint}"  # Verify entry exists
         assert "type" in strategies[endpoint]  # Verify strategy has a type field

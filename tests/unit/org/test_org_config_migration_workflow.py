@@ -1,7 +1,7 @@
 """Tests for the org config migration export flow, the operator prompts, and the report.
 
 Why:
-    ``src/org/org_config_migration_manager.py`` drives menu 176 and menu 177.
+    ``src/mist/resources/org/org_config_migration_manager.py`` drives menu 176 and menu 177.
     Menu 177 writes into a live org. Issue #1961 reports that the export flow,
     the file selection prompt, the bundle guard, the confirmation gate, and the
     result summary hold no test. This module covers those blocks. No test
@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.org import org_config_migration_manager as ocm
-from src.org.org_config_migration_manager import OrgConfigMigrationManager
+from src.mist.resources.org import org_config_migration_manager as ocm
+from src.mist.resources.org.org_config_migration_manager import OrgConfigMigrationManager
 
 TYPE_KEYS = [str(ct["key"]) for ct in OrgConfigMigrationManager.CONFIG_TYPES]  # WHY: the six keys a bundle must hold.
 
@@ -147,7 +147,9 @@ class TestDisplayExportSummary:
 
     def test_every_type_and_the_total_are_shown(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """A missing row hides an empty type that the operator expected to hold data."""
-        caplog.set_level("INFO", logger="src.org.org_config_migration_manager")  # WHY: preview now uses INFO.
+        caplog.set_level(
+            "INFO", logger="src.mist.resources.org.org_config_migration_manager"
+        )  # WHY: preview now uses INFO.
         counts = {key: 1 for key in TYPE_KEYS}  # WHY: one object of every type.
         bundle = {"metadata": {"object_counts": counts}}  # WHY: the printer reads this section.
         manager._display_export_summary(bundle, "data/OrgConfig_Export_Acme.json")  # WHY: drive the printer.
@@ -354,7 +356,9 @@ class TestDisplayBundlePreview:
 
     def test_the_preview_names_the_source_and_the_total(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """A preview without a count gives the operator nothing to check."""
-        caplog.set_level("INFO", logger="src.org.org_config_migration_manager")  # WHY: preview now uses INFO.
+        caplog.set_level(
+            "INFO", logger="src.mist.resources.org.org_config_migration_manager"
+        )  # WHY: preview now uses INFO.
         metadata = {
             "source_org_name": "Acme-Corp",  # WHY: the operator recognizes the org by name.
             "export_timestamp": "2026-08-23T00:00:00+00:00",  # WHY: a stale bundle is a common mistake.

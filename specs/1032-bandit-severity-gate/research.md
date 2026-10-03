@@ -25,7 +25,7 @@ This document records every decision that the plan depends on. The implementer m
 
 **Rationale**: Bandit B105 fires on the **name** of a variable, not on the value. The rule matches a name that holds `token`, `secret`, `pass`, or `pwd`. All 11 findings are module-level constants. The measured values are a prompt sentinel such as `"q"` and `"CREATE"`, a CSS alpha value such as `"0.2"`, an attribute name such as `"_api_token"`, a Vault path prefix, and a null-byte delimiter. None is a credential. No defect exists, so no fix exists.
 
-A rename such as `CANCEL_TOKEN` to `CANCEL_SENTINEL` would remove the finding at the root, which requirement FR-008 ranks above a suppression. The plan still rejects the rename for three reasons. The rename spreads churn to every call site of a public constant. The rename makes `_TOKEN_ATTR` less accurate, because that constant genuinely names a token attribute. The specification already set the default decision for B105 to a suppression and named `src/ssh/config/env_loader.py` line 67 as the model.
+A rename such as `CANCEL_TOKEN` to `CANCEL_SENTINEL` would remove the finding at the root, which requirement FR-008 ranks above a suppression. The plan still rejects the rename for three reasons. The rename spreads churn to every call site of a public constant. The rename makes `_TOKEN_ATTR` less accurate, because that constant genuinely names a token attribute. The specification already set the default decision for B105 to a suppression and named `src/operations/execution/ssh/config/env_loader.py` line 67 as the model.
 
 **Alternatives considered**:
 
@@ -52,7 +52,7 @@ Six of the nine B603 findings sit on a `subprocess.run(` call that spans several
 
 **Rationale**: The root `ruff` configuration selects `["E", "F", "W", "I", "UP", "B", "G"]`. The `S` set, which is `flake8-bandit`, is absent. The `mist-ops-platform` configuration also omits `S`. An `S` annotation therefore silences no `ruff` rule. Bandit reads `# nosec` only and ignores `# noqa` completely.
 
-Two in-scope lines carry this trap. `src/gateway/_wan2_variable_device.py` line 371 carries `# noqa: S101`. `src/utils/zscaler_probe.py` line 184 carries `# noqa: S603 - args are validated above`. Both still report to bandit today.
+Two in-scope lines carry this trap. `src/mist/resources/gateway/_wan2_variable_device.py` line 371 carries `# noqa: S101`. `src/foundation/support/utils/zscaler_probe.py` line 184 carries `# noqa: S603 - args are validated above`. Both still report to bandit today.
 
 **Consequence**: The implementer must not read an `S` annotation as a completed triage. The implementer must also leave the annotation in place, because removing it is a separate cleanup that this scope does not cover.
 
@@ -69,7 +69,7 @@ Two in-scope lines carry this trap. `src/gateway/_wan2_variable_device.py` line 
 | Class | Count | Evidence |
 | - | - | - |
 | Type narrowing | 11 | Each line already carries a comment such as `# WHY: mypy narrowing` or `# Guarded by _polyglot_db_layer_available`. An earlier guard proves the value. |
-| Runtime guard | 7 | 5 sit inside the `_rule_*` validators of `src/maps/plotly_map_templates.py`. 2 sit in the `__post_init__` of `SiteAutoUpgradeConfig`. |
+| Runtime guard | 7 | 5 sit inside the `_rule_*` validators of `src/interfaces/visualization/maps/plotly_map_templates.py`. 2 sit in the `__post_init__` of `SiteAutoUpgradeConfig`. |
 
 **Exception type for the conversions**:
 
@@ -93,10 +93,10 @@ Two in-scope lines carry this trap. `src/gateway/_wan2_variable_device.py` line 
 
 **Rationale**: A silent `except` block hides a fault. Requirement FR-011 sets the default to narrow and log. Two sites need the escalation that the same requirement allows.
 
-- `src/utils/logger_utils.py` line 113 sits inside a logging filter. A log call from the logging path can re-enter the same filter and can recurse without end. The existing comment already states that the block must never crash the logger. This site takes a suppression and keeps the broad `except`.
-- `src/utils/zscaler_probe.py` line 371 closes a socket in a cleanup path. The line already carries `# pragma: no cover - best-effort cleanup`. The specification names a best-effort cleanup as a valid escalation. This site takes a suppression.
+- `src/foundation/support/utils/logger_utils.py` line 113 sits inside a logging filter. A log call from the logging path can re-enter the same filter and can recurse without end. The existing comment already states that the block must never crash the logger. This site takes a suppression and keeps the broad `except`.
+- `src/foundation/support/utils/zscaler_probe.py` line 371 closes a socket in a cleanup path. The line already carries `# pragma: no cover - best-effort cleanup`. The specification names a best-effort cleanup as a valid escalation. This site takes a suppression.
 
-**Overlap with issue #1709 - resolved**: Issue #1709 asks the same question about the broad `except` blocks in `MistHelper.py`. The measurement shows that **none** of the 7 B110 findings sit in `MistHelper.py`. The files are `mist-ops-platform/src/api/routes/health.py`, `src/auth/interactive/login_orchestrator.py`, `src/export/site_insights/device_metric_operation.py`, `src/firmware/firmware_manager.py`, `src/utils/logger_utils.py`, and `src/utils/zscaler_probe.py`. The line-level conflict that the specification feared does not exist. The implementer still reads the current scope of #1709 before the first edit, because that scope may grow.
+**Overlap with issue #1709 - resolved**: Issue #1709 asks the same question about the broad `except` blocks in `MistHelper.py`. The measurement shows that **none** of the 7 B110 findings sit in `MistHelper.py`. The files are `mist-ops-platform/src/mist/access/api/routes/health.py`, `src/mist/access/auth/interactive/login_orchestrator.py`, `src/operations/exporting/export/site_insights/device_metric_operation.py`, `src/operations/execution/firmware/firmware_manager.py`, `src/foundation/support/utils/logger_utils.py`, and `src/foundation/support/utils/zscaler_probe.py`. The line-level conflict that the specification feared does not exist. The implementer still reads the current scope of #1709 before the first edit, because that scope may grow.
 
 **Complexity impact**: A narrowed exception type replaces one clause with another clause. It adds no branch, so the `radon` score stays flat. A `logging.debug` call adds one statement inside a block that the tests already miss, so the coverage impact is 5 statements against an 80 percent threshold on `src/`.
 
@@ -110,7 +110,7 @@ Two in-scope lines carry this trap. `src/gateway/_wan2_variable_device.py` line 
 
 All 3 findings sit **outside** `src/`. The `mypy`, `pylint`, `radon`, `vulture`, and coverage gates read `src/` only, so this change faces `ruff`, `black`, and `bandit` alone. That makes it the lowest-risk code change in the whole feature.
 
-`src/site/address_audit/ui_geocoder.py` already imports `shutil` for a `PATH` lookup of the Edge executable, so the repository already holds the pattern.
+`src/mist/resources/site/address_audit/ui_geocoder.py` already imports `shutil` for a `PATH` lookup of the Edge executable, so the repository already holds the pattern.
 
 **Action logging**: The resolution is a meaningful action under Principle VII. Each resolution logs before the lookup and logs the resolved path after the lookup. The log must never print an argument that could hold a secret.
 
@@ -125,7 +125,7 @@ All 3 findings sit **outside** `src/`. The `mypy`, `pylint`, `radon`, `vulture`,
 
 **Decision**: Add a `# nosec B107` comment with a stated reason. Do not change the signature.
 
-**Rationale**: The finding is `password: str = ""` in `mist-ops-platform/src/shared/services/notification.py`. The empty string is a "not provided" sentinel, not a credential. The repository already documents the identical pattern at `src/ssh/config/env_loader.py` line 67 with the comment `# nosec B105 - empty password is a sentinel for "not provided"`.
+**Rationale**: The finding is `password: str = ""` in `mist-ops-platform/src/shared/services/notification.py`. The empty string is a "not provided" sentinel, not a credential. The repository already documents the identical pattern at `src/operations/execution/ssh/config/env_loader.py` line 67 with the comment `# nosec B105 - empty password is a sentinel for "not provided"`.
 
 Requirement FR-014 permits this outcome when the value is shown not to be a secret. The specification's own escalation note for B107 allows a suppression for a documented placeholder.
 
@@ -153,12 +153,12 @@ Requirement FR-014 permits this outcome when the value is shown not to be a secr
 
 | Path | ruff, black, bandit | mypy, radon, vulture, coverage | pylint |
 | - | - | - | - |
-| `src/` | Yes | Yes | Yes, except `src/maps`, `src/ssh`, and `src/ui` |
+| `src/` | Yes | Yes | Yes, except `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui` |
 | `starlink_dashboard.py` | Yes | No | No |
 | `tools/` | Yes | No | No |
 | `mist-ops-platform/` | Yes | No | No |
 
-**Consequence**: 24 of the 54 findings sit outside `src/`. Group A holds 13 of them, which is why Group A runs first. The 5 asserts in `src/maps/plotly_map_templates.py` skip `pylint` but still face `mypy`, `radon`, `vulture`, and coverage.
+**Consequence**: 24 of the 54 findings sit outside `src/`. Group A holds 13 of them, which is why Group A runs first. The 5 asserts in `src/interfaces/visualization/maps/plotly_map_templates.py` skip `pylint` but still face `mypy`, `radon`, `vulture`, and coverage.
 
 ---
 

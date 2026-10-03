@@ -20,15 +20,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import (
+from src.mist.access.api.deps import (
     get_authenticated_user,
     get_db_session,
     get_scoped_org_id,
 )
-from src.api.middleware.auth import CurrentUser, require_org_access
-from src.api.schemas.common import ResponseEnvelope
+from src.mist.access.api.middleware.auth import CurrentUser, require_org_access
+from src.mist.access.api.schemas.common import ResponseEnvelope
 from src.shared.sync_db import sync_engine
-from src.api.schemas.deploy import (
+from src.mist.access.api.schemas.deploy import (
     CheckpointDetail,
     DryRunRequest,
     DryRunResponse,

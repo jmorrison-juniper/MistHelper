@@ -41,9 +41,9 @@ stylesheet holds a second width set for the table of ten columns.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/routes/review.py` | The rename to `record_site_label`. The new constant `SITE_TEST_ID_PREFIX`. `page_rows` adds the site text and the site test identifier. The new class `HistoryCaptureColumns`. `history_page` gives the template one instance as `history_columns`. |
-| `src/upgrade_portal/app/assets/templates/review/history.html` | The table class, the Site header, the site cell, the caption, and the span of the empty row. |
-| `src/upgrade_portal/app/assets/static/css/portal.css` | The width set of ten columns, and the clip rule of the site cell. |
+| `src/interfaces/portals/upgrade_portal/app/routes/review.py` | The rename to `record_site_label`. The new constant `SITE_TEST_ID_PREFIX`. `page_rows` adds the site text and the site test identifier. The new class `HistoryCaptureColumns`. `history_page` gives the template one instance as `history_columns`. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/review/history.html` | The table class, the Site header, the site cell, the caption, and the span of the empty row. |
+| `src/interfaces/portals/upgrade_portal/app/assets/static/css/portal.css` | The width set of ten columns, and the clip rule of the site cell. |
 | `specs/1823-upgrade-capture-portal/contracts/ui-testids.md` | One new row for `history-site-{capture_id}`. |
 | `tests/unit/upgrade_portal/test_issue_3486_history_site_column.py` | New. The column class, the rows, the render, and the stylesheet rules. |
 | `tests/contract/upgrade_portal/test_history_routes.py` | The Site column of the page with no site over two sites. No Site column on the page of one site. |

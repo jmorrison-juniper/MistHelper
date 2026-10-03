@@ -20,11 +20,11 @@
 
 **Purpose**: Remove old broken implementation and add database schema entries required by all subsequent phases.
 
-- [X] T001 [P] Delete the old `src/ssid_consolidation/` package directory entirely
-- [X] T002 [P] Remove `SSIDTemplateConsolidationLauncher` class (~line 12862–12943) and its `from src.ssid_consolidation...` import block from MistHelper.py
+- [X] T001 [P] Delete the old `src/operations/execution/ssid_consolidation/` package directory entirely
+- [X] T002 [P] Remove `SSIDTemplateConsolidationLauncher` class (~line 12862–12943) and its `from src.operations.execution.ssid_consolidation...` import block from MistHelper.py
 - [X] T003 [P] Add 6 PK strategy entries to `ENDPOINT_PRIMARY_KEY_STRATEGIES` dict (~line 3281) in MistHelper.py: `ssidConsolidationMatrix` (composite: site_id+ssid_id), `ssidConsolidationDeviation` (composite: cluster_id+parameter), `ssidConsolidationSiteVars` (composite: site_id+variable_name), `ssidConsolidationSiteGroups` (composite: site_id+group_id), `ssidConsolidationTemplates` (composite: template_id+ssid_name), `ssidConsolidationDisable` (composite: site_id+ssid_id) — see data-model.md for full definitions
 
-**Checkpoint**: `src/ssid_consolidation/` deleted. Old launcher removed. 6 PK strategies added. `python -m py_compile MistHelper.py` passes.
+**Checkpoint**: `src/operations/execution/ssid_consolidation/` deleted. Old launcher removed. 6 PK strategies added. `python -m py_compile MistHelper.py` passes.
 
 ---
 
@@ -175,7 +175,7 @@ Cross-phase parallelism is limited because this is a single-file monolith — mo
 | - | - | - |
 | FR-001 | T004 | Class inside MistHelper.py |
 | FR-002 | T007 | Menu 159 registration |
-| FR-003 | T001, T002 | Delete old src/ssid_consolidation/ |
+| FR-003 | T001, T002 | Delete old src/operations/execution/ssid_consolidation/ |
 | FR-004 | T004 | MIST_TARGET_SSID env var |
 | FR-005 | T004 | Runtime SSID override prompt |
 | FR-006 | T004 | Single SSID scope per run |

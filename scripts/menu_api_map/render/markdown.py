@@ -35,7 +35,7 @@ class LinkStyle:
     wiki: bool  # True for the wiki page set, which links to other pages by page name.
 
     def source(self, relative: str) -> str:
-        """Return the link to one repository file, such as src/export/site_exporter.py."""
+        """Return the link to one repository file, such as src/operations/exporting/export/site_exporter.py."""
         return f"{self.source_prefix}{relative}"  # A relative link, or an absolute GitHub link.
 
     def index_page(self) -> str:

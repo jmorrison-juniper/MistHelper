@@ -13,7 +13,7 @@ def test_misthelper_sle_metrics_delegates_to_serial_cc_service(monkeypatch):
         called["count"] += 1
         called["fast"] = fast
 
-    serial_cc_module = importlib.import_module("src.refactors.serial_cc.sle_metrics")
+    serial_cc_module = importlib.import_module("src.foundation.support.refactors.serial_cc.sle_metrics")
     monkeypatch.setattr(serial_cc_module.SLEMetricsService, "execute", staticmethod(fake_execute))
 
     misthelper_module.OrgExportUtils.sle_metrics(False)

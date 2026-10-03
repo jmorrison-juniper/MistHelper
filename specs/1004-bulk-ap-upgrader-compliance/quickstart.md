@@ -19,8 +19,8 @@
 Run these two commands. Both MUST exit 0 with no output on stderr:
 
 ```bash
-python -m py_compile src/firmware/bulk_ap_upgrader.py
-python -m ruff check src/firmware/bulk_ap_upgrader.py
+python -m py_compile src/operations/execution/firmware/bulk_ap_upgrader.py
+python -m ruff check src/operations/execution/firmware/bulk_ap_upgrader.py
 ```
 
 If either fails, the refactor is not ready. Do not proceed.
@@ -34,7 +34,7 @@ Corresponds to acceptance criteria FR-002, FR-003, SC-006, SC-007.
 Run the compliance analyzer and confirm the score and grade:
 
 ```bash
-python -m tools.compliance_analyzer src/firmware/bulk_ap_upgrader.py
+python -m tools.compliance_analyzer src/operations/execution/firmware/bulk_ap_upgrader.py
 ```
 
 Expected output includes:
@@ -78,8 +78,8 @@ Randomly sample 25 executable lines from the refactored file and count how many 
 
 ```bash
 # Rough sampling helper — reviewer picks 25 line numbers by inspection
-sed -n '100,150p' src/firmware/bulk_ap_upgrader.py    # spot-check a helper body
-sed -n '700,720p' src/firmware/bulk_ap_upgrader.py    # spot-check inside _select_strategy
+sed -n '100,150p' src/operations/execution/firmware/bulk_ap_upgrader.py    # spot-check a helper body
+sed -n '700,720p' src/operations/execution/firmware/bulk_ap_upgrader.py    # spot-check inside _select_strategy
 ```
 
 At least 20 of the 25 sampled lines MUST have an inline comment. The comments must explain *why* the line exists, not merely restate the code (per Constitution VI).
@@ -93,7 +93,7 @@ Corresponds to acceptance criterion SC-009.
 Confirm the info-before / debug-after pattern is present at the ten targeted refactor sites (FR-012):
 
 ```bash
-grep -n -B 2 -A 2 "def _select_strategy\|def _estimate_api_calls\|def _offer_additional_model_versions\|def _fetch_ap_model_families\|def _configure_auto_upgrade_schedule\|def _step11_write_results\|def _apply_version_selection\|def _upgrade_version_group\|def _log_upgrade_results\|def execute" src/firmware/bulk_ap_upgrader.py
+grep -n -B 2 -A 2 "def _select_strategy\|def _estimate_api_calls\|def _offer_additional_model_versions\|def _fetch_ap_model_families\|def _configure_auto_upgrade_schedule\|def _step11_write_results\|def _apply_version_selection\|def _upgrade_version_group\|def _log_upgrade_results\|def execute" src/operations/execution/firmware/bulk_ap_upgrader.py
 ```
 
 Each method's first executable line should be a `logging.info(...)` call. Somewhere before the method's return, a `logging.debug(...)` call MUST report the result summary.
@@ -103,7 +103,7 @@ Also confirm ASCII-only log strings:
 ```bash
 python -c "
 import re
-with open('src/firmware/bulk_ap_upgrader.py', encoding='utf-8') as fh:
+with open('src/operations/execution/firmware/bulk_ap_upgrader.py', encoding='utf-8') as fh:
     for lineno, line in enumerate(fh, 1):
         if 'logging.' in line:
             for match in re.finditer(r'[\"\'].*?[\"\']', line):
@@ -125,7 +125,7 @@ Start a Python REPL from the repo root and verify the new constructor contract:
 ```python
 python
 >>> from unittest.mock import MagicMock
->>> from src.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader, BulkAPUpgraderConfig
+>>> from src.operations.execution.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader, BulkAPUpgraderConfig
 >>>
 >>> # Positive case: construct via config, verify no TypeError
 >>> config = BulkAPUpgraderConfig(org_id="test-org", apisession=MagicMock(), dry_run=True)

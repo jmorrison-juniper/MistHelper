@@ -21,7 +21,7 @@ import pytest  # Test framework and skip helper
 PLATFORM_ROOT = pathlib.Path(__file__).resolve().parents[3]  # Sub-project root directory
 
 if str(PLATFORM_ROOT) not in sys.path:  # Only extend the path one time
-    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.shared" and "src.api" importable
+    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.shared" and "src.mist.access.api" importable
 
 from src.shared.services.session_store import (  # noqa: E402
     SESSION_TTL_SECONDS,
@@ -97,7 +97,7 @@ def _build_client() -> object:
     fastapi = pytest.importorskip("fastapi")  # Skip when the web framework is not installed.
     testclient = pytest.importorskip("fastapi.testclient")  # The client needs httpx as well.
 
-    from src.api.routes.health import auth_router  # Import here, so a missing dependency skips.
+    from src.mist.access.api.routes.health import auth_router  # Import here, so a missing dependency skips.
 
     app = fastapi.FastAPI()  # A bare application isolates the route from the real middleware.
     app.include_router(auth_router)  # Mount the router that holds POST /auth/token.

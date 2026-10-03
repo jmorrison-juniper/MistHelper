@@ -4,7 +4,7 @@
 
 ## Design
 
-1. New class `CloudReadCache` in `src/upgrade_portal/runtime/cloud_cache.py`:
+1. New class `CloudReadCache` in `src/interfaces/portals/upgrade_portal/runtime/cloud_cache.py`:
    a monotonic clock, a lock for the threads of the server, an ordered map with
    a size bound, copies in and copies out, and no empty answer.
 2. `select.default_cloud_read` looks up the key before the software

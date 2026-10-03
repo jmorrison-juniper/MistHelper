@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.juniper_docs.acquire.pdf_resolver import CompanionPdfResolver, JvdPdfResolver
-from src.juniper_docs.models import ResolveOutcome
+from src.mist.intelligence.juniper_docs.acquire.pdf_resolver import CompanionPdfResolver, JvdPdfResolver
+from src.mist.intelligence.juniper_docs.models import ResolveOutcome
 from tests.unit.juniper_docs.conftest import FakeCatalogClient, read_fixture
 
 _ROOT = "https://www.juniper.net/documentation/us/en/software/multi-pdf-guide/"

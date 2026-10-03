@@ -6,7 +6,7 @@
 
 ---
 
-## Pre-Refactor Signature (current, `src/firmware/bulk_ap_upgrader.py:43`)
+## Pre-Refactor Signature (current, `src/operations/execution/firmware/bulk_ap_upgrader.py:43`)
 
 ```python
 class BulkAPFirmwareUpgrader:
@@ -61,8 +61,8 @@ The following properties MUST hold across the refactor:
 
 | # | Invariant | Verified By |
 |---|-----------|-------------|
-| C-1 | The class name `BulkAPFirmwareUpgrader` is unchanged. | `grep -n "^class BulkAPFirmwareUpgrader" src/firmware/bulk_ap_upgrader.py` returns exactly one line. |
-| C-2 | The `.execute()` method signature is unchanged (`self` only, no new params). | `grep -n "def execute" src/firmware/bulk_ap_upgrader.py` shows `def execute(self) -> None:`. |
+| C-1 | The class name `BulkAPFirmwareUpgrader` is unchanged. | `grep -n "^class BulkAPFirmwareUpgrader" src/operations/execution/firmware/bulk_ap_upgrader.py` returns exactly one line. |
+| C-2 | The `.execute()` method signature is unchanged (`self` only, no new params). | `grep -n "def execute" src/operations/execution/firmware/bulk_ap_upgrader.py` shows `def execute(self) -> None:`. |
 | C-3 | The 11-step workflow order (`_step1_*` through `_step11_*`) is preserved. | Read `_run_discovery_phase` -> `_run_planning_phase` -> `_run_execution_phase` bodies; assert steps 1-11 appear in ascending order. |
 | C-4 | Every legacy `__init__` parameter maps to exactly one `BulkAPUpgraderConfig` field with the same name, type, and default. | See `data-model.md` mapping table. |
 | C-5 | Constructor rejects positional arguments beyond `config` with a plain `TypeError`. | `BulkAPFirmwareUpgrader("org1", session, dry_run=True)` raises `TypeError: __init__() takes 2 positional arguments but 3 were given`. |
@@ -78,14 +78,14 @@ The following properties MUST hold across the refactor:
 
 ```python
 class BulkAPFirmwareUpgrader:
-    """Thin wrapper that delegates to src.firmware.bulk_ap_upgrader."""
+    """Thin wrapper that delegates to src.operations.execution.firmware.bulk_ap_upgrader."""
     def __init__(self, org_id, sites_override=None, dry_run=False):
         self.org_id = org_id
         self.sites_override = sites_override
         self.dry_run = dry_run
 
     def execute(self):
-        from src.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader as _Impl
+        from src.operations.execution.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader as _Impl
         upgrader = _Impl(
             org_id=self.org_id,
             apisession=apisession,
@@ -107,7 +107,7 @@ class BulkAPFirmwareUpgrader:
 
 ```python
 class BulkAPFirmwareUpgrader:
-    """Thin wrapper that delegates to src.firmware.bulk_ap_upgrader."""
+    """Thin wrapper that delegates to src.operations.execution.firmware.bulk_ap_upgrader."""
     def __init__(self, org_id, sites_override=None, dry_run=False):
         # Wrapper's external contract is unchanged — menu 195 still passes 3 args
         self.org_id = org_id
@@ -115,7 +115,7 @@ class BulkAPFirmwareUpgrader:
         self.dry_run = dry_run
 
     def execute(self):
-        from src.firmware.bulk_ap_upgrader import (
+        from src.operations.execution.firmware.bulk_ap_upgrader import (
             BulkAPFirmwareUpgrader as _Impl,
             BulkAPUpgraderConfig,
         )
@@ -189,8 +189,8 @@ If any of the following are observed after the refactor, the contract is broken 
 
 - `menu 195` in production launches menu but raises `TypeError` at bulk-AP-upgrader construction.
 - `pytest tests/unit/test_bulk_ap_upgrader.py` returns non-zero.
-- `python -m py_compile src/firmware/bulk_ap_upgrader.py` returns non-zero.
-- `python -m ruff check src/firmware/bulk_ap_upgrader.py` reports any error or warning.
+- `python -m py_compile src/operations/execution/firmware/bulk_ap_upgrader.py` returns non-zero.
+- `python -m ruff check src/operations/execution/firmware/bulk_ap_upgrader.py` reports any error or warning.
 - A reviewer greps for `_step1_` through `_step11_` and finds any step is not called, called out of order, or called more than once per `execute()`.
 
 ---

@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from src.utils import rate_limiting
+from src.foundation.support.utils import rate_limiting
 from web_portal.services.operation import OperationExecutor
 from web_portal.services.output_scan import (
     EXCLUDED_DIR_NAMES,
@@ -106,7 +106,9 @@ class TestSkipListMatchesItsWriters:
 
     def test_application_log_name_is_still_live(self):
         """The application log name must still appear in the module that opens it."""
-        source = (REPOSITORY_ROOT / "src" / "refactors" / "main_entrypoint.py").read_text(encoding="utf-8")
+        source = (REPOSITORY_ROOT / "src" / "foundation" / "support" / "refactors" / "main_entrypoint.py").read_text(
+            encoding="utf-8"
+        )
         assert "script.log" in source
         assert "script.log" in RUNTIME_FILE_NAMES
 

@@ -5,12 +5,12 @@
 Closes #3561
 
 ## Summary
-- Add `src/reports/alert_digest` for menu 280 alert digest output and menu 281 alarm acknowledgement.
+- Add `src/mist/intelligence/reports/alert_digest` for menu 280 alert digest output and menu 281 alarm acknowledgement.
 - Menu 280 writes `AlertDigest.csv` and `AlertDigest.md` through the owned package.
 - Menu 281 is destructive. It changes Mist alarm acknowledgement state, requires `ACK <count>`, supports `--dry-run`, and needs human review before merge.
 
 ## Files
-- `src/reports/alert_digest/**`
+- `src/mist/intelligence/reports/alert_digest/**`
 - `tests/unit/reports/alert_digest/**`
 - `specs/3561-alert-digest-acknowledge/**`
 - `changelog.d/issue-3561-alert-digest-acknowledge.md`
@@ -18,7 +18,7 @@ Closes #3561
 ## Integration deferral
 - Menu wiring is deferred to the tier integration pull request.
 - The integration pull request must copy `specs/3561-alert-digest-acknowledge/wiring.md`.
-- The deferred wiring covers `MistHelper.py`, `src/utils/operation_registry.py`, primary key strategies, README, and generated menu references.
+- The deferred wiring covers `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, primary key strategies, README, and generated menu references.
 
 ## Acceptance Criteria
 - [x] All acceptance criteria from the linked Spec Issue are met.

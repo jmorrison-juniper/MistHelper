@@ -71,7 +71,10 @@ class CaptureConcurrencyBenchmark:
 
     def __init__(self, output_path: Path) -> None:
         self.output_path = output_path  # The caller chooses the committed artifact path.
-        from src.utils.performance import Recorder, RecorderSettings  # Import after sys.path is ready.
+        from src.foundation.support.utils.performance import (
+            Recorder,
+            RecorderSettings,
+        )  # Import after sys.path is ready.
 
         self.recorder = Recorder(RecorderSettings(level="diagnostic", sample_rate=1.0))  # Record every span.
         self.store_lock = threading.Lock()  # Model the shared ArangoDB and Redis write contention.
@@ -91,7 +94,7 @@ class CaptureConcurrencyBenchmark:
         return readings  # Tests read the result without opening the file.
 
     def _measure(self, scenario: Scenario, iteration: int) -> Reading:
-        from src.utils.performance import EventSource, Stopwatch  # Import after sys.path is ready.
+        from src.foundation.support.utils.performance import EventSource, Stopwatch  # Import after sys.path is ready.
 
         source = EventSource(
             "scripts/benchmarks", "measure", "CaptureConcurrencyBenchmark"

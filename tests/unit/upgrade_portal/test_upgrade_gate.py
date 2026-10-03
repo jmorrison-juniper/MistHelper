@@ -22,7 +22,7 @@ from typing import Any
 import mistapi
 import pytest
 
-from src.upgrade_portal.upgrade import gate
+from src.interfaces.portals.upgrade_portal.upgrade import gate
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches

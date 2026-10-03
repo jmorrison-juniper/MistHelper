@@ -54,7 +54,7 @@ The facade-removal workflow. For each Cat A candidate in the Dispatch Queue, a r
 
 **Why this priority**: Delivers the initiative's lowest-risk PRs — the `src/` implementation is already merged and CI-proven, so Cat A carries strictly a callsite-rewrite discipline. Front-loading Cat A within each refs-band validates the workflow before the higher-risk Cat E extractions.
 
-**Independent Test**: Any single Cat A Dispatch Queue candidate (e.g. `RoutingUtils` at 12 refs / 22 LoC, the lowest-refs Cat A) can be merged in isolation. The PR (a) records the method-parity audit output in a fenced code block in the description, (b) deletes the class body from `MistHelper.py`, (c) rewrites all callsites to import from `src/network/routing_utils.py`, (d) leaves a NOTE breadcrumb at the extraction site, and (e) lands green.
+**Independent Test**: Any single Cat A Dispatch Queue candidate (e.g. `RoutingUtils` at 12 refs / 22 LoC, the lowest-refs Cat A) can be merged in isolation. The PR (a) records the method-parity audit output in a fenced code block in the description, (b) deletes the class body from `MistHelper.py`, (c) rewrites all callsites to import from `src/mist/networking/network/routing_utils.py`, (d) leaves a NOTE breadcrumb at the extraction site, and (e) lands green.
 
 **Acceptance Scenarios**:
 
@@ -71,7 +71,7 @@ The novel Cat E workflow — the extraction discipline that this initiative adds
 
 **Why this priority**: Same P1 as User Story 1 because the two are the only value-delivery paths in this initiative. Cat E is the higher-risk of the two: a partial extraction (class body moved but `src/` callers still doing `mh.<ClassName>`) would leave a circular import graph and break `python MistHelper.py --test`. Atomicity is not optional.
 
-**Independent Test**: Any single Cat E Dispatch Queue candidate (e.g. `SSHExecutionConfig` at 5 refs / 8 LoC, the queue head) can be merged in isolation. The PR (a) creates `src/ssh/batch/execution_config.py` (or the mapped landing target from the Dispatch Queue), (b) deletes the class body from `MistHelper.py`, (c) rewrites all MistHelper.py callsites, (d) rewrites all `src/ssh/batch/*.py` lazy-import callsites to `from src.ssh.batch.execution_config import SSHExecutionConfig`, (e) leaves a NOTE breadcrumb at the extraction site, (f) lands green.
+**Independent Test**: Any single Cat E Dispatch Queue candidate (e.g. `SSHExecutionConfig` at 5 refs / 8 LoC, the queue head) can be merged in isolation. The PR (a) creates `src/operations/execution/ssh/batch/execution_config.py` (or the mapped landing target from the Dispatch Queue), (b) deletes the class body from `MistHelper.py`, (c) rewrites all MistHelper.py callsites, (d) rewrites all `src/operations/execution/ssh/batch/*.py` lazy-import callsites to `from src.operations.execution.ssh.batch.execution_config import SSHExecutionConfig`, (e) leaves a NOTE breadcrumb at the extraction site, (f) lands green.
 
 **Acceptance Scenarios**:
 
@@ -100,7 +100,7 @@ Carry-forward of 1010/1011/1013 User Story 3. Reference counts and callsite loca
 
 ### Edge Cases
 
-- **E-1** — Landing target selection for Cat E. Each Cat E candidate has a suggested landing target in the Dispatch Queue. The dispatch PR MAY override the suggestion at PR time if a closer semantic fit exists. The PR description records the destination-selection rationale in one sentence. When both are viable, prefer the existing semantic package over creating a new `src/refactors/*.py` module.
+- **E-1** — Landing target selection for Cat E. Each Cat E candidate has a suggested landing target in the Dispatch Queue. The dispatch PR MAY override the suggestion at PR time if a closer semantic fit exists. The PR description records the destination-selection rationale in one sentence. When both are viable, prefer the existing semantic package over creating a new `src/foundation/support/refactors/*.py` module.
 - **E-2** — Guideline-flag decomposition mid-move. If a Cat E candidate carries `oversize_25_lines` (e.g. `OrgInventoryExporter` at 686 LoC, `PromptUtils` at 441 LoC, `DataExporter` at 345 LoC, `InsightMetricsUtils` at 328 LoC, `CacheUtils` at 264 LoC, `APIFetchUtils` at 221 LoC, `DataProcessingUtils` at 158 LoC), the move includes method-level decomposition per FR-006. Deferral of any flag to a follow-up PR is prohibited.
 - **E-3** — Callsite drift between catalog regeneration and PR opening. If the analyzer's recorded line numbers drift, the PR uses fresh grep against the current `main` head at branch time. Line-number drift alone does not block the extraction; only a *count* change (ref count changed, or a Cat A candidate becoming Cat E because a new `src/` caller was added mid-initiative, or a Cat E candidate reclassifying to Cat A because a `src/` module was refactored to fold in the class) triggers deferral or re-classification.
 - **E-4** — NOTE breadcrumb at the extraction site. Every extraction PR MUST leave a single-line NOTE breadcrumb at the deletion site in `MistHelper.py` (per FR-007 below): `# NOTE: <ClassName> extracted to <new-module-path>::<ClassName>. See specs/1014-misthelper-refactor-hot-classes-with-src-callers/spec.md.` Silent (breadcrumbless) deletion is rejected.
@@ -177,34 +177,34 @@ Cat A / Cat E audit performed 2026-07-08 against all 24 candidates confirmed **6
 
 | # | Refs | LOC | Class | Cat | Landing target |
 |---:|---:|---:|---|:-:|---|
-| 1 | 5 | 8 | SSHExecutionConfig | E | `src/ssh/batch/execution_config.py` |
-| 2 | 6 | 22 | SiteAutoUpgradeConfigurator | E | `src/firmware/site_auto_upgrade.py` (fold-in) |
-| 3 | 6 | 9 | SSHConnectionConfig | E | `src/ssh/batch/connection_config.py` |
-| 4 | 12 | 22 | RoutingUtils | A | `src/network/routing_utils.py` |
-| 5 | 15 | 90 | ValidationUtils | E | `src/validation/validation_utils.py` |
-| 6 | 27 | 29 | TimeUtils | E | `src/time/time_utils.py` |
-| 7 | 33 | 79 | OrgLevelAPFirmwareUpgrader | E | `src/firmware/org_ap_upgrader.py` (fold-in) |
-| 8 | 34 | 221 | APIFetchUtils | E | `src/api/api_fetch_utils.py` |
-| 9 | 43 | 112 | OrgSiteExporter | E | `src/export/org_site_exporter.py` |
-| 10 | 43 | 47 | APICoreFetchUtils | E | `src/api/api_core_fetch_utils.py` |
-| 11 | 51 | 328 | InsightMetricsUtils | E | `src/analytics/insight_metrics_utils.py` |
-| 12 | 52 | 28 | GatewayStatsExporter | A | `src/gateway/gateway_stats_exporter.py` |
-| 13 | 78 | 98 | GatewayExportUtils | A | `src/gateway/gateway_export_utils.py` |
-| 14 | 81 | 264 | CacheUtils | E | `src/cache/cache_utils.py` |
-| 15 | 82 | 26 | SSHRunnerManager | A | `src/ssh/ssh_runner_manager.py` |
-| 16 | 86 | 145 | SiteExportUtils | A | `src/export/site_export_utils.py` |
-| 17 | 86 | 46 | FilePathUtils | E | `src/utils/file_path_utils.py` |
-| 18 | 90 | 441 | PromptUtils | E | `src/ui/prompt_utils.py` |
-| 19 | 104 | 686 | OrgInventoryExporter | E | `src/export/org_inventory_exporter.py` |
-| 20 | 104 | 78 | VirtualChassisManager | A | `src/device/virtual_chassis.py` |
-| 21 | 125 | 158 | DataProcessingUtils | E | `src/data/data_processing_utils.py` |
-| 22 | 146 | 70 | ConfigUtils | E | `src/config/config_utils.py` |
-| 23 | 168 | 345 | DataExporter | E | `src/export/data_exporter.py` |
-| 24 | 229 | 74 | InputUtils | E | `src/ui/input_utils.py` |
+| 1 | 5 | 8 | SSHExecutionConfig | E | `src/operations/execution/ssh/batch/execution_config.py` |
+| 2 | 6 | 22 | SiteAutoUpgradeConfigurator | E | `src/operations/execution/firmware/site_auto_upgrade.py` (fold-in) |
+| 3 | 6 | 9 | SSHConnectionConfig | E | `src/operations/execution/ssh/batch/connection_config.py` |
+| 4 | 12 | 22 | RoutingUtils | A | `src/mist/networking/network/routing_utils.py` |
+| 5 | 15 | 90 | ValidationUtils | E | `src/foundation/runtime/validation/validation_utils.py` |
+| 6 | 27 | 29 | TimeUtils | E | `src/foundation/runtime/time/time_utils.py` |
+| 7 | 33 | 79 | OrgLevelAPFirmwareUpgrader | E | `src/operations/execution/firmware/org_ap_upgrader.py` (fold-in) |
+| 8 | 34 | 221 | APIFetchUtils | E | `src/mist/access/api/api_fetch_utils.py` |
+| 9 | 43 | 112 | OrgSiteExporter | E | `src/operations/exporting/export/org_site_exporter.py` |
+| 10 | 43 | 47 | APICoreFetchUtils | E | `src/mist/access/api/api_core_fetch_utils.py` |
+| 11 | 51 | 328 | InsightMetricsUtils | E | `src/mist/intelligence/analytics/insight_metrics_utils.py` |
+| 12 | 52 | 28 | GatewayStatsExporter | A | `src/mist/resources/gateway/gateway_stats_exporter.py` |
+| 13 | 78 | 98 | GatewayExportUtils | A | `src/mist/resources/gateway/gateway_export_utils.py` |
+| 14 | 81 | 264 | CacheUtils | E | `src/foundation/persistence/cache/cache_utils.py` |
+| 15 | 82 | 26 | SSHRunnerManager | A | `src/operations/execution/ssh/ssh_runner_manager.py` |
+| 16 | 86 | 145 | SiteExportUtils | A | `src/operations/exporting/export/site_export_utils.py` |
+| 17 | 86 | 46 | FilePathUtils | E | `src/foundation/support/utils/file_path_utils.py` |
+| 18 | 90 | 441 | PromptUtils | E | `src/interfaces/visualization/ui/prompt_utils.py` |
+| 19 | 104 | 686 | OrgInventoryExporter | E | `src/operations/exporting/export/org_inventory_exporter.py` |
+| 20 | 104 | 78 | VirtualChassisManager | A | `src/mist/resources/device/virtual_chassis.py` |
+| 21 | 125 | 158 | DataProcessingUtils | E | `src/foundation/models/data/data_processing_utils.py` |
+| 22 | 146 | 70 | ConfigUtils | E | `src/foundation/runtime/config/config_utils.py` |
+| 23 | 168 | 345 | DataExporter | E | `src/operations/exporting/export/data_exporter.py` |
+| 24 | 229 | 74 | InputUtils | E | `src/interfaces/visualization/ui/input_utils.py` |
 
 **Category distribution**: 6 Cat A (positions 4, 12, 13, 15, 16, 20) + 18 Cat E (all remaining).
 
-**Landing distribution**: `src/export/` = 5, `src/ssh/` = 2 (Cat E) + 1 (Cat A), `src/api/` = 2, `src/firmware/` = 2 (fold-ins), `src/gateway/` = 2 Cat A, `src/ui/` = 2, `src/utils/` = 1, `src/analytics/` = 1, `src/cache/` = 1, `src/config/` = 1, `src/data/` = 1, `src/device/` = 1 Cat A, `src/network/` = 1 Cat A, `src/time/` = 1, `src/validation/` = 1. Note: `src/refactors/` receives **zero** candidates — every row lands in a domain-fitting existing or new package.
+**Landing distribution**: `src/operations/exporting/export/` = 5, `src/operations/execution/ssh/` = 2 (Cat E) + 1 (Cat A), `src/mist/access/api/` = 2, `src/operations/execution/firmware/` = 2 (fold-ins), `src/mist/resources/gateway/` = 2 Cat A, `src/interfaces/visualization/ui/` = 2, `src/foundation/support/utils/` = 1, `src/mist/intelligence/analytics/` = 1, `src/foundation/persistence/cache/` = 1, `src/foundation/runtime/config/` = 1, `src/foundation/models/data/` = 1, `src/mist/resources/device/` = 1 Cat A, `src/mist/networking/network/` = 1 Cat A, `src/foundation/runtime/time/` = 1, `src/foundation/runtime/validation/` = 1. Note: `src/foundation/support/refactors/` receives **zero** candidates — every row lands in a domain-fitting existing or new package.
 
 **Cat A method-parity risk flag**: Six Cat A candidates in this initiative each require a full method-parity audit per FR-025 before facade deletion. The highest-fanout Cat A candidate is `SiteExportUtils` (position 16, 86 refs) which the audit script confirms delegates a large number of static methods via `_configure_module()` — the dispatch PR MUST enumerate every static/classmethod exposed by the facade in the parity table.
 

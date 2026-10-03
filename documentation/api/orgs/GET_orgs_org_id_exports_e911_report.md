@@ -105,4 +105,4 @@ Common use cases:
 
 Menu Operation **5** exports the organization E911 report.
 Verification source: `git grep -n "getOrgE911Report" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.
+`src/operations/exporting/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

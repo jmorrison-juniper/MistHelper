@@ -9,23 +9,23 @@ in the same phase, because the two tasks touch no common file.
 
 ## Phase 1: The search and the record (User Stories 1 and 3)
 
-- [x] **T001** In `src/marvis/actions/client.py`, add `ALARM_GROUP`,
+- [x] **T001** In `src/mist/intelligence/marvis/actions/client.py`, add `ALARM_GROUP`,
   `ALARM_PAGE_LIMIT`, and `MAX_ALARM_PAGES`. Add `search_marvis_alarms` and its
   five private helpers. Change the docstrings of the module and of
   `MarvisListResult`. Satisfies FR-001, FR-003, FR-004, and FR-014.
 
-- [x] **T002** `[P]` In `src/marvis/actions/model.py`, add
+- [x] **T002** `[P]` In `src/mist/intelligence/marvis/actions/model.py`, add
   `MarvisFieldReader.iso_seconds`. Append the eight alarm fields to
   `MarvisActionRecord`, and change the comment of `build`. Satisfies FR-006,
   FR-007, and FR-008.
 
 ## Phase 2: The join (User Stories 1, 2, and 3)
 
-- [x] **T003** Create `src/marvis/actions/alarms.py` with `MarvisAlarmIndex` and
+- [x] **T003** Create `src/mist/intelligence/marvis/actions/alarms.py` with `MarvisAlarmIndex` and
   `MarvisAlarmJoin`. Satisfies FR-002, FR-005, FR-010, FR-012, and FR-015.
 
-- [x] **T004** In `src/marvis/actions/operation.py`, call the join in `_export`,
-  and change the module docstring. In `src/marvis/actions/__init__.py`, name five
+- [x] **T004** In `src/mist/intelligence/marvis/actions/operation.py`, call the join in `_export`,
+  and change the module docstring. In `src/mist/intelligence/marvis/actions/__init__.py`, name five
   modules. Satisfies FR-009, FR-011, and FR-013.
 
 ## Phase 3: Tests

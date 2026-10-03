@@ -11,8 +11,10 @@ from unittest.mock import MagicMock, patch  # WHY: side-effect stubs + attribute
 
 import pytest  # WHY: fixtures + tmp_path for file helper tests.
 
-from src.gateway import gateway_stats_exporter as module  # WHY: module handle for slot replacement + patching.
-from src.gateway.gateway_stats_exporter import (  # WHY: direct symbols under test.
+from src.mist.resources.gateway import (
+    gateway_stats_exporter as module,
+)  # WHY: module handle for slot replacement + patching.
+from src.mist.resources.gateway.gateway_stats_exporter import (  # WHY: direct symbols under test.
     EMPTY_IP_TOKENS,
     SAMPLE_CONFLICT_LIMIT,
     STATS_CSV_FILENAME,

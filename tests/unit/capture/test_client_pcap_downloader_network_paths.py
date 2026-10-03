@@ -20,9 +20,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.capture import client_pcap_downloader as cpd
-from src.capture.client_pcap_downloader import ClientPacketCaptureDownloader, _CaptureRow
-from src.capture.client_pcap_downloader import (
+from src.operations.execution.capture import client_pcap_downloader as cpd
+from src.operations.execution.capture.client_pcap_downloader import ClientPacketCaptureDownloader, _CaptureRow
+from src.operations.execution.capture.client_pcap_downloader import (
     ClientPacketCaptureDownloader as FailureModeClientPacketCaptureDownloader,
 )  # WHY: prove new HTTP status tests call src.
 

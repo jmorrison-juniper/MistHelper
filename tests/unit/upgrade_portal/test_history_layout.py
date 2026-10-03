@@ -9,7 +9,7 @@ Why:
     Three parts hold the repair, and each part needs a test.
 
     The first part shapes the moment in Python. A template must never hold a
-    rule, so ``src.upgrade_portal.app.routes.review`` cuts the seconds and names
+    rule, so ``src.interfaces.portals.upgrade_portal.app.routes.review`` cuts the seconds and names
     the zone. The tests below read that shaper directly.
 
     The second part prints the short text and keeps the full text in a ``title``
@@ -31,8 +31,8 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import review
-from src.upgrade_portal.compare import render
+from src.interfaces.portals.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.compare import render
 
 # The repository root. This file sits at tests/unit/upgrade_portal/.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -59,7 +59,7 @@ class _StorePage:
     """A stand-in for the page record of the capture store.
 
     Why:
-        The real record lives in ``src.upgrade_portal.capture.store``, and that
+        The real record lives in ``src.interfaces.portals.upgrade_portal.capture.store``, and that
         module imports the database driver. A stand-in with the same four field
         names keeps the driver out of a unit test.
 

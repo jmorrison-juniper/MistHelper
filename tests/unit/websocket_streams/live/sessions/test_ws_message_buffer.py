@@ -6,9 +6,11 @@ import gc  # The memory test walks the kept object graph.
 import json  # The tests decode the stored JSON text.
 import sys  # The memory test reads the size of each kept object.
 
-from src.websocket_streams.live.sessions.buffer.message import MessageDraft  # Tests supply complete message inputs.
-from src.websocket_streams.live.sessions.buffer.message_buffer import MessageBuffer
-from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The tests cover the buffer.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message import (
+    MessageDraft,
+)  # Tests supply complete message inputs.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message_buffer import MessageBuffer
+from src.mist.realtime.websocket_streams.live.sessions.buffer.page import MessagePage  # The tests cover the buffer.
 
 
 def deep_size(root: object) -> int:

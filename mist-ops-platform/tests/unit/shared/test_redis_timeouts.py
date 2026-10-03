@@ -25,8 +25,8 @@ REQUIRED_KEYS = ("socket_timeout", "socket_connect_timeout")
 CLIENT_MODULES = (
     "src/shared/mist/session.py",
     "src/shared/services/session_store.py",
-    "src/api/middleware/rate_limit.py",
-    "src/api/routes/health.py",
+    "src/mist/access/api/middleware/rate_limit.py",
+    "src/mist/access/api/routes/health.py",
 )
 
 

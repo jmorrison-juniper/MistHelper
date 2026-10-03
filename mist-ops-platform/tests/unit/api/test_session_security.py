@@ -18,9 +18,9 @@ import httpx
 import pytest
 from fastapi import Depends, FastAPI
 
-from src.api.deps import get_db_session
-from src.api.middleware.auth import CurrentUser, get_current_user
-from src.api.routes.health import auth_router
+from src.mist.access.api.deps import get_db_session
+from src.mist.access.api.middleware.auth import CurrentUser, get_current_user
+from src.mist.access.api.routes.health import auth_router
 from src.shared.config.settings import get_settings
 from src.shared.services.auth import AuthService, MistApiUnavailableError, MistPrivileges
 from src.shared.services.session_store import SessionStore

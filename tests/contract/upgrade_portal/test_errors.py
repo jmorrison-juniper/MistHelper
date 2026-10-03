@@ -26,8 +26,8 @@ from flask.testing import FlaskClient
 from flask_wtf.csrf import generate_csrf
 from werkzeug.test import TestResponse
 
-from src.upgrade_portal.app.config import ALLOWED_ADDRESSES_VARIABLE
-from src.upgrade_portal.app.factory import create_app
+from src.interfaces.portals.upgrade_portal.app.config import ALLOWED_ADDRESSES_VARIABLE
+from src.interfaces.portals.upgrade_portal.app.factory import create_app
 
 HEALTH_PATH = "/healthz"  # Section 7 of the contract binds this path to the status 200.
 UNKNOWN_PATH = "/no-such-page"  # No rule matches this path, so the router raises the 404 fault.

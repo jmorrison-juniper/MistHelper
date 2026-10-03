@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock
 
-from src.bootstrap.dependency_check import DependencyCheckOrchestrator
-from src.bootstrap.package_installer import PackageInstaller
+from src.foundation.runtime.bootstrap.dependency_check import DependencyCheckOrchestrator
+from src.foundation.runtime.bootstrap.package_installer import PackageInstaller
 
 
 def _build_orchestrator(requirements):

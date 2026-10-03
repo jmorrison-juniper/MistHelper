@@ -11,7 +11,7 @@
 - `test_capture.py`: the fixture `walking_page` yields the page, and then it calls `_release_the_site(page)` only. That helper clicks `lock-release-button`, and it never fails.
 - The walk reads `run_id` from the options address, and then it reports a skip at "The options page offered no version" (#3380). The run stays in the state `created`.
 - The refusal test accepts 201 or 409 for its first create call. After a 201, it records no run key.
-- `src/upgrade_portal/app/routes/upgrade.py`: `live_run_at_site` reads `site_run_records`, and it returns the first row for which `run_is_live` is true. `run_is_live` reads `RunStateMachine.read_state`. A `RunTransitionError` means not live. Any state outside `RunStateMachine.TERMINAL` is live.
+- `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`: `live_run_at_site` reads `site_run_records`, and it returns the first row for which `run_is_live` is true. `run_is_live` reads `RunStateMachine.read_state`. A `RunTransitionError` means not live. Any state outside `RunStateMachine.TERMINAL` is live.
 - A cancel moves a `created` run to `cancelled`, which is a final state.
 
 **Alternatives rejected**:
@@ -52,7 +52,7 @@
 
 **Evidence**:
 
-- `run_is_live` is a module function of `src/upgrade_portal/app/routes/upgrade.py`. The refusal helper `live_run_at_site` calls it for each row.
+- `run_is_live` is a module function of `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`. The refusal helper `live_run_at_site` calls it for each row.
 - The e2e conftest already imports that module, and 15 other test files import it too.
 
 **Alternatives rejected**:

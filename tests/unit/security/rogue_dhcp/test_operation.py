@@ -14,13 +14,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.security.rogue_dhcp.operation import (
+from src.operations.protection.security.rogue_dhcp.operation import (
     EXPORT_ENDPOINT_NAME,
     EXPORT_FILENAME,
     RogueDhcpScanOperation,
 )
-from src.security.rogue_dhcp.records import SOURCE_ORG_ALARM, RogueDhcpFinding, RogueDhcpRecordNormalizer
-from src.security.rogue_dhcp.scanner import RogueDhcpScanResult
+from src.operations.protection.security.rogue_dhcp.records import (
+    SOURCE_ORG_ALARM,
+    RogueDhcpFinding,
+    RogueDhcpRecordNormalizer,
+)
+from src.operations.protection.security.rogue_dhcp.scanner import RogueDhcpScanResult
 
 ALARM_RECORD = {
     "type": "sw_rogue_dhcp_server_detected",
@@ -56,7 +60,7 @@ def build_result(
 @pytest.fixture
 def stub_resolver() -> Any:
     """Patch the shared dependency resolver so no test touches a live session."""
-    with patch("src.security.rogue_dhcp.operation.SourceDependencyResolver") as resolver:
+    with patch("src.operations.protection.security.rogue_dhcp.operation.SourceDependencyResolver") as resolver:
         resolver.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
         resolver.apisession = object()
         resolver.DataExporter.write_with_format_selection.return_value = True
@@ -67,7 +71,7 @@ def run_with_result(resolver: Any, result: RogueDhcpScanResult) -> None:
     """Run the operation against a scanner that returns the supplied result."""
     scanner = MagicMock()
     scanner.scan.return_value = result
-    with patch("src.security.rogue_dhcp.operation.RogueDhcpScanner", return_value=scanner):
+    with patch("src.operations.protection.security.rogue_dhcp.operation.RogueDhcpScanner", return_value=scanner):
         RogueDhcpScanOperation.run()
 
 
@@ -152,7 +156,9 @@ def test_the_scanner_receives_the_resolved_organization(stub_resolver: Any) -> N
     """The scan must cover the organization the shared helper resolved."""
     scanner = MagicMock()
     scanner.scan.return_value = build_result([])
-    with patch("src.security.rogue_dhcp.operation.RogueDhcpScanner", return_value=scanner) as factory:
+    with patch(
+        "src.operations.protection.security.rogue_dhcp.operation.RogueDhcpScanner", return_value=scanner
+    ) as factory:
         RogueDhcpScanOperation.run()
     assert factory.call_args[0][1] == "org-1"
 
@@ -161,6 +167,8 @@ def test_the_window_length_reaches_the_scanner(stub_resolver: Any) -> None:
     """FR-003. The caller must be able to shorten the window."""
     scanner = MagicMock()
     scanner.scan.return_value = build_result([])
-    with patch("src.security.rogue_dhcp.operation.RogueDhcpScanner", return_value=scanner) as factory:
+    with patch(
+        "src.operations.protection.security.rogue_dhcp.operation.RogueDhcpScanner", return_value=scanner
+    ) as factory:
         RogueDhcpScanOperation.run(window_days=7)
     assert factory.call_args[1]["window_days"] == 7

@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch  # WHY: MagicMock builds the doubles,
 
 import pytest  # WHY: the fixtures and the tmp_path helper come from pytest.
 
-from src.gateway import wan_probe_device_override_manager as module  # WHY: patch the module globals.
-from src.gateway.wan_probe_device_override_manager import (  # WHY: the module under test.
+from src.mist.resources.gateway import wan_probe_device_override_manager as module  # WHY: patch the module globals.
+from src.mist.resources.gateway.wan_probe_device_override_manager import (  # WHY: the module under test.
     WANProbeDeviceOverrideDependencies,
     WANProbeDeviceOverrideManager,
     configure_wan_probe_device_override_dependencies,

@@ -14,7 +14,7 @@ from __future__ import annotations
 import prettytable
 import tqdm as tqdm_module
 
-from src.config.source_dependency_resolver import SourceDependencyResolver
+from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver
 
 
 class TestExternalSymbolResolution:

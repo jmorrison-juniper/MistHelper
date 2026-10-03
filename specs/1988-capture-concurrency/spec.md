@@ -107,7 +107,7 @@ The parallel store candidate saved 63.6743 ms. That is a 1.18 percent change.
 
 Do not change the production capture portal concurrency model for issue #1988.
 
-The current implementation satisfies the existing threaded capture requirement. `src\upgrade_portal\capture\collector.py` runs wave one through `CapturePool`. `src\upgrade_portal\runtime\pools.py` caps the pool at four workers. `BoundedFanOut` already runs tier-three subcalls with a four-call cap.
+The current implementation satisfies the existing threaded capture requirement. `src\interfaces\portals\upgrade_portal\capture\collector.py` runs wave one through `CapturePool`. `src\interfaces\portals\upgrade_portal\runtime\pools.py` caps the pool at four workers. `BoundedFanOut` already runs tier-three subcalls with a four-call cap.
 
 ## Assumptions
 

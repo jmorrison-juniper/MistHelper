@@ -67,9 +67,9 @@ Only these 23 paths can enter the feature change or its local staging command:
 ```text
 MistHelper.py
 web_portal/menu_registry.py
-src/export/endpoint_family_exporter.py
-src/export/endpoint_catalog.py
-src/refactors/endpoint_primary_key_strategies.py
+src/operations/exporting/export/endpoint_family_exporter.py
+src/operations/exporting/export/endpoint_catalog.py
+src/foundation/support/refactors/endpoint_primary_key_strategies.py
 tests/guardrails/test_endpoint_catalog.py
 tests/unit/export/test_endpoint_family_exporter.py
 documentation/menu-highlights.md
@@ -153,8 +153,8 @@ This task list carries that record forward without adding remediation tasks to i
 | --- | --- | --- |
 | Root: 48 tracked children. `MistHelper.py`: 214 top-level definitions. | Change only the menu 263 title. | Move one cohesive legacy menu group under a separate reservation. |
 | `specs/`: 747 local children. Feature directory: seven children before this task file. | Reuse the reserved directory. The required task file makes eight children. | Reconcile document layout and archival policy in separate governance work. |
-| `src/export/`: 48 children. Family/catalog modules: 11/9 definitions. Exporter: 15 methods. | Delete existing metadata only. Add no production method. | Partition one semantic metadata family separately. |
-| `src/refactors/`: 33 children. PK mapping: 571 observed entries. | Delete two supplemental entries only. | Partition one strategy family separately with equivalence tests. |
+| `src/operations/exporting/export/`: 48 children. Family/catalog modules: 11/9 definitions. Exporter: 15 methods. | Delete existing metadata only. Add no production method. | Partition one semantic metadata family separately. |
+| `src/foundation/support/refactors/`: 33 children. PK mapping: 571 observed entries. | Delete two supplemental entries only. | Partition one strategy family separately with equivalence tests. |
 | Test directories: 38/45 children. Reserved modules: 8/20 top-level definitions. | Reuse both modules. Keep guard decisions in existing `TestCatalogCoverage`. | Organize one test family separately without resetting the baseline. |
 | `web_portal/`: seven children. Description map: 179 entries. | Change one existing label. | Partition descriptions by existing category separately. |
 | Documentation/wiki/menu-api parents: 58/25/8 children. | Update only reserved existing pages. | Archive obsolete pages separately through existing gates. |
@@ -213,7 +213,7 @@ The existing broad fake helper is not real trend evidence.
 **Purpose**: Establish local inputs and immutable comparisons without new infrastructure.
 
 - [X] T001 Confirm the completed inputs, checklist, explicit root, and 23-path reservation. Record the scope and structural exceptions in `specs/3335-deprecated-sle-operations/tasks.md`. Keep all other feature documents unchanged. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; evidence: E001)
-- [X] T002 Capture pre-edit source and menu invariants from `src/export/endpoint_family_exporter.py`, `src/export/endpoint_catalog.py`, `src/refactors/endpoint_primary_key_strategies.py`, `MistHelper.py`, and `web_portal/menu_registry.py`. Record retained-member digests, counts, and dependency-file integrity in `specs/3335-deprecated-sle-operations/tasks.md`. Use local source comparisons, not a new baseline file. Record the parent-supplied 508-test four-module pass as prior evidence only. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; evidence: E002)
+- [X] T002 Capture pre-edit source and menu invariants from `src/operations/exporting/export/endpoint_family_exporter.py`, `src/operations/exporting/export/endpoint_catalog.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py`, `MistHelper.py`, and `web_portal/menu_registry.py`. Record retained-member digests, counts, and dependency-file integrity in `specs/3335-deprecated-sle-operations/tasks.md`. Use local source comparisons, not a new baseline file. Record the parent-supplied 508-test four-module pass as prior evidence only. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; evidence: E002)
 
 **Checkpoint**: Inputs and scope are known. No bootstrap, installation, branch change, or source edit is needed.
 
@@ -245,9 +245,9 @@ Retained-trend controls should already pass. Do not manufacture a failure in wor
 
 **Tests first**: T003, T004, and T008 provide the real red contract.
 
-- [X] T009 [P] [US1] Delete only the `getSiteSleSummary` and `getSiteSleClassifierDetails` rows from `_SITE_SLE_OPS` in `src/export/endpoint_family_exporter.py`. Preserve every retained field and relative order. Keep all exporter methods and aggregate construction unchanged. (delivered: `src/export/endpoint_family_exporter.py`; evidence: E012)
-- [X] T010 [P] [US1] Delete only those two exact `EndpointInfo` entries from `ENDPOINT_CATALOG` in `src/export/endpoint_catalog.py`. Preserve every retained description, safety value, and unknown-operation fallback. (delivered: `src/export/endpoint_catalog.py`; evidence: E012)
-- [X] T011 [P] [US1] Delete only those two exact supplemental PK registrations in `src/refactors/endpoint_primary_key_strategies.py`. Preserve both trend dictionaries, all unrelated strategies, earlier definitions, and the `setdefault` merge. Do not alter stored data or schemas. (delivered: `src/refactors/endpoint_primary_key_strategies.py`; evidence: E012)
+- [X] T009 [P] [US1] Delete only the `getSiteSleSummary` and `getSiteSleClassifierDetails` rows from `_SITE_SLE_OPS` in `src/operations/exporting/export/endpoint_family_exporter.py`. Preserve every retained field and relative order. Keep all exporter methods and aggregate construction unchanged. (delivered: `src/operations/exporting/export/endpoint_family_exporter.py`; evidence: E012)
+- [X] T010 [P] [US1] Delete only those two exact `EndpointInfo` entries from `ENDPOINT_CATALOG` in `src/operations/exporting/export/endpoint_catalog.py`. Preserve every retained description, safety value, and unknown-operation fallback. (delivered: `src/operations/exporting/export/endpoint_catalog.py`; evidence: E012)
+- [X] T011 [P] [US1] Delete only those two exact supplemental PK registrations in `src/foundation/support/refactors/endpoint_primary_key_strategies.py`. Preserve both trend dictionaries, all unrelated strategies, earlier definitions, and the `setdefault` merge. Do not alter stored data or schemas. (delivered: `src/foundation/support/refactors/endpoint_primary_key_strategies.py`; evidence: E012)
 - [X] T012 [US1] Run G-REM for `tests/guardrails/test_endpoint_catalog.py::TestCatalogCoverage` and `tests/unit/export/test_endpoint_family_exporter.py`. Confirm 15/132/284, both retained trends, and unchanged neighboring memberships. Compare source differences with T002. Record measured 284/284/569 guard inputs in `specs/3335-deprecated-sle-operations/tasks.md`. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; evidence: E012)
 
 **Checkpoint**: The metadata increment is independently verified.
@@ -321,7 +321,7 @@ No deprecated-name repository sweep, migration, or unrelated repair is needed.
 - [X] T027 Prepare the implementation handoff in `specs/3335-deprecated-sle-operations/tasks.md`. Include exact changed paths, before/after invariants, red/green cases, both six-injection matrices, measured read counts, real SDK absence results, generator equality, and unchanged dependency/store evidence. Run G-DIFF. Return to the parent without staging, committing, fetching, rebasing, or publishing. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; evidence: E027)
 - [X] T028 Parent only: independently run full G-CODE using unchanged `pyproject.toml`, including Ruff, Black, and syntax validation of `MistHelper.py`. Record exact exits and scope in `specs/3335-deprecated-sle-operations/tasks.md`. Do not narrow checks or perform unrelated formatting. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; E028, full Ruff passes and Black accepts 2,000 files.)
 - [X] T029 Parent only: run G-TYPES with the exact CI targets `src/`, `MistHelper.py`, `wsgi.py`, `scripts/mist_ideas_analyzer_pkg/__init__.py`, and `scripts/mist_ideas_distiller_v2_pkg/__init__.py`. Keep `pyproject.toml` unchanged. Record results in `specs/3335-deprecated-sle-operations/tasks.md`. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; E029, 663 source files and both changed test files pass.)
-- [X] T030 Parent only: run G-SECURITY with unchanged `pyproject.toml` and both separator samples for `src/utils/zen_city_metadata.py`. Require the exclude check and configured full Bandit scan. Record results in `specs/3335-deprecated-sle-operations/tasks.md`. Add no filter, suppression, or exclusion. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; E030, 786 file entries and 213,921 lines pass with zero findings.)
+- [X] T030 Parent only: run G-SECURITY with unchanged `pyproject.toml` and both separator samples for `src/foundation/support/utils/zen_city_metadata.py`. Require the exclude check and configured full Bandit scan. Record results in `specs/3335-deprecated-sle-operations/tasks.md`. Add no filter, suppression, or exclusion. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; E030, 786 file entries and 213,921 lines pass with zero findings.)
 - [X] T031 Parent only: run full local G-QUALITY with unchanged `.github/test-quality-config.toml` and `.github/test-quality-baseline.json`. Include uncommitted test edits, not only HEAD-relative changed files. Record measured scope and findings in `specs/3335-deprecated-sle-operations/tasks.md`. Do not write, prune, or bypass the baseline. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; E031, 992 files checked and zero new findings.)
 - [X] T032 Parent only: run G-LINKS and unchanged `tests/guardrails/test_markdown_links.py`. Directly parse all eight feature Markdown files plus `changelog.d/issue-3335-deprecated-sle-operations.md` with the installed checker's existing file parser. Require nine readable inputs and valid local links/anchors. Record results in `specs/3335-deprecated-sle-operations/tasks.md`. Do not stage files to obtain coverage. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; E032, 4,196 tracked files and nine new files pass.)
 - [X] T033 Parent only: run G-STE for all listed feature documents, reserved changed operator pages, and `changelog.d/issue-3335-deprecated-sle-operations.md`. Keep `.ste-linter.toml` unchanged and require minimum 80. Report optional dictionary limitations explicitly in `specs/3335-deprecated-sle-operations/tasks.md`. Do not create a dictionary or allowlist. (delivered: `specs/3335-deprecated-sle-operations/tasks.md`; E033, all 23 paths pass with explicit partial dictionary coverage.)
@@ -451,7 +451,7 @@ rtk proxy .venv/bin/ruff check .
 rtk proxy .venv/bin/black --check --diff .
 rtk proxy .venv/bin/python -m py_compile MistHelper.py
 rtk proxy .venv/bin/mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml
-rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'
+rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'
 rtk proxy .venv/bin/bandit -c pyproject.toml -r .
 rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
 ```
@@ -558,9 +558,9 @@ Stage only these exact paths:
 rtk proxy git -C /Users/jmorrison/GitHub/copilot-worktrees/MistHelper/jmorrison-juniper-fictional-barnacle add -- \
   MistHelper.py \
   web_portal/menu_registry.py \
-  src/export/endpoint_family_exporter.py \
-  src/export/endpoint_catalog.py \
-  src/refactors/endpoint_primary_key_strategies.py \
+  src/operations/exporting/export/endpoint_family_exporter.py \
+  src/operations/exporting/export/endpoint_catalog.py \
+  src/foundation/support/refactors/endpoint_primary_key_strategies.py \
   tests/guardrails/test_endpoint_catalog.py \
   tests/unit/export/test_endpoint_family_exporter.py \
   documentation/menu-highlights.md \
@@ -929,7 +929,7 @@ The checkout site lock trail remained at zero lines in every run.
 
 ```bash
 rtk proxy .venv/bin/python -m pytest tests/guardrails/test_endpoint_catalog.py::TestCatalogCoverage tests/unit/export/test_endpoint_family_exporter.py -q
-rtk proxy git --no-pager diff -- src/export/endpoint_family_exporter.py src/export/endpoint_catalog.py src/refactors/endpoint_primary_key_strategies.py
+rtk proxy git --no-pager diff -- src/operations/exporting/export/endpoint_family_exporter.py src/operations/exporting/export/endpoint_catalog.py src/foundation/support/refactors/endpoint_primary_key_strategies.py
 ```
 
 G-REM exited 0: 638 collected and passed, zero failed, zero skipped, in 1.88 seconds.
@@ -1192,9 +1192,9 @@ The final Git inventory contains exactly the reserved 23 paths and zero outside 
 ```text
 MistHelper.py
 web_portal/menu_registry.py
-src/export/endpoint_family_exporter.py
-src/export/endpoint_catalog.py
-src/refactors/endpoint_primary_key_strategies.py
+src/operations/exporting/export/endpoint_family_exporter.py
+src/operations/exporting/export/endpoint_catalog.py
+src/foundation/support/refactors/endpoint_primary_key_strategies.py
 tests/guardrails/test_endpoint_catalog.py
 tests/unit/export/test_endpoint_family_exporter.py
 documentation/menu-highlights.md
@@ -1283,7 +1283,7 @@ The release fragment now uses the required heading and change-type bullets.
 This corrects the fragment format without changing its scope.
 
 ```bash
-rtk proxy .venv/bin/python -m py_compile MistHelper.py src/export/endpoint_family_exporter.py src/export/endpoint_catalog.py src/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py
+rtk proxy .venv/bin/python -m py_compile MistHelper.py src/operations/exporting/export/endpoint_family_exporter.py src/operations/exporting/export/endpoint_catalog.py src/foundation/support/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py
 rtk proxy .venv/bin/ruff check .
 rtk proxy .venv/bin/black --check --diff .
 ```
@@ -1309,7 +1309,7 @@ No type suppression or mypy configuration changed.
 ### E030 — configured security scope
 
 ```bash
-rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'
+rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'
 rtk proxy .venv/bin/bandit -c pyproject.toml -r .
 rtk proxy .venv/bin/bandit -c pyproject.toml -r . --quiet --format json --output data/issue-3335/bandit-final.json
 ```
@@ -1622,9 +1622,9 @@ No pytest case failed or skipped.
 The command used the complete E035 selector set with these additional arguments:
 
 ```text
---cov=src.export.endpoint_family_exporter
---cov=src.export.endpoint_catalog
---cov=src.refactors.endpoint_primary_key_strategies
+--cov=src.operations.exporting.export.endpoint_family_exporter
+--cov=src.operations.exporting.export.endpoint_catalog
+--cov=src.foundation.support.refactors.endpoint_primary_key_strategies
 --cov-report=term-missing
 --cov-fail-under=80
 ```
@@ -1637,12 +1637,12 @@ This scoped result does not measure full-repository coverage.
 
 | Exact repeated gate | Result |
 | --- | --- |
-| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/export/endpoint_family_exporter.py src/export/endpoint_catalog.py src/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py` | Pass. |
+| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/operations/exporting/export/endpoint_family_exporter.py src/operations/exporting/export/endpoint_catalog.py src/foundation/support/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py` | Pass. |
 | `rtk proxy .venv/bin/ruff check .` | Pass. |
 | `rtk proxy .venv/bin/black --check --diff .` | Pass, 2,016 files. |
 | `rtk proxy .venv/bin/mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Pass, 665 source files. |
 | `rtk proxy .venv/bin/mypy tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py --config-file pyproject.toml` | Pass, both changed test files. |
-| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Pass, both separator samples. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'` | Pass, both separator samples. |
 | `rtk proxy .venv/bin/bandit -c pyproject.toml -r . --quiet --format json --output data/issue-3335/bandit-refresh.json` | Pass, 788 file entries and 214,955 lines, zero findings or read errors. |
 | `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --log-level WARNING` | Pass, 1,001 files and 725 old findings, zero new findings or parse errors. |
 | `rtk proxy .venv/bin/diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt` | Pass, 153 references across 15 diagram files. |
@@ -1764,12 +1764,12 @@ They do not repair or certify canonical object exports for the companion issue.
 | Fresh command on the granted tree | Result |
 | --- | --- |
 | `rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | Pass, six input reads/validations and three guide checks. |
-| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/export/endpoint_family_exporter.py src/export/endpoint_catalog.py src/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py` | Pass. |
+| `rtk proxy .venv/bin/python -m py_compile MistHelper.py src/operations/exporting/export/endpoint_family_exporter.py src/operations/exporting/export/endpoint_catalog.py src/foundation/support/refactors/endpoint_primary_key_strategies.py web_portal/menu_registry.py tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py` | Pass. |
 | `rtk proxy .venv/bin/ruff check .` | Pass. |
 | `rtk proxy .venv/bin/black --check --diff .` | Pass, 2,018 files. |
 | `rtk proxy .venv/bin/mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Pass, 665 source files. |
 | `rtk proxy .venv/bin/mypy tests/guardrails/test_endpoint_catalog.py tests/unit/export/test_endpoint_family_exporter.py --config-file pyproject.toml` | Pass, both changed test files. |
-| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Pass, both inclusion samples. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'` | Pass, both inclusion samples. |
 | `rtk proxy .venv/bin/bandit -c pyproject.toml -r . --quiet --format json --output data/issue-3335/bandit-publication.json` | Pass, 788 file entries and 214,955 lines, zero findings/read errors. |
 | `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --log-level WARNING` | Pass, 1,003 discovered files and 725 old findings, zero new findings/parse errors. |
 | `rtk proxy .venv/bin/pylint src/ --fail-under=9.5 --reports=n` | Pass, score 9.83/10. Existing diagnostic messages remain visible. |

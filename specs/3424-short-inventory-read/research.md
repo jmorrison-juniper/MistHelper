@@ -4,9 +4,9 @@
 
 ## Measured facts
 
-- `_read_paged` (`src/upgrade_portal/upgrade/options.py`) keeps the rows that
+- `_read_paged` (`src/interfaces/portals/upgrade_portal/upgrade/options.py`) keeps the rows that
   `mistapi.get_all` returned. It then calls `guard_page_count`
-  (`src/upgrade_portal/capture/devices.py`).
+  (`src/interfaces/portals/upgrade_portal/capture/devices.py`).
 - `guard_page_count` returns one of three reasons. A refusal status and an
   unknown answer shape each come with no rows. A short read
   (`page_count_mismatch`) comes when the row count is less than the reported

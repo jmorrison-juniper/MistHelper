@@ -1,6 +1,6 @@
 """Unit tests for InsightMetricsUtils (issue #878 tranche 8 -- un-omit).
 
-Covers every static method on ``src.analytics.insight_metrics_utils``:
+Covers every static method on ``src.mist.intelligence.analytics.insight_metrics_utils``:
 ``export_const_insight_metrics`` (banner + exporter delegation + CSV present/absent),
 ``_should_skip_row`` (empty / placeholder / valid),
 ``_row_matches_scope`` (skip / match / no-match),
@@ -33,7 +33,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.analytics.insight_metrics_utils import InsightMetricsUtils
+from src.mist.intelligence.analytics.insight_metrics_utils import InsightMetricsUtils
 
 
 def _make_mh(**extra):
@@ -59,8 +59,8 @@ def test_export_const_insight_metrics_delegates_and_reports_present(
     fake_mh.ConstDefinitionsExporter.return_value = exporter_instance
     with (
         caplog.at_level("INFO", logger="root"),
-        patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True),
-        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=True),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
     ):
         InsightMetricsUtils.export_const_insight_metrics()
     fake_mh.ConstDefinitionsExporter.assert_called_once_with(fake_mh.apisession)
@@ -81,8 +81,8 @@ def test_export_const_insight_metrics_warns_when_csv_missing(
     fake_mh.ConstDefinitionsExporter.return_value.export_endpoint.return_value = SimpleNamespace(outcome="updated")
     with (
         caplog.at_level("WARNING", logger="root"),
-        patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=False),
-        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=False),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
     ):
         InsightMetricsUtils.export_const_insight_metrics()
     messages = " ".join(rec.getMessage() for rec in caplog.records)
@@ -96,8 +96,8 @@ def test_refresh_success_reports_only_the_selected_csv(outcome: str, caplog: pyt
     fake_mh.ConstDefinitionsExporter.return_value.export_endpoint.return_value = SimpleNamespace(outcome=outcome)
     with (
         caplog.at_level("INFO"),
-        patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True) as exists,
-        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=True) as exists,
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
     ):
         result = InsightMetricsUtils.export_const_insight_metrics()
     assert result is None
@@ -114,8 +114,8 @@ def test_refresh_failure_cannot_report_an_existing_stale_csv(caplog: pytest.LogC
     )
     with (
         caplog.at_level("INFO"),
-        patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True) as exists,
-        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=True) as exists,
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
     ):
         result = InsightMetricsUtils.export_const_insight_metrics()
     assert result is None
@@ -189,27 +189,29 @@ def test_get_by_scope_returns_matches_from_csv(tmp_path) -> None:
     csv_path = tmp_path / "ConstInsightMetrics.csv"
     csv_path.write_text('metric_name,scopes\nm1,site\nm2,client\nm3,"site,client"\n', encoding="utf-8")
     with (
-        patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True),
-        patch("src.analytics.insight_metrics_utils.os.path.join", return_value=str(csv_path)),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=True),
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.join", return_value=str(csv_path)),
     ):
         assert InsightMetricsUtils.get_by_scope("site") == ["m1", "m3"]
 
 
 def test_get_by_scope_missing_file_returns_empty() -> None:
     """Missing CSV -> empty list, no raise."""
-    with patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=False):
+    with patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=False):
         assert InsightMetricsUtils.get_by_scope("site") == []
 
 
 def test_get_by_scope_exception_returns_empty() -> None:
     """Read failure -> empty list."""
-    with (patch("src.analytics.insight_metrics_utils.os.path.exists", side_effect=RuntimeError("boom")),):
+    with (
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", side_effect=RuntimeError("boom")),
+    ):
         assert InsightMetricsUtils.get_by_scope("site") == []
 
 
 def test_get_by_scope_none_target_normalizes() -> None:
     """None target scope normalizes to empty string without raising."""
-    with patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=False):
+    with patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=False):
         assert InsightMetricsUtils.get_by_scope(None) == []  # type: ignore[arg-type]
 
 

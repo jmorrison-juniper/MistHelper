@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re  # WHY: The key form check reads a fixed pattern.
 
-from src.upgrade_portal.capture import assembly, collector, store
+from src.interfaces.portals.upgrade_portal.capture import assembly, collector, store
 
 # WHY: The key holds the prefix, then 32 hexadecimal digits, then the ordinal.
 _KEY_PATTERN = re.compile(r"cap-[0-9a-f]{32}-01")

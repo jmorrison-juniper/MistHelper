@@ -35,8 +35,8 @@ from flask import Flask
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
-from src.upgrade_portal.app.factory import ERROR_CODES, ERROR_MESSAGES
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.factory import ERROR_CODES, ERROR_MESSAGES
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 # ---------------------------------------------------------------------------
 # The contract values. Each one repeats a line of the specification.

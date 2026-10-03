@@ -13,8 +13,8 @@
 
 ## Existing read operations
 
-- Menu 50 uses `src/export/org_config_exporter.py` and calls `mistapi.api.v1.orgs.mxedges.listOrgMxEdges` to export `OrgMxEdges.csv`.
-- Menu 71 and related read-only exporters use `listOrgMxEdgeUpgrades` and `getOrgMxEdgeUpgradeInfo` in `src/export/simple_endpoint_exporter.py` and `src/org_data_collector.py`.
+- Menu 50 uses `src/operations/exporting/export/org_config_exporter.py` and calls `mistapi.api.v1.orgs.mxedges.listOrgMxEdges` to export `OrgMxEdges.csv`.
+- Menu 71 and related read-only exporters use `listOrgMxEdgeUpgrades` and `getOrgMxEdgeUpgradeInfo` in `src/operations/exporting/export/simple_endpoint_exporter.py` and `src/operations/wan/org_data_collector.py`.
 
 ## OpenAPI and SDK findings
 

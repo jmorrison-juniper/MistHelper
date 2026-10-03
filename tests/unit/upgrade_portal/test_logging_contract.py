@@ -25,7 +25,7 @@ Why:
        names both fields, and a filter supplies a value for a record that names
        neither.
 
-    Scope: `src/upgrade_portal/` only. `src/auth/interactive/login_orchestrator.py`
+    Scope: `src/interfaces/portals/upgrade_portal/` only. `src/mist/access/auth/interactive/login_orchestrator.py`
     logs a plain email address at its lines 82, 121, and 221. That file sits
     outside this package, so this module never reads it and never reports it.
     A separate task owns that repair.
@@ -44,16 +44,18 @@ from typing import NamedTuple
 
 import pytest
 
-from src.upgrade_portal.app import factory  # The module that owns the log format and the log handler.
+from src.interfaces.portals.upgrade_portal.app import (
+    factory,
+)  # The module that owns the log format and the log handler.
 
 # WHY: The test file sits three levels below the repository root, so the scan
 # needs no working directory and no import of the package under test.
 REPO_ROOT = Path(__file__).resolve().parents[3]
-PACKAGE_ROOT = REPO_ROOT / "src" / "upgrade_portal"
+PACKAGE_ROOT = REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal"
 
 # WHY: The scan reads this package and nothing else. A path outside it belongs
 # to another owner and to another task.
-PACKAGE_PREFIX = "src/upgrade_portal/"
+PACKAGE_PREFIX = "src/interfaces/portals/upgrade_portal/"
 
 # WHY: Every method the logging library publishes for writing a record. A survey
 # of the package found three receivers only: `logger`, `_LOGGER`, and `logging`.
@@ -394,7 +396,7 @@ def test_the_scan_reads_the_portal_package_only(log_calls: list[LogCall]) -> Non
     """No scanned file lies outside the capture portal package.
 
     Why:
-        `src/auth/interactive/login_orchestrator.py` logs a plain email address.
+        `src/mist/access/auth/interactive/login_orchestrator.py` logs a plain email address.
         That file belongs to another owner, so this test states the boundary
         instead of reporting a defect the module may not repair.
 

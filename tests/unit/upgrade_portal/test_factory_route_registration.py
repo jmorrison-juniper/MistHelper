@@ -11,7 +11,7 @@ from __future__ import annotations  # Keep annotation evaluation stable during c
 import pytest  # The test runner checks the raised startup fault.
 from flask import Flask  # A small app is enough to exercise blueprint registration.
 
-from src.upgrade_portal.app import factory  # The module under test.
+from src.interfaces.portals.upgrade_portal.app import factory  # The module under test.
 
 
 def test_promised_route_import_failure_stops_startup(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -8,7 +8,7 @@
 ## Pre-Refactor Signature (current)
 
 ```python
-# src/firmware/org_ap_upgrader.py (line 41)
+# src/operations/execution/firmware/org_ap_upgrader.py (line 41)
 class OrgLevelAPFirmwareUpgrader:
     def __init__(  # pylint: disable=too-many-arguments
         self,
@@ -39,7 +39,7 @@ class OrgLevelAPFirmwareUpgrader:
 ## Post-Refactor Signature (target)
 
 ```python
-# src/firmware/org_ap_upgrader.py (new)
+# src/operations/execution/firmware/org_ap_upgrader.py (new)
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OrgAPUpgraderConfig:
     org_id: str
@@ -79,7 +79,7 @@ class OrgLevelAPFirmwareUpgrader:
 | C-3 | `OrgLevelAPFirmwareUpgrader(org_id=None, apisession=session)` raises `TypeError`. | `__post_init__` — `isinstance(org_id, str)` check. | Configuration validation section of `data-model.md`. |
 | C-4 | `OrgAPUpgraderConfig` instances are immutable at the field-binding level. | `@dataclass(frozen=True, slots=True)` — attribute assignment raises `FrozenInstanceError`; new attributes raise `AttributeError`. | `data-model.md` state-transition table. |
 | C-5 | `msp_privileges=None` is normalized to `[]` inside `__post_init__` (via `object.__setattr__`); `selected_msp=None` is preserved as-is. | `__post_init__` normalization block. | `data-model.md` validation-rules section. |
-| C-6 | Observable behavior at all four MistHelper.py callsites is identical to pre-refactor. | Zero-line diff outside `src/firmware/org_ap_upgrader.py`. | `git diff main..HEAD -- MistHelper.py` returns empty output. |
+| C-6 | Observable behavior at all four MistHelper.py callsites is identical to pre-refactor. | Zero-line diff outside `src/operations/execution/firmware/org_ap_upgrader.py`. | `git diff main..HEAD -- MistHelper.py` returns empty output. |
 
 ---
 
@@ -175,7 +175,7 @@ upgrader = _Impl(
 **None**. Grep for cross-repo consumers:
 
 ```bash
-grep -rn "from src.firmware.org_ap_upgrader import" --include="*.py" .
+grep -rn "from src.operations.execution.firmware.org_ap_upgrader import" --include="*.py" .
 ```
 
 Expected: exactly four matches — all inside `MistHelper.py` at the lazy-import positions (lines 20247, 20269, 20289, 20305 area). No other Python file in the repo imports this module.
@@ -201,12 +201,12 @@ OrgLevelAPFirmwareUpgrader
 OrgAPUpgraderConfig
 ```
 
-**Addition**: `OrgAPUpgraderConfig` becomes importable at the module level. This is a **strict superset** of the pre-refactor import surface; the pre-refactor imports (`from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl`) continue to work byte-identically.
+**Addition**: `OrgAPUpgraderConfig` becomes importable at the module level. This is a **strict superset** of the pre-refactor import surface; the pre-refactor imports (`from src.operations.execution.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl`) continue to work byte-identically.
 
 **No import statement change in MistHelper.py.** The four lazy-import lines remain:
 
 ```python
-from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
+from src.operations.execution.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
 ```
 
 Byte-identical to pre-refactor.
@@ -237,8 +237,8 @@ Two comment-form suppressions are eliminated as part of this refactor:
 
 | Location | Suppression | Reason for Removal |
 |----------|-------------|---------------------|
-| `src/firmware/org_ap_upgrader.py:9` | `# pylint: disable=too-many-lines,logging-fstring-interpolation` | LOC still exceeds 1000 after refactor, but `too-many-lines` is out of scope for compliance-analyzer (analyzer does not enforce module LOC). Retain if strictly needed; otherwise remove. `logging-fstring-interpolation` is addressed by converting every f-string in a `logging.*` call to lazy `%s`/`%d` form (R-8). |
-| `src/firmware/org_ap_upgrader.py:41` | `# pylint: disable=too-many-arguments` on `__init__` | Formal param count drops from 11 to 1 via `**cfg`. Suppression is no longer meaningful. |
+| `src/operations/execution/firmware/org_ap_upgrader.py:9` | `# pylint: disable=too-many-lines,logging-fstring-interpolation` | LOC still exceeds 1000 after refactor, but `too-many-lines` is out of scope for compliance-analyzer (analyzer does not enforce module LOC). Retain if strictly needed; otherwise remove. `logging-fstring-interpolation` is addressed by converting every f-string in a `logging.*` call to lazy `%s`/`%d` form (R-8). |
+| `src/operations/execution/firmware/org_ap_upgrader.py:41` | `# pylint: disable=too-many-arguments` on `__init__` | Formal param count drops from 11 to 1 via `**cfg`. Suppression is no longer meaningful. |
 
 Post-refactor state: **zero `# pylint: disable` on the class or its methods**. Any remaining module-level suppression (if kept) is limited to lint-family concerns orthogonal to compliance-analyzer scoring (NG-009).
 
@@ -282,6 +282,6 @@ The 1006 kwargs-passthrough is the strictest-constraint variant of the complianc
 
 - One new type in the module (`OrgAPUpgraderConfig`) and one changed constructor signature (`**cfg` kwargs-passthrough).
 - Six invariants (C-1 through C-6) enumerate the observable contract.
-- **Zero lines change outside `src/firmware/org_ap_upgrader.py`**; all four MistHelper.py callsites are byte-identical.
+- **Zero lines change outside `src/operations/execution/firmware/org_ap_upgrader.py`**; all four MistHelper.py callsites are byte-identical.
 - Two `# pylint: disable` suppressions removed (`too-many-arguments`; f-string suppression rendered moot by lazy-format conversion).
 - Failure-mode diagnostics cover every legacy call form and every validation branch.

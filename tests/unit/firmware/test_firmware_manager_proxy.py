@@ -4,7 +4,7 @@ from __future__ import annotations  # Keep annotations stable during pytest coll
 
 import types  # Build a small dependency host without importing MistHelper.
 
-import src.firmware.firmware_manager as fm_mod  # Import the module under test through its source path.
+import src.operations.execution.firmware.firmware_manager as fm_mod  # Import the moved dependency.
 
 
 def test_firmware_manager_uses_source_dependency_resolver() -> None:

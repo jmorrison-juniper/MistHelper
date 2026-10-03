@@ -26,8 +26,8 @@ from typing import Any
 import pytest
 from arango.exceptions import ArangoError  # WHY: history query tests exercise narrowed ArangoDB handlers.
 
-from src.upgrade_portal.capture import store
-from src.upgrade_portal.runtime.runs import RunRecordBuilder
+from src.interfaces.portals.upgrade_portal.capture import store
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunRecordBuilder
 
 _KEY = "cap-0001"  # WHY: One capture key serves every load test in this module.
 _SITE = "site-0001"  # WHY: One site narrows every history page in this module.
@@ -367,7 +367,7 @@ def test_the_review_page_reads_the_projected_count_name() -> None:
         the store package would pull the database layer into every page import.
         This test is the link that stops the two names from drifting apart.
     """
-    from src.upgrade_portal.app.routes import review
+    from src.interfaces.portals.upgrade_portal.app.routes import review
 
     assert review.RUN_DEVICE_COUNT_FIELD == store.RUN_DEVICE_COUNT_FIELD
 

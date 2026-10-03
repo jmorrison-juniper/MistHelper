@@ -6,7 +6,7 @@ import logging  # Capture visible validation failures without reading secrets.
 
 from pytest import LogCaptureFixture  # Type the log fixture for focused mypy checks.
 
-from src.upgrade_portal.app.routes.upgrade import (  # Import the route helper under test.
+from src.interfaces.portals.upgrade_portal.app.routes.upgrade import (  # Import the route helper under test.
     UpgradeStartInput,
     UpgradeStartInputFailure,
     UpgradeStartInputValidator,

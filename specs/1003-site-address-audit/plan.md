@@ -48,7 +48,7 @@ method; inline comment on every executable line; `logging.info`/`debug`
 before/after every meaningful action; all input via `InputUtils.safe_input()`;
 class-based only; paths via `os.path.join`/`pathlib`.
 **Scale/Scope**: Typical < 2000 CSV rows; peak memory negligible. New code is one
-subpackage (`src/site/address_audit/`, 10 classes) + 2 additive lines in
+subpackage (`src/mist/resources/site/address_audit/`, 10 classes) + 2 additive lines in
 `MistHelper.py`.
 
 ## Constitution Check
@@ -94,7 +94,7 @@ specs/1003-site-address-audit/
 ### Source Code (repository root)
 
 ```text
-src/site/address_audit/          # NEW subpackage (all new production code here)
+src/mist/resources/site/address_audit/          # NEW subpackage (all new production code here)
 |-- __init__.py                  # Exports AddressAuditEngine for menu registration
 |-- models.py                    # AddressRow, MatchedSite, ResolverResult, AuditResult, AuditCounters
 |-- csv_ingester.py              # CSVAddressIngester  -- parse & sanitize tab-delimited input
@@ -122,15 +122,15 @@ tests/e2e/                       # REUSE existing infra for optional Tier 3 UI t
 ```
 
 **Reused existing assets (do NOT reinvent)**:
-- `src/utils/address_utils.py` -> `NominatimValidator` (Tier 2 street validation),
+- `src/foundation/support/utils/address_utils.py` -> `NominatimValidator` (Tier 2 street validation),
   `AddressUtils` (normalization/parse), `AddressValidationConfig`.
-- `src/utils/input_utils.py` -> `InputUtils.safe_input()`.
+- `src/foundation/support/utils/input_utils.py` -> `InputUtils.safe_input()`.
 - `MistHelper.py` -> `GlobalImportManager` optional-import pattern for `rapidfuzz`
   and `scourgify`.
 - `data/mist_data.db` (additive table only).
 
 **Structure Decision**: Single-project CLI. All new production code is isolated in
-the `src/site/address_audit/` subpackage with one class per module. The only edits
+the `src/mist/resources/site/address_audit/` subpackage with one class per module. The only edits
 outside the subpackage are two additive lines in `MistHelper.py` (an import and a
 menu dict entry in range 1-59). No existing file logic is modified.
 

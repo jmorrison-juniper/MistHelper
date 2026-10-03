@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.reports.org_security_posture.checks.registry import OrgSecurityPostureCheckRegistry
+from src.mist.intelligence.reports.org_security_posture.checks.registry import OrgSecurityPostureCheckRegistry
 
 
 def test_registry_has_stable_order_and_minimum_size() -> None:

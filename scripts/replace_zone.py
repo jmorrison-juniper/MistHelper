@@ -15,13 +15,13 @@ STUB = '''\
 class ZoneConfigurationAnalyzer:
     """Zone, engagement, and occupancy configuration analysis (Menu 119).
 
-    Implementation extracted to src/analytics/zone_analyzer.py.
+    Implementation extracted to src/mist/intelligence/analytics/zone_analyzer.py.
     """
 
     @staticmethod
     def analyze() -> None:
         """Delegate to extracted module."""
-        from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA
+        from src.mist.intelligence.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA
 
         _ZCA.analyze(
             apisession=apisession,

@@ -39,7 +39,7 @@ channel.recv.side_effect = [b"prompt> ", b"output\n", b""]  # empty = EOF
 ```
 
 **Rules**:
-- Never let a real `paramiko.SSHClient()` instance be constructed in a unit test — patch at the import site (`src.ssh.cli_shell_manager.SSHClient`) not the module (`paramiko.SSHClient`).
+- Never let a real `paramiko.SSHClient()` instance be constructed in a unit test — patch at the import site (`src.operations.execution.ssh.cli_shell_manager.SSHClient`) not the module (`paramiko.SSHClient`).
 - `set_missing_host_key_policy` MUST be exercised by every SSH test (host-key discipline).
 - Real connections belong under `@pytest.mark.integration` — excluded from default CI (SC-007).
 
@@ -108,11 +108,11 @@ monkeypatch.setattr("sshkeyboard.listen_keyboard", fake_listen)
 ## §7 stdin / interactive prompts (`safe_input`)
 
 ```python
-monkeypatch.setattr("src.ui.prompt_utils.safe_input", lambda *_, **__: "UPGRADE")
+monkeypatch.setattr("src.interfaces.visualization.ui.prompt_utils.safe_input", lambda *_, **__: "UPGRADE")
 ```
 
 **Rules**:
-- Patch at the **import site** where `safe_input` is called (e.g., `src.firmware.firmware_manager.safe_input`), not the definition site — otherwise the patch is invisible to the module under test.
+- Patch at the **import site** where `safe_input` is called (e.g., `src.operations.execution.firmware.firmware_manager.safe_input`), not the definition site — otherwise the patch is invisible to the module under test.
 - Every state-changing manager (PR-6) MUST test BOTH accept AND reject responses. Constitution Principle III non-negotiable.
 
 ## §8 Filesystem

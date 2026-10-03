@@ -2,10 +2,10 @@
 
 from unittest.mock import MagicMock
 
-from src.site.address_audit import audit_engine as eng_mod
-from src.site.address_audit.audit_engine import AddressAuditEngine
-from src.site.address_audit.business_authority_ingester import BusinessAuthorityRow
-from src.site.address_audit.models import AddressRow, AuditResult, MatchedSite, ResolverResult
+from src.mist.resources.site.address_audit import audit_engine as eng_mod
+from src.mist.resources.site.address_audit.audit_engine import AddressAuditEngine
+from src.mist.resources.site.address_audit.business_authority_ingester import BusinessAuthorityRow
+from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite, ResolverResult
 
 _MIST_NO_SUITE = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
 _MIST_WITH_SUITE = {"address": "100 Main St Suite 5", "city": "Town", "state": "FL", "zip": "33000"}
@@ -193,12 +193,12 @@ class TestConsoleLogSuppression:
 
     def test_filter_drops_address_audit_records(self):
         """A record emitted from the address_audit package is dropped from console."""
-        rec = self._record("/x/src/site/address_audit/address_resolver.py")
+        rec = self._record("/x/src/mist/resources/site/address_audit/address_resolver.py")
         assert self._filter().filter(rec) is False
 
     def test_filter_keeps_other_records(self):
         """A record from elsewhere is kept on console."""
-        rec = self._record("/x/src/utils/address_utils.py")
+        rec = self._record("/x/src/foundation/support/utils/address_utils.py")
         assert self._filter().filter(rec) is True
 
     def test_filter_is_separator_portable(self):

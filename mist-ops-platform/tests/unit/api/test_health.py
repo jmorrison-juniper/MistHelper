@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 # WHY: import the router so we can mount a minimal FastAPI app for tests.
 from fastapi import FastAPI
 
-from src.api.routes.health import router
+from src.mist.access.api.routes.health import router
 
 
 def _build_app(engine: object | None = None) -> FastAPI:
@@ -41,7 +41,7 @@ class TestReadyzLogsOnMissingEngine:
         app = _build_app(engine=None)
         client = TestClient(app, raise_server_exceptions=False)
 
-        with caplog.at_level(logging.WARNING, logger="src.api.routes.health"):
+        with caplog.at_level(logging.WARNING, logger="src.mist.access.api.routes.health"):
             response = client.get("/readyz")  # WHY: call the probe directly.
 
         # WHY: the response contract must not change.
@@ -72,7 +72,7 @@ class TestReadyzLogsOnQueryFailure:
         app = _build_app(engine=fake_engine)
         client = TestClient(app, raise_server_exceptions=False)
 
-        with caplog.at_level(logging.WARNING, logger="src.api.routes.health"):
+        with caplog.at_level(logging.WARNING, logger="src.mist.access.api.routes.health"):
             response = client.get("/readyz")  # WHY: call the probe with a broken engine.
 
         # WHY: the response contract must not change.
@@ -111,7 +111,7 @@ class TestMetricsAnswers501:
         app = _build_app()
         client = TestClient(app, raise_server_exceptions=False)
 
-        with caplog.at_level(logging.WARNING, logger="src.api.routes.health"):
+        with caplog.at_level(logging.WARNING, logger="src.mist.access.api.routes.health"):
             client.get("/metrics")  # WHY: call the route to trigger the log.
 
         # WHY: a silent placeholder is the bug. The fix must produce a warning.

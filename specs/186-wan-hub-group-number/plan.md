@@ -5,7 +5,7 @@
 
 ## Summary
 
-Add a new menu operation (`"163"`) that lets NOC engineers view WAN Hub Profiles (gateway device profiles), see their current pod values (cross-referenced from Org VPNs), and set or clear the pod (group number) on all matching VPN paths. The implementation lives in a new external module `src/wan_hub_group_manager.py`, establishing the pattern for future menu operations outside MistHelper.py. MistHelper.py changes are limited to one import line and one `menu_actions` entry.
+Add a new menu operation (`"163"`) that lets NOC engineers view WAN Hub Profiles (gateway device profiles), see their current pod values (cross-referenced from Org VPNs), and set or clear the pod (group number) on all matching VPN paths. The implementation lives in a new external module `src/operations/wan/wan_hub_group_manager.py`, establishing the pattern for future menu operations outside MistHelper.py. MistHelper.py changes are limited to one import line and one `menu_actions` entry.
 
 ## Technical Context
 
@@ -67,13 +67,13 @@ tests/
     └── test_wan_hub_group_manager.py  # NEW: unit tests
 ```
 
-**Structure Decision**: Single new module under existing `src/` directory. This follows the established pattern (MistHelper.py already imports from `src.db`). The module is self-contained with one class. No new subdirectories needed.
+**Structure Decision**: Single new module under existing `src/` directory. This follows the established pattern (MistHelper.py already imports from `src.foundation.persistence.db`). The module is self-contained with one class. No new subdirectories needed.
 
 ## Implementation Design
 
 ### Class: `WanHubGroupNumberManager`
 
-**Location**: `src/wan_hub_group_manager.py`
+**Location**: `src/operations/wan/wan_hub_group_manager.py`
 
 **Constructor**: `__init__(self, apisession, org_id: str)`
 - Stores mistapi session and org_id
@@ -98,9 +98,9 @@ tests/
 
 **Changes** (3 lines):
 
-1. **Import** (near line 75, after existing `src.db` imports):
+1. **Import** (near line 75, after existing `src.foundation.persistence.db` imports):
    ```python
-   from src.wan_hub_group_manager import WanHubGroupNumberManager
+   from src.operations.wan.wan_hub_group_manager import WanHubGroupNumberManager
    ```
 
 2. **Menu registration** (after line 58131, menu `"162"`):

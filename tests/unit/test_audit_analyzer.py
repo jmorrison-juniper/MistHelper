@@ -1,11 +1,11 @@
-"""Unit tests for src.audit.analyzer module.
+"""Unit tests for src.mist.access.audit.analyzer module.
 
 Covers AuditLogAnalyzer.analyze, _build_admin_timelines,
 _build_object_changelogs, _build_rollback_diffs, _extract_object_name,
 _extract_object_type, and _compute_changed_fields.
 """
 
-from src.audit.analyzer import (
+from src.mist.access.audit.analyzer import (
     AuditAnalysisResult,
     AuditLogAnalyzer,
     ObjectChange,

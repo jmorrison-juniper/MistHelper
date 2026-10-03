@@ -29,7 +29,7 @@ from flask import Flask
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 logger = logging.getLogger(__name__)  # Keep synthetic fixture records separate from portal records.
 
@@ -78,9 +78,9 @@ RUN_LISTER_KEY = "RUN_LISTER"  # The run list seam of the same module.
 
 PROBE_EMAIL = "history.operator@example.invalid"  # A reserved domain, so no real address appears.
 
-REVIEW_MODULE = "src.upgrade_portal.app.routes.review"
-STORE_MODULE = "src.upgrade_portal.capture.store"
-RENDER_MODULE = "src.upgrade_portal.compare.render"
+REVIEW_MODULE = "src.interfaces.portals.upgrade_portal.app.routes.review"
+STORE_MODULE = "src.interfaces.portals.upgrade_portal.capture.store"
+RENDER_MODULE = "src.interfaces.portals.upgrade_portal.compare.render"
 
 RUN_LIST_NAMES = ("list_runs", "RunQuery", "RunListPage")  # The three names that the run history needs.
 HISTORY_VIEW_NAME = "build_history_view"  # The view builder that the history page needs.

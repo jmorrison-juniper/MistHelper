@@ -11,10 +11,17 @@ from datetime import UTC, datetime  # Build fixed aware times for deterministic 
 from functools import partial  # Bind the history workload to the generic sample runner.
 from typing import Any, Final  # Mark fixed workload sizes and thresholds.
 
-from src.upgrade_portal.api.run_controls.services import BulkRunActionService, SiteMutationGuard  # Use real service.
-from src.upgrade_portal.api.run_controls.views import RunStalePolicy  # Use the shared history stale policy.
-from src.upgrade_portal.app.routes.review import run_history_row  # Use the route row builder under test.
-from src.upgrade_portal.persistence.actions import (  # Use real journal.
+from src.interfaces.portals.upgrade_portal.api.run_controls.services import (
+    BulkRunActionService,
+    SiteMutationGuard,
+)  # Use real service.
+from src.interfaces.portals.upgrade_portal.api.run_controls.views import (
+    RunStalePolicy,
+)  # Use the shared history stale policy.
+from src.interfaces.portals.upgrade_portal.app.routes.review import (
+    run_history_row,
+)  # Use the route row builder under test.
+from src.interfaces.portals.upgrade_portal.persistence.actions import (  # Use real journal.
     RUN_COLLECTION,  # Name the real run collection that the fake database exposes.
     ActionRepository,  # Exercise the production action journal.
     DurableActorScope,  # Build the actor scope without a request context.

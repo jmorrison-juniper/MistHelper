@@ -28,7 +28,7 @@ commands therefore give two different answers for the same file.
 
 ```powershell
 # Reads the SUB-PROJECT config. Reports findings.
-python -m ruff check mist-ops-platform/src/api/routes/health.py
+python -m ruff check mist-ops-platform/src/mist/access/api/routes/health.py
 
 # Reads the ROOT config. Reports nothing, because extend-exclude skips the path.
 python -m ruff check .

@@ -85,8 +85,8 @@ The dedicated tests use stand-in resolvers and sockets.
 They measure real caller time and inspect cache expiry, shared work, resource limits, recovery, and cleanup.
 They do not use production DNS or database services.
 
-The implementation lives in [`src/db/host_resolver.py`](../src/db/host_resolver.py).
-The central callers live in [`src/db/__init__.py`](../src/db/__init__.py).
+The implementation lives in [`src/foundation/persistence/db/host_resolver.py`](../src/foundation/persistence/db/host_resolver.py).
+The central callers live in [`src/foundation/persistence/db/__init__.py`](../src/foundation/persistence/db/__init__.py).
 The requirements and separate publication hold live in the [issue specification](../specs/3318-bounded-database-discovery/spec.md).
 The reported Windows measurements remain the evidence in [issue #3318](https://github.com/jmorrison-juniper/MistHelper/issues/3318).
 Controlled local evidence is not a new Windows production measurement.

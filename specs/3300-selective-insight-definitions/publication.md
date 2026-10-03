@@ -192,7 +192,7 @@ Result: four passed benchmark cases, 20 measured durations, and four passing run
 ### Focused coverage and existing caller regressions
 
 ```bash
-rtk proxy env PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/coverage .venv/bin/python -m pytest tests/unit/export/test_selective_insight_definitions.py tests/unit/export/test_const_definitions_exporter.py tests/unit/analytics/test_insight_metrics_utils.py tests/unit/serial_cc/test_site_client_insights.py tests/unit/export/test_org_export_utils.py tests/unit/export/test_site_insights_exporter.py tests/unit/export/site_insights tests/unit/serial_cc/test_site_client_insight_path.py tests/integration/serial_cc/test_site_client_insights_integration.py -q -rs --timeout=120 -p no:cacheprovider --basetemp=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/tmp-green --junitxml=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/green.xml --cov=src.export.const_definitions_exporter --cov=src.analytics.insight_metrics_utils --cov=src.refactors.serial_cc.site_client_insights --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/coverage.json --cov-fail-under=90
+rtk proxy env PYTHONDONTWRITEBYTECODE=1 COVERAGE_FILE=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/coverage .venv/bin/python -m pytest tests/unit/export/test_selective_insight_definitions.py tests/unit/export/test_const_definitions_exporter.py tests/unit/analytics/test_insight_metrics_utils.py tests/unit/serial_cc/test_site_client_insights.py tests/unit/export/test_org_export_utils.py tests/unit/export/test_site_insights_exporter.py tests/unit/export/site_insights tests/unit/serial_cc/test_site_client_insight_path.py tests/integration/serial_cc/test_site_client_insights_integration.py -q -rs --timeout=120 -p no:cacheprovider --basetemp=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/tmp-green --junitxml=/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/green.xml --cov=src.operations.exporting.export.const_definitions_exporter --cov=src.mist.intelligence.analytics.insight_metrics_utils --cov=src.foundation.support.refactors.serial_cc.site_client_insights --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/43167b87-e78e-4ecb-80f8-4b1ea622d466/files/3300-publication/coverage.json --cov-fail-under=90
 ```
 
 Result: 532 passed, four explicit opt-in skips, and 96.20% scoped coverage.
@@ -236,12 +236,12 @@ Those existing limits are not claimed as measured passes.
 | `rtk proxy .venv/bin/check-citations src tests` | Passed for 251 citations with zero unresolved. |
 | `rtk proxy .venv/bin/diagram-refs --source-files MistHelper.py src/ --allowlist-file .github/diagram-refs-allowlist.txt` | Passed for 153 references across 15 diagram files. |
 | `rtk proxy .venv/bin/markdown-link-check --exclude 'documentation/wiki/**'` | Passed for 4,285 tracked Markdown files with zero broken local links before this new record. |
-| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\\src\\utils\\zen_city_metadata.py'` | Passed for both separator inclusion samples. The optional SARIF plugin is unavailable and is not used by the JSON scan. |
+| `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\\src\\utils\\zen_city_metadata.py'` | Passed for both separator inclusion samples. The optional SARIF plugin is unavailable and is not used by the JSON scan. |
 
 The syntax command checks six exact files:
 
 ```bash
-rtk proxy .venv/bin/python -m py_compile MistHelper.py src/export/const_definitions_exporter.py src/analytics/insight_metrics_utils.py src/refactors/serial_cc/site_client_insights.py tests/unit/export/test_selective_insight_definitions.py tests/unit/analytics/test_insight_metrics_utils.py
+rtk proxy .venv/bin/python -m py_compile MistHelper.py src/operations/exporting/export/const_definitions_exporter.py src/mist/intelligence/analytics/insight_metrics_utils.py src/foundation/support/refactors/serial_cc/site_client_insights.py tests/unit/export/test_selective_insight_definitions.py tests/unit/analytics/test_insight_metrics_utils.py
 ```
 
 Result: passed.

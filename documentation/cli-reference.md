@@ -58,7 +58,7 @@ python .\MistHelper.py --mib-check
 | `--test` | Every operation that the registry names `safe` |
 | `--testinteractive` | The `safe` set, and every operation that the registry names `interactive_safe` |
 
-`src/utils/operation_registry.py` decides. The classifier fails closed, so an
+`src/foundation/support/utils/operation_registry.py` decides. The classifier fails closed, so an
 operation that the registry does not name never runs in an automated pass. That
 rule keeps every destructive operation out of both modes.
 

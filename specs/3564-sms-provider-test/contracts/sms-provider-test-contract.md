@@ -4,7 +4,7 @@
 
 - Menu number: `284`
 - Category: `interactive`
-- Handler: `src.troubleshooting.sms_provider_test.operation.SmsProviderTest.run`
+- Handler: `src.mist.intelligence.troubleshooting.sms_provider_test.operation.SmsProviderTest.run`
 - Output file: `SmsProviderTest.csv`
 
 ## Prompt contract

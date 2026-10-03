@@ -1,7 +1,7 @@
 """Guard the documented destructive menu set against the operation registry.
 
 Why:
-    `src/utils/operation_registry.py` decides which menu is destructive. Several
+    `src/foundation/support/utils/operation_registry.py` decides which menu is destructive. Several
     documents repeat that set as a text range, such as
     `154-187, 189-191, 194, 206-208, 239`. A repeated value drifts.
 
@@ -48,7 +48,7 @@ class DestructiveMenuIndex:
     def from_registry() -> set[int]:
         """Return every menu number that the registry marks destructive."""
         registry = pytest.importorskip(  # Skip when the package cannot import at all.
-            "src.utils.operation_registry",
+            "src.foundation.support.utils.operation_registry",
             reason="The operation registry is unavailable, so the menu guard cannot run.",
         )
         operation_registry = registry.OperationRegistry  # Read the single source of truth.
@@ -110,7 +110,7 @@ def test_documents_match_the_registry() -> None:
 def test_instruction_table_counts_match_the_registry() -> None:
     """Fail when the category table in the instruction file holds a stale count."""
     registry = pytest.importorskip(  # Skip when the package cannot import at all.
-        "src.utils.operation_registry",
+        "src.foundation.support.utils.operation_registry",
         reason="The operation registry is unavailable, so the count guard cannot run.",
     )
     operation_registry = registry.OperationRegistry  # Read the single source of truth.

@@ -1,4 +1,4 @@
-"""Tests for the frozen slotted map-related dataclasses in src/dataclasses/.
+"""Tests for the frozen slotted map-related dataclasses in src/foundation/models/dataclasses/.
 
 Wave 14 P2 coverage lift (issue #1018). These dataclasses are simple
 frozen/slots containers used by the MapsManager tranche-3 refactor;
@@ -12,27 +12,27 @@ import dataclasses  # WHY: used to introspect the FrozenInstanceError contract.
 
 import pytest  # WHY: parametrize + exception assertions.
 
-from src.dataclasses.map_clone_deps import (  # WHY: 2 dataclasses under test.
+from src.foundation.models.dataclasses.map_clone_deps import (  # WHY: 2 dataclasses under test.
     MapCloneSummary,
     ZoneCloneResult,
 )
-from src.dataclasses.map_marker_deps import (  # WHY: 2 dataclasses under test.
+from src.foundation.models.dataclasses.map_marker_deps import (  # WHY: 2 dataclasses under test.
     DeviceMarkerStyle,
     MarkerPosition,
 )
-from src.dataclasses.map_scaling_deps import (  # WHY: 4 dataclasses under test.
+from src.foundation.models.dataclasses.map_scaling_deps import (  # WHY: 4 dataclasses under test.
     MapDimensions,
     MapScalingFactors,
     OriginalMapMetrics,
     ScaleChoiceContext,
 )
-from src.dataclasses.map_viewer_deps import (  # WHY: 4 dataclasses under test.
+from src.foundation.models.dataclasses.map_viewer_deps import (  # WHY: 4 dataclasses under test.
     HeatmapRenderCtx,
     MapViewerData,
     MapViewerOptional,
     MapViewerScope,
 )
-from src.dataclasses.map_wizard_deps import (  # WHY: 4 dataclasses under test.
+from src.foundation.models.dataclasses.map_wizard_deps import (  # WHY: 4 dataclasses under test.
     MapWizardApplyContext,
     MapWizardApplyTarget,
     MapWizardPreviewContext,

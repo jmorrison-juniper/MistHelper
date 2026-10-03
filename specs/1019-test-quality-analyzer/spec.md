@@ -31,8 +31,8 @@ A maintainer runs the engine against the repo and receives a prioritized report 
 **Acceptance Scenarios**:
 
 1. **Given** a fresh checkout of the repo, **When** the maintainer runs the engine CLI with no arguments, **Then** a JSON report and a Markdown summary are produced within 60 seconds, both files are deterministically sorted, and the JSON validates against the tool's published schema.
-2. **Given** the golden test set of known findings (untested `src/api/api_data_fetcher.py`, weak `assert_called()` at `tests/unit/ssh/test_shell_executor.py:110`, weak assertion at `tests/maps/test_viewer_callbacks_wave_b_c.py:526`, plus at least one representative each of tautological-test and missing-failure-mode findings), **When** the engine runs, **Then** every golden finding appears in the JSON report with the correct file, line, category, and severity.
-3. **Given** a test file that imports `mistapi` at module scope OR whose subject-under-test resides in `src/api/`, **When** the engine analyzes it, **Then** the file is recorded in the report with status `skipped: mist_api_excluded` and is NOT flagged for weak-assertion, edge-case, or failure-mode issues.
+2. **Given** the golden test set of known findings (untested `src/mist/access/api/api_data_fetcher.py`, weak `assert_called()` at `tests/unit/ssh/test_shell_executor.py:110`, weak assertion at `tests/maps/test_viewer_callbacks_wave_b_c.py:526`, plus at least one representative each of tautological-test and missing-failure-mode findings), **When** the engine runs, **Then** every golden finding appears in the JSON report with the correct file, line, category, and severity.
+3. **Given** a test file that imports `mistapi` at module scope OR whose subject-under-test resides in `src/mist/access/api/`, **When** the engine analyzes it, **Then** the file is recorded in the report with status `skipped: mist_api_excluded` and is NOT flagged for weak-assertion, edge-case, or failure-mode issues.
 4. **Given** the engine performs its analysis, **When** any phase runs, **Then** no network sockets are opened and no test modules are imported at runtime — analysis is purely AST + filesystem.
 
 ---
@@ -74,7 +74,7 @@ A maintainer changing the engine's rules must be confident that they haven't bro
 
 - What happens when a test file has been deleted but still appears in the baseline? Report as a stale-baseline advisory; do not fail the gate; offer a documented prune path.
 - What happens when a test file cannot be AST-parsed (syntax error)? Emit an engine-error finding with exit code 2; never silently skip.
-- What happens when a source module lives at `src/api/...` (excluded surface) but its logic is exercised indirectly through a non-`src/api/` wrapper module? The wrapper's tests are analyzed normally; the `src/api/` module is skipped and marked `mist_api_excluded`. The engine does not attempt to reason about transitive exercise.
+- What happens when a source module lives at `src/mist/access/api/...` (excluded surface) but its logic is exercised indirectly through a non-`src/mist/access/api/` wrapper module? The wrapper's tests are analyzed normally; the `src/mist/access/api/` module is skipped and marked `mist_api_excluded`. The engine does not attempt to reason about transitive exercise.
 - What happens when a test contains both a weak assertion and a strong assertion? The test is flagged for the weak assertion but severity is downgraded because at least one strong assertion exists on the same code path.
 - What happens if `coverage.py` output is not present? The engine still runs; it degrades gracefully with a note that coverage-informed heuristics are disabled.
 - What happens with parametrized tests (`@pytest.mark.parametrize`)? Each parameter set is treated as an independent test for edge-case analysis; a parametrized test that already covers empty/None/oversized values is credited accordingly.
@@ -85,7 +85,7 @@ A maintainer changing the engine's rules must be confident that they haven't bro
 ### Functional Requirements
 
 - **FR-001**: The engine MUST discover all Python test files under a configurable set of test roots (default: `tests/`) and classify each file as `analyzed` or `skipped: mist_api_excluded` before running any detection rule.
-- **FR-002**: The Mist-API exclusion rule MUST be applied to any test file where EITHER (a) `mistapi` is imported at module scope, OR (b) the primary subject-under-test (inferred from imports of `src.*` modules) resides under `src/api/`. The rule MUST be configurable so future scope changes do not require code edits.
+- **FR-002**: The Mist-API exclusion rule MUST be applied to any test file where EITHER (a) `mistapi` is imported at module scope, OR (b) the primary subject-under-test (inferred from imports of `src.*` modules) resides under `src/mist/access/api/`. The rule MUST be configurable so future scope changes do not require code edits.
 - **FR-003**: The engine MUST detect and report untested public source modules and functions — defined as any function whose name does not start with `_`, declared in a `src/*.py` file, for which no analyzed test file imports the containing module and references the function name.
 - **FR-004**: The engine MUST detect weak assertions, at minimum: bare `assert result` / `assert x` on non-boolean expressions; `assert x is not None`; `mock.assert_called()` with no argument check; `pytest.raises(Exception)` (over-broad base type); test functions containing zero assertions; test functions whose only assertion inspects a value returned by a mock configured in the same test.
 - **FR-005**: The engine MUST detect missing failure-mode coverage for source modules that make HTTP calls (`requests.*`, `httpx.*`, `urllib.*`) or SSH/socket calls, verifying that at least one analyzed test exists for each of: connection timeout, connection error, HTTP 4xx (401 OR 403 OR 404), HTTP 5xx, malformed JSON response, and empty response body.
@@ -99,7 +99,7 @@ A maintainer changing the engine's rules must be confident that they haven't bro
 - **FR-013**: The engine MUST provide a CLI entry point invokable both locally by developers and inside CI. The CLI MUST accept flags to select test roots, override the exclusion rule, point at an alternate baseline path, and toggle output format.
 - **FR-014**: The engine MUST NOT open any network sockets and MUST NOT `import` any test module at runtime. All analysis MUST be pure AST + filesystem.
 - **FR-015**: The engine MUST complete a full analysis of the current repo (~190 test files) in under 60 seconds on a developer laptop.
-- **FR-016**: The engine MUST ship with a golden test set derived from the manual audit — at minimum: `src/api/api_data_fetcher.py` classified as untested, `tests/unit/ssh/test_shell_executor.py:110` flagged weak-assertion, `tests/maps/test_viewer_callbacks_wave_b_c.py:526` flagged weak-assertion. These findings act as regression tests for the engine's accuracy on the real repo.
+- **FR-016**: The engine MUST ship with a golden test set derived from the manual audit — at minimum: `src/mist/access/api/api_data_fetcher.py` classified as untested, `tests/unit/ssh/test_shell_executor.py:110` flagged weak-assertion, `tests/maps/test_viewer_callbacks_wave_b_c.py:526` flagged weak-assertion. These findings act as regression tests for the engine's accuracy on the real repo.
 - **FR-017**: The engine MUST ship with meta-tests using synthetic fixtures — one bad-fixture file per detection category and one good-fixture file per category — such that fixture regressions surface immediately when detection rules change.
 - **FR-018**: When the engine encounters a test file it cannot AST-parse, it MUST emit a distinct `parse_error` finding rather than silently omitting the file, and MUST cause exit code 2 in gate mode.
 - **FR-019**: The engine MUST handle stale baseline entries (entries referencing files that no longer exist) by emitting a `stale_baseline` advisory without failing the gate, and MUST provide a documented mechanism to prune them.
@@ -111,7 +111,7 @@ A maintainer changing the engine's rules must be confident that they haven't bro
 - **Finding**: A single detected quality issue. Attributes: category, severity, file path, line number, explanation, suggested remediation, optional heuristic flag, optional related-source reference. Findings are the atomic unit of the JSON report and the row unit of the Markdown summary.
 - **Baseline**: An immutable-until-explicitly-updated snapshot of findings that pre-existed at a chosen point in time. Used by gate mode to distinguish "old backlog" from "newly introduced". On-disk format is JSON matching the report schema (findings array only, no run metadata) per Clarifications Q2 and FR-012 — canonicalized and deterministically sorted so byte-identical inputs produce byte-identical baselines.
 - **Report**: The full output of one engine run. Contains: engine version, run timestamp, scanned root(s), configuration snapshot, findings array, skipped-files array, engine-error array. Emitted as JSON and rendered secondarily as Markdown.
-- **Exclusion Rule**: A configurable predicate that decides whether a test file participates in analysis. Default predicate covers the Mist Cloud API surface (imports `mistapi` OR subject-under-test lives in `src/api/`). Additional predicates can be layered without touching engine core.
+- **Exclusion Rule**: A configurable predicate that decides whether a test file participates in analysis. Default predicate covers the Mist Cloud API surface (imports `mistapi` OR subject-under-test lives in `src/mist/access/api/`). Additional predicates can be layered without touching engine core.
 - **Detection Rule**: One of the categories above (untested, weak-assertion, missing-failure-mode, missing-edge-case, tautological). Each rule is independently toggleable and has its own severity mapping.
 - **Golden Test Set**: A curated list of known findings on the real repo, checked into the engine's meta-tests. Regressions in engine accuracy against the real repo are caught here.
 - **Fixture Set**: Synthetic Python test files under the engine's own test tree, half of them deliberately bad and half deliberately good, used to catch rule regressions in isolation from the main repo.
@@ -121,7 +121,7 @@ A maintainer changing the engine's rules must be confident that they haven't bro
 ### Measurable Outcomes
 
 - **SC-001**: On a fresh checkout of the current repo, the engine completes a full analysis in under 60 seconds on a developer laptop.
-- **SC-002**: The engine's report identifies 100% of the golden-set findings (`src/api/api_data_fetcher.py` untested, `tests/unit/ssh/test_shell_executor.py:110` weak, `tests/maps/test_viewer_callbacks_wave_b_c.py:526` weak, plus one representative each of tautological and missing-failure-mode) at the correct file:line with the correct category.
+- **SC-002**: The engine's report identifies 100% of the golden-set findings (`src/mist/access/api/api_data_fetcher.py` untested, `tests/unit/ssh/test_shell_executor.py:110` weak, `tests/maps/test_viewer_callbacks_wave_b_c.py:526` weak, plus one representative each of tautological and missing-failure-mode) at the correct file:line with the correct category.
 - **SC-003**: Against the synthetic bad-fixture set, the engine achieves 100% true-positive detection with the correct category assigned; against the synthetic good-fixture set, the engine produces zero false positives.
 - **SC-004**: In gate mode, introducing exactly one new weak-assertion test to the working tree produces exit code 1 and lists exactly one new finding; reverting the change produces exit code 0.
 - **SC-005**: Two independent runs of the engine against a byte-identical repo checkout produce byte-identical JSON and byte-identical Markdown outputs.
@@ -132,7 +132,7 @@ A maintainer changing the engine's rules must be confident that they haven't bro
 
 ## Assumptions
 
-- The Mist Cloud API surface is precisely identifiable by the two-part rule (`import mistapi` at module scope OR subject-under-test located under `src/api/`). If future refactoring blurs this boundary, the exclusion rule is intentionally configurable.
+- The Mist Cloud API surface is precisely identifiable by the two-part rule (`import mistapi` at module scope OR subject-under-test located under `src/mist/access/api/`). If future refactoring blurs this boundary, the exclusion rule is intentionally configurable.
 - The current line-coverage number of 90% is real but shallow; the engine's job is depth-of-behavior, not coverage. It complements `coverage.py` rather than replacing it.
 - Python 3.11+ is the target runtime, matching the rest of the project. Analysis relies on the standard-library `ast` module; no third-party parsers.
 - The AST-only constraint is a hard requirement — the engine must be safely runnable in CI even if the tests-under-analysis have side-effectful import time.

@@ -13,7 +13,7 @@ The reader reads the whole JSONL file. It builds all inferred rows. It shapes al
 The reader returns the same rows in the same order. Each row keeps the same fields and types. A damaged line still costs that line only. A missing file still returns an empty list.
 
 ## Scope
-Change `src/upgrade_portal/compare/lock_audit.py`. Keep the writer format in `src/upgrade_portal/runtime/lock.py` unchanged.
+Change `src/interfaces/portals/upgrade_portal/compare/lock_audit.py`. Keep the writer format in `src/interfaces/portals/upgrade_portal/runtime/lock.py` unchanged.
 
 ## Constraints
 Use one sequential process. Do not add threads, processes, async work, workers, or sharding. Use local disposable JSONL fixtures only.

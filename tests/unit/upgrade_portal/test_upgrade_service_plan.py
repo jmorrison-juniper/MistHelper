@@ -1,4 +1,4 @@
-"""Unit tests for ``plan_upgrade`` in ``src/firmware/upgrade_service.py``.
+"""Unit tests for ``plan_upgrade`` in ``src/operations/execution/firmware/upgrade_service.py``.
 
 Why:
     The plan decides which cloud call each device receives. An access point, a
@@ -22,8 +22,8 @@ from typing import Any
 
 import pytest
 
-from src.firmware import upgrade_service
-from src.firmware.upgrade_service import DeviceTarget, UpgradeOptions, UpgradePlan
+from src.operations.execution.firmware import upgrade_service
+from src.operations.execution.firmware.upgrade_service import DeviceTarget, UpgradeOptions, UpgradePlan
 
 MAC_SWITCH = "5c5b350e0001"
 MAC_GATEWAY = "5c5b350e0002"

@@ -1,4 +1,4 @@
-"""Wave 4 P2 coverage for src/refactors/data_directory_checker.py (initiative #1018).
+"""Wave 4 P2 coverage for src/foundation/support/refactors/data_directory_checker.py (initiative #1018).
 
 Covers `DataDirectoryChecker.check` end-to-end plus all log branches of
 `_handle_permission_error`. Uses tmp_path for real writable-directory validation
@@ -16,9 +16,11 @@ from pathlib import Path  # WHY: tmp_path fixture returns pathlib.Path.
 
 import pytest  # WHY: monkeypatch, tmp_path, caplog fixtures.
 
-from src.refactors.data_directory_checker import DataDirectoryChecker  # WHY: SUT direct import.
+from src.foundation.support.refactors.data_directory_checker import DataDirectoryChecker  # WHY: SUT direct import.
 
-_MODULE_LOGGER = "src.refactors.data_directory_checker"  # WHY: pin caplog to SUT logger post-#886 migration.
+_MODULE_LOGGER = (
+    "src.foundation.support.refactors.data_directory_checker"  # WHY: pin caplog to SUT logger post-#886 migration.
+)
 
 
 class TestInit:
@@ -69,7 +71,7 @@ class TestCheckPermissionError:
         )  # WHY: neither container marker exists → local-guidance branch.
         exit_calls: list[int] = []  # WHY: capture sys.exit code without killing the test process.
         monkeypatch.setattr(
-            "src.refactors.data_directory_checker.sys.exit",
+            "src.foundation.support.refactors.data_directory_checker.sys.exit",
             lambda code: exit_calls.append(code),
         )  # WHY: intercept exit for assertion.
 
@@ -104,7 +106,7 @@ class TestCheckPermissionError:
             os.path, "exists", lambda p: p == "/.dockerenv"
         )  # WHY: simulate docker container marker present.
         monkeypatch.setattr(
-            "src.refactors.data_directory_checker.sys.exit", lambda code: None
+            "src.foundation.support.refactors.data_directory_checker.sys.exit", lambda code: None
         )  # WHY: neutralize sys.exit for the test.
 
         with caplog.at_level(logging.INFO, logger=_MODULE_LOGGER):  # WHY: capture container-guidance info records.
@@ -134,7 +136,7 @@ class TestCheckPermissionError:
         )  # WHY: force perm-error.
         monkeypatch.setattr(os.path, "exists", lambda p: p == "/run/.containerenv")  # WHY: podman marker present.
         monkeypatch.setattr(
-            "src.refactors.data_directory_checker.sys.exit", lambda code: None
+            "src.foundation.support.refactors.data_directory_checker.sys.exit", lambda code: None
         )  # WHY: neutralize sys.exit.
 
         with caplog.at_level(logging.INFO, logger=_MODULE_LOGGER):  # WHY: capture alt container-marker info log.

@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: keep annotation behavior the same as 
 
 import json  # WHY: parse the attributes cell from export rows.
 
-from src.troubleshooting.nac_idp_credential_test.model import (  # WHY: tests target pure model behavior.
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test.model import (  # Import the moved dependency.
     RESULT_FIELD_NAMES,
     CredentialTestRequest,
     CredentialTestResult,

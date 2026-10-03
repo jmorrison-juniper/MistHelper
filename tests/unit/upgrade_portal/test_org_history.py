@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.upgrade_portal.upgrade.org_history import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_history import (
     JOB_PAGE_PREFIX,
     NOT_RECORDED,
     OperationHistorySection,

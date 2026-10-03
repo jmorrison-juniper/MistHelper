@@ -26,8 +26,8 @@ Use `APIDataFetcher` when it can return rows for custom post-processing. If that
 
 Rationale:
 
-- `src/export/org_device_stats_exporter.py` calls `APIDataFetcher` with `mistapi.api.v1.orgs.stats.listOrgDevicesStats`, `type="all"`, and `limit=1000`.
-- `src/api/api_data_fetcher.py` calls the SDK function, rejects HTTP failures, then paginates with `mistapi.get_all(response=response, mist_session=SourceDependencyResolver.apisession)`.
+- `src/operations/exporting/export/org_device_stats_exporter.py` calls `APIDataFetcher` with `mistapi.api.v1.orgs.stats.listOrgDevicesStats`, `type="all"`, and `limit=1000`.
+- `src/mist/access/api/api_data_fetcher.py` calls the SDK function, rejects HTTP failures, then paginates with `mistapi.get_all(response=response, mist_session=SourceDependencyResolver.apisession)`.
 - The AP scorecard must not add a second custom pagination loop.
 
 Alternatives considered:
@@ -132,7 +132,7 @@ Create [wiring.md](wiring.md) and do not edit shared files in this plan step.
 
 Rationale:
 
-- The fleet contract forbids edits to `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated docs, scripts, and copilot instructions during this step.
+- The fleet contract forbids edits to `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated docs, scripts, and copilot instructions during this step.
 - The user explicitly requested that shared wiring changes be deferred to [wiring.md](wiring.md).
 
 Alternatives considered:

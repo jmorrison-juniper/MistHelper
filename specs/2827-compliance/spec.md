@@ -8,12 +8,12 @@
 
 ## Baseline findings
 
-- `src/org/org_synthetic_probes_manager.py`: score 54.0 F. Findings: 81 total. The analyzer reported 9 high length findings, 42 medium length findings, 30 low complexity or block findings, and one comment coverage finding.
-- `src/device/ap_profile_migration_manager.py`: score 61.0 D-. Findings: 46 total. The analyzer reported 6 high length findings, 23 medium length findings, 17 low complexity or block findings, and one comment coverage finding.
+- `src/mist/resources/org/org_synthetic_probes_manager.py`: score 54.0 F. Findings: 81 total. The analyzer reported 9 high length findings, 42 medium length findings, 30 low complexity or block findings, and one comment coverage finding.
+- `src/mist/resources/device/ap_profile_migration_manager.py`: score 61.0 D-. Findings: 46 total. The analyzer reported 6 high length findings, 23 medium length findings, 17 low complexity or block findings, and one comment coverage finding.
 
 ## Previous pass result
 
-Pull request #2780 changed `src/device/ap_profile_migration_manager.py`, but the score stayed at 61.0. The current analyzer no longer reports the prior parameter-count finding. The remaining measured debt is length, complexity, block count, and comment coverage, so the AP file did not move because the previous pass did not remove enough currently weighted findings to cross a score boundary.
+Pull request #2780 changed `src/mist/resources/device/ap_profile_migration_manager.py`, but the score stayed at 61.0. The current analyzer no longer reports the prior parameter-count finding. The remaining measured debt is length, complexity, block count, and comment coverage, so the AP file did not move because the previous pass did not remove enough currently weighted findings to cross a score boundary.
 
 ## Refactor plan
 

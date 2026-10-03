@@ -18,7 +18,7 @@ The saved organization guide is:
 
 The repository routing source is:
 
-`src/firmware/upgrade_service.py`
+`src/operations/execution/firmware/upgrade_service.py`
 
 ## 2. Verified Operation Description
 
@@ -81,7 +81,7 @@ or gateway upgrades.
 
 ## 6. Existing Site Routing
 
-`src/firmware/upgrade_service.py` already plans mixed device upgrades.
+`src/operations/execution/firmware/upgrade_service.py` already plans mixed device upgrades.
 
 It provides these routes:
 

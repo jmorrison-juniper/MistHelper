@@ -15,8 +15,12 @@ from urllib.parse import parse_qs, urlsplit  # Read the after value of each term
 
 import pytest  # Use fixtures and skip support.
 
-from src.websocket_streams.live.runners.shell.runners import ShellRunner  # The silent device journey reads the reason.
-from src.websocket_streams.live.transport.endpoint import ConnectFailure  # Open failure journeys read the reasons.
+from src.mist.realtime.websocket_streams.live.runners.shell.runners import (
+    ShellRunner,
+)  # The silent device journey reads the reason.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
+    ConnectFailure,
+)  # Open failure journeys read the reasons.
 from tests.e2e.websockets_tab import terminal_support  # Register and read the shared harness.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
     HandshakeFault,

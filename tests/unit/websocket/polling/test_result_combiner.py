@@ -1,4 +1,4 @@
-"""Unit tests for ``src.websocket.polling.result_combiner``.
+"""Unit tests for ``src.mist.realtime.websocket.polling.result_combiner``.
 
 Why:
     ``combine_segments`` is the terminal step of the WebSocket poll loop —
@@ -17,8 +17,8 @@ from typing import Any
 
 import pytest
 
-import src.websocket.polling.result_combiner as rc_mod
-from src.websocket.polling.result_combiner import (
+import src.mist.realtime.websocket.polling.result_combiner as rc_mod
+from src.mist.realtime.websocket.polling.result_combiner import (
     CombineRequest,
     _absorb_extras,
     _absorb_raw_chunk,
@@ -30,7 +30,7 @@ from src.websocket.polling.result_combiner import (
     combine_segments,
 )
 
-_MODULE_LOGGER = "src.websocket.polling.result_combiner"
+_MODULE_LOGGER = "src.mist.realtime.websocket.polling.result_combiner"
 
 
 def _make_request(

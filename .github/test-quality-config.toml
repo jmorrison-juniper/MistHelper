@@ -64,4 +64,4 @@ tautological_return_echo = "high"    # default: high
 path_globs = []
 # Mist-API two-part predicate parameters (FR-002 / research Decision 6).
 banned_imports = ["mistapi"]              # Module-scope imports that mark a test as Mist-API.
-excluded_src_prefixes = ["src/api/"]      # src/* modules under these prefixes mark callers as Mist-API.
+excluded_src_prefixes = ["src/mist/access/api/"]      # src/* modules under these prefixes mark callers as Mist-API.

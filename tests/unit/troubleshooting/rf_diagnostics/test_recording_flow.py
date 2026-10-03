@@ -6,13 +6,17 @@ from dataclasses import dataclass  # WHY: fake client responses mimic SDK respon
 from datetime import UTC, datetime  # WHY: make file names and audit times deterministic.
 from typing import Any  # WHY: fake responses carry dynamic payloads.
 
-from src.troubleshooting.rf_diagnostics.file_naming import RfDiagnosticFileNamer  # WHY: inject temp download path.
-from src.troubleshooting.rf_diagnostics.models import (  # WHY: assert typed outcomes and files.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.file_naming import (
+    RfDiagnosticFileNamer,
+)  # WHY: inject temp download path.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.models import (  # WHY: assert typed outcomes and files.
     STATUS_FAILED,
     STATUS_SUCCESS,
     RfDiagnosticFile,
 )
-from src.troubleshooting.rf_diagnostics.recording import RfDiagnosticRecordingRunner  # WHY: test target.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.recording import (
+    RfDiagnosticRecordingRunner,
+)  # WHY: test target.
 
 
 @dataclass

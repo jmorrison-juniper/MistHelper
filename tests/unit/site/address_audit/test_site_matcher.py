@@ -1,7 +1,7 @@
 """Unit tests for SiteMatchingEngine (1003-site-address-audit)."""
 
-from src.site.address_audit import site_matcher as matcher_mod
-from src.site.address_audit.site_matcher import SiteMatchingEngine
+from src.mist.resources.site.address_audit import site_matcher as matcher_mod
+from src.mist.resources.site.address_audit.site_matcher import SiteMatchingEngine
 
 _SITES = [
     {"id": "s1", "name": "Store 181", "address": "5550 N Military Trail", "city": "Boca Raton", "state": "FL"},

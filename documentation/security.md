@@ -27,7 +27,7 @@ typed confirmation from a person, and that gate exists because the change
 reaches production hardware.
 
 The automated test modes never run a destructive operation. The classifier in
-`src/utils/operation_registry.py` fails closed, so an operation that the
+`src/foundation/support/utils/operation_registry.py` fails closed, so an operation that the
 registry does not name runs in no automated pass.
 
 ## Handle a finding, do not hide it

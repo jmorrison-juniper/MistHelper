@@ -29,7 +29,7 @@ ROUTES_DIR = (  # Directory that holds every API route module
 PLATFORM_ROOT = pathlib.Path(__file__).resolve().parents[3]  # Sub-project root
 
 if str(PLATFORM_ROOT) not in sys.path:  # Only extend the path once
-    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.api" importable
+    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.mist.access.api" importable
 
 WRITE_METHODS = {"post", "put", "patch", "delete"}  # HTTP methods that change state
 
@@ -202,8 +202,8 @@ def _build_probe_app():
     pytest.importorskip("httpx")  # The test client needs httpx
     pytest.importorskip("sqlalchemy")  # deps.py imports sqlalchemy at module load
 
-    from src.api.deps import get_db_session
-    from src.api.routes.config import router as config_router
+    from src.mist.access.api.deps import get_db_session
+    from src.mist.access.api.routes.config import router as config_router
 
     app = fastapi.FastAPI()  # Minimal app, so the test needs no database
     app.include_router(config_router)  # Mount the real routes under test

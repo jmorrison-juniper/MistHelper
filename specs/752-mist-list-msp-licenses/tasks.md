@@ -27,7 +27,7 @@
 
 ## Phase 3: Implementation
 
-- [X] T007 Add `src/export/msp_license_exporter.py` with `MSPLicenseExporter`.
+- [X] T007 Add `src/operations/exporting/export/msp_license_exporter.py` with `MSPLicenseExporter`.
 - [X] T008 Add `InputUtils.prompt_msp_id`, the shared prompt. It calls
       `safe_input` and rejects an empty answer, so the menu survives an EOF in an
       SSH or a container session. `CountExporter` held the only copy, and a

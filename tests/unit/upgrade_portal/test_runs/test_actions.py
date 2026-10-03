@@ -22,11 +22,13 @@ from typing import Any, Final
 
 import pytest
 
-from src.refactors.endpoint_primary_key_strategies import (  # Read the registered action domain key.
+from src.foundation.support.refactors.endpoint_primary_key_strategies import (  # Read the registered action domain key.
     ENDPOINT_PRIMARY_KEY_STRATEGIES,
 )
-from src.upgrade_portal.capture import store as capture_store  # Verify the existing export boundary unchanged.
-from src.upgrade_portal.persistence.actions import (  # Exercise immutable action records without a live store.
+from src.interfaces.portals.upgrade_portal.capture import (
+    store as capture_store,
+)  # Verify the existing export boundary unchanged.
+from src.interfaces.portals.upgrade_portal.persistence.actions import (  # Import the moved dependency.
     ActionIdentity,
     ActionInitialization,
     ActionIntent,
@@ -38,7 +40,7 @@ from src.upgrade_portal.persistence.actions import (  # Exercise immutable actio
     UpgradeRunAction,
     canonical_digest,
 )
-from src.upgrade_portal.runtime.runs import (
+from src.interfaces.portals.upgrade_portal.runtime.runs import (
     PHASE_ORDER,
     RUN_KEY_PREFIX,
     SCHEMA_VERSION,

@@ -2,8 +2,8 @@
 
 import argparse
 
-from src.ssid_consolidation.manager import SSIDTemplateConsolidationManager
-from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452).
+from src.operations.execution.ssid_consolidation.manager import SSIDTemplateConsolidationManager
+from src.foundation.support.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452).
 
 
 def main():

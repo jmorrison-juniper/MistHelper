@@ -1,4 +1,4 @@
-"""Unit tests for the ``src.firmware`` package.
+"""Unit tests for the ``src.operations.execution.firmware`` package.
 
 Why:
     Groups all firmware-manager coverage tests (issue #878 tranche 38).

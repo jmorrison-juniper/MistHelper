@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from src.reports.psk_hygiene import client as client_module
-from src.reports.psk_hygiene.client import DEFAULT_LIMIT
+from src.mist.intelligence.reports.psk_hygiene import client as client_module
+from src.mist.intelligence.reports.psk_hygiene.client import DEFAULT_LIMIT
 
 
 class _FakeResponse:

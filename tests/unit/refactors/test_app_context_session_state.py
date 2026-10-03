@@ -11,9 +11,15 @@ from unittest.mock import MagicMock  # WHY: isolate bootstrap side effects.
 import pytest  # WHY: use monkeypatch and tmp_path fixtures.
 
 import MistHelper  # WHY: verify the root module contract after import.
-from src.config.config_utils import ConfigUtils  # WHY: verify org resolution edge cases.
-from src.refactors.initialize_mist_session import MistSessionConfigurator  # WHY: verify the single session seam.
-from src.refactors.main_entrypoint import AppContext, ApplicationBootstrap, MainEntrypoint  # WHY: verify context use.
+from src.foundation.runtime.config.config_utils import ConfigUtils  # WHY: verify org resolution edge cases.
+from src.foundation.support.refactors.initialize_mist_session import (
+    MistSessionConfigurator,
+)  # WHY: verify the single session seam.
+from src.foundation.support.refactors.main_entrypoint import (
+    AppContext,
+    ApplicationBootstrap,
+    MainEntrypoint,
+)  # WHY: verify context use.
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 

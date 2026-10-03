@@ -24,9 +24,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 # The modules whose INFO lines describe plumbing rather than the operation.
 PLUMBING_MODULES = (
-    "src/config/source_dependency_resolver.py",
-    "src/config/config_utils.py",
-    "src/refactors/main_entrypoint.py",
+    "src/foundation/runtime/config/source_dependency_resolver.py",
+    "src/foundation/runtime/config/config_utils.py",
+    "src/foundation/support/refactors/main_entrypoint.py",
 )
 
 # The message stems that mark a plumbing line in those modules.
@@ -39,7 +39,9 @@ def _handler() -> _RunLogHandler:
     return _RunLogHandler(run, None)
 
 
-def _record(message: str, level: int = logging.INFO, name: str = "src.config.source_dependency_resolver"):
+def _record(
+    message: str, level: int = logging.INFO, name: str = "src.foundation.runtime.config.source_dependency_resolver"
+):
     """Build one log record as the handler would receive it."""
     return logging.LogRecord(name, level, __file__, 1, message, None, None)
 
@@ -90,7 +92,7 @@ def test_each_plumbing_line_goes_to_the_debug_panel(message):
 def test_each_operator_line_stays_in_the_execution_log(message):
     """A line that tells the operator what the run did stays in the main log."""
     handler = _handler()
-    handler.emit(_record(message, name="src.export.site_config_exporter"))
+    handler.emit(_record(message, name="src.operations.exporting.export.site_config_exporter"))
     assert [entry["message"] for entry in handler._run["log_messages"]] == [message]
     assert handler._run["debug_messages"] == []
 
@@ -106,7 +108,7 @@ def test_a_plumbing_warning_still_reaches_the_operator():
 # Issue #3232: the site prompt logs its menu at WARNING, and a WARNING always
 # reached the Execution Log. Every site-scoped run showed a heading and one row
 # for each of the 143 sites, after the pick list had already answered.
-SITE_MENU_MODULE = "src/ui/prompt_utils.py"
+SITE_MENU_MODULE = "src/interfaces/visualization/ui/prompt_utils.py"
 
 
 def _site_menu_messages() -> list[str]:
@@ -138,7 +140,7 @@ def test_the_site_menu_calls_still_exist():
 def test_each_site_menu_line_goes_to_the_debug_panel(message):
     """The pick list already answered the site menu, so the operator never needs it."""
     handler = _handler()
-    handler.emit(_record(message, level=logging.WARNING, name="src.ui.prompt_utils"))
+    handler.emit(_record(message, level=logging.WARNING, name="src.interfaces.visualization.ui.prompt_utils"))
     assert handler._run["log_messages"] == [], f"{message!r} reached the Execution Log"
     assert [entry["message"] for entry in handler._run["debug_messages"]] == [message]
 
@@ -147,7 +149,7 @@ def test_a_site_not_found_line_stays_in_the_execution_log():
     """This line tells the operator why the run stopped, so it must stay visible."""
     handler = _handler()
     message = "Site not found by name or index: AlamoSanAntonio"
-    handler.emit(_record(message, level=logging.WARNING, name="src.ui.prompt_utils"))
+    handler.emit(_record(message, level=logging.WARNING, name="src.interfaces.visualization.ui.prompt_utils"))
     assert [entry["message"] for entry in handler._run["log_messages"]] == [message]
 
 
@@ -155,7 +157,7 @@ def test_a_numbered_line_from_another_module_stays_in_the_execution_log():
     """The routing matches one logger only, so real numbered output stays visible."""
     handler = _handler()
     message = "[1] Found 3 gateways with an HA cluster"
-    handler.emit(_record(message, level=logging.WARNING, name="src.export.gateway_ha_exporter"))
+    handler.emit(_record(message, level=logging.WARNING, name="src.operations.exporting.export.gateway_ha_exporter"))
     assert [entry["message"] for entry in handler._run["log_messages"]] == [message]
 
 
@@ -163,7 +165,7 @@ def test_a_database_info_line_goes_to_the_debug_panel():
     """A site cache refresh writes one JSON line for each collection, which is plumbing."""
     handler = _handler()
     message = '{"collection": "sitegroups", "written": 5, "failed": 0, "event": "import_complete"}'
-    handler.emit(_record(message, name="src.db.arango_writer"))
+    handler.emit(_record(message, name="src.foundation.persistence.db.arango_writer"))
     assert handler._run["log_messages"] == [], "a database INFO line reached the Execution Log"
     assert [entry["message"] for entry in handler._run["debug_messages"]] == [message]
 
@@ -172,7 +174,7 @@ def test_a_database_warning_still_reaches_the_operator():
     """A failed write is a real problem, so the prefix rule applies below WARNING only."""
     handler = _handler()
     message = "Polyglot write failed for listOrgSites: the store refused 144 rows"
-    handler.emit(_record(message, level=logging.WARNING, name="src.db.arango_writer"))
+    handler.emit(_record(message, level=logging.WARNING, name="src.foundation.persistence.db.arango_writer"))
     assert [entry["message"] for entry in handler._run["log_messages"]] == [message]
 
 
@@ -180,7 +182,7 @@ def test_the_store_summary_line_goes_to_the_debug_panel():
     """The polyglot summary describes the cache refresh, not the operation."""
     handler = _handler()
     message = "Polyglot write: backend=arangodb, written=144, failed=0"
-    handler.emit(_record(message, name="src.export.data_exporter"))
+    handler.emit(_record(message, name="src.operations.exporting.export.data_exporter"))
     assert handler._run["log_messages"] == [], "the store summary reached the Execution Log"
     assert [entry["message"] for entry in handler._run["debug_messages"]] == [message]
 
@@ -198,5 +200,5 @@ def test_a_redis_writer_info_line_goes_to_the_debug_panel(logger_name):
 def test_the_store_start_line_goes_to_the_debug_panel():
     """The router start line belongs to the cache refresh, not to the operation."""
     handler = _handler()
-    handler.emit(_record("Polyglot DatabaseRouter initialized", name="src.export.data_exporter"))
+    handler.emit(_record("Polyglot DatabaseRouter initialized", name="src.operations.exporting.export.data_exporter"))
     assert handler._run["log_messages"] == [], "the store start line reached the Execution Log"

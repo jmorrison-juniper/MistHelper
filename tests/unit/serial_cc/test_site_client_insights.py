@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService
+from src.foundation.support.refactors.serial_cc.site_client_insights import SiteClientInsightsService
 
 
 def _deps_bundle():
@@ -24,7 +24,7 @@ def _deps_bundle():
     return deps
 
 
-@patch("src.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
 def test_no_site_selected_returns_early(mock_resolve_runtime_dependencies):
     deps = _deps_bundle()
     deps.PromptUtils.select_site.return_value = None
@@ -35,7 +35,7 @@ def test_no_site_selected_returns_early(mock_resolve_runtime_dependencies):
     deps.DataExporter.write_with_format_selection.assert_not_called()
 
 
-@patch("src.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
 def test_invalid_client_mac_returns_early(mock_resolve_runtime_dependencies):
     deps = _deps_bundle()
     deps.PromptUtils.select_site.return_value = "site-1"
@@ -54,7 +54,7 @@ def test_invalid_client_mac_returns_early(mock_resolve_runtime_dependencies):
     deps.DataExporter.write_with_format_selection.assert_not_called()
 
 
-@patch("src.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
 def test_happy_path_exports_rows(mock_resolve_runtime_dependencies):
     deps = _deps_bundle()
     deps.PromptUtils.select_site.return_value = "site-1"

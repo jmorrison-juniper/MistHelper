@@ -50,7 +50,7 @@ type and one device contract row.
 **Gate status**: PASS for the planning step.
 
 - **Five-Item Rule**: PASS. The future feature package is
-  `src/reports/subscription_expiry/`, and tests are in
+  `src/mist/intelligence/reports/subscription_expiry/`, and tests are in
   `tests/unit/reports/subscription_expiry/`.
 - **Class-Based Architecture**: PASS. `client.py`, `model.py`, and
   `operation.py` hold named classes with clear ownership. No wrapper-only module

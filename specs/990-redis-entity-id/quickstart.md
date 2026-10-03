@@ -27,7 +27,7 @@ these numbers after the change.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest tests/unit/test_redis_writer.py -q
-.venv\Scripts\python.exe -m radon cc src/db/redis_writer.py -s -n A | Select-Object -First 5
+.venv\Scripts\python.exe -m radon cc src/foundation/persistence/db/redis_writer.py -s -n A | Select-Object -First 5
 ```
 
 **Expected**: Every test passes. The highest block score is 5.

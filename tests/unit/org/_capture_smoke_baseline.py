@@ -6,8 +6,8 @@ Why:
     byte-stability regression test (T010) can compare current output against
     a static ground truth even after `main` advances past 1024. This script is
     invoked once from pytest (which supplies the correct sys.path so
-    ``from src.org import ...`` resolves the project package, not the shadow
-    ``src/dataclasses/`` package that collides with the stdlib module name).
+    ``from src.mist.resources.org import ...`` resolves the project package, not the shadow
+    ``src/foundation/models/dataclasses/`` package that collides with the stdlib module name).
 
 The harness is deliberately gated behind an environment flag so it does not
 run during ordinary ``pytest tests/`` invocations — regenerating a baseline
@@ -28,7 +28,7 @@ from pathlib import Path  # absolute-path resolution rooted at this test file
 
 import pytest  # test framework — used for skip guard, not for assertions
 
-from src.org import org_synthetic_probes_manager as ospm  # target module under 1025 edit surface
+from src.mist.resources.org import org_synthetic_probes_manager as ospm  # target module under 1025 edit surface
 
 # Path to the smoke_org fixture that _build_probe_set consumes.
 # Why: this fixture already ships from 1024 (verified during T002 inventory) and

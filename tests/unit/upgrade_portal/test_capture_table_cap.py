@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.upgrade_portal.capture import tables
+from src.interfaces.portals.upgrade_portal.capture import tables
 
 
 def device_document(count: int) -> dict[str, Any]:

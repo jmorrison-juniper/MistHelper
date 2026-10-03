@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/execution/parameter_collector.py."""
+"""Unit tests for src/interfaces/visualization/ui/execution/parameter_collector.py."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.ui.execution.parameter_collector import ParameterCollector
+from src.interfaces.visualization.ui.execution.parameter_collector import ParameterCollector
 
 
 def _make_collector(tui_stub) -> ParameterCollector:

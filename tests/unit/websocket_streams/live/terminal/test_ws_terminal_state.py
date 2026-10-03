@@ -7,13 +7,26 @@ import logging  # caplog captures structured state records.
 
 import pytest  # The tests assert contract refusals.
 
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify exact refusal codes.
-from src.websocket_streams.live.terminal.byte_history import ByteHistory, HistoryRead  # Tests build read values.
-from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests build writable terminal state.
-from src.websocket_streams.live.terminal.state.chunk_payload import TerminalChunk  # Tests build read payloads.
-from src.websocket_streams.live.terminal.state.status import TerminalStatus  # Tests build status values.
-from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Tests build shared state.
-from src.websocket_streams.live.transport.runtime.logging.bounds import MAX_FIELD_LENGTH  # Tests check bounds.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Tests verify exact refusal codes.
+from src.mist.realtime.websocket_streams.live.terminal.byte_history import (
+    ByteHistory,
+    HistoryRead,
+)  # Tests build read values.
+from src.mist.realtime.websocket_streams.live.terminal.input_queue import (
+    TerminalInput,
+)  # Tests build writable terminal state.
+from src.mist.realtime.websocket_streams.live.terminal.state.chunk_payload import (
+    TerminalChunk,
+)  # Tests build read payloads.
+from src.mist.realtime.websocket_streams.live.terminal.state.status import TerminalStatus  # Tests build status values.
+from src.mist.realtime.websocket_streams.live.terminal.state.terminal_state import (
+    TerminalState,
+)  # Tests build shared state.
+from src.mist.realtime.websocket_streams.live.transport.runtime.logging.bounds import (
+    MAX_FIELD_LENGTH,
+)  # Tests check bounds.
 
 
 class TestTerminalState:

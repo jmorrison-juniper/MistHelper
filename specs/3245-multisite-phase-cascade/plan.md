@@ -16,7 +16,7 @@ The single-site driver calls `_submit(record)` and then `_cascade(record)`. The 
 
 ## Design
 
-### New package `src/upgrade_portal/upgrade/org_cascade/`
+### New package `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/`
 
 | Module | Class | Purpose |
 | - | - | - |

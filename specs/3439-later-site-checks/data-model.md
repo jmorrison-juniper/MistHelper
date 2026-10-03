@@ -7,7 +7,7 @@ type, and one error answer.
 
 ## `SiteList` (changed)
 
-The type is in `src/upgrade_portal/app/routes/select.py`. Issue #3438 added it.
+The type is in `src/interfaces/portals/upgrade_portal/app/routes/select.py`. Issue #3438 added it.
 
 | Member | Type | Meaning |
 | - | - | - |
@@ -19,7 +19,7 @@ The type is in `src/upgrade_portal/app/routes/select.py`. Issue #3438 added it.
 
 ## `SiteListIncompleteError` (new)
 
-The type is in `src/upgrade_portal/app/routes/select.py`. The base class is
+The type is in `src/interfaces/portals/upgrade_portal/app/routes/select.py`. The base class is
 `Exception`.
 
 | Member | Type | Meaning |

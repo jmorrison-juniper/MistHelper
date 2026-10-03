@@ -39,8 +39,8 @@ sentence of the table caption. The route passes the scope to the template as
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/routes/review.py` | The new class `HistoryScope`. The route passes `history_scope` in place of `site_name`. The docstring of `read_site_name` states the new call. |
-| `src/upgrade_portal/app/assets/templates/review/history.html` | The note and the caption print the three scope texts. The variable list names `history_scope`. |
+| `src/interfaces/portals/upgrade_portal/app/routes/review.py` | The new class `HistoryScope`. The route passes `history_scope` in place of `site_name`. The docstring of `read_site_name` states the new call. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/review/history.html` | The note and the caption print the three scope texts. The variable list names `history_scope`. |
 | `tests/unit/upgrade_portal/test_issue_3482_history_scope.py` | New. The texts of each scope, and the render of the note and the caption. |
 | `tests/unit/upgrade_portal/test_issue_3449_count_nouns.py` | The render of one site passes a scope in place of `site_name`. |
 | `tests/unit/upgrade_portal/test_history_view.py` | The render passes a scope in place of `site_name`. |

@@ -20,7 +20,7 @@ Add menu 285 through deferred wiring to validate one Mist Access Assurance ident
 
 **Target Platform**: MistHelper CLI and SSH container on Windows-compatible Python paths.
 
-**Project Type**: Single Python CLI package under `src/troubleshooting/nac_idp_credential_test/`.
+**Project Type**: Single Python CLI package under `src/mist/intelligence/troubleshooting/nac_idp_credential_test/`.
 
 **Performance Goals**: Complete one provider list read and one validation call in the normal Mist API latency window. No polling is in scope.
 
@@ -58,7 +58,7 @@ specs/3565-nac-idp-credential-test/
 ### Source Code (repository root)
 
 ```text
-src/troubleshooting/nac_idp_credential_test/
+src/mist/intelligence/troubleshooting/nac_idp_credential_test/
 ├── __init__.py
 ├── client.py
 ├── model.py

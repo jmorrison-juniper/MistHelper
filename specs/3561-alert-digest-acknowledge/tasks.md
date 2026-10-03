@@ -15,8 +15,8 @@ The implementation branch must not edit these files. The integration pull reques
 | Deferred item | Integration file |
 | - | - |
 | Menu 280 and menu 281 registration | `MistHelper.py` |
-| Safe and destructive category registration | `src/utils/operation_registry.py` |
-| Alarm endpoint primary key strategies | `src/refactors/endpoint_primary_key_strategies.py` |
+| Safe and destructive category registration | `src/foundation/support/utils/operation_registry.py` |
+| Alarm endpoint primary key strategies | `src/foundation/support/refactors/endpoint_primary_key_strategies.py` |
 | User-facing menu documentation | `README.md` |
 | Generated menu references | `documentation/menu_reference.md` and generated menu API map outputs |
 
@@ -24,7 +24,7 @@ The implementation branch must not edit these files. The integration pull reques
 
 **Purpose**: Create the feature-owned files that let later groups work without changing integration-owned files.
 
-- [X] T001 [P] Create the alert digest package export surface in `src/reports/alert_digest/__init__.py`.
+- [X] T001 [P] Create the alert digest package export surface in `src/mist/intelligence/reports/alert_digest/__init__.py`.
 - [X] T002 [P] Create the alert digest unit test package marker in `tests/unit/reports/alert_digest/__init__.py`.
 - [X] T003 [P] Verify the integration deferral and menu contract in `specs/3561-alert-digest-acknowledge/wiring.md`.
 - [X] T004 [P] Create the release note fragment in `changelog.d/issue-3561-alert-digest-acknowledge.md`.
@@ -40,9 +40,9 @@ The implementation branch must not edit these files. The integration pull reques
 - [X] T005 [P] Write model tests for `AlarmDefinition`, `AlarmRecord`, `AlarmGroup`, `AcknowledgementCandidate`, and `AcknowledgementResult` in `tests/unit/reports/alert_digest/test_alert_digest_model.py`.
 - [X] T006 [P] Write client tests for `listAlarmDefinitions`, paged `searchOrgAlarms`, `ackOrgMultipleAlarms`, and `unackOrgMultipleAlarms` in `tests/unit/reports/alert_digest/test_alert_digest_client.py`.
 - [X] T007 [P] Write operation prompt tests for `ALERT_DIGEST_HOURS`, the 24-hour default, invalid values, and `ACK <count>` parsing in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
-- [X] T008 Implement alert digest dataclasses and pure grouping helpers in `src/reports/alert_digest/model.py`.
-- [X] T009 Implement the Mist API client class and paged alarm search in `src/reports/alert_digest/client.py`.
-- [X] T010 Implement lookback and confirmation helpers in `src/reports/alert_digest/operation.py`.
+- [X] T008 Implement alert digest dataclasses and pure grouping helpers in `src/mist/intelligence/reports/alert_digest/model.py`.
+- [X] T009 Implement the Mist API client class and paged alarm search in `src/mist/intelligence/reports/alert_digest/client.py`.
+- [X] T010 Implement lookback and confirmation helpers in `src/mist/intelligence/reports/alert_digest/operation.py`.
 
 **Commit group G2**: Commit after T005 through T010 pass `pytest tests\unit\reports\alert_digest\test_alert_digest_model.py tests\unit\reports\alert_digest\test_alert_digest_client.py tests\unit\reports\alert_digest\test_alert_digest_operation.py`.
 
@@ -64,9 +64,9 @@ The implementation branch must not edit these files. The integration pull reques
 
 ### Implementation for User Story 1
 
-- [X] T013 [US1] Implement CSV and Markdown output writing in `src/reports/alert_digest/writer.py`.
-- [X] T014 [US1] Implement `AlertDigestOperation.run_digest` in `src/reports/alert_digest/operation.py`.
-- [X] T015 [US1] Connect `AlertDigestOperation.run_digest` to `AlertDigestClient`, `AlertDigestModel`, and `AlertDigestWriter` in `src/reports/alert_digest/operation.py`.
+- [X] T013 [US1] Implement CSV and Markdown output writing in `src/mist/intelligence/reports/alert_digest/writer.py`.
+- [X] T014 [US1] Implement `AlertDigestOperation.run_digest` in `src/mist/intelligence/reports/alert_digest/operation.py`.
+- [X] T015 [US1] Connect `AlertDigestOperation.run_digest` to `AlertDigestClient`, `AlertDigestModel`, and `AlertDigestWriter` in `src/mist/intelligence/reports/alert_digest/operation.py`.
 
 **Commit group G3**: Commit after T011 through T015 pass `pytest tests\unit\reports\alert_digest -q --timeout=120` for the digest tests.
 
@@ -88,10 +88,10 @@ The implementation branch must not edit these files. The integration pull reques
 
 ### Implementation for User Story 2
 
-- [X] T019 [US2] Implement acknowledgement candidate selection and result row creation in `src/reports/alert_digest/model.py`.
-- [X] T020 [US2] Implement acknowledgement log writing in `src/reports/alert_digest/writer.py`.
-- [X] T021 [US2] Implement `AlertDigestOperation.run_acknowledge` safety flow in `src/reports/alert_digest/operation.py`.
-- [X] T022 [US2] Connect `AlertDigestOperation.run_acknowledge` to the bulk acknowledgement client call in `src/reports/alert_digest/operation.py`.
+- [X] T019 [US2] Implement acknowledgement candidate selection and result row creation in `src/mist/intelligence/reports/alert_digest/model.py`.
+- [X] T020 [US2] Implement acknowledgement log writing in `src/mist/intelligence/reports/alert_digest/writer.py`.
+- [X] T021 [US2] Implement `AlertDigestOperation.run_acknowledge` safety flow in `src/mist/intelligence/reports/alert_digest/operation.py`.
+- [X] T022 [US2] Connect `AlertDigestOperation.run_acknowledge` to the bulk acknowledgement client call in `src/mist/intelligence/reports/alert_digest/operation.py`.
 
 **Commit group G4**: Commit after T016 through T022 pass `pytest tests\unit\reports\alert_digest -q --timeout=120` for the acknowledgement tests.
 
@@ -112,8 +112,8 @@ The implementation branch must not edit these files. The integration pull reques
 
 ### Implementation for User Story 3
 
-- [X] T025 [US3] Apply the shared lookback resolver to digest and acknowledge paths in `src/reports/alert_digest/operation.py`.
-- [X] T026 [US3] Add invalid lookback rejection with no destructive request in `src/reports/alert_digest/operation.py`.
+- [X] T025 [US3] Apply the shared lookback resolver to digest and acknowledge paths in `src/mist/intelligence/reports/alert_digest/operation.py`.
+- [X] T026 [US3] Add invalid lookback rejection with no destructive request in `src/mist/intelligence/reports/alert_digest/operation.py`.
 
 **Commit group G5**: Commit after T023 through T026 pass `pytest tests\unit\reports\alert_digest -q --timeout=120` for the lookback tests.
 
@@ -125,13 +125,13 @@ The implementation branch must not edit these files. The integration pull reques
 
 **Purpose**: Prove the feature package and tests meet the local quality gates before integration wiring starts.
 
-- [X] T027 [P] Run `python -m py_compile MistHelper.py` and run `python -m py_compile` for `src/reports/alert_digest/__init__.py`, `src/reports/alert_digest/client.py`, `src/reports/alert_digest/model.py`, `src/reports/alert_digest/operation.py`, and `src/reports/alert_digest/writer.py`.
-- [X] T028 [P] Run `python -m ruff check src\reports\alert_digest tests\unit\reports\alert_digest`.
-- [X] T029 [P] Run `python -m black --check src\reports\alert_digest tests\unit\reports\alert_digest`.
-- [X] T030 [P] Run `python -m mypy src\reports\alert_digest --config-file pyproject.toml`.
-- [X] T031 [P] Run `python -m pydocstyle src\reports\alert_digest`.
-- [X] T032 [P] Run `python -m vulture src\reports\alert_digest --min-confidence 70`.
-- [X] T033 [P] Run `python -m interrogate -v src\reports\alert_digest`.
+- [X] T027 [P] Run `python -m py_compile MistHelper.py` and run `python -m py_compile` for `src/mist/intelligence/reports/alert_digest/__init__.py`, `src/mist/intelligence/reports/alert_digest/client.py`, `src/mist/intelligence/reports/alert_digest/model.py`, `src/mist/intelligence/reports/alert_digest/operation.py`, and `src/mist/intelligence/reports/alert_digest/writer.py`.
+- [X] T028 [P] Run `python -m ruff check src\mist\intelligence\reports\alert_digest tests\unit\reports\alert_digest`.
+- [X] T029 [P] Run `python -m black --check src\mist\intelligence\reports\alert_digest tests\unit\reports\alert_digest`.
+- [X] T030 [P] Run `python -m mypy src\mist\intelligence\reports\alert_digest --config-file pyproject.toml`.
+- [X] T031 [P] Run `python -m pydocstyle src\mist\intelligence\reports\alert_digest`.
+- [X] T032 [P] Run `python -m vulture src\mist\intelligence\reports\alert_digest --min-confidence 70`.
+- [X] T033 [P] Run `python -m interrogate -v src\mist\intelligence\reports\alert_digest`.
 - [X] T034 Run the quickstart validation commands in `specs/3561-alert-digest-acknowledge/quickstart.md`.
 - [X] T035 [P] Add tests for missing sample, missing acknowledgement state, missing timing values, local grouping performance, and local full digest path performance in `tests/unit/reports/alert_digest/test_alert_digest_model.py` and `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
 - [X] T036 [P] Confirm the fleet deferral for primary key, README, registry, and generated reference files in `specs/3561-alert-digest-acknowledge/wiring.md`.
@@ -159,7 +159,7 @@ The implementation branch must not edit these files. The integration pull reques
 
 ### Deferred integration dependencies
 
-The integration pull request starts after this branch validates the package, tests, release note, and wiring manifest. It must then update `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, `README.md`, and generated menu references. The fleet contract forbids this feature branch from editing those files.
+The integration pull request starts after this branch validates the package, tests, release note, and wiring manifest. It must then update `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py`, `README.md`, and generated menu references. The fleet contract forbids this feature branch from editing those files.
 
 ---
 

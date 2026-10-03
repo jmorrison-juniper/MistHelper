@@ -7,9 +7,9 @@ fail-soft behavior on permission/API errors.
 
 from unittest.mock import MagicMock
 
-from src.site.address_audit import address_corrector as corr_mod
-from src.site.address_audit.address_corrector import AddressCorrector
-from src.site.address_audit.models import AddressRow, AuditResult, MatchedSite
+from src.mist.resources.site.address_audit import address_corrector as corr_mod
+from src.mist.resources.site.address_audit.address_corrector import AddressCorrector
+from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite
 
 
 def _result(issue="MISSING_SUITE", site_id="s1", mist="100 Main St", suggested="100 Main St Suite 5, Town, FL"):

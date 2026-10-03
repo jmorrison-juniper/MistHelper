@@ -15,7 +15,7 @@
 
 - [x] T006 Add the exclusion filter to `_RUN_LIST_HEAD`, and update the test that expected no filter.
 - [x] T007 Add `OPERATION_LIST_FIELDS`, `OperationQuery`, `OperationListPage`, and `list_operations`.
-- [x] T008 Add `src/upgrade_portal/upgrade/org_history.py`.
+- [x] T008 Add `src/interfaces/portals/upgrade_portal/upgrade/org_history.py`.
 
 ## Phase 3: The route and the page
 

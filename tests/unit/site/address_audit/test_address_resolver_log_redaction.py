@@ -1,7 +1,7 @@
 """Log-redaction tests for AddressResolver (issue 1733).
 
 CodeQL reported ten ``py/clear-text-logging-sensitive-data`` alerts in
-``src/site/address_audit/address_resolver.py``. Every alert wrote a street
+``src/mist/resources/site/address_audit/address_resolver.py``. Every alert wrote a street
 address into ``data/script.log``, and that log travels inside the menu-101
 support bundle. These tests prove that no street address reaches the log any
 more. Each test captures the log with ``caplog`` and asserts that the street
@@ -12,10 +12,13 @@ import logging  # Set the caplog capture level for DEBUG-level assertions.
 
 import pytest  # Fixtures for temporary paths and log capture.
 
-from src.site.address_audit import address_resolver as resolver_mod  # Patch the Nominatim validator.
-from src.site.address_audit.address_resolver import AddressResolver  # Class under test.
-from src.site.address_audit.models import ResolveCandidates, ResolverResult  # Resolver input and output.
-from src.utils.logger_utils import PRIVATE_DIGEST_EMPTY, private_digest  # Expected digest value for each assertion.
+from src.foundation.support.utils.logger_utils import (
+    PRIVATE_DIGEST_EMPTY,
+    private_digest,
+)  # Expected digest value for each assertion.
+from src.mist.resources.site.address_audit import address_resolver as resolver_mod  # Patch the Nominatim validator.
+from src.mist.resources.site.address_audit.address_resolver import AddressResolver  # Class under test.
+from src.mist.resources.site.address_audit.models import ResolveCandidates, ResolverResult  # Resolver input and output.
 
 _STREET = "742 Evergreen Terrace Suite 12"  # A private street the log must never show.
 _CITY = "Springfield"  # City of the test address.

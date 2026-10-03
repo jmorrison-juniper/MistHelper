@@ -27,7 +27,7 @@ the existing stop browser tests, and the existing comparison browser tests.
 **Language/Version**: Python 3.13.
 
 **Primary Dependencies**: pytest, `mistapi` 0.64.0, and the shipped package
-`src/upgrade_portal/`.
+`src/interfaces/portals/upgrade_portal/`.
 
 **Storage**: None. The harness holds the run record in memory.
 
@@ -116,7 +116,7 @@ one at the end of the test.
 | `mistapi.get_all` | The page walk of the same read at `gate.py:856` |
 | `mistapi.api.v1.orgs.devices.searchOrgDeviceEvents` | `events.read_device_events` at `events.py:430` |
 | `mistapi.api.v1.const.device_events.listDeviceEventsDefinitions` | The event key catalogue of `events.py` |
-| `src.firmware.upgrade_service._resolve_endpoint` | The status read and the cancel call of `stop.py` |
+| `src.operations.execution.firmware.upgrade_service._resolve_endpoint` | The status read and the cancel call of `stop.py` |
 
 The fifth point is one function at `upgrade_service.py:547`. It is the single
 door to every sanctioned cloud endpoint of the upgrade module. A stand-in there
@@ -139,7 +139,7 @@ User Story 3 lives in that parameter. A harness that skips it cannot catch it.
 
 ### How the harness obeys the seam shape rule
 
-`src/upgrade_portal/app/seam_shapes.py` states the rule of issue #1991. A
+`src/interfaces/portals/upgrade_portal/app/seam_shapes.py` states the rule of issue #1991. A
 stand-in must answer the call that the caller really makes. The harness obeys
 that rule in three ways.
 

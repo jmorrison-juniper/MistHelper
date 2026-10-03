@@ -3,11 +3,11 @@
 **Feature Branch**: `refactor/firmware-manager-compliance`
 **Created**: 2026-07-02
 **Status**: Draft
-**Input**: User description: "Refactor `src/firmware/firmware_manager.py` to raise its compliance-analyzer grade from F (51.0/100) to A+ (100.0/100). 82 violations reported (6 High, 34 Medium, 42 Low). Preserve behavior; do not create wrappers/shims; real decomposition only; no `# noqa` or ignore flags."
+**Input**: User description: "Refactor `src/operations/execution/firmware/firmware_manager.py` to raise its compliance-analyzer grade from F (51.0/100) to A+ (100.0/100). 82 violations reported (6 High, 34 Medium, 42 Low). Preserve behavior; do not create wrappers/shims; real decomposition only; no `# noqa` or ignore flags."
 
 ## Summary
 
-`src/firmware/firmware_manager.py` is the extracted implementation of the interactive firmware upgrade workflows for APs, switches, and SSR/session-smart routers. It is 2450 lines long, contains a single class `FirmwareManager` with 82 functions, and is currently graded **F (51.0 / 100)** by `tools.compliance_analyzer`. This is PR #3 of a five-part serial refactor campaign; each prior campaign (bulk AP upgrader, org AP upgrader) has lifted its target file from F to A+/100.0 using the same pattern: a frozen `slots` dataclass for constructor collaborators, phase-helper decomposition of oversized methods, and per-line `# WHY:` inline comments driven by the AGENTS.md standard.
+`src/operations/execution/firmware/firmware_manager.py` is the extracted implementation of the interactive firmware upgrade workflows for APs, switches, and SSR/session-smart routers. It is 2450 lines long, contains a single class `FirmwareManager` with 82 functions, and is currently graded **F (51.0 / 100)** by `tools.compliance_analyzer`. This is PR #3 of a five-part serial refactor campaign; each prior campaign (bulk AP upgrader, org AP upgrader) has lifted its target file from F to A+/100.0 using the same pattern: a frozen `slots` dataclass for constructor collaborators, phase-helper decomposition of oversized methods, and per-line `# WHY:` inline comments driven by the AGENTS.md standard.
 
 The goal of this feature is to bring `firmware_manager.py` to **A+ (100.0 / 100)** — that is, **zero** violations of any severity across all seven analyzer rules (STRUCT-LENGTH, STRUCT-COMPLEXITY, STRUCT-BLOCKS, STRUCT-PARAMS, STRUCT-NESTING, CONV-COMMENTS, CONV-NAME). Every behavior consumed by `MistHelper.py` menu 195 / menu 196 / SSR upgrade menus / switch upgrade menus must be preserved. The only permitted change outside this file is a matching update to the `FirmwareManager.create(...)` factory in `MistHelper.py` to build the new configuration object.
 
@@ -15,18 +15,18 @@ The goal of this feature is to bring `firmware_manager.py` to **A+ (100.0 / 100)
 
 ### User Story 1 - Reach A+ Compliance Grade (Priority: P1)
 
-As a maintainer running the project's compliance analyzer as part of the code-review workflow, I need `src/firmware/firmware_manager.py` to score exactly 100.0/100 with grade A+ so the file is removed from the failing-grade dashboard and matches the standard set by the two prior campaign files (`bulk_ap_upgrader.py`, `org_ap_upgrader.py`).
+As a maintainer running the project's compliance analyzer as part of the code-review workflow, I need `src/operations/execution/firmware/firmware_manager.py` to score exactly 100.0/100 with grade A+ so the file is removed from the failing-grade dashboard and matches the standard set by the two prior campaign files (`bulk_ap_upgrader.py`, `org_ap_upgrader.py`).
 
 **Why this priority**: The file currently scores 51.0/100 (grade F) with 82 recorded violations — 6 High, 34 Medium, 42 Low. Every audit run flags it as the worst offender in the `firmware/` package. Every downstream feature depends on this being fixed; nothing else in this spec has value without it. The prior two campaigns established that A+/100.0 is achievable and is the campaign's declared target, not merely "better than F".
 
-**Independent Test**: Run `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` from the repository root against the refactored file and confirm the numeric score reported is exactly 100.0/100, the grade letter is A+, and the per-severity totals are all zero (0 critical, 0 high, 0 medium, 0 low).
+**Independent Test**: Run `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` from the repository root against the refactored file and confirm the numeric score reported is exactly 100.0/100, the grade letter is A+, and the per-severity totals are all zero (0 critical, 0 high, 0 medium, 0 low).
 
 **Acceptance Scenarios**:
 
-1. **Given** the refactored `firmware_manager.py` file on the `refactor/firmware-manager-compliance` branch, **When** a maintainer runs `python -m tools.compliance_analyzer src/firmware/firmware_manager.py`, **Then** the reported score is 100.0/100 and the reported grade is A+.
+1. **Given** the refactored `firmware_manager.py` file on the `refactor/firmware-manager-compliance` branch, **When** a maintainer runs `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py`, **Then** the reported score is 100.0/100 and the reported grade is A+.
 2. **Given** the analyzer's per-rule totals, **When** the maintainer inspects the JSON summary, **Then** every rule bucket (`CONV-COMMENTS`, `CONV-NAME`, `STRUCT-BLOCKS`, `STRUCT-COMPLEXITY`, `STRUCT-LENGTH`, `STRUCT-NESTING`, `STRUCT-PARAMS`) reports zero occurrences.
-3. **Given** the refactored file, **When** a maintainer runs `python -m py_compile src/firmware/firmware_manager.py`, **Then** the command exits with status 0.
-4. **Given** the refactored file, **When** a maintainer runs `python -m ruff check src/firmware/firmware_manager.py`, **Then** ruff reports zero errors and zero warnings.
+3. **Given** the refactored file, **When** a maintainer runs `python -m py_compile src/operations/execution/firmware/firmware_manager.py`, **Then** the command exits with status 0.
+4. **Given** the refactored file, **When** a maintainer runs `python -m ruff check src/operations/execution/firmware/firmware_manager.py`, **Then** ruff reports zero errors and zero warnings.
 5. **Given** the refactored file, **When** a reviewer greps for `# noqa`, `# type: ignore` (added by this refactor), or `# pragma: no cover` markers on lines that the analyzer would otherwise flag, **Then** none are present — the score comes from real structural change, not suppression.
 
 ---
@@ -41,7 +41,7 @@ As the developer of `MistHelper.py` (lines 18795, 19809, 22097, 22154, 22237, 22
 
 **Acceptance Scenarios**:
 
-1. **Given** the refactored impl class in `src/firmware/firmware_manager.py`, **When** the `MistHelper.FirmwareManager.create(apisession, org_id)` factory in `MistHelper.py` (lines 18788-18807) is invoked, **Then** construction succeeds without raising an exception attributable to the refactor.
+1. **Given** the refactored impl class in `src/operations/execution/firmware/firmware_manager.py`, **When** the `MistHelper.FirmwareManager.create(apisession, org_id)` factory in `MistHelper.py` (lines 18788-18807) is invoked, **Then** construction succeeds without raising an exception attributable to the refactor.
 2. **Given** the factory's six injected callables (`safe_input_fn`, `select_site_fn`, `check_cache_fn`, `get_csv_path_fn`, `gateway_templates_fn`, `sites_fn`), **When** the factory builds an impl instance, **Then** every callable is stored on the instance (or the config object attached to the instance) and is invocable by the workflow methods with unchanged semantics.
 3. **Given** any of the six callsites `FirmwareManager.create(...)` at MistHelper.py lines 19809, 22097, 22154, 22237, 22246 (plus the import at 18795), **When** the surrounding menu is invoked in dry-run mode, **Then** the menu proceeds past construction without raising a construction-time error.
 4. **Given** the factory refactor, **When** a reviewer diffs `MistHelper.py`, **Then** the only permitted changes are inside the `FirmwareManager.create` staticmethod body (lines 18791-18807) and imports it touches — no menu-driver code paths are modified.
@@ -133,16 +133,16 @@ As a maintainer, I need the 28 STRUCT-COMPLEXITY, 11 STRUCT-BLOCKS, 2 STRUCT-NES
 
 ### Functional Requirements
 
-- **FR-001**: The compliance analyzer (`python -m tools.compliance_analyzer src/firmware/firmware_manager.py`) MUST report a numeric score of 100.0/100 and a letter grade of A+ for the refactored file.
+- **FR-001**: The compliance analyzer (`python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py`) MUST report a numeric score of 100.0/100 and a letter grade of A+ for the refactored file.
 - **FR-002**: The analyzer's per-severity totals MUST all be zero: 0 critical, 0 high, 0 medium, 0 low.
 - **FR-003**: The analyzer's per-rule totals MUST all be zero for every rule: `CONV-COMMENTS`, `CONV-NAME`, `STRUCT-BLOCKS`, `STRUCT-COMPLEXITY`, `STRUCT-LENGTH`, `STRUCT-NESTING`, `STRUCT-PARAMS`.
-- **FR-004**: The refactored file MUST pass `python -m py_compile src/firmware/firmware_manager.py` with exit status 0.
-- **FR-005**: The refactored file MUST pass `python -m ruff check src/firmware/firmware_manager.py` with zero errors and zero warnings.
+- **FR-004**: The refactored file MUST pass `python -m py_compile src/operations/execution/firmware/firmware_manager.py` with exit status 0.
+- **FR-005**: The refactored file MUST pass `python -m ruff check src/operations/execution/firmware/firmware_manager.py` with zero errors and zero warnings.
 - **FR-006**: The refactor MUST NOT add `# noqa`, `# type: ignore` on lines the analyzer would otherwise flag, or `# pragma: no cover` markers as a substitute for real structural fixes. Analyzer-quieting suppressions are prohibited.
 - **FR-007**: The refactor MUST NOT introduce wrapper, delegator, or shim methods. A "wrapper/delegator/shim" is a helper whose entire body is a single call to another method with unchanged or trivially forwarded arguments and no additional logic. Every extracted helper MUST perform genuine work.
 - **FR-008**: The `FirmwareManager.__init__` method MUST accept at most 5 parameters excluding `self`. The current 8-parameter list MUST be consolidated into a single frozen `slots` dataclass (provisionally named `FirmwareManagerConfig`) that carries the previously optional callables.
 - **FR-009**: The `FirmwareManager.__init__` body MUST be <=25 executable lines, <=5 logical blocks, <=5 cyclomatic complexity, and <=4 nesting levels after refactor. Module-global binding logic currently inline in `__init__` MUST be moved to a dedicated helper (e.g. `_bind_module_globals`) that itself conforms to the size limits.
-- **FR-010**: The new configuration dataclass MUST live in the same file (`src/firmware/firmware_manager.py`) unless a circular-import barrier requires a separate module inside `src/firmware/`, in which case placement MUST be justified in the plan phase.
+- **FR-010**: The new configuration dataclass MUST live in the same file (`src/operations/execution/firmware/firmware_manager.py`) unless a circular-import barrier requires a separate module inside `src/operations/execution/firmware/`, in which case placement MUST be justified in the plan phase.
 - **FR-011**: The `MistHelper.FirmwareManager.create(apisession, org_id)` staticmethod at `MistHelper.py` lines 18791-18807 MUST be updated to construct the new configuration object and pass it to the refactored impl constructor. No other production code in `MistHelper.py` MUST be modified by this feature.
 - **FR-012**: Every call site of `FirmwareManager.create(...)` in `MistHelper.py` (lines 19809, 22097, 22154, 22237, 22246) MUST continue to succeed at construction time without argument changes at the callsite.
 - **FR-013**: Each of the following STRUCT-LENGTH offenders MUST be reduced to <=25 executable lines after refactor:
@@ -166,19 +166,19 @@ As a maintainer, I need the 28 STRUCT-COMPLEXITY, 11 STRUCT-BLOCKS, 2 STRUCT-NES
 - **FirmwareManager**: The refactor's target class. Represents the interactive firmware upgrade workflow for APs, switches, and SSR devices — org-scope, site-scope, template-scope, and MSP-scope. Owns methods for status checks, upgrade planning, upgrade execution, and continuous monitoring. The refactor changes its internal structure but preserves its identity as the single entry point behind `MistHelper.FirmwareManager.create(...)`.
 - **FirmwareManagerConfig** (proposed name; may be renamed in plan phase): A new `@dataclass(frozen=True, slots=True)` introduced to consolidate the six previously optional callable parameters (`safe_input_fn`, `select_site_fn`, `check_cache_fn`, `get_csv_path_fn`, `gateway_templates_fn`, `sites_fn`) plus any other collaborator state moved out of the constructor to satisfy STRUCT-PARAMS. Consumed by the refactored `__init__` in place of the flat parameter list.
 - **Compliance Analyzer Report**: The tool output that validates the refactor. Represents per-file score, letter grade, and enumerated violation records with severity, rule ID, method name, line number, and metric value. Baseline captured at `specs/1005-firmware-manager-compliance/artifacts/baseline_compliance_report.md`; final version must show 0 violations across all buckets.
-- **MistHelper Factory Wrapper**: The `class FirmwareManager` at `MistHelper.py` line 18788 with its `create(apisession, org_id)` staticmethod. Not part of `src/firmware/firmware_manager.py` but must be updated in lockstep so downstream callsites keep working; the update is the only permitted diff in `MistHelper.py` for this feature.
+- **MistHelper Factory Wrapper**: The `class FirmwareManager` at `MistHelper.py` line 18788 with its `create(apisession, org_id)` staticmethod. Not part of `src/operations/execution/firmware/firmware_manager.py` but must be updated in lockstep so downstream callsites keep working; the update is the only permitted diff in `MistHelper.py` for this feature.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: The compliance-analyzer score for `src/firmware/firmware_manager.py` improves from 51.0/100 (grade F) to 100.0/100 (grade A+), a 49.0-point absolute improvement.
+- **SC-001**: The compliance-analyzer score for `src/operations/execution/firmware/firmware_manager.py` improves from 51.0/100 (grade F) to 100.0/100 (grade A+), a 49.0-point absolute improvement.
 - **SC-002**: The total count of compliance-analyzer violations drops from 82 to 0 across all severity buckets (0 critical, 0 high, 0 medium, 0 low).
 - **SC-003**: The analyzer's per-rule totals for `CONV-COMMENTS`, `CONV-NAME`, `STRUCT-BLOCKS`, `STRUCT-COMPLEXITY`, `STRUCT-LENGTH`, `STRUCT-NESTING`, and `STRUCT-PARAMS` all report 0.
 - **SC-004**: Every method in the refactored file reports cyclomatic complexity <=5, executable-line length <=25, logical-block count <=5, nesting depth <=4, and parameter count <=5.
 - **SC-005**: Inline-comment coverage as measured by the analyzer is >=80%.
-- **SC-006**: `python -m py_compile src/firmware/firmware_manager.py` exits with status 0.
-- **SC-007**: `python -m ruff check src/firmware/firmware_manager.py` reports zero errors and zero warnings.
+- **SC-006**: `python -m py_compile src/operations/execution/firmware/firmware_manager.py` exits with status 0.
+- **SC-007**: `python -m ruff check src/operations/execution/firmware/firmware_manager.py` reports zero errors and zero warnings.
 - **SC-008**: All six existing callsites of `FirmwareManager.create(...)` in `MistHelper.py` (import at line 18795 plus factory calls at 19809, 22097, 22154, 22237, 22246) continue to instantiate and execute the class without raising `TypeError` or `AttributeError` attributable to the refactor.
 - **SC-009**: A reviewer randomly sampling 25 executable lines from the refactored file finds an inline `# WHY: ...` (or equivalent trailing `# ...`) comment on at least 20 of them (80% floor).
 - **SC-010**: A reviewer greps the refactored file for `# noqa`, `# type: ignore`, and `# pragma: no cover` markers added by this refactor on lines the analyzer would otherwise flag, and finds zero.
@@ -193,8 +193,8 @@ The following are explicitly out of scope for this feature:
 
 - **NG-001**: Adding new unit tests for `firmware_manager.py`. No `tests/unit/test_firmware_manager*.py` file exists today; this feature does not create one. A trivial smoke test (import + factory construction with mocked callables) MAY be added if it takes fewer than 20 lines total and does not exercise API-dependent code paths. Full test coverage is deferred to a follow-on feature.
 - **NG-002**: Modifying any code in `MistHelper.py` outside the `class FirmwareManager` body at lines 18788-18807. Menu-driver code, other classes, and unrelated helpers MUST NOT be touched.
-- **NG-003**: Modifying any other file in `src/firmware/` (e.g. `bulk_ap_upgrader.py`, `org_ap_upgrader.py`, `site_auto_upgrade.py`). Those files are governed by their own campaign spec directories.
-- **NG-004**: Extracting helpers into a separate module unless a circular-import barrier forces it. The refactor's default is to keep everything in `src/firmware/firmware_manager.py`.
+- **NG-003**: Modifying any other file in `src/operations/execution/firmware/` (e.g. `bulk_ap_upgrader.py`, `org_ap_upgrader.py`, `site_auto_upgrade.py`). Those files are governed by their own campaign spec directories.
+- **NG-004**: Extracting helpers into a separate module unless a circular-import barrier forces it. The refactor's default is to keep everything in `src/operations/execution/firmware/firmware_manager.py`.
 - **NG-005**: Changing the behavior of any workflow — files written, log lines, API calls, prompts, module-global bindings — beyond what is required to hit A+.
 - **NG-006**: Adjusting the compliance analyzer's thresholds or rules to make the file pass. The analyzer is the authority; the code must move to the analyzer, not the other way around.
 - **NG-007**: Renaming the `FirmwareManager` class or any of its public methods. Renaming private helpers is permitted during decomposition.
@@ -214,4 +214,4 @@ The following are explicitly out of scope for this feature:
 - The refactor may increase total file line count due to added `# WHY:` inline comments, the new dataclass, and helper method boilerplate. There is no upper bound on total file length — only on per-method size.
 - The prior-art template from `specs/1004-bulk-ap-upgrader-compliance/` (frozen `slots` dataclass + phase-helper decomposition + PCPP pattern) is the model. The plan phase for this feature will reuse it, adjusting only for firmware-manager-specific details (multiple workflow entry points instead of one, three device families instead of one).
 - The refactor is performed on the branch `refactor/firmware-manager-compliance` off `main`. No sub-branches or worktrees are required.
-- The file `src/firmware/firmware_manager.py` is 2450 lines long and contains one class with 82 functions as of the baseline compliance report dated 2026-07-02. Later plan / tasks / implement phases will operate against this baseline.
+- The file `src/operations/execution/firmware/firmware_manager.py` is 2450 lines long and contains one class with 82 functions as of the baseline compliance report dated 2026-07-02. Later plan / tasks / implement phases will operate against this baseline.

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.gateway.device_template_cloner import (
+from src.mist.resources.gateway.device_template_cloner import (
     DEVICE_METADATA_FIELDS_TO_STRIP,
     SECRET_FIELD_NAMES,
     DeviceConfigTemplateClonerManager,
@@ -48,7 +48,7 @@ def test_list_sites_http_failure_reaches_caller(status_code: int) -> None:
     """A site-list HTTP failure must stay visible to the clone caller."""
     manager = _build_manager()  # WHY: use the normal dependency bundle.
     with patch(
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
         side_effect=RuntimeError(f"HTTP {status_code}"),
     ):
         with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):

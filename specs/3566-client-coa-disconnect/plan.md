@@ -27,7 +27,7 @@ Do not send live destructive Mist requests from automated tests.
 
 **Target Platform**: MistHelper CLI on Windows and Linux containers.
 
-**Project Type**: CLI menu operation with a feature package under `src/device/client_session_control/`.
+**Project Type**: CLI menu operation with a feature package under `src/mist/resources/device/client_session_control/`.
 
 **Performance Goals**: A helpdesk operator can complete a request in less than 2 minutes when the site and target are known.
 
@@ -42,7 +42,7 @@ Do not send live destructive Mist requests from automated tests.
 - The fleet contract defers hot-file wiring, README edits, menu documentation edits, and primary-key strategy handling to the integration pull request.
 - `--dry-run` must print the request and send no Mist request.
 - Exact typed confirmation is required before each live Mist request.
-- Read existing MAC normalization and client lookup helpers under `src/device/` before implementation work starts.
+- Read existing MAC normalization and client lookup helpers under `src/mist/resources/device/` before implementation work starts.
 - Verify the required OpenAPI operation IDs and installed `mistapi` functions before client code starts.
 
 **Scale/Scope**: One menu operation, five supported actions, one CSV audit file, one handler package, and one unit test package.
@@ -53,7 +53,7 @@ Do not send live destructive Mist requests from automated tests.
 
 | Principle | Status | Evidence |
 | - | - | - |
-| I. Five-Item Rule | PASS WITH DOCUMENTED EXCEPTION | The required package is `src/device/client_session_control/`. `src/device/` already has more than five direct children. The user requirement makes this path mandatory. The implementation must add a nested package, not a loose module, and must record the existing debt. |
+| I. Five-Item Rule | PASS WITH DOCUMENTED EXCEPTION | The required package is `src/mist/resources/device/client_session_control/`. `src/mist/resources/device/` already has more than five direct children. The user requirement makes this path mandatory. The implementation must add a nested package, not a loose module, and must record the existing debt. |
 | II. Class-Based Architecture | PASS | The handler is `ClientSessionControl` with static `run()`. Helper behavior belongs in focused classes or dataclasses. |
 | III. Safety-First | PASS | The operation validates the target early, shows the normalized target, requires exact confirmation, and supports `--dry-run`. |
 | IV. Full Deployment Pipeline | PASS FOR PLAN | This step edits only planning artifacts. Implementation must add tests, local gates, release note, wiring, and pull request evidence. |
@@ -81,7 +81,7 @@ specs/3566-client-coa-disconnect/
 ### Source Code for implementation
 
 ```text
-src/device/client_session_control/
+src/mist/resources/device/client_session_control/
 ├── __init__.py
 ├── actions.py
 ├── audit.py
@@ -97,7 +97,7 @@ tests/unit/device/client_session_control/
 └── test_client_session_control_wiring.py
 ```
 
-**Structure Decision**: Use a nested package at `src/device/client_session_control/` because the specification requires that package.
+**Structure Decision**: Use a nested package at `src/mist/resources/device/client_session_control/` because the specification requires that package.
 Keep the package at five direct files.
 Put unit tests under `tests/unit/device/client_session_control/`.
 Defer repository registration to `specs/3566-client-coa-disconnect/wiring.md`.
@@ -106,7 +106,7 @@ Defer repository registration to `specs/3566-client-coa-disconnect/wiring.md`.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | - | - | - |
-| Add `src/device/client_session_control/` under noncompliant `src/device/` | The feature specification and user input require this exact package. | A different package would violate FR-016 and the current user contract. A loose file under `src/device/` would add less structure and more debt. |
+| Add `src/mist/resources/device/client_session_control/` under noncompliant `src/mist/resources/device/` | The feature specification and user input require this exact package. | A different package would violate FR-016 and the current user contract. A loose file under `src/mist/resources/device/` would add less structure and more debt. |
 | Deferred repository wiring | The current step is limited to `specs/3566-client-coa-disconnect/**`. | Editing `MistHelper.py` or registry files now would violate the fleet contract. |
 | Deferred README and primary-key strategy handling | The operation is destructive control, not data export or data collection, and the user explicitly forbids these hot-file edits in this branch. | The integration pull request will own registration, menu documentation, and any primary-key strategy N/A record or registry policy update that reviewers require. |
 | Phase checkpoint commits | The fleet contract for issue #3566 explicitly requires a commit after each completed task group. | A single end-only commit would violate the issue-specific instruction for this worktree. |

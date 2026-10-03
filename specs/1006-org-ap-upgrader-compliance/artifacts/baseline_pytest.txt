@@ -12,7 +12,7 @@ collecting ... collected 2944 items / 29 errors / 2834 deselected / 110 selected
   <Package tests>
     <Package unit>
       <Module test_org_ap_upgrader.py>
-        Tests for src.firmware.org_ap_upgrader -- OrgLevelAPFirmwareUpgrader.
+        Tests for src.operations.execution.firmware.org_ap_upgrader -- OrgLevelAPFirmwareUpgrader.
         
         Covers: initialization, MSP mode selection, MSP/org selection, site scope,
         AP discovery, firmware stats, version selection, upgrade configuration,
@@ -192,12 +192,12 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_multi_ap_scan_workflow.py:7: in <module>
-    from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -216,12 +216,12 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_org_pcap_wait_download_workflow.py:7: in <module>
-    from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -240,12 +240,12 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_packet_capture_download.py:11: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -264,12 +264,12 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_packet_capture_manager.py:9: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -288,12 +288,12 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_site_pcap_wait_download_workflow.py:7: in <module>
-    from src.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -312,8 +312,8 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\gateway\test_device_template_cloner.py:13: in <module>
-    from src.gateway.device_template_cloner import (
-src\gateway\device_template_cloner.py:11: in <module>
+    from src.mist.resources.gateway.device_template_cloner import (
+src\mist\resources\gateway\device_template_cloner.py:11: in <module>
     import mistapi.api.v1.orgs.gatewaytemplates  # Create/list org gateway templates
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -342,11 +342,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_address_corrector.py:10: in <module>
-    from src.site.address_audit import address_corrector as corr_mod
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit import address_corrector as corr_mod
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -375,11 +375,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_address_resolver.py:5: in <module>
-    from src.site.address_audit import address_resolver as resolver_mod
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit import address_resolver as resolver_mod
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -408,11 +408,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_audit_engine.py:5: in <module>
-    from src.site.address_audit import audit_engine as eng_mod
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit import audit_engine as eng_mod
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -441,11 +441,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_audit_reporter.py:7: in <module>
-    from src.site.address_audit.audit_reporter import AddressAuditReporter
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit.audit_reporter import AddressAuditReporter
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -474,11 +474,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_business_authority_ingester.py:5: in <module>
-    from src.site.address_audit.business_authority_ingester import BusinessAuthorityIngester
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit.business_authority_ingester import BusinessAuthorityIngester
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -507,11 +507,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_comparison_display.py:3: in <module>
-    from src.site.address_audit import comparison_display as display_mod
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit import comparison_display as display_mod
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -540,11 +540,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_csv_ingester.py:5: in <module>
-    from src.site.address_audit.csv_ingester import CSVAddressIngester
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit.csv_ingester import CSVAddressIngester
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -573,11 +573,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_perf.py:5: in <module>
-    from src.site.address_audit.perf import PhaseTimer
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit.perf import PhaseTimer
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -606,11 +606,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_site_matcher.py:3: in <module>
-    from src.site.address_audit import site_matcher as matcher_mod
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit import site_matcher as matcher_mod
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -639,11 +639,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_snmp_enricher.py:3: in <module>
-    from src.site.address_audit.snmp_enricher import SNMPLocationEnricher
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit.snmp_enricher import SNMPLocationEnricher
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -672,11 +672,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_suite_patterns.py:5: in <module>
-    from src.site.address_audit.suite_patterns import (
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit.suite_patterns import (
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -705,11 +705,11 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\site\address_audit\test_ui_geocoder.py:16: in <module>
-    from src.site.address_audit import MistUIGeocoder, ResolverResult, UIGeocoderConfig
-src\site\address_audit\__init__.py:14: in <module>
-    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    from src.mist.resources.site.address_audit import MistUIGeocoder, ResolverResult, UIGeocoderConfig
+src\mist\resources\site\address_audit\__init__.py:14: in <module>
+    from src.mist.resources.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\site\address_audit\address_corrector.py:24: in <module>
+src\mist\resources\site\address_audit\address_corrector.py:24: in <module>
     import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
     ^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
@@ -738,9 +738,9 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\test_api_tenant_fetch.py:7: in <module>
-    from src.api.tenant_fetch import APITenantFetchUtils  # Class under test
+    from src.mist.access.api.tenant_fetch import APITenantFetchUtils  # Class under test
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\api\tenant_fetch.py:15: in <module>
+src\mist\access\api\tenant_fetch.py:15: in <module>
     import mistapi.api.v1.orgs.gatewaytemplates
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
     from mistapi.__api_session import APISession as APISession
@@ -771,12 +771,12 @@ tests\unit\test_multi_ap_scan_workflow.py:3: in <module>
     from tests.unit.capture.test_multi_ap_scan_workflow import *  # noqa: F401,F403
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_multi_ap_scan_workflow.py:7: in <module>
-    from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -798,12 +798,12 @@ tests\unit\test_org_pcap_wait_download.py:3: in <module>
     from tests.unit.capture.test_org_pcap_wait_download_workflow import *  # noqa: F401,F403
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_org_pcap_wait_download_workflow.py:7: in <module>
-    from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -822,12 +822,12 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\test_packet_capture.py:9: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -846,9 +846,9 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\test_prompt_network_device_utils.py:16: in <module>
-    from src.device.prompt_utils import PromptNetworkDeviceUtils  # Class under test
+    from src.mist.resources.device.prompt_utils import PromptNetworkDeviceUtils  # Class under test
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\device\prompt_utils.py:19: in <module>
+src\mist\resources\device\prompt_utils.py:19: in <module>
     import mistapi.api.v1.sites.devices  # Mist Sites Devices API for listing APs/gateways/switches
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 E   ModuleNotFoundError: No module named 'mistapi.api'; 'mistapi' is not a package
@@ -860,8 +860,8 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\test_routing_utils.py:25: in <module>
-    from src.network.routing_utils import RoutingTableContext, RoutingUtils, SsrRouteContext
-src\network\routing_utils.py:25: in <module>
+    from src.mist.networking.network.routing_utils import RoutingTableContext, RoutingUtils, SsrRouteContext
+src\mist\networking\network\routing_utils.py:25: in <module>
     import requests
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
     from .exceptions import RequestsDependencyWarning
@@ -882,12 +882,12 @@ tests\unit\test_site_pcap_wait_download.py:3: in <module>
     from tests.unit.capture.test_site_pcap_wait_download_workflow import *  # noqa: F401,F403
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\capture\test_site_pcap_wait_download_workflow.py:7: in <module>
-    from src.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
-src\capture\__init__.py:3: in <module>
-    from src.capture.packet_capture import PacketCaptureManager
-src\capture\packet_capture.py:12: in <module>
-    from src.capture.packet_capture_download import PacketCaptureDownloadManager
-src\capture\packet_capture_download.py:12: in <module>
+    from src.operations.execution.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
+src\operations\execution\capture\__init__.py:3: in <module>
+    from src.operations.execution.capture.packet_capture import PacketCaptureManager
+src\operations\execution\capture\packet_capture.py:12: in <module>
+    from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+src\operations\execution\capture\packet_capture_download.py:12: in <module>
     import requests  # Download PCAP binaries from Mist-provided URLs.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -907,7 +907,7 @@ Traceback:
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 C:\Users\jmorrison\OneDrive - Juniper Networks, Inc\Code\MistHelper\tests\unit\test_wan_hub_group_manager.py:14: in <module>
     ???
-src\wan_hub_group_manager.py:21: in <module>
+src\operations\wan\wan_hub_group_manager.py:21: in <module>
     import mistapi.api.v1.orgs.deviceprofiles
 E   ModuleNotFoundError: No module named 'mistapi.api'; 'mistapi' is not a package
 _____________ ERROR collecting tests/unit/test_wan_vpn_builder.py _____________
@@ -919,7 +919,7 @@ Traceback:
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 C:\Users\jmorrison\OneDrive - Juniper Networks, Inc\Code\MistHelper\tests\unit\test_wan_vpn_builder.py:15: in <module>
     ???
-src\wan_vpn_builder.py:21: in <module>
+src\operations\wan\wan_vpn_builder.py:21: in <module>
     import mistapi.api.v1.orgs.deviceprofiles
 E   ModuleNotFoundError: No module named 'mistapi.api'; 'mistapi' is not a package
 ____ ERROR collecting tests/unit/websocket/test_service_ping_discovery.py _____
@@ -930,10 +930,10 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\websocket\test_service_ping_discovery.py:8: in <module>
-    from src.websocket.service_ping_discovery import (
-src\websocket\__init__.py:3: in <module>
-    from src.websocket.commands import MacTableCommand
-src\websocket\commands.py:9: in <module>
+    from src.mist.realtime.websocket.service_ping_discovery import (
+src\mist\realtime\websocket\__init__.py:3: in <module>
+    from src.mist.realtime.websocket.commands import MacTableCommand
+src\mist\realtime\websocket\commands.py:9: in <module>
     import requests  # HTTP client for Mist REST API used to trigger the show_mac_table RPC.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
@@ -952,10 +952,10 @@ Traceback:
     return _bootstrap._gcd_import(name[level:], package, level)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 tests\unit\websocket\test_service_ping_manager.py:9: in <module>
-    from src.websocket.service_ping_manager import ServicePingManager, configure_service_ping_manager_dependencies
-src\websocket\__init__.py:3: in <module>
-    from src.websocket.commands import MacTableCommand
-src\websocket\commands.py:9: in <module>
+    from src.mist.realtime.websocket.service_ping_manager import ServicePingManager, configure_service_ping_manager_dependencies
+src\mist\realtime\websocket\__init__.py:3: in <module>
+    from src.mist.realtime.websocket.commands import MacTableCommand
+src\mist\realtime\websocket\commands.py:9: in <module>
     import requests  # HTTP client for Mist REST API used to trigger the show_mac_table RPC.
     ^^^^^^^^^^^^^^^
 ..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>

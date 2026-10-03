@@ -2,7 +2,7 @@
 
 import time
 
-from src.site.address_audit.perf import PhaseTimer
+from src.mist.resources.site.address_audit.perf import PhaseTimer
 
 
 class TestPhaseTimer:

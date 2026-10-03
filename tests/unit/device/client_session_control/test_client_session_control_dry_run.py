@@ -3,8 +3,11 @@
 from dataclasses import dataclass, field  # WHY: fakes keep test state explicit.
 from typing import Any  # WHY: fake API signature accepts a broad session object.
 
-from src.device.client_session_control import handler  # WHY: monkeypatch the default site prompt path.
-from src.device.client_session_control.handler import ClientSessionControl, HandlerDependencies  # WHY: exercise run().
+from src.mist.resources.device.client_session_control import handler  # WHY: monkeypatch the default site prompt path.
+from src.mist.resources.device.client_session_control.handler import (
+    ClientSessionControl,
+    HandlerDependencies,
+)  # WHY: exercise run().
 
 
 @dataclass

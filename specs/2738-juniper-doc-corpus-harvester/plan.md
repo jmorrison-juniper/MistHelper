@@ -19,7 +19,7 @@ writes a folder tree by category and a manifest.
 
 The technical approach reuses four proven classes. The plan promotes
 `JvdCatalogClient`, `JvdPdfResolver`, and `JvdDownloader` from `scripts/crawl_jvd.py`
-into a new package `src/juniper_docs/`. The plan promotes `ReleaseNoteSelector` from
+into a new package `src/mist/intelligence/juniper_docs/`. The plan promotes `ReleaseNoteSelector` from
 `scripts/jvd_doc_selector.py` into the same package. The new feature classes extend
 these base classes rather than rewrite them. A dedicated SQLite store under
 `data/juniper_corpus/` holds the durable, resumable per-document state and the
@@ -90,7 +90,7 @@ filter keeps 822 notes and drops 151 on the current corpus.
 
 | Principle | Status | Evidence in this plan |
 |-----------|--------|-----------------------|
-| I. Five-Item Rule | PASS with recorded debt | The new package `src/juniper_docs/` holds 5 real children. Each nested package holds 5 or fewer real children. Every function stays within the parameter, block, and line limits. The one new top-level child under the already-noncompliant `src/` parent is recorded in Complexity Tracking with a separate remediation action. |
+| I. Five-Item Rule | PASS with recorded debt | The new package `src/mist/intelligence/juniper_docs/` holds 5 real children. Each nested package holds 5 or fewer real children. Every function stays within the parameter, block, and line limits. The one new top-level child under the already-noncompliant `src/` parent is recorded in Complexity Tracking with a separate remediation action. |
 | II. Class-Based Architecture (No Wrappers) | PASS | Every unit is a semantically named class. The entry script builds one runner and calls it. No standalone wrapper function delegates to a class method. Variable names use full words. |
 | III. Safety-First | PASS | The tool runs without interactive prompts. The tool validates each URL, sanitizes each file name, and fails closed on a locked or damaged store. No credential is read or logged. |
 | IV. Full Deployment Pipeline | DEFERRED to implement | The pipeline runs at implement time, not at plan time. The tasks phase adds the gate, commit, rebase, pull request, and container steps. |
@@ -106,7 +106,7 @@ No gate fails. No unresolved clarification remains. The three spec clarification
 already recorded in the spec.
 
 **Post-design re-evaluation (after Phase 1)**: The concrete package tree confirms the
-gates. `src/juniper_docs/` holds 5 real children. `acquire/` holds 4, `discovery/`
+gates. `src/mist/intelligence/juniper_docs/` holds 5 real children. `acquire/` holds 4, `discovery/`
 and `harvest/` each hold 3, and `classify/` holds 4. Every planned class maps to one function
 scope that stays within the 5-parameter, 5-block, 25-line limits. The content record
 has no text field, so the privacy invariant holds by structure. The Constitution Check
@@ -134,11 +134,11 @@ specs/2738-juniper-doc-corpus-harvester/
 
 The new feature package holds exactly 5 real children. Dunder files such as
 `__init__.py` and `__pycache__` do not count toward the five, which matches the
-established `src/db/` package pattern. Each nested package also holds 5 or fewer real
+established `src/foundation/persistence/db/` package pattern. Each nested package also holds 5 or fewer real
 children.
 
 ```text
-src/juniper_docs/                 # New feature package (one new child of src/)
+src/mist/intelligence/juniper_docs/                 # New feature package (one new child of src/)
 ├── __init__.py                   # Package marker (exempt from the count)
 ├── models.py                     # Shared dataclasses and the HarvestStage enum
 ├── discovery/                    # Inventory build and release-note filter
@@ -165,9 +165,9 @@ src/juniper_docs/                 # New feature package (one new child of src/)
     └── runner.py                 # HarvestRunner: end-to-end orchestration + progress
 
 scripts/crawl_jvd.py              # Keeps JvdCatalogWalker and JvdCrawlRunner.
-                                  # Imports the promoted base classes from src/juniper_docs/acquire.
+                                  # Imports the promoted base classes from src/mist/intelligence/juniper_docs/acquire.
 scripts/jvd_doc_selector.py       # Thin: re-exports nothing; imports ReleaseNoteSelector
-                                  # from src/juniper_docs/discovery for any legacy caller.
+                                  # from src/mist/intelligence/juniper_docs/discovery for any legacy caller.
 
 tests/unit/juniper_docs/          # Unit tests with mocked HTTP and PDF fixtures
 ├── test_sitemap_reader.py
@@ -182,7 +182,7 @@ tests/unit/juniper_docs/          # Unit tests with mocked HTTP and PDF fixtures
 └── test_runner.py
 ```
 
-**Structure Decision**: The feature lives in one new package, `src/juniper_docs/`.
+**Structure Decision**: The feature lives in one new package, `src/mist/intelligence/juniper_docs/`.
 The package groups the work into five cohesive children: `models.py`, `discovery/`,
 `acquire/`, `classify/`, and `harvest/`. The promoted base classes move into
 `acquire/` and `discovery/`. `scripts/crawl_jvd.py` keeps only the validated-designs

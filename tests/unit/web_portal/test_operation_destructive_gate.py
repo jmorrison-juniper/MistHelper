@@ -1,7 +1,7 @@
 """Security tests for the web portal destructive operation gate.
 
 `OperationExecutor` decided whether the portal may run an operation with a
-hardcoded number. `src/utils/operation_registry.py` holds the safety category
+hardcoded number. `src/foundation/support/utils/operation_registry.py` holds the safety category
 for every operation, and the project documents that registry as the single
 source of truth.
 
@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
+from src.foundation.support.utils.operation_registry import OperationRegistry
 from web_portal.services.operation import OperationExecutor
 
 

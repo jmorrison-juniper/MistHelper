@@ -127,13 +127,13 @@ documented sort key.
 
 **Decision**: Two-part rule from FR-002:
 1. Test file imports `mistapi` at module scope, OR
-2. Test file's inferred subject-under-test (SUT) resides under `src/api/`.
+2. Test file's inferred subject-under-test (SUT) resides under `src/mist/access/api/`.
 
 SUT inference algorithm:
 - Walk imports in the test file.
 - Collect all `from src.X import ...` and `import src.X` names.
-- If any resolves to a module under `src/api/`, the test is excluded.
-- If none resolve to `src/api/` but `mistapi` is imported, the test is excluded.
+- If any resolves to a module under `src/mist/access/api/`, the test is excluded.
+- If none resolve to `src/mist/access/api/` but `mistapi` is imported, the test is excluded.
 - Otherwise the test is analyzed.
 
 The predicate is implemented as a class (`MistApiExcluder`) with the two rules
@@ -144,7 +144,7 @@ live under `[exclusions]` in `config.toml` (Clarification Q5).
 **Rationale**:
 - Precisely matches Clarification Q2 (from the source spec) about which surface
   the engine must not audit.
-- Configurable, so a future refactor that renames `src/api/` does not require
+- Configurable, so a future refactor that renames `src/mist/access/api/` does not require
   code edits (Assumption 1 in spec.md).
 
 **Alternatives considered**:
@@ -229,8 +229,8 @@ tests that are mostly good but have one weak line.
 
 **Decision**: The golden set (SC-002) uses the three real findings called out
 in FR-016 as anchors:
-- `src/api/api_data_fetcher.py` — classified as untested. Note: this file lives
-  under `src/api/` which is on the exclusion list; the untested detector
+- `src/mist/access/api/api_data_fetcher.py` — classified as untested. Note: this file lives
+  under `src/mist/access/api/` which is on the exclusion list; the untested detector
   therefore also emits a `mist_api_excluded` skipped-file record, and the
   golden test asserts the presence of that skipped record rather than a
   finding on the file itself. This clarifies the interaction between FR-002

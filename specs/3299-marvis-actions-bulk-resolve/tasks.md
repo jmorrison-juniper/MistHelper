@@ -10,18 +10,18 @@ in the same phase, because the two tasks touch no common file.
 ## Phase 1: Foundation
 
 - [x] **T001** Add the strategies `listOrgMarvisActions` and
-  `resolveOrgMarvisActions` to `src/refactors/endpoint_primary_key_strategies.py`.
+  `resolveOrgMarvisActions` to `src/foundation/support/refactors/endpoint_primary_key_strategies.py`.
   Use `natural_pk` on `uuid` and on `result_id`, with the indexes from the plan.
   The constitution requires this entry before any code writes a row. Satisfies
   FR-014 and FR-029.
 
-- [x] **T002** Create the package `src/marvis/actions/` with an `__init__.py` that
+- [x] **T002** Create the package `src/mist/intelligence/marvis/actions/` with an `__init__.py` that
   exports `MarvisActionsOperation` and `MarvisCatalog`. Create
   `tests/unit/marvis/__init__.py` and `tests/unit/marvis/actions/__init__.py`.
 
 ## Phase 2: User Story 1 -- the report (P1)
 
-- [x] **T003** Write `src/marvis/actions/model.py`. Define the status, category,
+- [x] **T003** Write `src/mist/intelligence/marvis/actions/model.py`. Define the status, category,
   topic, and resolution code catalogs, `ResolutionCode`, `MarvisCatalog`,
   `MarvisFieldReader`, `MarvisActionRecord` with the 43 columns, and
   `MarvisActionRecordBuilder`. Satisfies FR-006, FR-015, and FR-016.
@@ -31,7 +31,7 @@ in the same phase, because the two tasks touch no common file.
   readers. Also cover the entity key order for AP Offline, the derived key, and the
   document shape.
 
-- [x] **T005** Write `src/marvis/actions/client.py`. Define `MarvisListResult` and
+- [x] **T005** Write `src/mist/intelligence/marvis/actions/client.py`. Define `MarvisListResult` and
   `MarvisActionsClient` with `list_actions`, `read_schema`, `read_site_names`, and
   `resolve_action`. Satisfies FR-004 to FR-007 and FR-023.
 
@@ -42,7 +42,7 @@ in the same phase, because the two tasks touch no common file.
 
 ## Phase 3: User Story 2 -- the filters (P2)
 
-- [x] **T007** Write `src/marvis/actions/selection.py`. Define `MarvisTopicCount`,
+- [x] **T007** Write `src/mist/intelligence/marvis/actions/selection.py`. Define `MarvisTopicCount`,
   `MarvisTopicSelector`, `MarvisFilterPrompts`, `MarvisResolveRequest`, and
   `MarvisResolvePrompts`. Satisfies FR-008 to FR-012 and FR-019 to FR-022.
 
@@ -53,7 +53,7 @@ in the same phase, because the two tasks touch no common file.
 
 ## Phase 4: User Story 3 -- the bulk resolve (P3)
 
-- [x] **T009** Write `src/marvis/actions/operation.py`. Define
+- [x] **T009** Write `src/mist/intelligence/marvis/actions/operation.py`. Define
   `MarvisResolveResult`, `MarvisBulkResolver`, `MarvisLoadedActions`,
   `MarvisResolveWorkflow`, and `MarvisActionsOperation`. Satisfies FR-003, FR-013,
   FR-017, FR-018, and FR-024 to FR-030.
@@ -70,7 +70,7 @@ in the same phase, because the two tasks touch no common file.
 
 ## Phase 5: User Story 4 -- the menu and the portal (P4)
 
-- [x] **T012** Add row `"270"` to `src/utils/operation_registry.py` as
+- [x] **T012** Add row `"270"` to `src/foundation/support/utils/operation_registry.py` as
   `interactive_safe`, with the WHY comment. Satisfies FR-001 and FR-002.
 
 - [x] **T013** Add the import and the `MenuEntry` row for 270 to `MistHelper.py`.
@@ -145,7 +145,7 @@ in the same phase, because the two tasks touch no common file.
 
 - [x] **T030** Name the real output target. The `--output-format sqlite` run writes
   no CSV file, so the log lines must name the SQLite table and the database path.
-  Add `MarvisOutputTarget` to `src/marvis/actions/operation.py` and four tests to
+  Add `MarvisOutputTarget` to `src/mist/intelligence/marvis/actions/operation.py` and four tests to
   `tests/unit/marvis/actions/test_operation.py`. Keep the CSV text unchanged,
   because the portal reads the file name from that line.
 

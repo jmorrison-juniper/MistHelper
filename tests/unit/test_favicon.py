@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from flask import Flask
 
-from src.upgrade_portal.app import factory
+from src.interfaces.portals.upgrade_portal.app import factory
 from web_portal.app import WebPortalApp
 from web_portal.menu_registry import build_static_menu_actions
 

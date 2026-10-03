@@ -164,7 +164,7 @@ The work changes three files. It creates no source file and deletes no source fi
 CHANGELOG.md                      # One entry under ## [Unreleased]
 ```
 
-**Structure Decision**: this feature edits CI configuration in place. It introduces no directory and no module. The `src/` tree stays untouched, because non-goal NG-009 forbids a refactor of `src/maps`, `src/ssh`, and `src/ui`.
+**Structure Decision**: this feature edits CI configuration in place. It introduces no directory and no module. The `src/` tree stays untouched, because non-goal NG-009 forbids a refactor of `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui`.
 
 ## Execution Phases
 

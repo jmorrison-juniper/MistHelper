@@ -15,22 +15,22 @@
 
 | # | File | Line | Naming Layer | Change Detail |
 |---|------|------|--------------|---------------|
-| 1 | `src/export/site_export_utils.py` | 32 | Module-level slot declaration | `is_debug_mode_fn = None` (or similar init) -> `check_fn = None` |
-| 2 | `src/export/site_export_utils.py` | 52 | Dataclass field or `global` list | Rename in place |
-| 3 | `src/export/site_export_utils.py` | 64 | Assignment LHS or RHS | Rename both sides where applicable |
-| 4 | `src/export/site_export_utils.py` | 76 | Assignment LHS or RHS | Rename both sides where applicable |
-| 5 | `src/export/site_export_utils.py` | 337 | Function-body reference | Rename in place |
+| 1 | `src/operations/exporting/export/site_export_utils.py` | 32 | Module-level slot declaration | `is_debug_mode_fn = None` (or similar init) -> `check_fn = None` |
+| 2 | `src/operations/exporting/export/site_export_utils.py` | 52 | Dataclass field or `global` list | Rename in place |
+| 3 | `src/operations/exporting/export/site_export_utils.py` | 64 | Assignment LHS or RHS | Rename both sides where applicable |
+| 4 | `src/operations/exporting/export/site_export_utils.py` | 76 | Assignment LHS or RHS | Rename both sides where applicable |
+| 5 | `src/operations/exporting/export/site_export_utils.py` | 337 | Function-body reference | Rename in place |
 | 6 | `MistHelper.py` | 13372 | Kwarg key in wiring call | `is_debug_mode_fn=<callable>` -> `check_fn=IsDebugMode.check` |
 
 ### Rename B: `connection_pool_fn` -> `execute_fn` (Action 3 — 6 occurrences)
 
 | # | File | Line | Naming Layer | Change Detail |
 |---|------|------|--------------|---------------|
-| 1 | `src/gateway/overrides/_deps.py` | 18 | Module-level slot declaration | Rename in place |
-| 2 | `src/gateway/overrides/_deps.py` | 33 | Dataclass field or global list | Rename in place |
-| 3 | `src/gateway/overrides/_deps.py` | 41 | Assignment LHS/RHS | Rename in place |
-| 4 | `src/gateway/overrides/_deps.py` | 49 | Assignment LHS/RHS | Rename in place |
-| 5 | `src/gateway/overrides/device_data_fetcher.py` | 40 | Function-body reference or dataclass field | Rename in place |
+| 1 | `src/mist/resources/gateway/overrides/_deps.py` | 18 | Module-level slot declaration | Rename in place |
+| 2 | `src/mist/resources/gateway/overrides/_deps.py` | 33 | Dataclass field or global list | Rename in place |
+| 3 | `src/mist/resources/gateway/overrides/_deps.py` | 41 | Assignment LHS/RHS | Rename in place |
+| 4 | `src/mist/resources/gateway/overrides/_deps.py` | 49 | Assignment LHS/RHS | Rename in place |
+| 5 | `src/mist/resources/gateway/overrides/device_data_fetcher.py` | 40 | Function-body reference or dataclass field | Rename in place |
 | 6 | `MistHelper.py` | 15564 | Kwarg key in wiring call | `connection_pool_fn=<callable>` -> `execute_fn=ConnectionPoolExecutor.execute` |
 
 ## The Five Naming Layers (Reference)
@@ -72,7 +72,7 @@ The pinned NOTE template at each rename site names the wiring-source callable an
 # NOTE: renamed from execute_with_connection_pool_management; wiring source ConnectionPoolExecutor.execute at MistHelper.py:15564.
 ```
 
-Only ONE such NOTE lands per DI cluster — at the module-level slot declaration (Rename A: `src/export/site_export_utils.py:32`; Rename B: `src/gateway/overrides/_deps.py:18`). The other rename occurrences (dataclass fields, global lists, LHS/RHS assignments, kwarg keys, cross-module references) are renamed in place WITHOUT additional NOTE breadcrumbs. The canonical NOTE at the module-level slot is the sole grep-discoverable audit trail for the cluster.
+Only ONE such NOTE lands per DI cluster — at the module-level slot declaration (Rename A: `src/operations/exporting/export/site_export_utils.py:32`; Rename B: `src/mist/resources/gateway/overrides/_deps.py:18`). The other rename occurrences (dataclass fields, global lists, LHS/RHS assignments, kwarg keys, cross-module references) are renamed in place WITHOUT additional NOTE breadcrumbs. The canonical NOTE at the module-level slot is the sole grep-discoverable audit trail for the cluster.
 
 ## Non-Contracts
 

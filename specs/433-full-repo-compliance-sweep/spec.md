@@ -14,8 +14,8 @@
 Drive 4 specific compliance debts to zero / passing scores:
 
 1. **Target A** -- `src/` G-rule violations: **789 -> 0**, remove the `src/**` per-file-ignore from `pyproject.toml`.
-2. **Target B** -- `src/firmware/site_auto_upgrade.py` score: **27/F -> >=70/C-**.
-3. **Target C** -- `src/maps/maps_manager.py` score: **40/F -> >=70/C-**.
+2. **Target B** -- `src/operations/execution/firmware/site_auto_upgrade.py` score: **27/F -> >=70/C-**.
+3. **Target C** -- `src/interfaces/visualization/maps/maps_manager.py` score: **40/F -> >=70/C-**.
 4. **Target D** -- 5 critical-severity STRUCT-COMPLEXITY violations across the repo: **5 -> 0**.
 
 ### Non-goals
@@ -34,7 +34,7 @@ As an operator running MistHelper at INFO/WARN/ERROR level in production, I need
 
 ### User Story 2 -- Maintainable worst-file decomposition (Priority: P1)
 
-As a maintainer touching `src/firmware/site_auto_upgrade.py` (worst-scored file in the repo) or `src/maps/maps_manager.py` (largest file in the repo, 6,387 lines), I need the file decomposed into smaller, single-responsibility classes so changes are reviewable.
+As a maintainer touching `src/operations/execution/firmware/site_auto_upgrade.py` (worst-scored file in the repo) or `src/interfaces/visualization/maps/maps_manager.py` (largest file in the repo, 6,387 lines), I need the file decomposed into smaller, single-responsibility classes so changes are reviewable.
 
 **Independent Test**: each file scores >= 70/C- under `python tools/check_compliance.py <path>`.
 
@@ -57,8 +57,8 @@ As a release engineer signing off on a quality gate, I need zero functions whose
 
 - **FR-001**: After Phase A, `python -m ruff check --select G003,G004,G201 src/` MUST report 0 violations.
 - **FR-002**: After Phase A, `pyproject.toml` `[tool.ruff.lint] per-file-ignores` MUST NOT contain `"G"` for `src/**`, `web_portal/**`, `tools/**`, `starlink_dashboard.py`, `maps_manager.py`, or `wsgi.py`.
-- **FR-003**: After Phase B, `tools/check_compliance.py src/firmware/site_auto_upgrade.py` score >= 70/C-.
-- **FR-004**: After Phase C, `tools/check_compliance.py src/maps/maps_manager.py` score >= 70/C-.
+- **FR-003**: After Phase B, `tools/check_compliance.py src/operations/execution/firmware/site_auto_upgrade.py` score >= 70/C-.
+- **FR-004**: After Phase C, `tools/check_compliance.py src/interfaces/visualization/maps/maps_manager.py` score >= 70/C-.
 - **FR-005**: After Phase D, `tools/check_compliance.py --recursive .` reports `"critical": 0`.
 - **FR-006**: All existing pytest suites pass on every phase commit.
 - **FR-007**: Coverage stays >= 70% on every phase commit.
@@ -114,8 +114,8 @@ As a release engineer signing off on a quality gate, I need zero functions whose
 
 1. `ruff check --select G003,G004,G201 src/` reports 0.
 2. `pyproject.toml` `per-file-ignores` no longer contains G-suppressions.
-3. `tools/check_compliance.py src/firmware/site_auto_upgrade.py` score >= 70.
-4. `tools/check_compliance.py src/maps/maps_manager.py` score >= 70.
+3. `tools/check_compliance.py src/operations/execution/firmware/site_auto_upgrade.py` score >= 70.
+4. `tools/check_compliance.py src/interfaces/visualization/maps/maps_manager.py` score >= 70.
 5. `tools/check_compliance.py --recursive .` reports `"critical": 0`.
 6. All CI quality gates pass.
 7. Coverage >= 70%.
@@ -133,13 +133,13 @@ As a release engineer signing off on a quality gate, I need zero functions whose
 ### Phase B -- site_auto_upgrade.py decomposition
 
 - Current: 1,285 lines, 64 violations, score 27/F.
-- Pattern: split into orchestration vs. data-fetch vs. reporting service classes under `src/firmware/site_auto_upgrade/` (move file to a package with sibling modules).
-- Reference: spec #195's serial-cc decomposition pattern (`src/refactors/serial_cc/*` extractions).
+- Pattern: split into orchestration vs. data-fetch vs. reporting service classes under `src/operations/execution/firmware/site_auto_upgrade/` (move file to a package with sibling modules).
+- Reference: spec #195's serial-cc decomposition pattern (`src/foundation/support/refactors/serial_cc/*` extractions).
 
 ### Phase C -- maps_manager.py decomposition
 
 - Current: 6,387 lines, 347 violations, score 40/F, contains CC 77 (`get_map_data`) and CC 92 (`_launch_flask_viewer` in sibling `viewer_callbacks.py`).
-- Approach: split into 4-5 sub-packages: `src/maps/dash_app/` (UI), `src/maps/data/` (fetching/processing), `src/maps/import_export/` (file IO), `src/maps/server/` (Flask + viewer launching).
+- Approach: split into 4-5 sub-packages: `src/interfaces/visualization/maps/dash_app/` (UI), `src/interfaces/visualization/maps/data/` (fetching/processing), `src/interfaces/visualization/maps/import_export/` (file IO), `src/interfaces/visualization/maps/server/` (Flask + viewer launching).
 - Note: Dash callback decorators stay attached to thin entry points; bodies move into service classes.
 
 ### Phase D -- remaining critical hotspots
@@ -147,7 +147,7 @@ As a release engineer signing off on a quality gate, I need zero functions whose
 After Phase C the maps-related criticals (CC 92, 77, 24) should fall out. That leaves:
 
 - `tools/compliance_analyzer/audit::audit` (CC 30) -- the audit-log analyzer itself.
-- `src/firmware/<...>::_process_one_batch` (CC 23) -- may be in `site_auto_upgrade.py` itself and fall out of Phase B.
+- `src/operations/execution/firmware/<...>::_process_one_batch` (CC 23) -- may be in `site_auto_upgrade.py` itself and fall out of Phase B.
 
 Each remaining hotspot gets standard guard-clause + helper-extraction treatment.
 

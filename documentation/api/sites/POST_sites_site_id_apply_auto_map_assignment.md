@@ -120,4 +120,4 @@ Common use cases:
 
 MistHelper does not currently call `applySiteAutoMapAssignment`.
 Verification source: `git grep -n "applySiteAutoMapAssignment" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.
+`src/operations/exporting/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

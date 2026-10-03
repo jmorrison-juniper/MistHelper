@@ -164,9 +164,9 @@ Run the repository structural analyzer against each changed Python package.
 Confirm these new packages:
 
 ```text
-src/upgrade_portal/api/run_controls/
-src/upgrade_portal/api/run_controls/services/
-src/upgrade_portal/persistence/actions/
+src/interfaces/portals/upgrade_portal/api/run_controls/
+src/interfaces/portals/upgrade_portal/api/run_controls/services/
+src/interfaces/portals/upgrade_portal/persistence/actions/
 tests/integration/upgrade_portal/run_controls/
 tests/support/upgrade_portal_e2e/
 tests/support/upgrade_portal_e2e/records/
@@ -179,9 +179,9 @@ Confirm these exact child budgets:
 
 | Package | Direct children |
 | - | -: |
-| `src/upgrade_portal/api/run_controls` | 5 |
-| `src/upgrade_portal/api/run_controls/services` | 5 |
-| `src/upgrade_portal/persistence/actions` | 5 |
+| `src/interfaces/portals/upgrade_portal/api/run_controls` | 5 |
+| `src/interfaces/portals/upgrade_portal/api/run_controls/services` | 5 |
+| `src/interfaces/portals/upgrade_portal/persistence/actions` | 5 |
 | `tests/unit/upgrade_portal/test_runs` | 5 |
 | `tests/contract/upgrade_portal/test_upgrade_routes` | 5 |
 | `tests/e2e/upgrade_portal/test_run_controls` | 5 |
@@ -193,11 +193,11 @@ Confirm these exact child budgets:
 Confirm that these existing files remain surgical integration points:
 
 ```text
-src/upgrade_portal/runtime/signals.py
-src/upgrade_portal/app/routes/review.py
-src/upgrade_portal/app/routes/upgrade.py
-src/upgrade_portal/app/factory.py
-src/upgrade_portal/app/wiring.py
+src/interfaces/portals/upgrade_portal/runtime/signals.py
+src/interfaces/portals/upgrade_portal/app/routes/review.py
+src/interfaces/portals/upgrade_portal/app/routes/upgrade.py
+src/interfaces/portals/upgrade_portal/app/factory.py
+src/interfaces/portals/upgrade_portal/app/wiring.py
 ```
 
 Confirm that no new direct child entered a grandfathered noncompliant parent.

@@ -14,17 +14,17 @@
 
 ## Phase 2. The firmware layer
 
-- [x] T006 Rename `_reboot_macs` to `reboot_macs` in `src/firmware/upgrade_service.py`.
+- [x] T006 Rename `_reboot_macs` to `reboot_macs` in `src/operations/execution/firmware/upgrade_service.py`.
 - [x] T007 Replace `_sort_cancel` with `sort_cancel(macs, writing, status)`. Update `cancel_upgrade`.
 - [x] T008 Update the comments that name `_sort_cancel` in `tests/support/rehearsal/cloud.py`.
-- [x] T009 Add `src/firmware/org_cancel_sort.py` with the classes `OrgRebootLists` and `OrgCancelSort`.
+- [x] T009 Add `src/operations/execution/firmware/org_cancel_sort.py` with the classes `OrgRebootLists` and `OrgCancelSort`.
 - [x] T010 Change `AggregateUpgradeService._cancel_org_child` to return `OrgCancelSort.result`.
 - [x] T011 Add the AP list assertion to `tests/unit/firmware/test_aggregate_upgrade_service.py`.
 - [x] T011a Add the sections for `reboot_macs` and `sort_cancel` to `specs/1823-upgrade-capture-portal/contracts/upgrade-service.md`.
 
 ## Phase 3. The view layer
 
-- [x] T012 Add `src/upgrade_portal/upgrade/org_cancel_outcomes.py` with the classes `OrgCancelLists` and `OrgCancelOutcomes`. Apply the rule of issue #3327 to a planned child job and to a rejected child job.
+- [x] T012 Add `src/interfaces/portals/upgrade_portal/upgrade/org_cancel_outcomes.py` with the classes `OrgCancelLists` and `OrgCancelOutcomes`. Apply the rule of issue #3327 to a planned child job and to a rejected child job.
 - [x] T013 Add `cancel_outcomes` to `_aggregate_record_view` in `org_upgrade.py`.
 - [x] T014 Add the `cancel=` part to `OrgControlsView.build`. Update the three signature assertions in `test_org_child_controls_routes.py`.
 - [x] T015 Replace the note with the Caution text in `org_progress.html`. Add the panel.

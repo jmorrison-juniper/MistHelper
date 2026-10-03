@@ -8,7 +8,9 @@ from pathlib import Path  # Build a portable per-test database path.
 
 import pytest  # Use pytest fixtures and exception assertions.
 
-from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # Import the writer under test.
+from src.foundation.support.refactors.sqlite_database_writer import (
+    SQLiteDatabaseWriter,
+)  # Import the writer under test.
 
 
 class _CommittedConnection:
@@ -48,7 +50,9 @@ def test_commit_and_verify_does_not_log_success_when_verification_fails(
 ) -> None:
     """A verification failure must not leave a misleading write-success claim."""
     writer = _writer_for_verification_failure(tmp_path)  # Create a writer with a failing verification cursor.
-    caplog.set_level(logging.DEBUG, logger="src.refactors.sqlite_database_writer")  # Capture module logs only.
+    caplog.set_level(
+        logging.DEBUG, logger="src.foundation.support.refactors.sqlite_database_writer"
+    )  # Capture module logs only.
     database_path = str(tmp_path / "mist_data.db")  # Compute the expected database path once for exact matches.
     intent_message = (  # Build the exact before-action message that must remain in the log.
         f"Committing 1/1 rows to table widgets in database {database_path} "

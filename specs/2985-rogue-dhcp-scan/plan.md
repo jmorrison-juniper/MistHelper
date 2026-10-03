@@ -93,7 +93,7 @@ proof that no Marvis action exists elsewhere.
 ### New source files
 
 ```text
-src/security/rogue_dhcp/
+src/operations/protection/security/rogue_dhcp/
 ├── __init__.py       # Public names: RogueDhcpScanOperation, RogueDhcpFinding
 ├── signals.py        # RogueDhcpSignalMatcher  -- FR-005 to FR-010
 ├── records.py        # RogueDhcpFinding, RogueDhcpRecordNormalizer -- FR-015 to FR-020
@@ -101,9 +101,9 @@ src/security/rogue_dhcp/
 └── operation.py      # RogueDhcpScanOperation -- FR-021 to FR-024, the menu entry point
 ```
 
-`src/security/` holds `credential_redaction.py` today. A rogue DHCP server is a
+`src/operations/protection/security/` holds `credential_redaction.py` today. A rogue DHCP server is a
 network security finding, so the package belongs there. After the change,
-`src/security/` holds three children, which respects the 5-Item Rule.
+`src/operations/protection/security/` holds three children, which respects the 5-Item Rule.
 
 ### New test files
 
@@ -125,8 +125,8 @@ tests/guardrails/
 | File | Change |
 | - | - |
 | `MistHelper.py` | One `menu_actions` row for `"269"`. |
-| `src/utils/operation_registry.py` | One entry `"269": {"category": "safe"}`. |
-| `src/refactors/endpoint_primary_key_strategies.py` | One strategy for `scanOrgRogueDhcpServers`. |
+| `src/foundation/support/utils/operation_registry.py` | One entry `"269": {"category": "safe"}`. |
+| `src/foundation/support/refactors/endpoint_primary_key_strategies.py` | One strategy for `scanOrgRogueDhcpServers`. |
 | `web_portal/services/operation.py` | One explicit allowlist that admits 269 past the numeric bound, plus one category range. |
 | `web_portal/menu_registry.py` | One static description row. |
 | `tests/unit/test_menu_entry_metadata.py` | The expected count rises from 268 to 269. |
@@ -222,7 +222,7 @@ and `marvis_scope_note`.
 
 Each API call passes `start` and `end` as epoch seconds and `limit=1000`. Paging
 uses `mistapi.get_all`, which the repository already uses in
-`src/api/api_core_fetch_utils.py`.
+`src/mist/access/api/api_core_fetch_utils.py`.
 
 ### RogueDhcpScanOperation (`operation.py`)
 
@@ -318,7 +318,7 @@ The result view needs no new template. The operation writes an output file, the
 run record reports it in `output_files`, and the existing data preview modal in
 `web_portal/templates/operations.html` renders the rows and exports the CSV file.
 
-The upgrade capture portal in `src/upgrade_portal/` receives no change, per
+The upgrade capture portal in `src/interfaces/portals/upgrade_portal/` receives no change, per
 FR-031.
 
 ## Test Strategy

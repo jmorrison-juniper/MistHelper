@@ -30,9 +30,9 @@ description: "Task list for [Spec 671] getSiteBeacon endpoint"
 
 **⚠️ CRITICAL**: Complete this phase before implementing user-story behavior.
 
-- [X] T004 Add `getSiteBeacon` entry to `ENDPOINT_PRIMARY_KEY_STRATEGIES` in `src/refactors/endpoint_primary_key_strategies.py`
-- [X] T005 Add operation-registry classification for the new menu option in `src/utils/operation_registry.py`
-- [X] T006 Add reusable site/beacon prompt-and-validation helper flow in `src/export/site_client_exporter.py`
+- [X] T004 Add `getSiteBeacon` entry to `ENDPOINT_PRIMARY_KEY_STRATEGIES` in `src/foundation/support/refactors/endpoint_primary_key_strategies.py`
+- [X] T005 Add operation-registry classification for the new menu option in `src/foundation/support/utils/operation_registry.py`
+- [X] T006 Add reusable site/beacon prompt-and-validation helper flow in `src/operations/exporting/export/site_client_exporter.py`
 
 **Checkpoint**: PK strategy, operation classification, and prompt/validation scaffolding are in place.
 
@@ -53,11 +53,11 @@ description: "Task list for [Spec 671] getSiteBeacon endpoint"
 
 ### Implementation for User Story 1
 
-- [X] T011 [US1] Implement `getSiteBeacon` export workflow (site/beacon prompts, logging, SDK call) in `src/export/site_client_exporter.py`
-- [X] T012 [US1] Wire `DataExporter.write_with_format_selection(..., api_function_name="getSiteBeacon")` and deterministic filename logic in `src/export/site_client_exporter.py`
+- [X] T011 [US1] Implement `getSiteBeacon` export workflow (site/beacon prompts, logging, SDK call) in `src/operations/exporting/export/site_client_exporter.py`
+- [X] T012 [US1] Wire `DataExporter.write_with_format_selection(..., api_function_name="getSiteBeacon")` and deterministic filename logic in `src/operations/exporting/export/site_client_exporter.py`
 - [X] T013 [US1] Register the new menu handler/label mapping in `MistHelper.py`
-- [X] T014 [US1] Ensure adaptive retry/rate-limit behavior is applied to `getSiteBeacon` call path in `src/export/site_client_exporter.py`
-- [X] T015 [US1] Align interactive-safe routing for the new menu option in `src/utils/operation_registry.py`
+- [X] T014 [US1] Ensure adaptive retry/rate-limit behavior is applied to `getSiteBeacon` call path in `src/operations/exporting/export/site_client_exporter.py`
+- [X] T015 [US1] Align interactive-safe routing for the new menu option in `src/foundation/support/utils/operation_registry.py`
 
 **Checkpoint**: US1 is end-to-end functional and independently testable.
 

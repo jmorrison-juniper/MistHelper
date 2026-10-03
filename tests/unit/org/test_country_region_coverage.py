@@ -26,7 +26,7 @@ import logging  # Constitution VII observability requirement
 import re  # regex compile for the shape invariant (2-letter upper-case ASCII)
 from pathlib import Path  # absolute-path fixture resolution rooted at this file
 
-from src.org.org_synthetic_probes_manager import (  # module under test
+from src.mist.resources.org.org_synthetic_probes_manager import (  # module under test
     _COUNTRY_CODE_INTENTIONAL_GAPS,  # frozenset of deliberately-omitted codes
     _COUNTRY_CODE_TO_REGION,  # dict of code -> region literal
 )

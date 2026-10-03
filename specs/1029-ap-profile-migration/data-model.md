@@ -187,8 +187,8 @@ distinct `event_type` to the existing MistHelper telemetry stream.
 |------|----------|----------|
 | NEW file (runtime) | one per migration | `data/ap-profile-migration_*.json` |
 | APPENDED lines (runtime) | one per revert | existing JSONL via `TelemetryEmitter` |
-| NEW committed code | `class APProfileMigrationManager` | `src/device/ap_profile_migration_manager.py` |
-| MODIFIED committed code | Two new destructive entries | `src/utils/operation_registry.py` |
+| NEW committed code | `class APProfileMigrationManager` | `src/mist/resources/device/ap_profile_migration_manager.py` |
+| MODIFIED committed code | Two new destructive entries | `src/foundation/support/utils/operation_registry.py` |
 | MODIFIED committed code | Menu dispatch for 207 and 208 | `MistHelper.py` |
 | NEW committed tests | Unit tests for both handlers | `tests/unit/device/test_ap_profile_migration_manager.py` |
 

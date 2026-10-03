@@ -291,7 +291,7 @@ runs give the same result for each journey.
   `.github/workflows/ci.yml`. A new workflow file would add a child to a
   noncompliant directory.
 - **Pull request**: The job runs the smoke set, `M-ASG` and `S-ASG`. If the pull
-  request changes no file below `src/upgrade_portal/`, `src/firmware/`, or the
+  request changes no file below `src/interfaces/portals/upgrade_portal/`, `src/operations/execution/firmware/`, or the
   harness, the job ends with success and runs nothing.
 - **Manual run**: A `workflow_dispatch` input selects `smoke`, `default`,
   `large`, or `all`.

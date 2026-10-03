@@ -33,7 +33,7 @@ Each family takes its own pull request. The gate change lands after every family
 **Constraints**:
 
 - The root ruff line length is 120 characters. A `ClassVar` annotation and an `encoding` argument both make a line longer, so a long line can need a wrap.
-- `ruff check .` reads the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`.
+- `ruff check .` reads the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`.
 - `mypy` reads `src/` and `MistHelper.py`. Every `RUF012` annotation faces that gate.
 - `pylint` reads `MistHelper.py` and `src` only. Pull request #1788 changed the job scope, so the implementer must confirm the current scope.
 
@@ -73,7 +73,7 @@ A maintainer probed the counts on 2026-08-06 at commit `08a75d2`. Four results s
 
 ### Discovered risk: two files carry sites in two families
 
-`src/firmware/firmware_manager.py` holds 5 `DTZ005` sites and 3 `RUF012` sites. `src/reports/e911_bssid.py` holds 3 of each.
+`src/operations/execution/firmware/firmware_manager.py` holds 5 `DTZ005` sites and 3 `RUF012` sites. `src/mist/intelligence/reports/e911_bssid.py` holds 3 of each.
 
 The two families land in two pull requests. A concurrent edit of the same file produces a merge conflict.
 

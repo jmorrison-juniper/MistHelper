@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.refactors.serial_cc.start_site_scan_capture import SiteScanCaptureService
+from src.foundation.support.refactors.serial_cc.start_site_scan_capture import SiteScanCaptureService
 
 
 def _build_manager():
@@ -17,7 +17,7 @@ def _build_manager():
     return manager
 
 
-@patch("src.refactors.serial_cc.start_site_scan_capture._resolve_prompt_helpers")
+@patch("src.foundation.support.refactors.serial_cc.start_site_scan_capture._resolve_prompt_helpers")
 def test_no_site_selected_returns_early(mock_resolve_prompt_helpers):
     manager = _build_manager()
     input_utils = MagicMock()
@@ -39,7 +39,7 @@ def test_no_site_selected_returns_early(mock_resolve_prompt_helpers):
     manager._execute_site_capture.assert_not_called()
 
 
-@patch("src.refactors.serial_cc.start_site_scan_capture._resolve_prompt_helpers")
+@patch("src.foundation.support.refactors.serial_cc.start_site_scan_capture._resolve_prompt_helpers")
 def test_all_aps_path_delegates_to_all_ap_handler(mock_resolve_prompt_helpers):
     manager = _build_manager()
     input_utils = MagicMock()
@@ -64,7 +64,7 @@ def test_all_aps_path_delegates_to_all_ap_handler(mock_resolve_prompt_helpers):
     manager._start_site_scan_capture_all_aps.assert_called_once_with("site-1")
 
 
-@patch("src.refactors.serial_cc.start_site_scan_capture._resolve_prompt_helpers")
+@patch("src.foundation.support.refactors.serial_cc.start_site_scan_capture._resolve_prompt_helpers")
 def test_full_flow_single_capture(mock_resolve_prompt_helpers):
     manager = _build_manager()
     input_utils = MagicMock()

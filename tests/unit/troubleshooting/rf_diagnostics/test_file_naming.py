@@ -7,7 +7,7 @@ from pathlib import Path  # WHY: assert path suffixes safely.
 
 import pytest  # WHY: assert validation failures.
 
-from src.troubleshooting.rf_diagnostics.file_naming import RfDiagnosticFileNamer  # WHY: test target.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.file_naming import RfDiagnosticFileNamer  # WHY: test target.
 
 
 def test_recording_path_contains_site_mac_and_time() -> None:

@@ -43,24 +43,24 @@ It assigns 416 other runtime files to profiler correlation.
 
 ## Existing measurement facilities
 
-`src/site/address_audit/perf.py` defines `PhaseTimer`.
+`src/mist/resources/site/address_audit/perf.py` defines `PhaseTimer`.
 It uses `time.perf_counter()` and aggregates named phases.
 The implementation phase must move new measurements to nanosecond clocks.
 It can preserve the existing public behavior.
 
-`src/analytics/telemetry_emitter.py` writes append-only JSON lines.
+`src/mist/intelligence/analytics/telemetry_emitter.py` writes append-only JSON lines.
 Its `emit` method performs JSON encoding, file writing, and flushing in one call.
 The plan measures encoding and file work as separate stages.
 
-`src/metrics_gateway/collector.py` already measures a complete pass with `time.time()`.
+`src/interfaces/monitoring/metrics_gateway/collector.py` already measures a complete pass with `time.time()`.
 The collector also centralizes three Mist endpoints.
 The plan replaces performance duration collection with a monotonic nanosecond clock.
 Wall-clock timestamps can continue to use the real-time clock.
 
-`src/metrics_gateway/cache.py` centralizes refresh, stale reads, and cache outcomes.
+`src/interfaces/monitoring/metrics_gateway/cache.py` centralizes refresh, stale reads, and cache outcomes.
 It is a suitable cache measurement boundary.
 
-`src/db/router.py`, `src/db/arango_writer.py`, and `src/db/redis_writer.py` centralize database writes.
+`src/foundation/persistence/db/router.py`, `src/foundation/persistence/db/arango_writer.py`, and `src/foundation/persistence/db/redis_writer.py` centralize database writes.
 `mist-ops-platform/src/shared/db.py` creates the SQLAlchemy engine and sessions.
 These boundaries support query counts and durations without route-level query timers.
 

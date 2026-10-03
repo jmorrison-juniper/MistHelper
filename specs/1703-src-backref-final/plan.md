@@ -30,7 +30,7 @@ Remove the remaining source package back-references to the root `MistHelper` mod
 
 ## Constitution Check
 
-- Five-Item Rule: The change adds one module in the existing `src/config/` package and one guard in the existing `tests/guardrails/` package. It does not add a new direct child under `src`.
+- Five-Item Rule: The change adds one module in the existing `src/foundation/runtime/config/` package and one guard in the existing `tests/guardrails/` package. It does not add a new direct child under `src`.
 - Class-Based Architecture: The source dependency seam uses a named class, not standalone wrapper functions.
 - Safety-First: No destructive operation changes occur.
 - Full Deployment Pipeline: Local gates, commit, pull request, CI, and merge are planned.
@@ -50,18 +50,18 @@ specs/1703-src-backref-final/
 ### Source Code (repository root)
 
 ```text
-src/config/source_dependency_resolver.py
+src/foundation/runtime/config/source_dependency_resolver.py
 tests/guardrails/test_source_misthelper_backrefs.py
 changelog.d/issue-1703-src-backref.md
 ```
 
 Existing source files that contain a back-reference will change only to use the new source seam and to remove stale text.
 
-**Structure Decision**: Use `src/config/` because it already owns source runtime settings and does not create a new top-level source package.
+**Structure Decision**: Use `src/foundation/runtime/config/` because it already owns source runtime settings and does not create a new top-level source package.
 
 ## Files Changed
 
-The implementation will change `MistHelper.py`, `src/config/source_dependency_resolver.py`, source files that currently contain executable back-references, `tests/guardrails/test_source_misthelper_backrefs.py`, `specs/1703-src-backref-final/*`, and `changelog.d/issue-1703-src-backref.md`.
+The implementation will change `MistHelper.py`, `src/foundation/runtime/config/source_dependency_resolver.py`, source files that currently contain executable back-references, `tests/guardrails/test_source_misthelper_backrefs.py`, `specs/1703-src-backref-final/*`, and `changelog.d/issue-1703-src-backref.md`.
 
 ## Complexity Tracking
 

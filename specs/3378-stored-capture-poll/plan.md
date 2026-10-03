@@ -26,8 +26,8 @@ other case, which is the rule of the live path.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/routes/capture.py` | `stored_progress` sends the lifecycle word. The route docstring states the 3-second poll. |
-| `src/upgrade_portal/app/routes/org_postcheck.py` | The docstring of `_result` states the new rule. |
+| `src/interfaces/portals/upgrade_portal/app/routes/capture.py` | `stored_progress` sends the lifecycle word. The route docstring states the 3-second poll. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_postcheck.py` | The docstring of `_result` states the new rule. |
 | `specs/1823-upgrade-capture-portal/contracts/http-api.md` | The status section states the poll interval and the words that end the poll. |
 | `tests/unit/upgrade_portal/test_capture_stored_state.py` | New unit tests for each scenario of user story 2. |
 | `tests/contract/upgrade_portal/test_capture_status.py` | The stored seed uses the shipped shape. New cases for `partial` and for a capture that this release cannot compare. |

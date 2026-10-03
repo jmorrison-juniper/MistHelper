@@ -17,7 +17,7 @@ Refactor the MistHelper data pipeline so polyglot backends (ArangoDB, Redis) rec
 **Project Type**: CLI tool with menu-driven operations
 **Performance Goals**: Dual-write overhead < 2x single-backend write (SC-007)
 **Constraints**: Max 25 lines/function, max 5 params/function (Five-Item Rule)
-**Scale/Scope**: ~28K line single-file main + `src/db/` package (4 modules)
+**Scale/Scope**: ~28K line single-file main + `src/foundation/persistence/db/` package (4 modules)
 
 ## Constitution Check
 
@@ -65,7 +65,7 @@ specs/185-polyglot-data-routing/
 ### Source Code (repository root)
 
 ```text
-src/db/
+src/foundation/persistence/db/
 ├── __init__.py          # MODIFIED: export RedisJSONWriter
 ├── arango_writer.py     # UNCHANGED
 ├── redis_writer.py      # MODIFIED: add RedisJSONWriter class
@@ -75,7 +75,7 @@ src/db/
 MistHelper.py            # MODIFIED: raw_data parameter, strategy reclassification
 ```
 
-**Structure Decision**: All changes fit within the existing `src/db/` package structure. No new packages or directories needed. `RedisJSONWriter` lives alongside `RedisTimeSeriesWriter` in `redis_writer.py` since both are Redis writers sharing the same connection infrastructure.
+**Structure Decision**: All changes fit within the existing `src/foundation/persistence/db/` package structure. No new packages or directories needed. `RedisJSONWriter` lives alongside `RedisTimeSeriesWriter` in `redis_writer.py` since both are Redis writers sharing the same connection infrastructure.
 
 ## Design Decisions
 
@@ -88,7 +88,7 @@ The `write_with_format_selection()` method gains an optional `raw_data` paramete
 
 ### D2: RedisJSONWriter in redis_writer.py (Not Separate File)
 
-Both Redis writers share connection setup, module detection, and pipelining patterns. Keeping them in one file avoids import complexity and stays within the 5-item rule for the `src/db/` directory (5 files currently).
+Both Redis writers share connection setup, module detection, and pipelining patterns. Keeping them in one file avoids import complexity and stays within the 5-item rule for the `src/foundation/persistence/db/` directory (5 files currently).
 
 ### D3: Independent Dual-Write (Not Transactional)
 
@@ -141,18 +141,18 @@ Only 6 clearly-numeric endpoints move to `timeseries_pk`. All event, alarm, clie
 
 **Changes**:
 
-1. **`src/db/redis_writer.py` - Add `RedisJSONWriter` class**:
+1. **`src/foundation/persistence/db/redis_writer.py` - Add `RedisJSONWriter` class**:
    - `__init__`: Reuse Redis connection, verify `ReJSON` module
    - `write()`: Pipeline `JSON.SET` + `EXPIRE` for each record
    - `_build_key()`: Construct key from endpoint name + PK fields
    - Uses `REDIS_JSON_TTL_DAYS` env var (default 7)
 
-2. **`src/db/router.py` - Update routing**:
+2. **`src/foundation/persistence/db/router.py` - Update routing**:
    - Replace `ARANGO_PK_TYPES` / `REDIS_PK_TYPES` with `ARANGO_ONLY_TYPES` / `DUAL_WRITE_TYPES` / `TIMESERIES_TYPES`
    - Add `_write_dual()` method for `composite_pk`: calls both `_write_redis_json()` and `_write_arango()`
    - Initialize `RedisJSONWriter` alongside `RedisTimeSeriesWriter`
 
-3. **`src/db/__init__.py`**:
+3. **`src/foundation/persistence/db/__init__.py`**:
    - Add `RedisJSONWriter` to `__all__`
 
 **Verification**: Run menu 13 (Device Events), check Redis JSON documents and ArangoDB archive.
@@ -163,11 +163,11 @@ Only 6 clearly-numeric endpoints move to `timeseries_pk`. All event, alarm, clie
 
 **Changes**:
 
-1. **`src/db/router.py`**:
+1. **`src/foundation/persistence/db/router.py`**:
    - Add `timeseries_pk` to routing dispatch (uses existing `_write_redis()`)
    - `RedisTimeSeriesWriter.write()` already handles numeric extraction; `ts_value_fields` and `ts_label_fields` are passed through the strategy dict
 
-2. **`src/db/redis_writer.py` - `RedisTimeSeriesWriter`**:
+2. **`src/foundation/persistence/db/redis_writer.py` - `RedisTimeSeriesWriter`**:
    - Update `_extract_chunk()` to respect `ts_value_fields` (only extract listed fields) and `ts_label_fields` (use as TS labels instead of dropping)
    - If `ts_value_fields` not in strategy, fall back to current auto-detect behavior
 
@@ -225,4 +225,4 @@ Phase 3 (timeseries_pk routing)  ←── Phase 4 (reclassification)
 No constitution violations requiring justification. All changes stay within the Five-Item Rule limits:
 - `write_with_format_selection`: 5 params (at limit, all necessary)
 - `RedisJSONWriter`: 3 public methods (write, health_check, __init__)
-- `src/db/` directory: 5 files (at limit after adding nothing new -- `RedisJSONWriter` goes in existing `redis_writer.py`)
+- `src/foundation/persistence/db/` directory: 5 files (at limit after adding nothing new -- `RedisJSONWriter` goes in existing `redis_writer.py`)

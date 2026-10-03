@@ -28,8 +28,8 @@ from types import SimpleNamespace
 import flask
 import pytest
 
-from src.upgrade_portal.runtime import identity
-from src.upgrade_portal.runtime.identity import (
+from src.interfaces.portals.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime.identity import (
     BROWSER_ID_BYTES,
     BROWSER_ID_COOKIE,
     BROWSER_ID_MAX_AGE_SECONDS,
@@ -62,7 +62,7 @@ from src.upgrade_portal.runtime.identity import (
 
 # WHY: The module logger takes its name from ``__name__``. A test raises the
 # level of this exact logger, so caplog receives the DEBUG records too.
-MODULE_LOGGER_NAME = "src.upgrade_portal.runtime.identity"
+MODULE_LOGGER_NAME = "src.interfaces.portals.upgrade_portal.runtime.identity"
 
 # WHY: Mixed case and a reserved example domain. The case proves the folding.
 OPERATOR_EMAIL = "Jane.Operator@Example.COM"

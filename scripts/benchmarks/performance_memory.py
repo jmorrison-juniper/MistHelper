@@ -19,15 +19,21 @@ from dataclasses import dataclass  # Keep process memory fields explicit.
 from pathlib import Path  # Read pyproject with platform-safe paths.
 from typing import Any, Final  # Mark constants and JSON-like values.
 
-from src.utils.performance import privacy  # Measure the bounded safe value cache.
-from src.utils.performance.event import (  # Import event helpers for event and cache measurements.
+from src.foundation.support.utils.performance import privacy  # Measure the bounded safe value cache.
+from src.foundation.support.utils.performance.event import (  # Import event helpers for event and cache measurements.
     EventSource,  # Build source records for retained events.
     PerformanceEvent,  # Build event records for retained queue memory.
     _dimension_key_ok,  # Measure the bounded label-key validator cache.
     _measurement_key_ok,  # Measure the bounded measurement-key validator cache.
 )
-from src.utils.performance.recorder import Recorder, RecorderSettings  # Measure the enabled and disabled span paths.
-from src.utils.performance.sink import DEFAULT_MAX_BYTES, BoundedSink  # Measure the retained event queue.
+from src.foundation.support.utils.performance.recorder import (
+    Recorder,
+    RecorderSettings,
+)  # Measure the enabled and disabled span paths.
+from src.foundation.support.utils.performance.sink import (
+    DEFAULT_MAX_BYTES,
+    BoundedSink,
+)  # Measure the retained event queue.
 
 _LOGGER = logging.getLogger(__name__)  # Share one logger for this measurement command.
 _SOURCE: Final = EventSource(  # Reuse one source.

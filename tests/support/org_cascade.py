@@ -8,8 +8,8 @@ Why:
 Scope:
     The store answers the two calls that the watch sends: ``read_run`` and
     ``compare_and_set_run``. The record builder writes the child job fields
-    that ``src/firmware/aggregate_upgrade_service.py`` stores. It holds no
-    phase rule. Every rule lives in ``src/upgrade_portal/upgrade/org_cascade``.
+    that ``src/operations/execution/firmware/aggregate_upgrade_service.py`` stores. It holds no
+    phase rule. Every rule lives in ``src/interfaces/portals/upgrade_portal/upgrade/org_cascade``.
     Issue #3244 adds the site plan fields and a stand-in post-check taker.
 """
 
@@ -21,8 +21,8 @@ from collections.abc import Callable, Mapping
 from copy import deepcopy
 from typing import Any
 
-from src.upgrade_portal.upgrade.org_cascade.record import OrgPhaseWatch
-from src.upgrade_portal.upgrade.org_postcheck import PostCheckResult, PostCheckSite
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import OrgPhaseWatch
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck import PostCheckResult, PostCheckSite
 from tests.support.rehearsal.harness import ORG_ID
 from tests.support.rehearsal.script import TYPE_ACCESS_POINT, DeviceScript, FleetScript
 

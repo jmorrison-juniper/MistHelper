@@ -27,8 +27,8 @@ import logging
 
 import pytest
 
-from src.firmware import upgrade_service
-from src.upgrade_portal.upgrade import gate, options, phase_gate
+from src.interfaces.portals.upgrade_portal.upgrade import gate, options, phase_gate
+from src.operations.execution.firmware import upgrade_service
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches a
 #      real organization, a real site, or a real device.
@@ -260,7 +260,7 @@ class TestANullUptimeSettlesOnTheAnchor:
         """
         settle = gate.SettleGate(FakeClock())
         signals = gate.GateSignals(reconnected=True, reading=_reading(None, LAST_SEEN_AFTER))
-        with caplog.at_level(logging.DEBUG, logger="src.upgrade_portal.upgrade.gate"):
+        with caplog.at_level(logging.DEBUG, logger="src.interfaces.portals.upgrade_portal.upgrade.gate"):
             settle.observe(_target(UPTIME_BEFORE, LAST_SEEN_BEFORE), _opened(), signals)
         messages = [record.getMessage() for record in caplog.records]
         assert any(SWITCH_MAC in message for message in messages)

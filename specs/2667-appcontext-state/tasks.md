@@ -23,9 +23,9 @@
 
 ## Phase 3: Implementation
 
-- [x] T006 Update `src/refactors/main_entrypoint.py` so `ApplicationBootstrap` accepts an optional explicit context and creates a new `AppContext` when none is supplied.
-- [x] T007 Update `src/refactors/main_entrypoint.py` so bootstrap activation publishes the invocation context before startup side effects.
-- [x] T008 Update `src/refactors/main_entrypoint.py` so `MainEntrypoint.run()` creates a fresh context for each invocation.
+- [x] T006 Update `src/foundation/support/refactors/main_entrypoint.py` so `ApplicationBootstrap` accepts an optional explicit context and creates a new `AppContext` when none is supplied.
+- [x] T007 Update `src/foundation/support/refactors/main_entrypoint.py` so bootstrap activation publishes the invocation context before startup side effects.
+- [x] T008 Update `src/foundation/support/refactors/main_entrypoint.py` so `MainEntrypoint.run()` creates a fresh context for each invocation.
 
 ## Phase 4: Release Note
 

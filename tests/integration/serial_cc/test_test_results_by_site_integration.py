@@ -13,7 +13,9 @@ def test_misthelper_test_results_by_site_delegates_to_serial_cc_service(monkeypa
         called["count"] += 1  # Record one invocation from delegator
         called["fast"] = fast  # Capture the fast flag forwarded by delegator
 
-    serial_cc_module = importlib.import_module("src.refactors.serial_cc.test_results_by_site")  # Target service module
+    serial_cc_module = importlib.import_module(
+        "src.foundation.support.refactors.serial_cc.test_results_by_site"
+    )  # Target service module
     monkeypatch.setattr(
         serial_cc_module.GatewayTestResultsService, "execute", staticmethod(fake_execute)
     )  # Patch target so no real API calls are made
@@ -34,7 +36,9 @@ def test_misthelper_test_results_by_site_forwards_fast_flag(monkeypatch):
         called["count"] += 1  # Record one invocation from delegator
         called["fast"] = fast  # Capture the fast flag forwarded by delegator
 
-    serial_cc_module = importlib.import_module("src.refactors.serial_cc.test_results_by_site")  # Target service module
+    serial_cc_module = importlib.import_module(
+        "src.foundation.support.refactors.serial_cc.test_results_by_site"
+    )  # Target service module
     monkeypatch.setattr(
         serial_cc_module.GatewayTestResultsService, "execute", staticmethod(fake_execute)
     )  # Patch target so no real API calls are made

@@ -8,19 +8,19 @@ from typing import Any
 
 import pytest
 
-from src.metrics_gateway.cache import MetricsCache
-from src.metrics_gateway.catalog import ROW_IDENTITY_COLUMN, MetricScope
-from src.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
-from src.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader
-from src.metrics_gateway.samples import MetricSnapshot
-from src.metrics_gateway.service import (
+from src.interfaces.monitoring.metrics_gateway.cache import MetricsCache
+from src.interfaces.monitoring.metrics_gateway.catalog import ROW_IDENTITY_COLUMN, MetricScope
+from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader
+from src.interfaces.monitoring.metrics_gateway.samples import MetricSnapshot
+from src.interfaces.monitoring.metrics_gateway.service import (
     ALL_INTERFACES_HOST,
     DEFAULT_HOST,
     DEFAULT_PORT,
     GatewaySettings,
     resolve_host,
 )
-from src.metrics_gateway.snmp import (
+from src.interfaces.monitoring.metrics_gateway.snmp import (
     DEFAULT_BASE_OID,
     GET_REQUEST,
     GETNEXT_REQUEST,
@@ -55,7 +55,9 @@ def _snapshot() -> MetricSnapshot:
 def test_payload_returns_none_and_logs_429(caplog: pytest.LogCaptureFixture) -> None:
     """A 429 Mist response must produce no payload and report the status."""
     response = StubResponse(status_code=429, data={"detail": "rate limited"})  # Model a rate-limited endpoint.
-    caplog.set_level("ERROR", logger="src.metrics_gateway.collector")  # Capture the product error record.
+    caplog.set_level(
+        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.collector"
+    )  # Capture the product error record.
     payload = MistStatsReader._payload(response, "getOrgStats")  # Drive the product status parser.
     assert payload is None  # A 429 reply must not feed the metric collector.
     assert "getOrgStats call returned status 429" in caplog.text  # The log must name the exact status.
@@ -64,7 +66,9 @@ def test_payload_returns_none_and_logs_429(caplog: pytest.LogCaptureFixture) -> 
 def test_payload_returns_none_and_logs_503(caplog: pytest.LogCaptureFixture) -> None:
     """A 503 Mist response must produce no payload and report the status."""
     response = StubResponse(status_code=503, data={"detail": "unavailable"})  # Model a server-error endpoint.
-    caplog.set_level("ERROR", logger="src.metrics_gateway.collector")  # Capture the product error record.
+    caplog.set_level(
+        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.collector"
+    )  # Capture the product error record.
     payload = FailureModeMistStatsReader._payload(response, "getOrgStats")  # Drive the real src status parser.
     assert payload is None  # A 503 reply must not feed the metric collector.
     assert "getOrgStats call returned status 503" in caplog.text  # The log must name the exact status.
@@ -304,7 +308,7 @@ class TestGatewaySettings:
 
 def test_the_web_application_serves_the_two_routes() -> None:
     """A scraper reads `/metrics`, and a container health probe reads `/healthz`."""
-    from src.metrics_gateway.web import create_app
+    from src.interfaces.monitoring.metrics_gateway.web import create_app
 
     reader = MistStatsReader(session=None, overrides=build_overrides())
     cache = MetricsCache(MistMetricsCollector(reader, ORG_ID))
@@ -317,8 +321,8 @@ def test_the_web_application_serves_the_two_routes() -> None:
 
 def test_the_scrape_names_the_media_type_once() -> None:
     """Flask appends its own charset to a `mimetype`, which names `charset` twice."""
-    from src.metrics_gateway.prometheus import CONTENT_TYPE
-    from src.metrics_gateway.web import create_app
+    from src.interfaces.monitoring.metrics_gateway.prometheus import CONTENT_TYPE
+    from src.interfaces.monitoring.metrics_gateway.web import create_app
 
     reader = MistStatsReader(session=None, overrides=build_overrides())
     cache = MetricsCache(MistMetricsCollector(reader, ORG_ID))
@@ -333,7 +337,7 @@ def test_the_health_route_never_reads_mist_cloud() -> None:
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise AssertionError("The health route must not read Mist Cloud.")
 
-    from src.metrics_gateway.web import create_app
+    from src.interfaces.monitoring.metrics_gateway.web import create_app
 
     reader = MistStatsReader(session=None, overrides={"getOrgStats": _boom})
     cache = MetricsCache(MistMetricsCollector(reader, ORG_ID))
@@ -342,7 +346,7 @@ def test_the_health_route_never_reads_mist_cloud() -> None:
 
 def test_the_package_exports_stay_importable() -> None:
     """A caller outside the package reads these names, so they must resolve."""
-    import src.metrics_gateway as package
+    import src.interfaces.monitoring.metrics_gateway as package
 
     for name in package.__all__:
         assert hasattr(package, name), f"The package does not export {name}."
@@ -350,7 +354,7 @@ def test_the_package_exports_stay_importable() -> None:
 
 def test_the_scope_set_covers_every_subtree() -> None:
     """A scope without a subtree number would raise during a walk."""
-    from src.metrics_gateway.catalog import SUBTREE_BY_SCOPE
+    from src.interfaces.monitoring.metrics_gateway.catalog import SUBTREE_BY_SCOPE
 
     assert set(SUBTREE_BY_SCOPE) == set(MetricScope)
     assert len(set(SUBTREE_BY_SCOPE.values())) == len(MetricScope)
@@ -358,7 +362,7 @@ def test_the_scope_set_covers_every_subtree() -> None:
 
 def test_no_metrics_variable_leaks_a_credential() -> None:
     """The Mist token stays in `.env` and must never reach the monitoring system."""
-    from src.metrics_gateway import service
+    from src.interfaces.monitoring.metrics_gateway import service
 
     for name in dir(service):
         if name.endswith("_VARIABLE"):

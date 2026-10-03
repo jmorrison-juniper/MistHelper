@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.reports.admin_token_hygiene.operation import AdminTokenHygieneReport
+from src.mist.intelligence.reports.admin_token_hygiene.operation import AdminTokenHygieneReport
 
 
 @dataclass

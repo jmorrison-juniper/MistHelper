@@ -8,7 +8,7 @@
 - **AC-004 (#1701)**: `rtk python MistHelper.py --help` prints argparse help before bootstrap work starts.
 - **AC-005 (#1701)**: `rtk python -c "import wsgi"` imports the WSGI app through `ApplicationBootstrap(parse_cli=False)`.
 - **AC-006 (#1706)**: `MistHelper.py` has zero `sys.argv` reads.
-- **AC-007 (#1706)**: `src/refactors/main_entrypoint.py` reads `sys.argv` in one place.
+- **AC-007 (#1706)**: `src/foundation/support/refactors/main_entrypoint.py` reads `sys.argv` in one place.
 - **AC-008 (#1706)**: The parse-count regression test proves `parse_args` runs one time.
 - **AC-009 (#1706)**: The bad flag regression test proves `--test-interactive` exits through argparse with code 2.
 - **AC-010 (#1701, #1706)**: The local quality gate section records the final command results.
@@ -37,5 +37,5 @@ rtk python -m tools.symbol_diff --base main MistHelper.py: pass with no module-l
 rtk python -c "import MistHelper": pass
 rtk python MistHelper.py --help: pass
 rtk python -c "import wsgi": pass
-rtk python -m radon cc MistHelper.py src/refactors/main_entrypoint.py wsgi.py -n C: pass with no block above B
+rtk python -m radon cc MistHelper.py src/foundation/support/refactors/main_entrypoint.py wsgi.py -n C: pass with no block above B
 ```

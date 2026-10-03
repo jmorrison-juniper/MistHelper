@@ -8,7 +8,7 @@ and is therefore ineligible for both ``--test`` and ``--testinteractive``. See
 
 from __future__ import annotations
 
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.operation_registry import OperationRegistry
 
 # WHY: a key guaranteed never to appear in _REGISTRY; exercises the fail-closed fallback branch only.
 _NEVER_REGISTERED = "__never_registered__"

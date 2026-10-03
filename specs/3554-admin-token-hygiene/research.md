@@ -80,7 +80,7 @@ operation IDs.
 
 ## Decision: Reuse the menu 47 and 48 export reference, but do not reuse token output
 
-**Rationale**: `src/export/org_admin_exporter.py` shows current menus 47 and 48.
+**Rationale**: `src/operations/exporting/export/org_admin_exporter.py` shows current menus 47 and 48.
 `OrgAdminExporter.api_tokens()` calls
 `mistapi.api.v1.orgs.apitokens.listOrgApiTokens` and writes
 `OrgApiTokens.csv`. `OrgAdminExporter.admins()` calls
@@ -102,10 +102,10 @@ it calls the exporter.
 **Rationale**: Existing operation packages use the shared dependency resolver
 for the active session and organization ID.
 
-- `src/security/rogue_dhcp/operation.py` resolves the organization through
+- `src/operations/protection/security/rogue_dhcp/operation.py` resolves the organization through
   `SourceDependencyResolver.ConfigUtils.get_cached_or_prompted_org_id()` and
   returns `SourceDependencyResolver.apisession`.
-- `src/marvis/actions/operation.py` builds `MarvisActionsClient` with
+- `src/mist/intelligence/marvis/actions/operation.py` builds `MarvisActionsClient` with
   `SourceDependencyResolver.apisession`, the organization ID, and the shared
   page limit.
 - `MistHelper.py` has direct `MainEntrypoint.context.apisession` call sites for

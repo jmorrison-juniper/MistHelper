@@ -6,7 +6,7 @@ from typing import Final  # Mark deterministic lease and request values.
 
 import pytest  # Exercise crash faults and compare-and-swap conflicts.
 
-from src.upgrade_portal.persistence.actions import (  # Test the public durable replay surface.
+from src.interfaces.portals.upgrade_portal.persistence.actions import (  # Test the public durable replay surface.
     RUN_COLLECTION,
     ActionIdentity,
     ActionInitialization,

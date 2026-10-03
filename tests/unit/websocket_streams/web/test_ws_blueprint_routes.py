@@ -17,11 +17,17 @@ from typing import Any  # Type fake request bodies without concrete service clas
 import pytest  # Use pytest fixtures for the route app.
 from flask import Flask  # Build a small app around the blueprint.
 
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Raise contract errors from the fake.
-from src.websocket_streams.live.sessions.buffer.message import StreamMessage
-from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
-from src.websocket_streams.web.blueprint.registry import WebSocketBlueprint  # Build the blueprint under test.
-from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Inject the fake service bundle.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Raise contract errors from the fake.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message import StreamMessage
+from src.mist.realtime.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
+from src.mist.realtime.websocket_streams.web.blueprint.registry import (
+    WebSocketBlueprint,
+)  # Build the blueprint under test.
+from src.mist.realtime.websocket_streams.web.services.registry import (
+    WebSocketServiceRegistry,
+)  # Inject the fake service bundle.
 from web_portal.services.config import SecurityMiddleware  # The portal installs the form token check with this class.
 
 ROOT = Path(__file__).resolve().parents[4]  # Repository root for template lookup.

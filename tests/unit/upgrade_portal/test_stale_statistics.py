@@ -31,7 +31,7 @@ import logging
 
 import pytest
 
-from src.upgrade_portal.upgrade import gate
+from src.interfaces.portals.upgrade_portal.upgrade import gate
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches
 #      a real organization, a real site, or a real device.
@@ -429,7 +429,7 @@ class TestStaleRecordLogging:
         """
         settle = gate.SettleGate(FakeClock())
         signals = gate.GateSignals(reconnected=True, reading=_rebooted_reading(LAST_SEEN_CACHED))
-        with caplog.at_level(logging.DEBUG, logger="src.upgrade_portal.upgrade.gate"):
+        with caplog.at_level(logging.DEBUG, logger="src.interfaces.portals.upgrade_portal.upgrade.gate"):
             settle.observe(_switch_target(), _opened_progress(LAST_SEEN_FRESH), signals)
         messages = [record.getMessage() for record in caplog.records]
         assert any(SWITCH_MAC in message and "stale" in message for message in messages)

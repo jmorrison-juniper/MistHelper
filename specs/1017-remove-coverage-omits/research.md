@@ -17,88 +17,88 @@ Read verbatim from `pyproject.toml [tool.coverage.run].omit` (lines 238-287) at 
 | 3 | `.venv/*` | Alternate venv location. |
 | 4 | `setup.py` | Legacy build stub (project builds via `hatchling`). |
 | 5 | `*/site-packages/*` | Any third-party install path. |
-| 6 | `src/maps/*` | Vendored maps subsystem — separate lifecycle. |
+| 6 | `src/interfaces/visualization/maps/*` | Vendored maps subsystem — separate lifecycle. |
 
 ### In-scope for removal (35 explicit + 1 wildcard = 36 modules total)
 
 **P1 — Utilities (4)**
-- `src/troubleshooting/troubleshoot_utils.py`
-- `src/input/prompt_client_utils.py`
-- `src/utils/environment_utils.py`
-- `src/utils/filter_operator_engine.py`
+- `src/mist/intelligence/troubleshooting/troubleshoot_utils.py`
+- `src/foundation/runtime/input/prompt_client_utils.py`
+- `src/foundation/support/utils/environment_utils.py`
+- `src/foundation/support/utils/filter_operator_engine.py`
 
 **P2 — Export helpers (5, incl. FR-016 delta `data_exporter.py`)**
-- `src/export/const_definitions_exporter.py`
-- `src/export/data_exporter.py`
-- `src/export/gateway_test_exporter.py`
-- `src/export/license_export_utils.py`
-- `src/export/org_export_utils.py`
+- `src/operations/exporting/export/const_definitions_exporter.py`
+- `src/operations/exporting/export/data_exporter.py`
+- `src/operations/exporting/export/gateway_test_exporter.py`
+- `src/operations/exporting/export/license_export_utils.py`
+- `src/operations/exporting/export/org_export_utils.py`
 
 **P3 — API / DB / analytics (7, incl. FR-016 deltas `api_core_fetch_utils`, `cache_utils`, `insight_metrics_utils`)**
-- `src/analytics/data_collection_manager.py`
-- `src/analytics/insight_metrics_utils.py`
-- `src/api/api_data_fetcher.py`
-- `src/api/api_fetch_utils.py`
-- `src/api/api_core_fetch_utils.py`
-- `src/cache/cache_utils.py`
-- `src/db/database_schema_utils.py`
+- `src/mist/intelligence/analytics/data_collection_manager.py`
+- `src/mist/intelligence/analytics/insight_metrics_utils.py`
+- `src/mist/access/api/api_data_fetcher.py`
+- `src/mist/access/api/api_fetch_utils.py`
+- `src/mist/access/api/api_core_fetch_utils.py`
+- `src/foundation/persistence/cache/cache_utils.py`
+- `src/foundation/persistence/db/database_schema_utils.py`
 
 **P4a — Org exporters, stats/templates/admin (3)**
-- `src/export/org_device_stats_exporter.py`
-- `src/export/org_template_exporter.py`
-- `src/export/org_admin_exporter.py`
+- `src/operations/exporting/export/org_device_stats_exporter.py`
+- `src/operations/exporting/export/org_template_exporter.py`
+- `src/operations/exporting/export/org_admin_exporter.py`
 
 **P4b — Org exporters, config/alarms/security/sites (4, incl. FR-016 delta `org_site_exporter.py`)**
-- `src/export/org_config_exporter.py`
-- `src/export/org_alarm_event_exporter.py`
-- `src/export/org_client_security_exporter.py`
-- `src/export/org_site_exporter.py`
+- `src/operations/exporting/export/org_config_exporter.py`
+- `src/operations/exporting/export/org_alarm_event_exporter.py`
+- `src/operations/exporting/export/org_client_security_exporter.py`
+- `src/operations/exporting/export/org_site_exporter.py`
 
 **P5a — Site exporters + gateway HA (5)**
-- `src/export/site_anomaly_exporter.py`
-- `src/export/site_config_exporter.py`
-- `src/export/site_device_exporter.py`
-- `src/export/sites_by_ap_model_exporter.py`
-- `src/gateway/gateway_ha_exporter.py`
+- `src/operations/exporting/export/site_anomaly_exporter.py`
+- `src/operations/exporting/export/site_config_exporter.py`
+- `src/operations/exporting/export/site_device_exporter.py`
+- `src/operations/exporting/export/sites_by_ap_model_exporter.py`
+- `src/mist/resources/gateway/gateway_ha_exporter.py`
 
 **P5b — Reports + inventory facade (5, reshuffled from spec P6 per plan.md Decision 4)**
-- `src/reports/global_wired_client_report_generator.py`
-- `src/reports/offline_device_reporter.py`
-- `src/reports/sfp_transceiver_data_processor.py`
-- `src/reports/wired_client_manufacturer_report_generator.py`
-- `src/inventory/org_device_inventory_summary_facade.py`
+- `src/mist/intelligence/reports/global_wired_client_report_generator.py`
+- `src/mist/intelligence/reports/offline_device_reporter.py`
+- `src/mist/intelligence/reports/sfp_transceiver_data_processor.py`
+- `src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py`
+- `src/mist/resources/inventory/org_device_inventory_summary_facade.py`
 
 **P6 — State-changing managers (5, Principle III)**
-- `src/device/arp_command_manager.py`
-- `src/device/device_reboot_manager.py`
-- `src/firmware/firmware_manager.py`
-- `src/site/bulk_radius_wlan_config_manager.py`
-- `src/org/org_ticket_manager.py`
+- `src/mist/resources/device/arp_command_manager.py`
+- `src/mist/resources/device/device_reboot_manager.py`
+- `src/operations/execution/firmware/firmware_manager.py`
+- `src/mist/resources/site/bulk_radius_wlan_config_manager.py`
+- `src/mist/resources/org/org_ticket_manager.py`
 
 **P7 — SSH + TUI + prompt (3, FR-015 candidates)**
-- `src/ssh/cli_shell_manager.py`
-- `src/ui/tui.py`
-- `src/ui/prompt_utils.py`
+- `src/operations/execution/ssh/cli_shell_manager.py`
+- `src/interfaces/visualization/ui/tui.py`
+- `src/interfaces/visualization/ui/prompt_utils.py`
 
-**P8 — Websocket wildcard (`src/websocket/*` → 15 files)**
+**P8 — Websocket wildcard (`src/mist/realtime/websocket/*` → 15 files)**
 
 Enumerated at branch cut:
 
-- `src/websocket/__init__.py`
-- `src/websocket/commands.py`
-- `src/websocket/context.py`
-- `src/websocket/manager.py`
-- `src/websocket/service_ping_discovery.py`
-- `src/websocket/service_ping_manager.py`
-- `src/websocket/diagnostics/__init__.py`
-- `src/websocket/diagnostics/arp_executor.py`
-- `src/websocket/diagnostics/common.py`
-- `src/websocket/diagnostics/ping_executor.py`
-- `src/websocket/polling/__init__.py`
-- `src/websocket/polling/completion_detector.py`
-- `src/websocket/polling/message_router.py`
-- `src/websocket/polling/result_collector.py`
-- `src/websocket/polling/result_combiner.py`
+- `src/mist/realtime/websocket/__init__.py`
+- `src/mist/realtime/websocket/commands.py`
+- `src/mist/realtime/websocket/context.py`
+- `src/mist/realtime/websocket/manager.py`
+- `src/mist/realtime/websocket/service_ping_discovery.py`
+- `src/mist/realtime/websocket/service_ping_manager.py`
+- `src/mist/realtime/websocket/diagnostics/__init__.py`
+- `src/mist/realtime/websocket/diagnostics/arp_executor.py`
+- `src/mist/realtime/websocket/diagnostics/common.py`
+- `src/mist/realtime/websocket/diagnostics/ping_executor.py`
+- `src/mist/realtime/websocket/polling/__init__.py`
+- `src/mist/realtime/websocket/polling/completion_detector.py`
+- `src/mist/realtime/websocket/polling/message_router.py`
+- `src/mist/realtime/websocket/polling/result_collector.py`
+- `src/mist/realtime/websocket/polling/result_combiner.py`
 
 Split across PR-8a (toplevel), PR-8b (diagnostics), PR-8c (polling).
 
@@ -117,7 +117,7 @@ Per plan.md Decision 5 risk register and Technical Context.
 | P7 SSH / TUI | `paramiko.SSHClient`, `sshkeyboard.listen_keyboard` | `MagicMock(spec=paramiko.SSHClient)`, `monkeypatch.setattr("sshkeyboard.listen_keyboard", fake)` | Interactive prompts via `monkeypatch` on `safe_input()`. |
 | P8 websocket | `websocket.WebSocketApp` (sync `websocket-client` + threading), injected `utility` deps | `MagicMock(spec=websocket.WebSocketApp)`; for `service_ping_*` mock injected utility deps | Project uses **synchronous** `websocket-client`, NOT `websockets` (async). Assert loop exits after ≤ 2 mocked iterations. |
 
-**No `sqlite3` fixture** — `src/db/database_schema_utils.py` is a pure DDL string builder (verified: only imports `inspect`, `logging`, `re`, `datetime`, `typing`).
+**No `sqlite3` fixture** — `src/foundation/persistence/db/database_schema_utils.py` is a pure DDL string builder (verified: only imports `inspect`, `logging`, `re`, `datetime`, `typing`).
 
 ## 3. Fixture-migration order
 

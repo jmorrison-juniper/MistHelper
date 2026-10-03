@@ -123,7 +123,7 @@ The current native causal and coverage commands pass:
   tests/tools/test_quality_analyzer --tb=short -q -rs
 
 .venv/bin/python -B -m pytest -p no:cacheprovider \
-  tests/unit/export/test_data_exporter.py --cov=src.export.data_exporter \
+  tests/unit/export/test_data_exporter.py --cov=src.operations.exporting.export.data_exporter \
   --cov-branch --cov-report=term-missing --cov-fail-under=80 --tb=short -q
 ```
 
@@ -302,7 +302,7 @@ The exact type and affected coverage commands pass:
 
 .venv/bin/python -B -m pytest -p no:cacheprovider \
   tests/unit/export/test_data_exporter.py \
-  --cov=src.export.data_exporter --cov-branch \
+  --cov=src.operations.exporting.export.data_exporter --cov-branch \
   --cov-report=term-missing --cov-fail-under=80 --tb=short -q
 ```
 
@@ -443,7 +443,7 @@ The fixture closes its listener, channels, transports, and worker before it retu
 | `.venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed for 786 files with no finding or parse error. |
 | The combined regression command below | Passed with 283 passed and one existing skip. |
 | The writer and new contracts alone | Passed with 91 passed and no skip. |
-| Exporter tests with `--cov=src.export.data_exporter --cov-branch --cov-fail-under=80` | Passed with 95.44 percent coverage. |
+| Exporter tests with `--cov=src.operations.exporting.export.data_exporter --cov-branch --cov-fail-under=80` | Passed with 95.44 percent coverage. |
 | Full test-quality ratchet with the unchanged configuration and baseline | Checked 994 files and found no new finding. |
 | Radon and `complexity-gate --max 10` on the new package | Passed. |
 | An AST count of the new functions | Checked 37 functions. None exceeds 25 lines. |

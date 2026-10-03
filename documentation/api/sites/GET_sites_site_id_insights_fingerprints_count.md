@@ -144,4 +144,4 @@ Common use cases:
 
 Menu Operation **236** offers this site count endpoint.
 Verification source: `git grep -n "countSiteClientFingerprints" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.
+`src/operations/exporting/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

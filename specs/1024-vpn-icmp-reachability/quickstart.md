@@ -157,7 +157,7 @@ Corresponds to FR-005 and contract `probe_type_dispatch.md`.
 ## Scenario H — US3 (optional in-scope): JSONL IKE health append
 
 **Setup**: Monkeypatch `_icmp_ping` and `_udp_check` in
-`src/utils/zscaler_probe.py`. Point the JSONL path at `tmp_path`.
+`src/foundation/support/utils/zscaler_probe.py`. Point the JSONL path at `tmp_path`.
 
 **Run**:
 

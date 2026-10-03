@@ -39,7 +39,7 @@ New methods remain within five parameters, five logical blocks, and 25 lines.
 The new unit package contains five files.
 Feature documentation uses five direct children and a nested design directory.
 
-`src/db` already contains six module files.
+`src/foundation/persistence/db` already contains six module files.
 The repair adds no file there.
 It adds the index state and manager to the existing `database_schema_utils.py`.
 The existing schema utility class and writer already exceed the class method limit.
@@ -80,7 +80,7 @@ specs/3309-declared-arango-indexes/
 ### Source Code (repository root)
 
 ```text
-src/db/
+src/foundation/persistence/db/
 ├── arango_writer.py
 └── database_schema_utils.py
 
@@ -103,7 +103,7 @@ Do not add a wrapper or change graph, snapshot, key, or import responsibilities.
 
 | Existing constraint | Narrow decision | Separate remediation |
 | - | - | - |
-| Six files in `src/db` | Use the existing schema module | Separate existing backend packages in an independent refactor |
+| Six files in `src/foundation/persistence/db` | Use the existing schema module | Separate existing backend packages in an independent refactor |
 | Existing classes exceed five methods | Add no writer or schema utility method | Divide existing responsibilities in an independent refactor |
 | Existing test roots exceed five children | Keep five feature unit files | Reorganize existing test roots in an independent refactor |
 

@@ -49,7 +49,7 @@ Closes #3556
 
 ## Files
 
-- `src/reports/site_variable_audit/`
+- `src/mist/intelligence/reports/site_variable_audit/`
 - `tests/unit/reports/site_variable_audit/`
 - `specs/3556-site-variable-audit/`
 - `changelog.d/issue-3556-site-variable-audit.md`

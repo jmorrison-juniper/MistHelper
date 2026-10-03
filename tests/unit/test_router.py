@@ -11,7 +11,7 @@ import pytest
 from arango.exceptions import ArangoError  # WHY: router tests must raise the narrowed ArangoDB driver type
 from redis.exceptions import RedisError  # WHY: router tests must raise the narrowed Redis driver type
 
-from src.db import DatabaseConfig, WriteResult
+from src.foundation.persistence.db import DatabaseConfig, WriteResult
 
 
 @pytest.fixture
@@ -54,9 +54,9 @@ def strategies() -> dict:
 def mock_backends():
     """Patch all writer constructors so router doesn't need live DBs."""
     with (
-        patch("src.db.router.ArangoDBWriter") as arango_cls,
-        patch("src.db.router.RedisTimeSeriesWriter") as redis_cls,
-        patch("src.db.router.RedisJSONWriter") as redis_json_cls,
+        patch("src.foundation.persistence.db.router.ArangoDBWriter") as arango_cls,
+        patch("src.foundation.persistence.db.router.RedisTimeSeriesWriter") as redis_cls,
+        patch("src.foundation.persistence.db.router.RedisJSONWriter") as redis_json_cls,
     ):
         arango_writer = MagicMock()
         arango_cls.return_value = arango_writer
@@ -76,7 +76,7 @@ def mock_backends():
 
 # Import must happen after patch is active for the constructor path
 def _make_router(config, mock_backends, strategies):
-    from src.db.router import DatabaseRouter
+    from src.foundation.persistence.db.router import DatabaseRouter
 
     return DatabaseRouter(config, strategies=strategies)
 
@@ -150,7 +150,7 @@ class TestRouterDegradedMode:
     """Test graceful degradation when backends are unavailable."""
 
     def test_standalone_mode_returns_csv_only(self, standalone_config):
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
         result = router.write([{"id": "1"}], "listOrgSites")
@@ -160,7 +160,7 @@ class TestRouterDegradedMode:
 
     def test_arango_unavailable_returns_csv_only(self, config, mock_backends, strategies):
         mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
         result = router.write([{"id": "1", "name": "HQ"}], "listOrgSites")
@@ -170,7 +170,7 @@ class TestRouterDegradedMode:
     def test_redis_unavailable_degrades_to_arango_only(self, config, mock_backends, strategies):
         mock_backends["redis_cls"].side_effect = RuntimeError("TimeSeries module missing")
         mock_backends["redis_json_cls"].side_effect = RuntimeError("Redis JSON module missing")
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
         mock_backends["arango_writer"].write.return_value = WriteResult(
@@ -207,7 +207,7 @@ class TestRouterHealthCheck:
         assert health["standalone"] is False
 
     def test_standalone_health(self, standalone_config):
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
         health = router.health_check()
@@ -259,7 +259,7 @@ class TestRouterWebhook:
         mock_backends["arango_writer"].snapshot.assert_called_once()
 
     def test_webhook_with_no_arango(self, standalone_config):
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
         router.handle_webhook_audit({"object_type": "site", "object_id": "s1"})
@@ -308,7 +308,7 @@ class TestRouterTimeseries:
             },
         }
         mock_backends["redis_cls"].side_effect = RuntimeError("down")
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
         data = [{"mac": "aa:bb", "timestamp": 170000, "cpu": 42}]
@@ -341,7 +341,7 @@ class TestRouterIngestStatsBatch:
 
     def test_degrades_when_redis_unavailable(self, config, mock_backends):
         mock_backends["redis_cls"].side_effect = RuntimeError("down")
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies={})
         result = router.ingest_stats_batch([], "getDeviceStats")
@@ -381,7 +381,7 @@ class TestRouterPullConfigHistory:
         assert count == 0
 
     def test_returns_zero_without_arango(self, standalone_config):
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
         count = router.pull_config_history([{"device_id": "d1"}])
@@ -415,7 +415,7 @@ class TestRouterClose:
         router.close()  # should not raise
 
     def test_close_standalone(self, standalone_config):
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
         router.close()  # should not raise
@@ -512,21 +512,21 @@ class TestRouterReprobe:
 
     def test_health_check_reports_a_recovered_backend(self, config, mock_backends, strategies):
         mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
         assert router.health_check()["arangodb"] is False
 
         mock_backends["arango_cls"].side_effect = None
         mock_backends["arango_cls"].return_value = mock_backends["arango_writer"]
-        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+        with patch("src.foundation.persistence.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
             health = router.health_check()
 
         assert health["arangodb"] is True
 
     def test_write_uses_a_backend_that_recovered(self, config, mock_backends, strategies):
         mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
         assert router.write([{"id": "1"}], "listOrgSites").backend == "csv_only"
@@ -539,7 +539,7 @@ class TestRouterReprobe:
             records_written=1,
             records_failed=0,
         )
-        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+        with patch("src.foundation.persistence.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
             result = router.write([{"id": "1"}], "listOrgSites")
 
         assert result.backend == "arangodb"
@@ -547,9 +547,9 @@ class TestRouterReprobe:
 
     def test_backoff_window_blocks_a_second_connect(self, config, mock_backends, strategies):
         mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
-        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
+        with patch("src.foundation.persistence.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
             router = DatabaseRouter(config, strategies=strategies)
             attempts_at_boot = mock_backends["arango_cls"].call_count
             for _ in range(5):
@@ -561,17 +561,17 @@ class TestRouterReprobe:
         router = _make_router(config, mock_backends, strategies)
         mock_backends["arango_writer"].write.side_effect = ArangoError("Write failed")
 
-        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
+        with patch("src.foundation.persistence.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
             router.write([{"id": "1"}], "listOrgSites")
             health = router.health_check()
 
         assert health["arangodb"] is False
 
     def test_standalone_never_probes_a_backend(self, standalone_config, mock_backends):
-        from src.db.router import DatabaseRouter
+        from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
-        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+        with patch("src.foundation.persistence.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
             health = router.health_check()
 
         assert health["standalone"] is True
@@ -583,7 +583,7 @@ class TestRouterReprobe:
         mock_backends["arango_writer"].write.side_effect = ArangoError("Write failed")
         router.write([{"id": "1"}], "listOrgSites")
 
-        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+        with patch("src.foundation.persistence.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
             router.health_check()
 
         mock_backends["arango_writer"].close.assert_called_once_with()  # Prove the stale writer was closed once.

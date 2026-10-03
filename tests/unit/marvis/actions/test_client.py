@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from src.marvis.actions import client as client_module
-from src.marvis.actions.client import (
+from src.mist.intelligence.marvis.actions import client as client_module
+from src.mist.intelligence.marvis.actions.client import (
     ALARM_GROUP,
     ALARM_PAGE_LIMIT,
     ERROR_TEXT_LIMIT,

@@ -1,4 +1,4 @@
-"""Tests for src.firmware.site_auto_upgrade -- SiteAutoUpgradeConfigurator.
+"""Tests for src.operations.execution.firmware.site_auto_upgrade -- SiteAutoUpgradeConfigurator.
 
 Covers: parse_time_input, _parse_hour_minute, _apply_ampm,
 _parse_index_selection, _build_auto_upgrade_payload,
@@ -35,8 +35,8 @@ with patch.dict(
         "mistapi.api.v1.sites.setting": MagicMock(),
     },
 ):
-    import src.firmware.site_auto_upgrade as _sau_mod
-    from src.firmware.site_auto_upgrade import (
+    import src.operations.execution.firmware.site_auto_upgrade as _sau_mod
+    from src.operations.execution.firmware.site_auto_upgrade import (
         SiteAutoUpgradeConfigurator,
         _apply_ampm,
         _apply_family_selection,
@@ -66,8 +66,8 @@ with patch.dict(
 # two helpers below so the existing per-kwarg test style stays readable.
 from dataclasses import replace
 
-from src.dataclasses.family_selection_context import FamilySelectionContext  # Phase B refactor.
-from src.dataclasses.site_auto_upgrade_deps import SiteAutoUpgradeCoreDeps, SiteAutoUpgradeMspDeps
+from src.foundation.models.dataclasses.family_selection_context import FamilySelectionContext  # Phase B refactor.
+from src.foundation.models.dataclasses.site_auto_upgrade_deps import SiteAutoUpgradeCoreDeps, SiteAutoUpgradeMspDeps
 
 
 def _make_core(

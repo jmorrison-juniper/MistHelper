@@ -10,22 +10,22 @@
 
 ## Decision 2: Introduce bounded bootstrap package for dependency checks
 
-- **Decision**: Extract `_early_dependency_check` into `src/bootstrap/{dependency_check.py,package_installer.py,uv_runtime.py}`.
+- **Decision**: Extract `_early_dependency_check` into `src/foundation/runtime/bootstrap/{dependency_check.py,package_installer.py,uv_runtime.py}`.
 - **Rationale**: The function currently combines parsing, uv discovery, install strategy, retries, and policy decisions (CC 49).
 - **Alternatives considered**:
   - Keep logic in `MistHelper.py` and only split helpers inline (rejected: still leaves monolith growth pressure).
-  - Move into generic `src/utils/` (rejected: weak domain ownership).
+  - Move into generic `src/foundation/support/utils/` (rejected: weak domain ownership).
 
 ## Decision 3: Split packet capture orchestration into org workflow + loop runner
 
-- **Decision**: Add `src/capture/org_capture_workflow.py` and `src/capture/site_capture_loop.py` and call from `src/capture/packet_capture.py`.
+- **Decision**: Add `src/operations/execution/capture/org_capture_workflow.py` and `src/operations/execution/capture/site_capture_loop.py` and call from `src/operations/execution/capture/packet_capture.py`.
 - **Rationale**: `start_org_packet_capture` and `_execute_site_capture_loop` are orchestration-heavy and already partly represented in extracted capture modules.
 - **Alternatives considered**:
   - Keep both methods entirely inside existing `packet_capture.py` and just add helpers (rejected: likely CC remains >10 and hard to test independently).
 
 ## Decision 4: Consolidate WAN override logic into dedicated analyzer module
 
-- **Decision**: Create `src/gateway/gateway_override_analysis.py` and delegate from `GatewayExportUtils.with_wan_overrides`.
+- **Decision**: Create `src/mist/resources/gateway/gateway_override_analysis.py` and delegate from `GatewayExportUtils.with_wan_overrides`.
 - **Rationale**: Existing logic is multiphase (cache bootstrap, filtering, API minimization, concurrency, report synthesis) and duplicated in `MistHelper.py`.
 - **Alternatives considered**:
   - Keep only wrapper delegates with no analyzer class (rejected: thin-wrapper anti-pattern).
@@ -33,7 +33,7 @@
 
 ## Decision 5: Extract 52-week event export into streaming exporter class
 
-- **Decision**: Create `src/export/device_events_52w_exporter.py` with explicit checkpoint + pagination lifecycle.
+- **Decision**: Create `src/operations/exporting/export/device_events_52w_exporter.py` with explicit checkpoint + pagination lifecycle.
 - **Rationale**: `device_events_52w` mixes transport, persistence, schema, and retry concerns (CC 38).
 - **Alternatives considered**:
   - Retain method and add local nested helpers only (rejected: testability and ownership remain poor).

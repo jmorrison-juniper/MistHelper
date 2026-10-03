@@ -11,7 +11,7 @@
 
 ## Phase 2: Implementation
 
-- [X] T004 Add `src/export/count_exporter.py` with the `_CountOp` row type.
+- [X] T004 Add `src/operations/exporting/export/count_exporter.py` with the `_CountOp` row type.
 - [X] T005 Populate the org, site, and MSP tables from the resolved operation list.
 - [X] T006 Add `_resolve`, which reports a missing module or operation instead of raising.
 - [X] T007 Add `_choose`, which rejects a non-numeric and an out-of-range answer.

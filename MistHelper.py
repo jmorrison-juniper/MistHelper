@@ -68,9 +68,13 @@ from packaging.specifiers import (
 )  # WHY: PEP 440 specifier checks replace hand comparisons.
 from packaging.version import InvalidVersion, Version  # WHY: PEP 440 version comparison.
 
-from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
-from src.utils.process_safe_log_handler import ProcessSafeRotatingFileHandler  # Serialize shared log writes.
-from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
+from src.foundation.support.utils.console import (
+    echo,
+)  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
+from src.foundation.support.utils.process_safe_log_handler import (
+    ProcessSafeRotatingFileHandler,
+)  # Serialize shared log writes.
+from src.foundation.support.utils.subprocess_runner import (  # Import the moved dependency.
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
     SubprocessRunner,  # Audited dispatcher. Sole entry point for external command execution.
     TimeoutExpired,  # Raised when subprocess.run exceeds its timeout.
@@ -141,10 +145,10 @@ class LogRotationSettings:  # Preserve the existing behavior during the complian
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
     from types import ModuleType  # ModuleType annotation for optional-module fallback typing
 
+    import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
     from prettytable import PrettyTable  # Type stub for prettytable (ASCII table formatting)
 
-    import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
-    from src.device.utility_commands import DeviceUtilityCommands  # Type stub for DeviceUtilityCommands
+    from src.mist.resources.device.utility_commands import DeviceUtilityCommands  # Type stub for DeviceUtilityCommands
 
     # ============================================================================
     # POLYGLOT DATABASE LAYER (OPTIONAL)
@@ -152,13 +156,13 @@ if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, m
     # Conditional import for ArangoDB + Redis TimeSeries backends.
     # Falls back gracefully in standalone mode (no python-arango/redis installed).
 try:  # Try to import polyglot database layer for ArangoDB/Redis export backends
-    from src.db import (
+    from src.foundation.persistence.db import (
         DatabaseConfig as _DatabaseConfigImpl,
     )  # Preserve the existing behavior during the compliance refactor.
-    from src.db import (
+    from src.foundation.persistence.db import (
         configure_db_logging as _configure_db_logging_impl,
     )  # Preserve the existing behavior during the compliance refactor.
-    from src.db.router import (
+    from src.foundation.persistence.db.router import (
         DatabaseRouter as _DatabaseRouterImpl,
     )  # Preserve the existing behavior during the compliance refactor.
 
@@ -375,469 +379,505 @@ __all__ = [  # Preserve the existing behavior during the compliance refactor.
     "websocket",
 ]
 
-from src.analytics.data_collection_manager import (
-    DataCollectionManager,  # Cat B (1013 SC-001 position 25) -- re-export for MistHelper.DataCollectionManager callers
-)
-from src.analytics.insight_metrics_utils import (
-    InsightMetricsUtils,
-)  # Cat E canonical (1014 P11) -- re-export for MistHelper.InsightMetricsUtils callers
-from src.analytics.site_analytics_configurator import (  # Import site analytics configuration tools
-    SiteAnalyticsConfigurator as ExtractedSiteAnalyticsConfigurator,  # Rename to avoid naming conflicts
-)
-from src.analytics.site_analytics_configurator import SiteAnalyticsConfiguratorDeps  # Import dependency injection class
-from src.analytics.site_inventory_health_analyzer import (  # Import site inventory health analysis tools
-    SiteInventoryHealthAnalyzer as ExtractedSiteInventoryHealthAnalyzer,  # Rename to avoid naming conflicts
-)
-from src.analytics.site_inventory_health_analyzer import (
-    SiteInventoryHealthAnalyzerDeps,
-)  # Import dependency injection class
-from src.analytics.telemetry_emitter import (
-    TelemetryEmitter,  # Cat B (1013 SC-001 position 9) -- re-export for callers at 18629/18632/18711/19062
-)
-from src.api.api_core_fetch_utils import (
-    APICoreFetchUtils,
-)  # Cat E canonical (1014 P10) -- re-export for MistHelper.APICoreFetchUtils callers
-from src.api.api_data_fetcher import (
-    APIDataFetcher,  # Cat B (1013 SC-001 position 21) -- re-export for MistHelper.APIDataFetcher callers
-)
-from src.api.api_fetch_utils import (
-    APIFetchUtils,
-)  # Cat E canonical (1014 P8) -- re-export for MistHelper.APIFetchUtils callers
-from src.audit.audit_analysis_ops import (
-    AuditAnalysisOps,  # Cat B (1013 SC-001 position 12) -- re-export for menu_actions #25/#174 dispatch
-)
-from src.auth.interactive import (
-    LoginOrchestrator,  # Re-exported so extracted refactors can resolve it via MistHelper (SC-023)
-    MspOrgSelector,
-)  # Duplicate import (re-stated with comment below). Kept to preserve module load behavior
-from src.bootstrap.dependency_check import (
-    DependencyCheckOrchestrator,
-)  # Duplicate import. Harmless re-import of dependency check orchestrator
-from src.bootstrap.package_installer import (
-    PackageInstaller,
-)  # Duplicate import. Harmless re-import of package installer
-from src.cache.cache_utils import (
-    CacheUtils,
-)  # Cat E canonical (1014 P14) -- re-export for MistHelper.CacheUtils callers
-from src.capture.client_pcap_downloader import (
-    ClientPacketCaptureDownloader,
-)  # Menu 197: interactive client PCAP downloader (issue #421)
-from src.capture.packet_capture import (
-    PacketCaptureManager,
-)  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
-from src.config.config_utils import (
-    ConfigUtils,  # Cat E canonical (1015 T-12) -- re-export for MistHelper.ConfigUtils callers
-)
-
 # BatchWorkerConfig import removed: pool machinery moved to ConnectionPoolExecutor (1012 SC-003)
-from src.dataclasses.endpoint_config import (
+from src.foundation.models.dataclasses.endpoint_config import (
     EndpointConfig,  # Cat B (1013 SC-001 position 16) -- re-export for MistHelper.EndpointConfig callers
 )
-from src.dataclasses.progress_event import (
+from src.foundation.models.dataclasses.progress_event import (
     ProgressContext,  # test access + mh.ProgressContext usage from extracted modules
     TestSummary,  # Test summary counters for telemetry emission
 )
-from src.dataclasses.systematic_test_option import (
+from src.foundation.models.dataclasses.systematic_test_option import (
     SystematicTestOption,
 )  # Issue #470: groups menu-option identity to keep _systematic_test_run_option within the 5-Item Rule.
-from src.dataclasses.websocket_stream_target import (
+from src.foundation.models.dataclasses.websocket_stream_target import (
     WebSocketStreamTarget,  # Re-export after ARPCommandManager extraction (1013 SC-001 position 42)
 )
-from src.db.database_schema_utils import (
+from src.foundation.persistence.cache.cache_utils import (
+    CacheUtils,
+)  # Cat E canonical (1014 P14) -- re-export for MistHelper.CacheUtils callers
+from src.foundation.persistence.db.database_schema_utils import (
     DatabaseSchemaUtils,  # Cat B (1013 SC-001 position 38) -- re-export for MistHelper.DatabaseSchemaUtils callers
 )
-from src.device.ap_profile_migration_manager import (
-    APProfileMigrationManager,  # Menus 207 and 208 -- migrate APs between device profiles and revert
+from src.foundation.runtime.bootstrap.dependency_check import (
+    DependencyCheckOrchestrator,
+)  # Duplicate import. Harmless re-import of dependency check orchestrator
+from src.foundation.runtime.bootstrap.package_installer import (
+    PackageInstaller,
+)  # Duplicate import. Harmless re-import of package installer
+from src.foundation.runtime.config.config_utils import (
+    ConfigUtils,  # Cat E canonical (1015 T-12) -- re-export for MistHelper.ConfigUtils callers
 )
-from src.device.arp_command_manager import (
-    ARPCommandManager,  # Cat B (1013 SC-001 position 42) -- re-export for MistHelper.ARPCommandManager callers
-)
-from src.device.device_reboot_manager import (
-    DeviceRebootManager,  # Cat B (1013 SC-001 position 41) -- re-export for MistHelper.DeviceRebootManager callers
-)
-from src.device.device_utils import (
-    DeviceUtils,  # Cat B (1013 SC-001 position 6) -- re-export for dynamic _mh.DeviceUtils lookup
-)
-from src.device.virtual_chassis import (  # Cat E canonical (1015 T-11) -- fold-in of stub facade
-    VirtualChassisDependencies as _VirtualChassisDependencies,
-)
-from src.device.virtual_chassis import (  # Preserve the existing behavior during the compliance refactor.
-    VirtualChassisManager,
-)
-from src.device.virtual_chassis import (  # Preserve the existing behavior during the compliance refactor.
-    configure_virtual_chassis_dependencies as _configure_virtual_chassis_dependencies,
-)
-from src.export.const_definitions_exporter import (
-    ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
-)
-from src.export.count_exporter import (
-    CountExporter,  # Issue #1802 -- the 70 Mist count endpoints, grouped by scope, menus 235-237
-)
-from src.export.device_events_52w_exporter import (
-    DeviceEvents52wExporter,  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
-)
-from src.export.endpoint_family_exporter import (
-    EndpointFamilyExporter,  # Issue #1807 stage two -- remaining endpoint issues grouped by prompt family.
-)
-from src.export.gateway_test_exporter import (
-    GatewayTestExporter,  # Cat B (1013 SC-001 position 37) -- re-export for MistHelper.GatewayTestExporter callers
-)
-from src.export.license_export_utils import (
-    LicenseExportUtils,  # Cat B (1013 SC-001 position 24) -- re-export for MistHelper.LicenseExportUtils callers
-)
-from src.export.msp_inventory_exporter import (
-    MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu row + static call rewire
-)
-from src.export.msp_license_exporter import (
-    MSPLicenseExporter,  # Issue #1260 -- the MSP license export, menu 238
-)
-from src.export.org_admin_exporter import (
-    OrgAdminExporter,  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
-)
-from src.export.org_alarm_event_exporter import (
-    OrgAlarmEventExporter,  # Cat B (1013 SC-001 position 18) -- re-export for MistHelper.OrgAlarmEventExporter callers
-)
-from src.export.org_client_security_exporter import (
-    OrgClientSecurityExporter,  # Cat B (1013 SC-001 position 32) -- re-export
-)
-from src.export.org_config_exporter import (
-    OrgConfigExporter,  # Cat B (1013 SC-001 position 31) -- re-export for MistHelper.OrgConfigExporter callers
-)
-from src.export.org_cradlepoint_connection_exporter import (
-    OrgCradlepointConnectionExporter,  # Issue #1413 -- Cradlepoint status read, menu 245
-)
-from src.export.org_device_stats_exporter import (
-    OrgDeviceStatsExporter,  # Cat B (1013 SC-001 position 45) -- re-export
-)
-from src.export.org_export_utils import (
-    OrgExportUtils,  # Cat B (1013 SC-001 position 47) -- re-export for MistHelper.OrgExportUtils callers
-)
-from src.export.org_inventory_exporter import (
-    OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
-)
-from src.export.org_inventory_search_exporter import (
-    OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 254
-)
-from src.export.org_search_exporter import (
-    OrgSearchExporter,  # Specs 863, 872, 874-879; issues #1371, #1377, #1379, #1380, #1382, #1383, #1385, #1386.
-)
-from src.export.org_sec_intel_profile_exporter import (
-    OrgSecIntelProfileExporter,  # Issue #1148 -- one SecIntel profile read by id, menu 240
-)
-from src.export.org_site_exporter import (
-    OrgSiteExporter,  # Cat E canonical (1014 P9) -- re-export for MistHelper.OrgSiteExporter callers
-)
-from src.export.org_template_exporter import (
-    OrgTemplateExporter,  # Cat B (1013 SC-001 position 22) -- re-export for MistHelper.OrgTemplateExporter callers
-)
-from src.export.org_webhook_deliveries_exporter import (
-    OrgWebhookDeliveriesExporter,  # Spec 876 / issue #1384 -- webhook delivery search, menu 256
-)
-from src.export.self_account_exporter import (
-    SelfAccountExporter,  # Issue #1415 -- verify an email change token, menu 247
-)
-from src.export.self_export_utils import (
-    SelfExportUtils,  # Cat B (1013 SC-001 position 7) -- re-export for menu row at MistHelper:18167
-)
-from src.export.simple_endpoint_exporter import (
-    SimpleEndpointExporter,  # Issue #1807 -- simple get and list endpoints, grouped by scope.
-)
-from src.export.site_anomaly_exporter import (
-    SiteAnomalyExporter,  # Cat B (1013 SC-001 position 43) -- re-export for MistHelper.SiteAnomalyExporter callers
-)
-from src.export.site_application_list_exporter import (
-    SiteApplicationListExporter,  # Spec 666 / issue #1416 -- getSiteApplicationList menu 213
-)
-from src.export.site_asset_exporter import (
-    SiteAssetExporter,  # Specs 667/668/670 / issues #1417, #1418, #1419 -- site asset menus 210-212
-)
-from src.export.site_client_exporter import (
-    SiteClientExporter,  # Cat B (1013 SC-001 position 14) -- re-export for MistHelper.SiteClientExporter callers
-)
-from src.export.site_config_exporter import (
-    SiteConfigExporter,  # Cat B (1013 SC-001 position 19) -- re-export for MistHelper.SiteConfigExporter callers
-)
-from src.export.site_device_exporter import (
-    SiteDeviceExporter,  # Cat B (1013 SC-001 position 34) -- re-export for MistHelper.SiteDeviceExporter callers
-)
-from src.export.site_export_utils import (  # Cat A canonical (1014 P16)
-    SiteExportUtils,
-)
-from src.export.site_guest_authorization_exporter import (
-    SiteGuestAuthorizationExporter,  # Spec 889 / issue #1397 -- searchSiteGuestAuthorization menu 200
-)
-from src.export.site_insights.device_metric_operation import (
-    DeviceMetricOperation,
-)  # Decomposed Menu 76 entry point
-from src.export.site_insights.site_metric_operation import (
-    SiteMetricOperation,
-)  # Decomposed Menu 74 entry point
-from src.export.site_mist_edge_events_exporter import (
-    SiteMistEdgeEventsExporter,  # Spec 890 / issue #1398 -- searchSiteMistEdgeEvents menu 201
-)
-from src.export.site_nac_client_events_exporter import (
-    SiteNacClientEventsExporter,  # Spec 891 / issue #1399 -- searchSiteNacClientEvents menu 202
-)
-from src.export.site_other_device_events_exporter import (
-    SiteOtherDeviceEventsExporter,  # Spec 894 / issue #1402 -- searchSiteOtherDeviceEvents menu 258
-)
-from src.export.site_search_exporter import (
-    SiteSearchExporter,  # Specs 879-882/897 / issues #1387-#1390, #1405 -- site search menus 215-219
-)
-from src.export.site_system_events_exporter import (
-    SiteSystemEventsExporter,  # Spec 898 / issue #1406 -- searchSiteSystemEvents menu 214
-)
-from src.export.site_wan_usage_exporter import (
-    SiteWanUsageExporter,  # Spec 901 / issue #1409 -- searchSiteWanUsage menu 198
-)
-from src.export.site_webhook_deliveries_exporter import (
-    SiteWebhookDeliveriesExporter,  # Spec 902 / issue #1410 -- searchSiteWebhooksDeliveries menu 199
-)
-from src.export.sites_by_ap_model_exporter import (
-    SitesByAPModelExporter,  # Cat B (1013 SC-001 position 28) -- re-export
-)
-from src.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
-    FirmwareManager,
-    FirmwareManagerConfig,
-)
-from src.firmware.org_ap_upgrader import (  # Cat A canonical (1014 P7)
-    OrgLevelAPFirmwareUpgrader as _OrgLevelAPFirmwareUpgrader,
-)
-from src.firmware.site_auto_upgrade import (  # Cat A canonical (1014 P2)
-    SiteAutoUpgradeConfigurator,
-)
-from src.gateway.gateway_export_utils import (  # Cat A canonical (1014 SC-001 position 13)
-    GatewayExportUtils,  # re-export for MistHelper.GatewayExportUtils callers
-    configure_gateway_export_utils_dependencies,
-)
-from src.gateway.gateway_ha_exporter import (
-    GatewayHaExporter,  # Cat B (1013 SC-001 position 23) -- re-export for MistHelper.GatewayHaExporter callers
-)
-from src.gateway.gateway_stats_exporter import (
-    GatewayStatsExporter,  # Cat A (1014 SC-001 position 12) -- re-export for MistHelper.GatewayStatsExporter callers
-)
-from src.gateway.template_config import GatewayTemplateConfigManager  # Cat A canonical (1013 SC-001)
-from src.input.prompt_client_utils import (
+from src.foundation.runtime.input.prompt_client_utils import (
     PromptClientUtils,  # Cat B (1013 SC-001 position 35) -- re-export for MistHelper.PromptClientUtils callers
 )
-from src.inventory.csv_imports.operation import (
-    CsvImportOperation,  # Menu 292 (issue #3572) -- destructive CSV imports for PSKs, user MACs, and assets.
-)
-from src.inventory.device_replace.operation import (
-    DeviceReplaceOperation,  # Menu 287 (issue #3567) -- Replace a Mist inventory device for an RMA.
-)
-from src.inventory.org_device_inventory_summary_facade import (
-    OrgDeviceInventorySummary,  # Cat B (1013 SC-001 position 29) -- re-export
-)
-from src.network.routing_utils import (  # Cat A canonical (1014 P4)
-    RoutingDeps,
-    RoutingUtils,
-)
-from src.org.mxedge_lifecycle.operation import (
-    MxEdgeLifecycleOperation,  # Menu 293 (issue #3573) -- destructive Mist Edge lifecycle operation.
-)
-from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
-from src.org.org_synthetic_probes_manager import (
-    manage_org_synthetic_probes,  # Menu 206 Zscaler probe manager (side-effect-free until final confirmation)
-)
-from src.org.org_ticket_manager import (
-    OrgTicketManager,  # Cat B (1013 SC-001 position 46) -- re-export for MistHelper.OrgTicketManager callers
-)
-from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
-from src.refactors.anomaly_metrics_discovery import (
+from src.foundation.support.refactors.anomaly_metrics_discovery import (
     AnomalyMetricsDiscovery,  # Cat B (1013 SC-001 pos 43) -- lazy access via mh.AnomalyMetricsDiscovery
 )
-from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # Extracted pool executor (1012 SC-003)
-from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
-from src.refactors.device_config_template_cloner_manager import (
+from src.foundation.support.refactors.connection_pool_executor import (
+    ConnectionPoolExecutor,
+)  # Extracted pool executor (1012 SC-003)
+from src.foundation.support.refactors.data_directory_checker import (
+    DataDirectoryChecker,
+)  # Early data-dir writable check (SC-005)
+from src.foundation.support.refactors.device_config_template_cloner_manager import (
     DeviceConfigTemplateClonerManager,  # Extracted device config template cloner (SC-020)
 )
-from src.refactors.device_data_fetcher import (
+from src.foundation.support.refactors.device_data_fetcher import (
     DeviceDataFetcher,  # Extracted device fetcher (SC-017). Lazy re-export for interactive_display_utils
 )
-from src.refactors.fast_mode_backoff_multiplier import (
+from src.foundation.support.refactors.fast_mode_backoff_multiplier import (
     FastModeBackoffMultiplier,  # Extracted backoff multiplier (SC-028). Lazy re-export for org_device_stats_exporter
 )
 
 # FastModeDevicesPerThread import removed: only referenced from within ConnectionPoolExecutor (1012 SC-003)
-from src.refactors.fast_mode_sequential_max_retries import (
+from src.foundation.support.refactors.fast_mode_sequential_max_retries import (
     FastModeSequentialMaxRetries,  # Cat E (1014 P8) -- re-export for lazy access in api_fetch_utils.py
 )
-from src.refactors.initialize_mist_session import (
+from src.foundation.support.refactors.initialize_mist_session import (
     MistSessionInitializer,  # Extracted token-based session initializer (SC-024)
 )
-from src.refactors.initialize_mist_session_interactive import (
+from src.foundation.support.refactors.initialize_mist_session_interactive import (
     MistSessionInteractiveInitializer,  # Extracted interactive login initializer (SC-023)
 )
-from src.refactors.inventory_csvcomparator import (
+from src.foundation.support.refactors.inventory_csvcomparator import (
     InventoryCSVComparator,  # Extracted inventory CSV comparator adapter (SC-018)
 )
-from src.refactors.is_debug_mode import IsDebugMode  # Extracted debug-mode predicate (SC-002)
-from src.refactors.keyboard_listener import (
-    KeyboardListener,  # Re-exported for src.ssh.cli_shell_manager.CLIShellManager lazy `mh.KeyboardListener` access
+from src.foundation.support.refactors.is_debug_mode import IsDebugMode  # Extracted debug-mode predicate (SC-002)
+from src.foundation.support.refactors.keyboard_listener import (
+    KeyboardListener,  # Preserve the existing behavior.
 )
-from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
+from src.foundation.support.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
+from src.mist.access.api.api_core_fetch_utils import (
+    APICoreFetchUtils,
+)  # Cat E canonical (1014 P10) -- re-export for MistHelper.APICoreFetchUtils callers
+from src.mist.access.api.api_data_fetcher import (
+    APIDataFetcher,  # Cat B (1013 SC-001 position 21) -- re-export for MistHelper.APIDataFetcher callers
+)
+from src.mist.access.api.api_fetch_utils import (
+    APIFetchUtils,
+)  # Cat E canonical (1014 P8) -- re-export for MistHelper.APIFetchUtils callers
+from src.mist.access.audit.audit_analysis_ops import (
+    AuditAnalysisOps,  # Cat B (1013 SC-001 position 12) -- re-export for menu_actions #25/#174 dispatch
+)
+from src.mist.access.auth.interactive import (
+    LoginOrchestrator,  # Re-exported so extracted refactors can resolve it via MistHelper (SC-023)
+    MspOrgSelector,
+)  # Duplicate import (re-stated with comment below). Kept to preserve module load behavior
+from src.mist.intelligence.analytics.data_collection_manager import (
+    DataCollectionManager,  # Cat B (1013 SC-001 position 25) -- re-export for MistHelper.DataCollectionManager callers
+)
+from src.mist.intelligence.analytics.insight_metrics_utils import (
+    InsightMetricsUtils,
+)  # Cat E canonical (1014 P11) -- re-export for MistHelper.InsightMetricsUtils callers
+from src.mist.intelligence.analytics.site_analytics_configurator import (  # Import site analytics configuration tools
+    SiteAnalyticsConfigurator as ExtractedSiteAnalyticsConfigurator,  # Rename to avoid naming conflicts
+)
+from src.mist.intelligence.analytics.site_analytics_configurator import (
+    SiteAnalyticsConfiguratorDeps,
+)  # Import dependency injection class
+from src.mist.intelligence.analytics.site_inventory_health_analyzer import (  # Import the moved dependency.
+    SiteInventoryHealthAnalyzer as ExtractedSiteInventoryHealthAnalyzer,  # Rename to avoid naming conflicts
+)
+from src.mist.intelligence.analytics.site_inventory_health_analyzer import (
+    SiteInventoryHealthAnalyzerDeps,
+)  # Import dependency injection class
+from src.mist.intelligence.analytics.telemetry_emitter import (
+    TelemetryEmitter,  # Cat B (1013 SC-001 position 9) -- re-export for callers at 18629/18632/18711/19062
+)
+from src.mist.networking.network.routing_utils import (  # Cat A canonical (1014 P4)
+    RoutingDeps,
+    RoutingUtils,
+)
+from src.mist.resources.device.ap_profile_migration_manager import (
+    APProfileMigrationManager,  # Menus 207 and 208 -- migrate APs between device profiles and revert
+)
+from src.mist.resources.device.arp_command_manager import (
+    ARPCommandManager,  # Cat B (1013 SC-001 position 42) -- re-export for MistHelper.ARPCommandManager callers
+)
+from src.mist.resources.device.device_reboot_manager import (
+    DeviceRebootManager,  # Cat B (1013 SC-001 position 41) -- re-export for MistHelper.DeviceRebootManager callers
+)
+from src.mist.resources.device.device_utils import (
+    DeviceUtils,  # Cat B (1013 SC-001 position 6) -- re-export for dynamic _mh.DeviceUtils lookup
+)
+from src.mist.resources.device.virtual_chassis import (  # Cat E canonical (1015 T-11) -- fold-in of stub facade
+    VirtualChassisDependencies as _VirtualChassisDependencies,
+)
+from src.mist.resources.device.virtual_chassis import (  # Import the moved dependency.
+    VirtualChassisManager,
+)
+from src.mist.resources.device.virtual_chassis import (  # Import the moved dependency.
+    configure_virtual_chassis_dependencies as _configure_virtual_chassis_dependencies,
+)
+from src.mist.resources.gateway.gateway_export_utils import (  # Cat A canonical (1014 SC-001 position 13)
+    GatewayExportUtils,  # re-export for MistHelper.GatewayExportUtils callers
+    configure_gateway_export_utils_dependencies,
+)
+from src.mist.resources.gateway.gateway_ha_exporter import (
+    GatewayHaExporter,  # Cat B (1013 SC-001 position 23) -- re-export for MistHelper.GatewayHaExporter callers
+)
+from src.mist.resources.gateway.gateway_stats_exporter import (
+    GatewayStatsExporter,  # Cat A (1014 SC-001 position 12) -- re-export for MistHelper.GatewayStatsExporter callers
+)
+from src.mist.resources.gateway.template_config import GatewayTemplateConfigManager  # Cat A canonical (1013 SC-001)
+from src.mist.resources.inventory.csv_imports.operation import (
+    CsvImportOperation,  # Menu 292 (issue #3572) -- destructive CSV imports for PSKs, user MACs, and assets.
+)
+from src.mist.resources.inventory.device_replace.operation import (
+    DeviceReplaceOperation,  # Menu 287 (issue #3567) -- Replace a Mist inventory device for an RMA.
+)
+from src.mist.resources.inventory.org_device_inventory_summary_facade import (
+    OrgDeviceInventorySummary,  # Cat B (1013 SC-001 position 29) -- re-export
+)
+from src.mist.resources.org.mxedge_lifecycle.operation import (
+    MxEdgeLifecycleOperation,  # Menu 293 (issue #3573) -- destructive Mist Edge lifecycle operation.
+)
+from src.mist.resources.org.org_config_migration_manager import (
+    OrgConfigMigrationManager,
+)  # Cat B (1013 SC-001 position 5)
+from src.mist.resources.org.org_synthetic_probes_manager import (
+    manage_org_synthetic_probes,  # Menu 206 Zscaler probe manager (side-effect-free until final confirmation)
+)
+from src.mist.resources.org.org_ticket_manager import (
+    OrgTicketManager,  # Cat B (1013 SC-001 position 46) -- re-export for MistHelper.OrgTicketManager callers
+)
+from src.operations.execution.capture.client_pcap_downloader import (
+    ClientPacketCaptureDownloader,
+)  # Menu 197: interactive client PCAP downloader (issue #421)
+from src.operations.execution.capture.packet_capture import (
+    PacketCaptureManager,
+)  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
+from src.operations.execution.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
+    FirmwareManager,
+    FirmwareManagerConfig,
+)
+from src.operations.execution.firmware.org_ap_upgrader import (  # Cat A canonical (1014 P7)
+    OrgLevelAPFirmwareUpgrader as _OrgLevelAPFirmwareUpgrader,
+)
+from src.operations.execution.firmware.site_auto_upgrade import (  # Cat A canonical (1014 P2)
+    SiteAutoUpgradeConfigurator,
+)
+from src.operations.exporting.export.const_definitions_exporter import (
+    ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
+)
+from src.operations.exporting.export.count_exporter import (
+    CountExporter,  # Issue #1802 -- the 70 Mist count endpoints, grouped by scope, menus 235-237
+)
+from src.operations.exporting.export.device_events_52w_exporter import (
+    DeviceEvents52wExporter,  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
+)
+from src.operations.exporting.export.endpoint_family_exporter import (
+    EndpointFamilyExporter,  # Issue #1807 stage two -- remaining endpoint issues grouped by prompt family.
+)
+from src.operations.exporting.export.gateway_test_exporter import (
+    GatewayTestExporter,  # Cat B (1013 SC-001 position 37) -- re-export for MistHelper.GatewayTestExporter callers
+)
+from src.operations.exporting.export.license_export_utils import (
+    LicenseExportUtils,  # Cat B (1013 SC-001 position 24) -- re-export for MistHelper.LicenseExportUtils callers
+)
+from src.operations.exporting.export.msp_inventory_exporter import (
+    MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu row + static call rewire
+)
+from src.operations.exporting.export.msp_license_exporter import (
+    MSPLicenseExporter,  # Issue #1260 -- the MSP license export, menu 238
+)
+from src.operations.exporting.export.org_admin_exporter import (
+    OrgAdminExporter,  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
+)
+from src.operations.exporting.export.org_alarm_event_exporter import (
+    OrgAlarmEventExporter,  # Cat B (1013 SC-001 position 18) -- re-export for MistHelper.OrgAlarmEventExporter callers
+)
+from src.operations.exporting.export.org_client_security_exporter import (
+    OrgClientSecurityExporter,  # Cat B (1013 SC-001 position 32) -- re-export
+)
+from src.operations.exporting.export.org_config_exporter import (
+    OrgConfigExporter,  # Cat B (1013 SC-001 position 31) -- re-export for MistHelper.OrgConfigExporter callers
+)
+from src.operations.exporting.export.org_cradlepoint_connection_exporter import (
+    OrgCradlepointConnectionExporter,  # Issue #1413 -- Cradlepoint status read, menu 245
+)
+from src.operations.exporting.export.org_device_stats_exporter import (
+    OrgDeviceStatsExporter,  # Cat B (1013 SC-001 position 45) -- re-export
+)
+from src.operations.exporting.export.org_export_utils import (
+    OrgExportUtils,  # Cat B (1013 SC-001 position 47) -- re-export for MistHelper.OrgExportUtils callers
+)
+from src.operations.exporting.export.org_inventory_exporter import (
+    OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
+)
+from src.operations.exporting.export.org_inventory_search_exporter import (
+    OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 254
+)
+from src.operations.exporting.export.org_search_exporter import (
+    OrgSearchExporter,  # Specs 863, 872, 874-879; issues #1371, #1377, #1379, #1380, #1382, #1383, #1385, #1386.
+)
+from src.operations.exporting.export.org_sec_intel_profile_exporter import (
+    OrgSecIntelProfileExporter,  # Issue #1148 -- one SecIntel profile read by id, menu 240
+)
+from src.operations.exporting.export.org_site_exporter import (
+    OrgSiteExporter,  # Cat E canonical (1014 P9) -- re-export for MistHelper.OrgSiteExporter callers
+)
+from src.operations.exporting.export.org_template_exporter import (
+    OrgTemplateExporter,  # Cat B (1013 SC-001 position 22) -- re-export for MistHelper.OrgTemplateExporter callers
+)
+from src.operations.exporting.export.org_webhook_deliveries_exporter import (
+    OrgWebhookDeliveriesExporter,  # Spec 876 / issue #1384 -- webhook delivery search, menu 256
+)
+from src.operations.exporting.export.self_account_exporter import (
+    SelfAccountExporter,  # Issue #1415 -- verify an email change token, menu 247
+)
+from src.operations.exporting.export.self_export_utils import (
+    SelfExportUtils,  # Cat B (1013 SC-001 position 7) -- re-export for menu row at MistHelper:18167
+)
+from src.operations.exporting.export.simple_endpoint_exporter import (
+    SimpleEndpointExporter,  # Issue #1807 -- simple get and list endpoints, grouped by scope.
+)
+from src.operations.exporting.export.site_anomaly_exporter import (
+    SiteAnomalyExporter,  # Cat B (1013 SC-001 position 43) -- re-export for MistHelper.SiteAnomalyExporter callers
+)
+from src.operations.exporting.export.site_application_list_exporter import (
+    SiteApplicationListExporter,  # Spec 666 / issue #1416 -- getSiteApplicationList menu 213
+)
+from src.operations.exporting.export.site_asset_exporter import (
+    SiteAssetExporter,  # Specs 667/668/670 / issues #1417, #1418, #1419 -- site asset menus 210-212
+)
+from src.operations.exporting.export.site_client_exporter import (
+    SiteClientExporter,  # Cat B (1013 SC-001 position 14) -- re-export for MistHelper.SiteClientExporter callers
+)
+from src.operations.exporting.export.site_config_exporter import (
+    SiteConfigExporter,  # Cat B (1013 SC-001 position 19) -- re-export for MistHelper.SiteConfigExporter callers
+)
+from src.operations.exporting.export.site_device_exporter import (
+    SiteDeviceExporter,  # Cat B (1013 SC-001 position 34) -- re-export for MistHelper.SiteDeviceExporter callers
+)
+from src.operations.exporting.export.site_export_utils import (  # Cat A canonical (1014 P16)
+    SiteExportUtils,
+)
+from src.operations.exporting.export.site_guest_authorization_exporter import (
+    SiteGuestAuthorizationExporter,  # Spec 889 / issue #1397 -- searchSiteGuestAuthorization menu 200
+)
+from src.operations.exporting.export.site_insights.device_metric_operation import (
+    DeviceMetricOperation,
+)  # Decomposed Menu 76 entry point
+from src.operations.exporting.export.site_insights.site_metric_operation import (
+    SiteMetricOperation,
+)  # Decomposed Menu 74 entry point
+from src.operations.exporting.export.site_mist_edge_events_exporter import (
+    SiteMistEdgeEventsExporter,  # Spec 890 / issue #1398 -- searchSiteMistEdgeEvents menu 201
+)
+from src.operations.exporting.export.site_nac_client_events_exporter import (
+    SiteNacClientEventsExporter,  # Spec 891 / issue #1399 -- searchSiteNacClientEvents menu 202
+)
+from src.operations.exporting.export.site_other_device_events_exporter import (
+    SiteOtherDeviceEventsExporter,  # Spec 894 / issue #1402 -- searchSiteOtherDeviceEvents menu 258
+)
+from src.operations.exporting.export.site_search_exporter import (
+    SiteSearchExporter,  # Specs 879-882/897 / issues #1387-#1390, #1405 -- site search menus 215-219
+)
+from src.operations.exporting.export.site_system_events_exporter import (
+    SiteSystemEventsExporter,  # Spec 898 / issue #1406 -- searchSiteSystemEvents menu 214
+)
+from src.operations.exporting.export.site_wan_usage_exporter import (
+    SiteWanUsageExporter,  # Spec 901 / issue #1409 -- searchSiteWanUsage menu 198
+)
+from src.operations.exporting.export.site_webhook_deliveries_exporter import (
+    SiteWebhookDeliveriesExporter,  # Spec 902 / issue #1410 -- searchSiteWebhooksDeliveries menu 199
+)
+from src.operations.exporting.export.sites_by_ap_model_exporter import (
+    SitesByAPModelExporter,  # Cat B (1013 SC-001 position 28) -- re-export
+)
+from src.operations.wan.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 
 MainEntrypoint.bind_host_module(sys.modules[__name__])  # Give source packages a bound host without root imports.
 
-from src.device.client_session_control.handler import (
-    ClientSessionControl,  # Menu 286 (issue #3566) -- destructive client session control handler.
-)
-from src.gateway.ssr_registration.operation import (
-    SsrRegistrationCommands,  # Menu 288 (issue #3568) -- show SSR registration commands.
-)
-from src.marvis.actions.operation import (
-    MarvisActionsOperation,  # Menu 270 (issue #3299) -- Marvis Actions export and bulk resolve.
-)
-from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
-from src.refactors.marvis_data_utils import (
+from src.foundation.runtime.time.time_utils import TimeUtils  # Cat E canonical (1014 P6)
+from src.foundation.runtime.validation.validation_utils import ValidationUtils  # Cat E canonical (1014 P5)
+from src.foundation.support.refactors.maps_manager_launcher import (
+    MapsManagerLauncher,
+)  # Extracted Maps Manager launcher (SC-006)
+from src.foundation.support.refactors.marvis_data_utils import (
     MarvisDataUtilsFactory,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
 )
-from src.refactors.mist_wan_target_ports import (
+from src.foundation.support.refactors.mist_wan_target_ports import (
     MistWanTargetPorts,  # Extracted operator-configured WAN target-ports list (SC-032)
 )
-from src.refactors.msp_privilege_detection import (
+from src.foundation.support.refactors.msp_privilege_detection import (
     detect_msp_privileges,  # Extracted MSP privilege detector (1015 T-05, Cat E)
 )
-from src.refactors.package_import_map import (
+from src.foundation.support.refactors.package_import_map import (
     PackageImportMapManager,  # Extracted pip-name -> import-name mapping (SC-025)
 )
-from src.refactors.run_interactive_test import (
+from src.foundation.support.refactors.run_interactive_test import (
     RunInteractiveTestManager,  # Extracted interactive-test manager (SC-011)
 )
-from src.refactors.service_ping_launcher import ServicePingLauncher  # Extracted Service Ping launcher (SC-008)
-from src.refactors.sqlite_database_writer import (
+from src.foundation.support.refactors.service_ping_launcher import (
+    ServicePingLauncher,
+)  # Extracted Service Ping launcher (SC-008)
+from src.foundation.support.refactors.sqlite_database_writer import (
     SQLiteDatabaseWriter,  # Extracted SQLite writer (SC-003) -- re-export for MistHelper.SQLiteDatabaseWriter callers
 )
-from src.refactors.switch_to_interactive_login import (
+from src.foundation.support.refactors.switch_to_interactive_login import (
     SwitchToInteractiveLoginManager,  # Extracted switch-to-interactive-login manager (SC-010)
 )
-from src.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
-from src.refactors.wan2_migration_launcher import WAN2MigrationLauncher  # Extracted WAN2 migration launcher (SC-009)
-from src.refactors.wan_probe_device_override_manager import (
+from src.foundation.support.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
+from src.foundation.support.refactors.wan2_migration_launcher import (
+    WAN2MigrationLauncher,
+)  # Extracted WAN2 migration launcher (SC-009)
+from src.foundation.support.refactors.wan_probe_device_override_manager import (
     WANProbeDeviceOverrideManager,  # Extracted WAN probe device override manager (SC-021)
 )
-from src.refactors.wanprobe_config_manager import (
+from src.foundation.support.refactors.wanprobe_config_manager import (
     WANProbeConfigManager,  # Extracted WAN probe config manager (SC-015)
 )
-from src.refactors.wlanradius_timer_manager import (
+from src.foundation.support.refactors.wlanradius_timer_manager import (
     WLANRadiusTimerManager,  # Extracted WLAN RADIUS timer manager (SC-014)
 )
-from src.reports.admin_token_hygiene.operation import AdminTokenHygieneReport  # Menu 273 (issue #3554) -- tokens.
-from src.reports.alert_digest.operation import (
-    AlertDigestOperation,  # Menu 280 and 281 (issue #3561) -- alert digest and alarm acknowledgement.
-)
-from src.reports.ap_scorecard.operation import (
-    ApScorecard,  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.
-)
-from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Menu 272 (issue #3553) -- cert expiry.
-from src.reports.client_fingerprint_census.operation import (
-    ClientFingerprintCensus,  # Menu 289 (issue #3569) -- export a site client fingerprint census.
-)
-from src.reports.e911_bssid import (
-    E911BSSIDReportGenerator,  # Module-level for tests + lazy-import re-export for src.export.org_export_utils
-)
-from src.reports.global_wired_client_report_generator import (
-    GlobalWiredClientReportGenerator,  # Cat B (1013 SC-001 position 36) -- re-export
-)
-from src.reports.offline_device_reporter import (
-    OfflineDeviceReporter,  # Cat B (1013 SC-001 position 44) -- re-export for MistHelper.OfflineDeviceReporter callers
-)
-from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist  # Menu 276 (issue #3557) -- posture.
-from src.reports.psk_hygiene.operation import PskHygieneReport  # Menu 274 (issue #3555) -- PSK hygiene report.
-from src.reports.rogue_pci_evidence.operation import (
-    RoguePciEvidencePack,  # Menu 282 (issue #3562) -- export rogue and PCI evidence files.
-)
-from src.reports.sfp_transceiver_data_processor import (
-    SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
-)
-from src.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 275 (issue #3556) -- site variables.
-from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport  # Menu 242 SSID coverage report.
-from src.reports.subscription_expiry.operation import SubscriptionExpiryReport  # Menu 271 (issue #3552) -- expiry.
-from src.reports.switch_scorecard.operation import (
-    SwitchScorecard,  # Menu 277 (issue #3558) -- organization switch scorecard report.
-)
-from src.reports.wan_edge_scorecard.scorecard import (
-    WanEdgeScorecard,  # Menu 279 (issue #3560) -- export the organization WAN edge scorecard.
-)
-from src.reports.wired_client_manufacturer_report_generator import (
-    WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
-)
-from src.security.rogue_dhcp import (
-    RogueDhcpScanOperation,  # Menu 269 (issue #2985) -- org-wide rogue DHCP server scan.
-)
-from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
-from src.site.bulk_radius_wlan_config_manager import (
-    BulkRadiusWLANConfigManager,  # Cat B (1013 SC-001 position 15) -- re-export
-)
-from src.site.rrm_reset.operation import (
-    RrmResetOperation,  # Menu 291 (issue #3571) -- capture RRM before and after optimize or reset.
-)
-from src.site.site_config_manager import (  # Cat A canonical (1013 SC-003)
-    SiteConfigDependencies as _SiteConfigDependencies,
-)
-from src.site.site_config_manager import (  # Preserve the existing behavior during the compliance refactor.
-    SiteConfigManager,
-)
-from src.site.site_config_manager import (  # Preserve the existing behavior during the compliance refactor.
-    configure_site_config_manager_dependencies as _configure_site_config_dependencies,
-)
-from src.ssh.cli_shell_manager import CLIShellManager  # Preserve the existing behavior during the compliance refactor.
-from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
-from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps  # Cat A canonical (1014 P15)
-from src.time.time_utils import TimeUtils  # Cat E canonical (1014 P6)
-from src.troubleshooting.interactive_test_runner import (
-    InteractiveTestRunner,
-)  # Import interactive diagnostic test runner
-from src.troubleshooting.marvis_troubleshoot_utils import (
-    MarvisTroubleshootDeps,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
-)
-from src.troubleshooting.marvis_troubleshoot_utils import (
-    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export
-)
-from src.troubleshooting.nac_idp_credential_test.operation import (
-    NacIdpCredentialTest,  # Menu 285 (issue #3565) -- validate one NAC identity provider credential safely.
-)
-from src.troubleshooting.rf_diagnostics.operation import (
-    RfDiagnosticsOperation,  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.
-)
-from src.troubleshooting.sms_provider_test.operation import (
-    SmsProviderTest,  # Menu 284 (issue #3564) -- Test guest portal SMS provider setup.
-)
-from src.troubleshooting.synthetic_test_trigger.operation import (
-    SyntheticTestTrigger,  # Menu 283 (issue #3563) -- trigger one synthetic test on demand.
-)
-from src.troubleshooting.troubleshoot_utils import (
-    TroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
-)
-from src.ui.display_utils import (
-    DisplayUtils,  # Cat B (1013 SC-001 position 11) -- re-export for lazy _MH.DisplayUtils callers
-)
-from src.ui.interactive_display_utils import (
-    InteractiveDisplayUtils,  # Cat B (1013 SC-001 position 10) -- re-export for callers at 17392/17393/17394/17395
-)
-from src.utils.environment_utils import (
+from src.foundation.support.utils.environment_utils import (
     EnvironmentUtils,  # Cat B (1013 SC-001 position 33) -- re-export for MistHelper.EnvironmentUtils callers
 )
-from src.utils.file_path_utils import (
+from src.foundation.support.utils.file_path_utils import (
     FilePathUtils,  # Cat E canonical (1015 T-13) -- re-export for MistHelper.FilePathUtils callers
 )
-from src.utils.filter_operator_engine import (
+from src.foundation.support.utils.filter_operator_engine import (
     FilterOperatorEngine,  # Cat B (1013 SC-001 position 40) -- re-export for MistHelper.FilterOperatorEngine callers
 )
-from src.utils.operation_registry import (
+from src.foundation.support.utils.operation_registry import (
     OperationRegistry,  # Cat B (1013 SC-001 position 13) -- re-export for menu safety classification
 )
-from src.validation.validation_utils import ValidationUtils  # Cat E canonical (1014 P5)
-from src.wan_hub_group_manager import WanHubGroupNumberManager  # Import WAN hub group number manager for hub routing
-from src.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
-from src.websocket.commands import MacTableCommand  # Import WebSocket show-MAC-table command handler
-from src.websocket.context import WebSocketCmdDeps  # Import WebSocket command dependency injection class
-from src.websocket.diagnostics import (
+from src.interfaces.visualization.ui.display_utils import (
+    DisplayUtils,  # Cat B (1013 SC-001 position 11) -- re-export for lazy _MH.DisplayUtils callers
+)
+from src.interfaces.visualization.ui.interactive_display_utils import (
+    InteractiveDisplayUtils,  # Cat B (1013 SC-001 position 10) -- re-export for callers at 17392/17393/17394/17395
+)
+from src.mist.intelligence.marvis.actions.operation import (
+    MarvisActionsOperation,  # Menu 270 (issue #3299) -- Marvis Actions export and bulk resolve.
+)
+from src.mist.intelligence.reports.admin_token_hygiene.operation import (
+    AdminTokenHygieneReport,
+)  # Menu 273 (issue #3554) -- tokens.
+from src.mist.intelligence.reports.alert_digest.operation import (
+    AlertDigestOperation,  # Menu 280 and 281 (issue #3561) -- alert digest and alarm acknowledgement.
+)
+from src.mist.intelligence.reports.ap_scorecard.operation import (
+    ApScorecard,  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.
+)
+from src.mist.intelligence.reports.certificate_expiry.operation import (
+    CertificateExpiryReport,
+)  # Menu 272 (issue #3553) -- cert expiry.
+from src.mist.intelligence.reports.client_fingerprint_census.operation import (
+    ClientFingerprintCensus,  # Menu 289 (issue #3569) -- export a site client fingerprint census.
+)
+from src.mist.intelligence.reports.e911_bssid import (
+    E911BSSIDReportGenerator,  # Preserve the existing behavior.
+)
+from src.mist.intelligence.reports.global_wired_client_report_generator import (
+    GlobalWiredClientReportGenerator,  # Cat B (1013 SC-001 position 36) -- re-export
+)
+from src.mist.intelligence.reports.offline_device_reporter import (
+    OfflineDeviceReporter,  # Cat B (1013 SC-001 position 44) -- re-export for MistHelper.OfflineDeviceReporter callers
+)
+from src.mist.intelligence.reports.org_security_posture.runner import (
+    OrgSecurityPostureChecklist,
+)  # Menu 276 (issue #3557) -- posture.
+from src.mist.intelligence.reports.psk_hygiene.operation import (
+    PskHygieneReport,
+)  # Menu 274 (issue #3555) -- PSK hygiene report.
+from src.mist.intelligence.reports.rogue_pci_evidence.operation import (
+    RoguePciEvidencePack,  # Menu 282 (issue #3562) -- export rogue and PCI evidence files.
+)
+from src.mist.intelligence.reports.sfp_transceiver_data_processor import (
+    SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
+)
+from src.mist.intelligence.reports.site_variable_audit.operation import (
+    SiteVariableAudit,
+)  # Menu 275 (issue #3556) -- site variables.
+from src.mist.intelligence.reports.ssid_broadcast_gap_report import (
+    SSIDBroadcastGapReport,
+)  # Menu 242 SSID coverage report.
+from src.mist.intelligence.reports.subscription_expiry.operation import (
+    SubscriptionExpiryReport,
+)  # Menu 271 (issue #3552) -- expiry.
+from src.mist.intelligence.reports.switch_scorecard.operation import (
+    SwitchScorecard,  # Menu 277 (issue #3558) -- organization switch scorecard report.
+)
+from src.mist.intelligence.reports.wan_edge_scorecard.scorecard import (
+    WanEdgeScorecard,  # Menu 279 (issue #3560) -- export the organization WAN edge scorecard.
+)
+from src.mist.intelligence.reports.wired_client_manufacturer_report_generator import (
+    WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
+)
+from src.mist.intelligence.troubleshooting.interactive_test_runner import (
+    InteractiveTestRunner,
+)  # Import interactive diagnostic test runner
+from src.mist.intelligence.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootDeps,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
+)
+from src.mist.intelligence.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export
+)
+from src.mist.intelligence.troubleshooting.nac_idp_credential_test.operation import (
+    NacIdpCredentialTest,  # Menu 285 (issue #3565) -- validate one NAC identity provider credential safely.
+)
+from src.mist.intelligence.troubleshooting.rf_diagnostics.operation import (
+    RfDiagnosticsOperation,  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.
+)
+from src.mist.intelligence.troubleshooting.sms_provider_test.operation import (
+    SmsProviderTest,  # Menu 284 (issue #3564) -- Test guest portal SMS provider setup.
+)
+from src.mist.intelligence.troubleshooting.synthetic_test_trigger.operation import (
+    SyntheticTestTrigger,  # Menu 283 (issue #3563) -- trigger one synthetic test on demand.
+)
+from src.mist.intelligence.troubleshooting.troubleshoot_utils import (
+    TroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
+)
+from src.mist.realtime.websocket.commands import MacTableCommand  # Import WebSocket show-MAC-table command handler
+from src.mist.realtime.websocket.context import WebSocketCmdDeps  # Import WebSocket command dependency injection class
+from src.mist.realtime.websocket.diagnostics import (
     ArpDeviceExecutor,
     PingDeviceExecutor,
 )  # WebSocket network diagnostic command executors
-from src.websocket.manager import WebSocketManager  # Import WebSocket connection manager for long-running diagnostics
+from src.mist.realtime.websocket.manager import (
+    WebSocketManager,
+)  # Import WebSocket connection manager for long-running diagnostics
+from src.mist.resources.device.client_session_control.handler import (
+    ClientSessionControl,  # Menu 286 (issue #3566) -- destructive client session control handler.
+)
+from src.mist.resources.gateway.ssr_registration.operation import (
+    SsrRegistrationCommands,  # Menu 288 (issue #3568) -- show SSR registration commands.
+)
+from src.mist.resources.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
+from src.mist.resources.site.bulk_radius_wlan_config_manager import (
+    BulkRadiusWLANConfigManager,  # Cat B (1013 SC-001 position 15) -- re-export
+)
+from src.mist.resources.site.rrm_reset.operation import (
+    RrmResetOperation,  # Menu 291 (issue #3571) -- capture RRM before and after optimize or reset.
+)
+from src.mist.resources.site.site_config_manager import (  # Cat A canonical (1013 SC-003)
+    SiteConfigDependencies as _SiteConfigDependencies,
+)
+from src.mist.resources.site.site_config_manager import (  # Import the moved dependency.
+    SiteConfigManager,
+)
+from src.mist.resources.site.site_config_manager import (  # Import the moved dependency.
+    configure_site_config_manager_dependencies as _configure_site_config_dependencies,
+)
+from src.operations.execution.ssh.cli_shell_manager import (
+    CLIShellManager,
+)  # Preserve the existing behavior during the compliance refactor.
+from src.operations.execution.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
+from src.operations.execution.ssh.ssh_runner_manager import (
+    SSHRunnerManager,
+    SSHRunnerManagerDeps,
+)  # Cat A canonical (1014 P15)
+from src.operations.protection.security.rogue_dhcp import (
+    RogueDhcpScanOperation,  # Menu 269 (issue #2985) -- org-wide rogue DHCP server scan.
+)
+from src.operations.wan.wan_hub_group_manager import (
+    WanHubGroupNumberManager,
+)  # Import WAN hub group number manager for hub routing
+from src.operations.wan.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
 
 # ============================================================================
 # CONFIGURATION DATACLASSES (5-Item Rule Compliance)
@@ -958,7 +998,7 @@ def _parse_requirements_file(
         # dead-code). The function (~430 lines, cyclomatic 64) was a leftover legacy
         # implementation never called from anywhere -- production startup uses the
         # canonical _early_dependency_check() defined below which delegates to the
-        # extracted src/bootstrap/* orchestrator.
+        # extracted src/foundation/runtime/bootstrap/* orchestrator.
 
 
 def _early_dependency_check() -> None:  # Public entry point. Delegates to the extracted bootstrap modules
@@ -1013,7 +1053,7 @@ except ImportError:  # numpy not installed
     np = None  # None lets runtime guards detect absence
 
 try:  # The tool needs websocket-client for live device diagnostics
-    import websocket  # WebSocket client fail-fast install guard (used by src.device.arp_command_manager)
+    import websocket  # WebSocket client fail-fast install guard (used by src.mist.resources.device.arp_command_manager)
 except ImportError as _ws_err:  # Required dependency is not installed
     raise ImportError(
         "websocket-client is required but not installed. Run: pip install websocket-client"
@@ -1034,10 +1074,10 @@ try:  # Import the SDK without starting a session or touching the network.
 except ImportError:  # The bootstrap dependency check reports the missing SDK before runtime modes start.
     pass  # Keep the public name available for environments that install dependencies later.
 
-    # tqdm wrapper: canonical home is src/utils/tqdm_wrapper.py (1015 T-14, Cat E).
+    # tqdm wrapper: canonical home is src/foundation/support/utils/tqdm_wrapper.py (1015 T-14, Cat E).
     # The wrapper resolves to the real tqdm package if installed, else a no-op pass-through.
     # Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
-from src.utils.tqdm_wrapper import tqdm  # Cat E canonical (1015 T-14) -- re-export.
+from src.foundation.support.utils.tqdm_wrapper import tqdm  # Cat E canonical (1015 T-14) -- re-export.
 
 if "requests" not in globals():  # Keep the requests name without importing the HTTP stack during module import.
     requests: Any = None  # Bootstrap and deferred imports publish requests after dependency checks run.
@@ -1078,7 +1118,7 @@ try:  # rapidfuzz is optional (fast fuzzy string matching)
 except ImportError:  # rapidfuzz not installed
     fuzz = None  # None lets callers skip fuzzy matching
 
-    # Keyboard listener functionality moved to src/refactors/keyboard_listener.py
+    # Keyboard listener functionality moved to src/foundation/support/refactors/keyboard_listener.py
     # (PR-13). The extracted class KeyboardListener preserves the no-op stub for the
     # single remaining call site (interactive SSR/SRX websocket shell). No wrapper or
     # alias is retained here per FR-005 (no shims left in MistHelper).
@@ -1181,7 +1221,7 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
     }
 
     MenuEntry: ClassVar[type[Any]] = __import__(  # WHY: keep MenuEntry off the module symbol table.
-        "src.utils.menu_entry", fromlist=("MenuEntry",)
+        "src.foundation.support.utils.menu_entry", fromlist=("MenuEntry",)
     ).MenuEntry
 
     _OPTIONAL_PACKAGES_RAW: ClassVar[dict[str, str | None]] = {  # Class-level optional spec map (data, not behavior)
@@ -2105,7 +2145,7 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         Returns:
             Tuple of (success: bool, global_assignments: dict)
         """
-        from src.refactors.serial_cc.import_initialization_service import (
+        from src.foundation.support.refactors.serial_cc.import_initialization_service import (
             ImportInitializationService,
         )  # Preserve the existing behavior during the compliance refactor.
 
@@ -2117,7 +2157,7 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         self,
     ) -> dict[str, Any]:  # Preserve the existing behavior during the compliance refactor.
         """Get dictionary of global variable assignments for imported modules."""
-        from src.refactors.serial_cc.global_assignments_builder import (
+        from src.foundation.support.refactors.serial_cc.global_assignments_builder import (
             GlobalAssignmentsBuilderService,
         )  # Preserve the existing behavior during the compliance refactor.
 
@@ -2462,7 +2502,7 @@ LAST_SELECTED_SITE_ID: str | None = None  # Preserve the existing behavior durin
 # ============================================================================
 
 
-from src.utils.input_utils import InputUtils  # Cat E canonical (1015 T-09) -- re-export.
+from src.foundation.support.utils.input_utils import InputUtils  # Cat E canonical (1015 T-09) -- re-export.
 
 # ============================================================================
 # CONFIGURATION VARIABLES
@@ -3473,18 +3513,18 @@ def _configure_session_timeout(
     logger.debug("Session timeout setup is owned by MistSessionConfigurator")  # Confirm no patch ran here.
 
 
-from src.api.tenant_fetch import APITenantFetchUtils  # Re-exported for ServicePingLauncher late-binding
-from src.data.data_processing_utils import DataProcessingUtils  # Cat E canonical (1015 T-10).
-from src.export.data_exporter import DataExporter  # T-08 re-export
-from src.ui.prompt_utils import PromptUtils  # T-07 re-export
+from src.foundation.models.data.data_processing_utils import DataProcessingUtils  # Cat E canonical (1015 T-10).
+from src.interfaces.visualization.ui.prompt_utils import PromptUtils  # T-07 re-export
+from src.mist.access.api.tenant_fetch import APITenantFetchUtils  # Re-exported for ServicePingLauncher late-binding
+from src.operations.exporting.export.data_exporter import DataExporter  # T-08 re-export
 
 
 def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands.
     """Create DeviceUtilityCommands instance with MistHelper globals."""
-    from src.device.utility_commands import (  # Import the extracted class + deps.
+    from src.mist.resources.device.utility_commands import (  # Import the extracted class + deps.
         DeviceUtilityCommands as _DUC,
     )
-    from src.device.utility_commands import (  # Preserve the existing behavior during the compliance refactor.
+    from src.mist.resources.device.utility_commands import (  # Import the moved dependency.
         UtilityCommandsDeps as _Deps,
     )
 
@@ -3502,7 +3542,9 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
 def _build_gateway_export_kwargs() -> dict[str, Any]:  # Preserve the existing behavior during the compliance refactor.
     """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
     logger.info("Reading the canonical site exclude prefix")  # Log before the prefix module read.
-    from src.refactors import mist_site_exclude_prefix  # Read the canonical filter owner at dispatch time.
+    from src.foundation.support.refactors import (
+        mist_site_exclude_prefix,
+    )  # Read the canonical filter owner at dispatch time.
 
     logger.debug(  # Log the filter length without exposing the configured text.
         "Read the canonical site exclude prefix with length %s",
@@ -3619,11 +3661,13 @@ def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle f
     )
 
     # ============================================================================
-    # RATE LIMITING & ADDRESS UTILITIES (extracted to src/utils/)
+    # RATE LIMITING & ADDRESS UTILITIES (extracted to src/foundation/support/utils/)
     # ============================================================================
 
 
-from src.utils.rate_limiting import RateLimitingUtils  # Preserve the existing behavior during the compliance refactor.
+from src.foundation.support.utils.rate_limiting import (
+    RateLimitingUtils,
+)  # Preserve the existing behavior during the compliance refactor.
 
 # ============================================================================
 # ORG CONFIG MIGRATION MANAGER CLASS
@@ -6935,8 +6979,8 @@ def _launch_capture_portal(
     Args:
         dev_debug: True to start the local development server with the debugger.
     """
-    from src.upgrade_portal.app.factory import create_app  # Deferred import keeps CLI startup fast
-    from src.upgrade_portal.runtime.server import resolve_host  # Deferred for the same reason
+    from src.interfaces.portals.upgrade_portal.app.factory import create_app  # Deferred import keeps CLI startup fast
+    from src.interfaces.portals.upgrade_portal.runtime.server import resolve_host  # Deferred for the same reason
 
     port = _capture_portal_port()  # CAPTURE_PORT with the documented default of 8056
     # A container needs every address, because a published port cannot reach a loopback bind. A
@@ -6987,7 +7031,7 @@ def _launch_mib_generator() -> None:  # Preserve the existing behavior during th
         Menu 243 and the --mib-generate flag need one shared start path, the
         same rule that menu 241 and --metrics-gateway follow.
     """
-    from src.mib_generator.runner import (
+    from src.operations.hardware.mib_generator.runner import (
         DEFAULT_OUTPUT,
         MibGeneratorRunner,
     )  # Preserve the existing behavior during the compliance refactor.
@@ -7013,12 +7057,14 @@ def _launch_metrics_gateway(
     Args:
         dev_debug: True to start the local development server with the debugger.
     """
-    from src.metrics_gateway.service import (
+    from src.interfaces.monitoring.metrics_gateway.service import (
         GatewaySettings,
         build_cache,
         start_refresh_thread,
     )  # Preserve the existing behavior during the compliance refactor.
-    from src.metrics_gateway.web import create_app  # Preserve the existing behavior during the compliance refactor.
+    from src.interfaces.monitoring.metrics_gateway.web import (
+        create_app,
+    )  # Preserve the existing behavior during the compliance refactor.
 
     in_container = EnvironmentUtils.is_running_in_container()  # A container binds every address
     settings = GatewaySettings.from_environment(in_container)  # One frozen record holds every setting
@@ -7072,19 +7118,21 @@ def _run_metrics_snmp(
     Args:
         _args: The parsed command-line namespace. This mode reads no flag.
     """
-    from src.metrics_gateway.snmp import (
+    from src.interfaces.monitoring.metrics_gateway.snmp import (
         SnmpPassPersistResponder,
         protect_protocol_streams,
     )  # Preserve the existing behavior during the compliance refactor.
 
     protect_protocol_streams()  # First call of this mode. A later call cannot recall a sent record.
 
-    from src.metrics_gateway.service import (
+    from src.foundation.support.utils.environment_utils import (
+        EnvironmentUtils,
+    )  # Import EnvironmentUtils for container detection
+    from src.interfaces.monitoring.metrics_gateway.service import (
         GatewaySettings,
         build_cache,
         start_refresh_thread,
     )  # Preserve the existing behavior during the compliance refactor.
-    from src.utils.environment_utils import EnvironmentUtils  # Import EnvironmentUtils for container detection
 
     logger.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
     settings = GatewaySettings.from_environment(
@@ -7126,7 +7174,7 @@ def _run_mib_generator_mode(
     """
     from pathlib import Path  # A local import keeps the start of the tool free of the generator modules.
 
-    from src.mib_generator.runner import (
+    from src.operations.hardware.mib_generator.runner import (
         DEFAULT_OUTPUT,
         MibGeneratorRunner,
     )  # Preserve the existing behavior during the compliance refactor.
@@ -7755,7 +7803,9 @@ def _run_tui_event_loop(
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Instantiate and run the TUI event loop. Handles Ctrl+C cleanly and Exceptions with traceback."""
     try:
-        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup
+        from src.interfaces.visualization.ui.tui import (
+            MistHelperTUI,
+        )  # PLC0415: lazy import avoids loading Rich at startup
 
         tui = MistHelperTUI(debug_mode=args.debug)  # Create TUI with debug flag
         tui.apisession = MainEntrypoint.context.apisession  # Pass global API session so TUI can execute live API calls
@@ -8112,7 +8162,7 @@ def _run_systematic_test_mode(
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Run all safe menu options once and exit 0 on pass / 1 on fail."""
     logger.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Trace before dispatch
-    from src.refactors.run_systematic_test import (  # Preserve the existing behavior during the compliance refactor.
+    from src.foundation.support.refactors.run_systematic_test import (  # Import the moved dependency.
         RunSystematicTestManager,
     )
 

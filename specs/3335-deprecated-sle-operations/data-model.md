@@ -14,7 +14,7 @@ Existing exported records and historical stored data remain untouched.
 
 **Existing type**: `_EndpointFamilyOp`.
 
-**Owner**: `src/export/endpoint_family_exporter.py`.
+**Owner**: `src/operations/exporting/export/endpoint_family_exporter.py`.
 
 | Field | Existing meaning | Required treatment |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ No duplicate registration is introduced.
 
 **Existing type**: `EndpointInfo`.
 
-**Owner**: `src/export/endpoint_catalog.py`.
+**Owner**: `src/operations/exporting/export/endpoint_catalog.py`.
 
 **Relationship**: The exact operation identifier joins a selectable row to its catalog entry.
 
@@ -76,7 +76,7 @@ The unknown-operation fallback remains unchanged and does not create a selectabl
 
 **Existing representation**: `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
 
-**Owner**: `src/refactors/endpoint_primary_key_strategies.py`.
+**Owner**: `src/foundation/support/refactors/endpoint_primary_key_strategies.py`.
 
 **Relationship**: `api_function_name` selects the existing strategy for a retained export.
 

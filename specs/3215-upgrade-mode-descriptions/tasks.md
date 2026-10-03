@@ -18,12 +18,12 @@
 
 ## Phase 3: User Story 1 - Understand each upgrade mode
 
-- [x] T007 [US1] Replace the mode descriptions. (delivered: src/upgrade_portal/app/assets/templates/select/mode.html)
+- [x] T007 [US1] Replace the mode descriptions. (delivered: src/interfaces/portals/upgrade_portal/app/assets/templates/select/mode.html)
 - [x] T008 [US1] Verify both descriptions, captures, mode values, and form actions. (delivered: tests/contract/upgrade_portal/test_mode_descriptions.py)
 
 ## Phase 4: User Story 2 - Understand the selected site's workflow
 
-- [x] T009 [US2] Replace the active-mode description. (delivered: src/upgrade_portal/app/assets/templates/select/sites.html)
+- [x] T009 [US2] Replace the active-mode description. (delivered: src/interfaces/portals/upgrade_portal/app/assets/templates/select/sites.html)
 - [x] T010 [US2] Verify single-site navigation and zero, one, and two selected-site states. (delivered: tests/e2e/upgrade_portal/test_mode_descriptions_journey.py)
 
 ## Phase 5: Quality and Analysis
@@ -56,7 +56,7 @@ Any later delivery requires a fresh rebase, repeated local gates, complete PR ev
 ## Local Refresh on 2026-10-02
 
 - [x] T015 Preserve the original commit and rebase only on the authorized immutable base. (delivered: specs/3215-upgrade-mode-descriptions/implementation.md)
-- [x] T016 Describe current per-device model choices and both AP routing cases. (delivered: src/upgrade_portal/app/assets/templates/select/mode.html)
+- [x] T016 Describe current per-device model choices and both AP routing cases. (delivered: src/interfaces/portals/upgrade_portal/app/assets/templates/select/mode.html)
 - [x] T017 Retain the browser import skip and prove strict and owner failure paths. (delivered: tests/e2e/upgrade_portal/test_mode_descriptions_journey.py)
 - [x] T018 Repeat real rendering, all six Chromium cases, full collection, and applicable local gates. (delivered: specs/3215-upgrade-mode-descriptions/implementation.md)
 - [x] T019 Record skipped cases and the current 23-item offline review requirement. (delivered: specs/3215-upgrade-mode-descriptions/analysis.md)

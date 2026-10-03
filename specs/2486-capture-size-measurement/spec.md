@@ -7,7 +7,7 @@ The upgrade capture store measures `stored_size_bytes` on every write. The curre
 Reduce sequential CPU time for upgrade capture write size stamping. Keep the stored size byte identical to the current canonical JSON rule.
 
 ## Scope
-This change covers `src\upgrade_portal\capture\store.py`. It covers `measure_size_bytes()`, `_stamp_size()`, `_capture_size_bytes()`, and `_edge_size_bytes()`.
+This change covers `src\interfaces\portals\upgrade_portal\capture\store.py`. It covers `measure_size_bytes()`, `_stamp_size()`, `_capture_size_bytes()`, and `_edge_size_bytes()`.
 
 ## Non-goals
 Do not add parallel execution. Do not call the Mist API. Do not change storage schema or public return types.

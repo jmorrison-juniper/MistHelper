@@ -2,7 +2,7 @@
 
 **Issue**: #3223 | **Plan**: [plan.md](plan.md)
 
-- [x] T001 Add `_PHASE_LOWEST` and `_check_phase_order` in `src/upgrade_portal/upgrade/options.py`.
+- [x] T001 Add `_PHASE_LOWEST` and `_check_phase_order` in `src/interfaces/portals/upgrade_portal/upgrade/options.py`.
 - [x] T002 Call `_check_phase_order` in `_read_canary`.
 - [x] T003 State the rule in the `canary_phases` help text.
 - [x] T004 Contract test: four refused single-site bodies in `REFUSED_ADVANCED_BODIES` (`tests/contract/upgrade_portal/test_upgrade_options.py`).

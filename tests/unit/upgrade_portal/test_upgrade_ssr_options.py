@@ -29,8 +29,17 @@ from typing import Any  # A request body is free-form.
 
 import pytest  # The test framework of the project.
 
-import src.upgrade_portal.upgrade.options as module_options  # Owns the clock seam.
-from src.firmware.upgrade_service import (
+import src.interfaces.portals.upgrade_portal.upgrade.options as module_options  # Owns the clock seam.
+from src.interfaces.portals.upgrade_portal.upgrade.options import (
+    BadOptionError,
+    advanced_option_values,
+    build_option_record,
+    build_options,
+    build_version_options,
+    format_duration,
+    parse_duration_seconds,
+)
+from src.operations.execution.firmware.upgrade_service import (
     ENDPOINT_ORG_SSRS,
     SCOPE_ORG,
     SSR_CHANNEL_CHOICES,
@@ -40,15 +49,6 @@ from src.firmware.upgrade_service import (
     UpgradeOptions,
     build_body,
     plan_upgrade,
-)
-from src.upgrade_portal.upgrade.options import (
-    BadOptionError,
-    advanced_option_values,
-    build_option_record,
-    build_options,
-    build_version_options,
-    format_duration,
-    parse_duration_seconds,
 )
 
 SITE_ID = "11111111-1111-1111-1111-111111111111"

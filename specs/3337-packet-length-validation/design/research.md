@@ -79,7 +79,7 @@ The existing validators then return `None` for that interruption.
 The shared validator prints errors.
 The wireless validator logs each warning.
 
-The shared resolver maps `InputUtils` to `src.utils.input_utils`.
+The shared resolver maps `InputUtils` to `src.foundation.support.utils.input_utils`.
 No new dependency seam or production wrapper is necessary.
 The limits-case parameter groups raw input, expected length, and exact diagnostic.
 The defaults function covers both packet-length EOF and complete wireless blank or EOF sequences.

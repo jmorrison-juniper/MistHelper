@@ -6,16 +6,16 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `src/troubleshooting/synthetic_test_trigger/__init__.py` with the public `SyntheticTestTrigger` export.
+- [ ] T001 Create `src/mist/intelligence/troubleshooting/synthetic_test_trigger/__init__.py` with the public `SyntheticTestTrigger` export.
 - [ ] T002 Create `tests/unit/troubleshooting/synthetic_test_trigger/__init__.py` for the feature test package.
 - [ ] T003 Create `changelog.d/issue-3563-synthetic-test-trigger.md` with one `Added` section for issue `#3563`.
 - [ ] T004 Create `specs/3563-synthetic-test-trigger/wiring.md` and mark `MistHelper.py` registration as deferred to the integration pull request.
 
 ## Phase 2: Foundational
 
-- [ ] T005 Create `src/troubleshooting/synthetic_test_trigger/models.py` with dataclasses, safe body builders, result normalization, timeout messages, and export row builders.
-- [ ] T006 Create `src/troubleshooting/synthetic_test_trigger/client.py` with SDK-backed trigger and poll calls for the five Mist operation IDs.
-- [ ] T007 Create `src/troubleshooting/synthetic_test_trigger/operation.py` with prompt flow, confirmation, polling, reporting, and export wiring.
+- [ ] T005 Create `src/mist/intelligence/troubleshooting/synthetic_test_trigger/models.py` with dataclasses, safe body builders, result normalization, timeout messages, and export row builders.
+- [ ] T006 Create `src/mist/intelligence/troubleshooting/synthetic_test_trigger/client.py` with SDK-backed trigger and poll calls for the five Mist operation IDs.
+- [ ] T007 Create `src/mist/intelligence/troubleshooting/synthetic_test_trigger/operation.py` with prompt flow, confirmation, polling, reporting, and export wiring.
 
 ## Phase 3: User Story 1 - Start a site validation now (P1)
 

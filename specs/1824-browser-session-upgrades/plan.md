@@ -12,7 +12,7 @@ compatible model and mark only known different running versions.
 ## Project Structure
 
 ```text
-src/upgrade_portal/
+src/interfaces/portals/upgrade_portal/
 ├── app/
 │   ├── config.py
 │   ├── routes/auth.py

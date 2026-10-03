@@ -67,13 +67,13 @@ The installed `listSiteDevicesStats` signature is `mist_session, site_id, type=N
 
 | File | Verdict |
 | - | - |
-| `src/export/site_device_exporter.py` | Valid. It passes session, site ID, `type`, and `limit`. |
-| `src/firmware/bulk_ap_upgrader.py` | Valid. It passes session, site ID, `type`, and `limit`. |
-| `src/firmware/firmware_manager.py` line 682 | Valid. It passes session, site ID, `type`, and `limit`. |
-| `src/firmware/firmware_manager.py` line 3519 | Valid. It passes session, site ID, `type`, and `limit`. |
-| `src/gateway/gateway_ha_exporter.py` | Valid. It passes session, site ID, and `type`. |
-| `src/maps/_maps_coverage.py` | Valid. It passes session, site ID, `type`, and `limit`. |
-| `src/maps/launcher/_viewer_site_switch.py` | Valid. It passes session, site ID, and `limit`. |
-| `src/maps/launcher/_viewer_url_switch.py` | Valid. It passes session, site ID, and `limit`. |
-| `src/maps/maps_manager.py` | Valid. It passes session, site ID, and `limit`. |
-| `src/upgrade_portal/api/run_controls/routes.py` | Repaired. It no longer passes `fields`. |
+| `src/operations/exporting/export/site_device_exporter.py` | Valid. It passes session, site ID, `type`, and `limit`. |
+| `src/operations/execution/firmware/bulk_ap_upgrader.py` | Valid. It passes session, site ID, `type`, and `limit`. |
+| `src/operations/execution/firmware/firmware_manager.py` line 682 | Valid. It passes session, site ID, `type`, and `limit`. |
+| `src/operations/execution/firmware/firmware_manager.py` line 3519 | Valid. It passes session, site ID, `type`, and `limit`. |
+| `src/mist/resources/gateway/gateway_ha_exporter.py` | Valid. It passes session, site ID, and `type`. |
+| `src/interfaces/visualization/maps/_maps_coverage.py` | Valid. It passes session, site ID, `type`, and `limit`. |
+| `src/interfaces/visualization/maps/launcher/_viewer_site_switch.py` | Valid. It passes session, site ID, and `limit`. |
+| `src/interfaces/visualization/maps/launcher/_viewer_url_switch.py` | Valid. It passes session, site ID, and `limit`. |
+| `src/interfaces/visualization/maps/maps_manager.py` | Valid. It passes session, site ID, and `limit`. |
+| `src/interfaces/portals/upgrade_portal/api/run_controls/routes.py` | Repaired. It no longer passes `fields`. |
