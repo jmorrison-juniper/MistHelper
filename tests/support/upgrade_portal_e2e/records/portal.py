@@ -305,7 +305,7 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
         same_site = record.get("site_id") == site_id  # Match the requested site first.
         pre_role = record.get("role") == "pre"  # Accept only the pre-check role.
         standalone = record.get("run_id") == ""  # A capture that a run owns is that run's baseline, not a free one.
-        verified = record.get("capture_status") == "verified"  # Issue #3375 owns the choice of this field.
+        verified = record.get("state") == "verified"  # Issue #3375: lifecycle state controls safe pre-check reuse.
         return same_site and pre_role and standalone and verified  # Require every safe reuse condition.
 
     def write_capture_edge(self, run_id: str, capture_id: str, role: str) -> None:  # Link owned records.

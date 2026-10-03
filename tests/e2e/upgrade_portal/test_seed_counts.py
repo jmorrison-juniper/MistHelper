@@ -49,6 +49,7 @@ SEED_CAPTURE_IDS = (  # The five seed captures, in the order of the seed stamps.
 TYPE_COUNTS = {"gateways": 1, "switches": 1, "access_points": 1}  # One device of each type in each seed.
 TIER3_CLIENT_COUNTS = {"clients_wired": 0, "clients_wireless": 3, "clients_guest": 1}  # Three radios, one guest.
 MARKER_COUNTS = {"marker_count": 7}  # A map that no real builder writes, so a hand-written map cannot match it.
+SEED_STATUS = {"capture_status": {"complete", "partial"}, "state": "verified"}  # The shipped fields every seed holds.
 
 
 def builder_counts(seed: dict[str, Any]) -> dict[str, int]:
@@ -97,6 +98,15 @@ def test_the_tier3_seed_counts_its_guest_client() -> None:
     clients = {name: seed["counts"].get(name) for name in TIER3_CLIENT_COUNTS}  # The three client counts.
     assert clients == TIER3_CLIENT_COUNTS, f"The Tier 3 client counts are {clients}"  # The guest client counts too.
     logger.debug("The Tier 3 seed counts %s clients", sum(TIER3_CLIENT_COUNTS.values()))  # Log after the compare.
+
+
+@pytest.mark.parametrize("capture_id", SEED_CAPTURE_IDS)
+def test_each_seed_holds_the_shipped_capture_status(capture_id: str) -> None:
+    """Issue #3375: each seed separates content completeness from lifecycle state."""
+    seed = stand_in_capture_index()[capture_id]  # The seed document that the shipped routes read.
+    assert seed["capture_status"] in SEED_STATUS["capture_status"], f"{capture_id}: invalid content status"
+    assert seed["state"] == SEED_STATUS["state"], f"{capture_id}: invalid lifecycle state"
+    logger.debug("The seed %s holds the shipped capture status fields", capture_id)  # Log after the compare.
 
 
 def test_the_seed_file_writes_no_count_by_hand(monkeypatch: pytest.MonkeyPatch) -> None:
