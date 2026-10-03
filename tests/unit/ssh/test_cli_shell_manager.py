@@ -522,3 +522,97 @@ class TestRunInteractive:
 
         m_ws_mod.enableTrace.assert_called_once_with(True)
         assert "wakeup" in caplog.text.lower()
+
+
+class TestNativeShellSessionResponses:
+    """Test native SDK responses without an HTTP request or a WebSocket connection."""
+
+    @pytest.fixture
+    def native_response(self, status_code: int) -> object:
+        """Parse a concrete HTTP response through the installed SDK."""
+        from mistapi.__api_response import APIResponse
+        from requests import Response
+
+        transport = Response()
+        transport.status_code = status_code
+        transport.url = "https://api.mist.example/api/v1/sites/s-native/devices/d-native/shell"
+        # A refused body must not make its plausible URL trustworthy.
+        transport._content = b'{"url":"wss://shell.example.invalid/session?token=synthetic-cli-only"}'
+        transport.headers["Content-Type"] = "application/json"
+        response = APIResponse(response=transport, url=transport.url)
+        assert response.status_code == status_code
+        assert response.data == {"url": "wss://shell.example.invalid/session?token=synthetic-cli-only"}
+        return response
+
+    @pytest.fixture
+    def shell_boundaries(
+        self, monkeypatch: pytest.MonkeyPatch, fake_mh: ModuleType, native_response: object
+    ) -> tuple[MagicMock, MagicMock, MagicMock, MagicMock, MagicMock]:
+        """Control the SDK call and stop any real transport attempt."""
+        from mistapi.api.v1.sites.devices import createSiteDeviceShellSession
+        from requests import Session
+
+        api_session: MagicMock = vars(fake_mh)["apisession"]
+        selector: MagicMock = vars(fake_mh)["PromptClientUtils"]
+        selector.select_site_and_device_ids.return_value = ("s-native", "d-native")
+        sdk_call = MagicMock(spec=createSiteDeviceShellSession, return_value=native_response)
+        interactive = MagicMock()
+        websocket_start = MagicMock(side_effect=AssertionError("A live WebSocket connection is not permitted."))
+        transport_request = MagicMock(side_effect=AssertionError("A live HTTP request is not permitted."))
+        monkeypatch.setattr("mistapi.api.v1.sites.devices.createSiteDeviceShellSession", sdk_call)
+        monkeypatch.setattr(CLIShellManager, "_run_interactive", interactive)
+        monkeypatch.setattr("src.ssh.cli_shell_manager.websocket.create_connection", websocket_start)
+        monkeypatch.setattr(Session, "request", transport_request)
+        return sdk_call, interactive, websocket_start, transport_request, api_session
+
+    @pytest.mark.parametrize("status_code", (403, 503), ids=("http403", "http503"))
+    def test_native_http_refusal_stops_before_shell(
+        self,
+        status_code: int,
+        shell_boundaries: tuple[MagicMock, MagicMock, MagicMock, MagicMock, MagicMock],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Reject the URL and identify the refused status and device."""
+        from unittest.mock import call
+
+        sdk_call, interactive, websocket_start, transport_request, api_session = shell_boundaries
+        caplog.clear()
+        result = CLIShellManager._create_session("s-native", "d-native")
+        CLIShellManager.launch(site_id="s-native", device_id="d-native", debug=True)
+        assert result is None
+        assert sdk_call.call_args_list == [call(api_session, "s-native", "d-native", body={})] * 2
+        error_records = [entry for entry in caplog.record_tuples if entry[1] >= logging.ERROR]
+        expected_error = (
+            "src.ssh.cli_shell_manager",
+            logging.ERROR,
+            f"The cloud returned HTTP {status_code} for the device shell session at device d-native",
+        )
+        assert error_records == [expected_error] * 2
+        interactive.assert_not_called()
+        websocket_start.assert_not_called()
+        transport_request.assert_not_called()
+
+    @pytest.mark.parametrize("status_code", (200,), ids=("http200",))
+    def test_native_http_success_preserves_url_without_logging_token(
+        self,
+        shell_boundaries: tuple[MagicMock, MagicMock, MagicMock, MagicMock, MagicMock],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Preserve successful SDK arguments and the URL without a live shell."""
+        from unittest.mock import call
+
+        sdk_call, interactive, websocket_start, transport_request, api_session = shell_boundaries
+        shell_url = "wss://shell.example.invalid/session?token=synthetic-cli-only"
+        caplog.clear()
+        result = CLIShellManager._create_session("s-native", "d-native")
+        CLIShellManager.launch(site_id="s-native", device_id="d-native", debug=True)
+        assert result == shell_url
+        assert sdk_call.call_args_list == [call(api_session, "s-native", "d-native", body={})] * 2
+        interactive.assert_called_once_with(shell_url, debug=True)
+        status_record = ("src.ssh.cli_shell_manager", logging.DEBUG, "CLI shell session API returned status 200")
+        assert caplog.record_tuples.count(status_record) == 2
+        assert [entry for entry in caplog.record_tuples if entry[1] >= logging.ERROR] == []
+        assert shell_url not in caplog.text
+        assert "synthetic-cli-only" not in caplog.text
+        websocket_start.assert_not_called()
+        transport_request.assert_not_called()
