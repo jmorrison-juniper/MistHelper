@@ -352,6 +352,16 @@ def page_limit() -> int:
     return result
 
 
+def _response_rows(response: Any) -> tuple[list[dict[str, Any]] | None, int]:
+    """Return valid rows and the response status."""
+    payload = getattr(response, "data", None)
+    rows = payload.get("results") if isinstance(payload, Mapping) else payload
+    status = int(getattr(response, "status_code", 0) or 0)
+    if not isinstance(rows, list):
+        return None, status
+    return [row for row in rows if isinstance(row, dict)], status
+
+
 def _collect(session: Any, response: Any) -> list[dict[str, Any]]:
     """Return every row of a paged response.
 
@@ -368,27 +378,20 @@ def _collect(session: Any, response: Any) -> list[dict[str, Any]]:
     Returns:
         Every row that is a mapping.
     """
-    current = response
-    payload = getattr(current, "data", None)
-    rows = payload.get("results") if isinstance(payload, Mapping) else payload
-    if not isinstance(rows, list):
-        status = int(getattr(current, "status_code", 0) or 0)
+    rows, status = _response_rows(response)
+    if rows is None:
         return PagedRows([], [{"reason": "unexpected_response_shape", "http_status": status}])
-    kept = [row for row in rows if isinstance(row, dict)]
+    current = response
+    kept = rows
     reasons: list[dict[str, Any]] = []
     while getattr(current, "next", None):
         logger.info("Upgrade capture reads the next client page")
         current = mistapi.get_next(mist_session=session, response=current)
-        payload = getattr(current, "data", None)
-        page = payload.get("results") if isinstance(payload, Mapping) else payload
-        status = int(getattr(current, "status_code", 0) or 0)
-        if not 200 <= status < 300:
+        page, status = _response_rows(current)
+        if page is None or not 200 <= status < 300:
             reasons.append({"reason": "page_count_mismatch", "http_status": status})
             break
-        if not isinstance(page, list):
-            reasons.append({"reason": "page_count_mismatch", "http_status": status})
-            break
-        kept.extend(row for row in page if isinstance(row, dict))
+        kept.extend(page)
     logger.debug("Upgrade capture read %s client rows.", len(kept))
     return PagedRows(kept, reasons)
 
