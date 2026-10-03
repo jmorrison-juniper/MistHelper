@@ -505,13 +505,15 @@ stay clear in the merged file. The pull request and issue #3671 record their res
 
 - [x] T057 After T084 and T092 pass, build the manifest, stage all final evidence, and
   commit any remaining files. Verify every correction is in the committed branch history.
-  Commit `97c09c01` holds the 23-file final convergence manifest. The history check found
+  Rebased commit `e5e25b98` holds the 23-file final convergence manifest. The history check found
   26 valid feature subjects and 26 required Copilot trailers. Write each commit subject in
   the constitution step 4 format
   `version YY.MM.DD.HH.MM - description`, with the time in UTC. The pull request title
   keeps Conventional Commits, because the title guard reads the title (issue #3720).
   (delivered: committed branch history)
-- [ ] T058 Fetch and rebase onto `origin/main`. Run the affected gates again.
+- [x] T058 Fetch and rebase onto `origin/main`. Run the affected gates again. The rebase
+  applied 27 commits without a conflict. The post-rebase checks passed Ruff, Black, compile,
+  363 Python tests, and 63 browser tests. (delivered: rebased branch history)
 - [ ] T059 Push the branch. Open the pull request with `Closes #3671`, `Closes #3659`,
   `Closes #3660`, and `Closes #3710`. The body also holds the changed-file summary, the
   local gate results from R14, the CI status, and the deployment and rollback notes.
