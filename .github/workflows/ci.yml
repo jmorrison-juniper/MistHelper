@@ -236,7 +236,7 @@ jobs:
       - mypy
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -244,15 +244,19 @@ jobs:
           - shard: root-and-contracts
             test_paths: "tests/test_*.py tests/bootstrap tests/contract tests/guardrails tests/integration tests/maps tests/tools"
             extra_ignore: "--ignore=tests/contract/upgrade_portal"
+            timeout_minutes: 15
           - shard: upgrade-contracts
             test_paths: "tests/contract/upgrade_portal"
             extra_ignore: ""
+            timeout_minutes: 15
           - shard: root-units
             test_paths: "tests/unit"
             extra_ignore: "--ignore=tests/unit/upgrade_portal"
+            timeout_minutes: 20
           - shard: upgrade-units
             test_paths: "tests/unit/upgrade_portal"
             extra_ignore: ""
+            timeout_minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -288,8 +292,8 @@ jobs:
         # coverage gate combines the data before it applies the unchanged floor.
         #
         # Issue #2036: --timeout=120 gives each test 120 seconds before pytest marks
-        # it as FAILED with a traceback that names the hung call. The shard limit is
-        # 15 minutes, so a single stalled test fails fast and names the call.
+        # it as FAILED with a traceback that names the hung call. Each matrix row
+        # sets a measured shard limit, so a single stalled test still names the call.
         run: pytest ${{ matrix.test_paths }} ${{ matrix.extra_ignore }} --ignore=tests/e2e --cov=${{ env.SRC_PATH }} --cov-report= --cov-fail-under=0 --timeout=120
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
@@ -307,7 +311,7 @@ jobs:
         # a test failed. This step writes a plain line so a reader can tell a stalled
         # runner from a broken test without counting timestamps in the log.
         if: cancelled()
-        run: echo "::error::A pytest shard was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
+        run: echo "::error::A pytest shard was cancelled at its ${{ matrix.timeout_minutes }}-minute limit. A per-test timeout of 120 seconds should have caught any stalled test first. Check the log for a test that held the runner."
 
   pytest:
     name: "pytest (coverage gate)"
@@ -734,7 +738,7 @@ jobs:
       - mypy
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     # Issue #2242: the browser suite could cover no write journey, because the
     # portal refuses a write it cannot guard with the site lock. With no lock
     # store the run creation answered 503, and 50 browser tests skipped. The run
