@@ -81,7 +81,7 @@
     "ste_word_grading": "partial",
     "ste_limitation": "dictionary_unavailable",
     "runtime_hashed_pins": 107,
-    "runtime_artifact_hashes": 2087,
+    "runtime_artifact_hashes": 2149,
     "runtime_vulnerabilities": 0,
     "normal_runtime_audit": "macos_temporary_ensurepip_sigabrt",
     "installed_audit_limitation": "misthelper-devtools_0.6.0_not_on_pypi",

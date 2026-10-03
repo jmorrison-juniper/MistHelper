@@ -79,7 +79,7 @@ Word grading remains partial because `data/ste_dictionary.json` is unavailable.
 No dictionary, configuration, baseline, or exclusion changed.
 
 The normal requirements audit aborted during macOS temporary-environment `ensurepip`.
-The complete hashed Linux graph contains 107 runtime pins and 2,087 artifact hashes.
+The complete current hashed Linux graph contains 107 runtime pins and 2,149 artifact hashes.
 Its strict audit found no known vulnerability.
 
 ```bash
