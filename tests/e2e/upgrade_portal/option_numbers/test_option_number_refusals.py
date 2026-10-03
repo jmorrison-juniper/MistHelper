@@ -35,3 +35,4 @@ def test_number_refusal_keeps_python_policy_text_out_of_the_page(page: Any, valu
     flash = page.get_by_test_id("flash-message")
     sync_api.expect(flash).to_contain_text("Canary phases")
     sync_api.expect(flash).not_to_contain_text("invalid literal")
+    assert flash.count() == 1  # Confirm that the refusal creates one visible message after the browser waits complete.
