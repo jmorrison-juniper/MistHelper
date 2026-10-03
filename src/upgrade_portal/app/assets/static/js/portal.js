@@ -1184,13 +1184,30 @@
             return;
         }
 
-        var needle = (input.value || "").trim().toLowerCase();
+        var filters = [];
+        var filterInputs = document.querySelectorAll("[data-filter-target]");
+        Array.prototype.forEach.call(filterInputs, function (candidate) {
+            if (candidate.getAttribute("data-filter-target") === target.id) {
+                filters.push(candidate);
+            }
+        });
         var rows = target.querySelectorAll("[data-filter-text]");
         var shown = 0;
 
         Array.prototype.forEach.call(rows, function (row) {
-            var haystack = (row.getAttribute("data-filter-text") || "").toLowerCase();
-            var matches = !needle || haystack.indexOf(needle) !== -1;
+            var matches = true;
+            Array.prototype.forEach.call(filters, function (filter) {
+                if (!matches) {
+                    return;
+                }
+                if (filter.getAttribute("data-filter-mode") === "has-devices") {
+                    matches = !filter.checked || Number(row.getAttribute("data-device-count") || "0") > 0;
+                    return;
+                }
+                var needle = (filter.value || "").trim().toLowerCase();
+                var haystack = (row.getAttribute("data-filter-text") || "").toLowerCase();
+                matches = !needle || haystack.indexOf(needle) !== -1;
+            });
             /* The hidden property is a DOM property, not a style attribute. */
             row.hidden = !matches;
             if (matches) {
@@ -1415,6 +1432,9 @@
         var inputs = document.querySelectorAll("[data-filter-target]");
         Array.prototype.forEach.call(inputs, function (input) {
             input.addEventListener("input", function () {
+                applyTableFilter(input);
+            });
+            input.addEventListener("change", function () {
                 applyTableFilter(input);
             });
             /* A browser can restore a typed value after a back step, so the
