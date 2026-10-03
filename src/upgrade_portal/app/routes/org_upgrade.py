@@ -129,6 +129,12 @@ MODE_REQUIRED_MESSAGE = "Choose the multi-site mode before you configure an orga
 SITES_REQUIRED = "sites_not_chosen"
 SITES_REQUIRED_MESSAGE = "Choose one or more sites before you configure an organization upgrade."
 OPTIONS_INVALID = "org_upgrade_options_invalid"
+
+
+class SelectedSitesChangedError(RuntimeError):
+    """Signal that a selected site left the organization before save."""
+
+
 CONFIRMATION_REQUIRED = "confirmation_required"
 CONFIRMATION_MESSAGE = "Type CONFIRM before you start the organization upgrade."
 SUBMISSION_FAILED = "org_upgrade_submission_failed"
@@ -1100,6 +1106,8 @@ def save_options() -> Response | tuple[Response, int]:
     org_id, site_ids = context  # Use only the validated active context.
     try:  # Map option and storage failures to the existing response.
         options, nonce = _validated_saved_options(org_id, site_ids)  # Build the legacy or aggregate record.
+    except SelectedSitesChangedError as error:  # Issue #3441: no plan may exist without a selected site.
+        return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, str(error))  # Reuse the site picker refusal contract.
     except BadOptionError as error:  # Issue #3273: every refusal names a control that this page paints.
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, str(OrgOptionRefusal.translate(error)))
     except (TypeError, ValueError, OverflowError, RuntimeError) as error:
@@ -1127,6 +1135,9 @@ def _aggregate_saved_options(
     """Build and persist one confirmed aggregate operation."""
     aggregate = _aggregate_option_record(org_id, site_ids, options)  # Validate each explicit target.
     rows = selected_rows(org_id, site_ids)  # Preserve approved site names with the operation.
+    if not rows:  # Issue #3441: a removed site must not produce an orphan plan.
+        logger.warning("Refused the aggregate save because a selected site left organization %s", org_id)
+        raise SelectedSitesChangedError(SITES_REQUIRED_MESSAGE)  # Return the existing 404 site selection contract.
     mapped = build_options(aggregate["options"], now=None)  # Reuse the proven option mapping.
     choices = OrgUpgradeScheduleReader.anchored_options(mapped)  # Count the reboot delay from the scheduled start.
     OrgAdvancedRules.refuse_stable_access_points(choices, aggregate["targets"])  # Issue #3383: no stable AP build.
