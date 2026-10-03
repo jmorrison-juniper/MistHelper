@@ -1,0 +1,93 @@
+/*
+ * Issue #3491. These three record tables retain whole values in their titles.
+ * A fixed column budget keeps long text from taking the width of another cell.
+ * The existing scroll containers contain tables wider than the window.
+ */
+.history-records-table {
+    table-layout: fixed;
+}
+
+.history-records-runs {
+    min-width: 96rem;
+}
+
+/* The 11 shares total 100 percent. Controls retain space instead of clipping. */
+.history-records-runs thead th:nth-child(1) { width: 3%; }
+.history-records-runs thead th:nth-child(2) { width: 9%; }
+.history-records-runs thead th:nth-child(3) { width: 9%; }
+.history-records-runs thead th:nth-child(4) { width: 11%; }
+.history-records-runs thead th:nth-child(5) { width: 10%; }
+.history-records-runs thead th:nth-child(6) { width: 7%; }
+.history-records-runs thead th:nth-child(7) { width: 7%; }
+.history-records-runs thead th:nth-child(8) { width: 9%; }
+.history-records-runs thead th:nth-child(9) { width: 9%; }
+.history-records-runs thead th:nth-child(10) { width: 12%; }
+.history-records-runs thead th:nth-child(11) { width: 14%; }
+
+.history-records-operations {
+    min-width: 84rem;
+}
+
+/* The ownership explanation retains its own line without increasing the font budget. */
+.history-records-operations thead th:nth-child(1) { width: 16%; }
+.history-records-operations thead th:nth-child(2) { width: 19%; }
+.history-records-operations thead th:nth-child(3) { width: 11%; }
+.history-records-operations thead th:nth-child(4) { width: 13%; }
+.history-records-operations thead th:nth-child(5) { width: 13%; }
+.history-records-operations thead th:nth-child(6) { width: 8%; }
+.history-records-operations thead th:nth-child(7) { width: 10%; }
+.history-records-operations thead th:nth-child(8) { width: 10%; }
+
+.history-records-audit {
+    min-width: 68rem;
+}
+
+.history-records-audit thead th:nth-child(1) { width: 22%; }
+.history-records-audit thead th:nth-child(2) { width: 28%; }
+.history-records-audit thead th:nth-child(3) { width: 14%; }
+.history-records-audit thead th:nth-child(4) { width: 18%; }
+.history-records-audit thead th:nth-child(5) { width: 18%; }
+
+.history-records-table tbody th,
+.history-records-table tbody td {
+    padding-block: 0.2rem;
+    vertical-align: middle;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+/* Row headers need the same theme surface and boundary as the existing data cells. */
+.history-records-table tbody th {
+    background-color: var(--portal-surface);
+    border-bottom: 1px solid var(--portal-table-border);
+    padding-inline: 0.75rem;
+    text-align: left;
+}
+
+.history-records-table tbody tr:hover th {
+    background-color: var(--portal-table-row-hover);
+}
+
+.history-records-table .history-record-value,
+.history-records-table .history-record-badge {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-records-table .history-record-badge {
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+/* Keep a link's focus outline inside the uncut cell padding. */
+.history-records-table a.history-record-value,
+.history-records-table span.history-record-value {
+    display: block;
+}
+
+/* The age and stale badge share one line within their reserved column. */
+.history-records-runs .run-age-cell .badge-stale {
+    margin-top: 0;
+}

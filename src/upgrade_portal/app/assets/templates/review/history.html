@@ -151,6 +151,11 @@
 
 {% block title %}{{ page_title | default('Capture history', true) }}{% endblock %}
 
+{% block head_extra %}
+  <link rel="stylesheet"
+        href="{{ url_for('static', filename='css/history_records.css') }}">
+{% endblock %}
+
 {% block heading %}<h1>{{ page_title | default('Capture history', true) }}</h1>{% endblock %}
 
 {% block content %}
@@ -171,7 +176,7 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table run-history-table" data-testid="history-run-table" data-sortable>
+  <table class="portal-table run-history-table history-records-table history-records-runs" data-testid="history-run-table" data-sortable>
     <caption class="visually-hidden">
       {{ run_texts.caption | default('The single-site upgrade runs in this list.', true) }}
       Each row holds the site, the state, the device count,
@@ -211,23 +216,23 @@
               `upgrade/progress.html`, and the route that renders it is
               `/runs/<id>`. Every row reached a fault page.
             #}
-            <a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a>
+            <a class="history-record-value" title="{{ run.run_id }}" href="/runs/{{ run.run_id }}">{{ run.run_id }}</a>
           </th>
-          <td>{{ run.site_name }}</td>
-          <td data-testid="history-run-operator-address-{{ run.run_id }}">{{ run.actor_email }}</td>
-          <td data-testid="history-run-cloud-account-{{ run.run_id }}">{{ run.cloud_account | default('Not recorded', true) }}</td>
+          <td class="history-record-value" title="{{ run.site_name }}">{{ run.site_name }}</td>
+          <td class="history-record-value" title="{{ run.actor_email }}" data-testid="history-run-operator-address-{{ run.run_id }}">{{ run.actor_email }}</td>
+          <td class="history-record-value" title="{{ run.cloud_account | default('Not recorded', true) }}" data-testid="history-run-cloud-account-{{ run.run_id }}">{{ run.cloud_account | default('Not recorded', true) }}</td>
           {#
             The badge class carries the stored word, so this page picks no color
             and holds no list of states. A word that no rule matches shows the
             neutral border of .portal-badge.
           #}
-          <td>
-            <span class="portal-badge badge-{{ run.state }}"
+          <td class="history-record-value" title="{{ run.state }}">
+            <span class="portal-badge badge-{{ run.state }} history-record-badge" title="{{ run.state }}"
                   data-testid="history-run-state-{{ run.run_id }}">{{ run.state }}</span>
           </td>
-          <td>{{ run.device_count }}</td>
-          <td title="{{ run.started_raw }}">{{ run.started_text }}</td>
-          <td>{{ run.ended_text }}</td>
+          <td class="history-record-value" title="{{ run.device_count }}">{{ run.device_count }}</td>
+          <td class="history-record-value" title="{{ run.started_raw }}">{{ run.started_text }}</td>
+          <td class="history-record-value" title="{{ run.ended_text }}">{{ run.ended_text }}</td>
           <td class="run-age-cell">
             <span class="run-age-text"
                   data-testid="history-run-age-{{ run.run_id }}"
@@ -340,7 +345,7 @@
 
 {% if operations.org_selected and operations.database_available %}
 <div class="portal-table-scroll">
-  <table class="portal-table" data-testid="history-operation-table" data-sortable>
+  <table class="portal-table history-records-table history-records-operations" data-testid="history-operation-table" data-sortable>
     <caption class="visually-hidden">
       {{ operation_texts.caption | default('The multi-site upgrades in this list.', true) }}
       Each row holds the sites, the device types, the operator, the Mist account,
@@ -370,23 +375,24 @@
             #}
             {% if row.can_open %}
               <a href="{{ row.progress_path }}"
+                 class="history-record-value" title="{{ row.operation_id }}"
                  data-testid="history-operation-open-{{ row.operation_id }}">{{ row.operation_id }}</a>
             {% else %}
-              {{ row.operation_id }}
-              <span class="cell-note"
+              <span class="history-record-value" title="{{ row.operation_id }}">{{ row.operation_id }}</span>
+              <span class="cell-note history-record-value" title="Another browser session started this upgrade."
                     data-testid="history-operation-not-owned-{{ row.operation_id }}">Another browser session started this upgrade.</span>
             {% endif %}
           </th>
-          <td data-testid="history-operation-sites-{{ row.operation_id }}">{{ row.sites_text }}</td>
-          <td data-testid="history-operation-types-{{ row.operation_id }}">{{ row.families_text }}</td>
-          <td data-testid="history-operation-operator-address-{{ row.operation_id }}">{{ row.actor_email }}</td>
-          <td data-testid="history-operation-cloud-account-{{ row.operation_id }}">{{ row.cloud_account }}</td>
-          <td>
-            <span class="portal-badge badge-{{ row.state }}"
+          <td class="history-record-value" title="{{ row.sites_text }}" data-testid="history-operation-sites-{{ row.operation_id }}">{{ row.sites_text }}</td>
+          <td class="history-record-value" title="{{ row.families_text }}" data-testid="history-operation-types-{{ row.operation_id }}">{{ row.families_text }}</td>
+          <td class="history-record-value" title="{{ row.actor_email }}" data-testid="history-operation-operator-address-{{ row.operation_id }}">{{ row.actor_email }}</td>
+          <td class="history-record-value" title="{{ row.cloud_account }}" data-testid="history-operation-cloud-account-{{ row.operation_id }}">{{ row.cloud_account }}</td>
+          <td class="history-record-value" title="{{ row.state }}">
+            <span class="portal-badge badge-{{ row.state }} history-record-badge" title="{{ row.state }}"
                   data-testid="history-operation-state-{{ row.operation_id }}">{{ row.state }}</span>
           </td>
-          <td title="{{ row.started_raw }}">{{ row.started_text }}</td>
-          <td title="{{ row.updated_raw }}">{{ row.updated_text }}</td>
+          <td class="history-record-value" title="{{ row.started_raw }}">{{ row.started_text }}</td>
+          <td class="history-record-value" title="{{ row.updated_raw }}">{{ row.updated_text }}</td>
         </tr>
       {% else %}
         <tr>
@@ -413,7 +419,7 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table" data-testid="history-audit-table" data-sortable>
+  <table class="portal-table history-records-table history-records-audit" data-testid="history-audit-table" data-sortable>
     <caption class="visually-hidden">
       {{ audit_texts.caption | default('The site lock actions in this list.', true) }}
       Each row shows a take, release, takeover, or expiry.
@@ -432,11 +438,11 @@
     <tbody>
       {% for entry in audit_rows | default([], true) %}
         <tr data-testid="history-audit-row-{{ loop.index }}">
-          <th scope="row" title="{{ entry.occurred_at }}">{{ entry.moment_text }}</th>
-          <td class="cell-mono">{{ entry.site_id }}</td>
-          <td>
-            <span class="portal-badge badge-{{ entry.action }}"
-                  data-testid="history-audit-action-{{ loop.index }}">{{ entry.action }}</span>
+          <th scope="row" class="history-record-value" title="{{ entry.occurred_at }}">{{ entry.moment_text }}</th>
+          <td class="cell-mono history-record-value" title="{{ entry.site_id }}">{{ entry.site_id }}</td>
+          <td class="history-record-value" title="{{ entry.action }}">
+            <span class="portal-badge history-record-badge badge-{{ entry.action }}"
+                  title="{{ entry.action }}" data-testid="history-audit-action-{{ loop.index }}">{{ entry.action }}</span>
             {#
               Issue #2221: no writer records an expiry. No request runs at the
               moment a hold ends, so the reader states where the fact comes
@@ -444,13 +450,15 @@
               trust a moment that nobody measured.
             #}
             {% if entry.inferred %}
-              <span class="portal-note" data-testid="history-audit-inferred-{{ loop.index }}">
+              <span class="portal-note"
+                    title="Read from the trail. The portal records no expiry as it happens."
+                    data-testid="history-audit-inferred-{{ loop.index }}">
                 Read from the trail. The portal records no expiry as it happens.
               </span>
             {% endif %}
           </td>
-          <td class="cell-mono">{{ entry.actor_digest }}</td>
-          <td class="cell-mono">{{ entry.previous_digest }}</td>
+          <td class="cell-mono history-record-value" title="{{ entry.actor_digest }}">{{ entry.actor_digest }}</td>
+          <td class="cell-mono history-record-value" title="{{ entry.previous_digest }}">{{ entry.previous_digest }}</td>
         </tr>
       {% else %}
         <tr>

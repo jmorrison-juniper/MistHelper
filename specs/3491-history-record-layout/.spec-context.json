@@ -1,0 +1,14 @@
+{
+  "workflow": "speckit",
+  "specName": "Compact history records",
+  "branch": "jmorrison-juniper-history-record-layout",
+  "currentStep": "analyze",
+  "status": "implemented",
+  "history": [
+    {"step": "specify", "kind": "complete", "by": "agent", "at": "2026-10-03T03:05:00Z"},
+    {"step": "plan", "kind": "complete", "by": "agent", "at": "2026-10-03T03:05:00Z"},
+    {"step": "tasks", "kind": "complete", "by": "agent", "at": "2026-10-03T03:05:00Z"},
+    {"step": "implement", "kind": "complete", "by": "agent", "at": "2026-10-03T04:27:45Z"},
+    {"step": "analyze", "kind": "complete", "by": "agent", "at": "2026-10-03T04:27:45Z"}
+  ]
+}
