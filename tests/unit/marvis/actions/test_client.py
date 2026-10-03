@@ -414,3 +414,25 @@ class TestResolveRequest:
         session = MagicMock()
         session.mist_put.return_value = FakeResponse(429, None)
         assert client_for(session).resolve_action({"row_key": "x"}) == (429, "HTTP 429")
+
+
+class TestAlarmAcknowledgeRequest:
+    """The alarm acknowledge request uses only the explicit list endpoint."""
+
+    def test_the_request_sends_the_alarm_ids_and_the_note(self, site_api: MagicMock) -> None:
+        """The client must preserve the explicit alarm list and the audit note."""
+        session = MagicMock()
+        site_api.api.v1.orgs.alarms.ackOrgMultipleAlarms.return_value = FakeResponse(200, {})
+        assert client_for(session).acknowledge_marvis_alarms(["alarm-1", "alarm-2"], "Reason") == (200, "")
+        site_api.api.v1.orgs.alarms.ackOrgMultipleAlarms.assert_called_once_with(
+            session,
+            ORG_ID,
+            body={"alarm_ids": ["alarm-1", "alarm-2"], "note": "Reason"},
+        )
+        assert site_api.api.v1.orgs.alarms.ackOrgAllAlarms.call_count == 0
+
+    def test_a_refused_request_returns_the_status_and_body(self, site_api: MagicMock) -> None:
+        """The results file must state why Mist refused the alarm batch."""
+        site_api.api.v1.orgs.alarms.ackOrgMultipleAlarms.return_value = FakeResponse(400, {"detail": "refused"})
+        status, error = client_for(MagicMock()).acknowledge_marvis_alarms(["alarm-1"], "Reason")
+        assert (status, error) == (400, 'HTTP 400 {"detail": "refused"}')

@@ -1828,21 +1828,23 @@ flowchart LR
 - Title: Export or resolve Marvis Actions by category and subcategory
 - Handler: `MarvisActionsOperation.run`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`RateLimitingUtils`](Menu-API-Endpoints#ratelimitingutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 3
+- Endpoints: 4
 
 ```mermaid
 flowchart LR
     menu["Menu 270: Export or<br/>resolve Marvis<br/>Actions by c..."]
     menu --> c1["MarvisActionsClient"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/alarms<br/>/search"]
-    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e1["POST<br/>/api/v1/orgs<br/>/{org_id}/alarms/ack"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/alarms<br/>/search"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c2["SCHEMA_PATH"]
-    c2 --> e3["Unknown<br/>/api/v1/labs<br/>/suggestions_schema"]
+    c2 --> e4["Unknown<br/>/api/v1/labs<br/>/suggestions_schema"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | Unknown | `/api/v1/labs/suggestions_schema` | None (raw request) | [`SCHEMA_PATH`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/marvis/actions/client.py) | Path |
+| POST | `/api/v1/orgs/{org_id}/alarms/ack` | [`orgs.alarms.ackOrgMultipleAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/ack-org-multiple-alarms) | [`MarvisActionsClient.acknowledge_marvis_alarms`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/marvis/actions/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`MarvisActionsClient._read_first_alarm_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/marvis/actions/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`MarvisActionsClient.read_site_names`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/marvis/actions/client.py) | Call |
 

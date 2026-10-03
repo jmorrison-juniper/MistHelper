@@ -42,15 +42,16 @@ from web_portal.services.input_hook import InputInterceptor, web_input_context
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor, _RunLogHandler
 
 MENU = "270"  # The menu number of the feature.
-CONTROL_NAMES = [  # The six controls, in the order of the six prompts. FR-032.
+CONTROL_NAMES = [  # The seven controls, in the order of the seven prompts. FR-032.
     "marvis_mode",
     "marvis_category",
     "marvis_subcategory",
     "marvis_resolution_code",
     "marvis_comment",
     "marvis_confirmation",
+    "marvis_alarm_ack_confirmation",
 ]
-DEFAULT_ANSWERS = ("1", "all", "all", "suggested", "", "")  # The browser answers when the operator changes nothing.
+DEFAULT_ANSWERS = ("1", "all", "all", "suggested", "", "", "")  # Safe browser defaults for all controls.
 EXPORT_FILE = "OrgMarvisActions.csv"  # The report of modes 1, 2, and 4.
 RESULTS_FILE = "OrgMarvisActionsResolveResults.csv"  # The results file of mode 3.
 
@@ -116,6 +117,12 @@ class PortalRun:
         assert len(calls) == 1, calls
         return list(calls[0].args[0])
 
+    def result_rows(self) -> list[dict[str, Any]]:
+        """Return the rows of the one mode 3 results write."""
+        calls = [call for call in self.fakes.exports() if call.args[1] == RESULTS_FILE]
+        assert len(calls) == 1, calls
+        return list(calls[0].args[0])
+
 
 class PortalRunner:
     """Run menu 270 the way the portal runs it, with the real input hook."""
@@ -161,9 +168,9 @@ def portal(harness: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCapt
 
 
 class TestTheRegistryRow:
-    """The row must match the six prompts of the operation."""
+    """The row must match the seven prompts of the operation."""
 
-    def test_the_row_holds_six_controls_in_prompt_order(self) -> None:
+    def test_the_row_holds_seven_controls_in_prompt_order(self) -> None:
         """FR-032. The answer order is the control order."""
         names = [param["name"] for param in PARAMETER_REGISTRY[MENU]["parameters"]]
         print(f"The menu 270 portal guard checked {len(names)} controls.")
@@ -188,7 +195,7 @@ class TestTheRegistryRow:
     def test_only_the_first_three_controls_are_required(self) -> None:
         """A report run must start without a code, a comment, or a confirmation."""
         required = [bool(param["required"]) for param in PARAMETER_REGISTRY[MENU]["parameters"]]
-        assert required == [True, True, True, False, False, False]
+        assert required == [True, True, True, False, False, False, False]
 
     def test_the_default_answers_match_the_control_defaults(self) -> None:
         """The contract runs below use the answers that the page sends by default."""
@@ -268,14 +275,14 @@ class TestPortalRuns:
 
     def test_a_topic_choice_exports_the_open_actions_of_that_topic(self, portal: PortalRunner) -> None:
         """Mode 2 with one category and one pair keeps the open actions of that topic only."""
-        run = portal.run(portal_rows(), ("2", "switch", "switch/sw_offline", "suggested", "", ""))
+        run = portal.run(portal_rows(), ("2", "switch", "switch/sw_offline", "suggested", "", "", ""))
         assert [row["suggestion_id"] for row in run.exported_rows()] == ["swoff-1", "swoff-2"]
         assert run.puts() == []
         assert (run.missing_input(), run.handled_error()) == (None, None)
 
     def test_a_category_without_open_actions_completes_with_a_reason(self, portal: PortalRunner) -> None:
         """The only AP action is closed, so mode 2 finds nothing and says so."""
-        run = portal.run(portal_rows(), ("2", "ap", "all", "suggested", "", ""))
+        run = portal.run(portal_rows(), ("2", "ap", "all", "suggested", "", "", ""))
         assert run.fakes.exports() == []
         assert (run.missing_input(), run.handled_error()) == (None, None)
         message = run.executor._completion_message(run.record)
@@ -285,7 +292,7 @@ class TestPortalRuns:
 
     def test_the_closed_report_exports_the_closed_actions(self, portal: PortalRunner) -> None:
         """Issue #3342: mode 4 reads three answers, and it exports the one closed AP action."""
-        run = portal.run(portal_rows(), ("4", "all", "all", "suggested", "", ""))
+        run = portal.run(portal_rows(), ("4", "all", "all", "suggested", "", "", ""))
         assert [row["suggestion_id"] for row in run.exported_rows()] == ["swoff-3"]
         assert run.puts() == []
         assert (run.missing_input(), run.handled_error()) == (None, None)
@@ -293,7 +300,7 @@ class TestPortalRuns:
 
     def test_a_category_without_closed_actions_completes_with_a_reason(self, portal: PortalRunner) -> None:
         """The switch actions are open, so mode 4 finds nothing and says so."""
-        run = portal.run(portal_rows(), ("4", "switch", "all", "suggested", "", ""))
+        run = portal.run(portal_rows(), ("4", "switch", "all", "suggested", "", "", ""))
         assert run.fakes.exports() == []
         assert (run.missing_input(), run.handled_error()) == (None, None)
         message = run.executor._completion_message(run.record)
@@ -303,7 +310,7 @@ class TestPortalRuns:
 
     def test_a_blank_confirmation_shows_the_count_and_sends_nothing(self, portal: PortalRunner) -> None:
         """FR-033. The preview and the count reach the log, and the portal reports a missing answer."""
-        run = portal.run(portal_rows(), ("3", "all", "all", "suggested", "", ""))
+        run = portal.run(portal_rows(), ("3", "all", "all", "suggested", "", "", ""))
         assert run.puts() == []
         assert run.missing_input() == (
             "No value provided for the confirmation, so no action was changed. "
@@ -314,7 +321,7 @@ class TestPortalRuns:
 
     def test_a_stale_count_fails_and_sends_nothing(self, portal: PortalRunner) -> None:
         """A count from an older report must not confirm the current targets."""
-        run = portal.run(portal_rows(), ("3", "switch", "switch/sw_offline", "known", "", "RESOLVE 3"))
+        run = portal.run(portal_rows(), ("3", "switch", "switch/sw_offline", "known", "", "RESOLVE 3", ""))
         assert run.puts() == []
         assert run.handled_error() == (
             "MistHelper could not confirm the resolve. The answer 'RESOLVE 3' does not match 'RESOLVE 2'. "
@@ -323,15 +330,23 @@ class TestPortalRuns:
 
     def test_the_other_code_without_a_comment_sends_nothing(self, portal: PortalRunner) -> None:
         """FR-021. The code nonsuggested needs a comment, and the portal reports the missing answer."""
-        run = portal.run(portal_rows(), ("3", "all", "all", "nonsuggested", "", "RESOLVE 3"))
+        run = portal.run(portal_rows(), ("3", "all", "all", "nonsuggested", "", "RESOLVE 3", ""))
         assert run.puts() == []
         assert run.missing_input() == (
             "No value provided for the comment. The code nonsuggested needs a comment, so no action was changed."
         )
 
     def test_the_typed_count_resolves_with_the_code_and_the_comment(self, portal: PortalRunner) -> None:
-        """The six answers resolve the two open switch actions with the other code and its comment."""
-        answers = ("3", "switch", "switch/sw_offline", "nonsuggested", "Bounced the uplink port", "RESOLVE 2")
+        """The seven answers resolve the two open switch actions and skip the optional alarm step."""
+        answers = (
+            "3",
+            "switch",
+            "switch/sw_offline",
+            "nonsuggested",
+            "Bounced the uplink port",
+            "RESOLVE 2",
+            "",
+        )
         run = portal.run(portal_rows(), answers)
         bodies = run.puts()
         assert [body["row_key"] for body in bodies] == ["synthetic-row-key-0001", "synthetic-row-key-0002"]
@@ -341,6 +356,20 @@ class TestPortalRuns:
         assert all("suggestion_id" not in body for body in bodies)
         assert (run.missing_input(), run.handled_error()) == (None, None)
         assert RESULTS_FILE in run.record["output_files"]
+
+    def test_the_second_typed_count_acknowledges_only_the_joined_alarms(
+        self,
+        portal: PortalRunner,
+        site_api: MagicMock,
+    ) -> None:
+        """Issue #3357: the portal sends the seventh answer to the alarm acknowledge guard."""
+        site_api.api.v1.orgs.alarms.searchOrgAlarms.return_value = make_alarm_page([make_alarm(1), make_alarm(2)])
+        answers = ("3", "switch", "switch/sw_offline", "suggested", "", "RESOLVE 2", "ACKNOWLEDGE 2")
+        run = portal.run(portal_rows(), answers)
+        body = site_api.api.v1.orgs.alarms.ackOrgMultipleAlarms.call_args.kwargs["body"]
+        assert body["alarm_ids"] == [make_alarm(1)["id"], make_alarm(2)["id"]]
+        assert {row["alarm_ack_outcome"] for row in run.result_rows()} == {"acknowledged"}
+        assert (run.missing_input(), run.handled_error()) == (None, None)
 
     def test_a_missing_answer_list_reads_the_prompt_defaults(self, portal: PortalRunner) -> None:
         """An empty queue acts as a closed stream, so each prompt takes its safe default."""
