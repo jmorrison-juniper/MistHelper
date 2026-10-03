@@ -67,6 +67,7 @@ from ...runtime import identity
 from ...runtime.runs import RunStateMachine, RunTransitionError  # Use the canonical final-state authority.
 from ...upgrade.org_history import OperationHistorySection, OrgOperationHistory  # Issue #3248: the section rules.
 from ..factory import json_error
+from ..history_descriptions import HistoryCardScope
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 from . import select  # Reuse the signed organization resolver and existing refusal authority.
 
@@ -2127,6 +2128,7 @@ def history_page() -> str | tuple[Response, int]:  # An invalid selection return
     page_view = build_page_view(  # Preserve already scoped counts and page links.
         build_history(shaped, build_window(site_id, limit, offset, total)), shaped
     )  # Scoped pages.
+    scope = HistoryScope.for_page(site_id, shaped)
     logger.debug("review: the history page holds %s rows of %s", len(page_view.rows), page_view.total)  # Safe counts.
     logger.info("review: render the selected organization history cards")  # Record scoped reads and rendering.
     page = render_page(  # Render all four cards within the same validated organization.
@@ -2134,7 +2136,8 @@ def history_page() -> str | tuple[Response, int]:  # An invalid selection return
         page_title=HISTORY_PAGE_TITLE,  # Keep unrelated history text unchanged.
         signed_in=True,  # The existing identity guard remains the first request boundary.
         # Issue #3482. The scope names every site when the request names no site.
-        history_scope=HistoryScope.for_page(site_id, shaped),  # Preserve legitimate requested-site context.
+        history_scope=scope,  # Preserve legitimate requested-site context.
+        history_cards=HistoryCardScope(site_id=scope.site_id, site_name=scope.site_name),
         # Issue #3486. The Captures table of every site names the site of each row.
         history_columns=HistoryCaptureColumns(site_id=site_id),  # Keep site columns and device-type cells unchanged.
         history_view=page_view,  # Totals and page links come from already scoped source queries.
