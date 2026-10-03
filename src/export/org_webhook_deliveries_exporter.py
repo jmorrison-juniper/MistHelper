@@ -16,6 +16,14 @@ from src.utils.input_utils import InputUtils  # WHY: handle EOF safely in SSH an
 logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
 
 _OPERATION = "searchOrgWebhooksDeliveries"  # WHY: select the configured storage-key strategy.
+_HTTP_OK = 200  # WHY: response doubles without a status retain the existing success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx responses cannot prove an empty delivery result.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-integer attributes are not statuses.
 
 
 class OrgWebhookDeliveriesExporter:
@@ -93,6 +101,14 @@ class OrgWebhookDeliveriesExporter:
             response = mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries(
                 mh.apisession, org_id, webhook_id
             )  # Fetch deliveries.
+            status_code = _response_status_code(response)  # WHY: a failed response can carry an empty body.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failure must not become a false no-data result.
+                logger.error(  # WHY: match the repository error contract for rejected cloud responses.
+                    "The cloud returned HTTP %s for organization webhook deliveries at org %s",
+                    status_code,
+                    org_id,
+                )
+                return  # WHY: stop before pagination and persistence on HTTP 403 or another failure.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all results.
             logger.debug("%s returned %d rows", _OPERATION, len(rawdata))  # Log the response count.
             OrgWebhookDeliveriesExporter._persist(rawdata, webhook_name)  # Write the normalized result.
