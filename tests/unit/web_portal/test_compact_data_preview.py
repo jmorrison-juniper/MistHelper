@@ -6,11 +6,11 @@ import csv
 import json
 import re
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
-from tests.support.data_preview_harness import DataPreviewHarness, PreviewRowBudget, WidePreviewFixture
+from tests.support.data_preview_harness import DataPreviewHarness, PreviewBrowser, PreviewRowBudget, WidePreviewFixture
 from web_portal.services.data_browser import DataBrowserService
 from web_portal.services.row_sorter import SortSpec
 
@@ -147,7 +147,7 @@ class TestOfflinePreviewFailures:
     def test_http_4xx_names_the_missing_file(self, tmp_path: Path) -> None:
         """The actual preview route keeps its missing-file response."""
         harness = DataPreviewHarness(tmp_path)
-        response = harness.app.test_client().get("/api/data/preview/Missing.csv")
+        response = harness.app.test_client().get("/api/data/preview/Missing.csv", headers=harness.policy.headers)
         assert response.status_code == 404
         assert response.get_json() == {"error": "File not found"}
 
@@ -158,7 +158,9 @@ class TestOfflinePreviewFailures:
         monkeypatch.setattr(
             DataBrowserService, "preview_file", Mock(side_effect=PermissionError("Fixture read failed."))
         )
-        response = harness.app.test_client().get("/api/data/preview/OrgMarvisActions.csv")
+        response = harness.app.test_client().get(
+            "/api/data/preview/OrgMarvisActions.csv", headers=harness.policy.headers
+        )
         assert response.status_code == 500
         assert response.content_type.startswith("text/html")
 
@@ -166,7 +168,7 @@ class TestOfflinePreviewFailures:
         """A valid file with no records remains different from a read failure."""
         harness = DataPreviewHarness(tmp_path)
         (tmp_path / "Empty.csv").write_bytes(b"")
-        response = harness.app.test_client().get("/api/data/preview/Empty.csv")
+        response = harness.app.test_client().get("/api/data/preview/Empty.csv", headers=harness.policy.headers)
         assert response.status_code == 200
         assert response.get_json()["rows"] == []
         assert response.get_json()["total_rows"] == 0
@@ -178,7 +180,73 @@ class TestOfflinePreviewFailures:
         with pytest.raises(json.JSONDecodeError, match="Expecting property name"):
             json.loads(content)
         (tmp_path / "Broken.json").write_text(content, encoding="utf-8")
-        response = harness.app.test_client().get("/api/data/preview/Broken.json")
+        response = harness.app.test_client().get("/api/data/preview/Broken.json", headers=harness.policy.headers)
         assert response.status_code == 400
         assert response.get_json()["error"].startswith("Failed to read JSON:")
         assert "Expecting property name" in response.get_json()["error"]
+
+
+class TestOwnedPreviewCapabilities:
+    """Keep required cases strict and refuse nonfixture requests before a route runs."""
+
+    @pytest.mark.parametrize("headers", [{}, {"X-MistHelper-Preview-Owner": "foreign-owner"}])
+    def test_missing_or_foreign_ownership_fails(self, tmp_path: Path, headers: dict[str, str]) -> None:
+        """A response without the exact fake owner must never appear successful."""
+        harness = DataPreviewHarness(tmp_path)
+        response = harness.app.test_client().get("/api/data/preview/OrgMarvisActions.csv", headers=headers)
+        assert response.status_code == 403
+        assert response.get_json() == {"error": "The preview fixture ownership check refused this request."}
+        assert harness.policy.counts["requests"] == harness.policy.counts["refused"] == 1
+        harness.url = "http://127.0.0.1:9650"
+        journey = PreviewBrowser(Mock(), harness)
+        route = Mock()
+        route.request.url = "https://example.invalid/static/css/portal.css"
+        route.request.method = "GET"
+        journey.check_route(route)
+        assert route.method_calls == [call.abort("blockedbyclient")]
+        assert journey.owner_errors == ["The browser requested a route outside the owned read-only fixture."]
+
+    def test_the_response_names_its_exact_owner_and_fixture_shape(self, tmp_path: Path) -> None:
+        """Every owned request reports its temporary root and measured record shape."""
+        harness = DataPreviewHarness(tmp_path)
+        response = harness.app.test_client().get(
+            "/api/data/preview/OrgMarvisActions.csv", headers=harness.policy.headers
+        )
+        assert response.status_code == 200
+        assert {name: response.headers[name] for name in harness.policy.headers} == harness.policy.headers
+        assert response.get_json()["total_rows"] == 112
+        assert len(response.get_json()["columns"]) == 43
+        assert harness.policy.counts == dict(
+            requests=1, refused=0, responses=1, real_mist=0, real_stores=0, real_operations=0
+        )
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [("POST", "/api/operations/run"), ("GET", "/api/operations/run"), ("DELETE", "/api/data/files")],
+    )
+    def test_execution_requests_fail_before_their_route(self, tmp_path: Path, method: str, path: str) -> None:
+        """The fixture must refuse real execution and writes even with a valid owner."""
+        harness = DataPreviewHarness(tmp_path)
+        response = harness.app.test_client().open(path, method=method, headers=harness.policy.headers)
+        assert response.status_code == 403
+        assert harness.policy.counts["refused"] == 1
+        assert harness.policy.counts["real_operations"] == 0
+
+    def test_another_data_root_fails_before_file_access(self, tmp_path: Path) -> None:
+        """The owner cannot authorize a different data root."""
+        harness = DataPreviewHarness(tmp_path)
+        harness.app.config["DATA_DIR"] = str(tmp_path / "another-root")
+        response = harness.app.test_client().get("/api/data/files", headers=harness.policy.headers)
+        assert response.status_code == 403
+        assert response.get_json()["error"] == "The preview fixture ownership check refused this request."
+
+    def test_screenshots_are_optional_and_off_by_default(self, tmp_path: Path) -> None:
+        """A screenshot capability must not decide whether the row measurement passes."""
+        page = Mock()
+        page.evaluate.return_value = {"heights": [41.5] * 50, "columnCount": 43}
+        page.viewport_size = {"width": 1600, "height": 1000}
+        page.screenshot.side_effect = RuntimeError("The optional screenshot capability is unavailable.")
+        result = PreviewRowBudget.capture(page, tmp_path / "preview-without-screenshot")
+        assert PreviewRowBudget.check(result["heights"]) == 50
+        assert json.loads((tmp_path / "preview-without-screenshot.json").read_text(encoding="utf-8")) == result
+        assert not (tmp_path / "preview-without-screenshot.png").exists()

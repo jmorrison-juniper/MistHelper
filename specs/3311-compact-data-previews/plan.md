@@ -110,3 +110,51 @@ Add one release-note fragment for issue #3311.
 Commit only the reserved paths with a Conventional Commit and the required coauthor trailer.
 Report the local commit, measured bounds, artifacts, and exact validation commands.
 Stop before a push or pull request until the parent gives an explicit publication grant.
+
+## Local Refresh on the Accepted Base
+
+The accepted base is `92dc5d3ebf5fa6d2b9ddba536b5c3bc6cd4ca232`.
+Preserve the original repair at local tag `preservation/3311-original-7619861`.
+The original commit is `7619861530afdb5a25847b94c9f13fe2fccf0b7b`.
+The rebase produced `31bea2154ba59fd9b4a2725cfb146d598df97068` with an identical repair.
+
+The follow-up changes only the three owned test files and the three feature documents.
+It changes no product behavior.
+It creates no new release-note fragment because the follow-up is test-only.
+It changes no shared harness, router, store, authentication, schema, dependency, baseline, exclusion, or suppression.
+
+### Owned Test Boundaries
+
+The fixture requires an existing temporary data root outside the repository.
+Each request carries an exact fake owner, root name, 43-column count, and 112-record count.
+The fixture returns the same ownership headers on every response.
+The browser refuses foreign origins before network delivery.
+The fixture refuses execution requests and a changed root before route dispatch.
+The fixture starts no operation service or production store.
+
+The required-case collection hook fails when the timeout or Playwright plugin is absent.
+The test module registers its own hook because the shared E2E fixture remains unchanged.
+This framework hook performs the actual capability decision.
+It is not a compatibility wrapper.
+
+The row measurement does not require a screenshot.
+Recording stays disabled unless the caller supplies the existing Playwright recording options.
+Run one complete default-off suite and one explicit screenshot proof.
+Keep the 60-pixel height budget unchanged.
+Compare the exported CSV bytes with the existing quoted export format.
+
+### Refresh Evidence
+
+Read the six current quality inputs and check all three guide procedures.
+Run the default full test-quality ratchet against the unchanged baseline.
+Collect every current nonbrowser CI shard and the complete strict browser scope.
+Build the wheel and source distribution with the existing uv tool.
+Compare both packaged product assets with the worktree bytes.
+Run full Ruff, full Black, configured types, configured Bandit, and the owned harness scan.
+Attempt the normal runtime audit before the full hashed macOS workaround.
+Report unavailable PowerShell and dictionary capabilities without a substitute success claim.
+
+The offline pull request draft retains the current template's 23 checklist items.
+Record exact local command results.
+Leave unavailable or unauthorized checks unchecked.
+Do not publish that draft.
