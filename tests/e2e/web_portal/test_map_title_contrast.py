@@ -17,10 +17,10 @@ from playwright.sync_api import Error as BrowserError
 from playwright.sync_api import Page, Route
 from requests.exceptions import ConnectionError, Timeout
 
-from tests.e2e import test_map_viewer_image as map_journeys
-from tests.e2e.test_map_viewer_image import cloud as cloud
-from tests.e2e.test_map_viewer_image import maps_portal as maps_portal
-from tests.e2e.test_map_viewer_image import simulated_cloud as simulated_cloud
+from tests.e2e.web_portal import test_map_viewer_image as map_journeys
+from tests.e2e.web_portal.test_map_viewer_image import cloud as cloud
+from tests.e2e.web_portal.test_map_viewer_image import maps_portal as maps_portal
+from tests.e2e.web_portal.test_map_viewer_image import simulated_cloud as simulated_cloud
 from web_portal.services.config import ThemeManager
 
 logger = logging.getLogger(__name__)
