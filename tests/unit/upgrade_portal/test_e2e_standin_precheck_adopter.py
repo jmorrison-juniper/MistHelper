@@ -3,8 +3,8 @@
 Why:
     Issue #3360. The browser tests replace the pre-check adopter with
     `PortalRecordStore.newest_precheck`. The shipped reader
-    `latest_standalone_precheck` adopts only a verified pre-check that names no
-    run, and it reads the newest start time first. These tests hold the
+    `latest_standalone_precheck` adopts only a lifecycle-verified pre-check that
+    names no run, and it reads the newest start time first. These tests hold the
     stand-in to the same rules, so a browser journey can prove the standalone
     filter of Delta H3 (FR-103).
 
@@ -44,7 +44,8 @@ def capture(capture_id: str, started_at: str = OLDER_STAMP, **fields: Any) -> di
         "site_id": SITE_ID,  # The site that the read names.
         "role": "pre",  # The pre-check half of the upgrade.
         "run_id": "",  # A standalone capture names no run.
-        "capture_status": "verified",  # The field that the stand-in reads for a verified capture.
+        "capture_status": "complete",  # The content status that the shipped writer stores for a whole capture.
+        "state": "verified",  # The lifecycle state that the shipped reader uses for adoption.
         "started_at": started_at,  # The sort key of the shipped query.
     }
     record.update(fields)  # Apply the change that one test needs.
@@ -113,15 +114,21 @@ def test_a_capture_with_no_start_time_loses() -> None:
     "change",
     [
         {"role": "post"},  # A post-check is never a baseline.
-        {"capture_status": "failed"},  # A failed capture is not verified in either field.
+        {"state": "failed"},  # A capture that did not reach the verified lifecycle state.
         {"site_id": OTHER_SITE_ID},  # A capture of another site.
     ],
     ids=["post-check", "not-verified", "other-site"],
 )
 def test_a_capture_that_fails_another_rule_is_not_adopted(change: dict[str, str]) -> None:
-    """The role rule, the verified rule, and the site rule stay as before."""
+    """The role rule, the lifecycle rule, and the site rule stay as before."""
     store = store_with(capture("cap-refused", **change))  # The only capture fails one rule.
     assert store.newest_precheck(SITE_ID) == "", f"The stand-in adopted a capture with {change}."
+
+
+def test_a_partial_capture_with_verified_lifecycle_is_adopted() -> None:
+    """Issue #3375: partial content remains reusable after the lifecycle verifies."""
+    store = store_with(capture("cap-partial", capture_status="partial"))  # The content is incomplete.
+    assert store.newest_precheck(SITE_ID) == "cap-partial", "The stand-in rejected a lifecycle-verified partial capture."
 
 
 def test_the_store_order_decides_a_tie() -> None:

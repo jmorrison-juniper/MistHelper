@@ -315,9 +315,8 @@ RUN_OWNED_CAPTURE_IDS = (PRE_CAPTURE_ID, POST_CAPTURE_ID, TIER3_CAPTURE_ID)  # T
 STANDALONE_PRE_CAPTURE_ID = "e2e-capture-standalone-0001"  # The seeded pre-check that names no run.
 STANDALONE_PRE_CAPTURE_STAMP = "2026-08-19T10:15:00+00:00"  # Between the seeded pre-check and post-check.
 # WHY: Issue #3378. The shipped store writes `complete` into `capture_status`
-# and `verified` into `state`. Every other seed holds `verified` in
-# `capture_status`, which issue #3375 repairs. This seed holds the shipped shape,
-# so its page reads the stored status path that a page reads after a restart.
+# and `verified` into `state`. Every seed now holds the shipped shape, and this
+# seed keeps a separate site so its page reads the stored path after a restart.
 # It sits on its own site and between the post-check and the Tier 3 capture, so
 # no count, no first or last picker choice, and no pre-check adopter reads it.
 STORED_POLL_CAPTURE_ID = "e2e-capture-stored-poll-0001"  # The seed in the shipped shape.
@@ -1895,7 +1894,8 @@ def stand_in_capture(
         "site_name": site_name,
         "role": role,
         "ordinal": 1 if role == "pre" else 2,
-        "capture_status": "verified",
+        "capture_status": "complete",  # The content status that the shipped writer stores for a whole capture.
+        "state": "verified",  # The lifecycle state that the shipped writer stores after the read-back.
         "actor_email": STAND_IN_EMAIL,
         "schema_version": 1,
         "tier": 2,
@@ -1968,6 +1968,7 @@ def stand_in_tier3_capture() -> dict[str, Any]:
         }
     ]
     capture["counts"] = stand_in_counts(capture)  # Issue #3492: the count map now counts the guest client too.
+    capture["capture_status"] = "partial"  # The failed BGP read makes the stored content incomplete.
     capture["extras"] = {
         "switch_ports": [{"mac": switch_mac, "port_id": "ge-0/0/1", "up": True, "speed": 1000}],
         "poe": [{"mac": switch_mac, "port_id": "ge-0/0/1", "poe_on": True, "power_draw": 4.5}],
@@ -1996,6 +1997,8 @@ def stand_in_standalone_precheck() -> dict[str, Any]:
         STANDALONE_PRE_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], STANDALONE_PRE_CAPTURE_STAMP
     )
     capture["run_id"] = ""  # A standalone pre-check names no run, which is the rule of the shipped reader.
+    capture["capture_status"] = "partial"  # Issue #3375: adoption must use lifecycle state, not content completeness.
+    capture["partial_reasons"] = [{"section": "bgp_peers", "reason": "cloud_call_failed", "http_status": 0}]
     return capture  # The index stores it before the Tier 3 capture.
 
 
