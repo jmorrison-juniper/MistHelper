@@ -14,12 +14,15 @@ Every Mist call is mocked, so no test reaches the live cloud.
 
 from __future__ import annotations
 
+import json
 import sys
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+from mistapi.__api_response import APIResponse
 
 from src.export.org_cradlepoint_connection_exporter import OrgCradlepointConnectionExporter
 from src.export.org_cradlepoint_connection_exporter import (
@@ -28,6 +31,7 @@ from src.export.org_cradlepoint_connection_exporter import (
 
 ORG_ID = "org-1413"
 MODULE = "src.export.org_cradlepoint_connection_exporter"
+STATUS_URL = "https://api.mist.com/api/v1/orgs/org-1413/setting/cradlepoint/setup"
 
 
 @pytest.fixture
@@ -42,6 +46,16 @@ def mist_helper(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     stub.apisession = MagicMock()
     monkeypatch.setitem(sys.modules, "MistHelper", stub)
     return stub
+
+
+def sdk_response(status_code: int, payload: dict[str, str]) -> APIResponse:
+    """Build a real SDK response so HTTP refusal handling matches production."""
+    response = requests.Response()
+    response.status_code = status_code
+    response.url = STATUS_URL
+    response._content = json.dumps(payload).encode()
+    response.headers["Content-Type"] = "application/json"
+    return APIResponse(response=response, url=STATUS_URL)
 
 
 class TestFetch:
@@ -119,6 +133,20 @@ class TestStatusMenu:
 
         mist_helper.DataExporter.write_with_format_selection.assert_called_once()
 
+    def test_http_200_configuration_error_is_exported(self, mist_helper: MagicMock) -> None:
+        """A valid HTTP 200 status can report its own Cradlepoint configuration error."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
+        response = sdk_response(200, {"last_status": "inactive", "error": "keys are invalid"})
+        with patch(
+            f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
+            return_value=response,
+        ):
+            FailureModeOrgCradlepointConnectionExporter.status()
+
+        mist_helper.DataExporter.write_with_format_selection.assert_called_once()
+        rows = mist_helper.DataExporter.write_with_format_selection.call_args.args[0]
+        assert rows[0]["error"] == "keys are invalid"
+
     def test_no_org_returns_early(self, mist_helper: MagicMock) -> None:
         """A cancelled org prompt must not call the Mist API."""
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
@@ -148,6 +176,27 @@ class TestStatusMenu:
         ):
             OrgCradlepointConnectionExporter.status()
 
+        mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+
+    @pytest.mark.parametrize("status_code", [403, 503])
+    def test_http_refusal_response_is_rejected_before_export(
+        self,
+        mist_helper: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+        status_code: int,
+    ) -> None:
+        """A refused SDK response must not become a successful export."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
+        refused = sdk_response(status_code, {"detail": f"controlled HTTP {status_code} refusal"})
+        with patch(
+            f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
+            return_value=refused,
+        ):
+            with caplog.at_level("ERROR"):
+                FailureModeOrgCradlepointConnectionExporter.status()
+
+        assert f"HTTP {status_code}" in caplog.text
+        assert "controlled HTTP" not in caplog.text
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
 
     @pytest.mark.parametrize("status_code", [404, 503])

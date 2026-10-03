@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)  # Name the logger for this module so a rea
 
 # The operationId that selects the primary-key strategy for the written row.
 _OPERATION = "testOrgCradlepointConnection"
+_HTTP_OK = 200  # Keep response doubles without a status on the existing success path.
+_HTTP_ERROR_MIN = 400  # Treat every HTTP refusal or server failure as an export failure.
 
 
 class OrgCradlepointConnectionExporter:
@@ -66,6 +68,16 @@ class OrgCradlepointConnectionExporter:
         response = mistapi.api.v1.orgs.setting.testOrgCradlepointConnection(
             mh.apisession, org_id
         )  # The SDK call for the Cradlepoint status.
+        status_code = getattr(response, "status_code", _HTTP_OK)  # Read the SDK HTTP result before its payload.
+        if isinstance(status_code, int) and status_code >= _HTTP_ERROR_MIN:  # Refused responses can still carry a dict.
+            logger.error(  # Report only the operation and status, never the response body.
+                "The cloud returned HTTP %s for the Cradlepoint status at org %s",
+                status_code,
+                org_id,
+            )
+            raise RuntimeError(  # Stop the exporter before it creates or persists a false status row.
+                f"Cradlepoint status request returned HTTP {status_code}"
+            )
         payload = getattr(response, "data", None)  # The SDK exposes the body on .data.
         logger.debug(
             "testOrgCradlepointConnection returned payload_type=%s", type(payload).__name__
