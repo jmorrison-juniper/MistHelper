@@ -6,6 +6,7 @@ import json  # Structured shell records must parse as bounded JSON objects.
 import logging  # caplog checks that logs contain no terminal secrets.
 import threading  # Raw-output tests delay close until after the client starts reading.
 import time  # Tests use bounded waits for the reader thread.
+from typing import Any  # Preserve parsed JSON values until each assertion checks them.
 
 import pytest  # The tests use fixtures and exception assertions.
 
@@ -420,6 +421,46 @@ def test_shell_unexpected_sink_exception_fails_plainly() -> None:
     assert session.reason == "The terminal failed. Read the portal log for the cause."  # User text is plain.
 
 
+class ShellLogAssertions:
+    """Keep shell log checks separate from the native shell run."""
+
+    @staticmethod
+    def assert_secret_exclusion(caplog: pytest.LogCaptureFixture, cloud: FakeMistCloud) -> None:
+        """Reject every address, path, input, or output secret in captured logs."""
+        assert cloud.base_ws_url not in caplog.text  # Logs must not hold the shell address.
+        assert "/shell/default" not in caplog.text  # Logs must not hold the URL path.
+        assert "SECRET-TYPED" not in caplog.text  # Logs must not hold typed text.
+        assert "SECRET-OUTPUT" not in caplog.text  # Logs must not hold output text.
+
+    @staticmethod
+    def assert_event_coverage(payloads: list[dict[str, Any]]) -> None:
+        """Require the original count of distinct shell action events."""
+        assert len({payload["event"] for payload in payloads}) == 21  # Require every distinct shell action event.
+
+    @staticmethod
+    def assert_safe_fields(payloads: list[dict[str, Any]]) -> None:
+        """Reject fields outside the structured logger allowlist."""
+        assert all(  # Reject records that include fields outside the logger allowlist.
+            set(payload) <= {"event", "redacted", *SAFE_FIELDS}
+            for payload in payloads  # Check every native captured payload.
+        )  # Allow safe fields only.
+
+    @staticmethod
+    def assert_event_lengths(payloads: list[dict[str, Any]]) -> None:
+        """Keep every event name within the configured bound."""
+        assert all(len(str(payload["event"])) <= MAX_EVENT_LENGTH for payload in payloads)  # Bound event names.
+
+    @staticmethod
+    def assert_field_lengths(payloads: list[dict[str, Any]]) -> None:
+        """Keep every safe string within the configured bound."""
+        assert all(
+            len(value) <= MAX_FIELD_LENGTH
+            for payload in payloads  # Check each payload from the same capture.
+            for value in payload.values()  # Check each original payload field.
+            if isinstance(value, str)  # Apply the bound only to string values.
+        )  # Bound every safe string field.
+
+
 def test_shell_logs_do_not_hold_address_input_or_output(caplog: pytest.LogCaptureFixture) -> None:
     """Shell logs omit the URL path, typed text, and output text."""
     caplog.set_level(logging.DEBUG)  # Capture debug logs to check high-frequency records.
@@ -437,18 +478,13 @@ def test_shell_logs_do_not_hold_address_input_or_output(caplog: pytest.LogCaptur
         runner.stop()  # Stop the shell.
         _wait_for_state(session, {SessionState.STOPPED})  # Wait for shutdown.
         ShellLogCompletion.wait(caplog)  # STOPPED precedes the reader's final outcome log.
-    assert cloud.base_ws_url not in caplog.text  # Logs must not hold the shell address.
-    assert "/shell/default" not in caplog.text  # Logs must not hold the URL path.
-    assert "SECRET-TYPED" not in caplog.text  # Logs must not hold typed text.
-    assert "SECRET-OUTPUT" not in caplog.text  # Logs must not hold output text.
+    ShellLogAssertions.assert_secret_exclusion(caplog, cloud)  # Check secrets against the native captured log text.
     records = [record for record in caplog.records if ".runners.shell." in record.name]  # Select package records.
     payloads = [json.loads(record.message) for record in records]  # Require valid JSON for each package record.
-    assert len({payload["event"] for payload in payloads}) == 21  # Require every distinct shell action event.
-    assert all(set(payload) <= {"event", "redacted", *SAFE_FIELDS} for payload in payloads)  # Allow safe fields only.
-    assert all(len(str(payload["event"])) <= MAX_EVENT_LENGTH for payload in payloads)  # Bound event names.
-    assert all(
-        len(value) <= MAX_FIELD_LENGTH for payload in payloads for value in payload.values() if isinstance(value, str)
-    )  # Bound every safe string field.
+    ShellLogAssertions.assert_event_coverage(payloads)  # Keep the original event-count condition.
+    ShellLogAssertions.assert_safe_fields(payloads)  # Keep the original field allowlist condition.
+    ShellLogAssertions.assert_event_lengths(payloads)  # Keep the original event-length condition.
+    ShellLogAssertions.assert_field_lengths(payloads)  # Keep the original safe-string length condition.
 
 
 def test_shell_history_preserves_raw_control_and_split_utf8_bytes() -> None:
