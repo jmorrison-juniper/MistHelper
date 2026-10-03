@@ -7,11 +7,17 @@ import logging  # WHY: structured operational logging preserves action-trace con
 from dataclasses import dataclass  # WHY: dataclass bundles both the injected deps and the immutable stamp payload.
 from typing import Any  # WHY: vendor JSON payload shapes remain dynamic dicts of arbitrary value types.
 
+from src.api.response_integrity import (
+    ResponseIntegrityChecker,  # WHY: detect JSON parse failures swallowed by the mistapi SDK.
+)
+
 logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
 
 _SITE_LIST_CSV = "SiteList.csv"  # WHY: canonical SiteList filename referenced by cache + prompt + lookup helpers.
 _OUTPUT_CSV = "SiteWiFiClients.CSV"  # WHY: canonical output filename shared by placeholder and finalize paths.
 _API_PAGE_LIMIT = 1000  # WHY: paginated API page size — matches legacy behavior for parity with prior exporter.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx responses cannot prove an empty WiFi result.
+_MISSING_ATTRIBUTE = object()  # WHY: distinguish absent raw_data from a native empty response body.
 _UNKNOWN_SITE = "Unknown Site"  # WHY: fallback display name preserving legacy stamp semantics on lookup failure.
 _SOURCE_CLIENT = "client"  # WHY: provenance marker distinguishing client-origin rows in downstream tooling.
 _SOURCE_SESSION_ONLY = "session_only"  # WHY: provenance marker distinguishing orphan-session-origin rows.
@@ -157,9 +163,60 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
         """Call the supplied paginated endpoint and resolve its full result list via get_all."""
         logger.info("Fetching %s data...", label)  # WHY: log before the first-page API call for tracing.
         response = endpoint(self.apisession, site_id, limit=_API_PAGE_LIMIT)  # WHY: first-page API call.
+        logger.debug(  # WHY: record the response status before validation decides whether data is trustworthy.
+            "Received HTTP %s response for %s at site %s",
+            self._response_status_code(response),
+            label,
+            site_id,
+        )
+        self._reject_failed_response(response, site_id, label)  # WHY: stop false-empty output before pagination.
         results = self.mistapi_module.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
         logger.debug("Fetched %d %s records", len(results) if results else 0, label)  # WHY: after-action size.
         return results or []  # WHY: normalize None to empty list so caller logic stays branch-free.
+
+    @classmethod
+    def _reject_failed_response(cls, response: Any, site_id: str, label: str) -> None:
+        """Reject HTTP failures and native responses whose body cannot prove an empty result."""
+        status_code = cls._response_status_code(response)  # WHY: inspect the native HTTP outcome before pagination.
+        if (  # WHY: failed HTTP answers cannot prove emptiness.
+            status_code is not None and status_code >= _HTTP_ERROR_MIN
+        ):
+            logger.error(  # WHY: expose the actual cloud failure instead of a valid-empty notice.
+                "The cloud returned HTTP %s for %s at site %s",
+                status_code,
+                label,
+                site_id,
+            )
+            raise RuntimeError(  # WHY: route failure to execute() with the cloud status.
+                f"WiFi {label} request failed with HTTP {status_code}"
+            )
+        if cls._response_body_failed(response):  # WHY: malformed or empty bodies cannot prove an empty result.
+            if ResponseIntegrityChecker.body_failed_to_parse(response):  # WHY: use the shared parse-failure report.
+                ResponseIntegrityChecker.report_parse_failure(response, label, site_id)  # WHY: name the broken reply.
+            else:
+                logger.error(  # WHY: report a native 200 response with no body as a failed WiFi answer.
+                    "The cloud reply for %s at site %s has an empty body. Treat this run as a failure.",
+                    label,
+                    site_id,
+                )
+            raise ValueError(f"WiFi {label} response body is unusable")  # WHY: prevent placeholder output.
+
+    @staticmethod
+    def _response_status_code(response: Any) -> int | None:
+        """Return an integer HTTP status when the response exposes one."""
+        status_code = getattr(response, "status_code", None)  # WHY: native APIResponse carries the HTTP result here.
+        return status_code if isinstance(status_code, int) else None  # WHY: ignore incomplete test doubles safely.
+
+    @classmethod
+    def _response_body_failed(cls, response: Any) -> bool:
+        """Return whether the response body cannot prove a valid WiFi result."""
+        if ResponseIntegrityChecker.body_failed_to_parse(response):  # WHY: detect malformed JSON retained by mistapi.
+            return True  # WHY: malformed JSON must not become a valid-empty export.
+        raw_data = getattr(response, "raw_data", _MISSING_ATTRIBUTE)  # WHY: inspect only native SDK body state.
+        payload = getattr(response, "data", _MISSING_ATTRIBUTE)  # WHY: pair body state with the parsed payload state.
+        return (  # WHY: reject native empty bodies while preserving response doubles without raw_data.
+            isinstance(raw_data, str) and not raw_data.strip() and payload in ({}, [])
+        )
 
     def _write_no_data_placeholder(self, stamp: _SiteStamp) -> None:
         """Write the legacy no-data sentinel CSV when neither clients nor sessions are found."""
