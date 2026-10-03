@@ -803,63 +803,89 @@ def build_version_options(
     version_resolver = RunningFirmwareVersionResolver(object()) if running_by_key is not None else None
     rows: list[dict[str, Any]] = []
     for device in devices:
-        model = str(device.get("model", "")).strip()
-        device_type = str(device.get("type", "")).strip().lower()
-        versions = sorted(
-            {_normalized_version(version) for version in by_model.get(model, ()) if _normalized_version(version)},
-            key=_numeric_version_key,
-            reverse=True,
-        )
-        selected = str(selections.get(device_type, {}).get("selected_version") or "")
-        safe_target, target_source = safe_model_target(
-            device_type,
-            versions,
-            _configured_override(device_type, os.environ),
-        )
-        version_target = selected if selected in versions else safe_target
-        version_reading = None
-        if version_resolver is not None:
-            version_reading = version_resolver.read(dict(device), dict(running_by_key or {}))
-        version_before = (
-            version_reading.value if version_reading is not None else str(device.get("version", "")).strip()
-        )
-        type_supported = device_type in SUPPORTED_DEVICE_TYPES
-        skip_reason = (
-            ""
-            if type_supported
-            else f"The portal skips {device_type or 'unknown'} devices because this type is not supported."
-        )
-        rows.append(
-            {
-                "mac": normalize_device_mac(device.get("mac")),
-                "name": str(device.get("name", "")).strip(),
-                "device_type": device_type,
-                "model": model,
-                "version_before": version_before,
-                "version_target": version_target,
-                "safe_target": safe_target,
-                "target_source": target_source,
-                "firmware_mismatch": bool(version_before) and bool(safe_target) and version_before != safe_target,
-                "version_is_running": version_reading.is_running if version_reading is not None else False,
-                "version_note": (
-                    ""
-                    if version_reading is None or version_reading.is_running
-                    else "The running version is not available."
-                ),
-                "versions": versions,
-                # Issue #2211: the cloud may name a type that the portal does not
-                # model. The row states it, so the table can tell the operator why
-                # that device carries no target.
-                "type_supported": type_supported,
-                "skip_reason": skip_reason,
-                # Issue #2157 shows the router controls only when the selection
-                # holds a router. The page cannot read the model rules, so the
-                # row carries the family that `classify_gateway` decided.
-                "gateway_family": resolve_family_scope(device_type, device)[0] or "",
-            }
-        )
+        rows.append(_build_version_option_row(device, by_model, selections, version_resolver, running_by_key))
     logger.debug("Upgrade portal offers a version choice for %s device(s)", len(rows))
     return rows
+
+
+def _build_version_option_row(
+    device: Mapping[str, Any],
+    by_model: Mapping[str, tuple[str, ...]],
+    selections: Mapping[str, Mapping[str, Any]],
+    version_resolver: RunningFirmwareVersionResolver | None,
+    running_by_key: Mapping[str, str] | None,
+) -> dict[str, Any]:
+    """Build one version choice row for one device."""
+    model = str(device.get("model", "")).strip()
+    device_type = str(device.get("type", "")).strip().lower()
+    versions = sorted(
+        {
+            _normalized_version(version)
+            for version in by_model.get(model, ())
+            if _normalized_version(version)
+        },
+        key=_numeric_version_key,
+        reverse=True,
+    )
+    selected = str(selections.get(device_type, {}).get("selected_version") or "")
+    safe_target, target_source = safe_model_target(
+        device_type,
+        versions,
+        _configured_override(device_type, os.environ),
+    )
+    version_target = selected if selected in versions else safe_target
+    version_reading = _read_running_version(device, version_resolver, running_by_key)
+    version_before = _version_before(device, version_reading)
+    type_supported = device_type in SUPPORTED_DEVICE_TYPES
+    return {
+        "mac": normalize_device_mac(device.get("mac")),
+        "name": str(device.get("name", "")).strip(),
+        "device_type": device_type,
+        "model": model,
+        "version_before": version_before,
+        "version_target": version_target,
+        "safe_target": safe_target,
+        "target_source": target_source,
+        "firmware_mismatch": bool(version_before) and bool(safe_target) and version_before != safe_target,
+        "version_is_running": version_reading.is_running if version_reading is not None else False,
+        "version_note": _version_note(version_reading),
+        "versions": versions,
+        "type_supported": type_supported,
+        "skip_reason": _skip_reason(device_type, type_supported),
+        "gateway_family": resolve_family_scope(device_type, device)[0] or "",
+    }
+
+
+def _read_running_version(
+    device: Mapping[str, Any],
+    version_resolver: RunningFirmwareVersionResolver | None,
+    running_by_key: Mapping[str, str] | None,
+) -> Any:
+    """Read a running version when the caller supplied a version map."""
+    if version_resolver is None:
+        return None
+    return version_resolver.read(dict(device), dict(running_by_key or {}))
+
+
+def _version_before(device: Mapping[str, Any], version_reading: Any) -> str:
+    """Return the running version or the inventory version."""
+    if version_reading is not None:
+        return version_reading.value
+    return str(device.get("version", "")).strip()
+
+
+def _version_note(version_reading: Any) -> str:
+    """Describe a missing running version."""
+    if version_reading is None or version_reading.is_running:
+        return ""
+    return "The running version is not available."
+
+
+def _skip_reason(device_type: str, type_supported: bool) -> str:
+    """Describe why an unsupported device type is skipped."""
+    if type_supported:
+        return ""
+    return f"The portal skips {device_type or 'unknown'} devices because this type is not supported."
 
 
 def _read_boolean(payload: Mapping[str, Any], field: str, fallback: bool) -> bool:
