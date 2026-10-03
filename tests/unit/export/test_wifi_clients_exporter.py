@@ -62,14 +62,20 @@ def test_execute_exports_merged_records() -> None:
     exporter.data_processing_utils.flatten_nested_fields.side_effect = lambda value: value
     exporter.data_processing_utils.escape_multiline.side_effect = lambda value: value
 
-    client_response = MagicMock()
-    session_response = MagicMock()
+    client_response = MagicMock(
+        status_code=200,
+        data={"results": [{"mac": "aa:bb:cc:dd:ee:ff", "hostname": "client-1"}]},
+        raw_data='{"results":[{"mac":"aa:bb:cc:dd:ee:ff","hostname":"client-1"}]}',
+        next=None,
+    )
+    session_response = MagicMock(
+        status_code=200,
+        data={"results": [{"mac": "aa:bb:cc:dd:ee:ff", "start_time": 10}]},
+        raw_data='{"results":[{"mac":"aa:bb:cc:dd:ee:ff","start_time":10}]}',
+        next=None,
+    )
     mistapi_module.api.v1.sites.clients.searchSiteWirelessClients.return_value = client_response
     mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = session_response
-    mistapi_module.get_all.side_effect = [
-        [{"mac": "aa:bb:cc:dd:ee:ff", "hostname": "client-1"}],
-        [{"mac": "aa:bb:cc:dd:ee:ff", "start_time": 10}],
-    ]
 
     os.makedirs("tests/fixtures", exist_ok=True)
     with open("tests/fixtures/site_list.csv", "w", encoding="utf-8") as file_handle:
@@ -103,7 +109,12 @@ def test_execute_writes_placeholder_when_no_data(tmp_path: Path) -> None:
     exporter, _prompt_utils, mistapi_module, data_exporter = _build_exporter()
     placeholder_path = tmp_path / "SiteWiFiClients.CSV"  # WHY: placeholder written via file_path_utils.get_csv_path
     exporter.file_path_utils.get_csv_path.return_value = str(placeholder_path)  # WHY: route path for both lookups
-    mistapi_module.get_all.return_value = []  # WHY: empty datasets trigger the placeholder branch
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(
+        status_code=200, data={"results": []}, raw_data='{"results":[]}', next=None
+    )
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = MagicMock(
+        status_code=200, data={"results": []}, raw_data='{"results":[]}', next=None
+    )
 
     exporter.execute(site_id="site-1")
 
@@ -120,11 +131,13 @@ def test_execute_logs_empty_merge_when_no_enriched_rows(tmp_path: Path, caplog) 
     exporter.file_path_utils.get_csv_path.return_value = str(tmp_path / "site_list.csv")  # WHY: unused; safe path
     exporter.data_processing_utils.flatten_nested_fields.side_effect = lambda value: value
     exporter.data_processing_utils.escape_multiline.side_effect = lambda value: value
-    # WHY: return sessions with no MAC (skipped) and no clients — merge produces zero rows.
-    mistapi_module.get_all.side_effect = [
-        [],  # WHY: zero clients so client_pass produces empty enriched list
-        [{"start_time": 1}],  # WHY: session without MAC — orphan pass skips it
-    ]
+    # These valid pages keep the original empty merge without an unchecked aggregate response.
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(
+        status_code=200, data={"results": []}, raw_data='{"results":[]}', next=None
+    )
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = MagicMock(
+        status_code=200, data={"results": [{"start_time": 1}]}, raw_data='{"results":[{"start_time":1}]}', next=None
+    )
 
     with caplog.at_level(logging.INFO, logger="root"):
         exporter.execute(site_id="site-1")

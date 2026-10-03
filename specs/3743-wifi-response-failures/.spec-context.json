@@ -1,0 +1,12 @@
+{
+  "issue": 3743,
+  "feature_directory": "specs/3743-wifi-response-failures",
+  "branch": "jmorrison-juniper-wifi-response-failures",
+  "app_session_id": "e3e3a9db-bc16-4806-866e-738c396fd552",
+  "cli_session_id": "05fb935e-7c47-412a-a6e8-94fd1b75e08f",
+  "base_commit": "0317b944388fb9f927ce4a20368070408542c4b1",
+  "currentStep": "analyze",
+  "status": "implemented-locally",
+  "publication": "prohibited",
+  "workflow_constraint": "Use current templates and feature-only context. Do not switch the app-managed branch or write shared .specify state."
+}

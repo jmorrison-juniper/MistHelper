@@ -7,6 +7,8 @@ import logging  # WHY: structured operational logging preserves action-trace con
 from dataclasses import dataclass  # WHY: dataclass bundles both the injected deps and the immutable stamp payload.
 from typing import Any  # WHY: vendor JSON payload shapes remain dynamic dicts of arbitrary value types.
 
+from src.api.response_integrity import ResponseIntegrityChecker  # Detect parse failures that the SDK catches.
+
 logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
 
 _SITE_LIST_CSV = "SiteList.csv"  # WHY: canonical SiteList filename referenced by cache + prompt + lookup helpers.
@@ -154,12 +156,56 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
         return clients or [], sessions or []  # WHY: normalize None so merge helpers can iterate safely.
 
     def _fetch_paginated(self, endpoint: Any, site_id: str, label: str) -> list[dict[str, Any]]:
-        """Call the supplied paginated endpoint and resolve its full result list via get_all."""
-        logger.info("Fetching %s data...", label)  # WHY: log before the first-page API call for tracing.
-        response = endpoint(self.apisession, site_id, limit=_API_PAGE_LIMIT)  # WHY: first-page API call.
-        results = self.mistapi_module.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
-        logger.debug("Fetched %d %s records", len(results) if results else 0, label)  # WHY: after-action size.
-        return results or []  # WHY: normalize None to empty list so caller logic stays branch-free.
+        """Validate every SDK page before returning a complete record list."""
+        logger.info("Fetching %s data for site %s...", label, site_id)
+        response = endpoint(self.apisession, site_id, limit=_API_PAGE_LIMIT)
+        results: list[dict[str, Any]] = []
+        links: set[str] = set()
+        page_number = 1
+        while True:
+            context = f"{label} for site {site_id}, page {page_number}"
+            results.extend(self._validated_page_rows(response, context))
+            next_link = getattr(response, "next", None)
+            if next_link in (None, ""):
+                break
+            if not isinstance(next_link, str) or next_link in links:
+                raise RuntimeError(f"{context}, HTTP 200: The next-page link is invalid or repeated.")
+            links.add(next_link)  # A repeated link cannot prove that the read is complete.
+            logger.info("Fetching %s page %d for site %s", label, page_number + 1, site_id)
+            response = self.mistapi_module.get_next(mist_session=self.apisession, response=response)
+            page_number += 1
+        logger.debug("Fetched %d %s records from %d validated pages", len(results), label, page_number)
+        return results
+
+    @classmethod
+    def _validated_page_rows(cls, response: Any, context: str) -> list[dict[str, Any]]:
+        """Accept only a complete page whose records are objects."""
+        payload = cls._validate_page_response(response, context)
+        rows = payload.get("results") if isinstance(payload, dict) else payload
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise RuntimeError(f"{context}, HTTP 200: The response body must contain a list of record objects.")
+        logger.debug("Checked 1 WiFi response page for %s: accepted %d records", context, len(rows))
+        return rows
+
+    @staticmethod
+    def _validate_page_response(response: Any, context: str) -> Any:
+        """Check HTTP status and retained parse evidence before reading records."""
+        logger.info("Checking 1 WiFi response page for %s", context)
+        status = getattr(response, "status_code", None)
+        status_label = str(status) if type(status) is int else "unavailable"
+        detail = f"{context}, HTTP {status_label}"
+        if type(status) is not int or status != 200:
+            raise RuntimeError(f"{detail}: The response has no successful HTTP 200 status.")
+        if ResponseIntegrityChecker.body_failed_to_parse(response):
+            length = len(response.raw_data)
+            raise RuntimeError(f"{detail}: The JSON body did not parse ({length} characters).")
+        raw_body = getattr(response, "raw_data", None)
+        if isinstance(raw_body, str) and not raw_body.strip():
+            raise RuntimeError(f"{detail}: The response body is empty.")
+        payload = getattr(response, "data", None)
+        if isinstance(payload, dict) and payload.get("error"):
+            raise RuntimeError(f"{detail}: The response body reports an API error.")
+        return payload
 
     def _write_no_data_placeholder(self, stamp: _SiteStamp) -> None:
         """Write the legacy no-data sentinel CSV when neither clients nor sessions are found."""
