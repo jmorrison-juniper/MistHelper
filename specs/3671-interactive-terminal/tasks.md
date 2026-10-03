@@ -503,11 +503,14 @@ Compare the messages, the states, and the end reasons.
 T057 to T061 hold the 12 pipeline steps. T059 to T061 run after the push, so their boxes
 stay clear in the merged file. The pull request and issue #3671 record their results.
 
-- [ ] T057 After T084 and T092 pass, build the manifest, stage all final evidence, and
+- [x] T057 After T084 and T092 pass, build the manifest, stage all final evidence, and
   commit any remaining files. Verify every correction is in the committed branch history.
-  Write each commit subject in the constitution step 4 format
+  Commit `97c09c01` holds the 23-file final convergence manifest. The history check found
+  26 valid feature subjects and 26 required Copilot trailers. Write each commit subject in
+  the constitution step 4 format
   `version YY.MM.DD.HH.MM - description`, with the time in UTC. The pull request title
   keeps Conventional Commits, because the title guard reads the title (issue #3720).
+  (delivered: committed branch history)
 - [ ] T058 Fetch and rebase onto `origin/main`. Run the affected gates again.
 - [ ] T059 Push the branch. Open the pull request with `Closes #3671`, `Closes #3659`,
   `Closes #3660`, and `Closes #3710`. The body also holds the changed-file summary, the
