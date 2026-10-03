@@ -84,7 +84,7 @@ def test_bulk_preview_replaces_selection_and_gates_the_exact_phrase(page: Any) -
     dialog = page.get_by_test_id("history-runs-preview-dialog")  # The native dialog of the preview.
     sync_api.expect(dialog).to_be_visible()  # The answer opens the dialog.
     summary = page.get_by_test_id("history-runs-preview-summary")  # The counts that the dialog shows.
-    sync_api.expect(summary).to_contain_text("2 run(s) across 1 site(s)")  # The same counts as the server.
+    sync_api.expect(summary).to_have_text("2 runs across 1 site.")  # Issue #3472: plural counts use plural nouns.
     sync_api.expect(page.get_by_test_id("history-runs-preview-phrase")).to_have_text("RETRY 2 RUNS")  # The phrase.
     confirm = page.get_by_test_id("history-runs-preview-confirm")  # The Continue control.
     sync_api.expect(confirm).to_be_disabled()  # No phrase yet, so Continue stays off.
@@ -93,6 +93,16 @@ def test_bulk_preview_replaces_selection_and_gates_the_exact_phrase(page: Any) -
     sync_api.expect(confirm).to_be_disabled()  # A near match does not turn Continue on.
     phrase.fill("RETRY 2 RUNS")  # The exact phrase.
     sync_api.expect(confirm).to_be_enabled()  # Only the exact phrase turns Continue on.
+
+
+def test_bulk_preview_uses_singular_counts(page: Any) -> None:
+    """The preview uses singular nouns when one run targets one site."""
+    _open_history(page)  # Wait until the seed runs show on the history page.
+    page.get_by_test_id(f"history-run-select-{FAILED_RUN_ID}").check()  # Select one run.
+    page.get_by_test_id("history-runs-cancel").click()  # Open the cancel preview.
+    sync_api.expect(page.get_by_test_id("history-runs-preview-summary")).to_have_text(  # Issue #3472.
+        "1 run across 1 site."
+    )
 
 
 def test_bulk_selection_survives_reload_but_requires_a_new_preview(page: Any) -> None:
@@ -105,6 +115,9 @@ def test_bulk_selection_survives_reload_but_requires_a_new_preview(page: Any) ->
     sync_api.expect(page.get_by_test_id("history-runs-selection-count")).to_have_text("1 run selected")
     assert page.get_by_test_id("history-runs-preview-dialog").is_hidden()
     page.get_by_test_id("history-runs-cancel").click()
+    sync_api.expect(page.get_by_test_id("history-runs-preview-summary")).to_have_text(  # Issue #3472.
+        "1 run across 1 site."
+    )
     sync_api.expect(page.get_by_test_id("history-runs-preview-phrase")).to_have_text("CANCEL 1 RUNS")
 
 

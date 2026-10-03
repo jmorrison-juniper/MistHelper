@@ -221,6 +221,8 @@ def test_each_row_with_the_device_type_phrase_stays_on_one_line(page: Any, page_
     assert save_fit(fits, name).exists()  # The measure sits beside the screenshot of this width.
     for capture_id, fit in fits.items():  # Each seed row of the two sites.
         assert (fit["whiteSpace"], fit["textOverflow"]) == ("nowrap", "ellipsis"), f"{capture_id}: {fit}"  # A clip.
+        if width == 1280:  # Issue #3495: the common desktop width must show the complete phrase.
+            assert not fit["clipped"], f"{capture_id}: the device type phrase clips at 1280 pixels: {fit}"
         height = row_height(page, capture_id)  # The painted height of the row.
         message = f"{capture_id}: the row is {height} pixels tall at {width} pixels"  # The failure text.
         assert height <= ROW_HEIGHT_CEILING, message  # Issue #2106: the phrase adds no second line.
