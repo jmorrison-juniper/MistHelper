@@ -6,7 +6,13 @@ Verify .error returns None for 2xx, extracts detail for non-2xx.
 
 from __future__ import annotations
 
+import logging
+
+import pytest
+
 from src.shared.mist.endpoints import ApiResult
+
+LOGGER = logging.getLogger(__name__)
 
 
 class TestApiResultSuccess:
@@ -54,6 +60,26 @@ class TestApiResultError:
         )
         assert "message" in str(result.error)
 
-    def test_error_with_list_data(self) -> None:
-        result = ApiResult(status_code=400, data=[{"err": "bad"}])
-        assert result.error is not None
+    @pytest.mark.parametrize(
+        ("data", "expected_error"),
+        [
+            pytest.param([], "[]", id="empty-list"),
+            pytest.param([{"err": "bad"}], "[{'err': 'bad'}]", id="single-error"),
+            pytest.param(
+                [{"detail": "first"}, {"detail": "second"}],
+                "[{'detail': 'first'}, {'detail': 'second'}]",
+                id="multiple-errors",
+            ),
+            pytest.param(
+                [{"err": "bad", "code": "E400"}],
+                "[{'err': 'bad', 'code': 'E400'}]",
+                id="all-fields",
+            ),
+        ],
+    )
+    def test_error_with_list_data(self, data: list[dict[str, str]], expected_error: str) -> None:
+        """Keep every list entry and field in the error text."""
+        LOGGER.info("Checking the error text for %d list entries.", len(data))
+        result = ApiResult(status_code=400, data=data)
+        assert result.error == expected_error
+        LOGGER.debug("Checked the error text for %d list entries.", len(data))
