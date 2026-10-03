@@ -284,7 +284,8 @@ def _create_run(page: Any, ledger: RunLedger, site_id: str | None = None) -> str
             401 or 404. All three name a fault of the portal that this run
             started, so none of them may report a skip.
     """
-    site_id = site_id or _first_site_id(page)  # Use a local site when the test owns one.
+    listed_site_id = _first_site_id(page)  # Load the signed-in page and its CSRF token before any request.
+    site_id = site_id or listed_site_id  # Use a local site when the test owns one.
     ledger.record_site(site_id)  # Teardown must free the site even when the run is final.
     path = RUNS_API_TEMPLATE.format(site_id=site_id)  # The create route of that site.
     headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # Each write needs both.
@@ -607,3 +608,4 @@ class TestTheRetryControl:
         capture_start = portal_page.get_by_test_id("capture-start-button")  # The first control of the retry.
         sync_api.expect(capture_start).to_be_visible()  # The operator must see where to start.
         assert capture_start.get_attribute("data-run-id")
+
