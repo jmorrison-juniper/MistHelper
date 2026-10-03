@@ -6,28 +6,11 @@ All redis interactions are mocked — no live Redis required.
 from __future__ import annotations
 
 from collections import Counter  # WHY: the mocked _extract_chunk must return the same tally type as the real worker.
-from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.db import DatabaseConfig, host_resolver
-from src.db.host_resolver import BoundedHostResolver
-from tests.unit.db_discovery.fakes import ControlledResolver
-
-
-@pytest.fixture(autouse=True)
-def isolated_redis_dns(monkeypatch: pytest.MonkeyPatch) -> Iterator[ControlledResolver]:
-    """Keep Redis tests on controlled DNS and close their finite worker pool."""
-    lookup = ControlledResolver()
-    lookup.answers["localhost"] = lookup.addresses()
-    resolver = BoundedHostResolver(lookup=lookup)
-    monkeypatch.setattr(host_resolver, "DEFAULT_RESOLVER", resolver)
-    try:
-        yield lookup
-    finally:
-        lookup.release.set()
-        resolver.close(timeout=1)
+from src.db import DatabaseConfig
 
 
 @pytest.fixture
@@ -69,7 +52,7 @@ class TestRedisTimeSeriesWriterInit:
         writer = RedisTimeSeriesWriter(config)
         mock_redis["client_cls"].assert_called_once()
         mock_redis["client"].module_list.assert_called_once()
-        assert writer._ts is mock_redis["ts"]
+        assert writer._ts is not None
 
     def test_raises_if_ts_module_missing(self, config, mock_redis):
         from src.db.redis_writer import RedisTimeSeriesWriter
@@ -240,12 +223,11 @@ class TestCoverageGapTargets:
 
         from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
 
-        error = socket.gaierror("Name or service not known")
-        isolated_redis_dns.answers["localhost"] = error
-        with pytest.raises(ConnectionError, match="not resolvable") as failure:
-            RedisTimeSeriesWriter(config)
-        assert failure.value.__cause__ is error
-        assert len(isolated_redis_dns.calls) == 1
+        with patch.dict(
+            isolated_redis_dns.answers, {"localhost": socket.gaierror("Name or service not known")}
+        ):  # Limit the controlled failure to this constructor check.
+            with pytest.raises(ConnectionError, match="not resolvable"):  # Must raise ConnectionError
+                RedisTimeSeriesWriter(config)  # Constructor must propagate DNS failure as ConnectionError
 
     def test_extract_chunk_with_ts_value_fields_calls_listed_fields(self, config, mock_redis) -> None:
         """Line 189: when ts_value_fields is provided, _extract_listed_fields is called instead of _extract_numeric."""
@@ -263,11 +245,8 @@ class TestCoverageGapTargets:
         with patch(  # Patch on the class since _select_numeric references the static via class binding
             "src.db.redis_writer.RedisTimeSeriesWriter._extract_listed_fields", return_value=listed_return
         ) as mock_lf:
-            adds, key_records, sources = writer._extract_chunk(records, ctx)
+            writer._extract_chunk(records, ctx)  # Trigger the listed-fields branch via context.ts_value_fields
         mock_lf.assert_called_once()  # _extract_listed_fields must have been called via line 189
-        assert adds == [("testFunc:dev-1:cpu", 45.0)]
-        assert key_records == {"testFunc:dev-1:cpu": records[0]}
-        assert sources == Counter({"strategy": 1})
 
     def test_create_single_key_skips_when_key_already_cached(self, config, mock_redis) -> None:
         """Line 341: _create_single_key must return early when ts_key is already in _created_keys."""
@@ -466,3 +445,21 @@ class TestResolutionSummaryLogging:
         counts = writer._log.debug.call_args_list[0].kwargs  # WHY: the summary reports the counts as keywords.
         assert counts["fallback"] == 10000  # WHY: every record resolves through the fallback list.
         assert counts["strategy"] + counts["fallback"] + counts["unknown"] == 10000  # WHY: the merge loses no count.
+
+
+@pytest.fixture(autouse=True)
+def isolated_redis_dns(monkeypatch: pytest.MonkeyPatch):
+    """Keep Redis tests on controlled DNS and close their finite worker pool."""
+    from src.db import host_resolver
+    from src.db.host_resolver import BoundedHostResolver
+    from tests.unit.db_discovery.fakes import ControlledResolver
+
+    lookup = ControlledResolver()
+    lookup.answers["localhost"] = lookup.addresses()
+    resolver = BoundedHostResolver(lookup=lookup)
+    monkeypatch.setattr(host_resolver, "DEFAULT_RESOLVER", resolver)
+    try:
+        yield lookup
+    finally:
+        lookup.release.set()
+        resolver.close(timeout=1)

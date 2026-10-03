@@ -17,6 +17,7 @@ from src import db
 from src.db import DatabaseConfig, arango_writer
 from src.db.arango_writer import ArangoDBWriter
 from src.db.host_resolver import ResolverLimits
+from src.db.redis_writer import RedisTimeSeriesWriter
 from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 from tests.unit.db_discovery.fakes import ControlledPreflightCall, ControlledSockets, ResolverHarness
@@ -373,3 +374,19 @@ class TestArangoPreflightResources:
         assert failure.value is error
         assert client.call_count == 1
         assert len(discovery.lookup.calls) == 1
+
+
+class TestRedisConstructorPreflight:
+    """Preserve the actual constructor's DNS cause and single-query contract."""
+
+    def test_constructor_preserves_dns_cause_identity_and_one_lookup(self, discovery: ResolverHarness) -> None:
+        error = socket.gaierror("Name or service not known")
+        discovery.lookup.answers["localhost"] = error
+        config = DatabaseConfig(redis_host="localhost", redis_port=6379)
+        with patch("src.db.redis_writer.redis.Redis") as client:
+            with pytest.raises(ConnectionError, match="not resolvable") as failure:
+                RedisTimeSeriesWriter(config)
+        assert failure.value.__cause__ is error
+        assert len(discovery.lookup.calls) == 1
+        assert discovery.lookup.calls == [("localhost", None, socket.AF_UNSPEC, socket.SOCK_STREAM)]
+        assert client.call_count == 0
