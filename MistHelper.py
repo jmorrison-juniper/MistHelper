@@ -52,7 +52,6 @@ from collections.abc import (
     Iterable,  # Type hints for static analysis
 )
 from datetime import datetime  # Import datetime for timestamping logs and events
-from logging.handlers import RotatingFileHandler  # Rotate script.log before the data volume fills
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -70,6 +69,7 @@ from packaging.specifiers import (
 from packaging.version import InvalidVersion, Version  # WHY: PEP 440 version comparison.
 
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
+from src.utils.process_safe_log_handler import ProcessSafeRotatingFileHandler  # Serialize shared log writes.
 from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
     SubprocessRunner,  # Audited dispatcher. Sole entry point for external command execution.
@@ -125,14 +125,13 @@ class LogRotationSettings:  # Preserve the existing behavior during the complian
 
     def build_handler(
         self, log_path: str
-    ) -> RotatingFileHandler:  # Preserve the existing behavior during the compliance refactor.
-        """Build a UTF-8 rotating handler for the configured log path."""
-        return RotatingFileHandler(  # Create the bounded handler used by both logging setup paths
-            log_path,  # Keep the existing data/script.log location
-            maxBytes=self.max_bytes,  # Rotate when the active file reaches the configured size
-            backupCount=self.backup_count,  # Retain only the configured number of backups
-            encoding="utf-8",  # Preserve non-ASCII operational data safely
-        )
+    ) -> ProcessSafeRotatingFileHandler:  # Preserve the existing behavior during the compliance refactor.
+        """Build a UTF-8 rotating handler that supports concurrent processes."""
+        return ProcessSafeRotatingFileHandler(  # Create one serialized writer for the shared data log.
+            log_path,  # Keep the existing data/script.log location.
+            max_bytes=self.max_bytes,  # Rotate when the active file reaches the configured size.
+            backup_count=self.backup_count,  # Retain only the configured number of backups.
+        )  # Return the process-safe handler used by every startup path.
 
         # Type stubs for dynamically imported modules
         # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -1365,7 +1364,9 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         logger.debug("_build_console_log_handler: console handler ready")  # Log after build
         return console_handler  # Caller wires this into basicConfig
 
-    def _build_file_log_handler(self, level: int) -> RotatingFileHandler:  # File handler factory (data/script.log)
+    def _build_file_log_handler(
+        self, level: int
+    ) -> ProcessSafeRotatingFileHandler:  # File handler factory (data/script.log)
         """Build a data/script.log file handler at the requested level."""
         logger.debug("_build_file_log_handler: creating file handler at level %s", level)  # Log before build
         log_file_path = os.path.join("data", "script.log")  # Log path under data/ (writable in the container)
