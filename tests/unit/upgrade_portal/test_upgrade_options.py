@@ -301,6 +301,9 @@ class TestVersionOptions:
                 # Issue #2211 marks the row that the portal cannot upgrade. A
                 # switch is a modeled type, so the row reads true.
                 "type_supported": True,
+                "skip_reason": "",
+                "version_is_running": False,
+                "version_note": "",
                 # Issue #2157 shows the router controls only for a router row,
                 # so every row names its gateway family. A switch has none.
                 "gateway_family": "",
@@ -328,6 +331,7 @@ class TestVersionOptions:
         rows = module.build_version_options([router_row], {})
         assert rows[0]["device_type"] == "router"
         assert rows[0]["type_supported"] is False
+        assert rows[0]["skip_reason"] == "The portal skips router devices because this type is not supported."
 
     def test_an_unmodeled_device_type_reads_no_version_override(self) -> None:
         """The portal names no environment variable for a type it does not model."""
@@ -336,6 +340,17 @@ class TestVersionOptions:
     def test_a_modeled_device_type_still_reads_its_override(self) -> None:
         """The guard must not remove the override that a modeled type carries."""
         assert module._configured_override("ap", {"CAPTURE_DEFAULT_AP_VERSION": "0.14.29076"}) == "0.14.29076"
+
+    def test_running_version_replaces_the_configured_inventory_version(self) -> None:
+        """The multi-site table must show the version that the device runs."""
+        rows = module.build_version_options(
+            [SWITCH_ROW],
+            {"EX4400-48P": ("24.2R1.17",)},
+            running_by_key={SWITCH_ROW["mac"]: "24.2R1.17"},
+        )
+        assert rows[0]["version_before"] == "24.2R1.17"
+        assert rows[0]["version_is_running"] is True
+        assert rows[0]["version_note"] == ""
 
 
 class TestBuildOptions:
@@ -743,6 +758,23 @@ class TestBuildOptionsView:
         monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)
         answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
         assert answer["versions_by_model"]["EX4400-48P"] == ["23.4R2-S4.11", "24.2R1.17"]
+
+    def test_the_view_uses_the_running_version_reader(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """The table view must overlay the running version before rendering."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        monkeypatch.setattr(fake_mist_session, "mist_get", lambda **_: None, raising=False)
+        monkeypatch.setattr(
+            module.RunningFirmwareVersionResolver,
+            "fetch_site_running_versions",
+            lambda _resolver, site_id: {SWITCH_ROW["mac"]: "24.2R1.17"},
+        )
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
+        assert answer["targets"][0]["version_before"] == "24.2R1.17"
+        assert answer["targets"][0]["version_is_running"] is True
 
     def test_an_empty_read_spends_no_second_call(
         self,
