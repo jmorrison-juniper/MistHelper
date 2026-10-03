@@ -11,8 +11,9 @@ Cache positive and negative results for 30 seconds.
 Use two finite daemon workers and admit at most two outstanding queries.
 Use resolved numeric addresses for central TCP probes.
 Share the released Redis and capture-store DNS preflights.
+Share the inherited ArangoDB DNS preflight on the exact accepted predecessor.
 Keep configured driver hostnames, URLs, TLS/SNI, and network handshakes unchanged.
-Keep the owned ArangoDB writer unchanged until the verified position-25 release.
+Keep all declared-index and data behavior unchanged.
 
 ## Technical Context
 
@@ -45,7 +46,7 @@ Keep the owned ArangoDB writer unchanged until the verified position-25 release.
 - Existing `DatabaseConfig.from_env` exceeds the method length limit. Preserve its configuration and credential semantics without an unrelated class migration.
 - Existing `capture/store.py` uses long module functions. Add only the released DNS preflight and preserve its real connection logic.
 - Follow the current branch and commit rules instead of the older constitution commit format.
-- Run local gates before the local commit. Do not push or deploy without the coordinator's explicit main-SHA grant.
+- Run local gates before the local commit. Do not publish or deploy without a separate explicit publication grant.
 - Use safe structured diagnostics. Do not log credentials.
 
 ## Project Structure
@@ -71,6 +72,7 @@ specs/3318-bounded-database-discovery/
 src/db/
   __init__.py
   host_resolver.py
+  arango_writer.py
   redis_writer.py
 src/upgrade_portal/capture/store.py
 tests/unit/db_discovery/
@@ -124,13 +126,22 @@ Late completion does not replace an existing unexpired cache result.
 Completion releases the slot even when the caller already timed out.
 Shutdown joins workers only within a finite caller budget.
 
-## Inherited implementation prerequisite
+## Accepted local inheritance
 
-The coordinator authorizes the ArangoDB DNS preflight migration only after issue #3309 completes position 25.
-That release must name a fully verified main SHA.
-The writer remains read-only until that release.
-Add controlled red, green, time, and resource evidence on the inherited writer before the one publication.
-The local handoff must state that this implementation prerequisite remains incomplete.
+The [local source grant](https://github.com/jmorrison-juniper/MistHelper/issues/3318#issuecomment-5966338605) names the exact accepted predecessor.
+Its SHA is `67a1ca625ab3526c68a8e54d1580dc1c92d3abc4`.
+Its sole parent is `10fbd06110101e7f75705dbd585796dfeff8a3ab`.
+Its tree is `7fb44231359a06e3623ccc403a85c97d4b8551f9`.
+
+Preserve original preparation commit `4477312b0c891a59954c07044efc2f4afabf905f` before the bounded own-branch rebase.
+The verified bundle retains its complete original one-commit range over `ff3cc1bea8ab58026210a968ff1465f61c9fec78`.
+The rebase uses `rebase.updateRefs=false` and changes no peer branch.
+The rebased preparation commit is `67e53ecad8b94bafa50b35796c7d2e68ef05224d`.
+
+Only the inherited `_preflight_dns` method and necessary imports change in `src/db/arango_writer.py`.
+All other writer methods and the declared-index manager remain unchanged.
+Controlled native tests prove the caller deadline, cache expiry, refusal, recovery, finite work, and cleanup.
+The separate publication decision remains open.
 
 ## Validation
 

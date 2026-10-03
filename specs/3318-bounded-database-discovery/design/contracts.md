@@ -33,10 +33,10 @@ DNS success alone does not mean that a service is ready.
 
 ## Released preflight and driver boundary
 
-The Redis and capture-store DNS preflights share the central resolver.
+The ArangoDB, Redis, and capture-store DNS preflights share the central resolver.
 They retain original driver hostnames, configured URLs, TLS/SNI, and error types.
-The ArangoDB writer remains read-only until the coordinator releases the verified position-25 main SHA.
-Its inherited preflight migration remains an incomplete prerequisite before publication.
+The inherited ArangoDB change applies only to its DNS preflight and necessary imports.
+Declared-index behavior and all other writer logic remain unchanged.
 The repair makes no one-second claim for driver network handshakes.
 
 ## Validation isolation
@@ -48,5 +48,6 @@ Controlled blocked lookups must finish after release.
 
 ## Delivery
 
-The first deliverable is a verified local commit.
-Any push, pull request, protected merge, and exact merged-main test require the coordinator's later verified-SHA grant.
+The local source grant permits a verified local commit on the accepted predecessor.
+Any push or pull request requires a separate explicit publication decision.
+Protected merge and exact merged-main tests remain later delivery phases.

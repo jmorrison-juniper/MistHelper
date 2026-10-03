@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import socket
 import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import pytest
+import structlog
+from arango.exceptions import ArangoError
 
 from src import db
-from tests.unit.db_discovery.fakes import ControlledSockets, ResolverHarness
+from src.db import DatabaseConfig, arango_writer
+from src.db.arango_writer import ArangoDBWriter
+from src.db.host_resolver import ResolverLimits
+from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
+from tests.unit.db_discovery.fakes import ControlledPreflightCall, ControlledSockets, ResolverHarness
 
 
 class TestNumericAddresses:
@@ -205,3 +214,162 @@ class TestConfiguredBackendProbes:
             assert db.polyglot_hosts_unreachable() is True
         assert len(discovery.lookup.calls) == 2
         assert sockets.targets == []
+
+
+class TestArangoDnsPreflight:
+    """Prove the inherited preflight deadline and both cache expiry paths."""
+
+    def test_native_blocked_preflight_obeys_the_real_one_second_deadline(
+        self, discovery: ResolverHarness, record_property
+    ) -> None:
+        discovery.lookup.blocked_hosts.add("blocked-arango.invalid")
+        probe = ControlledPreflightCall(discovery.lookup)
+        failure, elapsed, completed = probe.measure(lambda: ArangoDBWriter._preflight_dns("blocked-arango.invalid"))
+        record_property("arango_preflight_elapsed_seconds", elapsed)
+        record_property("arango_preflight_completed_inside_budget", completed)
+        assert completed is True, f"The inherited preflight remained blocked after {elapsed:.3f} seconds."
+        assert 0.9 <= elapsed < 1.3, elapsed
+        assert isinstance(failure, ConnectionError)
+        assert isinstance(failure.__cause__, TimeoutError)
+        assert len(discovery.lookup.calls) == 1
+
+    def test_failed_configuration_and_preflight_share_one_negative_lookup(self, discovery: ResolverHarness) -> None:
+        assert db._hosts_unreachable("https://missing-arango.invalid:9443", "missing-redis.invalid") is True
+        for _attempt in range(3):
+            with pytest.raises(ConnectionError, match="not resolvable") as failure:
+                ArangoDBWriter._preflight_dns("missing-arango.invalid")
+            assert isinstance(failure.value.__cause__, socket.gaierror)
+        assert [call[0] for call in discovery.lookup.calls] == ["missing-arango.invalid", "missing-redis.invalid"]
+
+    def test_positive_preflight_cache_expires_at_thirty_seconds(self, discovery: ResolverHarness) -> None:
+        discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses()
+        ArangoDBWriter._preflight_dns("arango.invalid")
+        discovery.clock.advance(29.999)
+        ArangoDBWriter._preflight_dns("arango.invalid")
+        assert len(discovery.lookup.calls) == 1
+        discovery.clock.advance(0.001)
+        discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses("192.0.2.11")
+        ArangoDBWriter._preflight_dns("arango.invalid")
+        assert len(discovery.lookup.calls) == 2
+        assert db.host_resolver.DEFAULT_RESOLVER.resolve("arango.invalid").addresses == tuple(
+            discovery.lookup.addresses("192.0.2.11")
+        )
+
+    def test_negative_preflight_cache_expiry_detects_recovery(self, discovery: ResolverHarness) -> None:
+        with pytest.raises(ConnectionError, match="not resolvable"):
+            ArangoDBWriter._preflight_dns("arango.invalid")
+        discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses()
+        discovery.clock.advance(29.999)
+        with pytest.raises(ConnectionError, match="not resolvable"):
+            ArangoDBWriter._preflight_dns("arango.invalid")
+        assert len(discovery.lookup.calls) == 1
+        discovery.clock.advance(0.001)
+        ArangoDBWriter._preflight_dns("arango.invalid")
+        assert len(discovery.lookup.calls) == 2
+        assert db.host_resolver.DEFAULT_RESOLVER.resolve("arango.invalid").error is None
+
+    def test_successful_preflight_and_numeric_tcp_share_the_same_addresses(
+        self, discovery: ResolverHarness, monkeypatch
+    ) -> None:
+        discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses()
+        sockets = ControlledSockets()
+        monkeypatch.setattr(db.socket, "socket", sockets)
+        ArangoDBWriter._preflight_dns("arango.invalid")
+        assert db._can_connect("arango.invalid", 9529) is True
+        assert len(discovery.lookup.calls) == 1
+        assert sockets.targets == [("192.0.2.10", 9529)]
+
+
+class TestArangoPreflightResources:
+    """Prove native guard refusals, finite shared work, and protected driver behavior."""
+
+    def test_parallel_preflights_share_one_lookup_and_release_all_helpers(self, discovery: ResolverHarness) -> None:
+        discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses()
+        discovery.lookup.blocked_hosts.add("arango.invalid")
+        resolver = db.host_resolver.DEFAULT_RESOLVER
+        with ThreadPoolExecutor(max_workers=12) as callers:
+            futures = [callers.submit(ArangoDBWriter._preflight_dns, "arango.invalid") for _request in range(12)]
+            assert discovery.lookup.wait_for_calls(1) is True
+            discovery.lookup.release.set()
+            assert [future.result(timeout=2) for future in futures] == [None] * 12
+        assert len(discovery.lookup.calls) == 1
+        assert resolver.resource_counts()["pending"] == 0
+        assert resolver.resource_counts()["workers"] <= 2
+        resolver.close(timeout=1)
+        assert resolver.resource_counts() == {"workers": 0, "pending": 0, "queued": 0, "cached": 1}
+
+    def test_saturated_preflights_refuse_extra_work_then_recover(self, discovery: ResolverHarness) -> None:
+        discovery.lookup.blocked_hosts.update({"first.invalid", "second.invalid"})
+        resolver = discovery.create(ResolverLimits(timeout_seconds=0.03), shared=True)
+        for hostname in ("first.invalid", "second.invalid"):
+            with pytest.raises(ConnectionError, match="not resolvable") as failure:
+                ArangoDBWriter._preflight_dns(hostname)
+            assert isinstance(failure.value.__cause__, TimeoutError)
+        with (
+            structlog.testing.capture_logs() as records,
+            pytest.raises(ConnectionError, match="not resolvable") as failure,
+        ):
+            ArangoDBWriter._preflight_dns("later.invalid")
+        assert isinstance(failure.value.__cause__, OSError)
+        assert failure.value.__cause__.errno == errno.EBUSY
+        assert resolver.resource_counts() == {"workers": 2, "pending": 2, "queued": 0, "cached": 2}
+        assert any(
+            record["event"] == "arango_dns_preflight_unavailable" and record["checked_hosts"] == 1 for record in records
+        )
+        discovery.drain(resolver)
+        discovery.lookup.answers["later.invalid"] = discovery.lookup.addresses()
+        ArangoDBWriter._preflight_dns("later.invalid")
+        assert [call[0] for call in discovery.lookup.calls] == ["first.invalid", "second.invalid", "later.invalid"]
+
+    def test_dns_guard_refusal_reports_one_checked_host_and_prevents_client_creation(
+        self, discovery: ResolverHarness
+    ) -> None:
+        config = DatabaseConfig(arango_host="https://missing.invalid:9443")
+        with structlog.testing.capture_logs() as records, patch.object(arango_writer, "ArangoClient") as client:
+            with pytest.raises(ConnectionError, match="not resolvable") as failure:
+                ArangoDBWriter(config)
+        assert isinstance(failure.value.__cause__, socket.gaierror)
+        assert client.call_count == 0
+        assert len(discovery.lookup.calls) == 1
+        assert any(
+            record["event"] == "arango_dns_preflight_unavailable" and record["checked_hosts"] == 1 for record in records
+        )
+        assert not any(record["event"] == "arango_dns_preflight_finished" for record in records)
+
+    def test_original_tls_url_credentials_and_declared_indexes_remain_unchanged(
+        self, discovery: ResolverHarness, remote_arango_config: DatabaseConfig
+    ) -> None:
+        config = remote_arango_config
+        discovery.lookup.answers["external-arango.invalid"] = discovery.lookup.addresses()
+        harness = ArangoIndexWriterHarness(config)
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["listOrgMarvisActions"]
+        with patch.object(arango_writer, "ArangoClient", autospec=True, return_value=harness.client) as client:
+            writer = ArangoDBWriter(config)
+            try:
+                result = writer.write([{"uuid": "action-1"}], "listOrgMarvisActions", strategy)
+            finally:
+                writer.close()
+        client.assert_called_once_with(hosts=config.arango_host)
+        assert harness.client.db.call_args_list[0].kwargs == {
+            "username": config.arango_username,
+            "password": config.arango_password,
+        }
+        collection = harness.database.collections["listOrgMarvisActions"]
+        assert [entry.args[0] for entry in collection.handle.add_index.call_args_list] == [
+            {"type": "persistent", "fields": [name]} for name in strategy["indexes"]
+        ]
+        assert len(strategy["indexes"]) == 5
+        assert (result.success, result.records_written, result.records_failed) == (True, 1, 0)
+        assert [call[0] for call in discovery.lookup.calls] == ["external-arango.invalid"]
+
+    def test_resolved_preflight_does_not_change_driver_error_semantics(self, discovery: ResolverHarness) -> None:
+        discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses()
+        config = DatabaseConfig(arango_host="https://arango.invalid:9443")
+        error = ArangoError("Controlled driver failure.")
+        with patch.object(arango_writer, "ArangoClient") as client:
+            client.return_value.db.side_effect = error
+            with pytest.raises(ArangoError, match="Controlled driver failure") as failure:
+                ArangoDBWriter(config)
+        assert failure.value is error
+        assert client.call_count == 1
+        assert len(discovery.lookup.calls) == 1

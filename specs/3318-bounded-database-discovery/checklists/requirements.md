@@ -21,7 +21,7 @@
 - [x] The success criteria describe measured behavior.
 - [x] The acceptance scenarios cover all three user stories.
 - [x] The edge cases include expiry, capacity, late completion, and errors.
-- [x] The scope separates released preflights from the still-owned ArangoDB writer.
+- [x] The scope limits the inherited ArangoDB change to its released preflight and necessary imports.
 - [x] The assumptions state the operating system resolver limitation.
 
 ## Feature Readiness
@@ -35,5 +35,6 @@
 
 The checklist contains 16 completed items.
 The user authorizes the unique file-only SpecKit workflow.
-The current repair does not claim a deadline for the still-owned ArangoDB preflight or database driver handshakes.
-The inherited ArangoDB migration remains an explicit incomplete prerequisite before publication.
+The current repair bounds the ArangoDB DNS preflight without a deadline claim for database driver handshakes.
+The accepted position-25 predecessor permits the local source migration.
+The separate publication hold remains explicit.

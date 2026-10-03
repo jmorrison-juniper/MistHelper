@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import socket
 import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from threading import Condition, Event, Lock
 from unittest.mock import MagicMock
 
@@ -151,3 +153,33 @@ class ControlledSockets:
             time.sleep(min(self.delay, budget))
         if index < len(self.failures) and self.failures[index] is not None:
             raise self.failures[index]
+
+
+class ControlledPreflightCall:
+    """Measure a native preflight and release the controlled blocked lookup."""
+
+    def __init__(self, lookup: ControlledResolver) -> None:
+        """Keep the release specific to the test-owned resolver."""
+        self.lookup = lookup
+
+    def measure(self, action: Callable[[], None]) -> tuple[ConnectionError | None, float, bool]:
+        """Stop an unbounded baseline caller without abandoning its helper."""
+        failure: ConnectionError | None = None
+        completed = True
+        with ThreadPoolExecutor(max_workers=1) as caller:
+            started = time.monotonic()
+            future = caller.submit(action)
+            try:
+                future.result(timeout=1.3)
+            except ConnectionError as error:
+                failure = error
+            except TimeoutError:
+                completed = False
+            finally:
+                elapsed = time.monotonic() - started
+                self.lookup.release.set()
+            try:
+                future.result(timeout=1)
+            except ConnectionError as error:
+                failure = error
+        return failure, elapsed, completed

@@ -43,16 +43,17 @@ One resolved backend keeps required credential validation active.
 The portal correctly retries an absent store handle.
 Do not change that retry or cache an absent handle permanently.
 
-`ArangoDBWriter._preflight_dns` and the Redis writer still use their own raw lookup.
-The user keeps the owned ArangoDB writer read-only.
-Report this boundary to the coordinator instead of expanding this repair without authorization.
+The original preparation pass left the owned ArangoDB writer unchanged.
+It proved that its raw preflight still blocked in partial-backend mode.
+The preserved preparation commit retains that historical evidence.
 
-The coordinator now releases the Redis and capture-store preflights after fresh exact ownership checks.
-Migrate those DNS preflights through the shared resolver.
+The coordinator released the Redis and capture-store preflights after fresh exact ownership checks.
+The later local source grant releases the inherited ArangoDB preflight on the accepted position-25 predecessor.
+All three preflight paths now use the shared resolver.
 Preserve the original driver hostnames and URLs.
 Do not replace them with numeric addresses, because that change can break TLS/SNI.
-The inherited ArangoDB preflight migration requires the later verified position-25 main-SHA release.
-This migration remains a real incomplete implementation prerequisite before publication.
+Preserve every declared-index and data behavior outside the released preflight.
+The local source grant does not authorize publication.
 
 ## Decision: Use controlled evidence
 

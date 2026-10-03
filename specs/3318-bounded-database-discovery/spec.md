@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Ready for implementation
+**Status**: Locally implemented. Publication is not authorized.
 
 **Input**: Repair [issue #3318](https://github.com/jmorrison-juniper/MistHelper/issues/3318) in the isolated app worktree.
 
@@ -120,7 +120,9 @@ A resolved name alone does not establish database readiness.
 - A permanently blocked operating system lookup holds its worker slot until that lookup finishes.
 - Driver network handshakes remain separate from the bounded DNS preflight.
 - The coordinator releases Redis and capture-store preflight files after fresh exact ownership checks.
-- The ArangoDB writer belongs to issue #3309 and remains read-only until the verified position-25 release.
-- Its inherited DNS preflight migration remains an incomplete implementation prerequisite before publication.
+- The coordinator accepted the predecessor `67a1ca625ab3526c68a8e54d1580dc1c92d3abc4` after issue #3309 completed position 25.
+- The [local source grant](https://github.com/jmorrison-juniper/MistHelper/issues/3318#issuecomment-5966338605) releases only the inherited ArangoDB DNS preflight and necessary imports.
+- All declared-index logic, data strategies, keys, preparation, batches, driver settings, and backend policy remain unchanged.
 - No production DNS, Mist API, service, store, container, or firmware operation is authorized.
-- The coordinator must grant a verified main SHA before any push or pull request.
+- The local source grant does not authorize publication.
+- A separate explicit publication grant must precede any push or pull request.

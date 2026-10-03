@@ -54,6 +54,7 @@ Driver authentication, request verification, and network handshakes remain separ
 | - | - | - |
 | `DatabaseConfig.from_env` | Each configured name uses the shared one-second budget and 30-second cache. | The method opens no service connection. |
 | `polyglot_hosts_unreachable` | It reuses shared DNS results. | Each service has one aggregate 0.5-second TCP budget. |
+| ArangoDB writer preflight | It uses the shared resolver before client creation. | The ArangoDB driver keeps its configured URL and connection behavior. |
 | Redis writer preflights | Redis TimeSeries and Redis JSON use the shared resolver. | The Redis driver keeps its original hostname and connection behavior. |
 | Capture-store preflight | It uses the shared ArangoDB name result before client creation. | The verified ArangoDB client keeps its configured URL and existing request timeout. |
 
@@ -64,13 +65,17 @@ CSV and SQLite behavior does not change.
 An absent capture-store handle remains retryable after DNS cache expiry.
 Existing callers can retain their own standalone or TCP verdict according to their previous policy.
 
-## Pending inherited preflight
+## Connection limits
 
-The ArangoDB writer belongs to issue #3309 during this local implementation phase.
-Its raw DNS preflight remains an incomplete prerequisite for issue #3318.
-The coordinator must release its fully verified position-25 main revision before this branch changes that preflight.
-Publication remains blocked until that migration and its controlled evidence are complete.
-This local implementation does not claim a bounded complete router startup.
+The ArangoDB writer, Redis writers, and capture store use the same bounded DNS preflight.
+The preflight rejects a failed lookup before client creation.
+It does not replace a configured URL with an IP address.
+The ArangoDB writer retains its declared-index behavior.
+
+The one-second deadline applies to the shared DNS caller and each DNS preflight.
+It does not apply to later driver authentication, service verification, or complete router initialization.
+A driver can perform its own DNS lookup during a later handshake.
+This implementation does not claim a deadline for those handshakes.
 
 ## Configuration and evidence
 
@@ -82,6 +87,6 @@ They do not use production DNS or database services.
 
 The implementation lives in [`src/db/host_resolver.py`](../src/db/host_resolver.py).
 The central callers live in [`src/db/__init__.py`](../src/db/__init__.py).
-The requirements and pending delivery steps live in the [issue specification](../specs/3318-bounded-database-discovery/spec.md).
+The requirements and separate publication hold live in the [issue specification](../specs/3318-bounded-database-discovery/spec.md).
 The reported Windows measurements remain the evidence in [issue #3318](https://github.com/jmorrison-juniper/MistHelper/issues/3318).
 Controlled local evidence is not a new Windows production measurement.

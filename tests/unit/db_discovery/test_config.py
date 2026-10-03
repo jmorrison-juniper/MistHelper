@@ -6,7 +6,6 @@ import os
 import socket
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -17,7 +16,7 @@ from arango.response import Response
 from src.db import DatabaseConfig, host_resolver
 from src.db.host_resolver import ResolutionResult
 from src.db.router import DatabaseRouter
-from tests.unit.db_discovery.fakes import ControlledResolver, ResolverHarness
+from tests.unit.db_discovery.fakes import ResolverHarness
 
 DISCOVERY_ENV = {
     "ARANGO_HOST": "http://missing-arango.invalid:9529",
@@ -108,46 +107,30 @@ class TestPartialBackendBoundary:
         with patch.dict(os.environ, DISCOVERY_ENV | REQUIRED_ENV, clear=True):
             return DatabaseConfig.from_env()
 
-    @staticmethod
-    def _measure_owned_router(config: DatabaseConfig, lookup: ControlledResolver) -> tuple[DatabaseRouter, float, bool]:
-        """Measure the still-owned preflight without leaving a blocked caller."""
-        with ThreadPoolExecutor(max_workers=1) as caller:
-            started = time.monotonic()
-            pending = caller.submit(DatabaseRouter, config)
-            completed = True
-            try:
-                pending.result(timeout=1.3)
-            except TimeoutError:
-                completed = False
-            finally:
-                elapsed = time.monotonic() - started
-                lookup.release.set()
-            router = pending.result(timeout=1)
-        return router, elapsed, completed
-
-    def test_owned_arango_preflight_exposes_the_incomplete_router_boundary(
+    def test_arango_preflight_reuses_failed_dns_in_partial_backend_mode(
         self, discovery: ResolverHarness, record_property
     ) -> None:
-        """Record the real position-25 prerequisite without claiming a router bound."""
+        """Refuse the unresolved backend before its driver while keeping Redis available."""
         from src.db import arango_writer
         from src.db import router as router_module
 
         config = self._partial_config(discovery)
         discovery.lookup.blocked_hosts.add("missing-arango.invalid")
-        stand_in = SimpleNamespace(getaddrinfo=discovery.lookup, gaierror=socket.gaierror)
         with (
-            patch.object(arango_writer, "socket", stand_in),
+            patch.object(arango_writer, "ArangoClient") as client,
             patch.object(router_module, "RedisTimeSeriesWriter"),
             patch.object(router_module, "RedisJSONWriter"),
         ):
-            router, elapsed, completed = self._measure_owned_router(config, discovery.lookup)
-        record_property("owned_arango_requires_migration", not completed)
-        record_property("owned_arango_blocked_seconds", elapsed)
-        assert completed is False
-        assert elapsed >= 1.3
+            started = time.monotonic()
+            router = DatabaseRouter(config)
+            elapsed = time.monotonic() - started
+        record_property("partial_backend_cached_refusal_seconds", elapsed)
+        assert elapsed < 0.3
+        assert client.call_count == 0
         assert router._arango_available is False
         assert router._redis_available is True
-        assert [call[0] for call in discovery.lookup.calls].count("missing-arango.invalid") == 2
+        assert router._redis_json_available is True
+        assert [call[0] for call in discovery.lookup.calls].count("missing-arango.invalid") == 1
 
 
 class TestConfigurationPolicy:

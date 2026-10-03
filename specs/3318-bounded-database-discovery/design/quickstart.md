@@ -16,6 +16,7 @@ rtk proxy .venv/bin/python -m pytest tests/unit/db_discovery -q
 
 The suite must prove the real caller deadline, cache expiry, shared work, finite resources, and recovery.
 No required case may skip.
+Treat an unhandled helper-thread warning as a failure.
 
 ## Related behavior
 
@@ -42,6 +43,8 @@ Record the local commit SHA and its exact changed files.
 ## Remote gate
 
 Stop before any push or pull request.
-Wait for the coordinator's fully verified main-SHA grant after position 25.
-After the grant, repeat local evidence on the current main revision before a protected merge.
+The local source grant names accepted predecessor `67a1ca625ab3526c68a8e54d1580dc1c92d3abc4`.
+This grant does not authorize publication.
+Wait for a separate explicit publication decision before any push or pull request.
+After that decision, repeat required local evidence before a protected merge.
 Test the exact actual merged SHA locally after that merge.
