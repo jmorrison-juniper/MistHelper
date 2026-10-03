@@ -148,6 +148,7 @@ class TestServiceWiring:
         with caplog.at_level(logging.WARNING):  # Capture warning logs
             # WHY: Patch load_module to return None (simulate missing module)
             with patch.object(wiring, "load_module", return_value=None):  # Make load_module fail
+                app.config.pop(CAPTURE_SERVICE_KEY, None)  # Remove the production seam before simulating absence.
                 wiring._install_capture_service(app)  # Call installer with missing module
 
         # WHY: Verify a warning was logged about missing module
@@ -171,6 +172,7 @@ class TestServiceWiring:
         with caplog.at_level(logging.WARNING):  # Capture warning logs
             # WHY: Patch load_module to return None (simulate missing module)
             with patch.object(wiring, "load_module", return_value=None):  # Make load_module fail
+                app.config.pop(UPGRADE_SERVICE_KEY, None)  # Remove the production seam before simulating absence.
                 wiring._install_upgrade_service(app)  # Call installer with missing module
 
         # WHY: Verify a warning was logged about missing module

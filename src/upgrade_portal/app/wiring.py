@@ -1105,39 +1105,13 @@ def _install_capture_service(app: Flask) -> None:
             )  # Only pre-phase2 deployments lack this
             return
 
-        # WHY: Import required collaborators for CaptureService: Mist client, database router, audit logger
-        mistapi_module = load_module(f"{PACKAGE_NAME}.mistapi")  # The Mist API client wrapper
-        if mistapi_module is None:  # The mistapi module is not available
-            logger.warning(
-                "wiring: mistapi module is absent, CaptureService needs it to fetch device captures"
-            )  # Cannot proceed without API client
-            return
-
-        db_module = load_module(STORE_MODULE)  # The database router for ArangoDB persistence
-        if db_module is None:  # The store module is not available
-            logger.warning(
-                "wiring: store module is absent, CaptureService needs it to persist captures"
-            )  # Cannot proceed without database
-            return
-
         # WHY: Get the audit logger instance to log capture operations before/after
         audit_logger = logging.getLogger("upgrade_portal.audit")  # The audit logger for compliance and debugging
 
-        # WHY: Get the Mist API client from the Flask config or create a new one
+        # WHY: Read the Mist client from the Flask config without inventing an unsupported client
         mist_client = app.config.get("MIST_CLIENT")  # May have been injected by a test
-        if mist_client is None:  # The Mist client is not already in Flask config
-            # WHY: Create a new Mist API client using environment variables (org_id, api_token)
-            mistapi_class = getattr(mistapi_module, "MistApiClient", None)  # The class that wraps Mist API calls
-            if mistapi_class is not None:  # The class exists in the mistapi module
-                mist_client = mistapi_class()  # Instantiate with env vars (org_id, api_token, host)
-
-        # WHY: Get the database router instance or create a new one
+        # WHY: Read the database router from the Flask config because its constructor requires DatabaseConfig
         db_router = app.config.get("DB_ROUTER")  # May have been injected by a test
-        if db_router is None:  # The database router is not already in Flask config
-            # WHY: Import and create the database router to connect to ArangoDB
-            db_class = getattr(db_module, "DatabaseRouter", None)  # The class that routes store operations
-            if db_class is not None:  # The database router class exists
-                db_router = db_class()  # Instantiate with env vars (arangodb_host, arangodb_user, arangodb_password)
 
         # WHY: Instantiate the CaptureService with all required collaborators
         CaptureService = getattr(
@@ -1192,39 +1166,13 @@ def _install_upgrade_service(app: Flask) -> None:
             )  # Only pre-phase2 deployments lack this
             return
 
-        # WHY: Import required collaborators for UpgradeService: Mist client, database router, audit logger
-        mistapi_module = load_module(f"{PACKAGE_NAME}.mistapi")  # The Mist API client wrapper
-        if mistapi_module is None:  # The mistapi module is not available
-            logger.warning(
-                "wiring: mistapi module is absent, UpgradeService needs it to initiate device upgrades"
-            )  # Cannot proceed without API client
-            return
-
-        db_module = load_module(STORE_MODULE)  # The database router for ArangoDB persistence
-        if db_module is None:  # The store module is not available
-            logger.warning(
-                "wiring: store module is absent, UpgradeService needs it to persist upgrade status"
-            )  # Cannot proceed without database
-            return
-
         # WHY: Get the audit logger instance to log upgrade operations before/after
         audit_logger = logging.getLogger("upgrade_portal.audit")  # The audit logger for compliance and debugging
 
-        # WHY: Get the Mist API client from the Flask config or create a new one
+        # WHY: Read the Mist client from the Flask config without inventing an unsupported client
         mist_client = app.config.get("MIST_CLIENT")  # May have been injected by a test
-        if mist_client is None:  # The Mist client is not already in Flask config
-            # WHY: Create a new Mist API client using environment variables (org_id, api_token)
-            mistapi_class = getattr(mistapi_module, "MistApiClient", None)  # The class that wraps Mist API calls
-            if mistapi_class is not None:  # The class exists in the mistapi module
-                mist_client = mistapi_class()  # Instantiate with env vars (org_id, api_token, host)
-
-        # WHY: Get the database router instance or create a new one
+        # WHY: Read the database router from the Flask config because its constructor requires DatabaseConfig
         db_router = app.config.get("DB_ROUTER")  # May have been injected by a test
-        if db_router is None:  # The database router is not already in Flask config
-            # WHY: Import and create the database router to connect to ArangoDB
-            db_class = getattr(db_module, "DatabaseRouter", None)  # The class that routes store operations
-            if db_class is not None:  # The database router class exists
-                db_router = db_class()  # Instantiate with env vars (arangodb_host, arangodb_user, arangodb_password)
 
         # WHY: Instantiate the UpgradeService with all required collaborators
         UpgradeService = getattr(
@@ -1278,39 +1226,13 @@ def _install_settle_gate_service(app: Flask) -> None:
             )  # Only pre-phase3 deployments lack this
             return
 
-        # WHY: Import required collaborators for SettleGateService: Mist client, database router, audit logger
-        mistapi_module = load_module(f"{PACKAGE_NAME}.mistapi")  # The Mist API client wrapper
-        if mistapi_module is None:  # The mistapi module is not available
-            logger.warning(
-                "wiring: mistapi module is absent, SettleGateService needs it to verify device settle"
-            )  # Cannot proceed without API client
-            return
-
-        db_module = load_module(STORE_MODULE)  # The database router for ArangoDB persistence
-        if db_module is None:  # The store module is not available
-            logger.warning(
-                "wiring: store module is absent, SettleGateService needs it to persist settle gate results"
-            )  # Cannot proceed without database
-            return
-
         # WHY: Get the audit logger instance to log settle gate operations before/after
         audit_logger = logging.getLogger("upgrade_portal.audit")  # The audit logger for compliance and debugging
 
-        # WHY: Get the Mist API client from the Flask config or create a new one
+        # WHY: Read the Mist client from the Flask config without inventing an unsupported client
         mist_client = app.config.get("MIST_CLIENT")  # May have been injected by a test
-        if mist_client is None:  # The Mist client is not already in Flask config
-            # WHY: Create a new Mist API client using environment variables (org_id, api_token)
-            mistapi_class = getattr(mistapi_module, "MistApiClient", None)  # The class that wraps Mist API calls
-            if mistapi_class is not None:  # The class exists in the mistapi module
-                mist_client = mistapi_class()  # Instantiate with env vars (org_id, api_token, host)
-
-        # WHY: Get the database router instance or create a new one
+        # WHY: Read the database router from the Flask config because its constructor requires DatabaseConfig
         db_router = app.config.get("DB_ROUTER")  # May have been injected by a test
-        if db_router is None:  # The database router is not already in Flask config
-            # WHY: Import and create the database router to connect to ArangoDB
-            db_class = getattr(db_module, "DatabaseRouter", None)  # The class that routes store operations
-            if db_class is not None:  # The database router class exists
-                db_router = db_class()  # Instantiate with env vars (arangodb_host, arangodb_user, arangodb_password)
 
         # WHY: Instantiate the SettleGateService with all required collaborators
         SettleGateService = getattr(
@@ -1365,24 +1287,11 @@ def _install_comparison_service(app: Flask) -> None:
             )  # Only pre-phase3 deployments lack this
             return
 
-        # WHY: Import required collaborators for ComparisonService: settle gate service, database router, audit logger
-        db_module = load_module(STORE_MODULE)  # The database router for ArangoDB persistence
-        if db_module is None:  # The store module is not available
-            logger.warning(
-                "wiring: store module is absent, ComparisonService needs it to persist comparison results"
-            )  # Cannot proceed without database
-            return
-
         # WHY: Get the audit logger instance to log comparison operations before/after
         audit_logger = logging.getLogger("upgrade_portal.audit")  # The audit logger for compliance and debugging
 
-        # WHY: Get the database router instance or create a new one
+        # WHY: Read the database router from the Flask config because its constructor requires DatabaseConfig
         db_router = app.config.get("DB_ROUTER")  # May have been injected by a test
-        if db_router is None:  # The database router is not already in Flask config
-            # WHY: Import and create the database router to connect to ArangoDB
-            db_class = getattr(db_module, "DatabaseRouter", None)  # The class that routes store operations
-            if db_class is not None:  # The database router class exists
-                db_router = db_class()  # Instantiate with env vars (arangodb_host, arangodb_user, arangodb_password)
 
         # WHY: Get the SettleGateService from Flask config (installed by _install_settle_gate_service)
         settle_gate_service = app.config.get(SETTLE_GATE_SERVICE_KEY)  # The settle gate service for prerequisite checks

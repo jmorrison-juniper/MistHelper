@@ -8,7 +8,13 @@ from datetime import UTC, datetime  # WHY: timestamp for approval audit trail
 from typing import Any  # WHY: generic type annotation, Union type
 
 import structlog  # WHY: structured logging
-from flask import Blueprint, Response, jsonify, request  # WHY: Flask routing, request handling, HTML rendering
+from flask import (  # WHY: Flask routing and request handling.
+    Blueprint,
+    Response,
+    current_app,
+    jsonify,
+    request,
+)
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger
 
@@ -49,6 +55,12 @@ def create_comparison_routes(
         logger.info("get_comparison_results_request", run_id=run_id)  # WHY: request event
 
         try:
+            active_comparison_service = comparison_service or current_app.config.get(
+                "COMPARISON_SERVICE"
+            )  # Use the configured service for the module-level blueprint.
+            active_db_router = db_router or current_app.config.get(
+                "DB_ROUTER"
+            )  # Use the configured database boundary for the registered route.
             # WHY: validate run_id format
             if not run_id or not isinstance(run_id, str) or len(run_id) == 0:
                 # WHY: bad request
@@ -59,7 +71,7 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: check if comparison service available
-            if not comparison_service:  # WHY: no service
+            if not active_comparison_service:  # WHY: no service
                 # WHY: service unavailable
                 logger.error("comparison_service_unavailable_get")  # WHY: service error
                 return (
@@ -68,7 +80,7 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: check if database router available
-            if not db_router:  # WHY: no database access
+            if not active_db_router:  # WHY: no database access
                 # WHY: database unavailable
                 logger.error("db_router_unavailable_get")  # WHY: database error
                 return (
@@ -78,7 +90,7 @@ def create_comparison_routes(
 
             # WHY: fetch run from database
             logger.info("db_router_get_run_call", run_id=run_id)  # WHY: pre-call log
-            run_doc = db_router.get_run(run_id)  # WHY: database call to fetch run
+            run_doc = active_db_router.get_run(run_id)  # WHY: database call to fetch run
             # WHY: check if run found
             if run_doc is None:  # WHY: if not found
                 # WHY: not found
@@ -90,7 +102,7 @@ def create_comparison_routes(
 
             # WHY: check if comparison result already exists
             logger.info("db_router_get_comparison_call", run_id=run_id)  # WHY: pre-call log
-            comparison_doc = db_router.get_comparison(run_id)  # WHY: database call to fetch comparison
+            comparison_doc = active_db_router.get_comparison(run_id)  # WHY: database call to fetch comparison
             # WHY: check if comparison exists
             if comparison_doc is None:  # WHY: if not found
                 # WHY: not found
@@ -173,6 +185,12 @@ def create_comparison_routes(
         logger.info("approve_comparison_request", run_id=run_id)  # WHY: request event
 
         try:
+            active_comparison_service = comparison_service or current_app.config.get(
+                "COMPARISON_SERVICE"
+            )  # Use the configured service for the module-level blueprint.
+            active_db_router = db_router or current_app.config.get(
+                "DB_ROUTER"
+            )  # Use the configured database boundary for the registered route.
             # WHY: validate run_id format
             if not run_id or not isinstance(run_id, str) or len(run_id) == 0:
                 # WHY: bad request
@@ -213,7 +231,7 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: check if comparison service available
-            if not comparison_service:  # WHY: no service
+            if not active_comparison_service:  # WHY: no service
                 # WHY: service unavailable
                 logger.error("comparison_service_unavailable_approve")  # WHY: service error
                 return (
@@ -222,7 +240,7 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: check if database router available
-            if not db_router:  # WHY: no database access
+            if not active_db_router:  # WHY: no database access
                 # WHY: database unavailable
                 logger.error("db_router_unavailable_approve")  # WHY: database error
                 return (
@@ -232,7 +250,7 @@ def create_comparison_routes(
 
             # WHY: fetch comparison from database
             logger.info("db_router_get_comparison_for_approval", run_id=run_id)  # WHY: pre-call log
-            comparison_doc = db_router.get_comparison(run_id)  # WHY: database call to fetch comparison
+            comparison_doc = active_db_router.get_comparison(run_id)  # WHY: database call to fetch comparison
             # WHY: check if comparison exists
             if comparison_doc is None:  # WHY: if not found
                 # WHY: not found
@@ -274,7 +292,7 @@ def create_comparison_routes(
 
             # WHY: update comparison in database
             logger.info("db_router_update_comparison_approval", run_id=run_id)  # WHY: pre-call log
-            db_router.update_comparison(
+            active_db_router.update_comparison(
                 run_id,
                 {
                     "approved": True,
@@ -286,7 +304,7 @@ def create_comparison_routes(
 
             # WHY: update run status to completed
             logger.info("db_router_update_run_status", run_id=run_id)  # WHY: pre-call log
-            db_router.update_run(
+            active_db_router.update_run(
                 run_id,
                 {
                     "status": "completed",
@@ -348,3 +366,6 @@ def create_comparison_routes(
 
     # WHY: return blueprint
     return comparison_bp  # WHY: return configured blueprint
+
+
+comparison_bp = create_comparison_routes()  # WHY: export the blueprint that the application factory registers
