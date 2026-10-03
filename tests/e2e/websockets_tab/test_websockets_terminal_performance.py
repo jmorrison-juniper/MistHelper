@@ -253,3 +253,35 @@ def test_review_sc_split_256_kib_under_50_ms(page: Any, terminal_harness: Termin
     assert measurement["elapsed"] < 50.0  # The reviewed threshold prevents a page freeze.
     assert measurement["total"] == 256 * 1024  # Splitting must preserve all text.
     assert measurement["maxPart"] <= 4096  # Each part must fit the terminal input route.
+
+
+@pytest.mark.parametrize(
+    ("raw_body", "failure_mode"),
+    [(b"", "empty_body"), (b"bad json", "malformed_json")],
+    ids=["empty_body", "malformed_json"],
+)
+def test_empty_body_and_malformed_json_answers_stay_under_50_ms(
+    page: Any,
+    raw_body: bytes,
+    failure_mode: str,
+) -> None:
+    """Normalize invalid response bodies without a visible browser pause."""
+    harness = terminal_support.TerminalPortalHarness().start()  # Start a real portal for this response case.
+    try:  # Always stop the portal and fake cloud after the browser measurement.
+        harness.open_page(page)  # Load the shared readJsonAnswer helper in the real portal page.
+        measurement = page.evaluate(
+            """async ({body}) => {
+                const response = new Response(body, {status: 503, headers: {'Content-Type': 'application/json'}});
+                const start = performance.now();
+                const answer = await readJsonAnswer(response);
+                return {elapsed: performance.now() - start, error: answer.error};
+            }""",
+            {"body": raw_body.decode("utf-8")},
+        )  # Measure the production response normalizer with the selected invalid body.
+        print(
+            f"SC-review {failure_mode}_json_answer_ms={measurement['elapsed']:.2f}"
+        )  # Report which failure mode produced the measurement.
+        assert measurement["error"] == "The portal is restarting. Wait a moment, then try again."  # Keep guidance.
+        assert measurement["elapsed"] < 50.0  # Invalid response text must not pause terminal browser work.
+    finally:
+        harness.stop()  # Stop both local servers for this parameter case.

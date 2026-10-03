@@ -232,6 +232,6 @@ class TestEndpointStructuredLogging:
         endpoint.sslopt()  # Emit TLS records.
         records = [json.loads(record.message) for record in caplog.records]  # Parse every captured record.
         serialized = json.dumps(records)  # Build one text value for secret checks.
-        assert records  # The endpoint must use the structured logger.
+        assert len(records) == 7  # The endpoint must emit readiness and each authentication result pair.
         assert all("event" in record for record in records)  # Every record has the required event field.
         assert "secret" not in serialized  # No sensitive connection value can cross the log boundary.

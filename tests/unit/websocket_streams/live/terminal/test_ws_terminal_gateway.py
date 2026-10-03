@@ -31,6 +31,7 @@ from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import 
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import (
     FakeConnection,
     FakeMistCloud,
+    HandshakeFault,
 )  # Host the fake shell.
 
 
@@ -225,14 +226,62 @@ class TestTerminalGatewayWrite:
                     client.close()  # Stop this socket before the next complete run.
 
     @staticmethod
-    def _shell_client(cloud: FakeMistCloud) -> ShellClient:
+    def _shell_client(cloud: FakeMistCloud, subscribe_timeout_seconds: float = 10.0) -> ShellClient:
         """Build a production shell client for the safe loopback cloud."""
         profile = TransportProfile(
-            stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream", allow_loopback=True
-        )  # Allow test loopback.
+            stream_url=f"{cloud.base_ws_url}/api-ws/v1/stream",
+            allow_loopback=True,
+            subscribe_timeout_seconds=subscribe_timeout_seconds,
+        )  # Allow test loopback and caller-controlled handshake timing.
         endpoint = MistStreamEndpoint(FakeApiSession(), profile)  # Supply fake authentication fields.
         policy = ShellAddressPolicy(endpoint.cloud_host, allow_loopback=True)  # Restrict the client to this host.
         return ShellClient(endpoint, policy, factory=websocket.create_connection)  # Use production socket creation.
+
+    def test_connection_error_after_shell_reset_stops_terminal_transport(self) -> None:
+        """Keep a reset connection closed before terminal input can start."""
+        with FakeMistCloud() as cloud:  # Host one deterministic reset handshake.
+            path = "/shell/connection-error"  # Isolate this failure from other fake routes.
+            cloud.fail_handshake(path, HandshakeFault("reset"))  # Reset the TCP connection during open.
+            client = self._shell_client(cloud, subscribe_timeout_seconds=0.5)  # Keep the failed open bounded.
+            with pytest.raises(ConnectionError) as error:  # Capture the operating system connection failure.
+                client.open(f"{cloud.base_ws_url}{path}", 80, 24)  # Open through the production shell client.
+            requests = cloud.wait_for_requests(1, 1.0)  # Confirm the request reached the fake Mist cloud.
+            assert requests[0].path == path  # The reset occurred on the intended shell endpoint.
+            assert error.value.__class__.__name__ == "ConnectionResetError"  # Preserve the exact failure family.
+            with pytest.raises(StreamRequestError) as closed:  # A failed open must leave writes unavailable.
+                client.send("show version\r")  # Attempt input after the connection failure.
+            assert closed.value.code == "not_open"  # The transport did not publish a partial connection.
+
+    def test_connection_timeout_after_shell_stall_stops_terminal_transport(self) -> None:
+        """Keep a stalled connection closed before terminal input can start."""
+        with FakeMistCloud() as cloud:  # Host one deterministic stalled handshake.
+            path = "/shell/connection-timeout"  # Isolate this failure from other fake routes.
+            cloud.fail_handshake(path, HandshakeFault("stall"))  # Leave the opening handshake unanswered.
+            client = self._shell_client(cloud, subscribe_timeout_seconds=0.2)  # Bound the deliberate stall.
+            with pytest.raises(websocket.WebSocketTimeoutException) as error:  # Capture the handshake timeout.
+                client.open(f"{cloud.base_ws_url}{path}", 80, 24)  # Open through the production shell client.
+            requests = cloud.wait_for_requests(1, 1.0)  # Confirm the request reached the fake Mist cloud.
+            assert requests[0].path == path  # The timeout occurred on the intended shell endpoint.
+            assert "Timeout" in error.value.__class__.__name__  # Preserve the WebSocket timeout family.
+            with pytest.raises(StreamRequestError) as closed:  # A timed-out open must leave writes unavailable.
+                client.send("show version\r")  # Attempt input after the connection timeout.
+            assert closed.value.code == "not_open"  # The transport did not publish a partial connection.
+
+    @pytest.mark.parametrize("status_code", [403, 503], ids=["http_4xx", "http_5xx"])
+    def test_http_4xx_and_http_5xx_shell_refusals_preserve_status(self, status_code: int) -> None:
+        """Preserve the HTTP refusal status and keep terminal transport closed."""
+        with FakeMistCloud() as cloud:  # Host one deterministic HTTP handshake refusal.
+            path = f"/shell/http-{status_code}"  # Isolate each refusal status on its own endpoint.
+            cloud.fail_handshake(path, HandshakeFault("refuse", status_code=status_code))  # Refuse the upgrade.
+            client = self._shell_client(cloud, subscribe_timeout_seconds=0.5)  # Keep the failed open bounded.
+            with pytest.raises(websocket.WebSocketBadStatusException) as error:  # Capture the HTTP refusal.
+                client.open(f"{cloud.base_ws_url}{path}", 80, 24)  # Open through the production shell client.
+            requests = cloud.wait_for_requests(1, 1.0)  # Confirm the request reached the fake Mist cloud.
+            assert requests[0].path == path  # The refusal occurred on the intended shell endpoint.
+            assert error.value.status_code == status_code  # Preserve the exact HTTP 4xx or HTTP 5xx status.
+            with pytest.raises(StreamRequestError) as closed:  # A refused open must leave writes unavailable.
+                client.send("show version\r")  # Attempt input after the HTTP refusal.
+            assert closed.value.code == "not_open"  # The transport did not publish a partial connection.
 
     def test_resize_accepts_edges_and_refuses_bad_sizes(self) -> None:
         """Accept valid edges and refuse invalid dimensions."""
@@ -262,13 +311,30 @@ class TestTerminalGatewayWrite:
                 action()  # Execute the refused operation.
             assert error.value.code == code  # Preserve the exact contract code.
 
-    def test_bad_read_and_empty_input_values_raise_bad_request(self) -> None:
-        """Refuse invalid read values and empty input."""
+    def test_bad_read_values_raise_bad_request(self) -> None:
+        """Refuse invalid terminal read values."""
         gateway, _session_value, _runner = _gateway()  # Build a writable terminal session.
         actions = [lambda: gateway.read("abc123", -1, 0.0)]  # Refuse a negative cursor.
         actions += [lambda: gateway.read("abc123", 0, -0.1)]  # Refuse a negative wait.
-        actions += [lambda: gateway.send("abc123", "")]  # Refuse empty input.
         for action in actions:  # Run each invalid request.
             with pytest.raises(StreamRequestError) as error:  # Capture the refusal.
                 action()  # Execute the invalid request.
             assert error.value.code == "bad_request"  # Preserve the common contract code.
+
+    def test_empty_body_terminal_input_raises_bad_request(self) -> None:
+        """Refuse an empty terminal input body before session lookup."""
+        gateway, _session_value, runner = _gateway()  # Build a writable terminal session.
+        empty_body = b""  # Model the empty HTTP request body before route text decoding.
+        with pytest.raises(StreamRequestError) as error:  # Capture the empty-body refusal.
+            gateway.send("abc123", empty_body.decode("utf-8"))  # Submit the empty text that the route extracted.
+        assert error.value.code == "bad_request"  # Preserve the route contract code.
+        assert runner.sent == []  # The empty body never reached the terminal runner.
+
+    def test_malformed_json_terminal_input_is_sent_verbatim(self) -> None:
+        """Treat malformed JSON text as terminal input instead of parsing it."""
+        gateway, session, runner = _gateway()  # Build a writable terminal session.
+        session.terminal.input.release()  # Send accepted input directly to the runner.
+        malformed_json = "bad json"  # Build text that no JSON parser can decode.
+        result = gateway.send("abc123", malformed_json)  # Submit the text through the terminal gateway.
+        assert result == {"accepted": len(malformed_json), "queued": False}  # Count the exact ASCII bytes.
+        assert runner.sent == [malformed_json]  # Preserve the malformed JSON text byte-for-byte.

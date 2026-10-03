@@ -58,6 +58,6 @@ def test_stream_catalog_logs_bounded_json_without_catalog_keys(caplog: pytest.Lo
     catalog = build_catalog()  # Build the real joined catalog.
     catalog.find("utility", "operator-token-value")  # Supply a key that must not enter a log.
     records = [json.loads(record.message) for record in caplog.records if record.message.startswith("{")]  # Parse JSON.
-    assert records  # The shared logger must emit measurable evidence.
+    assert len(records) == 12  # The catalog build and lookup must emit the complete structured record sequence.
     assert all("event" in record and len(record) <= 9 for record in records)  # Enforce bounded record fields.
     assert "operator-token-value" not in caplog.text  # Keep the operator-controlled key outside logs.

@@ -18,13 +18,17 @@ class TestFrameDecoder:
         expected = {"event": "data", "channel": "c", "data": "{}"}  # The decoded event stays unchanged.
         assert FrameDecoder.event(frame) == expected  # NUL bytes must not break JSON decoding.
 
-    @pytest.mark.parametrize("frame", ["plain text", "", '{"event": "data", "data": '])
+    @pytest.mark.parametrize("frame", ["plain text", '{"event": "data", "data": '])
     def test_event_wraps_non_json_text(self, frame: str) -> None:
-        """Wrap complete, empty, and cut non-JSON text as raw data."""
+        """Wrap complete and cut non-JSON text as raw data."""
         if frame.startswith("{"):  # Prove that the cut object is invalid JSON.
             with pytest.raises(json.JSONDecodeError):  # The standard parser must reject the cut frame.
                 json.loads(frame)  # Parse the incomplete JSON text.
         assert FrameDecoder.event(frame) == {"raw": frame}  # Preserve the prior SDK fallback shape.
+
+    def test_event_empty_body_returns_raw_empty_text(self) -> None:
+        """Preserve an empty frame body through the raw-data fallback."""
+        assert FrameDecoder.event(b"") == {"raw": ""}  # Keep the empty-body result explicit for callers.
 
     def test_data_payload_decodes_json_text(self) -> None:
         """Decode JSON text inside a data event."""

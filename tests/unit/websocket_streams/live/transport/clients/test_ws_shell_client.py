@@ -447,7 +447,7 @@ class TestShellStructuredLogging:
             client.close()  # Emit close records.
         records = [json.loads(record.message) for record in caplog.records]  # Parse every captured record.
         serialized = json.dumps(records)  # Build one text value for secret checks.
-        assert records  # The shell client must use the structured logger.
+        assert len(records) == 8  # The shell client must emit the complete open, write, and close sequence.
         assert all("event" in record for record in records)  # Every record has the required event field.
         assert "private-token" not in serialized  # The shell path must not cross the log boundary.
         assert "terminal-secret-text" not in serialized  # Terminal input must not cross the log boundary.

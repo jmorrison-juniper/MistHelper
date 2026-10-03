@@ -412,7 +412,7 @@ def test_shell_logs_do_not_hold_address_input_or_output(caplog: pytest.LogCaptur
     assert "SECRET-OUTPUT" not in caplog.text  # Logs must not hold output text.
     records = [record for record in caplog.records if ".runners.shell." in record.name]  # Select package records.
     payloads = [json.loads(record.message) for record in records]  # Require valid JSON for each package record.
-    assert payloads  # The shell package must emit structured action evidence.
+    assert len({payload["event"] for payload in payloads}) == 21  # Require every distinct shell action event.
     assert all(set(payload) <= {"event", "redacted", *SAFE_FIELDS} for payload in payloads)  # Allow safe fields only.
     assert all(len(str(payload["event"])) <= MAX_EVENT_LENGTH for payload in payloads)  # Bound event names.
     assert all(
