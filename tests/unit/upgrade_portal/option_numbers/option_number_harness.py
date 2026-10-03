@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from src.upgrade_portal.upgrade import options
+from src.interfaces.portals.upgrade_portal.upgrade import options
 
 FIXED_NOW = 1_780_000_000
 

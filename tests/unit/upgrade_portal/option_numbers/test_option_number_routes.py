@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.upgrade_portal.upgrade import options
+from src.interfaces.portals.upgrade_portal.upgrade import options
 
 
 @pytest.mark.parametrize("field", ["max_failure_percentage", "p2p_cluster_size"])
