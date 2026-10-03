@@ -50,8 +50,8 @@ from collections.abc import Iterator  # The fixture `portal_page` yields, so its
 from typing import Any
 
 import pytest
-
 from tests.e2e.upgrade_portal.retry_run_seeds import RETRY_SITE_ID  # Issue #3292: the retry site is isolated.
+
 from tests.support.upgrade_portal_e2e.site_lock import RunLedger, SiteRelease  # Issue #3497: the teardown.
 
 # The Playwright package must exist before this module defines a browser test.
@@ -608,4 +608,3 @@ class TestTheRetryControl:
         capture_start = portal_page.get_by_test_id("capture-start-button")  # The first control of the retry.
         sync_api.expect(capture_start).to_be_visible()  # The operator must see where to start.
         assert capture_start.get_attribute("data-run-id")
-
