@@ -98,3 +98,29 @@ class TestOrganizationWebhookResponseHandling:
         ):
             OrgWebhookDeliveriesExporter.deliveries()  # WHY: exercise the valid empty-result path.
         persist.assert_called_once_with([], "Alarms")  # WHY: let the existing persistence notice handle no rows.
+
+    def test_later_http_failure_discards_partial_rows(self, fake_mh: Any) -> None:
+        """Reject a later refused page before partial rows reach persistence."""
+        first_response = MagicMock(
+            status_code=200, data=[{"id": "delivery-1"}], next="next-page"
+        )  # WHY: provide one valid page.
+        refused_response = MagicMock(status_code=403, data=[], next=None)  # WHY: model refusal on the next page.
+        with (
+            patch(f"{_MODULE}.SourceDependencyResolver", fake_mh),
+            patch.object(
+                OrgWebhookDeliveriesExporter,
+                "_select_webhook_id",
+                return_value=("wh-1", "Alarms"),
+            ),
+            patch(
+                f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries",
+                return_value=first_response,
+            ),
+            patch(f"{_MODULE}.mistapi.get_next", return_value=refused_response) as get_next,
+            patch.object(OrgWebhookDeliveriesExporter, "_persist") as persist,
+        ):
+            OrgWebhookDeliveriesExporter.deliveries()  # WHY: exercise refusal handling after the first page.
+        get_next.assert_called_once_with(
+            mist_session=fake_mh.apisession, response=first_response
+        )  # WHY: follow the SDK next link.
+        persist.assert_not_called()  # WHY: a refused later page must not create partial output.

@@ -30,6 +30,36 @@ class OrgWebhookDeliveriesExporter:
     """Export webhook deliveries for one organization webhook."""
 
     @staticmethod
+    def _get_all_delivery_rows(response: Any, apisession: Any, org_id: str) -> list[Any] | None:
+        """Return all delivery rows after checking every paginated response."""
+        rows: list[Any] = []  # WHY: accumulate only pages that pass the HTTP status check.
+        current = response  # WHY: inspect the initial response before following pagination.
+        while current is not None:  # WHY: stop cleanly if the SDK returns no next response.
+            status_code = _response_status_code(current)  # WHY: every page can refuse independently.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: partial rows must not become a successful export.
+                logger.error(  # WHY: identify the refused page for operator diagnosis.
+                    "The cloud returned HTTP %s for organization webhook deliveries at org %s",
+                    status_code,
+                    org_id,
+                )
+                return None  # WHY: signal the caller to skip persistence after any refused page.
+            page_data = getattr(current, "data", None)  # WHY: match the SDK pagination helper input shape.
+            if isinstance(page_data, list):  # WHY: accept standard list responses.
+                rows.extend(page_data)  # WHY: preserve the SDK order across pages.
+            elif isinstance(page_data, dict) and isinstance(
+                page_data.get("results"), list
+            ):  # WHY: accept result envelopes.
+                rows.extend(page_data["results"])  # WHY: preserve the SDK envelope behavior.
+            else:  # WHY: unsupported response data produces the same empty result as mistapi.get_all.
+                return mistapi.get_all(
+                    response=current, mist_session=apisession
+                )  # WHY: preserve legacy response-double handling.
+            if not getattr(current, "next", None):  # WHY: finish after the final response page.
+                return rows  # WHY: return valid rows for persistence or the valid-empty path.
+            current = mistapi.get_next(mist_session=apisession, response=current)  # WHY: follow the SDK next link.
+        return rows  # WHY: return accumulated rows when the SDK ends pagination without a response.
+
+    @staticmethod
     def _resolve_webhook_choice(raw: str, webhooks: list[dict[str, Any]]) -> tuple[str, str] | None:
         """Convert a one-based operator choice into a webhook identifier and name."""
         if not raw.isdigit():  # Reject text before integer conversion can fail.
@@ -109,7 +139,11 @@ class OrgWebhookDeliveriesExporter:
                     org_id,
                 )
                 return  # WHY: stop before pagination and persistence on HTTP 403 or another failure.
-            rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all results.
+            rawdata = OrgWebhookDeliveriesExporter._get_all_delivery_rows(
+                response, mh.apisession, org_id
+            )  # Check every result page.
+            if rawdata is None:  # WHY: a later HTTP refusal invalidates all accumulated rows.
+                return  # WHY: prevent partial persistence after a failed page.
             logger.debug("%s returned %d rows", _OPERATION, len(rawdata))  # Log the response count.
             OrgWebhookDeliveriesExporter._persist(rawdata, webhook_name)  # Write the normalized result.
         except Exception as exception:  # Keep SDK failures inside the menu loop.
