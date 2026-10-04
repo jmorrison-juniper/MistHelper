@@ -148,22 +148,25 @@ class CaptureStatisticsGuard:
                     "run_id": "e2e-run-0001",
                     "role": "pre",
                     "tier": 2,
-                    "capture_status": "verified",
+                    "capture_status": "complete",
                     "started_at": "2026-08-19T10:00:00+00:00",
+                    "state": "verified",
                 },
                 "e2e-capture-standalone-0001": {
                     "run_id": "",
                     "role": "pre",
                     "tier": 2,
-                    "capture_status": "verified",
+                    "capture_status": "partial",
                     "started_at": "2026-08-19T10:15:00+00:00",
+                    "state": "verified",
                 },
                 "e2e-capture-post-0001": {
                     "run_id": "e2e-run-0001",
                     "role": "post",
                     "tier": 2,
-                    "capture_status": "verified",
+                    "capture_status": "complete",
                     "started_at": "2026-08-19T10:30:00+00:00",
+                    "state": "verified",
                 },
                 "e2e-capture-stored-poll-0001": {
                     "run_id": "",
@@ -179,8 +182,9 @@ class CaptureStatisticsGuard:
                     "run_id": "e2e-run-0001",
                     "role": "pre",
                     "tier": 3,
-                    "capture_status": "verified",
+                    "capture_status": "partial",
                     "started_at": "2026-08-19T11:00:00+00:00",
+                    "state": "verified",
                 },
             },
             "counts": {
@@ -248,7 +252,9 @@ class CaptureStatisticsGuard:
             }
             assert capture.get("extras") == (preserved["extras"] if tier3 else None)
             assert capture["partial_reasons"] == (
-                [{"section": "bgp_peers", "reason": "cloud_call_failed", "http_status": 0}] if tier3 else []
+                [{"section": "bgp_peers", "reason": "cloud_call_failed", "http_status": 0}]
+                if tier3 or capture["capture_id"] == "e2e-capture-standalone-0001"
+                else []
             )
             logger.debug("Checked client groups=3 tier3=%s", tier3)
 

@@ -74,7 +74,8 @@ STORED_CAPTURE: dict[str, Any] = {
     "ordinal": 1,
     "role": "pre",
     "tier": 2,
-    "capture_status": "verified",
+    "capture_status": "complete",  # The content status that the shipped writer stores for a whole capture.
+    "state": "verified",  # The lifecycle state that the shipped writer stores after the read-back.
     "partial_reasons": [],
     "counts": {"devices_total": 3},
     "stored_size_bytes": 4096,

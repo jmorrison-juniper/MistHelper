@@ -104,6 +104,7 @@ class TestMultiSitePrecheckGate:
         first_row = page.get_by_test_id(f"org-upgrade-precheck-row-{SITE_ID}")  # The first site row.
         sync_api.expect(first_row).to_have_attribute("data-ready", "true")  # Issue #3360: a standalone seed exists.
         first_capture = capture_of(page, SITE_ID)  # The capture that the card adopted for the first site.
+        assert first_capture == "e2e-capture-standalone-0001", f"The card adopted {first_capture!r}."
         owned_message = f"The card adopted a capture that a run owns: {first_capture}"  # Name the wrong capture.
         assert first_capture not in RUN_OWNED_CAPTURE_IDS, owned_message
         sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-tier-{SITE_ID}")).to_have_text("2")
