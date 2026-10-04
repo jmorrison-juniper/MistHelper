@@ -539,7 +539,7 @@ class TestMapSiteObservationGuard:
         self, monkeypatch: pytest.MonkeyPatch, mode: str
     ) -> None:
         """Execute the actual import decision without a browser or missing environment."""
-        path = Path(__file__).resolve().parents[2] / "e2e" / "test_map_site_selection_race_journey.py"
+        path = Path(__file__).resolve().parents[2] / "e2e" / "web_portal" / "test_map_site_selection_race_journey.py"
         nodes = ast.parse(path.read_text(encoding="utf-8"), filename=str(path)).body
         guards = [node for node in nodes if isinstance(node, ast.Try)]
         assert len(guards) == 1, "The browser module must contain one required import decision."
