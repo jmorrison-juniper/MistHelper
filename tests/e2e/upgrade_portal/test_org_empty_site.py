@@ -91,6 +91,10 @@ def test_an_empty_last_site_stops_the_save_and_the_operator_recovers(empty_site_
     """The save names the empty site, and the plan keeps each choice after the operator clears that site."""
     page = empty_site_operator_page  # The separate operator, so no other journey sees the empty site.
     open_the_site_picker(page)  # Choose the multi-site mode.
+    reveal = page.get_by_test_id("empty-site-toggle")  # Issue #3840: the picker hides a site with no hardware.
+    sync_api.expect(reveal).to_have_text("Show the sites with no hardware")  # The hidden branch offers the reveal.
+    reveal.click()  # Reveal the empty site, because this journey must select it.
+    page.wait_for_url(re.compile(r".*show_empty=1.*"))  # Wait until the revealed list owns the page.
     empty_row = page.get_by_test_id(f"site-row-{EMPTY_SITE_ID}")  # The last row of the picker.
     sync_api.expect(empty_row.locator("td.cell-number")).to_have_text("0")  # The picker shows zero devices.
     page.get_by_test_id(f"site-select-{SITE_ID}").check()  # Select a site that holds devices.

@@ -273,3 +273,23 @@ def test_apply_empty_site_filter_accepts_an_empty_row_list() -> None:
 def test_read_show_empty_accepts_a_none_argument() -> None:
     """Edge case: a missing query argument reads as ``None`` and keeps the default hide rule."""
     assert read_show_empty(None) is False  # A missing argument must never show the empty sites.
+
+
+def test_a_chosen_empty_site_stays_visible() -> None:
+    """FR-009: a site the operator already chose stays visible, even when it holds no hardware."""
+    rows = [{"site_id": STOCKED_ID, "device_count": 4}, {"site_id": BARE_ID, "device_count": 0}]
+    chosen = frozenset({BARE_ID})  # The operator already chose the empty site.
+    kept, hidden = apply_empty_site_filter(list(rows), True, False, True, chosen)  # Filter with that choice.
+    assert [row["site_id"] for row in kept] == [STOCKED_ID, BARE_ID]  # The chosen empty site stays.
+    assert hidden == 0  # The page states no hidden site, because the filter hid none.
+
+
+def test_an_unchosen_empty_site_is_still_hidden() -> None:
+    """FR-009: the chosen-site rule changes nothing for a site the operator did not choose."""
+    rows = [{"site_id": STOCKED_ID, "device_count": 4}, {"site_id": BARE_ID, "device_count": 0}]
+    chosen = frozenset({STOCKED_ID})  # The operator chose only the site that holds hardware.
+    kept, hidden = apply_empty_site_filter(list(rows), True, False, True, chosen)  # Filter with that choice.
+    assert [row["site_id"] for row in kept] == [STOCKED_ID]  # The unchosen empty site leaves.
+    assert hidden == 1  # The page states the one hidden site.
+    empty_choice = apply_empty_site_filter(list(rows), True, False, True, frozenset())  # No choice at all.
+    assert empty_choice == ([rows[0]], 1)  # An empty choice set reads as no choice.

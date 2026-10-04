@@ -1136,6 +1136,7 @@ def apply_empty_site_filter(
     counts_complete: bool,
     show_empty: bool,
     counts_observed: bool = False,
+    chosen_site_ids: frozenset[str] | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Hide the sites that hold no hardware, and report how many were hidden.
 
@@ -1143,19 +1144,28 @@ def apply_empty_site_filter(
         Issue #3840 asks the picker to omit a site with no hardware of any
         type. A hidden site cannot be chosen, so the filter never runs when
         the device counts are incomplete or when no device count arrived.
+        A site that the operator already chose stays visible, because the
+        refusal message tells the operator to clear that site on this page.
 
     Args:
         rows: The rows to filter.
         counts_complete: Whether every device count was read.
         show_empty: Whether the operator asked to see every site.
         counts_observed: Whether the statistics read gave at least one record.
+        chosen_site_ids: The sites the operator already chose.
 
     Returns:
         The kept rows and the count of hidden rows.
     """
     if show_empty or not counts_complete or not counts_observed:  # A zero count is unproven, so hide nothing.
         return rows, 0  # Hide nothing, because a hidden site cannot be chosen.
-    kept = [row for row in rows if int(row.get("device_count", 0)) > 0]  # Keep each site that holds hardware.
+    chosen = chosen_site_ids or frozenset()  # Treat a missing selection as an empty set.
+    kept = [
+        row
+        for row in rows
+        if int(row.get("device_count", 0)) > 0  # Keep each site that holds hardware.
+        or row.get("site_id") in chosen  # Keep a chosen site, so the operator can clear it.
+    ]
     return kept, len(rows) - len(kept)  # The rows to render and the count the page states.
 
 
@@ -1929,6 +1939,7 @@ def sites_page() -> str:
         site_list.counts_complete,  # False when the device count read lost a page.
         show_empty,  # True when the operator asked for every site.
         site_list.counts_observed,  # Issue #3840: an unobserved count hides nothing.
+        frozenset(selected_site_ids()),  # Issue #3840: a chosen site stays visible.
     )
     name = org_display_name(chosen)  # The heading names the organization, not only its identifier.
     logger.debug("select: the site picker shows %s row(s)", len(rows))  # Log the count after the filter.
@@ -2110,6 +2121,7 @@ def list_sites(org_id: str | None = None) -> tuple[Response, int]:
         site_list.counts_complete,  # False when the device count read lost a page.
         show_empty,  # True when the caller asked for every site.
         site_list.counts_observed,  # Issue #3840: an unobserved count hides nothing.
+        frozenset(selected_site_ids()),  # Issue #3840: a chosen site stays visible.
     )
     logger.debug("select: the site list holds %s row(s)", len(rows))  # Log the count after the filter.
     body = {
