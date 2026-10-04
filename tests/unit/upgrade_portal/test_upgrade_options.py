@@ -1009,7 +1009,7 @@ class TestShortReadSave:
             module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
         lines = [record.getMessage() for record in caplog.records]  # Each log line of the save.
         refusal_lines = [line for line in lines if REASON_SHORT_READ in line]  # The lines that name the reason.
-        assert refusal_lines, lines  # The save logs the reason code of the short read.
+        assert len(refusal_lines) == 1, lines  # The save logs one reason code for the short read.
         assert all(SITE_ID in line for line in refusal_lines)  # The same line names the site.
         assert not any("5c5b350e0001" in line for line in lines)  # The log holds no device address.
         assert not any(str(SWITCH_ROW["mac"]) in line for line in lines)  # Not in the form of the cloud either.
@@ -1137,7 +1137,7 @@ class TestModuleProhibitions:
     def test_the_module_calls_no_console_function(self) -> None:
         """A source module never reads the console and never prints."""
         source = (module.__file__ or "").strip()
-        assert source
+        assert source.endswith("options.py")  # The test reads the upgrade options module.
         with open(source, encoding="utf-8") as handle:
             text = handle.read()
         for forbidden in ("print(", "input(", "safe_input("):
