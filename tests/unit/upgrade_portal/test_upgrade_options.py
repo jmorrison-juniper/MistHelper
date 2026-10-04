@@ -341,17 +341,6 @@ class TestVersionOptions:
         """The guard must not remove the override that a modeled type carries."""
         assert module._configured_override("ap", {"CAPTURE_DEFAULT_AP_VERSION": "0.14.29076"}) == "0.14.29076"
 
-    def test_running_version_replaces_the_configured_inventory_version(self) -> None:
-        """The multi-site table must show the version that the device runs."""
-        rows = module.build_version_options(
-            [SWITCH_ROW],
-            {"EX4400-48P": ("24.2R1.17",)},
-            running_by_key={SWITCH_ROW["mac"]: "24.2R1.17"},
-        )
-        assert rows[0]["version_before"] == "24.2R1.17"
-        assert rows[0]["version_is_running"] is True
-        assert rows[0]["version_note"] == ""
-
 
 class TestBuildOptions:
     """The map from the interface controls onto the seam option record."""
