@@ -440,6 +440,11 @@ class TestWriteCsvFormat:
             assert DataExporter._write_csv_format([{"a": 1}], "target.csv") is True
         writer.assert_called_once_with([{"a": 1}], "target.csv", fieldnames=None)
 
+    def test_preserves_uppercase_extension_when_present(self):
+        with patch.object(DataExporter, "write_to_csv") as writer:
+            assert DataExporter._write_csv_format([{"a": 1}], "SiteWiFiClients.CSV") is True
+        writer.assert_called_once_with([{"a": 1}], "SiteWiFiClients.CSV", fieldnames=None)
+
     def test_passes_fieldnames_through(self):
         with patch.object(DataExporter, "write_to_csv") as writer:
             DataExporter._write_csv_format([{"a": 1}], "target", fieldnames=["a"])
@@ -457,6 +462,17 @@ class TestWriteSqliteFormat:
         assert ok is True
         writer_cls.assert_called_once_with([{"a": 1}], "target", "listStuff")
 
+    def test_strips_uppercase_csv_extension_for_table_name(self):
+        writer_instance = MagicMock()
+        writer_instance.write.return_value = True
+        with patch(
+            "src.operations.exporting.export.data_exporter.SQLiteDatabaseWriter",
+            return_value=writer_instance,
+        ) as writer_cls:
+            ok = DataExporter._write_sqlite_format([{"a": 1}], "SiteWiFiClients.CSV", "listStuff")
+        assert ok is True
+        writer_cls.assert_called_once_with([{"a": 1}], "SiteWiFiClients", "listStuff")
+
     def test_uses_bare_name_when_no_csv_extension(self):
         writer_instance = MagicMock()
         writer_instance.write.return_value = False
@@ -471,7 +487,8 @@ class TestWriteSqliteFormat:
 class TestWriteToCsv:
     def test_empty_data_short_circuits(self):
         with patch.object(DataExporter, "_resolve_csv_path") as resolver:
-            DataExporter.write_to_csv([], "target.csv")
+            result = DataExporter.write_to_csv([], "target.csv")
+        assert result is None
         resolver.assert_not_called()
 
     def test_full_flow_writes(self, monkeypatch):
@@ -546,7 +563,8 @@ class TestWriteCsvOpenAndEmit:
 class TestWriteCsvWithExceptionHandling:
     def test_success_passes_through(self):
         with patch.object(DataExporter, "_write_csv_open_and_emit") as inner:
-            DataExporter._write_csv_with_exception_handling("p", [{"a": 1}], ["a"])
+            result = DataExporter._write_csv_with_exception_handling("p", [{"a": 1}], ["a"])
+        assert result is None
         inner.assert_called_once()
 
     def test_permission_error_reraises(self, caplog):

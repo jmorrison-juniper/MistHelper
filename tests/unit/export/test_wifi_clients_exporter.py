@@ -77,7 +77,21 @@ def test_execute_exports_merged_records() -> None:
 
     exporter.execute(site_id="site-1")
 
-    data_exporter.write_with_format_selection.assert_called_once()
+    data_exporter.write_with_format_selection.assert_called_once_with(
+        [
+            {
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "hostname": "client-1",
+                "site_id": "site-1",
+                "site_name": "Site One",
+                "data_source": "client",
+                "session_start_time": 10,
+                "session_count": 1,
+            }
+        ],
+        "SiteWiFiClients.CSV",
+        api_function_name="listSiteWirelessClientsStats",
+    )
 
 
 def test_execute_logs_failure_when_pipeline_raises(caplog) -> None:

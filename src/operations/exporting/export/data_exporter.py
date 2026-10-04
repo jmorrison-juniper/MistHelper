@@ -370,7 +370,7 @@ class DataExporter:  # Multi-backend export facade.
         fieldnames: list[str] | None = None,
     ) -> bool:
         """Write data to CSV format.  Pass fieldnames to preserve a specific column order."""
-        csv_filename = filename_or_table if filename_or_table.endswith(".csv") else f"{filename_or_table}.csv"
+        csv_filename = filename_or_table if filename_or_table.lower().endswith(".csv") else f"{filename_or_table}.csv"
         logger.info("Writing %s rows to CSV file: %s", len(data), csv_filename)  # Log CSV write.
         DataExporter.write_to_csv(data, csv_filename, fieldnames=fieldnames)  # Thread explicit column order through
         return True  # CSV written.
@@ -378,7 +378,7 @@ class DataExporter:  # Multi-backend export facade.
     @staticmethod
     def _write_sqlite_format(data: list[dict[str, Any]], filename_or_table: str, api_function_name: str | None) -> bool:
         """Write data to SQLite format. Returns True on success."""
-        table_name = filename_or_table[:-4] if filename_or_table.endswith(".csv") else filename_or_table
+        table_name = filename_or_table[:-4] if filename_or_table.lower().endswith(".csv") else filename_or_table
         logger.debug(  # Trace SQLite write.
             "SQLite write: table=%s, api_function=%s, strategy lookup initiated", table_name, api_function_name
         )
