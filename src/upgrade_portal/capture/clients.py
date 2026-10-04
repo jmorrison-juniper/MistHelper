@@ -66,6 +66,24 @@ Row = Mapping[str, Any]
 RowReader = Callable[[Any, str], list[dict[str, Any]]]
 
 
+class PagedRows(list[dict[str, Any]]):
+    """Hold rows and the reason for a partial page walk."""
+
+    def __init__(self, rows: Sequence[dict[str, Any]], partial_reasons: Sequence[dict[str, Any]] = ()) -> None:
+        """Store the rows and any reasons that the page walk found."""
+        super().__init__(rows)
+        self.partial_reasons = list(partial_reasons)
+
+
+class ClientRecords(list["ClientRecord"]):
+    """Hold normalized client records and source read reasons."""
+
+    def __init__(self, records: Sequence[ClientRecord], partial_reasons: Sequence[dict[str, Any]] = ()) -> None:
+        """Store normalized records and any source read reasons."""
+        super().__init__(records)
+        self.partial_reasons = list(partial_reasons)
+
+
 # ---------------------------------------------------------------------------
 # The records
 # ---------------------------------------------------------------------------
@@ -334,6 +352,16 @@ def page_limit() -> int:
     return result
 
 
+def _response_rows(response: Any) -> tuple[list[dict[str, Any]] | None, int]:
+    """Return valid rows and the response status."""
+    payload = getattr(response, "data", None)
+    rows = payload.get("results") if isinstance(payload, Mapping) else payload
+    status = int(getattr(response, "status_code", 0) or 0)
+    if not isinstance(rows, list):
+        return None, status
+    return [row for row in rows if isinstance(row, dict)], status
+
+
 def _collect(session: Any, response: Any) -> list[dict[str, Any]]:
     """Return every row of a paged response.
 
@@ -350,10 +378,22 @@ def _collect(session: Any, response: Any) -> list[dict[str, Any]]:
     Returns:
         Every row that is a mapping.
     """
-    rows = mistapi.get_all(session, response)
-    kept = [row for row in rows if isinstance(row, dict)]
+    rows, status = _response_rows(response)
+    if rows is None:
+        return PagedRows([], [{"reason": "unexpected_response_shape", "http_status": status}])
+    current = response
+    kept = rows
+    reasons: list[dict[str, Any]] = []
+    while getattr(current, "next", None):
+        logger.info("Upgrade capture reads the next client page")
+        current = mistapi.get_next(mist_session=session, response=current)
+        page, status = _response_rows(current)
+        if page is None or not 200 <= status < 300:
+            reasons.append({"reason": "page_count_mismatch", "http_status": status})
+            break
+        kept.extend(page)
     logger.debug("Upgrade capture read %s client rows.", len(kept))
-    return kept
+    return PagedRows(kept, reasons)
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +493,9 @@ def join_wireless_clients(
     for record in search_records:
         held = joined.get(record.mac)
         joined[record.mac] = _merge_records(held, record) if held is not None else record
-    return sorted(joined.values(), key=_address_of)
+    reasons = list(getattr(stats_records, "partial_reasons", ()))
+    reasons.extend(getattr(search_records, "partial_reasons", ()))
+    return ClientRecords(sorted(joined.values(), key=_address_of), reasons)
 
 
 # ---------------------------------------------------------------------------
@@ -716,7 +758,7 @@ def _merge_signal(primary: WirelessSignal | None, secondary: WirelessSignal | No
 # ---------------------------------------------------------------------------
 
 
-def _build_records(rows: Sequence[Row], mapper: Callable[[Row], ClientRecord | None]) -> list[ClientRecord]:
+def _build_records(rows: Sequence[Row], mapper: Callable[[Row], ClientRecord | None]) -> ClientRecords:
     """Return one record for each row that holds an address.
 
     Why:
@@ -735,7 +777,7 @@ def _build_records(rows: Sequence[Row], mapper: Callable[[Row], ClientRecord | N
     dropped = len(rows) - len(records)
     if dropped > 0:
         logger.warning("Upgrade capture dropped %s client rows that hold no valid address.", dropped)
-    return sorted(records, key=_address_of)
+    return ClientRecords(sorted(records, key=_address_of), getattr(rows, "partial_reasons", ()))
 
 
 def _address_of(record: ClientRecord) -> str:

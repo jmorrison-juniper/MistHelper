@@ -212,6 +212,7 @@ class _PagedResponse:
 
     status_code: int
     data: list[dict[str, Any]]
+    partial_reasons: tuple[dict[str, Any], ...] = ()
 
 
 def _page_limit() -> int:
@@ -273,22 +274,39 @@ def _paged(session: Any, response: Any, scope: SiteScope) -> _PagedResponse:
     Returns:
         The status of the first page beside the rows of every page.
     """
-    first = _records_of(getattr(response, "data", None))
+    current = response
+    first = _records_of(getattr(current, "data", None))
+    rows = list(first)
+    while getattr(current, "next", None):
+        logger.info("Upgrade portal reads the next extra page for site %s", scope.site_id)
+        try:
+            current = mistapi.get_next(mist_session=session, response=current)
+        except Exception as error:  # A failed page walk keeps the rows that already arrived.
+            logger.warning(
+                "Upgrade portal could not read a later page for site %s: %s",
+                scope.site_id,
+                type(error).__name__,
+            )
+            return _PagedResponse(
+                int(getattr(response, "status_code", 0) or 0),
+                rows,
+                ({"reason": "page_count_mismatch", "http_status": 0},),
+            )
+        page = _records_of(getattr(current, "data", None))
+        status = int(getattr(current, "status_code", 0) or 0)
+        if not _STATUS_FLOOR <= status < _STATUS_CEILING:
+            logger.warning("Upgrade portal lost a later page for site %s with status %s", scope.site_id, status)
+            return _PagedResponse(status, rows, ({"reason": "page_count_mismatch", "http_status": status},))
+        if not page and getattr(current, "data", None) not in ([], {"results": []}):
+            logger.warning("Upgrade portal lost a later page for site %s with status %s", scope.site_id, status)
+            return _PagedResponse(
+                status,
+                rows,
+                ({"reason": "page_count_mismatch", "http_status": status},),
+            )
+        rows.extend(page)
     status = int(getattr(response, "status_code", 0) or 0)
-    try:
-        rows = _records_of(mistapi.get_all(response=response, mist_session=session))
-    except Exception as error:  # A failed page walk must not lose the rows that already arrived
-        logger.warning("Upgrade portal could not walk every page of site %s: %s", scope.site_id, type(error).__name__)
-        rows = ()
-    if len(rows) < len(first):  # The walk gave up, so the first page holds every row that this call can report.
-        logger.warning(
-            "Upgrade portal kept the first page of %s row(s) for site %s because the page walk returned %s",
-            len(first),
-            scope.site_id,
-            len(rows),
-        )
-        return _PagedResponse(status, list(first))
-    return _PagedResponse(status, list(rows))
+    return _PagedResponse(status, rows)
 
 
 def _fetch_ports(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -386,6 +404,16 @@ def _section_from_response(name: str, response: Any) -> ExtraSection:
         The section. A status outside the 200 range holds no record.
     """
     status = int(getattr(response, "status_code", 0) or 0)
+    partial_reasons = tuple(getattr(response, "partial_reasons", ()))
+    if partial_reasons:
+        reason = partial_reasons[0]
+        logger.warning("Upgrade portal read a partial %s section with status %s", name, reason["http_status"])
+        return ExtraSection(
+            name,
+            _records_of(getattr(response, "data", None)),
+            "page_count_mismatch",
+            reason["http_status"],
+        )
     if not _STATUS_FLOOR <= status < _STATUS_CEILING:
         logger.warning("Upgrade portal read no %s. The cloud answered with status %s", name, status)
         return ExtraSection(name, (), REASON_ERROR_STATUS, status)
