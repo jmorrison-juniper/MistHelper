@@ -40,11 +40,17 @@ class RunLedger:  # Hold each run that one browser test built.
     def __init__(self) -> None:
         """Start with no run."""
         self._runs: list[str] = []  # A list keeps the order in which the test built the runs.
+        self._sites: list[str] = []  # A list keeps each site that the test locked.
 
     @property
     def runs(self) -> tuple[str, ...]:
         """Return each recorded run key, in the order of the record."""
         return tuple(self._runs)  # A tuple keeps each caller away from the list of the ledger.
+
+    @property
+    def sites(self) -> tuple[str, ...]:
+        """Return each recorded site, in the order of the record."""
+        return tuple(self._sites)  # A tuple keeps teardown site ownership immutable.
 
     def record(self, run_id: str) -> None:
         """Record one run that the test built.
@@ -61,6 +67,22 @@ class RunLedger:  # Hold each run that one browser test built.
         if run_id not in self._runs:  # A test can meet the same run two times.
             self._runs.append(run_id)  # The teardown then ends the run one time only.
         logger.debug("The run ledger holds %s run(s)", len(self._runs))  # Log after the record.
+
+    def record_site(self, site_id: str) -> None:
+        """Record one site that the test locked.
+
+        Args:
+            site_id: The identifier of the site that teardown must free.
+
+        Raises:
+            ValueError: The identifier is empty, so no teardown could free it.
+        """
+        logger.info("Record one site in the run ledger")  # Log before the record.
+        if not site_id.strip():  # An empty identifier names no site.
+            raise ValueError("The run ledger needs the identifier of a site.")  # Refuse the record at once.
+        if site_id not in self._sites:  # A test can take one site more than one time.
+            self._sites.append(site_id)  # Teardown then frees the site one time only.
+        logger.debug("The run ledger holds %s site(s)", len(self._sites))  # Log after the record.
 
     def record_from_url(self, url: str) -> str:
         """Record the run that the query of one address names.
@@ -83,6 +105,9 @@ class RunLedger:  # Hold each run that one browser test built.
         run_id = values[0].strip() if values else ""  # The capture page names one run.
         if not run_id:  # The page names no run, so the retry run stays unknown.
             raise AssertionError(f"The address {url!r} names no run, so the teardown cannot end the retry run.")
+        site_values = parse_qs(urlsplit(url).query).get("site_id", [])  # The capture page names its site.
+        site_id = site_values[0].strip() if site_values else ""  # The query can omit the site only on a bad route.
+        self.record_site(site_id)  # Teardown must free the site of the retry run.
         self.record(run_id)  # The teardown ends this run too.
         logger.debug("The address named one run")  # Log after the read.
         return run_id  # The caller can open the run page.
