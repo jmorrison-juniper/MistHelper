@@ -729,10 +729,20 @@ def test_a_missing_secret_key_becomes_a_fresh_random_key(monkeypatch: pytest.Mon
         raw: A value that holds no key.
     """
     monkeypatch.setenv("CAPTURE_SECRET_KEY", raw)
+    monkeypatch.setattr(config, "_is_container_runtime", lambda: False)
     first = read_secret_key()
     second = read_secret_key()
     assert first != second  # WHY: A fixed fallback key would sign every deployment alike.
     assert len(first) >= 32  # WHY: 32 random bytes encode to a longer text.
+
+
+def test_a_container_without_secret_key_refuses_to_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A container must not start with a temporary session key."""
+    monkeypatch.setenv("CAPTURE_SECRET_KEY", "")
+    monkeypatch.setattr(config, "_is_container_runtime", lambda: True)
+
+    with pytest.raises(SettingsError, match="CAPTURE_SECRET_KEY must be set"):
+        read_secret_key()
 
 
 def test_the_secret_key_never_reaches_a_log_record(
@@ -904,6 +914,7 @@ def test_load_settings_never_reads_a_password_variable(monkeypatch: pytest.Monke
     # WHY: The module reads the environment through its own `os` name. A patch of
     # that name reaches this module only and leaves every other module alone.
     monkeypatch.setattr(config, "os", SimpleNamespace(environ=recorder))
+    monkeypatch.setattr(config, "_is_container_runtime", lambda: False)
     load_settings()
     assert len(recorder.read_keys) > 0  # WHY: An empty log would make the next two checks meaningless.
     assert ARANGO_PASSWORD_NAME not in recorder.read_keys

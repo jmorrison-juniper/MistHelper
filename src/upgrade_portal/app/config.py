@@ -18,6 +18,7 @@ import re  # Checks that a theme name holds safe characters only.
 import secrets  # Builds a session key when the operator sets none.
 from dataclasses import dataclass  # Builds the frozen settings records.
 from ipaddress import IPv4Network, IPv6Network, ip_network  # Parses the address allow list.
+from pathlib import Path  # Checks standard container marker files.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
 
@@ -405,10 +406,10 @@ def read_secret_key() -> str:
     """Read the key that signs the browser session cookie.
 
     Why:
-        A portal without a stable key drops every session at each restart. The
-        portal builds a new key when the operator sets none, so a developer can
-        start the portal with no setup. The portal logs the variable name only,
-        never the key value.
+        A container without a stable key drops every session at each restart.
+        The container refuses to start when the operator sets no key. A local
+        developer can still start the portal with a generated key. The portal
+        logs the variable name only, never the key value.
 
     Returns:
         The session key.
@@ -416,11 +417,21 @@ def read_secret_key() -> str:
     stored = os.environ.get(SECRET_KEY_VARIABLE, "").strip()  # The value never reaches a log line.
     if stored:  # The operator set a stable key.
         return stored  # Every restart then keeps the open sessions.
+    if _is_container_runtime():
+        raise SettingsError(
+            f"{SECRET_KEY_VARIABLE} must be set for container deployments. "
+            "The portal cannot start with a temporary session key."
+        )
     logger.warning(
         "The variable %s is empty. The portal signs the session with a new key.",  # The name only.
         SECRET_KEY_VARIABLE,
     )
     return secrets.token_urlsafe(SECRET_KEY_BYTES)  # A fresh key drops the open sessions.
+
+
+def _is_container_runtime() -> bool:
+    """Return whether the process runs under Docker or Podman."""
+    return any(Path(marker).exists() for marker in ("/.dockerenv", "/run/.containerenv"))
 
 
 def read_poll_interval() -> int:
