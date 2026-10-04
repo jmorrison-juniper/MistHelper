@@ -25,7 +25,7 @@ ROUTES_DIR = (  # Directory that holds every API route module
 PLATFORM_ROOT = pathlib.Path(__file__).resolve().parents[3]  # Sub-project root
 
 if str(PLATFORM_ROOT) not in sys.path:  # Only extend the path once
-    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.mist.access.api" importable
+    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.api" importable
 
 ORG_IN_SCOPE = "11111111-1111-1111-1111-111111111111"  # Organization the caller owns
 ORG_OUT_OF_SCOPE = "22222222-2222-2222-2222-222222222222"  # Organization the caller must not read
@@ -282,8 +282,8 @@ def _build_probe_app(
     pytest.importorskip("sqlalchemy")  # deps.py imports sqlalchemy at module load
     from uuid import UUID  # Match the type the real routes declare
 
-    from src.mist.access.api.deps import get_authenticated_user, get_scoped_org_id
-    from src.mist.access.api.middleware.auth import CurrentUser
+    from src.api.deps import get_authenticated_user, get_scoped_org_id
+    from src.api.middleware.auth import CurrentUser
 
     app = fastapi.FastAPI()  # Minimal app, so the test needs no database
 
@@ -350,7 +350,7 @@ def test_caller_without_a_token_is_refused() -> None:
     from uuid import UUID  # Match the type the real routes declare
 
     from fastapi.testclient import TestClient
-    from src.mist.access.api.deps import get_scoped_org_id
+    from src.api.deps import get_scoped_org_id
 
     app = fastapi.FastAPI()  # No dependency override, so the real auth path runs
 

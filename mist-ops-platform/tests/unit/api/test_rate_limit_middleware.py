@@ -24,11 +24,11 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from src.mist.access.api.middleware import logging as request_logging
-from src.mist.access.api.middleware import rate_limit
-from src.mist.access.api.middleware.rate_limit import DEFAULT_REQUEST_LIMIT as DEFAULT_REQUEST_LIMIT
-from src.mist.access.api.middleware.rate_limit import DEFAULT_WINDOW_SECONDS as DEFAULT_WINDOW_SECONDS
-from src.mist.access.api.middleware.rate_limit import OrgRateLimiter as OrgRateLimiter
+from src.api.middleware import logging as request_logging
+from src.api.middleware import rate_limit
+from src.api.middleware.rate_limit import DEFAULT_REQUEST_LIMIT as DEFAULT_REQUEST_LIMIT
+from src.api.middleware.rate_limit import DEFAULT_WINDOW_SECONDS as DEFAULT_WINDOW_SECONDS
+from src.api.middleware.rate_limit import OrgRateLimiter as OrgRateLimiter
 from src.shared.redis_timeouts import redis_timeout_kwargs
 
 if TYPE_CHECKING:
@@ -162,8 +162,8 @@ def _build_probe_app(
     pytest.importorskip("httpx2")  # The test client needs the httpx2 package
     pytest.importorskip("sqlalchemy")  # deps.py imports sqlalchemy at module load
 
-    from src.mist.access.api.deps import get_authenticated_user, get_scoped_org_id
-    from src.mist.access.api.middleware.auth import CurrentUser
+    from src.api.deps import get_authenticated_user, get_scoped_org_id
+    from src.api.middleware.auth import CurrentUser
 
     app = fastapi.FastAPI()  # Minimal app, so the test needs no database
     org_dependency = fastapi.Depends(get_scoped_org_id)  # Reuse the dependency in the probe.
@@ -465,7 +465,7 @@ def test_unauthenticated_caller_does_not_touch_the_org_counter() -> None:
     """
     limiter = _RecordingLimiter()  # Record every org the dependency counts
     app = _build_probe_app([ORG_IN_SCOPE], limiter, authenticated=False)  # No token is sent
-    with patch("src.mist.access.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
+    with patch("src.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
         response = _get(app, ORG_IN_SCOPE)  # Send the request with no token
 
     assert response.status_code == HTTP_UNAUTHORIZED  # The auth dependency refuses the caller
@@ -476,7 +476,7 @@ def test_caller_outside_the_org_does_not_touch_the_counter() -> None:
     """A caller refused by the membership check counts toward no organization."""
     limiter = _RecordingLimiter()  # Record every org the dependency counts
     app = _build_probe_app([ORG_IN_SCOPE], limiter)  # The caller owns one organization
-    with patch("src.mist.access.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
+    with patch("src.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
         response = _get(app, ORG_OUT_OF_SCOPE)  # Request a different organization
 
     assert response.status_code == HTTP_FORBIDDEN  # The membership check refuses the caller
@@ -487,7 +487,7 @@ def test_verified_caller_counts_toward_the_org_budget() -> None:
     """A caller inside the organization counts toward that organization only."""
     limiter = _RecordingLimiter()  # Record every org the dependency counts
     app = _build_probe_app([ORG_IN_SCOPE], limiter)  # The caller owns one organization
-    with patch("src.mist.access.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
+    with patch("src.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
         response = _get(app, ORG_IN_SCOPE)  # Request the owned organization
 
     assert response.status_code == HTTP_OK  # The membership check passes
@@ -498,7 +498,7 @@ def test_over_budget_verified_caller_gets_429() -> None:
     """A verified caller past the budget gets 429, not the data."""
     limiter = _RecordingLimiter(over_limit=True)  # The check refuses the request
     app = _build_probe_app([ORG_IN_SCOPE], limiter)  # The caller owns one organization
-    with patch("src.mist.access.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
+    with patch("src.api.deps.get_org_rate_limiter", return_value=limiter):  # Inject the recorder
         response = _get(app, ORG_IN_SCOPE)  # Request the owned organization
 
     assert response.status_code == HTTP_TOO_MANY_REQUESTS  # The limiter refuses the caller

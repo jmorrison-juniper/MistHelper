@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.mist.access.api.schemas.deploy import (
+from src.api.schemas.deploy import (
     BlastRadius,
     DryRunRequest,
     DryRunResponse,

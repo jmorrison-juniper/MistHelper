@@ -18,14 +18,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.mist.access.api.deps import (
+from src.api.deps import (
     get_authenticated_user,
     get_db_session,
     get_scoped_org_id,
 )
-from src.mist.access.api.middleware.auth import CurrentUser, require_org_access
-from src.mist.access.api.schemas.common import PaginationMeta, ResponseEnvelope
-from src.mist.access.api.schemas.config import (
+from src.api.middleware.auth import CurrentUser, require_org_access
+from src.api.schemas.common import PaginationMeta, ResponseEnvelope
+from src.api.schemas.config import (
     AcceptDriftRequest,
     BaselineCreate,
     BaselineResponse,

@@ -34,7 +34,7 @@ SCHEMA_PATH = (
     / "performance-event.schema.json"
 )
 
-SOURCE = EventSource(file="src/mist/access/api/api_data_fetcher.py", symbol="execute", class_name="ApiFetcher")
+SOURCE = EventSource(file="src/api/api_data_fetcher.py", symbol="execute", class_name="ApiFetcher")
 
 
 def _event(**overrides: object) -> PerformanceEvent:

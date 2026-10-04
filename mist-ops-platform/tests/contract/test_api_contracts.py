@@ -11,28 +11,28 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.mist.access.api.schemas.common import ErrorDetail, PaginationMeta, ResponseEnvelope
+from src.api.schemas.common import ErrorDetail, PaginationMeta, ResponseEnvelope
 
 # Issue #1895: this module imported InventoryStatsResponse, and that name does not
-# exist in src.mist.access.api.schemas.sync. The dead import raised an ImportError and stopped
+# exist in src.api.schemas.sync. The dead import raised an ImportError and stopped
 # pytest from collecting the whole contract module. No test used the name.
-from src.mist.access.api.schemas.sync import (
+from src.api.schemas.sync import (
     SyncStatusResponse,
     SyncTriggerRequest,
 )
-from src.mist.access.api.schemas.config import (
+from src.api.schemas.config import (
     DiffRequest,
     RevisionResponse,
     TimeTravelRequest,
 )
-from src.mist.access.api.schemas.deploy import (
+from src.api.schemas.deploy import (
     DryRunRequest,
     JobCreate,
     JobSummary,
     RolloutCreate,
     WaveCreate,
 )
-from src.mist.access.api.schemas.audit import (
+from src.api.schemas.audit import (
     AuditRecordResponse,
     ExportRequest,
 )

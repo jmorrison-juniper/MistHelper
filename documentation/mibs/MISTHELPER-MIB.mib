@@ -17,7 +17,7 @@ MISTHELPER-MIB DEFINITIONS ::= BEGIN
 --
 -- The generator reads three inputs:
 --   documentation/mist-api-openapi31json.json  the Mist field types.
---   src/interfaces/monitoring/metrics_gateway/catalog.py  the readings the agent
+--   src/interfaces/monitoring/metrics_gateway/catalog.py             the readings the agent
 --                                              answers.
 --   data/mib_generator/oid_assignments.json    the number of each
 --                                              field, so no OID moves.
@@ -57,7 +57,7 @@ IMPORTS
         FROM SNMPv2-TC;
 
 mistHelperMIB MODULE-IDENTITY
-    LAST-UPDATED "202609160310Z"
+    LAST-UPDATED "202610040131Z"
     ORGANIZATION "MistHelper project"
     CONTACT-INFO
         "MistHelper project maintainers
@@ -67,7 +67,7 @@ mistHelperMIB MODULE-IDENTITY
          MistHelper metrics gateway collects from the Mist REST API.
          The gateway reads Mist Cloud on a timer and answers every
          request from memory, so a poll never waits for Mist Cloud."
-    REVISION "202609160310Z"
+    REVISION "202610040131Z"
     DESCRIPTION
         "The generator writes this module. Run it again after Mist ships
          a new OpenAPI file:  python MistHelper.py --mib-generate

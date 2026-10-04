@@ -29,7 +29,7 @@ import pytest  # Test framework and skip helper
 PLATFORM_ROOT = Path(__file__).resolve().parents[3]  # Sub-project root that holds "src"
 
 if str(PLATFORM_ROOT) not in sys.path:  # Only extend the path one time
-    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.mist.access.api" importable
+    sys.path.insert(0, str(PLATFORM_ROOT))  # Make "src.api" importable
 
 CALLER_ORG = "11111111-1111-1111-1111-111111111111"  # Organization that the caller belongs to
 TARGET_ORG = "22222222-2222-2222-2222-222222222222"  # Organization named in every request body
@@ -168,7 +168,7 @@ class _FakeSession:
 
 def _fake_user_factory(caller_org: str):
     """Return a dependency that answers with a caller inside *caller_org*."""
-    from src.mist.access.api.middleware.auth import CurrentUser
+    from src.api.middleware.auth import CurrentUser
 
     async def fake_user() -> CurrentUser:
         """Return a caller that belongs to *caller_org* and to nothing else."""
@@ -192,9 +192,9 @@ def _build_app(caller_org: str):
     pytest.importorskip("httpx")  # The test client needs httpx
     pytest.importorskip("sqlalchemy")  # The route modules import sqlalchemy at module load
 
-    from src.mist.access.api.deps import get_authenticated_user, get_db_session
-    from src.mist.access.api.routes.config import router as config_router
-    from src.mist.access.api.routes.deploy import router as deploy_router
+    from src.api.deps import get_authenticated_user, get_db_session
+    from src.api.routes.config import router as config_router
+    from src.api.routes.deploy import router as deploy_router
 
     app = fastapi.FastAPI()  # Minimal app, so the test needs no live database
     app.include_router(config_router)  # Mount the real config routes, not a copy
