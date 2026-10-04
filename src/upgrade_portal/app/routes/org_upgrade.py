@@ -1440,73 +1440,100 @@ def _operation_site_lock(
     except lock.SiteLockError as fault:  # Map the lock error to a safe API response.
         return _lock_fault(fault)  # Preserve the code and the message of the lock module.
     if record is None:  # The operator holds the site for another run.
-        refusal = _busy_site_refusal(operation, scope.org_id, site_id)  # Name the owner job without exposing identity.
+        refusal = _busy_site_refusal(scope.org_id, site_id)  # Name the owner job without exposing identity.
         _discard_unconfirmed_operation(operation)  # Remove this browser's unconfirmed plan and release its locks.
         return refusal  # Refuse unsafe reuse with the owning progress page.
     return _store_site_lock(operation, site_id, record)  # Persist this lock before the next site.
 
 
-def _busy_site_refusal(
-    operation: Mapping[str, Any],
-    org_id: str,
-    site_id: str,
-) -> tuple[Response, int]:
+def _busy_site_refusal(org_id: str, site_id: str) -> tuple[Response, int]:
     """Build a safe refusal that names the owning operation and held sites."""
-    held = lock.read_lock(org_id, site_id, select_routes.lock_client())  # Read the lock that blocked this plan.
-    owner_id = str(held.run_id) if held is not None else ""  # The lock carries only the operation identifier.
-    owner = _read_operation(owner_id) if owner_id else None  # Read the owning job from durable storage.
-    if not isinstance(owner, Mapping) or str(owner.get("org_id", "")) != org_id:  # Enforce organization scope.
-        logger.warning("The busy site %s names no readable operation in organization %s", site_id, org_id)
+    owner_details = _read_busy_owner(org_id, site_id)  # Read and validate the blocking operation.
+    if owner_details is None:  # Refuse when the lock has no safe owner record.
         return json_error(CONFLICT_STATUS, SITE_LOCK_WRONG_RUN, SITE_LOCK_WRONG_RUN_MESSAGE)  # Hide invalid links.
-    held_ids = (  # Name the locks that the owning operation already holds.
-        [str(value) for value in owner.get("site_locks", {}).keys()]
-        if isinstance(owner.get("site_locks"), Mapping)
-        else []
-    )
-    if site_id not in held_ids:  # Include the blocking site even if its owner record is one write behind.
-        held_ids.append(site_id)  # Keep the operator's refusal complete.
-    names = owner.get("site_names", {})  # Read the safe display names stored with the owning operation.
-    name_map = (  # Index the safe names without exposing operator identity.
-        {str(site_id): str(name) for site_id, name in names.items()} if isinstance(names, Mapping) else {}
-    )
-    held_sites = [  # Expose site identifiers and names, but no credentials.
+    owner_id, owner = owner_details  # Keep the validated operation identity and record together.
+    held_ids = _busy_site_ids(owner, site_id)  # Name every site held by the owning operation.
+    name_map = _busy_site_names(owner)  # Read safe display names without operator identity.
+    held_sites = [  # Build the browser list with safe site identifiers and names.
         {"site_id": value, "name": name_map.get(value, value)} for value in held_ids
     ]
     next_page = f"/upgrade/org/jobs/{owner_id}"  # Link only the validated aggregate progress route.
     message = f"Site {name_map.get(site_id, site_id)} is held by operation {owner_id}."  # Name the cure.
-    details = {  # Give the browser structured facts.
-        "operation_id": owner_id,
-        "held_sites": held_sites,
-        "next": next_page,
-    }
+    details = {"operation_id": owner_id, "held_sites": held_sites, "next": next_page}  # Give structured facts.
     return json_error(CONFLICT_STATUS, SITE_LOCK_WRONG_RUN, message, details)  # Return one safe error envelope.
+
+
+def _read_busy_owner(org_id: str, site_id: str) -> tuple[str, Mapping[str, Any]] | None:
+    """Read one blocking operation after enforcing the organization boundary."""
+    held = lock.read_lock(org_id, site_id, select_routes.lock_client())  # Read the lock that blocked this plan.
+    owner_id = str(held.run_id) if held is not None else ""  # The lock carries only the operation identifier.
+    owner = _read_operation(owner_id) if owner_id else None  # Read the owning job from durable storage.
+    if isinstance(owner, Mapping) and str(owner.get("org_id", "")) == org_id:  # Accept only same-organization records.
+        return owner_id, owner  # Return the validated operation identity and record.
+    logger.warning(  # Explain why the refusal hides the operation link.
+        "The busy site %s names no readable operation in organization %s", site_id, org_id
+    )
+    return None  # Hide invalid links and operator details.
+
+
+def _busy_site_ids(owner: Mapping[str, Any], site_id: str) -> list[str]:
+    """Return all sites held by the owner, including the blocking site."""
+    stored = owner.get("site_locks", {})  # Read the locks that the owner record stores.
+    held_ids = [str(value) for value in stored.keys()] if isinstance(stored, Mapping) else []  # Normalize site IDs.
+    if site_id not in held_ids:  # Include a lock that the owner record has not mirrored yet.
+        held_ids.append(site_id)  # Keep the refusal complete for the operator.
+    return held_ids  # Return stable site identifiers for the browser contract.
+
+
+def _busy_site_names(owner: Mapping[str, Any]) -> dict[str, str]:
+    """Return safe display names for sites held by the owner."""
+    names = owner.get("site_names", {})  # Read the display names stored with the owning operation.
+    if not isinstance(names, Mapping):  # Treat missing names as an empty safe mapping.
+        return {}  # The caller falls back to site identifiers.
+    return {str(site_id): str(name) for site_id, name in names.items()}  # Normalize names for the browser response.
 
 
 def _discard_unconfirmed_operation(operation: MutableMapping[str, Any]) -> None:
     """Release and delete one plan that never reached a submission claim."""
+    if not _is_unconfirmed_plan(operation):  # A claimed or changed child must remain durable for reconciliation.
+        return  # Never delete evidence of a started operation.
+    _release_operation_locks(operation)  # Release only locks acquired by this unconfirmed browser plan.
+    run_id = str(operation.get("run_id", ""))  # Delete the exact planned record.
+    store = upgrade_routes.run_store()  # Use the same store that wrote the plan.
+    delete = getattr(store, "delete_run", None)  # Stand-ins may not support cleanup.
+    if callable(delete) and delete(run_id):  # Remove only after the store confirms deletion.
+        _clear_deleted_operation_session()  # Remove stale browser references after durable cleanup.
+        logger.debug("Deleted unconfirmed aggregate upgrade %s", run_id)  # Report the cleanup result.
+
+
+def _is_unconfirmed_plan(operation: Mapping[str, Any]) -> bool:
+    """Return whether an operation has no claimed or changed child."""
     children = operation.get("children", [])  # Read the durable child states before deleting anything.
-    planned = (
+    return (
         operation.get("state") == "planned"
         and isinstance(children, list)
         and all(  # Prove no write started.
             isinstance(child, Mapping) and child.get("status") == "planned" for child in children
         )
     )
-    if not planned:  # A claimed or changed child must remain durable for reconciliation.
-        return  # Never delete evidence of a started operation.
+
+
+def _release_operation_locks(operation: Mapping[str, Any]) -> None:
+    """Release each lock recorded by an unconfirmed operation."""
     stored = operation.get("site_locks", {})  # Read locks acquired by this browser before the refusal.
-    if isinstance(stored, Mapping):  # Release only locks recorded for this operation.
-        org_id = str(operation.get("org_id", ""))  # Build safe keys inside the operation organization.
-        for site_id, value in list(stored.items()):  # Release each partial lock before deletion.
-            _release_one_lock(org_id, str(site_id), value)  # Compare the token before freeing a site.
-    run_id = str(operation.get("run_id", ""))  # Delete the exact planned record.
-    store = upgrade_routes.run_store()  # Use the same store that wrote the plan.
-    delete = getattr(store, "delete_run", None)  # Stand-ins may not support cleanup.
-    if callable(delete) and delete(run_id):  # Remove only after the store confirms deletion.
-        if has_request_context():  # A route cleanup can clear stale signed browser state.
-            session.pop(OPTIONS_SESSION_KEY, None)  # Remove the browser reference to the deleted plan.
-            session.pop(OPTIONS_NONCE_SESSION_KEY, None)  # Prevent a deleted plan from passing replay checks.
-        logger.debug("Deleted unconfirmed aggregate upgrade %s", run_id)  # Report the cleanup result.
+    if not isinstance(stored, Mapping):  # Stand-ins may omit lock data.
+        return  # No locks need release.
+    org_id = str(operation.get("org_id", ""))  # Build safe keys inside the operation organization.
+    for site_id, value in list(stored.items()):  # Release each partial lock before deletion.
+        _release_one_lock(org_id, str(site_id), value)  # Compare the token before freeing a site.
+
+
+def _clear_deleted_operation_session() -> None:
+    """Clear browser references after a planned operation is deleted."""
+    if not has_request_context():  # Tests can call cleanup without a Flask request.
+        return  # No browser session exists outside a request.
+    session.pop(OPTIONS_SESSION_KEY, None)  # Remove the browser reference to the deleted plan.
+    session.pop(OPTIONS_NONCE_SESSION_KEY, None)  # Prevent a deleted plan from passing replay checks.
 
 
 def _operation_lock_record(

@@ -385,7 +385,7 @@ def test_busy_site_refusal_names_owner_sites_and_progress_link(monkeypatch: pyte
     monkeypatch.setattr(org_upgrade.lock, "read_lock", lambda *_args: SimpleNamespace(run_id="org-run-owner"))
     app = Flask(__name__)  # Build the context needed by Flask's JSON response helper.
     with app.app_context():
-        response, status = org_upgrade._busy_site_refusal({"operation_id": "org-run-new"}, "org-1", "site-2")
+        response, status = org_upgrade._busy_site_refusal("org-1", "site-2")
     body = response.get_json()  # Read the structured refusal envelope.
     assert status == 409  # A conflicting owner operation remains a recoverable refusal.
     assert body["error"]["details"] == {  # Keep the browser contract explicit.
@@ -421,7 +421,7 @@ def test_unconfirmed_plan_cleanup_keeps_started_record(monkeypatch: pytest.Monke
     store.write_run(record)  # Model the durable claim that proves a start.
     monkeypatch.setattr(org_upgrade.upgrade_routes, "run_store", lambda: store)
     org_upgrade._discard_unconfirmed_operation(record)  # Attempt the same cleanup path.
-    assert store.read_run("org-run-started") is not None  # Started evidence must remain durable.
+    assert store.read_run("org-run-started") == record  # Started evidence must remain durable and unchanged.
 
 
 @pytest.fixture
