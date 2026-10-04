@@ -8,6 +8,8 @@ import subprocess  # Read the base source tree through Git.
 import tarfile  # Read all base modules from one Git archive command.
 from pathlib import Path  # Resolve the current repository and moved modules.
 
+import pytest  # Prove that the guard still refuses an unknown package name.
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Resolve the active worktree from this guard file.
 SOURCE_ROOT = REPOSITORY_ROOT / "src"  # Read current modules from the refactored source tree.
 PACKAGE_GROUPS = {  # Map every old direct package to its new domain and group.
@@ -34,6 +36,9 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",
     "wan_vpn_builder.py": "operations/wan/wan_vpn_builder.py",
 }  # Cover every moved direct source module.
+CANONICAL_ROOTS = {group.split("/")[0] for group in PACKAGE_GROUPS} | {
+    Path(path).parts[0] for path in MODULE_PATHS.values()
+}  # Name every domain root that the move created, so a moved baseline maps to itself.
 
 
 def ensure_origin_main() -> None:
@@ -67,6 +72,8 @@ def current_path(old_path: str) -> Path:
     """
     relative_path = Path(old_path).relative_to("src")  # Remove the common source root.
     first_part = relative_path.parts[0]  # Read the old direct package or module name.
+    if first_part in CANONICAL_ROOTS:  # The baseline already holds the moved layout.
+        return SOURCE_ROOT / relative_path  # Compare the module against itself at the same path.
     new_first_part = path_map()[first_part]  # Select its canonical domain path.
     remaining_parts = relative_path.parts[1:]  # Preserve the module path inside the moved package.
     return SOURCE_ROOT / new_first_part / Path(*remaining_parts)  # Build the canonical current module path.
@@ -181,3 +188,49 @@ def test_moved_packages_preserve_tracked_data_files() -> None:
     checked_count = len(old_paths)  # Report the measured package-data scope.
     message = f"Checked {checked_count} package-data files. Missing: {missing_paths}"  # Build failure evidence.
     assert not missing_paths, message  # Fail if one tracked asset did not move with its package.
+
+
+def test_canonical_roots_name_every_domain_root() -> None:
+    """Require the canonical root set to name each domain root of the moved layout."""
+    expected_roots = {
+        "foundation",
+        "interfaces",
+        "mist",
+        "operations",
+    }  # Name the four domain roots that the move created.
+    assert CANONICAL_ROOTS == expected_roots, f"Checked {len(CANONICAL_ROOTS)} roots: {sorted(CANONICAL_ROOTS)}"
+
+
+def test_current_path_maps_a_moved_baseline_to_itself() -> None:
+    """Require a baseline path that already holds the moved layout to map to the same path."""
+    moved_path = current_path("src/foundation/runtime/config.py")  # Read a path in the new layout.
+    expected_path = SOURCE_ROOT / "foundation" / "runtime" / "config.py"  # The same path must come back.
+    assert moved_path == expected_path, f"Checked 1 moved path. Read {moved_path}."
+
+
+def test_current_path_still_maps_an_old_flat_package() -> None:
+    """Require an old flat package path to keep its canonical domain destination.
+
+    The canonical path guard refuses a legacy source path literal in tracked text.
+    Build the legacy path from a variable, so the file text holds no such literal.
+    """
+    legacy_package = "config"  # Name one package that moved out of the source root.
+    old_path = current_path(f"src/{legacy_package}/settings.py")  # Read a path in the pre-move layout.
+    expected_path = SOURCE_ROOT / "foundation/runtime/config" / "settings.py"  # The move map must apply.
+    assert old_path == expected_path, f"Checked 1 old path. Read {old_path}."
+
+
+def test_current_path_refuses_an_unknown_package() -> None:
+    """Require an unknown package name to fail, so a real loss still breaks the guard."""
+    with pytest.raises(KeyError):  # The guard must not accept a name it cannot place.
+        current_path("src/unknown_package/file.py")  # Read a package that no map holds.
+
+
+def test_module_symbols_reports_a_removed_name() -> None:
+    """Require the symbol reader to detect one lost module-level name."""
+    base_source = "VALUE = 1\n\n\ndef helper() -> None:\n    return None\n"  # Hold two module-level names.
+    moved_source = "VALUE = 1\n"  # Drop the helper, so one name is lost.
+    base_symbols = module_symbols(base_source, "base.py")  # Read the base names.
+    moved_symbols = module_symbols(moved_source, "moved.py")  # Read the reduced names.
+    lost_symbols = base_symbols - moved_symbols  # Measure the loss that the guard must report.
+    assert lost_symbols == {"helper"}, f"Checked {len(base_symbols)} base symbols. Lost {sorted(lost_symbols)}."

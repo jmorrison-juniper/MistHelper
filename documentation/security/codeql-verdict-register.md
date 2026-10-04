@@ -6,7 +6,7 @@
 
 **Generated**: 2026-10-04
 
-**Rows**: 88
+**Rows**: 90
 
 A dismissed CodeQL alert is a decision to accept a security risk. This register
 records that decision. Each row names the alert, the code location, the verdict,
@@ -141,15 +141,17 @@ reason. Add the reason to the alert on GitHub, then run `generate` again.
 | 207 | #3000 | src/upgrade_portal/app/config.py | 427 | src/upgrade_portal/app/config.py::L427 | false_positive | False positive. The logged value is SECRET_KEY_VARIABLE, a constant holding the literal string CAPTURE_SECRET_KEY, which names an environment variable. The key value lives in the local name stored, which never reaches a log call. Issue #3000 records the analysis. | jmorrison-juniper | 2026-09-19 | 2027-03-18 | A later CodeQL scan raises the same alert again. |
 | 208 | #3000 | src/upgrade_portal/app/security.py | 126 | src/upgrade_portal/app/security.py::L126 | false_positive | False positive. The logged value is trusted_hops, which is declared int. It is the count of proxies in front of the portal, built by read_proxy_hops in config.py. A bad value falls back to zero. The value carries no credential. Issue #3000 records the full analysis. | jmorrison-juniper | 2026-09-19 | 2027-03-18 | A later CodeQL scan raises the same alert again. |
 | 211 | #1735 | src/device/_utility_commands_action.py | 348 | src/device/_utility_commands_action.py::L348 | accepted_with_rationale | accepted_with_rationale. Repeats dismissed alert 199 at the same file and line. Issue #1735, review 2026-08-22, PR #1876 gates the print on sys.stdout.isatty(). PR #1850 removed an unused noqa from that line, which changed the fingerprint. The behavior did not change. | jmorrison-juniper | 2026-08-26 | 2027-02-22 | A later CodeQL scan raises the same alert again. |
+| 239 | - | src/mist/resources/device/_utility_commands_action.py | 348 | src/mist/resources/device/_utility_commands_action.py::L348 | accepted_with_rationale | Pre-existing baseline alert. Menu 144 intentionally prints the one-time ZTP credential only to a live terminal. The terminal guard and migration tests prevent logging it. | jmorrison-juniper | 2026-10-04 | 2027-04-02 | A later CodeQL scan raises the same alert again. |
+| 240 | - | src/interfaces/portals/upgrade_portal/app/config.py | 434 | src/interfaces/portals/upgrade_portal/app/config.py::L434 | accepted_with_rationale | Pre-existing baseline alert. The log records only the fixed environment variable name, never the secret value. The portal contract test requires this operator-facing name. | jmorrison-juniper | 2026-10-04 | 2027-04-02 | A later CodeQL scan raises the same alert again. |
 
 
 ## Summary
 
 | Verdict | Rows |
 | - | - |
-| accepted_with_rationale | 4 |
+| accepted_with_rationale | 6 |
 | false_positive | 30 |
 | test_fixture | 54 |
-| **Total** | 88 |
+| **Total** | 90 |
 
 Rows that still need a written reason: 39.
