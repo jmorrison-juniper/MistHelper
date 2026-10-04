@@ -137,3 +137,29 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
     assert (
         not violations
     ), f"Checked {checked_count} moved modules. Lost symbols: {violations}"  # Report the measured scope and failures.
+
+
+def test_moved_packages_preserve_tracked_data_files() -> None:
+    """Require each tracked package-data file to keep its relative package path."""
+    command = [
+        "git",
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "origin/main",
+        "src",
+    ]  # Read the base tracked source file inventory.
+    result = subprocess.run(
+        command, cwd=REPOSITORY_ROOT, check=True, capture_output=True, text=True
+    )  # Fail if Git cannot provide the required base input.
+    old_paths = [
+        path for path in result.stdout.splitlines() if not path.endswith(".py") and path != "src/__init__.py"
+    ]  # Select each tracked non-Python package-data file.
+    missing_paths = [
+        f"{old_path} -> {current_path(old_path).relative_to(REPOSITORY_ROOT)}"
+        for old_path in old_paths
+        if not current_path(old_path).is_file()
+    ]  # Record each package-data file that did not move with its package.
+    checked_count = len(old_paths)  # Report the measured package-data scope.
+    message = f"Checked {checked_count} package-data files. Missing: {missing_paths}"  # Build failure evidence.
+    assert not missing_paths, message  # Fail if one tracked asset did not move with its package.

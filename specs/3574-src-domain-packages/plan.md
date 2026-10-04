@@ -35,6 +35,47 @@ It does not add a child to these directories or change their internal behavior.
 Issue #3824 records the required incremental remediation action for this debt.
 Each #3824 slice will reduce the measured violation count and preserve public symbols.
 
+The measured debt inventory is:
+
+- `src/operations/execution/capture`: 12 children.
+- `src/operations/execution/firmware`: 11 children.
+- `src/operations/execution/ssh`: 9 children.
+- `src/operations/execution/ssid_consolidation`: 7 children.
+- `src/operations/exporting/export`: 47 children.
+- `src/mist/access/api`: 6 children.
+- `src/mist/access/audit`: 10 children.
+- `src/mist/intelligence/analytics`: 6 children.
+- `src/mist/intelligence/reports`: 18 children.
+- `src/mist/intelligence/troubleshooting`: 7 children.
+- `src/mist/networking/network`: 7 children.
+- `src/mist/realtime/websocket`: 7 children.
+- `src/mist/resources/device`: 14 children.
+- `src/mist/resources/gateway`: 16 children.
+- `src/mist/resources/inventory`: 7 children.
+- `src/mist/resources/site/address_audit`: 13 children.
+- `src/mist/realtime/websocket_streams/catalog`: 6 children.
+- `src/mist/intelligence/juniper_docs/classify`: 6 children.
+- `src/mist/intelligence/troubleshooting/rf_diagnostics`: 7 children.
+- `src/interfaces/monitoring/metrics_gateway`: 8 children.
+- `src/interfaces/portals/upgrade_portal`: 11 children.
+- `src/interfaces/visualization/maps`: 19 children.
+- `src/interfaces/visualization/ui`: 8 children.
+- `src/interfaces/visualization/maps/launcher`: 8 children.
+- `src/interfaces/portals/upgrade_portal/app`: 9 children.
+- `src/interfaces/portals/upgrade_portal/capture`: 9 children.
+- `src/interfaces/portals/upgrade_portal/compare`: 7 children.
+- `src/interfaces/portals/upgrade_portal/runtime`: 9 children.
+- `src/interfaces/portals/upgrade_portal/upgrade`: 21 children.
+- `src/interfaces/portals/upgrade_portal/app/routes`: 12 children.
+- `src/interfaces/portals/upgrade_portal/upgrade/org_cascade`: 6 children.
+- `src/interfaces/portals/upgrade_portal/app/assets/templates`: 9 children.
+- `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade`: 7 children.
+- `src/foundation/models/dataclasses`: 15 children.
+- `src/foundation/persistence/db`: 6 children.
+- `src/foundation/support/refactors`: 33 children.
+- `src/foundation/support/utils`: 17 children.
+- `src/foundation/support/refactors/serial_cc`: 9 children.
+
 ## Technical Approach
 
 1. Create each domain and group package with an `__init__.py` file.
@@ -96,3 +137,15 @@ rtk pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\contract tests
 - Scan the full repository for every old path after the migration.
 - Run structural, import, and behavior tests before the full gates.
 - Rebase once after the active conflicting changes merge.
+
+## Verification Evidence
+
+- The focused non-portal behavior run passed 4,446 tests and skipped 4 tests.
+- The upgrade portal behavior run passed 6,292 tests.
+- The moved-module guard compared 808 Python modules and found no lost symbol.
+- The package-data guard checks each tracked non-Python file from `origin/main`.
+- Ruff, Black, mypy, Python compilation, and stable-path `symbol-diff` passed.
+- The unit sweep reached 46 percent before its 900-second chunk timeout.
+- The contract, guardrail, and integration sweep reached its 900-second timeout.
+- The Windows `socket.AF_UNIX` failure reproduces on unchanged `origin/main`.
+- The local test-quality analyzer path mismatch reproduces on unchanged `origin/main`.

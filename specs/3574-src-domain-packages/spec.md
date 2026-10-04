@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-03
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: Issue #3574 requests domain grouping for the direct children of `src`.
 

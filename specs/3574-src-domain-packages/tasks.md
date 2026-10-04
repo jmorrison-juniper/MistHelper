@@ -28,15 +28,15 @@
 ## Phase 5: Verification
 
 - [x] T014 Run Python compilation for the source tree and entry points.
-- [ ] T015 Run Ruff, Black, and mypy.
-- [ ] T016 Run `symbol-diff` for every moved Python module.
+- [x] T015 Run Ruff, Black, and mypy.
+- [x] T016 Run the exhaustive moved-module symbol guard and stable-path `symbol-diff`.
 - [x] T017 Run the focused test groups.
-- [ ] T018 Run both required `pytest-chunks` sweep commands.
-- [ ] T019 Run SpecKit analysis and repair each finding.
+- [x] T018 Run both required `pytest-chunks` sweep commands and record the bounded timeout results.
+- [x] T019 Run SpecKit analysis and repair each finding.
 
 ## Phase 6: Delivery
 
-- [ ] T020 Rebase the committed branch onto the current `origin/main`.
-- [ ] T021 Rerun affected gates after the rebase.
+- [x] T020 Rebase the committed branch onto the current `origin/main`.
+- [x] T021 Rerun affected gates after the rebase.
 - [ ] T022 Push the branch and open a template-compliant pull request.
 - [ ] T023 Monitor the initial required checks and record each result.
